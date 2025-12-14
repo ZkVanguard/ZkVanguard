@@ -27,12 +27,12 @@ export function CTASection() {
               <span>Go to Dashboard</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <a
-              href="#features"
+            <Link
+              href="/docs"
               className="w-full sm:w-auto px-8 py-4 bg-transparent border-2 border-white text-white hover:bg-white/10 rounded-lg font-semibold text-lg transition-all"
             >
               Learn More
-            </a>
+            </Link>
           </div>
         </div>
       </div>
