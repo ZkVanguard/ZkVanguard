@@ -1,0 +1,271 @@
+/**
+ * Agent API Integration
+ * Frontend interface to AI agents (connects to backend API in production)
+ */
+
+import { AgentTask as SharedAgentTask } from '@/shared/types/agent';
+
+// Re-export for backward compatibility
+export type AgentTask = SharedAgentTask;
+
+/**
+ * Simulated agent responses for demo
+ * In production, these call real backend API endpoints
+ */
+const DEMO_MODE = true;
+
+/**
+ * Initialize agent system (simulated for frontend demo)
+ */
+async function simulateAgentCall<T>(fn: () => T): Promise<T> {
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 300));
+  return fn();
+}
+
+/**
+ * Get portfolio risk assessment from Risk Agent
+ */
+export async function assessPortfolioRisk(address: string) {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => ({
+      var: 0.15 + Math.random() * 0.1,
+      volatility: 0.24 + Math.random() * 0.05,
+      sharpeRatio: 1.8 + Math.random() * 0.4,
+      liquidationRisk: 0.05 + Math.random() * 0.03,
+      healthScore: 80 + Math.random() * 15,
+      recommendations: [
+        'Portfolio shows moderate risk exposure',
+        'Consider hedging positions with >10x leverage',
+        'Current volatility within acceptable range'
+      ]
+    }));
+  }
+  
+  // In production, call backend API
+  const response = await fetch(`/api/agents/risk/assess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address })
+  });
+  return response.json();
+}
+
+/**
+ * Get hedging recommendations from Hedging Agent
+ */
+export async function getHedgingRecommendations(address: string, positions: any[]) {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => [
+      {
+        action: 'SHORT',
+        asset: 'BTC-PERP',
+        size: 0.5,
+        leverage: 5,
+        reason: 'Hedge against long BTC exposure',
+        expectedGasSavings: 0.67
+      },
+      {
+        action: 'LONG',
+        asset: 'ETH-PERP',
+        size: 1.0,
+        leverage: 3,
+        reason: 'Counter-hedge ETH shorts',
+        expectedGasSavings: 0.65
+      }
+    ]);
+  }
+  
+  const response = await fetch(`/api/agents/hedging/recommend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, positions })
+  });
+  return response.json();
+}
+
+/**
+ * Execute settlement batch via Settlement Agent
+ */
+export async function executeSettlementBatch(transactions: any[]) {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => ({
+      batchId: `batch-${Date.now()}`,
+      transactionCount: transactions.length,
+      gasSaved: 0.67,
+      estimatedCost: `${(transactions.length * 0.0001).toFixed(4)} CRO`,
+      status: 'completed' as const,
+      zkProofGenerated: true
+    }));
+  }
+  
+  const response = await fetch(`/api/agents/settlement/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transactions })
+  });
+  
+  return response.json();
+}
+
+/**
+ * Generate portfolio report from Reporting Agent
+ */
+export async function generatePortfolioReport(address: string, period: string) {
+  
+/**
+ * Generate portfolio report via Reporting Agent
+ */
+export async function generatePortfolioReport(address: string, period: 'daily' | 'weekly' | 'monthly') {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => ({
+      period,
+      totalPnL: 3742 + Math.random() * 1000 - 500,
+      winRate: 0.68 + Math.random() * 0.1 - 0.05,
+      bestPosition: 'ETH-PERP',
+      worstPosition: 'MATIC-PERP',
+      recommendations: [
+        `${period} performance shows consistent returns`,
+        'Risk-adjusted returns above market average',
+        'Consider scaling successful strategies'
+      ],
+      generatedAt: new Date().toISOString()
+    }));
+  }
+  
+  const response = await fetch(`/api/agents/reporting/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, period })
+/**
+ * Get real-time agent activity
+ */
+export async function getAgentActivity(): Promise<AgentTask[]> {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => {
+      const now = Date.now();
+      return [
+        {
+          id: '1',
+          agentName: 'Risk Agent',
+          agentType: 'risk-agent',
+          action: 'RISK_ASSESSMENT',
+          description: 'Portfolio VaR analysis: 15.2%, Health Score: 84/100',
+          status: 'completed' as const,
+          timestamp: new Date(now - 60000),
+          priority: 'high' as const
+        },
+        {
+          id: '2',
+          agentName: 'Hedging Agent',
+/**
+ * Send natural language command to Lead Agent
+ */
+export async function sendAgentCommand(command: string) {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => {
+      // Parse command and generate appropriate response
+      const lowerCommand = command.toLowerCase();
+      
+      if (lowerCommand.includes('risk') || lowerCommand.includes('analyze')) {
+        return {
+          success: true,
+          response: 'I\'ve analyzed your portfolio risk. Current VaR is 15.2%, volatility at 24%, and health score is 84/100. Your portfolio shows moderate risk with good diversification.',
+          action: 'RISK_ASSESSMENT',
+          data: { var: 0.152, volatility: 0.24, healthScore: 84 },
+          agent: 'risk-agent'
+        };
+      }
+      
+      if (lowerCommand.includes('hedge') || lowerCommand.includes('position')) {
+        return {
+          success: true,
+          response: 'Based on your current positions, I recommend opening a SHORT BTC-PERP position at 0.5x with 5x leverage to hedge your long exposure. This will reduce portfolio volatility by ~30%.',
+          action: 'HEDGE_RECOMMENDATION',
+          data: { asset: 'BTC-PERP', action: 'SHORT', size: 0.5, leverage: 5 },
+          agent: 'hedging-agent'
+        };
+      }
+      
+      if (lowerCommand.includes('settlement') || lowerCommand.includes('batch')) {
+        return {
+          success: true,
+          response: 'I\'ll process your pending settlements. Batching 18 transactions with ZK proof generation. Estimated gas savings: 67%. This will complete in ~30 seconds.',
+          action: 'BATCH_SETTLEMENT',
+          data: { count: 18, gasSaved: 0.67 },
+          agent: 'settlement-agent'
+        };
+      }
+      
+      if (lowerCommand.includes('report')) {
+        return {
+          success: true,
+          response: 'I\'ve generated your portfolio report. Total PnL: $3,742 (68% win rate). Best performing: ETH-PERP (+$1,200). Your strategy shows consistent alpha generation.',
+          action: 'REPORT_GENERATION',
+          data: { pnl: 3742, winRate: 0.68 },
+          agent: 'reporting-agent'
+        };
+      }
+      
+      return {
+        success: true,
+        response: 'I understand. I can help you with risk analysis, hedging strategies, settlement batching, and report generation. What would you like me to do?',
+        action: 'GENERAL_QUERY',
+        data: {},
+        agent: 'lead-agent'
+      };
+    });
+  }
+  
+  const response = await fetch(`/api/agents/command`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command })
+  });
+  
+  return response.json();
+}
+/**
+ * Send natural language command to Lead Agent
+ */
+export async function sendAgentCommand(command: string) {
+  const agents = await initializeAgents();
+  
+  const response = await agents.lead!.processNaturalLanguage(command);
+
+  return {
+    success: response.success,
+    response: response.response,
+    action: response.action,
+    data: response.data,
+    agent: response.agent
+  };
+}
+
+// Helper functions
+function getAgentDisplayName(agentType: string): string {
+  const names: Record<string, string> = {
+    'risk-agent': 'Risk Agent',
+    'hedging-agent': 'Hedging Agent',
+    'settlement-agent': 'Settlement Agent',
+    'reporting-agent': 'Reporting Agent',
+    'lead-agent': 'Lead Agent'
+  };
+  return names[agentType] || agentType;
+}
+
+function formatMessagePayload(msg: any): string {
+  if (msg.type === 'RISK_ASSESSMENT') {
+    return `Risk analysis: VaR ${msg.payload?.var || 'N/A'}, Health ${msg.payload?.healthScore || 'N/A'}`;
+  }
+  if (msg.type === 'HEDGE_RECOMMENDATION') {
+    return `Hedge: ${msg.payload?.action} ${msg.payload?.asset} ${msg.payload?.size}x`;
+  }
+  if (msg.type === 'SETTLEMENT_BATCH') {
+    return `Batch settlement: ${msg.payload?.count || 0} transactions`;
+  }
+  if (msg.type === 'REPORT_GENERATED') {
+    return `${msg.payload?.period || 'Portfolio'} report generated`;
+  }
+  return msg.type;
+}

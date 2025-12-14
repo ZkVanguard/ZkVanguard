@@ -99,7 +99,7 @@ export async function generateRiskProof(
 /**
  * Verify ZK proof on-chain
  */
-export async function verifyProofOnChain(proof: ZKProof): Promise<boolean> {
+export async function verifyProofOnChain(_proof: ZKProof): Promise<boolean> {
   try {
     console.log('🔍 Verifying ZK proof on-chain...');
     
@@ -132,7 +132,7 @@ export async function getZKStats() {
  * Simulate proof generation (replaces actual Cairo prover in demo)
  * In production, this would call an API route: POST /api/zk/generate
  */
-async function simulateProofGeneration(data: any[]): Promise<string> {
+async function simulateProofGeneration(_data: any[]): Promise<string> {
   // Simulate proof generation time
   await new Promise(resolve => setTimeout(resolve, 800));
   
@@ -166,7 +166,7 @@ export async function checkZKSystemStatus(): Promise<{
 /**
  * Get proof generation progress (for long-running proofs)
  */
-export async function getProofProgress(proofId: string): Promise<number> {
+export async function getProofProgress(_proofId: string): Promise<number> {
   // In production, this would query the proof generation service
   return 100; // For demo, proofs complete instantly
 }

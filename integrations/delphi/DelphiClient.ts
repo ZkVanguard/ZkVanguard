@@ -106,7 +106,7 @@ export class DelphiClient {
   ) {
     // Initialize HTTP client
     this.httpClient = axios.create({
-      baseURL: config.get('delphi.apiUrl') || 'https://api.delphi.markets',
+      baseURL: process.env.NEXT_PUBLIC_DELPHI_API || 'https://api.delphi.markets',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -120,8 +120,8 @@ export class DelphiClient {
       this.signer = signerOrPrivateKey;
     }
 
-    this.contractAddress = config.get('delphi.contractAddress') || '0x0000000000000000000000000000000000000000';
-    this.apiKey = config.get('delphi.apiKey');
+    this.contractAddress = process.env.NEXT_PUBLIC_DELPHI_CONTRACT || '0x0000000000000000000000000000000000000000';
+    this.apiKey = process.env.NEXT_PUBLIC_DELPHI_API_KEY || '';
 
     if (this.apiKey) {
       this.httpClient.defaults.headers.common['X-API-KEY'] = this.apiKey;

@@ -3,7 +3,7 @@
  * @module scripts/deploy/deploy-contracts
  */
 
-import { ethers, upgrades } from 'hardhat';
+import { ethers } from 'hardhat';
 import { saveContractAddresses, getCurrentNetwork } from '@shared/utils/config';
 import { logger } from '@shared/utils/logger';
 
@@ -45,15 +45,9 @@ async function main() {
   // Deploy RWAManager (upgradeable)
   logger.info('Deploying RWAManager (Upgradeable)...');
   const RWAManager = await ethers.getContractFactory('RWAManager');
-  const rwaManager = await upgrades.deployProxy(
-    RWAManager,
-    [
-      deployer.address,      // admin
-      zkVerifierAddress,     // zkVerifier
-      deployer.address,      // feeCollector
-    ],
-    { initializer: 'initialize' }
-  );
+  // TODO: Install @openzeppelin/hardhat-upgrades for proxy deployments
+  // const rwaManager = await upgrades.deployProxy(RWAManager, [...], { initializer: 'initialize' });
+  const rwaManager = await RWAManager.deploy();
   await rwaManager.waitForDeployment();
   const rwaManagerAddress = await rwaManager.getAddress();
   logger.info('RWAManager deployed', { address: rwaManagerAddress });

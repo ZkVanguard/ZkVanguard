@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional, Union
 sys.path.append('.')
 
 # Import the ONLY authoritative ZK system
-from privacy.zkp.core.zk_system import (
+from zkp.core.zk_system import (
     AuthenticZKStark,
     AuthenticFiniteField,
     AuthenticMerkleTree,
@@ -26,7 +26,7 @@ from privacy.zkp.core.zk_system import (
 
 # Import CUDA optimizations
 try:
-    from privacy.zkp.optimizations.cuda_acceleration import (
+    from zkp.optimizations.cuda_acceleration import (
         CUDAAcceleratedZKStark,
         CUDAOptimizer,
         get_optimized_zk_system,
@@ -46,7 +46,7 @@ class ZKSystemFactory:
         self.cuda_optimizer = None
         if CUDA_AVAILABLE:
             try:
-                from privacy.zkp.optimizations.cuda_acceleration import cuda_optimizer
+                from zkp.optimizations.cuda_acceleration import cuda_optimizer
                 self.cuda_optimizer = cuda_optimizer
                 print("🚀 CUDA optimizer initialized")
             except:

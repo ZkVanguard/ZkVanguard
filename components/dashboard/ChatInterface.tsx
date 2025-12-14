@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
-import { sendAgentCommand } from '@/lib/api/agents-real';
+import { sendAgentCommand } from '@/lib/api/agents';
 
 interface Message {
   id: string;

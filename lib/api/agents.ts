@@ -1,36 +1,25 @@
 /**
  * Agent API Integration
- * Frontend interface to AI agents (connects to backend API in production)
+ * Frontend interface to AI agents
  */
 
-export type AgentTask = {
-  id: string;
-  agentName: string;
-  agentType: string;
-  action: string;
-  description: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  timestamp: Date;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-};
+import { AgentTask as SharedAgentTask } from '@/shared/types/agent';
+
+// Re-export for backward compatibility
+export type AgentTask = SharedAgentTask;
 
 /**
  * Simulated agent responses for demo
- * In production, these call real backend API endpoints
  */
 const DEMO_MODE = true;
 
-/**
- * Initialize agent system (simulated for frontend demo)
- */
 async function simulateAgentCall<T>(fn: () => T): Promise<T> {
-  // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 300));
   return fn();
 }
 
 /**
- * Get portfolio risk assessment from Risk Agent
+ * Get portfolio risk assessment
  */
 export async function assessPortfolioRisk(address: string) {
   if (DEMO_MODE) {
@@ -48,13 +37,16 @@ export async function assessPortfolioRisk(address: string) {
     }));
   }
   
-  // In production, call backend API
   const response = await fetch(`/api/agents/risk/assess`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address })
+  });
+  return response.json();
+}
+
 /**
- * Get hedging recommendations from Hedging Agent
+ * Get hedging recommendations
  */
 export async function getHedgingRecommendations(address: string, positions: any[]) {
   if (DEMO_MODE) {
@@ -75,8 +67,19 @@ export async function getHedgingRecommendations(address: string, positions: any[
         reason: 'Counter-hedge ETH shorts',
         expectedGasSavings: 0.65
       }
+    ]);
+  }
+  
+  const response = await fetch(`/api/agents/hedging/recommend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, positions })
+  });
+  return response.json();
+}
+
 /**
- * Execute settlement batch via Settlement Agent
+ * Execute settlement batch
  */
 export async function executeSettlementBatch(transactions: any[]) {
   if (DEMO_MODE) {
@@ -95,29 +98,28 @@ export async function executeSettlementBatch(transactions: any[]) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ transactions })
   });
-  
   return response.json();
-}*/
-export async function executeSettlementBatch(transactions: any[]) {
-  const agents = await initializeAgents();
-  
+}
+
 /**
- * Generate portfolio report via Reporting Agent
+ * Generate portfolio report
  */
-export async function generatePortfolioReport(address: string, period: 'daily' | 'weekly' | 'monthly') {
+export async function generatePortfolioReport(address: string, period: string) {
   if (DEMO_MODE) {
     return simulateAgentCall(() => ({
       period,
-      totalPnL: 3742 + Math.random() * 1000 - 500,
-      winRate: 0.68 + Math.random() * 0.1 - 0.05,
-      bestPosition: 'ETH-PERP',
-      worstPosition: 'MATIC-PERP',
-      recommendations: [
-        `${period} performance shows consistent returns`,
-        'Risk-adjusted returns above market average',
-        'Consider scaling successful strategies'
-      ],
-      generatedAt: new Date().toISOString()
+      totalValue: 50000 + Math.random() * 50000,
+      profitLoss: -5000 + Math.random() * 10000,
+      performance: {
+        daily: 2.5,
+        weekly: 8.3,
+        monthly: 15.7
+      },
+      topPositions: [
+        { asset: 'CRO', value: 25000, pnl: 5.2 },
+        { asset: 'USDC', value: 15000, pnl: 0.1 },
+        { asset: 'ETH', value: 10000, pnl: 8.5 }
+      ]
     }));
   }
   
@@ -125,126 +127,76 @@ export async function generatePortfolioReport(address: string, period: 'daily' |
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address, period })
+  });
+  return response.json();
+}
+
 /**
- * Get real-time agent activity
- */
-export async function getAgentActivity(): Promise<AgentTask[]> {
-  if (DEMO_MODE) {
-    return simulateAgentCall(() => {
-      const now = Date.now();
-      return [
-        {
-          id: '1',
-          agentName: 'Risk Agent',
-          agentType: 'risk-agent',
-          action: 'RISK_ASSESSMENT',
-          description: 'Portfolio VaR analysis: 15.2%, Health Score: 84/100',
-          status: 'completed' as const,
-          timestamp: new Date(now - 60000),
-          priority: 'high' as const
-        },
-        {
-          id: '2',
-          agentName: 'Hedging Agent',
-/**
- * Send natural language command to Lead Agent
+ * Send natural language command
  */
 export async function sendAgentCommand(command: string) {
-  if (DEMO_MODE) {
-    return simulateAgentCall(() => {
-      // Parse command and generate appropriate response
-      const lowerCommand = command.toLowerCase();
-      
-      if (lowerCommand.includes('risk') || lowerCommand.includes('analyze')) {
-        return {
-          success: true,
-          response: 'I\'ve analyzed your portfolio risk. Current VaR is 15.2%, volatility at 24%, and health score is 84/100. Your portfolio shows moderate risk with good diversification.',
-          action: 'RISK_ASSESSMENT',
-          data: { var: 0.152, volatility: 0.24, healthScore: 84 },
-          agent: 'risk-agent'
-        };
-      }
-      
-      if (lowerCommand.includes('hedge') || lowerCommand.includes('position')) {
-        return {
-          success: true,
-          response: 'Based on your current positions, I recommend opening a SHORT BTC-PERP position at 0.5x with 5x leverage to hedge your long exposure. This will reduce portfolio volatility by ~30%.',
-          action: 'HEDGE_RECOMMENDATION',
-          data: { asset: 'BTC-PERP', action: 'SHORT', size: 0.5, leverage: 5 },
-          agent: 'hedging-agent'
-        };
-      }
-      
-      if (lowerCommand.includes('settlement') || lowerCommand.includes('batch')) {
-        return {
-          success: true,
-          response: 'I\'ll process your pending settlements. Batching 18 transactions with ZK proof generation. Estimated gas savings: 67%. This will complete in ~30 seconds.',
-          action: 'BATCH_SETTLEMENT',
-          data: { count: 18, gasSaved: 0.67 },
-          agent: 'settlement-agent'
-        };
-      }
-      
-      if (lowerCommand.includes('report')) {
-        return {
-          success: true,
-          response: 'I\'ve generated your portfolio report. Total PnL: $3,742 (68% win rate). Best performing: ETH-PERP (+$1,200). Your strategy shows consistent alpha generation.',
-          action: 'REPORT_GENERATION',
-          data: { pnl: 3742, winRate: 0.68 },
-          agent: 'reporting-agent'
-        };
-      }
-      
-      return {
-        success: true,
-        response: 'I understand. I can help you with risk analysis, hedging strategies, settlement batching, and report generation. What would you like me to do?',
-        action: 'GENERAL_QUERY',
-        data: {},
-        agent: 'lead-agent'
-      };
-    });
-  }
-  
-  const response = await fetch(`/api/agents/command`, {
+  const response = await fetch('/api/agents/command', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ command })
   });
-  
   return response.json();
 }
+
 /**
- * Send natural language command to Lead Agent
+ * Get agent activity
  */
-export async function sendAgentCommand(command: string) {
-  const agents = await initializeAgents();
+export async function getAgentActivity(_address: string) {
+  if (DEMO_MODE) {
+    return simulateAgentCall(() => [
+      {
+        id: '1',
+        agentName: 'Risk Agent',
+        agentType: 'risk',
+        action: 'Portfolio Analysis',
+        description: 'Assessed risk metrics for portfolio',
+        status: 'completed' as const,
+        timestamp: new Date(Date.now() - 120000),
+        type: 'risk_assessment',
+        priority: 1,
+        createdAt: new Date(Date.now() - 120000)
+      },
+      {
+        id: '2',
+        agentName: 'Hedging Agent',
+        agentType: 'hedging',
+        action: 'Generate Hedges',
+        description: 'Created 3 hedge recommendations',
+        status: 'completed' as const,
+        timestamp: new Date(Date.now() - 60000),
+        type: 'hedging',
+        priority: 2,
+        createdAt: new Date(Date.now() - 60000)
+      },
+      {
+        id: '3',
+        agentName: 'Settlement Agent',
+        agentType: 'settlement',
+        action: 'Batch Settlement',
+        description: 'Processing 5 transactions',
+        status: 'in-progress' as const,
+        timestamp: new Date(),
+        type: 'settlement',
+        priority: 1,
+        createdAt: new Date()
+      }
+    ]);
+  }
   
-  const response = await agents.lead!.processNaturalLanguage(command);
-
-  return {
-    success: response.success,
-    response: response.response,
-    action: response.action,
-    data: response.data,
-    agent: response.agent
-  };
+  return [];
 }
 
-// Helper functions
-function getAgentDisplayName(agentType: string): string {
-  const names: Record<string, string> = {
-    'risk-agent': 'Risk Agent',
-    'hedging-agent': 'Hedging Agent',
-    'settlement-agent': 'Settlement Agent',
-    'reporting-agent': 'Reporting Agent',
-    'lead-agent': 'Lead Agent'
-  };
-  return names[agentType] || agentType;
-}
-
-function formatMessagePayload(msg: any): string {
-  if (msg.type === 'RISK_ASSESSMENT') {
-    return `Risk analysis: VaR ${msg.payload?.var || 'N/A'}, Health ${msg.payload?.healthScore || 'N/A'}`;
+/**
+ * Format agent message for display
+ */
+export function formatAgentMessage(msg: any): string {
+  if (msg.type === 'RISK_ALERT') {
+    return `⚠️ Risk Alert: ${msg.payload?.message}`;
   }
   if (msg.type === 'HEDGE_RECOMMENDATION') {
     return `Hedge: ${msg.payload?.action} ${msg.payload?.asset} ${msg.payload?.size}x`;
@@ -257,14 +209,3 @@ function formatMessagePayload(msg: any): string {
   }
   return msg.type;
 }
-
-export type AgentTask = {
-  id: string;
-  agentName: string;
-  agentType: string;
-  action: string;
-  description: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  timestamp: Date;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-};

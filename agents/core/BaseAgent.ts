@@ -14,6 +14,7 @@ import { AgentConfig, AgentStatus, AgentMessage, AgentTask } from '@shared/types
  */
 export abstract class BaseAgent extends EventEmitter {
   protected id: string;
+  protected agentId: string; // Alias for specialized agents
   protected name: string;
   protected type: string;
   protected status: AgentStatus;
@@ -25,17 +26,43 @@ export abstract class BaseAgent extends EventEmitter {
   protected currentTask: AgentTask | null = null;
   protected executionHistory: AgentTask[] = [];
 
-  constructor(name: string, type: string, config: AgentConfig, messageBus: EventEmitter) {
+  // Overloaded constructor to support both patterns
+  constructor(name: string, type: string, config: AgentConfig, messageBus: EventEmitter);
+  constructor(agentId: string, name: string, capabilities: string[] | any);
+  constructor(
+    nameOrId: string,
+    typeOrName: string,
+    configOrCapabilities?: AgentConfig | string[] | any,
+    messageBus?: EventEmitter
+  ) {
     super();
-    this.id = uuidv4();
-    this.name = name;
-    this.type = type;
-    this.config = config;
+    
+    // Detect which constructor pattern is being used
+    if (messageBus && typeof configOrCapabilities === 'object' && !Array.isArray(configOrCapabilities)) {
+      // Full constructor: (name, type, config, messageBus)
+      this.id = uuidv4();
+      this.agentId = this.id;
+      this.name = nameOrId;
+      this.type = typeOrName;
+      this.config = configOrCapabilities as AgentConfig;
+      this.messageBus = messageBus;
+      this.capabilities = [];
+      this.setupMessageHandlers();
+    } else {
+      // Simplified constructor: (agentId, name, capabilities)
+      this.id = nameOrId;
+      this.agentId = nameOrId;
+      this.name = typeOrName;
+      const derivedType = typeOrName.toLowerCase().replace('agent', '') as any;
+      this.type = derivedType;
+      this.config = { name: typeOrName, type: derivedType };
+      this.messageBus = new EventEmitter();
+      this.capabilities = Array.isArray(configOrCapabilities) 
+        ? configOrCapabilities.map(c => typeof c === 'string' ? c : c.toString())
+        : [];
+    }
+    
     this.status = 'idle';
-    this.capabilities = [];
-    this.messageBus = messageBus;
-
-    this.setupMessageHandlers();
     logger.info(`Agent initialized: ${this.name} (${this.type})`, { agentId: this.id });
   }
 
@@ -219,10 +246,21 @@ export abstract class BaseAgent extends EventEmitter {
 
   // Private helper methods
   private setupMessageHandlers(): void {
-    this.messageBus.on('message', (message: AgentMessage) => {
-      if (message.to === this.id || message.to === 'broadcast') {
-        this.handleMessage(message);
-      }
-    });
+    if (this.messageBus) {
+      this.messageBus.on('message', (message: AgentMessage) => {
+        if (message.to === this.id || message.to === 'broadcast') {
+          this.handleMessage(message);
+        }
+      });
+    }
+  }
+  
+  // Helper methods for specialized agents
+  getCapabilities(): string[] {
+    return this.capabilities;
+  }
+  
+  getPendingCount(): number {
+    return this.taskQueue.length;
   }
 }

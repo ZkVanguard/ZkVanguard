@@ -3,8 +3,8 @@
  * Real contract interactions on Cronos zkEVM testnet
  */
 
-import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
-import { cronosZkEvmTestnet } from '@/lib/chains';
+import { createPublicClient, http } from 'viem';
+import { CronoszkEVMTestnet } from '@/lib/chains';
 
 // Contract addresses (deployed on testnet)
 export const CONTRACTS = {
@@ -19,7 +19,7 @@ export const CONTRACTS = {
  */
 export function getPublicClient() {
   return createPublicClient({
-    chain: cronosZkEvmTestnet,
+    chain: CronoszkEVMTestnet,
     transport: http()
   });
 }
@@ -86,8 +86,6 @@ export async function getBalance(address: string) {
  * Estimate gas for transaction batch
  */
 export async function estimateBatchGas(transactions: any[]) {
-  const client = getPublicClient();
-  
   try {
     // Estimate gas for individual transactions
     const individualGas = transactions.length * 21000; // Base gas per transaction
@@ -167,24 +165,24 @@ export async function getNetworkStats() {
     ]);
 
     return {
-      chainId: cronosZkEvmTestnet.id,
-      chainName: cronosZkEvmTestnet.name,
+      chainId: CronoszkEVMTestnet.id,
+      chainName: CronoszkEVMTestnet.name,
       blockNumber: Number(block.number),
       blockTime: Number(block.timestamp),
       gasPrice: (Number(gasPrice) / 1e9).toFixed(2) + ' Gwei',
       isTestnet: true,
-      explorer: cronosZkEvmTestnet.blockExplorers?.default.url
+      explorer: CronoszkEVMTestnet.blockExplorers?.default.url
     };
   } catch (error) {
     console.error('Failed to fetch network stats:', error);
     return {
-      chainId: cronosZkEvmTestnet.id,
-      chainName: cronosZkEvmTestnet.name,
+      chainId: CronoszkEVMTestnet.id,
+      chainName: CronoszkEVMTestnet.name,
       blockNumber: 0,
       blockTime: 0,
       gasPrice: 'N/A',
       isTestnet: true,
-      explorer: cronosZkEvmTestnet.blockExplorers?.default.url
+      explorer: CronoszkEVMTestnet.blockExplorers?.default.url
     };
   }
 }

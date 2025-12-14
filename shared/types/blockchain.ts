@@ -41,3 +41,48 @@ export interface GasEstimate {
   estimatedCost: bigint;
   estimatedCostUSD?: number;
 }
+
+/**
+ * Common trading position interface
+ */
+export interface TradingPosition {
+  id: string;
+  asset: string;
+  size: number;
+  entryPrice: number;
+  currentPrice: number;
+  pnl: number;
+  pnlPercent: number;
+  leverage?: number;
+  liquidationPrice?: number;
+  timestamp: Date;
+  status: 'open' | 'closed' | 'liquidated';
+}
+
+/**
+ * Market order interface
+ */
+export interface MarketOrder {
+  id: string;
+  type: 'market' | 'limit' | 'stop';
+  side: 'long' | 'short' | 'buy' | 'sell';
+  asset: string;
+  size: number;
+  price?: number;
+  leverage?: number;
+  status: 'pending' | 'filled' | 'cancelled' | 'rejected';
+  timestamp: Date;
+}
+
+/**
+ * Market data interface
+ */
+export interface MarketData {
+  asset: string;
+  price: number;
+  volume24h: number;
+  change24h: number;
+  high24h: number;
+  low24h: number;
+  timestamp: Date;
+}

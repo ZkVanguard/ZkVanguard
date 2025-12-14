@@ -79,28 +79,43 @@ export class SettlementAgent extends BaseAgent {
       AgentCapability.SETTLEMENT,
     ]);
 
-    this.x402Client = new X402Client(provider, signer, paymentRouterAddress);
+    this.x402Client = new X402Client(provider);
   }
 
   /**
    * Initialize agent
    */
-  async initialize(): Promise<void> {
-    await super.initialize();
-    
+  protected async onInitialize(): Promise<void> {
     try {
-      await this.x402Client.initialize();
       logger.info('SettlementAgent initialized', { agentId: this.agentId });
     } catch (error) {
       logger.error('Failed to initialize SettlementAgent', { error });
       throw error;
     }
   }
+  
+  /**
+   * Handle incoming messages
+   */
+  protected onMessageReceived(_message: any): void {
+    // Handle messages from other agents
+  }
+  
+  /**
+   * Cleanup on shutdown
+   */
+  protected async onShutdown(): Promise<void> {
+    try {
+      logger.info('SettlementAgent shutdown complete', { agentId: this.agentId });
+    } catch (error) {
+      logger.error('Error during SettlementAgent shutdown', { error });
+    }
+  }
 
   /**
    * Execute task
    */
-  protected async executeTask(task: AgentTask): Promise<TaskResult> {
+  protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
     logger.info('Executing settlement task', { taskId: task.id, action: task.action });
 
     try {
@@ -178,7 +193,7 @@ export class SettlementAgent extends BaseAgent {
           action: 'process_settlement',
           parameters: { requestId: settlement.requestId },
           priority: 5,
-          createdAt: Date.now(),
+          createdAt: new Date(),
         });
       }
 
@@ -223,6 +238,7 @@ export class SettlementAgent extends BaseAgent {
         amount: settlement.amount,
         validAfter: settlement.validAfter || 0,
         validBefore: settlement.validBefore || Math.floor(Date.now() / 1000) + 3600,
+        nonce: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
       });
 
       settlement.status = 'COMPLETED';
@@ -234,14 +250,14 @@ export class SettlementAgent extends BaseAgent {
 
       logger.info('Settlement processed successfully', {
         requestId,
-        transactionId: result.transactionId,
+        transactionId: result.txHash,
       });
 
       return {
         success: true,
         data: {
           requestId,
-          transactionId: result.transactionId,
+          transactionId: result.txHash,
           status: 'COMPLETED',
           processingTime: Date.now() - settlement.createdAt,
         },
@@ -322,17 +338,18 @@ export class SettlementAgent extends BaseAgent {
       // Process each token group as a batch
       const results = [];
       for (const [token, settlements] of tokenGroups.entries()) {
-        const transfers = settlements.map(s => ({
-          token: s.token,
-          from: s.portfolioId, // Should be resolved to actual address
-          to: s.beneficiary,
-          amount: s.amount,
-          validAfter: s.validAfter || 0,
-          validBefore: s.validBefore || Math.floor(Date.now() / 1000) + 3600,
-        }));
+        const batchRequest: any = {
+          token,
+          from: await this.signer.getAddress(),
+          recipients: settlements.map(s => s.beneficiary),
+          amounts: settlements.map(s => s.amount),
+          validAfter: Math.min(...settlements.map(s => s.validAfter || 0)),
+          validBefore: Math.max(...settlements.map(s => s.validBefore || Math.floor(Date.now() / 1000) + 3600)),
+          nonce: `batch-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        };
 
         try {
-          const batchResult = await this.x402Client.executeBatchTransfers(transfers);
+          const batchResult = await this.x402Client.executeBatchTransfer(batchRequest);
           
           // Update settlement statuses
           for (const settlement of settlements) {
@@ -345,7 +362,7 @@ export class SettlementAgent extends BaseAgent {
           results.push({
             token,
             count: settlements.length,
-            transactionId: batchResult.transactionId,
+            transactionId: batchResult.txHash,
             status: 'COMPLETED',
           });
         } catch (error) {
@@ -578,12 +595,12 @@ export class SettlementAgent extends BaseAgent {
           
           // Check if we should process
           if (pendingCount >= schedule.minBatchSize) {
-            await this.addTask({
+            this.enqueueTask({
               id: `auto-batch-${Date.now()}`,
               action: 'batch_settlements',
               parameters: { maxBatchSize: schedule.maxBatchSize },
               priority: 2,
-              createdAt: Date.now(),
+              createdAt: new Date(),
             });
           }
         }
@@ -625,7 +642,6 @@ export class SettlementAgent extends BaseAgent {
    */
   async shutdown(): Promise<void> {
     this.stopAutomaticProcessing();
-    await this.x402Client.disconnect();
     await super.shutdown();
   }
 }

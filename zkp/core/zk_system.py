@@ -520,14 +520,18 @@ class AuthenticZKStark:
             if isinstance(obj, dict):
                 cleaned = {}
                 for k, v in obj.items():
-                    cleaned[k] = clean_data_recursively(v, witness_values)
+                    # Never mask field_prime - needed for verification
+                    if k == 'field_prime':
+                        cleaned[k] = v
+                    else:
+                        cleaned[k] = clean_data_recursively(v, witness_values)
                 return cleaned
             elif isinstance(obj, list):
                 return [clean_data_recursively(item, witness_values) for item in obj]
             elif isinstance(obj, str):
-                # Check if this is a protected constant
+                # Check if this is a protected constant - keep it as-is
                 if obj in protected_constants:
-                    return "PROTECTED_CONSTANT"
+                    return obj  # Keep protected constants unchanged
                 
                 # For strings, check if they contain witness values
                 cleaned_str = obj

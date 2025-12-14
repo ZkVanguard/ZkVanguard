@@ -17,7 +17,7 @@ import numpy as np
 sys.path.append('.')
 
 # Import the main ZK system (the ONLY authoritative implementation)
-from privacy.zkp.core.zk_system import AuthenticZKStark, AuthenticFiniteField
+from zkp.core.zk_system import AuthenticZKStark, AuthenticFiniteField
 
 
 class CUDAAcceleratedField(AuthenticFiniteField):

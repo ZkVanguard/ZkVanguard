@@ -5,19 +5,21 @@
 
 import { jest } from '@jest/globals';
 
-// Mock environment variables
-process.env.NODE_ENV = 'test';
-process.env.LOG_LEVEL = 'error'; // Reduce noise in tests
+// Mock environment variables (cannot reassign NODE_ENV in production builds)
+// process.env.NODE_ENV is set by test runner
+if (process.env.LOG_LEVEL === undefined) {
+  process.env.LOG_LEVEL = 'error'; // Reduce noise in tests
+}
 
 // Mock ethers provider for tests
-global.mockProvider = {
+(global as any).mockProvider = {
   getCode: jest.fn().mockResolvedValue('0x1234'),
   getNetwork: jest.fn().mockResolvedValue({ chainId: 338, name: 'cronos-testnet' }),
   getBlockNumber: jest.fn().mockResolvedValue(1000000),
 };
 
 // Mock Moonlander API responses
-global.mockMoonlanderAPI = {
+(global as any).mockMoonlanderAPI = {
   getMarketInfo: jest.fn().mockResolvedValue({
     market: 'BTC-USD-PERP',
     markPrice: '45000',
@@ -33,7 +35,7 @@ global.mockMoonlanderAPI = {
 };
 
 // Mock VVS API responses
-global.mockVVSAPI = {
+(global as any).mockVVSAPI = {
   getQuote: jest.fn().mockResolvedValue({
     amountOut: '1000',
     priceImpact: 0.5,
@@ -46,7 +48,7 @@ global.mockVVSAPI = {
 };
 
 // Mock MCP API responses
-global.mockMCPAPI = {
+(global as any).mockMCPAPI = {
   getPrice: jest.fn().mockResolvedValue({
     symbol: 'BTC',
     price: 45000,
@@ -61,7 +63,7 @@ global.mockMCPAPI = {
 };
 
 // Mock x402 API responses
-global.mockX402API = {
+(global as any).mockX402API = {
   executeGaslessTransfer: jest.fn().mockResolvedValue({
     transactionId: 'x402-tx-123',
     status: 'COMPLETED',
@@ -73,7 +75,7 @@ global.mockX402API = {
 };
 
 // Global test utilities
-global.testUtils = {
+(global as any).testUtils = {
   // Wait for async operations
   wait: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
 
@@ -89,7 +91,7 @@ global.testUtils = {
 
   // Generate random wallet
   randomWallet: () => ({
-    address: global.testUtils.randomAddress(),
+    address: (global as any).testUtils.randomAddress(),
     privateKey: '0x' + '0123456789abcdef'.repeat(4),
   }),
 
@@ -105,7 +107,7 @@ global.testUtils = {
 
 // Setup console for test output
 const originalConsole = global.console;
-global.console = {
+(global as any).console = {
   ...originalConsole,
   log: jest.fn((...args) => {
     if (process.env.DEBUG === 'true') {

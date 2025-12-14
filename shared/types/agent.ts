@@ -13,6 +13,19 @@ export type AgentType =
   | 'reporting'
   | 'monitoring';
 
+/**
+ * Agent capabilities enum
+ */
+export enum AgentCapability {
+  RISK_ANALYSIS = 'RISK_ANALYSIS',
+  PORTFOLIO_MANAGEMENT = 'PORTFOLIO_MANAGEMENT',
+  MARKET_INTEGRATION = 'MARKET_INTEGRATION',
+  PAYMENT_PROCESSING = 'PAYMENT_PROCESSING',
+  SETTLEMENT = 'SETTLEMENT',
+  DATA_ANALYSIS = 'DATA_ANALYSIS',
+  REPORTING = 'REPORTING'
+}
+
 export type TaskStatus = 'queued' | 'in-progress' | 'completed' | 'failed' | 'cancelled';
 
 export type MessageType =
@@ -43,10 +56,10 @@ export interface AgentConfig {
  */
 export interface AgentTask {
   id: string;
-  type: string;
-  status: TaskStatus;
+  type?: string;
+  status?: TaskStatus;
   priority: number;
-  payload: any;
+  payload?: any;
   assignedTo?: string;
   createdAt: Date;
   startedAt?: Date;
@@ -54,6 +67,26 @@ export interface AgentTask {
   executionTime?: number;
   result?: any;
   error?: Error;
+  metadata?: Record<string, any>;
+  
+  // Compatibility aliases for frontend
+  agentName?: string;
+  agentType?: string;
+  action?: string;
+  description?: string;
+  timestamp?: Date;
+  parameters?: any;
+}
+
+/**
+ * Task execution result
+ */
+export interface TaskResult {
+  success: boolean;
+  data?: any;
+  error: string | null;
+  executionTime: number;
+  agentId: string;
   metadata?: Record<string, any>;
 }
 

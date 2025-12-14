@@ -36,10 +36,10 @@ export function ConnectButton() {
     return (
       <button
         onClick={handleDisconnect}
-        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors flex items-center space-x-2"
+        className="px-4 py-2 glass border border-white/20 hover:border-emerald-500 rounded-lg transition-all flex items-center space-x-2"
       >
-        <Wallet className="w-4 h-4" />
-        <span>{address.slice(0, 6)}...{address.slice(-4)}</span>
+        <Wallet className="w-4 h-4 text-emerald-400" />
+        <span className="text-white">{address.slice(0, 6)}...{address.slice(-4)}</span>
       </button>
     );
   }
@@ -49,7 +49,7 @@ export function ConnectButton() {
       <button
         onClick={handleConnect}
         disabled={isLoading}
-        className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:shadow-lg hover:shadow-emerald-500/30 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-white"
       >
         <Wallet className="w-4 h-4" />
         <span>{isLoading ? 'Connecting...' : 'Connect Wallet'}</span>

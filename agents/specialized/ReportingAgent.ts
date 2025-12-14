@@ -210,11 +210,32 @@ export class ReportingAgent extends BaseAgent {
       AgentCapability.REPORTING,
     ]);
   }
+  
+  /**
+   * Initialize agent
+   */
+  protected async onInitialize(): Promise<void> {
+    logger.info('ReportingAgent initialized', { agentId: this.agentId });
+  }
+  
+  /**
+   * Handle incoming messages
+   */
+  protected onMessageReceived(_message: any): void {
+    // Handle messages from other agents
+  }
+  
+  /**
+   * Cleanup on shutdown
+   */
+  protected async onShutdown(): Promise<void> {
+    logger.info('ReportingAgent shutdown complete', { agentId: this.agentId });
+  }
 
   /**
    * Execute task
    */
-  protected async executeTask(task: AgentTask): Promise<TaskResult> {
+  protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
     logger.info('Executing reporting task', { taskId: task.id, action: task.action });
 
     try {
