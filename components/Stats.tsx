@@ -17,25 +17,24 @@ export function Stats() {
   }, []);
 
   return (
-    <section className="py-16 bg-gray-800/50 border-y border-gray-700">
-      <div className="container mx-auto px-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {stats.map((stat, index) => (
-            <div
-              key={index}
-              className={`text-center transition-all duration-700 ${
-                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-              }`}
-              style={{ transitionDelay: `${index * 100}ms` }}
-            >
-              <div className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+    <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
+      <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Platform Stats</h3>
+      <div className="grid grid-cols-2 gap-4">
+        {stats.map((stat, index) => (
+          <div
+            key={index}
+            className={`text-center transition-all duration-700 ${
+              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+            style={{ transitionDelay: `${index * 100}ms` }}
+          >
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 sm:mb-2 bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">
                 {stat.value}
               </div>
-              <div className="text-sm md:text-base text-gray-400">{stat.label}</div>
+              <div className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400 font-medium">{stat.label}</div>
             </div>
           ))}
         </div>
-      </div>
-    </section>
+    </div>
   );
 }

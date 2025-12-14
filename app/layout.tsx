@@ -26,6 +26,53 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                // Aggressively block WalletConnect Cloud API calls
+                const blockedDomains = ['api.web3modal.org', 'pulse.walletconnect.org', 'explorer-api.walletconnect.com'];
+                
+                // Store original fetch
+                const _fetch = window.fetch;
+                
+                // Override fetch with blocking logic
+                window.fetch = function(input, init) {
+                  const url = typeof input === 'string' ? input : input?.url || '';
+                  
+                  // Check if URL contains blocked domain
+                  for (let i = 0; i < blockedDomains.length; i++) {
+                    if (url.indexOf(blockedDomains[i]) !== -1) {
+                      console.log('[API Blocked]', url.substring(0, 100));
+                      
+                      // Return mock successful response immediately
+                      return Promise.resolve(new Response(
+                        JSON.stringify({ success: true, data: [], wallets: [], total: 0, features: {} }),
+                        {
+                          status: 200,
+                          statusText: 'OK',
+                          headers: new Headers({ 'Content-Type': 'application/json' })
+                        }
+                      ));
+                    }
+                  }
+                  
+                  // Call original fetch for non-blocked URLs
+                  return _fetch.apply(this, arguments);
+                };
+                
+                // Also patch fetch on prototype
+                Object.defineProperty(window, 'fetch', {
+                  value: window.fetch,
+                  writable: false,
+                  configurable: false
+                });
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <Providers>
           <div className="flex flex-col min-h-screen">

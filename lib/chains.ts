@@ -1,29 +1,47 @@
-import { Chain } from 'wagmi';
+import { defineChain } from 'viem';
 
-export const CronoszkEVMTestnet: Chain = {
-  id: 282,
-  name: 'Cronos zkEVM Testnet',
-  network: 'cronos-zkevm-testnet',
+// Cronos EVM Mainnet (Required for Cronos x402 Paytech Hackathon)
+export const CronosMainnet = defineChain({
+  id: 25,
+  name: 'Cronos',
   nativeCurrency: {
     decimals: 18,
-    name: 'zkTCRO',
-    symbol: 'zkTCRO',
+    name: 'Cronos',
+    symbol: 'CRO',
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc-zkevm-testnet.cronos.org'],
-      webSocket: ['wss://rpc-zkevm-testnet.cronos.org/ws'],
-    },
-    public: {
-      http: ['https://rpc-zkevm-testnet.cronos.org'],
-      webSocket: ['wss://rpc-zkevm-testnet.cronos.org/ws'],
+      http: ['https://evm.cronos.org'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'Cronos zkEVM Explorer',
-      url: 'https://explorer-zkevm-testnet.cronos.org',
+      name: 'Cronoscan',
+      url: 'https://cronoscan.com',
+    },
+  },
+  testnet: false,
+});
+
+// Cronos EVM Testnet (For Development & Testing)
+export const CronosTestnet = defineChain({
+  id: 338,
+  name: 'Cronos Testnet',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Test Cronos',
+    symbol: 'tCRO',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://evm-t3.cronos.org'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Cronos Testnet Explorer',
+      url: 'https://testnet.cronoscan.com',
     },
   },
   testnet: true,
-};
+});

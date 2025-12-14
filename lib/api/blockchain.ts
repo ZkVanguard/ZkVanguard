@@ -1,10 +1,10 @@
 /**
  * Blockchain Integration
- * Real contract interactions on Cronos zkEVM testnet
+ * Real contract interactions on Cronos EVM testnet
  */
 
 import { createPublicClient, http } from 'viem';
-import { CronoszkEVMTestnet } from '@/lib/chains';
+import { CronosTestnet } from '@/lib/chains';
 
 // Contract addresses (deployed on testnet)
 export const CONTRACTS = {
@@ -19,13 +19,13 @@ export const CONTRACTS = {
  */
 export function getPublicClient() {
   return createPublicClient({
-    chain: CronoszkEVMTestnet,
+    chain: CronosTestnet,
     transport: http()
   });
 }
 
 /**
- * Get real-time gas prices from Cronos zkEVM
+ * Get real-time gas prices from Cronos EVM
  */
 export async function getGasPrice() {
   const client = getPublicClient();
@@ -165,24 +165,24 @@ export async function getNetworkStats() {
     ]);
 
     return {
-      chainId: CronoszkEVMTestnet.id,
-      chainName: CronoszkEVMTestnet.name,
+      chainId: CronosTestnet.id,
+      chainName: CronosTestnet.name,
       blockNumber: Number(block.number),
       blockTime: Number(block.timestamp),
       gasPrice: (Number(gasPrice) / 1e9).toFixed(2) + ' Gwei',
       isTestnet: true,
-      explorer: CronoszkEVMTestnet.blockExplorers?.default.url
+      explorer: CronosTestnet.blockExplorers?.default.url
     };
   } catch (error) {
     console.error('Failed to fetch network stats:', error);
     return {
-      chainId: CronoszkEVMTestnet.id,
-      chainName: CronoszkEVMTestnet.name,
+      chainId: CronosTestnet.id,
+      chainName: CronosTestnet.name,
       blockNumber: 0,
       blockTime: 0,
       gasPrice: 'N/A',
       isTestnet: true,
-      explorer: CronoszkEVMTestnet.blockExplorers?.default.url
+      explorer: CronosTestnet.blockExplorers?.default.url
     };
   }
 }

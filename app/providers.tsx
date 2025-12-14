@@ -1,33 +1,63 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { WagmiConfig, createConfig, configureChains } from 'wagmi';
-import { CronoszkEVMTestnet } from '@/lib/chains';
-import { publicProvider } from 'wagmi/providers/public';
-import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
-import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
+import { WagmiProvider, createConfig, http } from 'wagmi';
+import { injected, coinbaseWallet } from 'wagmi/connectors';
+import { CronosTestnet, CronosMainnet } from '@/lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '@/contexts/ThemeContext';
+import '@rainbow-me/rainbowkit/styles.css';
 
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [CronoszkEVMTestnet],
-  [publicProvider()]
-);
+// Production-ready configuration for Cronos x402 Paytech Hackathon
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
+// Validate Project ID exists
+if (!projectId) {
+  throw new Error(
+    'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. Get one at https://cloud.walletconnect.com/'
+  );
+}
+
+// Manual Wagmi configuration without WalletConnect to avoid AppKit API calls
 const config = createConfig({
-  autoConnect: true,
+  chains: [CronosTestnet, CronosMainnet],
+  transports: {
+    [CronosTestnet.id]: http('https://evm-t3.cronos.org'),
+    [CronosMainnet.id]: http('https://evm.cronos.org'),
+  },
   connectors: [
-    new MetaMaskConnector({ chains }),
+    injected({
+      shimDisconnect: true,
+      target: 'metaMask',
+    }),
+    injected({
+      shimDisconnect: true,
+      target: 'coinbase',
+    }),
+    injected({
+      shimDisconnect: true,
+      target: 'brave',
+    }),
+    injected({
+      shimDisconnect: true,
+      target: 'trust',
+    }),
+    coinbaseWallet({
+      appName: 'Chronos Vanguard',
+      darkMode: false,
+    }),
   ],
-  publicClient,
-  webSocketPublicClient,
+  ssr: true,
 });
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
+      retry: 3,
+      staleTime: 60_000,
+      gcTime: 300_000,
     },
   },
 });
@@ -35,11 +65,21 @@ const queryClient = new QueryClient({
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <CustomThemeProvider>
-      <WagmiConfig config={config}>
+      <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          {children}
+          <RainbowKitProvider
+            modalSize="compact"
+            theme={lightTheme({
+              accentColor: '#007aff',
+              accentColorForeground: 'white',
+              borderRadius: 'large',
+              fontStack: 'system',
+            })}
+          >
+            {children}
+          </RainbowKitProvider>
         </QueryClientProvider>
-      </WagmiConfig>
+      </WagmiProvider>
     </CustomThemeProvider>
   );
 }

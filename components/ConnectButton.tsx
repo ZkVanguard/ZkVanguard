@@ -1,60 +1,112 @@
 'use client';
 
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { ConnectButton as RainbowConnectButton } from '@rainbow-me/rainbowkit';
 import { Wallet } from 'lucide-react';
-import { useState } from 'react';
 
 export function ConnectButton() {
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isLoading } = useConnect();
-  const { disconnect } = useDisconnect();
-  const [error, setError] = useState('');
-
-  const handleConnect = async () => {
-    try {
-      setError('');
-      if (connectors[0]) {
-        await connect({ connector: connectors[0] });
-      } else {
-        setError('Please install MetaMask');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Connection failed');
-      console.error('Connection error:', err);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-    } catch (err) {
-      console.error('Disconnect error:', err);
-    }
-  };
-
-  if (isConnected && address) {
-    return (
-      <button
-        onClick={handleDisconnect}
-        className="px-4 py-2 glass border border-white/20 hover:border-emerald-500 rounded-lg transition-all flex items-center space-x-2"
-      >
-        <Wallet className="w-4 h-4 text-emerald-400" />
-        <span className="text-white">{address.slice(0, 6)}...{address.slice(-4)}</span>
-      </button>
-    );
-  }
-
   return (
-    <div className="flex flex-col items-end">
-      <button
-        onClick={handleConnect}
-        disabled={isLoading}
-        className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:shadow-lg hover:shadow-emerald-500/30 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-      >
-        <Wallet className="w-4 h-4" />
-        <span>{isLoading ? 'Connecting...' : 'Connect Wallet'}</span>
-      </button>
-      {error && <span className="text-xs text-red-400 mt-1">{error}</span>}
-    </div>
+    <RainbowConnectButton.Custom>
+      {({
+        account,
+        chain,
+        openAccountModal,
+        openChainModal,
+        openConnectModal,
+        authenticationStatus,
+        mounted,
+      }) => {
+        const ready = mounted && authenticationStatus !== 'loading';
+        const connected =
+          ready &&
+          account &&
+          chain &&
+          (!authenticationStatus ||
+            authenticationStatus === 'authenticated');
+
+        return (
+          <div
+            {...(!ready && {
+              'aria-hidden': true,
+              'style': {
+                opacity: 0,
+                pointerEvents: 'none',
+                userSelect: 'none',
+              },
+            })}
+          >
+            {(() => {
+              if (!connected) {
+                return (
+                  <button
+                    onClick={openConnectModal}
+                    type="button"
+                    className="px-4 sm:px-6 py-2 sm:py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl font-semibold text-sm sm:text-base transition-all flex items-center space-x-2 shadow-ios-lg hover:shadow-glow-primary"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    <span>Connect Wallet</span>
+                  </button>
+                );
+              }
+
+              if (chain.unsupported) {
+                return (
+                  <button
+                    onClick={openChainModal}
+                    type="button"
+                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-500 font-medium hover:bg-red-500/20 transition-all"
+                  >
+                    Wrong network
+                  </button>
+                );
+              }
+
+              return (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openChainModal}
+                    type="button"
+                    className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 rounded-2xl transition-all shadow-ios hidden sm:flex items-center gap-2"
+                  >
+                    {chain.hasIcon && (
+                      <div
+                        style={{
+                          background: chain.iconBackground,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 999,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {chain.iconUrl && (
+                          <img
+                            alt={chain.name ?? 'Chain icon'}
+                            src={chain.iconUrl}
+                            style={{ width: 20, height: 20 }}
+                          />
+                        )}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-black dark:text-white">
+                      {chain.name}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={openAccountModal}
+                    type="button"
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 rounded-2xl transition-all flex items-center space-x-2 shadow-ios"
+                  >
+                    <Wallet className="w-4 h-4 text-primary-500" />
+                    <span className="text-black dark:text-white font-medium">
+                      {account.displayName}
+                    </span>
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        );
+      }}
+    </RainbowConnectButton.Custom>
   );
 }

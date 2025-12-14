@@ -19,8 +19,16 @@ const nextConfig = {
         zlib: false,
         path: false,
         os: false,
+        '@react-native-async-storage/async-storage': false,
+        'pino-pretty': false,
       };
     }
+
+    // Suppress specific module warnings
+    config.ignoreWarnings = [
+      { module: /node_modules\/@metamask\/sdk/ },
+      { module: /node_modules\/pino/ },
+    ];
 
     // Handle .node files
     config.module.rules.push({
