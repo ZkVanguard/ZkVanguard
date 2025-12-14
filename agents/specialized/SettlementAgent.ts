@@ -1,0 +1,631 @@
+/**
+ * Settlement Agent
+ * Specialized agent for payment settlement and batch processing using x402
+ */
+
+import { BaseAgent } from '../core/BaseAgent';
+import { AgentCapability, AgentTask, TaskResult } from '@shared/types/agent';
+import { X402Client } from '@integrations/x402/X402Client';
+import { ethers } from 'ethers';
+import { logger } from '@shared/utils/logger';
+
+export interface SettlementRequest {
+  requestId: string;
+  portfolioId: string;
+  beneficiary: string;
+  amount: string;
+  token: string;
+  purpose: string;
+  validAfter?: number;
+  validBefore?: number;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  createdAt: number;
+  processedAt?: number;
+}
+
+export interface BatchSettlement {
+  batchId: string;
+  requests: SettlementRequest[];
+  totalAmount: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  transactionHash?: string;
+  gaslessTransactionId?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export interface SettlementSchedule {
+  scheduleId: string;
+  frequency: 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  minBatchSize: number;
+  maxBatchSize: number;
+  minAmount: string;
+  active: boolean;
+}
+
+export interface SettlementReport {
+  period: {
+    start: number;
+    end: number;
+  };
+  statistics: {
+    totalSettlements: number;
+    totalAmount: string;
+    successRate: number;
+    avgProcessingTime: number;
+    gasSavings: string;
+  };
+  settlements: SettlementRequest[];
+  batches: BatchSettlement[];
+}
+
+export class SettlementAgent extends BaseAgent {
+  private x402Client: X402Client;
+  private pendingSettlements: Map<string, SettlementRequest> = new Map();
+  private completedSettlements: Map<string, SettlementRequest> = new Map();
+  private batchHistory: Map<string, BatchSettlement> = new Map();
+  private schedules: Map<string, SettlementSchedule> = new Map();
+  private processingInterval?: NodeJS.Timeout;
+
+  constructor(
+    agentId: string,
+    private provider: ethers.Provider,
+    private signer: ethers.Wallet | ethers.Signer,
+    private paymentRouterAddress: string
+  ) {
+    super(agentId, 'SettlementAgent', [
+      AgentCapability.PAYMENT_PROCESSING,
+      AgentCapability.SETTLEMENT,
+    ]);
+
+    this.x402Client = new X402Client(provider, signer, paymentRouterAddress);
+  }
+
+  /**
+   * Initialize agent
+   */
+  async initialize(): Promise<void> {
+    await super.initialize();
+    
+    try {
+      await this.x402Client.initialize();
+      logger.info('SettlementAgent initialized', { agentId: this.agentId });
+    } catch (error) {
+      logger.error('Failed to initialize SettlementAgent', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Execute task
+   */
+  protected async executeTask(task: AgentTask): Promise<TaskResult> {
+    logger.info('Executing settlement task', { taskId: task.id, action: task.action });
+
+    try {
+      switch (task.action) {
+        case 'create_settlement':
+          return await this.createSettlement(task);
+        
+        case 'process_settlement':
+          return await this.processSettlement(task);
+        
+        case 'batch_settlements':
+          return await this.batchSettlements(task);
+        
+        case 'cancel_settlement':
+          return await this.cancelSettlement(task);
+        
+        case 'create_schedule':
+          return await this.createSchedule(task);
+        
+        case 'generate_report':
+          return await this.generateReport(task);
+        
+        case 'check_status':
+          return await this.checkSettlementStatus(task);
+        
+        default:
+          throw new Error(`Unknown action: ${task.action}`);
+      }
+    } catch (error) {
+      logger.error('Task execution failed', { taskId: task.id, error });
+      return {
+        success: false,
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        executionTime: 0,
+        agentId: this.agentId,
+      };
+    }
+  }
+
+  /**
+   * Create settlement request
+   */
+  private async createSettlement(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { portfolioId, beneficiary, amount, token, purpose, priority, validAfter, validBefore } = task.parameters;
+
+    try {
+      const settlement: SettlementRequest = {
+        requestId: `settlement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        portfolioId,
+        beneficiary,
+        amount,
+        token,
+        purpose,
+        priority: priority || 'MEDIUM',
+        validAfter,
+        validBefore,
+        status: 'PENDING',
+        createdAt: Date.now(),
+      };
+
+      this.pendingSettlements.set(settlement.requestId, settlement);
+
+      logger.info('Settlement request created', {
+        requestId: settlement.requestId,
+        amount,
+        beneficiary,
+      });
+
+      // Auto-process if urgent
+      if (settlement.priority === 'URGENT') {
+        await this.processSettlement({
+          id: `process-${settlement.requestId}`,
+          action: 'process_settlement',
+          parameters: { requestId: settlement.requestId },
+          priority: 5,
+          createdAt: Date.now(),
+        });
+      }
+
+      return {
+        success: true,
+        data: settlement,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to create settlement', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Process individual settlement
+   */
+  private async processSettlement(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { requestId } = task.parameters;
+
+    try {
+      const settlement = this.pendingSettlements.get(requestId);
+      if (!settlement) {
+        throw new Error(`Settlement ${requestId} not found`);
+      }
+
+      if (settlement.status !== 'PENDING') {
+        throw new Error(`Settlement ${requestId} already ${settlement.status}`);
+      }
+
+      logger.info('Processing settlement', { requestId });
+      settlement.status = 'PROCESSING';
+
+      // Execute gasless transfer via x402
+      const result = await this.x402Client.executeGaslessTransfer({
+        token: settlement.token,
+        from: await this.signer.getAddress(),
+        to: settlement.beneficiary,
+        amount: settlement.amount,
+        validAfter: settlement.validAfter || 0,
+        validBefore: settlement.validBefore || Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      settlement.status = 'COMPLETED';
+      settlement.processedAt = Date.now();
+
+      // Move to completed
+      this.pendingSettlements.delete(requestId);
+      this.completedSettlements.set(requestId, settlement);
+
+      logger.info('Settlement processed successfully', {
+        requestId,
+        transactionId: result.transactionId,
+      });
+
+      return {
+        success: true,
+        data: {
+          requestId,
+          transactionId: result.transactionId,
+          status: 'COMPLETED',
+          processingTime: Date.now() - settlement.createdAt,
+        },
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to process settlement', { requestId, error });
+      
+      const settlement = this.pendingSettlements.get(requestId);
+      if (settlement) {
+        settlement.status = 'FAILED';
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Batch multiple settlements
+   */
+  private async batchSettlements(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { requestIds, maxBatchSize } = task.parameters;
+
+    try {
+      // Get pending settlements
+      const settlementsToProcess: SettlementRequest[] = [];
+      
+      if (requestIds) {
+        // Specific settlements
+        for (const id of requestIds) {
+          const settlement = this.pendingSettlements.get(id);
+          if (settlement && settlement.status === 'PENDING') {
+            settlementsToProcess.push(settlement);
+          }
+        }
+      } else {
+        // All pending settlements
+        for (const settlement of this.pendingSettlements.values()) {
+          if (settlement.status === 'PENDING') {
+            settlementsToProcess.push(settlement);
+          }
+        }
+      }
+
+      if (settlementsToProcess.length === 0) {
+        return {
+          success: true,
+          data: { message: 'No settlements to process' },
+          error: null,
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
+      }
+
+      // Sort by priority
+      settlementsToProcess.sort((a, b) => {
+        const priorityWeight = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+        return priorityWeight[b.priority] - priorityWeight[a.priority];
+      });
+
+      // Limit batch size
+      const batchSize = maxBatchSize || 50;
+      const batch = settlementsToProcess.slice(0, batchSize);
+
+      logger.info('Processing batch settlements', { count: batch.length });
+
+      // Group by token for efficient batching
+      const tokenGroups = new Map<string, SettlementRequest[]>();
+      for (const settlement of batch) {
+        const group = tokenGroups.get(settlement.token) || [];
+        group.push(settlement);
+        tokenGroups.set(settlement.token, group);
+      }
+
+      // Process each token group as a batch
+      const results = [];
+      for (const [token, settlements] of tokenGroups.entries()) {
+        const transfers = settlements.map(s => ({
+          token: s.token,
+          from: s.portfolioId, // Should be resolved to actual address
+          to: s.beneficiary,
+          amount: s.amount,
+          validAfter: s.validAfter || 0,
+          validBefore: s.validBefore || Math.floor(Date.now() / 1000) + 3600,
+        }));
+
+        try {
+          const batchResult = await this.x402Client.executeBatchTransfers(transfers);
+          
+          // Update settlement statuses
+          for (const settlement of settlements) {
+            settlement.status = 'COMPLETED';
+            settlement.processedAt = Date.now();
+            this.pendingSettlements.delete(settlement.requestId);
+            this.completedSettlements.set(settlement.requestId, settlement);
+          }
+
+          results.push({
+            token,
+            count: settlements.length,
+            transactionId: batchResult.transactionId,
+            status: 'COMPLETED',
+          });
+        } catch (error) {
+          logger.error('Batch processing failed for token', { token, error });
+          
+          // Mark as failed
+          for (const settlement of settlements) {
+            settlement.status = 'FAILED';
+          }
+          
+          results.push({
+            token,
+            count: settlements.length,
+            status: 'FAILED',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      // Create batch record
+      const batchRecord: BatchSettlement = {
+        batchId: `batch-${Date.now()}`,
+        requests: batch,
+        totalAmount: batch.reduce((sum, s) => sum + parseFloat(s.amount), 0).toString(),
+        status: results.every(r => r.status === 'COMPLETED') ? 'COMPLETED' : 'FAILED',
+        createdAt: startTime,
+        completedAt: Date.now(),
+      };
+
+      this.batchHistory.set(batchRecord.batchId, batchRecord);
+
+      logger.info('Batch settlements completed', {
+        batchId: batchRecord.batchId,
+        totalSettlements: batch.length,
+        successCount: results.filter(r => r.status === 'COMPLETED').length,
+      });
+
+      return {
+        success: true,
+        data: {
+          batchId: batchRecord.batchId,
+          totalProcessed: batch.length,
+          results,
+          executionTime: Date.now() - startTime,
+        },
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to batch settlements', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel settlement
+   */
+  private async cancelSettlement(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { requestId } = task.parameters;
+
+    try {
+      const settlement = this.pendingSettlements.get(requestId);
+      if (!settlement) {
+        throw new Error(`Settlement ${requestId} not found`);
+      }
+
+      if (settlement.status !== 'PENDING') {
+        throw new Error(`Cannot cancel settlement with status ${settlement.status}`);
+      }
+
+      this.pendingSettlements.delete(requestId);
+      logger.info('Settlement cancelled', { requestId });
+
+      return {
+        success: true,
+        data: { requestId, status: 'CANCELLED' },
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to cancel settlement', { requestId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Create settlement schedule
+   */
+  private async createSchedule(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { frequency, minBatchSize, maxBatchSize, minAmount } = task.parameters;
+
+    try {
+      const schedule: SettlementSchedule = {
+        scheduleId: `schedule-${Date.now()}`,
+        frequency: frequency || 'DAILY',
+        minBatchSize: minBatchSize || 5,
+        maxBatchSize: maxBatchSize || 50,
+        minAmount: minAmount || '0',
+        active: true,
+      };
+
+      this.schedules.set(schedule.scheduleId, schedule);
+
+      logger.info('Settlement schedule created', { scheduleId: schedule.scheduleId });
+
+      return {
+        success: true,
+        data: schedule,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to create schedule', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate settlement report
+   */
+  private async generateReport(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { startDate, endDate } = task.parameters;
+
+    try {
+      const start = startDate || Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+      const end = endDate || Date.now();
+
+      // Filter settlements by date range
+      const settlements = Array.from(this.completedSettlements.values())
+        .filter(s => s.createdAt >= start && s.createdAt <= end);
+
+      // Filter batches by date range
+      const batches = Array.from(this.batchHistory.values())
+        .filter(b => b.createdAt >= start && b.createdAt <= end);
+
+      // Calculate statistics
+      const totalAmount = settlements.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+      const successCount = settlements.filter(s => s.status === 'COMPLETED').length;
+      const totalProcessingTime = settlements.reduce((sum, s) => 
+        s.processedAt ? sum + (s.processedAt - s.createdAt) : sum, 0
+      );
+
+      // Estimate gas savings from batching
+      const individualtxCost = 50000; // gas units
+      const batchTxCost = 100000; // gas units for batch
+      const savedGas = settlements.length * individualtxCost - batches.length * batchTxCost;
+
+      const report: SettlementReport = {
+        period: { start, end },
+        statistics: {
+          totalSettlements: settlements.length,
+          totalAmount: totalAmount.toString(),
+          successRate: settlements.length > 0 ? (successCount / settlements.length) * 100 : 0,
+          avgProcessingTime: settlements.length > 0 ? totalProcessingTime / settlements.length : 0,
+          gasSavings: savedGas.toString(),
+        },
+        settlements,
+        batches,
+      };
+
+      logger.info('Settlement report generated', {
+        period: report.period,
+        totalSettlements: report.statistics.totalSettlements,
+      });
+
+      return {
+        success: true,
+        data: report,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to generate report', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Check settlement status
+   */
+  private async checkSettlementStatus(task: AgentTask): Promise<TaskResult> {
+    const startTime = Date.now();
+    const { requestId } = task.parameters;
+
+    try {
+      let settlement = this.pendingSettlements.get(requestId);
+      if (!settlement) {
+        settlement = this.completedSettlements.get(requestId);
+      }
+
+      if (!settlement) {
+        throw new Error(`Settlement ${requestId} not found`);
+      }
+
+      return {
+        success: true,
+        data: settlement,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.agentId,
+      };
+    } catch (error) {
+      logger.error('Failed to check settlement status', { requestId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Start automatic processing based on schedules
+   */
+  startAutomaticProcessing(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+    }
+
+    // Check every minute
+    this.processingInterval = setInterval(async () => {
+      try {
+        for (const schedule of this.schedules.values()) {
+          if (!schedule.active) continue;
+
+          const pendingCount = this.pendingSettlements.size;
+          
+          // Check if we should process
+          if (pendingCount >= schedule.minBatchSize) {
+            await this.addTask({
+              id: `auto-batch-${Date.now()}`,
+              action: 'batch_settlements',
+              parameters: { maxBatchSize: schedule.maxBatchSize },
+              priority: 2,
+              createdAt: Date.now(),
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('Automatic processing error', { error });
+      }
+    }, 60000); // Every minute
+
+    logger.info('Automatic settlement processing started');
+  }
+
+  /**
+   * Stop automatic processing
+   */
+  stopAutomaticProcessing(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+      this.processingInterval = undefined;
+      logger.info('Automatic settlement processing stopped');
+    }
+  }
+
+  /**
+   * Get pending settlements count
+   */
+  getPendingCount(): number {
+    return this.pendingSettlements.size;
+  }
+
+  /**
+   * Get completed settlements count
+   */
+  getCompletedCount(): number {
+    return this.completedSettlements.size;
+  }
+
+  /**
+   * Shutdown agent
+   */
+  async shutdown(): Promise<void> {
+    this.stopAutomaticProcessing();
+    await this.x402Client.disconnect();
+    await super.shutdown();
+  }
+}

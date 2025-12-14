@@ -1,0 +1,202 @@
+{
+  "name": "chronos-vanguard",
+  "version": "0.1.0",
+  "description": "Verifiable Multi-Agent AI Swarm for Institutional RWA Risk Orchestration on Cronos EVM",
+  "author": "Chronos Vanguard Team",
+  "license": "MIT",
+  "keywords": [
+    "cronos",
+    "ai-agents",
+    "rwa",
+    "defi",
+    "zk-proofs",
+    "x402",
+    "web3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/chronos-vanguard.git"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "workspaces": [
+    "agents",
+    "integrations",
+    "simulator",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "prepare": "husky install",
+    "clean": "rimraf dist coverage .hardhat cache",
+    "compile": "hardhat compile",
+    "compile:circuits": "node scripts/utils/generate-circuits.ts",
+    "test": "jest",
+    "test:agents": "jest test/agents",
+    "test:integration": "jest test/integration",
+    "test:contracts": "hardhat test",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:debug": "DEBUG=true jest --verbose",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "test:sprint2": "node scripts/test-sprint2.js",
+    "lint": "npm run lint:contracts && npm run lint:ts",
+    "lint:contracts": "solhint 'contracts/**/*.sol'",
+    "lint:ts": "eslint . --ext .ts,.tsx",
+    "lint:fix": "npm run lint:contracts -- --fix && npm run lint:ts -- --fix",
+    "format": "prettier --write '**/*.{ts,tsx,sol,json,md}'",
+    "format:check": "prettier --check '**/*.{ts,tsx,sol,json,md}'",
+    "typecheck": "tsc --noEmit",
+    "deploy:testnet": "hardhat run scripts/deploy/deploy-contracts.ts --network cronos-testnet",
+    "deploy:mainnet": "hardhat run scripts/deploy/deploy-contracts.ts --network cronos-mainnet",
+    "verify:testnet": "hardhat run scripts/deploy/verify-contracts.ts --network cronos-testnet",
+    "verify:mainnet": "hardhat run scripts/deploy/verify-contracts.ts --network cronos-mainnet",
+    "agents:start": "ts-node agents/core/LeadAgent.ts",
+    "agents:init": "ts-node scripts/setup/setup-agents.ts",
+    "agents:dev": "nodemon --watch agents --exec ts-node agents/core/LeadAgent.ts",
+    "simulator:dev": "concurrently \"cd simulator/backend && npm run dev\" \"cd simulator/frontend && npm run dev\"",
+    "simulator:build": "cd simulator/frontend && npm run build",
+    "simulator:scenario": "ts-node simulator/backend/virtualizer/ScenarioEngine.ts",
+    "simulator:replay": "ts-node simulator/backend/api/controllers/replay-controller.ts",
+    "dev:next": "next dev",
+    "build:next": "next build",
+    "start:next": "next start",
+    "frontend:dev": "npm run dev:next",
+    "frontend:build": "npm run build:next",
+    "frontend:preview": "npm run start:next",
+    "logs:agents": "tail -f logs/agents.log",
+    "logs:contracts": "tail -f logs/contracts.log",
+    "fund:wallets": "ts-node scripts/setup/fund-wallets.ts",
+    "dev": "concurrently \"npm run agents:dev\" \"npm run simulator:dev\" \"npm run frontend:dev\"",
+    "build": "npm run compile && npm run compile:circuits && npm run simulator:build && npm run frontend:build",
+    "start": "npm run agents:start"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1",
+    "@openzeppelin/contracts-upgradeable": "^5.0.1",
+    "@tanstack/react-query": "^5.17.0",
+    "axios": "^1.6.2",
+    "chart.js": "^4.5.1",
+    "circomlibjs": "^0.1.7",
+    "cors": "^2.8.5",
+    "date-fns": "^3.0.6",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.9.0",
+    "eventemitter3": "^5.0.1",
+    "express": "^4.18.2",
+    "framer-motion": "^10.18.0",
+    "lucide-react": "^0.303.0",
+    "next": "^14.0.4",
+    "next-themes": "^0.2.1",
+    "pg": "^8.11.3",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^18.2.0",
+    "redis": "^4.6.12",
+    "snarkjs": "^0.7.3",
+    "uuid": "^9.0.1",
+    "viem": "^1.21.4",
+    "wagmi": "^1.4.12",
+    "winston": "^3.11.0",
+    "ws": "^8.16.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.5",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.3",
+    "@playwright/test": "^1.40.1",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "eslint-config-prettier": "^9.1.0",
+    "hardhat": "^2.19.4",
+    "hardhat-contract-sizer": "^2.10.0",
+    "hardhat-gas-reporter": "^1.0.9",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.0",
+    "nodemon": "^3.0.2",
+    "postcss": "^8.4.32",
+    "prettier": "^3.1.1",
+    "prettier-plugin-solidity": "^1.3.1",
+    "rimraf": "^5.0.5",
+    "solhint": "^4.1.1",
+    "solidity-coverage": "^0.8.5",
+    "tailwindcss": "^3.4.0",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typechain": "^8.3.2",
+    "typescript": "^5.3.3"
+  },
+  "lint-staged": {
+    "*.sol": [
+      "solhint --fix",
+      "prettier --write"
+    ],
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 100,
+    "tabWidth": 2,
+    "overrides": [
+      {
+        "files": "*.sol",
+        "options": {
+          "printWidth": 120,
+          "tabWidth": 4,
+          "useTabs": false,
+          "singleQuote": false,
+          "bracketSpacing": false
+        }
+      }
+    ]
+  },
+  "eslintConfig": {
+    "parser": "@typescript-eslint/parser",
+    "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended",
+      "prettier"
+    ],
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "env": {
+      "node": true,
+      "es2021": true
+    },
+    "rules": {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          "argsIgnorePattern": "^_"
+        }
+      ]
+    }
+  }
+}

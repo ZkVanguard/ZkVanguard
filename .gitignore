@@ -1,0 +1,93 @@
+# Dependencies
+node_modules/
+**/node_modules/
+/.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build outputs
+dist/
+build/
+artifacts/
+cache/
+typechain-types/
+
+# Hardhat
+.hardhat/
+coverage/
+coverage.json
+
+# Environment files
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+*.pem
+Thumbs.db
+
+# Testing
+.nyc_output/
+test-results/
+playwright-report/
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# ZK artifacts
+zk/build/
+zk/proving-key/
+zk/verification-key/
+*.zkey
+*.wasm
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Deployment
+deployments/
+.openzeppelin/
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Secrets
+secrets/
+*.key
+private-keys/
+
+# Package manager lock files (keep package-lock.json for consistency)
+# Uncomment if using yarn/pnpm
+# yarn.lock
+# pnpm-lock.yaml

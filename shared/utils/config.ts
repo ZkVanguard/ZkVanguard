@@ -1,0 +1,206 @@
+/**
+ * @fileoverview Configuration management utility
+ * @module shared/utils/config
+ */
+
+import * as dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { NetworkConfig, ContractAddresses } from '@shared/types/blockchain';
+
+// Load environment variables
+dotenv.config();
+
+/**
+ * Network configurations
+ */
+export const networks: Record<string, NetworkConfig> = {
+  'cronos-testnet': {
+    chainId: 338,
+    name: 'Cronos Testnet',
+    rpcUrl: process.env.CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org/',
+    explorerUrl: 'https://testnet.cronoscan.com/',
+    nativeCurrency: {
+      name: 'Test CRO',
+      symbol: 'TCRO',
+      decimals: 18,
+    },
+  },
+  'cronos-mainnet': {
+    chainId: 25,
+    name: 'Cronos Mainnet',
+    rpcUrl: process.env.CRONOS_MAINNET_RPC || 'https://evm.cronos.org/',
+    explorerUrl: 'https://cronoscan.com/',
+    nativeCurrency: {
+      name: 'CRO',
+      symbol: 'CRO',
+      decimals: 18,
+    },
+  },
+  hardhat: {
+    chainId: 31337,
+    name: 'Hardhat Local',
+    rpcUrl: 'http://127.0.0.1:8545',
+    explorerUrl: '',
+    nativeCurrency: {
+      name: 'ETH',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+};
+
+/**
+ * Get network configuration
+ */
+export function getNetworkConfig(networkName: string): NetworkConfig {
+  const config = networks[networkName];
+  if (!config) {
+    throw new Error(`Network configuration not found: ${networkName}`);
+  }
+  return config;
+}
+
+/**
+ * Get current network from environment
+ */
+export function getCurrentNetwork(): NetworkConfig {
+  const networkName = process.env.NETWORK || 'hardhat';
+  return getNetworkConfig(networkName);
+}
+
+/**
+ * Load contract addresses from deployment file
+ */
+export function loadContractAddresses(networkName: string): ContractAddresses | null {
+  const deploymentFile = path.join(
+    process.cwd(),
+    'deployments',
+    networkName,
+    'addresses.json'
+  );
+
+  if (!fs.existsSync(deploymentFile)) {
+    return null;
+  }
+
+  try {
+    const data = fs.readFileSync(deploymentFile, 'utf8');
+    return JSON.parse(data) as ContractAddresses;
+  } catch (error) {
+    console.error(`Failed to load contract addresses: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Save contract addresses to deployment file
+ */
+export function saveContractAddresses(
+  networkName: string,
+  addresses: ContractAddresses
+): void {
+  const deploymentDir = path.join(process.cwd(), 'deployments', networkName);
+  
+  if (!fs.existsSync(deploymentDir)) {
+    fs.mkdirSync(deploymentDir, { recursive: true });
+  }
+
+  const deploymentFile = path.join(deploymentDir, 'addresses.json');
+  fs.writeFileSync(deploymentFile, JSON.stringify(addresses, null, 2));
+}
+
+/**
+ * Application configuration
+ */
+export const config = {
+  // Environment
+  nodeEnv: process.env.NODE_ENV || 'development',
+  isDevelopment: process.env.NODE_ENV === 'development',
+  isProduction: process.env.NODE_ENV === 'production',
+
+  // Blockchain
+  privateKey: process.env.PRIVATE_KEY || '',
+  deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY || '',
+  
+  // APIs
+  cryptocomAiApiKey: process.env.CRYPTOCOM_AI_API_KEY || '',
+  cryptocomApiSecret: process.env.CRYPTOCOM_API_SECRET || '',
+  x402ApiKey: process.env.X402_API_KEY || '',
+  x402FacilitatorUrl: process.env.X402_FACILITATOR_URL || 'https://api.x402.io',
+  mcpServerUrl: process.env.MCP_SERVER_URL || 'https://mcp.cronos.org',
+  mcpApiKey: process.env.MCP_API_KEY || '',
+  cronoscanApiKey: process.env.CRONOSCAN_API_KEY || '',
+
+  // dApp Integrations
+  vvsRouterAddress: process.env.VVS_ROUTER_ADDRESS || '',
+  moonlanderApiUrl: process.env.MOONLANDER_API_URL || '',
+  delphiContractAddress: process.env.DELPHI_CONTRACT_ADDRESS || '',
+
+  // Database
+  databaseUrl: process.env.DATABASE_URL || '',
+  dbHost: process.env.DB_HOST || 'localhost',
+  dbPort: parseInt(process.env.DB_PORT || '5432'),
+  dbName: process.env.DB_NAME || 'chronos_vanguard',
+  dbUser: process.env.DB_USER || 'chronos_user',
+  dbPassword: process.env.DB_PASSWORD || '',
+
+  // Redis
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisHost: process.env.REDIS_HOST || 'localhost',
+  redisPort: parseInt(process.env.REDIS_PORT || '6379'),
+
+  // Agent Configuration
+  agentLogLevel: process.env.AGENT_LOG_LEVEL || 'info',
+  agentMaxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3'),
+  agentTimeout: parseInt(process.env.AGENT_TIMEOUT || '30000'),
+
+  // ZK Configuration
+  zkTrustedSetupPath: process.env.ZK_TRUSTED_SETUP_PATH || './zk/trusted-setup',
+  zkCircuitPath: process.env.ZK_CIRCUIT_PATH || './zk/circuits',
+
+  // Frontend
+  apiUrl: process.env.VITE_API_URL || 'http://localhost:3000',
+  wsUrl: process.env.VITE_WS_URL || 'ws://localhost:3000',
+  chainId: parseInt(process.env.VITE_CHAIN_ID || '338'),
+
+  // Simulator
+  simulatorPort: parseInt(process.env.SIMULATOR_PORT || '3001'),
+  simulatorDbPath: process.env.SIMULATOR_DB_PATH || './simulator/data',
+
+  // Logging
+  logLevel: process.env.LOG_LEVEL || 'info',
+  logFilePath: process.env.LOG_FILE_PATH || './logs',
+
+  // Gas Configuration
+  gasPriceMultiplier: parseFloat(process.env.GAS_PRICE_MULTIPLIER || '1.1'),
+  maxGasLimit: parseInt(process.env.MAX_GAS_LIMIT || '8000000'),
+
+  // Security
+  jwtSecret: process.env.JWT_SECRET || 'your-jwt-secret',
+  encryptionKey: process.env.ENCRYPTION_KEY || 'your-encryption-key',
+
+  // Monitoring
+  sentryDsn: process.env.SENTRY_DSN || '',
+  grafanaUrl: process.env.GRAFANA_URL || '',
+  prometheusPort: parseInt(process.env.PROMETHEUS_PORT || '9090'),
+};
+
+/**
+ * Validate required configuration
+ */
+export function validateConfig(): void {
+  const required = ['privateKey'];
+  
+  if (config.isProduction) {
+    required.push('cryptocomAiApiKey', 'x402ApiKey', 'mcpApiKey');
+  }
+
+  const missing = required.filter((key) => !config[key as keyof typeof config]);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required configuration: ${missing.join(', ')}`);
+  }
+}
+
+export default config;
