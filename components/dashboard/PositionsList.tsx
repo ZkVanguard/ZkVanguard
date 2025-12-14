@@ -68,10 +68,15 @@ export function PositionsList({ address }: { address: string }) {
             Example positions showing risk management capabilities
           </p>
         </div>
-        <button className="text-sm text-blue-500 hover:text-blue-400 flex items-center space-x-1">
+        <a 
+          href="https://moonlander.io" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-sm text-blue-500 hover:text-blue-400 flex items-center space-x-1"
+        >
           <span>View on Moonlander</span>
           <ExternalLink className="w-4 h-4" />
-        </button>
+        </a>
       </div>
 
       <div className="overflow-x-auto">

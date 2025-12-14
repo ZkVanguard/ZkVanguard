@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
-import { redirect } from 'next/navigation';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { AgentActivity } from '@/components/dashboard/AgentActivity';
 import { RiskMetrics } from '@/components/dashboard/RiskMetrics';
@@ -15,9 +14,8 @@ export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements'>('overview');
 
-  if (!isConnected) {
-    redirect('/');
-  }
+  // Allow access without wallet for demo purposes
+  const displayAddress = address || '0x0000...0000';
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -30,10 +28,15 @@ export default function DashboardPage() {
             <div className="px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-xs text-yellow-400">
               [DEMO] Demo Environment - Showcasing Platform Capabilities
             </div>
+            {!isConnected && (
+              <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-xs text-blue-400">
+                Connect wallet for live data
+              </div>
+            )}
           </div>
         </div>
         <div className="text-sm text-gray-400">
-          {address?.slice(0, 6)}...{address?.slice(-4)}
+          {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
         </div>
       </div>
 
@@ -60,19 +63,19 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 space-y-6">
           {activeTab === 'overview' && (
             <>
-              <PortfolioOverview address={address!} />
-              <RiskMetrics address={address!} />
+              <PortfolioOverview address={displayAddress} />
+              <RiskMetrics address={displayAddress} />
               <ZKProofDemo />
             </>
           )}
-          {activeTab === 'agents' && <AgentActivity address={address!} />}
-          {activeTab === 'positions' && <PositionsList address={address!} />}
-          {activeTab === 'settlements' && <SettlementsPanel address={address!} />}
+          {activeTab === 'agents' && <AgentActivity address={displayAddress} />}
+          {activeTab === 'positions' && <PositionsList address={displayAddress} />}
+          {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
         </div>
 
         {/* Chat Sidebar */}
         <div className="lg:col-span-1">
-          <ChatInterface address={address!} />
+          <ChatInterface address={displayAddress} />
         </div>
       </div>
     </div>

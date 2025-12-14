@@ -89,7 +89,10 @@ export function SettlementsPanel({ address }: { address: string }) {
     <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">Settlements</h2>
-        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
+        <button 
+          onClick={() => alert('New Settlement feature coming soon!')}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
+        >
           New Settlement
         </button>
       </div>

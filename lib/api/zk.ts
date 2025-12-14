@@ -1,13 +1,7 @@
 /**
- * ZK-STARK Integration
+ * ZK-STARK Integration (Browser-Compatible)
  * Connects frontend to real ZK proof generation system
  */
-
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-
-const execAsync = promisify(exec);
 
 export interface ZKProof {
   proof: string;
@@ -136,7 +130,7 @@ export async function getZKStats() {
 
 /**
  * Simulate proof generation (replaces actual Cairo prover in demo)
- * In production, this would call: cairo-run --program=settlement_batch.json
+ * In production, this would call an API route: POST /api/zk/generate
  */
 async function simulateProofGeneration(data: any[]): Promise<string> {
   // Simulate proof generation time
