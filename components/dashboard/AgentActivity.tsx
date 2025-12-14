@@ -56,9 +56,7 @@ export function AgentActivity({ address }: { address: string }) {
     return () => {
       if (interval) clearInterval(interval);
     };
-      setLoading(false);
-    }, 1000);
-  }, [address]);
+  }, [address, realTimeEnabled]);
 
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-96" />;

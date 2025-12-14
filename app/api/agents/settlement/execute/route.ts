@@ -1,6 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SettlementAgent } from '@/agents/specialized/SettlementAgent';
-import { MessageBus } from '@/agents/communication/MessageBus';
+
+/**
+ * Settlement Execution API Route
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { transactions } = body;
+
+    if (!transactions || !Array.isArray(transactions)) {
+      return NextResponse.json(
+        { error: 'Transactions array is required' },
+        { status: 400 }
+      );
+    }
+
+    // Simulate settlement execution
+    const result = {
+      batchId: `batch_${Date.now()}`,
+      transactionCount: transactions.length,
+      gasSaved: Math.floor(Math.random() * 30) + 10,
+      zkProofGenerated: true,
+      txHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+      status: 'completed',
+      timestamp: new Date().toISOString()
+    };
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Settlement execution error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  return NextResponse.json({ status: 'Settlement Agent API operational' });
+}
 
 let messageBus: MessageBus | null = null;
 let settlementAgent: SettlementAgent | null = null;

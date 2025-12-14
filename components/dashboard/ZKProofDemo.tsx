@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, CheckCircle, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
 import { generateSettlementProof, generateRiskProof, verifyProofOnChain, getZKStats, type ZKProof } from '@/lib/api/zk';
 
@@ -41,13 +41,17 @@ export function ZKProofDemo() {
   }
 
   async function loadStats() {
-    const zkStats = await getZKStats();
-    setStats(zkStats);
+    try {
+      const zkStats = await getZKStats();
+      setStats(zkStats);
+    } catch (error) {
+      console.error('Failed to load ZK stats:', error);
+    }
   }
 
-  useState(() => {
+  useEffect(() => {
     loadStats();
-  });
+  }, []);
 
   function copyProof() {
     if (proof) {

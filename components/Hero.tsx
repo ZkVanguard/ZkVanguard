@@ -45,18 +45,18 @@ export function Hero() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <Link
-              href={isConnected ? '/dashboard' : '#'}
+              href="/dashboard"
               className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg font-semibold text-lg transition-all flex items-center justify-center space-x-2 group"
             >
-              <span>{isConnected ? 'Go to Dashboard' : 'Get Started'}</span>
+              <span>Go to Dashboard</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <Link
-              href="/docs"
+            <a
+              href="#features"
               className="w-full sm:w-auto px-8 py-4 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold text-lg transition-colors"
             >
               Learn More
-            </Link>
+            </a>
           </div>
 
           {/* Feature Pills */}

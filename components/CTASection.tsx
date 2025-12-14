@@ -21,18 +21,18 @@ export function CTASection() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href={isConnected ? '/dashboard' : '#'}
+              href="/dashboard"
               className="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 hover:bg-gray-100 rounded-lg font-semibold text-lg transition-all flex items-center justify-center space-x-2 group"
             >
-              <span>{isConnected ? 'Go to Dashboard' : 'Get Started'}</span>
+              <span>Go to Dashboard</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <Link
-              href="/docs"
+            <a
+              href="#features"
               className="w-full sm:w-auto px-8 py-4 bg-transparent border-2 border-white text-white hover:bg-white/10 rounded-lg font-semibold text-lg transition-all"
             >
-              Read Documentation
-            </Link>
+              Learn More
+            </a>
           </div>
         </div>
       </div>
