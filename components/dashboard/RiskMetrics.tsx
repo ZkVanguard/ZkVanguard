@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle, TrendingUp, Shield, Activity } from 'lucide-react';
-import { assessPortfolioRisk } from '@/lib/api/agents-real';
+import { assessPortfolioRisk } from '@/lib/api/agents';
 
 interface RiskMetric {
   label: string;

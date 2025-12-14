@@ -53,7 +53,7 @@ export class X402Client {
       timeout: 30000,
     });
 
-    this.provider = provider || new ethers.JsonRpcProvider(config.networks['cronos-testnet'].rpcUrl);
+    this.provider = provider || new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
   }
 
   /**

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
+import { Shield, CheckCircle, Loader2, Eye, Copy, ExternalLink, ArrowRight } from 'lucide-react';
 import { generateSettlementProof, generateRiskProof, verifyProofOnChain, getZKStats, type ZKProof } from '@/lib/api/zk';
+import Link from 'next/link';
 
 export function ZKProofDemo() {
   const [generating, setGenerating] = useState(false);
@@ -221,6 +222,14 @@ export function ZKProofDemo() {
           </div>
         </div>
       </div>
+
+      {/* Link to Full ZK Proof Page */}
+      <Link href="/zk-proof">
+        <button className="mt-4 w-full px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 group">
+          <span>Explore Interactive ZK Proof Demonstration</span>
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </button>
+      </Link>
     </div>
   );
 }

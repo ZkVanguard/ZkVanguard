@@ -8,7 +8,7 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from privacy.zkp import (
+from zkp.core.zk_system import (
     AuthenticZKStark,
     AuthenticProofManager,
     AuthenticFiniteField,

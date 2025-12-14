@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Activity, CheckCircle, Clock, XCircle, Zap } from 'lucide-react';
-import { getAgentActivity, type AgentTask } from '@/lib/api/agents-real';
+import { getAgentActivity, type AgentTask } from '@/lib/api/agents';
 
 export function AgentActivity({ address }: { address: string }) {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
@@ -13,7 +13,7 @@ export function AgentActivity({ address }: { address: string }) {
     // Fetch real agent activity from message bus
     async function fetchAgentActivity() {
       try {
-        const activity = await getAgentActivity();
+        const activity = await getAgentActivity('0x0000000000000000000000000000000000000000'); // TODO: Use actual connected address
         setTasks(activity.slice(0, 10)); // Show last 10 tasks
         setLoading(false);
       } catch (error) {
@@ -28,7 +28,9 @@ export function AgentActivity({ address }: { address: string }) {
             description: 'Portfolio risk analysis completed',
             status: 'completed',
             timestamp: new Date(Date.now() - 1000 * 60 * 5),
-            priority: 'high'
+            priority: 1,
+            createdAt: new Date(Date.now() - 1000 * 60 * 5),
+            type: 'risk_assessment'
           },
           {
             id: '2',
@@ -36,9 +38,11 @@ export function AgentActivity({ address }: { address: string }) {
             agentType: 'hedging-agent',
             action: 'HEDGE_RECOMMENDATION',
             description: 'Opening SHORT position on BTC-PERP',
-            status: 'processing',
+            status: 'in-progress',
             timestamp: new Date(Date.now() - 1000 * 60 * 2),
-            priority: 'medium'
+            priority: 2,
+            createdAt: new Date(Date.now() - 1000 * 60 * 2),
+            type: 'hedging'
           },
         ]);
         setLoading(false);
@@ -66,7 +70,7 @@ export function AgentActivity({ address }: { address: string }) {
     switch (status) {
       case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'processing':
+      case 'in-progress':
         return <Activity className="w-5 h-5 text-blue-500 animate-pulse" />;
       case 'pending':
         return <Clock className="w-5 h-5 text-yellow-500" />;
@@ -108,13 +112,13 @@ export function AgentActivity({ address }: { address: string }) {
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-3 flex-1">
-                {getStatusIcon(task.status)}
+                {getStatusIcon(task.status || 'queued')}
                 <div className="flex-1">
                   <div className="font-medium text-white mb-1">{task.agentName}</div>
                   <div className="text-sm text-gray-400">{task.action}</div>
                 </div>
               </div>
-              <div className="text-xs text-gray-500">{getTimeAgo(task.timestamp)}</div>
+              <div className="text-xs text-gray-500">{getTimeAgo(task.timestamp || task.createdAt || new Date())}</div>
             </div>
           </div>
         ))}

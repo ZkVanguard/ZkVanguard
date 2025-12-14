@@ -7,7 +7,7 @@ import { publicProvider } from 'wagmi/providers/public';
 import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
 import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider as CustomThemeProvider } from '@/contexts/ThemeContext';
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [CronoszkEVMTestnet],
@@ -34,12 +34,12 @@ const queryClient = new QueryClient({
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+    <CustomThemeProvider>
       <WagmiConfig config={config}>
         <QueryClientProvider client={queryClient}>
           {children}
         </QueryClientProvider>
       </WagmiConfig>
-    </ThemeProvider>
+    </CustomThemeProvider>
   );
 }

@@ -104,7 +104,7 @@ export class VVSClient {
     }
 
     // VVS Router on Cronos
-    this.routerAddress = config.get('vvs.routerAddress') || '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
+    this.routerAddress = process.env.NEXT_PUBLIC_VVS_ROUTER || '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
     
     // Initialize router contract
     this.router = new ethers.Contract(this.routerAddress, VVS_ROUTER_ABI, this.signer);

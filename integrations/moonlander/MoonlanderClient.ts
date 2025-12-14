@@ -97,7 +97,7 @@ export class MoonlanderClient {
   ) {
     // Initialize HTTP client
     this.httpClient = axios.create({
-      baseURL: config.get('moonlander.apiUrl') || 'https://api.moonlander.io',
+      baseURL: process.env.NEXT_PUBLIC_MOONLANDER_API || 'https://api.moonlander.io',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -112,8 +112,8 @@ export class MoonlanderClient {
     }
 
     // API credentials (optional, for authenticated endpoints)
-    this.apiKey = config.get('moonlander.apiKey');
-    this.apiSecret = config.get('moonlander.apiSecret');
+    this.apiKey = process.env.NEXT_PUBLIC_MOONLANDER_API_KEY || '';
+    this.apiSecret = process.env.NEXT_PUBLIC_MOONLANDER_API_SECRET || '';
 
     logger.info('MoonlanderClient initialized', {
       apiUrl: this.httpClient.defaults.baseURL,

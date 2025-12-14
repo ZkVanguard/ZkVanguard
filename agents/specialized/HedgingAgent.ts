@@ -71,9 +71,7 @@ export class HedgingAgent extends BaseAgent {
   /**
    * Initialize agent
    */
-  async initialize(): Promise<void> {
-    await super.initialize();
-    
+  protected async onInitialize(): Promise<void> {
     try {
       // Initialize integrations
       await this.moonlanderClient.initialize();
@@ -85,11 +83,30 @@ export class HedgingAgent extends BaseAgent {
       throw error;
     }
   }
+  
+  /**
+   * Handle incoming messages
+   */
+  protected onMessageReceived(_message: any): void {
+    // Handle messages from other agents
+  }
+  
+  /**
+   * Cleanup on shutdown
+   */
+  protected async onShutdown(): Promise<void> {
+    try {
+      await this.mcpClient.disconnect();
+      logger.info('HedgingAgent shutdown complete', { agentId: this.agentId });
+    } catch (error) {
+      logger.error('Error during HedgingAgent shutdown', { error });
+    }
+  }
 
   /**
    * Execute task
    */
-  protected async executeTask(task: AgentTask): Promise<TaskResult> {
+  protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
     logger.info('Executing hedging task', { taskId: task.id, action: task.action });
 
     try {
@@ -220,11 +237,11 @@ export class HedgingAgent extends BaseAgent {
         takeProfit,
       });
 
-      // Record the hedge
-      this.recordExecution({
+      // Log the hedge execution
+      logger.info('Hedge position opened', {
+        agentId: this.agentId,
         action: 'open_hedge',
-        parameters: task.parameters,
-        result: order,
+        orderId: order.orderId,
         timestamp: Date.now(),
       });
 
@@ -314,7 +331,7 @@ export class HedgingAgent extends BaseAgent {
           notionalValue: position.size,
         },
         priority: 1,
-        createdAt: Date.now(),
+        createdAt: new Date(),
       });
 
       if (!analysis.success || !analysis.data) {
@@ -471,7 +488,7 @@ export class HedgingAgent extends BaseAgent {
     try {
       const historicalPrices = await this.mcpClient.getHistoricalPrices(
         assetSymbol,
-        'USD',
+        '1d',
         30 // 30 days
       );
 
@@ -516,12 +533,12 @@ export class HedgingAgent extends BaseAgent {
 
     this.monitoringInterval = setInterval(async () => {
       try {
-        await this.addTask({
+        this.enqueueTask({
           id: `monitor-${Date.now()}`,
           action: 'monitor_positions',
           parameters: {},
           priority: 1,
-          createdAt: Date.now(),
+          createdAt: new Date(),
         });
       } catch (error) {
         logger.error('Monitoring error', { error });

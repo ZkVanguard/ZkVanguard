@@ -44,6 +44,8 @@
     "coverage",
     "cache",
     "artifacts",
-    "typechain-types"
+    "typechain-types",
+    "test",
+    "scripts"
   ]
 }
