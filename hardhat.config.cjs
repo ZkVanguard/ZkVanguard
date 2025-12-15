@@ -1,16 +1,17 @@
-import { HardhatUserConfig } from 'hardhat/config';
-import '@nomicfoundation/hardhat-toolbox';
-import '@nomicfoundation/hardhat-verify';
-import 'hardhat-gas-reporter';
-import 'hardhat-contract-sizer';
-import 'solidity-coverage';
-import * as dotenv from 'dotenv';
+const { HardhatUserConfig } = require('hardhat/config');
+require('@nomicfoundation/hardhat-toolbox');
+require('@nomicfoundation/hardhat-verify');
+require('@openzeppelin/hardhat-upgrades');
+require('hardhat-gas-reporter');
+require('hardhat-contract-sizer');
+require('solidity-coverage');
+const dotenv = require('dotenv');
 
-dotenv.config();
+dotenv.config({ path: '.env.local' });
 
-const config: HardhatUserConfig = {
+const config = {
   solidity: {
-    version: '0.8.20',
+    version: '0.8.22',
     settings: {
       optimizer: {
         enabled: true,
@@ -95,4 +96,4 @@ const config: HardhatUserConfig = {
   },
 };
 
-export default config;
+module.exports = config;

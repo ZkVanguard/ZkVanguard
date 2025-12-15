@@ -2,9 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -17,7 +18,8 @@ contract RWAManager is
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
-    PausableUpgradeable 
+    PausableUpgradeable,
+    UUPSUpgradeable 
 {
     using SafeERC20 for IERC20;
 
@@ -364,4 +366,7 @@ contract RWAManager is
     function unpause() external onlyRole(ADMIN_ROLE) {
         _unpause();
     }
+
+    // Required by UUPSUpgradeable
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(ADMIN_ROLE) {}
 }

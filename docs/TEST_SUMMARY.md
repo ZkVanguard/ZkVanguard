@@ -185,7 +185,7 @@ DEBUG=true npm test
 
 1. **Mocked Integrations**: External services are mocked, not real
 2. **Blockchain**: No actual blockchain interactions in tests
-3. **ZK Proofs**: ZK proof generation uses fallback mocks
+3. **ZK Proofs**: ZK proof generation uses production STARK system (Python/CUDA backend)
 4. **Time-based Tests**: Some timing tests may be flaky in CI/CD
 
 ## Next Steps for Sprint 3

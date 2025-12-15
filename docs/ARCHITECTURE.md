@@ -234,7 +234,9 @@ chronos-vanguard/
 - Multi-signature support
 
 **ZKVerifier.sol**
-- Groth16 proof verification
+- ZK-STARK proof verification (AIR + FRI protocol)
+- CUDA-accelerated Python backend integration
+- Optional external verifier support for other proof systems
 - Proof registry integration
 - Decision validation
 

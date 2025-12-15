@@ -1,235 +1,279 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, Loader2, Eye, Copy, ExternalLink, ArrowRight } from 'lucide-react';
-import { generateSettlementProof, generateRiskProof, verifyProofOnChain, getZKStats, type ZKProof } from '@/lib/api/zk';
-import Link from 'next/link';
+import { useState } from 'react';
+import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu } from 'lucide-react';
+import { useAccount } from 'wagmi';
+import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
+import { generateProofForOnChain } from '@/lib/api/zk';
 
 export function ZKProofDemo() {
-  const [generating, setGenerating] = useState(false);
-  const [proof, setProof] = useState<ZKProof | null>(null);
-  const [verified, setVerified] = useState(false);
-  const [stats, setStats] = useState<any>(null);
-  const [showProof, setShowProof] = useState(false);
+  const { isConnected } = useAccount();
+  const contractAddresses = useContractAddresses();
+  const { verifyProof, isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
+  const [showForm, setShowForm] = useState(false);
+  const [proofType, setProofType] = useState('settlement');
+  const [isGeneratingProof, setIsGeneratingProof] = useState(false);
+  const [proofMetadata, setProofMetadata] = useState<any>(null);
 
-  async function generateProof() {
-    setGenerating(true);
-    setProof(null);
-    setVerified(false);
-
+  // Generate proof using Python/CUDA backend and submit on-chain
+  const handleGenerateAndVerifyProof = async () => {
     try {
-      // Generate proof for demo settlement batch
-      const demoTransactions = [
-        { hash: '0x123...', amount: '100' },
-        { hash: '0x456...', amount: '200' },
-        { hash: '0x789...', amount: '150' },
-      ];
-
-      const proofStatus = await generateSettlementProof(demoTransactions);
+      setIsGeneratingProof(true);
       
-      if (proofStatus.status === 'completed' && proofStatus.proof) {
-        setProof(proofStatus.proof);
-        
-        // Automatically verify proof
-        const isValid = await verifyProofOnChain(proofStatus.proof);
-        setVerified(isValid);
+      // Prepare sample data based on proof type
+      let data;
+      if (proofType === 'settlement') {
+        data = {
+          payments: [
+            { recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', amount: 1000, token: '0x0000000000000000000000000000000000000000' },
+            { recipient: '0x170E8232E9e18eeB1839dB1d939501994f1e272F', amount: 2000, token: '0x0000000000000000000000000000000000000000' }
+          ]
+        };
+      } else if (proofType === 'risk') {
+        data = {
+          portfolio_value: 10000,
+          volatility: 250,
+          value_at_risk: 500
+        };
+      } else {
+        data = {
+          old_allocations: [5000, 3000, 2000],
+          new_allocations: [4000, 4000, 2000]
+        };
       }
-    } catch (error) {
-      console.error('Proof generation failed:', error);
+
+      // Generate proof using Python/CUDA backend (ZK-STARK)
+      console.log('🔐 Generating ZK-STARK proof with Python/CUDA backend...');
+      const result = await generateProofForOnChain(proofType as any, data, 1);
+      
+      setProofMetadata(result.metadata);
+      
+      // Convert to contract format and submit on-chain
+      const { a, b, c, publicSignals } = result.groth16Proof;
+      
+      console.log('📝 Submitting proof to ZKVerifier contract...');
+      verifyProof(proofType, a, b, c, publicSignals);
+      
+    } catch (err) {
+      console.error('❌ Proof generation failed:', err);
+      alert('Failed to generate proof: ' + (err as Error).message);
     } finally {
-      setGenerating(false);
+      setIsGeneratingProof(false);
     }
+  };
+
+  if (!isConnected) {
+    return (
+      <div className="glass p-6 rounded-xl border border-white/10">
+        <div className="flex items-center space-x-2 mb-4">
+          <Shield className="w-6 h-6 text-purple-500" />
+          <h2 className="text-2xl font-semibold">ZK Proof Verification</h2>
+        </div>
+        <div className="text-center py-12">
+          <Shield className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Connect Your Wallet</h3>
+          <p className="text-gray-400">
+            Connect your wallet to submit and verify ZK proofs on-chain
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  async function loadStats() {
-    try {
-      const zkStats = await getZKStats();
-      setStats(zkStats);
-    } catch (error) {
-      console.error('Failed to load ZK stats:', error);
-    }
+  if (isConfirmed) {
+    return (
+      <div className="glass p-6 rounded-xl border border-green-500/30 bg-green-500/5">
+        <div className="flex items-center gap-3 mb-4">
+          <CheckCircle className="w-6 h-6 text-green-400" />
+          <h3 className="text-xl font-bold text-green-400">Proof Verified On-Chain!</h3>
+        </div>
+        <p className="text-gray-300 mb-4">
+          Your ZK proof has been successfully verified by the ZKVerifier contract on Cronos Testnet.
+        </p>
+        
+        {proofMetadata && (
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-400">Proof Type:</span>
+                <span className="ml-2 font-semibold text-purple-400">{proofMetadata.proofType}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Generation Time:</span>
+                <span className="ml-2 font-semibold text-green-400">{proofMetadata.durationMs}ms</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-gray-400">Acceleration:</span>
+                {proofMetadata.cudaAccelerated ? (
+                  <span className="ml-2 inline-flex items-center gap-1 text-cyan-400 font-semibold">
+                    <Cpu className="w-4 h-4" />
+                    CUDA Enabled
+                  </span>
+                ) : (
+                  <span className="ml-2 text-yellow-400">CPU</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="flex gap-3">
+          <a
+            href={`https://testnet.cronoscan.com/tx/${hash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
+          >
+            View Transaction
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          <button
+            onClick={() => {
+              setShowForm(false);
+              setProofMetadata(null);
+            }}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+          >
+            Verify Another Proof
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  function copyProof() {
-    if (proof) {
-      navigator.clipboard.writeText(proof.proof);
-      alert('Proof copied to clipboard!');
-    }
+  if (error) {
+    return (
+      <div className="glass p-6 rounded-xl border border-red-500/30 bg-red-500/5">
+        <div className="flex items-center gap-3 mb-4">
+          <XCircle className="w-6 h-6 text-red-400" />
+          <h3 className="text-xl font-bold text-red-400">Verification Failed</h3>
+        </div>
+        <p className="text-gray-300 mb-4 text-sm">
+          {error.message || 'Failed to verify proof on-chain'}
+        </p>
+        <button
+          onClick={() => setShowForm(true)}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+    <div className="glass p-6 rounded-xl border border-white/10">
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center space-x-2">
             <Shield className="w-6 h-6 text-purple-500" />
-            <h2 className="text-2xl font-semibold">ZK-STARK Proof System</h2>
-            <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
-              Live System
+            <h2 className="text-2xl font-semibold">ZK Proof Verification</h2>
+            <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30">
+              On-Chain
             </span>
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Real Cairo-based proof generation • Verified on Cronos zkEVM testnet
+            Submit ZK-STARK proofs for verification on ZKVerifier contract
           </p>
         </div>
       </div>
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-700/50 rounded-lg p-4">
-            <div className="text-sm text-gray-400">Total Proofs</div>
-            <div className="text-2xl font-bold text-white">{stats.totalProofsGenerated.toLocaleString()}</div>
+      {!showForm ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-900 p-4 rounded-lg border border-purple-500/20">
+              <h3 className="font-semibold text-purple-400 mb-2">Contract Address</h3>
+              <p className="text-xs font-mono text-gray-400 break-all">
+                {contractAddresses.zkVerifier}
+              </p>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg border border-purple-500/20">
+              <h3 className="font-semibold text-purple-400 mb-2">Proof System</h3>
+              <p className="text-sm text-gray-300">ZK-STARK (AIR + FRI Protocol)</p>
+              <p className="text-xs text-gray-400 mt-1">CUDA-accelerated Python implementation</p>
+            </div>
           </div>
-          <div className="bg-gray-700/50 rounded-lg p-4">
-            <div className="text-sm text-gray-400">Today</div>
-            <div className="text-2xl font-bold text-white">{stats.proofsToday}</div>
-          </div>
-          <div className="bg-gray-700/50 rounded-lg p-4">
-            <div className="text-sm text-gray-400">Avg Gen Time</div>
-            <div className="text-2xl font-bold text-white">{stats.averageGenerationTime}s</div>
-          </div>
-          <div className="bg-gray-700/50 rounded-lg p-4">
-            <div className="text-sm text-gray-400">Success Rate</div>
-            <div className="text-2xl font-bold text-green-500">{(stats.verificationSuccessRate * 100).toFixed(0)}%</div>
+
+          <button
+            onClick={() => setShowForm(true)}
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-bold text-white transition-all duration-300"
+          >
+            Submit Proof for Verification
+          </button>
+
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
+            <p className="text-xs text-cyan-400">
+              ℹ️ This demo generates real ZK-STARK proofs using our Python/CUDA backend with AIR+FRI protocol.
+            </p>
           </div>
         </div>
-      )}
-
-      {/* Generate Button */}
-      <button
-        onClick={generateProof}
-        disabled={generating}
-        className="w-full mb-6 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-      >
-        {generating ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Generating ZK Proof...</span>
-          </>
-        ) : (
-          <>
-            <Shield className="w-5 h-5" />
-            <span>Generate Settlement Proof</span>
-          </>
-        )}
-      </button>
-
-      {/* Proof Result */}
-      {proof && (
+      ) : (
         <div className="space-y-4">
-          {/* Verification Status */}
-          <div className={`flex items-center space-x-2 p-4 rounded-lg ${
-            verified ? 'bg-green-500/10 border border-green-500/30' : 'bg-yellow-500/10 border border-yellow-500/30'
-          }`}>
-            {verified ? (
-              <>
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-green-400 font-medium">Proof Verified On-Chain [VERIFIED]</span>
-              </>
-            ) : (
-              <>
-                <Loader2 className="w-5 h-5 text-yellow-500 animate-spin" />
-                <span className="text-yellow-400 font-medium">Verifying...</span>
-              </>
-            )}
-          </div>
-
-          {/* Proof Details */}
-          <div className="bg-gray-700/50 rounded-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Circuit Name:</span>
-              <span className="text-white font-mono">{proof.circuitName}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Public Inputs:</span>
-              <span className="text-white">{proof.publicInputs.length} hashes</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Generated:</span>
-              <span className="text-white">{new Date(proof.timestamp).toLocaleTimeString()}</span>
-            </div>
-          </div>
-
-          {/* Proof Data (Collapsible) */}
-          <div className="bg-gray-700/50 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setShowProof(!showProof)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-600/50 transition-colors"
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Proof Type
+            </label>
+            <select
+              value={proofType}
+              onChange={(e) => setProofType(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+              disabled={isPending || isConfirming}
             >
-              <div className="flex items-center space-x-2">
-                <Eye className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-medium">View Proof Data</span>
-              </div>
-              <span className="text-xs text-gray-500">{proof.proof.length / 2} bytes</span>
-            </button>
-            
-            {showProof && (
-              <div className="p-4 border-t border-gray-600">
-                <div className="bg-black/50 rounded p-3 font-mono text-xs text-gray-300 break-all max-h-40 overflow-y-auto">
-                  {proof.proof}
-                </div>
-                <div className="mt-3 flex space-x-2">
-                  <button
-                    onClick={copyProof}
-                    className="flex items-center space-x-1 px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs transition-colors"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>Copy</span>
-                  </button>
-                  <a
-                    href={`https://explorer-zkevm-testnet.cronos.org/proof/${proof.proof.slice(0, 20)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center space-x-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>View on Explorer</span>
-                  </a>
-                </div>
-              </div>
-            )}
+              <option value="settlement">Settlement Verification</option>
+              <option value="risk">Risk Assessment</option>
+              <option value="rebalance">Portfolio Rebalance</option>
+            </select>
           </div>
 
-          {/* Active Circuits */}
-          {stats && (
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400 mb-3">Active Circuits</div>
-              <div className="flex flex-wrap gap-2">
-                {stats.activeCircuits.map((circuit: string) => (
-                  <span key={circuit} className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs border border-purple-500/30">
-                    {circuit}
-                  </span>
-                ))}
+          {isPending || isConfirming ? (
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
+                <div>
+                  <p className="font-semibold text-purple-400">
+                    {isPending ? 'Waiting for signature...' : 'Verifying proof on-chain...'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {isPending ? 'Please sign the transaction in your wallet' : 'ZKVerifier contract is processing your proof'}
+                  </p>
+                </div>
               </div>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowForm(false)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateAndVerifyProof}
+                disabled={isGeneratingProof}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                {isGeneratingProof ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  'Generate & Verify'
+                )}
+              </button>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Info Banner */}
-      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-        <div className="flex items-start space-x-3">
-          <Shield className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-blue-300">
-            <strong>How it works:</strong> Our ZK-STARK system uses Cairo circuits to generate zero-knowledge proofs 
-            for settlement batches. These proofs prove computation correctness without revealing transaction details, 
-            enabling privacy-preserving verification on-chain.
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+            <p className="text-xs text-amber-400 mb-1">
+              ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.2-0.4 tCRO.
+            </p>
+            <p className="text-xs text-gray-400">
+              🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Link to Full ZK Proof Page */}
-      <Link href="/zk-proof">
-        <button className="mt-4 w-full px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 group">
-          <span>Explore Interactive ZK Proof Demonstration</span>
-          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-        </button>
-      </Link>
+      )}
     </div>
   );
 }

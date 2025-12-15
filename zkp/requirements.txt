@@ -1,0 +1,10 @@
+# ZK Proof System API Server
+# FastAPI server to expose Python/CUDA ZK system to Next.js frontend
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+aiofiles==23.2.1
+numpy==1.24.3
+pycuda==2022.2.2  # Optional: only if CUDA available

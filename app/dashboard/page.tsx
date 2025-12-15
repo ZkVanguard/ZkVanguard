@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useBalance, useChainId } from 'wagmi';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { AgentActivity } from '@/components/dashboard/AgentActivity';
 import { RiskMetrics } from '@/components/dashboard/RiskMetrics';
@@ -9,13 +9,34 @@ import { ChatInterface } from '@/components/dashboard/ChatInterface';
 import { PositionsList } from '@/components/dashboard/PositionsList';
 import { SettlementsPanel } from '@/components/dashboard/SettlementsPanel';
 import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
+import { CreatePortfolioButton } from '@/components/dashboard/CreatePortfolioButton';
+import { formatEther } from 'viem';
+import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { data: balance } = useBalance({ address });
   const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements'>('overview');
 
+  // Contract data
+  const contractAddresses = useContractAddresses();
+  const { data: portfolioCount } = usePortfolioCount();
+
+  // Network info
+  const networkName = chainId === 338 ? 'Cronos Testnet' : chainId === 25 ? 'Cronos Mainnet' : 'Unknown Network';
+  const isTestnet = chainId === 338;
+  
   // Allow access without wallet for demo purposes
   const displayAddress = address || '0x0000...0000';
+  const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
+
+  useEffect(() => {
+    if (isConnected && contractAddresses) {
+      console.log('📝 Contract Addresses:', contractAddresses);
+      console.log('📊 Portfolio Count:', portfolioCount?.toString());
+    }
+  }, [isConnected, contractAddresses, portfolioCount]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 transition-colors duration-300">
@@ -28,6 +49,12 @@ export default function DashboardPage() {
                 <span className="gradient-text">Dashboard</span>
               </h1>
               <div className="flex flex-wrap items-center gap-3">
+                {isTestnet && isConnected && (
+                  <div className="px-4 py-2 bg-green-500/10 rounded-lg border border-green-500/30 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    <span className="text-sm font-semibold text-green-400">{networkName}</span>
+                  </div>
+                )}
                 <div className="px-4 py-2 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center gap-2">
                   <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
                   <span className="text-sm font-semibold text-amber-400">DEMO MODE</span>
@@ -40,11 +67,21 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            <div className="glass px-6 py-4 rounded-xl border border-white/10">
-              <div className="text-xs text-gray-400 mb-1 font-medium">CONNECTED ADDRESS</div>
-              <div className="text-lg font-mono font-bold text-white">
-                {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
+            <div className="flex flex-col gap-3">
+              <div className="glass px-6 py-4 rounded-xl border border-white/10">
+                <div className="text-xs text-gray-400 mb-1 font-medium">CONNECTED ADDRESS</div>
+                <div className="text-lg font-mono font-bold text-white">
+                  {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
+                </div>
               </div>
+              {isConnected && balance && (
+                <div className="glass px-6 py-4 rounded-xl border border-white/10">
+                  <div className="text-xs text-gray-400 mb-1 font-medium">WALLET BALANCE</div>
+                  <div className="text-lg font-mono font-bold text-white">
+                    {displayBalance} {balance.symbol}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -74,6 +111,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-6">
             {activeTab === 'overview' && (
               <>
+                <CreatePortfolioButton />
                 <PortfolioOverview address={displayAddress} />
                 <RiskMetrics address={displayAddress} />
                 <ZKProofDemo />
