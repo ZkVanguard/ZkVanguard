@@ -21,13 +21,7 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-  "workspaces": [
-    "agents",
-    "integrations",
-    "simulator",
-    "frontend",
-    "shared"
-  ],
+
   "scripts": {
     "prepare": "husky install",
     "clean": "rimraf dist coverage .hardhat cache",

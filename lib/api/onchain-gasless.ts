@@ -5,9 +5,10 @@
 
 import { config } from '@/app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
+import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 
 // Self-sponsoring gasless verifier (5000 gwei refund rate for accurate pricing)
-const GASLESS_VERIFIER_ADDRESS = '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9' as `0x${string}`;
+const GASLESS_VERIFIER_ADDRESS = CONTRACT_ADDRESSES.cronos_testnet.gaslessZKCommitmentVerifier;
 
 const GASLESS_VERIFIER_ABI = [
   {
