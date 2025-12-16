@@ -83,8 +83,14 @@ export async function generateSettlementProof(
     console.log(`✅ Proof job created: ${result.job_id}`);
     
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ ZK proof generation failed:', error);
+    
+    // Provide helpful error message if backend is not running
+    if (error.message?.includes('ERR_CONNECTION_REFUSED') || error.message?.includes('fetch failed')) {
+      throw new Error(`ZK Backend not running. Start it with: python zkp/api/server.py`);
+    }
+    
     throw error;
   }
 }

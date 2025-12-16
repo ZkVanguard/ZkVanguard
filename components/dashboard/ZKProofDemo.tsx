@@ -1,19 +1,28 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu } from 'lucide-react';
+import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
 import { generateProofForOnChain } from '@/lib/api/zk';
+import { useGasless } from '@/lib/hooks/useGasless';
 
 export function ZKProofDemo() {
   const { isConnected } = useAccount();
   const contractAddresses = useContractAddresses();
   const { verifyProof, isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
+  const { 
+    verifyProof: verifyProofGasless, 
+    loading: gaslessLoading, 
+    isAvailable: gaslessAvailable,
+    userStats 
+  } = useGasless();
   const [showForm, setShowForm] = useState(false);
   const [proofType, setProofType] = useState('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<any>(null);
+  const [useGaslessMode, setUseGaslessMode] = useState(true);
+  const [gaslessResult, setGaslessResult] = useState<any>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -51,8 +60,21 @@ export function ZKProofDemo() {
       // Convert to contract format and submit on-chain
       const { a, b, c, publicSignals } = result.groth16Proof;
       
-      console.log('📝 Submitting proof to ZKVerifier contract...');
-      verifyProof(proofType, a, b, c, publicSignals);
+      if (useGaslessMode && gaslessAvailable) {
+        console.log('⚡ Submitting proof GASLESS (YOU PAY NO GAS)...');
+        const gaslessRes = await verifyProofGasless(
+          contractAddresses.zkVerifier,
+          proofType,
+          a as [bigint, bigint],
+          b as [[bigint, bigint], [bigint, bigint]],
+          c as [bigint, bigint],
+          publicSignals as bigint[]
+        );
+        setGaslessResult(gaslessRes);
+      } else {
+        console.log('📝 Submitting proof to ZKVerifier contract...');
+        verifyProof(proofType, a, b, c, publicSignals);
+      }
       
     } catch (err) {
       console.error('❌ Proof generation failed:', err);
@@ -80,57 +102,98 @@ export function ZKProofDemo() {
     );
   }
 
-  if (isConfirmed) {
+  if (isConfirmed || gaslessResult) {
+    const isGasless = !!gaslessResult;
     return (
       <div className="glass p-6 rounded-xl border border-green-500/30 bg-green-500/5">
         <div className="flex items-center gap-3 mb-4">
           <CheckCircle className="w-6 h-6 text-green-400" />
-          <h3 className="text-xl font-bold text-green-400">Proof Verified On-Chain!</h3>
+          <h3 className="text-xl font-bold text-green-400 flex items-center gap-2">
+            Proof Verified On-Chain!
+            {isGasless && (
+              <span className="text-xs px-2 py-1 bg-emerald-500 rounded-full flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                GASLESS
+              </span>
+            )}
+          </h3>
         </div>
         <p className="text-gray-300 mb-4">
           Your ZK proof has been successfully verified by the ZKVerifier contract on Cronos Testnet.
+          {isGasless && ' You paid ZERO gas fees! 🎉'}
         </p>
         
         {proofMetadata && (
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 mb-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-gray-400">Proof Type:</span>
-                <span className="ml-2 font-semibold text-purple-400">{proofMetadata.proofType}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Generation Time:</span>
-                <span className="ml-2 font-semibold text-green-400">{proofMetadata.durationMs}ms</span>
-              </div>
-              <div className="col-span-2">
-                <span className="text-gray-400">Acceleration:</span>
-                {proofMetadata.cudaAccelerated ? (
-                  <span className="ml-2 inline-flex items-center gap-1 text-cyan-400 font-semibold">
-                    <Cpu className="w-4 h-4" />
-                    CUDA Enabled
-                  </span>
-                ) : (
-                  <span className="ml-2 text-yellow-400">CPU</span>
-                )}
+          <>
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-400">Proof Type:</span>
+                  <span className="ml-2 font-semibold text-purple-400">{proofMetadata.proofType}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Generation Time:</span>
+                  <span className="ml-2 font-semibold text-green-400">{proofMetadata.durationMs}ms</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-400">Acceleration:</span>
+                  {proofMetadata.cudaAccelerated ? (
+                    <span className="ml-2 inline-flex items-center gap-1 text-cyan-400 font-semibold">
+                      <Cpu className="w-4 h-4" />
+                      CUDA Enabled
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-yellow-400">CPU</span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+            
+            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-cyan-400 mb-2 flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Zero-Knowledge Privacy
+              </h4>
+              <div className="text-sm text-gray-300 space-y-1">
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span><strong>Public:</strong> Statement verified on blockchain</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span><strong>Hidden:</strong> Actual amounts, addresses, balances</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span><strong>Proven:</strong> Computation is correct without revealing inputs</span>
+                </div>
+              </div>
+            </div>
+          </>
         )}
         
         <div className="flex gap-3">
-          <a
-            href={`https://testnet.cronoscan.com/tx/${hash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
-          >
-            View Transaction
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {hash && (
+            <a
+              href={`https://explorer.cronos.org/testnet/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
+            >
+              View Transaction
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+          {isGasless && gaslessResult?.queueId && (
+            <div className="text-sm text-gray-400">
+              Queue ID: {gaslessResult.queueId} • Processing in batch...
+            </div>
+          )}
           <button
             onClick={() => {
               setShowForm(false);
               setProofMetadata(null);
+              setGaslessResult(null);
             }}
             className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
           >
@@ -194,11 +257,46 @@ export function ZKProofDemo() {
             </div>
           </div>
 
+          {/* Gasless Mode Toggle */}
+          {gaslessAvailable && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <p className="font-semibold text-emerald-400">Gasless Mode Available</p>
+                    <p className="text-xs text-gray-400">Pay ZERO gas fees - platform covers all costs</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useGaslessMode}
+                    onChange={(e) => setUseGaslessMode(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+              {userStats.gaslessTransactions !== '0' && (
+                <div className="mt-2 pt-2 border-t border-emerald-500/20 text-xs text-gray-400">
+                  You've saved {userStats.totalGasSaved} TCRO across {userStats.gaslessTransactions} transactions 🎉
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={() => setShowForm(true)}
-            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-bold text-white transition-all duration-300"
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-bold text-white transition-all duration-300 flex items-center justify-center gap-2"
           >
+            {useGaslessMode && gaslessAvailable && (
+              <Zap className="w-5 h-5 text-yellow-300" />
+            )}
             Submit Proof for Verification
+            {useGaslessMode && gaslessAvailable && (
+              <span className="text-xs px-2 py-0.5 bg-emerald-500 rounded-full">FREE</span>
+            )}
           </button>
 
           <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
@@ -223,18 +321,49 @@ export function ZKProofDemo() {
               <option value="risk">Risk Assessment</option>
               <option value="rebalance">Portfolio Rebalance</option>
             </select>
+            
+            {/* Show what will be hidden */}
+            <div className="mt-3 p-3 bg-slate-900/50 border border-cyan-500/30 rounded-lg">
+              <p className="text-xs text-cyan-400 font-semibold mb-2">🔒 Secrets (NOT revealed in proof):</p>
+              <ul className="text-xs text-gray-400 space-y-1">
+                {proofType === 'settlement' && (
+                  <>
+                    <li>• Exact recipient addresses</li>
+                    <li>• Individual payment amounts</li>
+                    <li>• Transaction details</li>
+                  </>
+                )}
+                {proofType === 'risk' && (
+                  <>
+                    <li>• Actual portfolio value</li>
+                    <li>• Volatility calculations</li>
+                    <li>• Specific risk scores</li>
+                  </>
+                )}
+                {proofType === 'rebalance' && (
+                  <>
+                    <li>• Old allocation values</li>
+                    <li>• New allocation values</li>
+                    <li>• Asset distribution details</li>
+                  </>
+                )}
+              </ul>
+              <p className="text-xs text-emerald-400 mt-2">✓ Only proves the computation is valid</p>
+            </div>
           </div>
 
-          {isPending || isConfirming ? (
+          {(isPending || isConfirming || gaslessLoading) ? (
             <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
               <div className="flex items-center gap-3">
                 <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
                 <div>
                   <p className="font-semibold text-purple-400">
-                    {isPending ? 'Waiting for signature...' : 'Verifying proof on-chain...'}
+                    {gaslessLoading && useGaslessMode ? 'Signing message (gasless)...' : 
+                     isPending ? 'Waiting for signature...' : 'Verifying proof on-chain...'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {isPending ? 'Please sign the transaction in your wallet' : 'ZKVerifier contract is processing your proof'}
+                    {gaslessLoading && useGaslessMode ? 'Sign the message to verify WITHOUT paying gas ⚡' :
+                     isPending ? 'Please sign the transaction in your wallet' : 'ZKVerifier contract is processing your proof'}
                   </p>
                 </div>
               </div>
@@ -264,14 +393,26 @@ export function ZKProofDemo() {
             </div>
           )}
 
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-            <p className="text-xs text-amber-400 mb-1">
-              ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.2-0.4 tCRO.
-            </p>
-            <p className="text-xs text-gray-400">
-              🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
-            </p>
-          </div>
+          {useGaslessMode && gaslessAvailable ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+              <p className="text-xs text-emerald-400 mb-1 font-semibold flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                100% GASLESS - You pay ZERO fees! Platform covers all costs.
+              </p>
+              <p className="text-xs text-gray-400">
+                🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
+              </p>
+            </div>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-xs text-amber-400 mb-1">
+                ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.2-0.4 tCRO.
+              </p>
+              <p className="text-xs text-gray-400">
+                🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
