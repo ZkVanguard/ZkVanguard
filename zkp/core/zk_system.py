@@ -552,6 +552,9 @@ class AuthenticZKStark:
                                 cleaned_str = cleaned_str.replace(witness_str, replacement)
                 
                 return cleaned_str
+            elif isinstance(obj, bool):
+                # CRITICAL: Preserve boolean values - they are NOT witness data
+                return obj
             elif isinstance(obj, (int, float)):
                 # For numbers, check if they exactly match a witness value
                 for witness_key, witness_val in witness_values.items():
@@ -727,7 +730,9 @@ class AuthenticZKStark:
                 'witness_blinding': False,
                 'multi_polynomial': False,
                 'double_commitment': False,
-                'constant_time': False
+                'constant_time': False,
+                '_test_marker': 'UPDATED_CODE_V2',  # Test marker to verify code is loaded
+                '_debug_witness_blinding_type': str(type(False).__name__)  # Debug: check type
             },
             'proof_metadata': {
                 'blowup_factor': self.blowup_factor,
@@ -1205,7 +1210,10 @@ class AuthenticZKStark:
             
             return True
             
-        except Exception:
+        except Exception as e:
+            print(f"DEBUG VERIFICATION EXCEPTION: {type(e).__name__}: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
             return False
     
     def _verify_proof_enhanced_privacy(self, proof: Dict[str, Any], statement: Dict[str, Any]) -> bool:
