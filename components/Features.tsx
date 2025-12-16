@@ -1,6 +1,6 @@
 'use client';
 
-import { Shield, Zap, Users, BarChart3, Clock, Lock } from 'lucide-react';
+import { Shield, Zap, BarChart3, Lock } from 'lucide-react';
 
 const features = [
   {

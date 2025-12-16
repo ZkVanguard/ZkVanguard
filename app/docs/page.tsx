@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Book, Code, Zap, Shield, Box, Terminal, FileText, CheckCircle } from 'lucide-react';
+import { Book, Code, Zap, Shield, Box, Terminal, CheckCircle } from 'lucide-react';
 
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { DollarSign, Users, Zap, TrendingUp, Globe, Shield } from 'lucide-react';
+import { DollarSign, Users, TrendingUp, Globe, Shield } from 'lucide-react';
 
 const marketData = [
   {

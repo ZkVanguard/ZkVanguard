@@ -1,0 +1,22 @@
+# Build and cache directories
+node_modules/
+.next/
+dist/
+coverage/
+cache/
+artifacts/
+typechain-types/
+
+# Archive (legacy code)
+archive/
+
+# Test files (less strict)
+test/
+tests/
+
+# Config files
+next.config.js
+tailwind.config.js
+postcss.config.js
+jest.config.js
+hardhat.config.cjs

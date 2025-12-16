@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare, Brain, Shield, CheckCircle } from 'lucide-react';
+import { MessageSquare, Brain, CheckCircle } from 'lucide-react';
 
 const steps = [
   {

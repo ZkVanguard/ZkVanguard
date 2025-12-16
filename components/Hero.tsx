@@ -1,11 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Shield, Zap, TrendingUp, Sparkles, ChevronDown, BarChart3, Lock } from 'lucide-react';
-import { useAccount } from 'wagmi';
+import { ArrowRight, Shield, Zap, Sparkles, ChevronDown, BarChart3, Lock } from 'lucide-react';
 
 export function Hero() {
-  const { isConnected } = useAccount();
 
   return (
     <div className="relative bg-gray-50 dark:bg-black overflow-hidden">

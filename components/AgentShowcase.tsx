@@ -1,6 +1,6 @@
 'use client';
 
-import { Brain, FileText, DollarSign, TrendingUp, Activity } from 'lucide-react';
+import { DollarSign, TrendingUp, Activity } from 'lucide-react';
 
 const agents = [
   {

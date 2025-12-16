@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAccount } from 'wagmi';
 
 export function CTASection() {
-  const { isConnected } = useAccount();
+  useAccount();
 
   return (
     <section className="py-8 sm:py-10 lg:py-12 bg-gradient-to-br from-primary-500 via-accent-500 to-secondary-500 relative overflow-hidden">

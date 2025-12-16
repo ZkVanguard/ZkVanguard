@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
 import { ConnectButton } from './ConnectButton';
 import { Menu, X, Zap, FlaskConical, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
