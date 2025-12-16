@@ -24,7 +24,9 @@ interface Proof {
 interface ProofResult {
   proof: Proof;
   statement: any;
+  claim?: string;
   scenario: string;
+  duration_ms?: number;
 }
 
 const scenarios = [
@@ -128,6 +130,7 @@ function ZKProofPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           proof: proofResult.proof,
+          claim: proofResult.claim,
           statement: proofResult.statement
         })
       });

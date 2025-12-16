@@ -6,18 +6,40 @@
 const ZK_API_URL = process.env.NEXT_PUBLIC_ZK_API_URL || 'http://localhost:8000';
 
 export interface ZKProof {
-  witness: number[];
-  commitments: string[];
-  evaluations: number[];
-  fri_proof: Record<string, any>;
-  proof_type: string;
-  cuda_accelerated: boolean;
+  version: string;
+  statement_hash: string | number;
+  merkle_root: string;
+  challenge: string | number;
+  response: string | number;
+  witness_commitment: any;
+  public_inputs: number[];
+  computation_steps: number;
+  query_responses: Array<{
+    index: number;
+    value: string | number;
+    proof: Array<[string, string]>;
+  }>;
+  execution_trace_length: number;
+  extended_trace_length: number;
+  field_prime: string;
+  security_level: number;
+  generation_time: number;
+  timestamp: string;
+  privacy_enhancements: {
+    witness_blinding: boolean;
+    multi_polynomial: boolean;
+    double_commitment: boolean;
+    constant_time: boolean;
+  };
+  proof_metadata: Record<string, any>;
+  proof_hash: string | number;
 }
 
 export interface ZKProofStatus {
   job_id: string;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   proof?: ZKProof;
+  claim?: string;
   error?: string;
   timestamp: string;
   duration_ms?: number;
@@ -218,7 +240,8 @@ export async function waitForProof(
  */
 export async function verifyProofOffChain(
   proof: ZKProof,
-  publicInputs: number[]
+  claim: string,
+  publicInputs: number[] = []
 ): Promise<boolean> {
   try {
     const response = await fetch(`${ZK_API_URL}/api/zk/verify`, {
@@ -228,6 +251,7 @@ export async function verifyProofOffChain(
       },
       body: JSON.stringify({
         proof,
+        claim,
         public_inputs: publicInputs
       })
     });

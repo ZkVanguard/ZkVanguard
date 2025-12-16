@@ -5,7 +5,10 @@ const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { proof, statement } = body;
+    const { proof, statement, claim } = body;
+
+    // Use the claim from proof generation if available
+    const verificationClaim = claim || JSON.stringify(statement, null, 0);
 
     // Call the real FastAPI ZK server
     const response = await fetch(`${ZK_API_URL}/api/zk/verify`, {
@@ -15,19 +18,22 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         proof: proof,
-        public_inputs: statement ? [statement.threshold || 0] : []
+        claim: verificationClaim,
+        public_inputs: []
       })
     });
 
     if (!response.ok) {
-      throw new Error(`ZK API error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`ZK API error: ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
 
     return NextResponse.json({
       success: true,
-      verified: result.verified
+      verified: result.valid, // Backend returns 'valid' not 'verified'
+      duration_ms: result.duration_ms
     });
   } catch (error: any) {
     console.error('Error verifying proof:', error);
