@@ -1,5 +1,4 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
@@ -7,8 +6,11 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "lib": ["ES2020"]
   },
   "include": ["hardhat.config.ts", "scripts/**/*.ts", "test/**/*.ts"],
-  "files": ["./hardhat.config.ts"]
+  "exclude": ["node_modules", "app", "components", "lib", "contexts"]
 }

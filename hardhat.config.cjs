@@ -10,6 +10,9 @@ const dotenv = require('dotenv');
 dotenv.config({ path: '.env.local' });
 
 const config = {
+  'ts-node': {
+    project: './tsconfig.hardhat.json'
+  },
   solidity: {
     version: '0.8.22',
     settings: {
@@ -56,7 +59,7 @@ const config = {
         chainId: 338,
         urls: {
           apiURL: 'https://api-testnet.cronoscan.com/api',
-          browserURL: 'https://testnet.cronoscan.com/',
+          browserURL: 'https://explorer.cronos.org/testnet/',
         },
       },
       {
@@ -64,7 +67,7 @@ const config = {
         chainId: 25,
         urls: {
           apiURL: 'https://api.cronoscan.com/api',
-          browserURL: 'https://cronoscan.com/',
+          browserURL: 'https://explorer.cronos.org/',
         },
       },
     ],

@@ -67,9 +67,9 @@ async function main() {
   console.log('└─ PaymentRouter:   ', paymentRouterAddress);
   
   console.log('\n🔗 Block Explorer Links:');
-  console.log('├─ ZKVerifier:      ', `https://testnet.cronoscan.com/address/${zkVerifierAddress}`);
-  console.log('├─ RWAManager:      ', `https://testnet.cronoscan.com/address/${rwaManagerAddress}`);
-  console.log('└─ PaymentRouter:   ', `https://testnet.cronoscan.com/address/${paymentRouterAddress}`);
+  console.log('├─ ZKVerifier:      ', `https://explorer.cronos.org/testnet/address/${zkVerifierAddress}`);
+  console.log('├─ RWAManager:      ', `https://explorer.cronos.org/testnet/address/${rwaManagerAddress}`);
+  console.log('└─ PaymentRouter:   ', `https://explorer.cronos.org/testnet/address/${paymentRouterAddress}`);
 
   console.log('\n💾 Save these addresses to your .env.local:');
   console.log(`NEXT_PUBLIC_ZKVERIFIER_ADDRESS=${zkVerifierAddress}`);

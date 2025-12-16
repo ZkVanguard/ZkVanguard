@@ -19,7 +19,7 @@ export const networks: Record<string, NetworkConfig> = {
     chainId: 338,
     name: 'Cronos Testnet',
     rpcUrl: process.env.CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org/',
-    explorerUrl: 'https://testnet.cronoscan.com/',
+    explorerUrl: 'https://explorer.cronos.org/testnet/',
     nativeCurrency: {
       name: 'Test CRO',
       symbol: 'TCRO',
@@ -30,7 +30,7 @@ export const networks: Record<string, NetworkConfig> = {
     chainId: 25,
     name: 'Cronos Mainnet',
     rpcUrl: process.env.CRONOS_MAINNET_RPC || 'https://evm.cronos.org/',
-    explorerUrl: 'https://cronoscan.com/',
+    explorerUrl: 'https://explorer.cronos.org/',
     nativeCurrency: {
       name: 'CRO',
       symbol: 'CRO',
