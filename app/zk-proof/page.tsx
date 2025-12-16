@@ -163,6 +163,21 @@ function ZKProofPage() {
       console.log('✅ Stored on-chain! TX:', result.txHash);
       console.log('💰 Gas refunded - you paid $0.00!');
       
+      // Store statement_hash and statement for ZK verification
+      // The statement_hash is already committed on-chain as part of proofHash
+      // Users can later prove they know the statement by providing it
+      const proofMetadata = {
+        txHash: result.txHash,
+        proofHash: commitment.proofHash,
+        statement_hash: proof.statement_hash,
+        statement: selectedScenario?.statement || {},
+        timestamp: Date.now(),
+        gasRefunded: result.gasRefunded,
+        refundDetails: result.refundDetails,
+      };
+      localStorage.setItem(`proof_${commitment.proofHash}`, JSON.stringify(proofMetadata));
+      localStorage.setItem(`proof_tx_${result.txHash}`, JSON.stringify(proofMetadata));
+      
     } catch (error) {
       console.error('❌ Failed to store on-chain:', error);
       alert('Failed to store proof on-chain: ' + (error instanceof Error ? error.message : String(error)));

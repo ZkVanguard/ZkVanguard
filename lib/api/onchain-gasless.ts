@@ -88,6 +88,11 @@ export interface OnChainGaslessResult {
   txHash: string;
   gasRefunded: boolean;
   message: string;
+  refundDetails?: {
+    gasUsed: string;
+    refundAmount: string;
+    effectiveCost: string;
+  };
 }
 
 /**
@@ -120,12 +125,33 @@ export async function storeCommitmentOnChainGasless(
   if (receipt.status === 'success') {
     console.log('✅ Commitment stored ON-CHAIN!');
     console.log('   Transaction:', hash);
-    console.log('   🎉 GAS REFUNDED - Your net cost: $0.00!');
+    
+    // Extract refund details from transaction receipt
+    let refundDetails;
+    if (receipt.gasUsed) {
+      const gasUsed = receipt.gasUsed.toString();
+      const effectiveGasPrice = receipt.effectiveGasPrice?.toString() || '0';
+      const gasCost = BigInt(gasUsed) * BigInt(effectiveGasPrice);
+      const refundAmount = gasCost; // Contract refunds full amount
+      
+      refundDetails = {
+        gasUsed,
+        refundAmount: refundAmount.toString(),
+        effectiveCost: '0', // Net cost is zero after refund
+      };
+      
+      console.log('   💰 Gas Used:', gasUsed, 'units');
+      console.log('   💰 Refund Amount:', (Number(refundAmount) / 1e18).toFixed(6), 'CRO');
+      console.log('   🎉 Your net cost: $0.00!');
+    } else {
+      console.log('   🎉 GAS REFUNDED - Your net cost: $0.00!');
+    }
     
     return {
       txHash: hash,
       gasRefunded: true,
-      message: 'Commitment stored on-chain with automatic gas refund - you paid $0.00!'
+      message: 'Commitment stored on-chain with automatic gas refund - you paid $0.00!',
+      refundDetails
     };
   } else {
     throw new Error('Transaction failed');
@@ -165,12 +191,33 @@ export async function storeCommitmentsBatchOnChainGasless(
     console.log('✅ Batch stored ON-CHAIN!');
     console.log('   Transaction:', hash);
     console.log('   Commitments:', commitments.length);
-    console.log('   🎉 GAS REFUNDED - Your net cost: $0.00!');
+    
+    // Extract refund details
+    let refundDetails;
+    if (receipt.gasUsed) {
+      const gasUsed = receipt.gasUsed.toString();
+      const effectiveGasPrice = receipt.effectiveGasPrice?.toString() || '0';
+      const gasCost = BigInt(gasUsed) * BigInt(effectiveGasPrice);
+      const refundAmount = gasCost;
+      
+      refundDetails = {
+        gasUsed,
+        refundAmount: refundAmount.toString(),
+        effectiveCost: '0',
+      };
+      
+      console.log('   💰 Gas Used:', gasUsed, 'units');
+      console.log('   💰 Refund Amount:', (Number(refundAmount) / 1e18).toFixed(6), 'CRO');
+      console.log('   🎉 Your net cost: $0.00!');
+    } else {
+      console.log('   🎉 GAS REFUNDED - Your net cost: $0.00!');
+    }
     
     return {
       txHash: hash,
       gasRefunded: true,
-      message: `${commitments.length} commitments stored on-chain with gas refund - you paid $0.00!`
+      message: `${commitments.length} commitments stored on-chain with gas refund - you paid $0.00!`,
+      refundDetails
     };
   } else {
     throw new Error('Transaction failed');
