@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User } from 'lucide-react';
 import { sendAgentCommand } from '@/lib/api/agents';
 
 interface Message {
@@ -12,7 +12,7 @@ interface Message {
   agentType?: string;
 }
 
-export function ChatInterface({ address }: { address: string }) {
+export function ChatInterface({ address: _address }: { address: string }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',

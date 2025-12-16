@@ -5,7 +5,7 @@
 
 import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult } from '@shared/types/agent';
-import { MoonlanderClient, OrderResult, PerpetualPosition } from '@integrations/moonlander/MoonlanderClient';
+import { MoonlanderClient } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
@@ -158,7 +158,7 @@ export class HedgingAgent extends BaseAgent {
 
       // Determine hedge market (e.g., BTC-USD-PERP for BTC exposure)
       const hedgeMarket = `${assetSymbol}-USD-PERP`;
-      const marketInfo = await this.moonlanderClient.getMarketInfo(hedgeMarket);
+      await this.moonlanderClient.getMarketInfo(hedgeMarket);
 
       // Calculate optimal hedge ratio using delta-hedging approach
       const hedgeRatio = await this.calculateOptimalHedgeRatio(
@@ -413,7 +413,7 @@ export class HedgingAgent extends BaseAgent {
   /**
    * Monitor positions
    */
-  private async monitorPositions(task: AgentTask): Promise<TaskResult> {
+  private async monitorPositions(_task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
 
     try {
@@ -515,7 +515,7 @@ export class HedgingAgent extends BaseAgent {
   /**
    * Calculate spot-future correlation
    */
-  private async calculateSpotFutureCorrelation(assetSymbol: string): Promise<number> {
+  private async calculateSpotFutureCorrelation(_assetSymbol: string): Promise<number> {
     // Simplified correlation calculation
     // In production, would fetch perpetual funding rates and spot prices
     

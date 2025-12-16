@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useCreatePortfolio, usePortfolioCount } from '@/lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
-import { parseUnits } from 'viem';
 
 export function CreatePortfolioButton() {
   const { isConnected } = useAccount();

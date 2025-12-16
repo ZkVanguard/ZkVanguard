@@ -3,8 +3,7 @@
  * Converts ZK-STARK proofs to contract format and submits to blockchain
  */
 
-import { parseEther, type Address } from 'viem';
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import type { Address } from 'viem';
 import type { ZKProof } from '../api/zk';
 
 /**

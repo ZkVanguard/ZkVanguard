@@ -93,7 +93,7 @@ export class RiskAgent extends BaseAgent {
    * Analyze portfolio risk
    */
   private async analyzeRisk(payload: any): Promise<RiskAnalysis> {
-    const { portfolioId, objectives } = payload;
+    const { portfolioId } = payload;
 
     logger.info('Analyzing portfolio risk', {
       agentId: this.id,
@@ -152,7 +152,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Internal volatility calculation
    */
-  private async calculateVolatilityInternal(portfolioId: number): Promise<number> {
+  private async calculateVolatilityInternal(_portfolioId: number): Promise<number> {
     // Simulate volatility calculation
     // In production: fetch historical prices, calculate std deviation
     const baseVolatility = 0.2; // 20% annualized
@@ -171,7 +171,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Calculate asset exposures
    */
-  private async calculateExposures(portfolioId: number): Promise<RiskAnalysis['exposures']> {
+  private async calculateExposures(_portfolioId: number): Promise<RiskAnalysis['exposures']> {
     // Simulate exposure analysis
     // In production: fetch from blockchain, categorize assets
     return [
@@ -201,7 +201,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Assess market sentiment
    */
-  private async assessMarketSentiment(payload: any): Promise<string> {
+  private async assessMarketSentiment(_payload: any): Promise<string> {
     return await this.assessMarketSentimentInternal();
   }
 

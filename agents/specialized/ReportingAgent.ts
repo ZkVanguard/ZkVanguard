@@ -590,7 +590,7 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generateComprehensiveReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, startDate, endDate } = task.parameters;
+    const { startDate, endDate } = task.parameters;
 
     try {
       logger.info('Generating comprehensive report');
@@ -721,7 +721,7 @@ export class ReportingAgent extends BaseAgent {
   /**
    * List all reports
    */
-  private async listReports(task: AgentTask): Promise<TaskResult> {
+  private async listReports(_task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
 
     const reportList = Array.from(this.completedReports.keys()).map(reportId => ({

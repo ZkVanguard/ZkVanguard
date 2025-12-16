@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Activity, CheckCircle, Clock, XCircle, Zap } from 'lucide-react';
+import { Activity, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { getAgentActivity, type AgentTask } from '@/lib/api/agents';
 
 export function AgentActivity({ address }: { address: string }) {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [realTimeEnabled, setRealTimeEnabled] = useState(true);
 
   useEffect(() => {
     // Fetch real agent activity from message bus

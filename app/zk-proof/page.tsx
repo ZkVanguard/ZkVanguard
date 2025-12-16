@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Search } from 'lucide-react';
+import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
 
 interface Proof {
   statement_hash: number;
@@ -91,7 +91,6 @@ function ZKProofPage() {
   const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
   const [showSecrets, setShowSecrets] = useState(false);
   const [showProofDetails, setShowProofDetails] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
 
   const generateProof = async () => {
     setIsGenerating(true);
@@ -179,7 +178,7 @@ function ZKProofPage() {
 
         {/* Scenario Selection */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {scenarios.map((scenario, idx) => (
+          {scenarios.map((scenario, _idx) => (
             <button
               key={scenario.id}
               onClick={() => {

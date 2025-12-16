@@ -5,6 +5,7 @@
 
 import { spawn } from 'child_process';
 import path from 'path';
+import crypto from 'crypto';
 import { logger } from '@shared/utils/logger';
 import { RiskAnalysis } from '@shared/types/agent';
 
@@ -83,7 +84,7 @@ export class ProofGenerator {
 
       const proof: ZKProof = {
         proof: result.proof,
-        proofHash: result.proof.trace_merkle_root || this.hashProof(result.proof),
+        proofHash: result.proof.trace_merkle_root || this.hashProofSync(result.proof),
         proofType,
         verified: result.verified || false,
         generationTime: Date.now() - startTime,
@@ -175,10 +176,10 @@ export class ProofGenerator {
       trace_length: 1024,
       extended_trace_length: 4096,
       blowup_factor: 4,
-      trace_merkle_root: this.hashProof(statement).substring(0, 64),
+      trace_merkle_root: this.hashProofSync(statement).substring(0, 64),
       fri_roots: [
-        this.hashProof({ ...statement, layer: 0 }).substring(0, 64),
-        this.hashProof({ ...statement, layer: 1 }).substring(0, 64),
+        this.hashProofSync({ ...statement, layer: 0 }).substring(0, 64),
+        this.hashProofSync({ ...statement, layer: 1 }).substring(0, 64),
       ],
       fri_final_polynomial: [1, 2, 3, 4],
       query_responses: [],
@@ -204,8 +205,7 @@ export class ProofGenerator {
   /**
    * Hash proof data to create proof hash
    */
-  private hashProof(data: any): string {
-    const crypto = require('crypto');
+  private hashProofSync(data: any): string {
     const hash = crypto.createHash('sha256');
     hash.update(JSON.stringify(data));
     return hash.digest('hex');

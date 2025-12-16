@@ -12,7 +12,7 @@ interface Payment {
   token: string;
 }
 
-export function SettlementsPanel({ address }: { address: string }) {
+export function SettlementsPanel({ address: _address }: { address: string }) {
   const { isConnected } = useAccount();
   const contractAddresses = useContractAddresses();
   const { processSettlement, isPending, isConfirming, isConfirmed, error, hash } = useProcessSettlement();

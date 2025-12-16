@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Activity, RefreshCw } from 'lucide-react';
-import { usePortfolioCount, usePortfolio } from '@/lib/contracts/hooks';
-import { formatEther } from 'viem';
+import { DollarSign, Activity, RefreshCw } from 'lucide-react';
+import { usePortfolioCount } from '@/lib/contracts/hooks';
 
 interface PortfolioData {
   totalValue: number;
@@ -13,7 +12,7 @@ interface PortfolioData {
   activeHedges: number;
 }
 
-export function PortfolioOverview({ address }: { address: string }) {
+export function PortfolioOverview({ address: _address }: { address: string }) {
   const { data: portfolioCount, isLoading: countLoading, refetch } = usePortfolioCount();
   const [loading, setLoading] = useState(true);
   
@@ -39,8 +38,6 @@ export function PortfolioOverview({ address }: { address: string }) {
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-64" />;
   }
-
-  const isPositive = data.dailyChange >= 0;
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">

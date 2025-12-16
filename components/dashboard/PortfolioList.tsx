@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { usePortfolio } from '@/lib/contracts/hooks';
 import { formatEther } from 'viem';
-import { TrendingUp, ExternalLink, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 interface PortfolioCardProps {
   portfolioId: bigint;
@@ -98,7 +98,6 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
 }
 
 export function PortfolioList() {
-  const { data: portfolioCount } = usePortfolio(BigInt(0)); // Just to check if any exist
   const [viewCount, setViewCount] = useState(3);
 
   // Generate array of portfolio IDs to display

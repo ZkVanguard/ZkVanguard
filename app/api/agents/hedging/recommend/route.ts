@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, positions } = body;
+    const { address } = body;
 
     if (!address) {
       return NextResponse.json(

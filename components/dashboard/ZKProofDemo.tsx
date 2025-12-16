@@ -7,14 +7,13 @@ import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
 import { generateProofForOnChain } from '@/lib/api/zk';
 
 export function ZKProofDemo() {
-  const { isConnected, address: account } = useAccount();
+  const { isConnected } = useAccount();
   const contractAddresses = useContractAddresses();
-  const { verifyProof, isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
+  const { isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
   const [showForm, setShowForm] = useState(false);
   const [proofType, setProofType] = useState('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<any>(null);
-  const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
   const [gaslessResult, setGaslessResult] = useState<any>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
@@ -79,12 +78,9 @@ export function ZKProofDemo() {
           console.log('   Proof Hash:', result.commitment.proofHash);
           console.log('   Security: 521-bit NIST P-521');
           console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
-          
-          setVerificationResult(true);
         } catch (err) {
           console.error('❌ Failed to store commitment on-chain:', err);
           console.log('✅ But proof was still verified off-chain successfully!');
-          setVerificationResult(true);
         }
       } else {
         console.log('✅ Proof verified off-chain successfully!');
@@ -92,7 +88,6 @@ export function ZKProofDemo() {
         console.log('   Security: 521-bit NIST P-521');
         console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
         console.log('ℹ️  Connect wallet to store commitment on-chain');
-        setVerificationResult(true);
       }
       
     } catch (err) {

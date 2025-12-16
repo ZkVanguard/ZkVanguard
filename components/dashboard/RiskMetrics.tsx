@@ -8,13 +8,12 @@ interface RiskMetric {
   label: string;
   value: string;
   status: 'low' | 'medium' | 'high';
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 export function RiskMetrics({ address }: { address: string }) {
   const [metrics, setMetrics] = useState<RiskMetric[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     // Fetch real risk assessment from Risk Agent
@@ -48,7 +47,6 @@ export function RiskMetrics({ address }: { address: string }) {
             icon: Activity 
           },
         ]);
-        setLastUpdate(new Date());
         setLoading(false);
       } catch (error) {
         console.error('Failed to fetch risk metrics:', error);

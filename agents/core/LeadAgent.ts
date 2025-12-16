@@ -7,7 +7,6 @@ import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { BaseAgent } from './BaseAgent';
 import { AgentRegistry } from './AgentRegistry';
-import { MessageBus } from '../communication/MessageBus';
 import { logger } from '@shared/utils/logger';
 import {
   AgentConfig,
@@ -152,7 +151,6 @@ export class LeadAgent extends BaseAgent {
     // Extract numerical values
     const yieldMatch = text.match(/(\d+\.?\d*)%?\s*yield/i);
     const riskMatch = text.match(/risk.*?(\d+)/i);
-    const amountMatch = text.match(/\$?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:m|million)?/i);
 
     const intent: StrategyIntent = {
       action,

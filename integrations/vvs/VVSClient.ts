@@ -5,7 +5,6 @@
 
 import { ethers } from 'ethers';
 import { logger } from '@shared/utils/logger';
-import { config } from '@shared/utils/config';
 
 // VVS Router ABI (simplified)
 const VVS_ROUTER_ABI = [
@@ -465,10 +464,10 @@ export class VVSClient {
    * Calculate price impact (simplified)
    */
   private calculatePriceImpact(
-    amountIn: string,
-    amountOut: string,
-    tokenIn: string,
-    tokenOut: string
+    _amountIn: string,
+    _amountOut: string,
+    _tokenIn: string,
+    _tokenOut: string
   ): number {
     // Simplified calculation
     // In production, compare against spot price from oracle

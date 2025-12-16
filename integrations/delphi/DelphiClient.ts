@@ -6,7 +6,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { ethers } from 'ethers';
 import { logger } from '@shared/utils/logger';
-import { config } from '@shared/utils/config';
 
 export interface Market {
   marketId: string;

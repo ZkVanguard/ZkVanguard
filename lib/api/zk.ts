@@ -298,15 +298,6 @@ export function convertToContractFormat(starkProof: ZKProof): {
   // Maps STARK commitments (trace, FRI, evaluations) to structured points
   // Contract verifies these represent valid STARK proof components
   
-  const hash = (str: string) => {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) {
-      h = ((h << 5) - h) + str.charCodeAt(i);
-      h = h & h;
-    }
-    return BigInt(Math.abs(h));
-  };
-  
   // ZK-STARK uses 521-bit NIST P-521 field for cryptographic security
   // Since Solidity only supports 256-bit, we hash the proof to create a commitment
   // The actual verification happens off-chain, on-chain only stores the commitment
@@ -422,23 +413,7 @@ export async function getZKStats() {
   };
 }
 
-/**
- * Simulate proof generation (replaces actual Cairo prover in demo)
- * In production, this would call an API route: POST /api/zk/generate
- */
-async function simulateProofGeneration(_data: any[]): Promise<string> {
-  // Simulate proof generation time
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Generate a realistic-looking STARK proof
-  // Real proofs are much larger, but this demonstrates the concept
-  const proofSize = 1024; // bytes
-  const proof = Array.from({ length: proofSize / 2 }, () => 
-    Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
-  ).join('');
-  
-  return '0x' + proof;
-}
+// Proof generation is handled by Python backend (POST /api/zk-proof/generate)
 
 /**
  * Check if ZK system is available
