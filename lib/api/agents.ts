@@ -48,7 +48,7 @@ export async function assessPortfolioRisk(address: string) {
 /**
  * Get hedging recommendations
  */
-export async function getHedgingRecommendations(address: string, positions: any[]) {
+export async function getHedgingRecommendations(address: string, positions: unknown[]) {
   if (DEMO_MODE) {
     return simulateAgentCall(() => [
       {
@@ -81,7 +81,7 @@ export async function getHedgingRecommendations(address: string, positions: any[
 /**
  * Execute settlement batch
  */
-export async function executeSettlementBatch(transactions: any[]) {
+export async function executeSettlementBatch(transactions: unknown[]) {
   if (DEMO_MODE) {
     return simulateAgentCall(() => ({
       batchId: `batch-${Date.now()}`,
@@ -194,7 +194,7 @@ export async function getAgentActivity(_address: string) {
 /**
  * Format agent message for display
  */
-export function formatAgentMessage(msg: any): string {
+export function formatAgentMessage(msg: Record<string, unknown>): string {
   if (msg.type === 'RISK_ALERT') {
     return `⚠️ Risk Alert: ${msg.payload?.message}`;
   }

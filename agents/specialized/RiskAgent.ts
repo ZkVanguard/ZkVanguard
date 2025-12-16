@@ -31,7 +31,7 @@ export class RiskAgent extends BaseAgent {
     logger.info('Risk Agent initialized successfully', { agentId: this.id });
   }
 
-  protected async onExecuteTask(task: AgentTask): Promise<any> {
+  protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
     switch (task.type) {
       case 'analyze-risk':
         return await this.analyzeRisk(task.payload);
@@ -92,7 +92,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Analyze portfolio risk
    */
-  private async analyzeRisk(payload: any): Promise<RiskAnalysis> {
+  private async analyzeRisk(payload: unknown): Promise<RiskAnalysis> {
     const { portfolioId } = payload;
 
     logger.info('Analyzing portfolio risk', {
@@ -145,7 +145,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Calculate portfolio volatility
    */
-  private async calculateVolatility(payload: any): Promise<number> {
+  private async calculateVolatility(payload: { portfolioId: number }): Promise<number> {
     return await this.calculateVolatilityInternal(payload.portfolioId);
   }
 
@@ -164,7 +164,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Analyze asset exposures
    */
-  private async analyzeExposures(payload: any): Promise<any> {
+  private async analyzeExposures(payload: { portfolioId: number }): Promise<RiskAnalysis['exposures']> {
     return await this.calculateExposures(payload.portfolioId);
   }
 
@@ -201,7 +201,7 @@ export class RiskAgent extends BaseAgent {
   /**
    * Assess market sentiment
    */
-  private async assessMarketSentiment(_payload: any): Promise<string> {
+  private async assessMarketSentiment(_payload: unknown): Promise<string> {
     return await this.assessMarketSentimentInternal();
   }
 

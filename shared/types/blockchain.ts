@@ -30,7 +30,7 @@ export interface TransactionReceipt {
   blockNumber: number;
   gasUsed: bigint;
   status: 'success' | 'failed';
-  events?: any[];
+  events?: unknown[];
 }
 
 export interface GasEstimate {

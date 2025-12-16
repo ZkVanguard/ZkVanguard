@@ -11,12 +11,12 @@ import { RiskAnalysis } from '@shared/types/agent';
 
 export interface ZKProofInput {
   proofType: string;
-  statement: Record<string, any>;
-  witness: Record<string, any>;
+  statement: Record<string, unknown>;
+  witness: Record<string, unknown>;
 }
 
 export interface ZKProof {
-  proof: any;
+  proof: Record<string, unknown>;
   proofHash: string;
   proofType: string;
   verified: boolean;
@@ -68,8 +68,8 @@ export class ProofGenerator {
    */
   async generateProof(
     proofType: string,
-    statement: Record<string, any>,
-    witness: Record<string, any>
+    statement: Record<string, unknown>,
+    witness: Record<string, unknown>
   ): Promise<ZKProof> {
     const startTime = Date.now();
 
@@ -114,9 +114,9 @@ export class ProofGenerator {
    */
   private async callPythonProver(
     proofType: string,
-    statement: Record<string, any>,
-    witness: Record<string, any>
-  ): Promise<any> {
+    statement: Record<string, unknown>,
+    witness: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     return new Promise((resolve, reject) => {
       const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
 
@@ -167,7 +167,7 @@ export class ProofGenerator {
    */
   private generateMockProof(
     proofType: string,
-    statement: Record<string, any>
+    statement: Record<string, unknown>
   ): ZKProof {
     logger.warn('Using mock ZK proof for development', { proofType });
 
@@ -205,7 +205,7 @@ export class ProofGenerator {
   /**
    * Hash proof data to create proof hash
    */
-  private hashProofSync(data: any): string {
+  private hashProofSync(data: unknown): string {
     const hash = crypto.createHash('sha256');
     hash.update(JSON.stringify(data));
     return hash.digest('hex');

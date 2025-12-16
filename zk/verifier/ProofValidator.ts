@@ -32,8 +32,8 @@ export class ProofValidator {
    * Validate ZK-STARK proof off-chain
    */
   async validateProof(
-    proof: any,
-    statement: Record<string, any>,
+    proof: Record<string, unknown>,
+    statement: Record<string, unknown>,
     proofType: string
   ): Promise<ProofValidationResult> {
     const startTime = Date.now();
@@ -86,9 +86,9 @@ export class ProofValidator {
    * Call Python ZK-STARK verifier
    */
   private async callPythonVerifier(
-    proof: any,
-    statement: Record<string, any>
-  ): Promise<any> {
+    proof: Record<string, unknown>,
+    statement: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     return new Promise((resolve, reject) => {
       const pythonScript = path.join(this.zkSystemPath, 'cli', 'verify_proof.py');
 
@@ -141,7 +141,7 @@ export class ProofValidator {
    * Batch validate proofs
    */
   async validateBatchProofs(
-    proofs: Array<{ proof: any; statement: Record<string, any>; proofType: string }>
+    proofs: Array<{ proof: Record<string, unknown>; statement: Record<string, unknown>; proofType: string }>
   ): Promise<ProofValidationResult[]> {
     logger.info('Validating batch ZK-STARK proofs', { count: proofs.length });
 
@@ -153,7 +153,7 @@ export class ProofValidator {
   /**
    * Quick validation of proof structure (without full verification)
    */
-  validateProofStructure(proof: any): boolean {
+  validateProofStructure(proof: Record<string, unknown>): boolean {
     // Check required fields for STARK proof
     const requiredFields = [
       'version',
@@ -183,7 +183,7 @@ export class ProofValidator {
   /**
    * Extract public outputs from proof
    */
-  extractPublicOutputs(proof: any): Record<string, any> {
+  extractPublicOutputs(proof: Record<string, unknown>): Record<string, unknown> {
     return {
       publicOutput: proof.public_output,
       statement: proof.statement,

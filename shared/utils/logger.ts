@@ -84,7 +84,7 @@ if (process.env.NODE_ENV !== 'production') {
 /**
  * Create a child logger with additional context
  */
-export function createChildLogger(context: Record<string, any>) {
+export function createChildLogger(context: Record<string, unknown>) {
   return logger.child(context);
 }
 

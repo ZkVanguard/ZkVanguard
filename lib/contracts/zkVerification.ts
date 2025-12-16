@@ -51,7 +51,7 @@ export function convertProofToContractFormat(proof: ZKProof) {
 export async function verifyProofOnChain(
   proof: ZKProof,
   zkVerifierAddress: Address,
-  writeContract: any
+  writeContract: (args: unknown) => Promise<`0x${string}`>
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
     const contractFormat = convertProofToContractFormat(proof);
@@ -96,7 +96,7 @@ export async function verifyProofGasless(
   proof: ZKProof,
   gaslessVerifierAddress: Address,
   relayerAddress: Address,
-  signer: any
+  signer: unknown
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
     const contractFormat = convertProofToContractFormat(proof);
@@ -146,7 +146,7 @@ export async function verifyProofGasless(
 export async function isProofVerifiedOnChain(
   proofHash: string,
   zkVerifierAddress: Address,
-  publicClient: any
+  publicClient: unknown
 ): Promise<boolean> {
   try {
     const result = await publicClient.readContract({
@@ -177,7 +177,7 @@ export async function isProofVerifiedOnChain(
 export async function getVerificationHistory(
   address: Address,
   zkVerifierAddress: Address,
-  publicClient: any
+  publicClient: unknown
 ): Promise<Array<{ proofHash: string; timestamp: number; verified: boolean }>> {
   try {
     // Query VerificationComplete events
@@ -200,7 +200,7 @@ export async function getVerificationHistory(
       toBlock: 'latest'
     });
 
-    return logs.map((log: any) => ({
+    return logs.map((log: Record<string, unknown>) => ({
       proofHash: log.args.proofHash,
       timestamp: Number(log.args.timestamp),
       verified: log.args.verified
