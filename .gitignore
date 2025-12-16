@@ -91,3 +91,9 @@ private-keys/
 # Uncomment if using yarn/pnpm
 # yarn.lock
 # pnpm-lock.yaml
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
