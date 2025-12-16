@@ -36,21 +36,12 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <Link href="/" className="group flex items-center space-x-3">
-            <div className="relative">
-              <div className="p-2 bg-gradient-to-br from-primary-500 to-accent-500 rounded-2xl shadow-ios-lg group-hover:shadow-glow-primary transition-all">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-bold bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">
-                ZkVanguard
-              </span>
-              <span className="hidden md:flex items-center space-x-2 -mt-1">
-                <FlaskConical className="w-3 h-3 text-orange-500" />
-                <span className="text-[10px] text-orange-500 font-semibold">DEMO</span>
-              </span>
-            </div>
+          <Link href="/" className="group flex items-center space-x-2">
+            <img src="/assets/branding/logo-navbar.svg" alt="ZkVanguard" className="h-16 w-auto transition-transform group-hover:scale-105" />
+            <span className="hidden md:flex items-center space-x-2">
+              <FlaskConical className="w-3 h-3 text-orange-500" />
+              <span className="text-[10px] text-orange-500 font-semibold">DEMO</span>
+            </span>
           </Link>
 
           {/* Desktop Navigation */}

@@ -36,13 +36,8 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="p-2 bg-gradient-to-br from-primary-600 to-secondary-500 rounded-xl shadow-glow-primary">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold gradient-text">
-                ZkVanguard
-              </span>
+            <div className="flex items-center mb-4">
+              <img src="/assets/branding/logo-navbar.svg" alt="ZkVanguard" className="h-10 w-auto" />
             </div>
             <p className="text-slate-600 dark:text-slate-400 mb-4 max-w-md leading-relaxed">
               AI-powered multi-agent system for real-world asset risk management on Cronos zkEVM.

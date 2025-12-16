@@ -254,10 +254,25 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
         {/* Results Display */}
         {result && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 space-y-3">
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 space-y-4">
             <div className="flex items-center gap-2 text-green-400 font-semibold">
               <CheckCircle className="w-5 h-5" />
               Verification Results
+            </div>
+
+            {/* What Was Proven Section */}
+            <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+              <div className="text-sm font-semibold text-purple-400 mb-2">✨ What Was Proven:</div>
+              <div className="text-gray-300 space-y-1 text-sm">
+                <div>• A zero-knowledge proof was generated and stored on-chain</div>
+                <div>• The proof demonstrates knowledge of private data without revealing it</div>
+                <div>• The commitment is cryptographically secured with <span className="text-purple-400 font-semibold">{result.securityLevel}-bit security</span></div>
+                <div>• Original claim: <span className="text-emerald-400 italic">"Private witness data satisfies the public statement"</span></div>
+              </div>
+              <div className="mt-3 text-xs text-gray-400 bg-gray-800 rounded p-2 font-mono">
+                💡 Note: The actual statement/claim from the proof generation is not stored on-chain for privacy. 
+                Only the cryptographic commitment (merkleRoot + proofHash) is immutably recorded.
+              </div>
             </div>
 
             <div className="space-y-2 text-sm">

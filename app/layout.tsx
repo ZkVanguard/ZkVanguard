@@ -12,10 +12,16 @@ export const metadata: Metadata = {
   description: 'Multi-agent AI system for real-world asset risk management on Cronos zkEVM',
   keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
   authors: [{ name: 'ZkVanguard Team' }],
+  icons: {
+    icon: '/assets/branding/logo-icon.svg',
+    shortcut: '/assets/branding/logo-icon.svg',
+    apple: '/assets/branding/logo-navbar.svg',
+  },
   openGraph: {
     title: 'ZkVanguard',
     description: 'AI-Powered RWA Risk Management Platform',
     type: 'website',
+    images: ['/logo.svg'],
   },
 };
 
