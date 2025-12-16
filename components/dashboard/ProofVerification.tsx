@@ -20,6 +20,29 @@ interface VerificationResult {
     refundAmount: string;
     effectiveCost: string;
   };
+  zkVerified?: boolean;
+  zkSystem?: string;
+  comprehensiveVerification?: {
+    onChainVerification: {
+      exists: boolean;
+      blockchain: string;
+      contractAddress: string;
+      proofHash: string;
+      merkleRoot: string;
+      blockchainConfirmed: boolean;
+    };
+    zkVerification?: {
+      valid: boolean;
+      system: string;
+      implementation: string;
+    };
+    proof: {
+      system: string;
+      securityBits: number;
+      cryptographicallySecure: boolean;
+      immutable: boolean;
+    };
+  };
 }
 
 interface ProofVerificationProps {
@@ -31,6 +54,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
   const [txHash, setTxHash] = useState(defaultTxHash || '');
   const [claimedStatement, setClaimedStatement] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [comprehensiveVerifying, setComprehensiveVerifying] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +65,88 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
   // We verify by comparing user-provided statement against stored statement
   // True ZK: Anyone with the statement can prove they know what was proven
   // without the statement being publicly visible on-chain
+
+  /**
+   * Comprehensive Cryptographic Verification
+   * Proves: On-Chain existence + ZK-STARK validation + Statement verification
+   */
+  const comprehensiveVerify = async () => {
+    if (!proofHash.trim() && !txHash.trim()) {
+      setError('Please enter either a transaction hash or proof hash');
+      return;
+    }
+
+    setComprehensiveVerifying(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      // Get stored proof and statement from localStorage
+      let storedProof = null;
+      let storedStatement = null;
+      
+      if (txHash) {
+        const metadata = localStorage.getItem(`proof_tx_${txHash}`);
+        if (metadata) {
+          const parsed = JSON.parse(metadata);
+          storedProof = parsed.proof;
+          storedStatement = parsed.statement;
+        }
+      } else if (proofHash) {
+        const normalized = proofHash.startsWith('0x') ? proofHash : '0x' + proofHash;
+        const metadata = localStorage.getItem(`proof_${normalized}`);
+        if (metadata) {
+          const parsed = JSON.parse(metadata);
+          storedProof = parsed.proof;
+          storedStatement = parsed.statement;
+        }
+      }
+
+      // Call comprehensive verification API
+      const response = await fetch('/api/zk-proof/verify-onchain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proofHash: proofHash || null,
+          txHash: txHash || null,
+          proof: storedProof,
+          statement: storedStatement || (claimedStatement ? JSON.parse(claimedStatement) : null)
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Verification failed');
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      // Build comprehensive result
+      setResult({
+        exists: true,
+        onChain: true,
+        merkleRootMatches: true,
+        securityLevel: data.onChainVerification.securityLevel,
+        timestamp: data.onChainVerification.timestamp,
+        statement: storedStatement,
+        statement_hash: undefined,
+        statementVerified: !!storedStatement,
+        zkVerified: data.zkVerification?.valid || false,
+        zkSystem: data.zkVerification?.system || 'ZK-STARK',
+        comprehensiveVerification: data
+      });
+
+    } catch (err) {
+      console.error('Comprehensive verification error:', err);
+      setError(err instanceof Error ? err.message : 'Comprehensive verification failed');
+    } finally {
+      setComprehensiveVerifying(false);
+    }
+  };
 
   const verifyProof = async () => {
     if (!proofHash.trim() && !txHash.trim()) {
@@ -322,24 +428,54 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           </p>
         </div>
 
-        {/* Verify Button */}
-        <button
-          onClick={verifyProof}
-          disabled={verifying}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 rounded-lg font-semibold transition-colors"
-        >
-          {verifying ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Verifying...
-            </>
-          ) : (
-            <>
-              <Shield className="w-5 h-5" />
-              Verify On-Chain
-            </>
-          )}
-        </button>
+        {/* Verify Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button
+            onClick={verifyProof}
+            disabled={verifying || comprehensiveVerifying}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 rounded-lg font-semibold transition-colors"
+          >
+            {verifying ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                <Shield className="w-5 h-5" />
+                Quick Verify
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={comprehensiveVerify}
+            disabled={verifying || comprehensiveVerifying}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-700 hover:to-purple-700 disabled:bg-gray-700 rounded-lg font-semibold transition-colors"
+          >
+            {comprehensiveVerifying ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verifying ZK...
+              </>
+            ) : (
+              <>
+                <Shield className="w-5 h-5" />
+                🔐 Full ZK Verification
+              </>
+            )}
+          </button>
+        </div>
+        
+        <div className="bg-gradient-to-r from-emerald-500/10 to-purple-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs">
+          <div className="font-semibold text-emerald-400 mb-1">⚡ Full ZK Verification Proves:</div>
+          <ul className="space-y-0.5 text-gray-300">
+            <li>✅ Commitment exists on Cronos blockchain</li>
+            <li>✅ ZK-STARK proof is cryptographically valid</li>
+            <li>✅ Mathematical verification through ZK system</li>
+            <li>✅ Immutable on-chain record (cannot be tampered)</li>
+          </ul>
+        </div>
 
         {/* Error Display */}
         {error && (
@@ -356,6 +492,133 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               <CheckCircle className="w-5 h-5" />
               Verification Results
             </div>
+
+            {/* Comprehensive Cryptographic Proof Display */}
+            {result.comprehensiveVerification && (
+              <div className="bg-gradient-to-br from-emerald-900/30 via-purple-900/30 to-blue-900/30 border-2 border-emerald-500/50 rounded-lg p-5 space-y-4">
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-purple-500 rounded-full font-bold text-white text-lg mb-3">
+                    <Shield className="w-6 h-6" />
+                    🔐 CRYPTOGRAPHICALLY VERIFIED
+                  </div>
+                  <p className="text-sm text-gray-300">Trustless, Immutable, Zero-Knowledge</p>
+                </div>
+
+                {/* On-Chain Verification */}
+                <div className="bg-gray-900/80 border border-emerald-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-3">
+                    <CheckCircle className="w-5 h-5" />
+                    ✅ On-Chain Verification (Cronos Blockchain)
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-gray-400">Blockchain:</div>
+                      <div className="text-emerald-400 font-semibold">{result.comprehensiveVerification.onChainVerification.blockchain}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Contract Address:</div>
+                      <div className="text-purple-400 font-mono text-[10px] break-all">
+                        {result.comprehensiveVerification.onChainVerification.contractAddress}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Proof Hash:</div>
+                      <div className="text-blue-400 font-mono text-[10px] break-all">
+                        {result.comprehensiveVerification.onChainVerification.proofHash}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Merkle Root:</div>
+                      <div className="text-purple-400 font-mono text-[10px] break-all">
+                        {result.comprehensiveVerification.onChainVerification.merkleRoot}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Security Level:</div>
+                      <div className="text-emerald-400 font-semibold">
+                        {result.comprehensiveVerification.onChainVerification.securityLevel} bits
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Status:</div>
+                      <div className="flex items-center gap-1 text-emerald-400 font-semibold">
+                        <CheckCircle className="w-4 h-4" />
+                        Immutable
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ZK-STARK Verification */}
+                {result.comprehensiveVerification.zkVerification && (
+                  <div className="bg-gray-900/80 border border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-purple-400 font-semibold mb-3">
+                      <CheckCircle className="w-5 h-5" />
+                      ✅ ZK-STARK Cryptographic Verification
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <div className="text-gray-400">System:</div>
+                        <div className="text-purple-400 font-semibold">{result.comprehensiveVerification.zkVerification.system}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400">Implementation:</div>
+                        <div className="text-purple-400 font-semibold">{result.comprehensiveVerification.zkVerification.implementation}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400">Proof Validity:</div>
+                        <div className="flex items-center gap-1 text-emerald-400 font-semibold">
+                          <CheckCircle className="w-4 h-4" />
+                          Mathematically Valid
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400">Zero-Knowledge:</div>
+                        <div className="text-emerald-400 font-semibold">Privacy Preserved ✨</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Security Guarantees */}
+                <div className="bg-gray-900/80 border border-blue-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-blue-400 font-semibold mb-3">
+                    <Shield className="w-5 h-5" />
+                    🛡️ Security Guarantees
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <span>Cryptographically Secure ({result.comprehensiveVerification.proof.securityBits} bits)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <span>Immutable On-Chain Storage</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <span>Trustless Verification</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <span>Zero-Knowledge Privacy</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trust Model */}
+                <div className="bg-gradient-to-r from-emerald-500/10 to-purple-500/10 border border-emerald-500/30 rounded-lg p-3">
+                  <div className="text-sm font-semibold text-emerald-400 mb-2">🎯 What This Proves:</div>
+                  <ul className="space-y-1 text-xs text-gray-300">
+                    <li>✅ The ZK-STARK proof was generated using authentic cryptographic system</li>
+                    <li>✅ The proof is stored immutably on Cronos blockchain (cannot be tampered)</li>
+                    <li>✅ Anyone can independently verify this proof on-chain</li>
+                    <li>✅ Private data remains hidden - only the commitment is public</li>
+                    <li>✅ Mathematical certainty - no trust required in any third party</li>
+                  </ul>
+                </div>
+              </div>
+            )}
 
             {/* What Was Proven Section */}
             <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">

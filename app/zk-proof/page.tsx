@@ -171,6 +171,7 @@ function ZKProofPage() {
         proofHash: commitment.proofHash,
         statement_hash: proof.statement_hash,
         statement: selectedScenario?.statement || {},
+        proof: proof, // Store full proof for comprehensive ZK verification
         timestamp: Date.now(),
         gasRefunded: result.gasRefunded,
         refundDetails: result.refundDetails,
