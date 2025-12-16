@@ -48,7 +48,7 @@ export interface AgentConfig {
   apiKeys?: Record<string, string>;
   endpoints?: Record<string, string>;
   enabled?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -59,15 +59,15 @@ export interface AgentTask {
   type?: string;
   status?: TaskStatus;
   priority: number;
-  payload?: any;
+  payload?: unknown;
   assignedTo?: string;
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
   executionTime?: number;
-  result?: any;
+  result?: unknown;
   error?: Error;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   
   // Compatibility aliases for frontend
   agentName?: string;
@@ -75,7 +75,7 @@ export interface AgentTask {
   action?: string;
   description?: string;
   timestamp?: Date;
-  parameters?: any;
+  parameters?: Record<string, unknown>;
 }
 
 /**
@@ -83,11 +83,11 @@ export interface AgentTask {
  */
 export interface TaskResult {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error: string | null;
   executionTime: number;
   agentId: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -98,10 +98,10 @@ export interface AgentMessage {
   type: MessageType;
   from: string;
   to: string; // Agent ID or 'broadcast'
-  payload: any;
+  payload: unknown;
   timestamp: Date;
   correlationId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -111,8 +111,8 @@ export interface AgentContext {
   portfolioId?: number;
   userId?: string;
   strategy?: string;
-  constraints?: Record<string, any>;
-  metadata?: Record<string, any>;
+  constraints?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -128,7 +128,7 @@ export interface StrategyInput {
     preferredAssets?: string[];
     blacklistedAssets?: string[];
   };
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -220,7 +220,7 @@ export interface AgentExecutionReport {
     agentType: AgentType;
     taskType: string;
     executionTime: number;
-    result: any;
+    result: unknown;
   }[];
   riskAnalysis?: RiskAnalysis;
   hedgingStrategy?: HedgingStrategy;
@@ -232,5 +232,5 @@ export interface AgentExecutionReport {
   }[];
   totalExecutionTime: number;
   status: 'success' | 'partial' | 'failed';
-  errors?: any[];
+  errors?: Error[];
 }

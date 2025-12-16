@@ -42,7 +42,7 @@ export class LeadAgent extends BaseAgent {
     logger.info('Lead Agent initialized successfully', { agentId: this.id });
   }
 
-  protected async onExecuteTask(task: AgentTask): Promise<any> {
+  protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
     switch (task.type) {
       case 'parse-strategy':
         return await this.parseStrategy(task.payload);
@@ -210,7 +210,7 @@ export class LeadAgent extends BaseAgent {
 
     try {
       // Execute agents in sequence based on dependencies
-      const results: any = {};
+      const results: Record<string, unknown> = {};
 
       // 1. Risk Analysis (always first)
       if (intent.requiredAgents.includes('risk')) {
@@ -296,7 +296,7 @@ export class LeadAgent extends BaseAgent {
   /**
    * Delegate task to specialized agent
    */
-  private async delegateToAgent(agentType: AgentType, taskPayload: any): Promise<any> {
+  private async delegateToAgent(agentType: AgentType, taskPayload: unknown): Promise<TaskResult> {
     logger.info('Delegating task to agent', {
       leadAgentId: this.id,
       agentType,
@@ -332,7 +332,7 @@ export class LeadAgent extends BaseAgent {
   /**
    * Generate ZK proof for verification
    */
-  private async generateZKProof(proofType: string, data: any): Promise<any> {
+  private async generateZKProof(proofType: string, data: unknown): Promise<Record<string, unknown>> {
     // In production, this would call the actual ZK proof generator
     // For now, return a mock proof structure
     logger.info('Generating ZK proof', {
@@ -351,7 +351,7 @@ export class LeadAgent extends BaseAgent {
   /**
    * Aggregate results from multiple agents
    */
-  private async aggregateResults(payload: any): Promise<any> {
+  private async aggregateResults(payload: unknown): Promise<unknown> {
     logger.info('Aggregating results', { agentId: this.id });
     
     // Implement result aggregation logic
@@ -399,7 +399,7 @@ export class LeadAgent extends BaseAgent {
   /**
    * Handle agent result event
    */
-  private handleAgentResult(result: any): void {
+  private handleAgentResult(result: unknown): void {
     logger.debug('Handling agent result', { agentId: this.id, result });
   }
 

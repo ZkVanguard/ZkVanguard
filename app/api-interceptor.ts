@@ -8,7 +8,7 @@ if (typeof window !== 'undefined') {
     'explorer-api.walletconnect.com',
   ];
 
-  const mockResponses: Record<string, any> = {
+  const mockResponses: Record<string, unknown> = {
     'api.web3modal.org/appkit/v1/config': {
       success: true,
       data: {

@@ -13,8 +13,8 @@ export function ZKProofDemo() {
   const [showForm, setShowForm] = useState(false);
   const [proofType, setProofType] = useState('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
-  const [proofMetadata, setProofMetadata] = useState<any>(null);
-  const [gaslessResult, setGaslessResult] = useState<any>(null);
+  const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
+  const [gaslessResult, setGaslessResult] = useState<Record<string, unknown> | null>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -45,7 +45,7 @@ export function ZKProofDemo() {
 
       // Generate proof using Python/CUDA backend (ZK-STARK)
       console.log('🔐 Generating ZK-STARK proof with Python/CUDA backend...');
-      const result = await generateProofForOnChain(proofType as any, data, 1);
+      const result = await generateProofForOnChain(proofType, data, 1);
       
       setProofMetadata(result.metadata);
       

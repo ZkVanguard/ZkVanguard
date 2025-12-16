@@ -28,11 +28,11 @@ export abstract class BaseAgent extends EventEmitter {
 
   // Overloaded constructor to support both patterns
   constructor(name: string, type: string, config: AgentConfig, messageBus: EventEmitter);
-  constructor(agentId: string, name: string, capabilities: string[] | any);
+  constructor(agentId: string, name: string, capabilities: string[]);
   constructor(
     nameOrId: string,
     typeOrName: string,
-    configOrCapabilities?: AgentConfig | string[] | any,
+    configOrCapabilities?: AgentConfig | string[],
     messageBus?: EventEmitter
   ) {
     super();
@@ -53,7 +53,7 @@ export abstract class BaseAgent extends EventEmitter {
       this.id = nameOrId;
       this.agentId = nameOrId;
       this.name = typeOrName;
-      const derivedType = typeOrName.toLowerCase().replace('agent', '') as any;
+      const derivedType = typeOrName.toLowerCase().replace('agent', '') as AgentType;
       this.type = derivedType;
       this.config = { name: typeOrName, type: derivedType };
       this.messageBus = new EventEmitter();
@@ -86,7 +86,7 @@ export abstract class BaseAgent extends EventEmitter {
   /**
    * Execute a task assigned to this agent
    */
-  async executeTask(task: AgentTask): Promise<any> {
+  async executeTask(task: AgentTask): Promise<TaskResult> {
     try {
       this.currentTask = task;
       this.status = 'busy';
@@ -184,7 +184,7 @@ export abstract class BaseAgent extends EventEmitter {
   /**
    * Process next task in queue
    */
-  async processNextTask(): Promise<any> {
+  async processNextTask(): Promise<TaskResult | null> {
     if (this.taskQueue.length === 0 || this.status !== 'idle') {
       return null;
     }
@@ -240,7 +240,7 @@ export abstract class BaseAgent extends EventEmitter {
 
   // Abstract methods to be implemented by specialized agents
   protected abstract onInitialize(): Promise<void>;
-  protected abstract onExecuteTask(task: AgentTask): Promise<any>;
+  protected abstract onExecuteTask(task: AgentTask): Promise<TaskResult>;
   protected abstract onMessageReceived(message: AgentMessage): void;
   protected abstract onShutdown(): Promise<void>;
 

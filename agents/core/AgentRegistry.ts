@@ -99,7 +99,7 @@ export class AgentRegistry extends EventEmitter {
   /**
    * Get agent statuses
    */
-  getAgentStatuses(): any[] {
+  getAgentStatuses(): AgentStatus[] {
     return this.getAllAgents().map((agent) => agent.getStatus());
   }
 

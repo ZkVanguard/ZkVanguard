@@ -8,7 +8,7 @@ interface Proof {
   merkle_root: string;
   challenge: number;
   response: number;
-  witness_commitment: any;
+  witness_commitment: Record<string, unknown>;
   query_responses: Array<{
     index: number;
     value: number | string;
@@ -23,7 +23,7 @@ interface Proof {
 
 interface ProofResult {
   proof: Proof;
-  statement: any;
+  statement: Record<string, unknown>;
   claim?: string;
   scenario: string;
   duration_ms?: number;
@@ -112,8 +112,8 @@ function ZKProofPage() {
       } else {
         alert('Error generating proof: ' + data.error);
       }
-    } catch (error: any) {
-      alert('Error: ' + error.message);
+    } catch (error: unknown) {
+      alert('Error: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsGenerating(false);
     }
@@ -139,8 +139,8 @@ function ZKProofPage() {
       } else {
         alert('Error verifying proof: ' + data.error);
       }
-    } catch (error: any) {
-      alert('Error: ' + error.message);
+    } catch (error: unknown) {
+      alert('Error: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsVerifying(false);
     }
@@ -296,7 +296,7 @@ function ZKProofPage() {
               </h2>
               <div className="grid gap-4">
                 {selectedScenario.secrets.map((secretKey) => {
-                  const secretValue = (selectedScenario.witness as any)[secretKey];
+                  const secretValue = (selectedScenario.witness as Record<string, unknown>)[secretKey];
                   
                   // Proper privacy check: Look for exact witness field names or clear-text values
                   // ZK-STARK proofs contain random-looking numbers that may coincidentally match

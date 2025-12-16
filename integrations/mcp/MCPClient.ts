@@ -113,7 +113,7 @@ export class MCPClient extends EventEmitter {
   /**
    * Handle WebSocket messages
    */
-  private handleWebSocketMessage(message: any): void {
+  private handleWebSocketMessage(message: Record<string, unknown>): void {
     switch (message.type) {
       case 'price-update':
         this.emit('price-update', message.data as MCPPriceData);
@@ -241,7 +241,7 @@ export class MCPClient extends EventEmitter {
   /**
    * Get market sentiment data
    */
-  async getMarketSentiment(symbols?: string[]): Promise<any> {
+  async getMarketSentiment(symbols?: string[]): Promise<Record<string, unknown>> {
     try {
       const response = await this.httpClient.post('/api/v1/sentiment', {
         symbols: symbols || ['BTC', 'ETH', 'CRO'],

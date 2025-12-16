@@ -11,7 +11,7 @@ export interface ZKProof {
   merkle_root: string;
   challenge: string | number;
   response: string | number;
-  witness_commitment: any;
+  witness_commitment: Record<string, unknown>;
   public_inputs: number[];
   computation_steps: number;
   query_responses: Array<{
@@ -31,7 +31,7 @@ export interface ZKProof {
     double_commitment: boolean;
     constant_time: boolean;
   };
-  proof_metadata: Record<string, any>;
+  proof_metadata: Record<string, unknown>;
   proof_hash: string | number;
 }
 
@@ -50,7 +50,7 @@ export interface ZKSystemHealth {
   status: string;
   cuda_available: boolean;
   cuda_enabled: boolean;
-  system_info: Record<string, any>;
+  system_info: Record<string, unknown>;
 }
 
 /**
@@ -106,11 +106,12 @@ export async function generateSettlementProof(
     console.log(`✅ Proof job created: ${result.job_id}`);
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ ZK proof generation failed:', error);
     
     // Provide helpful error message if backend is not running
-    if (error.message?.includes('ERR_CONNECTION_REFUSED') || error.message?.includes('fetch failed')) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg?.includes('ERR_CONNECTION_REFUSED') || errorMsg?.includes('fetch failed')) {
       throw new Error(`ZK Backend not running. Start it with: python zkp/api/server.py`);
     }
     
@@ -347,7 +348,7 @@ export function convertToContractFormat(starkProof: ZKProof): {
  */
 export async function generateProofForOnChain(
   proofType: 'settlement' | 'risk' | 'rebalance',
-  data: any,
+  data: Record<string, unknown>,
   portfolioId?: number
 ) {
   // Generate STARK proof using Python backend with full 521-bit security

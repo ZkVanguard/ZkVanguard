@@ -87,7 +87,7 @@ export class HedgingAgent extends BaseAgent {
   /**
    * Handle incoming messages
    */
-  protected onMessageReceived(_message: any): void {
+  protected onMessageReceived(_message: AgentMessage): void {
     // Handle messages from other agents
   }
   

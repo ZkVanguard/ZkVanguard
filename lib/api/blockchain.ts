@@ -85,7 +85,7 @@ export async function getBalance(address: string) {
 /**
  * Estimate gas for transaction batch
  */
-export async function estimateBatchGas(transactions: any[]) {
+export async function estimateBatchGas(transactions: unknown[]) {
   try {
     // Estimate gas for individual transactions
     const individualGas = transactions.length * 21000; // Base gas per transaction
@@ -191,7 +191,7 @@ export async function getNetworkStats() {
  * Simulate contract call to check if position would liquidate
  */
 export async function checkLiquidationRisk(
-  position: any
+  position: Record<string, unknown>
 ): Promise<{ atRisk: boolean; liquidationPrice: number; buffer: number }> {
   // In production, this calls the RiskEngine contract
   // For demo, we calculate locally

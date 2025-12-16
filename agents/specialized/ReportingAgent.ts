@@ -199,7 +199,7 @@ export interface ComprehensiveReport {
 
 export class ReportingAgent extends BaseAgent {
   private reports: Map<string, ReportRequest> = new Map();
-  private completedReports: Map<string, any> = new Map();
+  private completedReports: Map<string, unknown> = new Map();
 
   constructor(
     agentId: string,
@@ -221,7 +221,7 @@ export class ReportingAgent extends BaseAgent {
   /**
    * Handle incoming messages
    */
-  protected onMessageReceived(_message: any): void {
+  protected onMessageReceived(_message: AgentMessage): void {
     // Handle messages from other agents
   }
   
@@ -742,7 +742,7 @@ export class ReportingAgent extends BaseAgent {
   /**
    * Convert report to CSV
    */
-  private convertToCSV(report: any): string {
+  private convertToCSV(report: Record<string, unknown>): string {
     // Simplified CSV conversion
     return Object.entries(report)
       .map(([key, value]) => `${key},${JSON.stringify(value)}`)
@@ -752,7 +752,7 @@ export class ReportingAgent extends BaseAgent {
   /**
    * Convert report to HTML
    */
-  private convertToHTML(report: any): string {
+  private convertToHTML(report: Record<string, unknown>): string {
     return `
 <!DOCTYPE html>
 <html>
@@ -777,7 +777,7 @@ export class ReportingAgent extends BaseAgent {
   /**
    * Get report
    */
-  getReport(reportId: string): any {
+  getReport(reportId: string): unknown {
     return this.completedReports.get(reportId);
   }
 }

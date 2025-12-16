@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
       verified: result.valid, // Backend returns 'valid' not 'verified'
       duration_ms: result.duration_ms
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error verifying proof:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

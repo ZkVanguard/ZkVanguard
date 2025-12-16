@@ -97,7 +97,7 @@ export class SettlementAgent extends BaseAgent {
   /**
    * Handle incoming messages
    */
-  protected onMessageReceived(_message: any): void {
+  protected onMessageReceived(_message: AgentMessage): void {
     // Handle messages from other agents
   }
   
@@ -338,7 +338,7 @@ export class SettlementAgent extends BaseAgent {
       // Process each token group as a batch
       const results = [];
       for (const [token, settlements] of tokenGroups.entries()) {
-        const batchRequest: any = {
+        const batchRequest: Record<string, unknown> = {
           token,
           from: await this.signer.getAddress(),
           recipients: settlements.map(s => s.beneficiary),

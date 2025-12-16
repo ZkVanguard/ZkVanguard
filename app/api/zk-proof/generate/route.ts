@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const { scenario, statement, witness } = body;
 
     // Prepare data based on scenario type
-    let proofData: any = {};
+    let proofData: Record<string, unknown> = {};
     
     if (scenario === 'portfolio_risk') {
       proofData = {
@@ -92,10 +92,10 @@ export async function POST(request: NextRequest) {
       statement: statement,
       scenario: scenario
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating proof:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
