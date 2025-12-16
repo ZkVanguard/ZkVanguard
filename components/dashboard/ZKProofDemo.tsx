@@ -336,18 +336,16 @@ export function ZKProofDemo() {
             </div>
           </div>
 
-          {(isPending || isConfirming || gaslessLoading) ? (
+          {(isPending || isConfirming) ? (
             <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
               <div className="flex items-center gap-3">
                 <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
                 <div>
                   <p className="font-semibold text-purple-400">
-                    {gaslessLoading && useGaslessMode ? 'Signing message (gasless)...' : 
-                     isPending ? 'Waiting for signature...' : 'Verifying proof on-chain...'}
+                    {isPending ? 'Waiting for signature...' : 'Verifying proof on-chain...'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {gaslessLoading && useGaslessMode ? 'Sign the message to verify WITHOUT paying gas ⚡' :
-                     isPending ? 'Please sign the transaction in your wallet' : 'ZKVerifier contract is processing your proof'}
+                    {isPending ? 'Please sign the transaction in your wallet' : 'ZKVerifier contract is processing your proof'}
                   </p>
                 </div>
               </div>
@@ -377,26 +375,16 @@ export function ZKProofDemo() {
             </div>
           )}
 
-          {useGaslessMode && gaslessAvailable ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
-              <p className="text-xs text-emerald-400 mb-1 font-semibold flex items-center gap-2">
-                <Zap className="w-4 h-4" />
-                100% GASLESS - You pay ZERO fees! Platform covers all costs.
-              </p>
-              <p className="text-xs text-gray-400">
-                🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
-              </p>
-            </div>
-          ) : (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-              <p className="text-xs text-amber-400 mb-1">
-                ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.2-0.4 tCRO.
-              </p>
-              <p className="text-xs text-gray-400">
-                🚀 ZK-STARK proof generation uses Python/CUDA backend (avg ~10-20ms with GPU acceleration)
-              </p>
-            </div>
-          )}
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+            <p className="text-xs text-emerald-400 mb-1 font-semibold flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              97%+ GASLESS - Automatic gas refunds via smart contract!
+            </p>
+            <p className="text-xs text-gray-400">
+              🚀 ZK-STARK proof generation uses Python backend (real cryptographic proofs, 77KB size)
+            </p>
+          </div>
+
         </div>
       )}
     </div>

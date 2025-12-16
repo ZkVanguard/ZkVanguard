@@ -114,15 +114,24 @@ chronos-vanguard/
 │       ├── ContractManager.ts     # Smart contract interactions
 │       └── TransactionManager.ts  # Transaction handling
 │
-├── zk/                            # Zero-knowledge proof system
-│   ├── circuits/
-│   │   ├── risk-calculation.circom    # Risk score proof
-│   │   └── portfolio-valuation.circom # Portfolio proof
+├── zk/                            # ZK-STARK TypeScript integration layer
 │   ├── prover/
-│   │   ├── ProofGenerator.ts      # Generate ZK proofs
-│   │   └── ProofSerializer.ts     # Proof serialization
-│   └── verifier/
-│       └── ProofValidator.ts      # Verify proofs off-chain
+│   │   └── ProofGenerator.ts      # TypeScript wrapper for Python prover
+│   ├── verifier/
+│   │   └── ProofValidator.ts      # TypeScript wrapper for Python verifier
+│   └── README.md                  # Integration documentation
+│
+├── zkp/                           # Python ZK-STARK implementation
+│   ├── core/
+│   │   ├── true_stark.py          # Core STARK protocol (AIR + FRI)
+│   │   ├── zk_system.py           # Enhanced STARK with privacy
+│   │   └── stark_compat.py        # Backward compatibility
+│   ├── cli/
+│   │   ├── generate_proof.py      # CLI proof generation
+│   │   └── verify_proof.py        # CLI proof verification
+│   ├── api/
+│   │   └── server.py              # API server for proof generation
+│   └── tests/                     # Python test suite
 │
 ├── simulator/                     # Dev simulator dashboard
 │   ├── backend/
@@ -284,15 +293,17 @@ chronos-vanguard/
 
 ### 4. ZK Proof System
 
-**Proof Generation**
-- Circom circuits for risk calculations
+**Proof Generation (ZK-STARK)**
+- Python implementation with AIR (Algebraic Intermediate Representation)
+- FRI (Fast Reed-Solomon Interactive Oracle Proofs) protocol
 - Witness generation from agent decisions
-- Groth16 proof creation
+- 521-bit security (NIST P-521 prime)
 
 **Proof Verification**
-- On-chain verification via ZKVerifier contract
-- Off-chain validation for testing
-- Proof registry for audit trail
+- Off-chain validation via Python verifier
+- On-chain commitment storage (GaslessZKCommitmentVerifier)
+- Proof registry with Merkle roots for audit trail
+- 97%+ gasless transactions via self-refunding contract
 
 ### 5. Dev Simulator Dashboard
 
@@ -369,9 +380,11 @@ chronos-vanguard/
 - **Patterns**: Event-driven, microservices-style agents
 
 ### ZK Proofs
-- **Circuit Language**: Circom
-- **Proof System**: Groth16
-- **Libraries**: snarkjs, circomlib
+- **Proof System**: ZK-STARK (AIR + FRI)
+- **Implementation**: Python (zkp/ directory)
+- **Integration**: TypeScript wrappers (zk/ directory)
+- **Security**: 521-bit (NIST P-521 quantum-resistant prime)
+- **Protocol**: Transparent (no trusted setup required)
 
 ### Frontend
 - **Framework**: React 18 with TypeScript
