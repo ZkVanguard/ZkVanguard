@@ -31,8 +31,8 @@ if (typeof window !== 'undefined') {
 
   // Intercept fetch API
   const originalFetch = window.fetch;
-  window.fetch = function (...args: any[]) {
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+  window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
     // Check if URL contains any blocked domains
     const isBlocked = blockedDomains.some((domain) => url.includes(domain));
@@ -53,7 +53,7 @@ if (typeof window !== 'undefined') {
       );
     }
 
-    return originalFetch.apply(this, args);
+    return originalFetch.call(this, input, init);
   };
 
   // Also intercept XMLHttpRequest for legacy code
@@ -61,7 +61,9 @@ if (typeof window !== 'undefined') {
   XMLHttpRequest.prototype.open = function (
     method: string,
     url: string | URL,
-    ...rest: any[]
+    async: boolean = true,
+    username?: string | null,
+    password?: string | null
   ) {
     const urlString = typeof url === 'string' ? url : url.toString();
     const isBlocked = blockedDomains.some((domain) => urlString.includes(domain));
@@ -81,7 +83,7 @@ if (typeof window !== 'undefined') {
       };
     }
 
-    return originalXHROpen.call(this, method, url, ...rest);
+    return originalXHROpen.call(this, method, url, async, username, password);
   };
 
   console.log('[API Interceptor] WalletConnect Cloud API blocker initialized');

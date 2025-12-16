@@ -26,7 +26,7 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
     return null;
   }
 
-  const [owner, totalValue, targetYield, riskTolerance, lastRebalance, isActive, assets] = portfolio;
+  const { owner, totalValue, targetYield, riskTolerance, lastRebalance, isActive, assets } = portfolio;
   const isOwner = address?.toLowerCase() === owner.toLowerCase();
 
   return (

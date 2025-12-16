@@ -10,7 +10,7 @@ import { type Account, type Chain, type Transport } from 'viem';
  * Convert viem WalletClient to ethers Signer
  * Required for gasless transactions that use ethers.js
  */
-export function walletClientToSigner(walletClient: WalletClient<Transport, Chain, Account>): Signer {
+export async function walletClientToSigner(walletClient: WalletClient<Transport, Chain, Account>): Promise<Signer> {
   const { account, chain, transport } = walletClient;
   const network = {
     chainId: chain.id,
@@ -19,6 +19,6 @@ export function walletClientToSigner(walletClient: WalletClient<Transport, Chain
   };
   
   const provider = new ethers.BrowserProvider(transport, network);
-  const signer = provider.getSigner(account.address);
-  return signer as any as Signer;
+  const signer = await provider.getSigner(account.address);
+  return signer;
 }

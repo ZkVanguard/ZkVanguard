@@ -33,11 +33,11 @@ const config = createConfig({
     }),
     injected({
       shimDisconnect: true,
-      target: 'coinbase',
+      target: 'coinbaseWallet',
     }),
     injected({
       shimDisconnect: true,
-      target: 'brave',
+      target: 'braveWallet',
     }),
     injected({
       shimDisconnect: true,
@@ -83,3 +83,6 @@ export function Providers({ children }: { children: ReactNode }) {
     </CustomThemeProvider>
   );
 }
+
+// Export config for use in contract interactions
+export { config };
