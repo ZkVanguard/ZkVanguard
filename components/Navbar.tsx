@@ -44,7 +44,7 @@ export function Navbar() {
             </div>
             <div className="flex flex-col">
               <span className="text-xl font-bold bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">
-                Chronos Vanguard
+                ZkVanguard
               </span>
               <span className="hidden md:flex items-center space-x-2 -mt-1">
                 <FlaskConical className="w-3 h-3 text-orange-500" />

@@ -6,7 +6,7 @@
 import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@shared/utils/logger';
-import { AgentConfig, AgentStatus, AgentMessage, AgentTask } from '@shared/types/agent';
+import { AgentConfig, AgentStatus, AgentMessage, AgentTask, AgentType, TaskResult } from '@shared/types/agent';
 
 /**
  * Abstract base class for all agents in the system
@@ -57,9 +57,7 @@ export abstract class BaseAgent extends EventEmitter {
       this.type = derivedType;
       this.config = { name: typeOrName, type: derivedType };
       this.messageBus = new EventEmitter();
-      this.capabilities = Array.isArray(configOrCapabilities) 
-        ? configOrCapabilities.map(c => typeof c === 'string' ? c : c.toString())
-        : [];
+      this.capabilities = Array.isArray(configOrCapabilities) ? configOrCapabilities : [];
     }
     
     this.status = 'idle';

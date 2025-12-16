@@ -38,7 +38,7 @@ const consoleFormat = winston.format.combine(
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: customFormat,
-  defaultMeta: { service: 'chronos-vanguard' },
+  defaultMeta: { service: 'zkvanguard' },
   transports: [
     // Write all logs to combined.log
     new winston.transports.File({

@@ -6,7 +6,7 @@
 import { EventEmitter } from 'eventemitter3';
 import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
-import { AgentConfig, AgentTask, AgentMessage, RiskAnalysis } from '@shared/types/agent';
+import { AgentConfig, AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
 
 /**
  * Risk Agent specializing in risk analysis and assessment
@@ -32,17 +32,40 @@ export class RiskAgent extends BaseAgent {
   }
 
   protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
-    switch (task.type) {
-      case 'analyze-risk':
-        return await this.analyzeRisk(task.payload);
-      case 'calculate-volatility':
-        return await this.calculateVolatility(task.payload);
-      case 'analyze-exposures':
-        return await this.analyzeExposures(task.payload);
-      case 'assess-sentiment':
-        return await this.assessMarketSentiment(task.payload);
-      default:
-        throw new Error(`Unknown task type: ${task.type}`);
+    const startTime = Date.now();
+    try {
+      let data: unknown;
+      switch (task.type) {
+        case 'analyze-risk':
+          data = await this.analyzeRisk(task.payload);
+          break;
+        case 'calculate-volatility':
+          data = await this.calculateVolatility(task.payload as { portfolioId: number });
+          break;
+        case 'analyze-exposures':
+          data = await this.analyzeExposures(task.payload as { portfolioId: number });
+          break;
+        case 'assess-sentiment':
+          data = await this.assessMarketSentiment(task.payload as { market?: string });
+          break;
+        default:
+          throw new Error(`Unknown task type: ${task.type}`);
+      }
+      return {
+        success: true,
+        data,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.id,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        data: null,
+        error: error instanceof Error ? error.message : String(error),
+        executionTime: Date.now() - startTime,
+        agentId: this.id,
+      };
     }
   }
 
@@ -54,7 +77,8 @@ export class RiskAgent extends BaseAgent {
     });
 
     // Handle specific message types
-    if (message.type === 'request' && message.payload.action === 'analyze-risk') {
+    const payload = message.payload as { action?: string };
+    if (message.type === 'request' && payload.action === 'analyze-risk') {
       this.enqueueTask({
         id: message.id,
         type: 'analyze-risk',
@@ -93,7 +117,8 @@ export class RiskAgent extends BaseAgent {
    * Analyze portfolio risk
    */
   private async analyzeRisk(payload: unknown): Promise<RiskAnalysis> {
-    const { portfolioId } = payload;
+    const params = payload as { portfolioId: number };
+    const { portfolioId } = params;
 
     logger.info('Analyzing portfolio risk', {
       agentId: this.id,

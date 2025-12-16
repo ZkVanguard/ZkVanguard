@@ -11,10 +11,10 @@ export function ZKProofDemo() {
   const contractAddresses = useContractAddresses();
   const { isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
   const [showForm, setShowForm] = useState(false);
-  const [proofType, setProofType] = useState('settlement');
+  const [proofType, setProofType] = useState<'settlement' | 'risk' | 'rebalance'>('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
-  const [gaslessResult, setGaslessResult] = useState<Record<string, unknown> | null>(null);
+  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; gasRefunded: boolean; message: string } | null>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -143,11 +143,11 @@ export function ZKProofDemo() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-gray-400">Proof Type:</span>
-                  <span className="ml-2 font-semibold text-purple-400">{proofMetadata.proofType}</span>
+                  <span className="ml-2 font-semibold text-purple-400">{String(proofMetadata.proofType)}</span>
                 </div>
                 <div>
                   <span className="text-gray-400">Generation Time:</span>
-                  <span className="ml-2 font-semibold text-green-400">{proofMetadata.durationMs}ms</span>
+                  <span className="ml-2 font-semibold text-green-400">{String(proofMetadata.durationMs)}ms</span>
                 </div>
                 <div className="col-span-2">
                   <span className="text-gray-400">Acceleration:</span>
@@ -198,9 +198,9 @@ export function ZKProofDemo() {
               <ExternalLink className="w-4 h-4" />
             </a>
           )}
-          {isGasless && gaslessResult?.queueId && (
+          {isGasless && gaslessResult && (
             <div className="text-sm text-gray-400">
-              Queue ID: {gaslessResult.queueId} • Processing in batch...
+              {gaslessResult.message}
             </div>
           )}
           <button
@@ -292,7 +292,7 @@ export function ZKProofDemo() {
             </label>
             <select
               value={proofType}
-              onChange={(e) => setProofType(e.target.value)}
+              onChange={(e) => setProofType(e.target.value as 'settlement' | 'risk' | 'rebalance')}
               className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
               disabled={isPending || isConfirming}
             >

@@ -195,9 +195,9 @@ export async function checkLiquidationRisk(
 ): Promise<{ atRisk: boolean; liquidationPrice: number; buffer: number }> {
   // In production, this calls the RiskEngine contract
   // For demo, we calculate locally
-  const entryPrice = position.entryPrice;
-  const leverage = position.leverage;
-  const type = position.type;
+  const entryPrice = Number(position.entryPrice);
+  const leverage = Number(position.leverage);
+  const type = String(position.type);
   
   const liquidationBuffer = 0.10; // 10% buffer before liquidation
   
@@ -208,7 +208,7 @@ export async function checkLiquidationRisk(
     liquidationPrice = entryPrice * (1 + liquidationBuffer / leverage);
   }
   
-  const currentPrice = position.currentPrice;
+  const currentPrice = Number(position.currentPrice);
   const atRisk = type === 'LONG' 
     ? currentPrice < liquidationPrice * 1.2 
     : currentPrice > liquidationPrice * 0.8;

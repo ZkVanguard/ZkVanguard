@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
+import { ProofVerification } from '@/components/dashboard/ProofVerification';
 
 interface Proof {
   statement_hash: number;
@@ -530,6 +531,11 @@ function ZKProofPage() {
             <p>✅ Anyone can verify the proof without seeing your secrets</p>
             <p>✅ 521-bit post-quantum security (NIST P-521 prime field)</p>
           </div>
+        </div>
+
+        {/* On-Chain Verification Section */}
+        <div className="mt-8">
+          <ProofVerification />
         </div>
       </div>
     </div>

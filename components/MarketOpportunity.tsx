@@ -99,7 +99,7 @@ export function MarketOpportunity() {
               <div key={index} className="p-6 bg-gray-900 border border-gray-700 rounded-xl">
                 <div className="text-lg font-semibold mb-2 text-white">{comp.name}</div>
                 <div className="text-sm text-red-400 mb-3">❌ {comp.gap}</div>
-                <div className="text-sm text-green-400">[CHECK] Chronos Vanguard</div>
+                <div className="text-sm text-green-400">[CHECK] ZkVanguard</div>
               </div>
             ))}
           </div>
@@ -114,7 +114,7 @@ export function MarketOpportunity() {
         >
           <div className="flex items-center space-x-3 mb-6">
             <Shield className="w-8 h-8 text-blue-500" />
-            <h3 className="text-2xl font-bold text-white">Why Chronos Vanguard Wins</h3>
+            <h3 className="text-2xl font-bold text-white">Why ZkVanguard Wins</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3">

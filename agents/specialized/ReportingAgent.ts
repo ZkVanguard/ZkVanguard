@@ -4,7 +4,7 @@
  */
 
 import { BaseAgent } from '../core/BaseAgent';
-import { AgentCapability, AgentTask, TaskResult } from '@shared/types/agent';
+import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 
@@ -284,7 +284,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generateRiskReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, startDate, endDate, includeZKProofs } = task.parameters;
+    const parameters = task.parameters as { portfolioId: string; startDate?: number; endDate?: number; includeZKProofs?: boolean };
+    const { portfolioId, startDate, endDate, includeZKProofs } = parameters;
 
     try {
       logger.info('Generating risk report', { portfolioId });
@@ -339,7 +340,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generatePerformanceReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, startDate, endDate } = task.parameters;
+    const parameters = task.parameters as { portfolioId: string; startDate?: number; endDate?: number };
+    const { portfolioId, startDate, endDate } = parameters;
 
     try {
       logger.info('Generating performance report', { portfolioId });
@@ -413,7 +415,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generateSettlementReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { startDate, endDate } = task.parameters;
+    const parameters = task.parameters as { startDate?: number; endDate?: number };
+    const { startDate, endDate } = parameters;
 
     try {
       logger.info('Generating settlement report');
@@ -472,7 +475,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generatePortfolioReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId } = task.parameters;
+    const parameters = task.parameters as { portfolioId: string };
+    const { portfolioId } = parameters;
 
     try {
       logger.info('Generating portfolio report', { portfolioId });
@@ -524,7 +528,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generateAuditReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { startDate, endDate } = task.parameters;
+    const parameters = task.parameters as { startDate?: number; endDate?: number };
+    const { startDate, endDate } = parameters;
 
     try {
       logger.info('Generating audit report');
@@ -590,7 +595,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async generateComprehensiveReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { startDate, endDate } = task.parameters;
+    const parameters = task.parameters as { startDate?: number; endDate?: number };
+    const { startDate, endDate } = parameters;
 
     try {
       logger.info('Generating comprehensive report');
@@ -631,11 +637,11 @@ export class ReportingAgent extends BaseAgent {
           totalSettlements: 145,
           systemHealth: 'EXCELLENT',
         },
-        riskReport: riskResult.data.report,
-        performanceReport: perfResult.data.report,
-        settlementReport: settlementResult.data.report,
-        portfolioReports: [portfolioResult.data.report],
-        auditReport: auditResult.data.report,
+        riskReport: (riskResult.data as { report: RiskReport }).report,
+        performanceReport: (perfResult.data as { report: PerformanceReport }).report,
+        settlementReport: (settlementResult.data as { report: SettlementReport }).report,
+        portfolioReports: [(portfolioResult.data as { report: PortfolioReport }).report],
+        auditReport: (auditResult.data as { report: AuditReport }).report,
         recommendations: [
           {
             priority: 'HIGH',
@@ -673,7 +679,8 @@ export class ReportingAgent extends BaseAgent {
    */
   private async exportReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { reportId, format } = task.parameters;
+    const parameters = task.parameters as { reportId: string; format: 'JSON' | 'PDF' | 'HTML' | 'CSV' };
+    const { reportId, format } = parameters;
 
     try {
       const report = this.completedReports.get(reportId);
@@ -689,11 +696,11 @@ export class ReportingAgent extends BaseAgent {
           break;
         
         case 'CSV':
-          exportedData = this.convertToCSV(report);
+          exportedData = this.convertToCSV(report as unknown as Record<string, unknown>);
           break;
         
         case 'HTML':
-          exportedData = this.convertToHTML(report);
+          exportedData = this.convertToHTML(report as unknown as Record<string, unknown>);
           break;
         
         case 'PDF':
@@ -757,7 +764,7 @@ export class ReportingAgent extends BaseAgent {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Chronos Vanguard Report</title>
+  <title>ZkVanguard Report</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     h1 { color: #2c3e50; }
@@ -767,7 +774,7 @@ export class ReportingAgent extends BaseAgent {
   </style>
 </head>
 <body>
-  <h1>Chronos Vanguard Report</h1>
+  <h1>ZkVanguard Report</h1>
   <pre>${JSON.stringify(report, null, 2)}</pre>
 </body>
 </html>

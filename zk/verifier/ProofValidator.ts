@@ -48,15 +48,15 @@ export class ProofValidator {
       const result = await this.callPythonVerifier(proof, statement);
 
       const validation: ProofValidationResult = {
-        valid: result.verified,
-        proofHash: proof.trace_merkle_root || 'unknown',
+        valid: result.verified as boolean,
+        proofHash: (proof.trace_merkle_root as string) || 'unknown',
         proofType,
-        protocol: proof.protocol || 'ZK-STARK',
+        protocol: (proof.protocol as string) || 'ZK-STARK',
         verificationTime: Date.now() - startTime,
       };
 
       if (!result.verified) {
-        validation.errors = [result.error || 'Proof verification failed'];
+        validation.errors = [(result.error as string) || 'Proof verification failed'];
       }
 
       logger.info('ZK-STARK proof validation complete', {
@@ -73,9 +73,9 @@ export class ProofValidator {
 
       return {
         valid: false,
-        proofHash: proof.trace_merkle_root || 'unknown',
+        proofHash: (proof.trace_merkle_root as string) || 'unknown',
         proofType,
-        protocol: proof.protocol || 'ZK-STARK',
+        protocol: (proof.protocol as string) || 'ZK-STARK',
         verificationTime: Date.now() - startTime,
         errors: [(error as Error).message],
       };
@@ -172,8 +172,9 @@ export class ProofValidator {
     }
 
     // Check protocol is STARK
-    if (!proof.protocol.includes('STARK')) {
-      logger.warn('Proof protocol is not STARK', { protocol: proof.protocol });
+    const protocol = proof.protocol as string | undefined;
+    if (!protocol || !protocol.includes('STARK')) {
+      logger.warn('Proof protocol is not STARK', { protocol });
       return false;
     }
 

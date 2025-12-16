@@ -16,6 +16,10 @@ import {
   StrategyIntent,
   AgentExecutionReport,
   AgentType,
+  TaskResult,
+  RiskAnalysis,
+  HedgingStrategy,
+  SettlementResult,
 } from '@shared/types/agent';
 
 /**
@@ -43,15 +47,38 @@ export class LeadAgent extends BaseAgent {
   }
 
   protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
-    switch (task.type) {
-      case 'parse-strategy':
-        return await this.parseStrategy(task.payload);
-      case 'execute-strategy':
-        return await this.executeStrategy(task.payload);
-      case 'aggregate-results':
-        return await this.aggregateResults(task.payload);
-      default:
-        throw new Error(`Unknown task type: ${task.type}`);
+    const startTime = Date.now();
+    try {
+      let data: unknown;
+      switch (task.type) {
+        case 'parse-strategy':
+          data = await this.parseStrategy(task.payload as StrategyInput);
+          break;
+        case 'execute-strategy':
+          data = await this.executeStrategy(task.payload as StrategyIntent);
+          break;
+        case 'aggregate-results':
+          data = await this.aggregateResults(task.payload);
+          break;
+        default:
+          throw new Error(`Unknown task type: ${task.type}`);
+      }
+      
+      return {
+        success: true,
+        data,
+        error: null,
+        executionTime: Date.now() - startTime,
+        agentId: this.id,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        data: undefined,
+        error: error instanceof Error ? error.message : String(error),
+        executionTime: Date.now() - startTime,
+        agentId: this.id,
+      };
     }
   }
 
@@ -219,8 +246,8 @@ export class LeadAgent extends BaseAgent {
           portfolioId: intent.targetPortfolio,
           objectives: intent.objectives,
         });
-        results.riskAnalysis = riskResult;
-        report.riskAnalysis = riskResult;
+        results.riskAnalysis = riskResult.data;
+        report.riskAnalysis = riskResult.data as RiskAnalysis;
       }
 
       // 2. Hedging Strategy (if needed)
@@ -231,8 +258,8 @@ export class LeadAgent extends BaseAgent {
           riskAnalysis: results.riskAnalysis,
           objectives: intent.objectives,
         });
-        results.hedgingStrategy = hedgingResult;
-        report.hedgingStrategy = hedgingResult;
+        results.hedgingStrategy = hedgingResult.data;
+        report.hedgingStrategy = hedgingResult.data as HedgingStrategy;
       }
 
       // 3. Settlement (if transactions needed)
@@ -242,8 +269,8 @@ export class LeadAgent extends BaseAgent {
           portfolioId: intent.targetPortfolio,
           hedgingStrategy: results.hedgingStrategy,
         });
-        results.settlement = settlementResult;
-        report.settlement = settlementResult;
+        results.settlement = settlementResult.data;
+        report.settlement = settlementResult.data as SettlementResult;
       }
 
       // 4. Generate ZK proof for risk calculation
@@ -273,7 +300,7 @@ export class LeadAgent extends BaseAgent {
       return report;
     } catch (error) {
       report.status = 'failed';
-      report.errors = [error];
+      report.errors = [error instanceof Error ? error : new Error(String(error))];
       report.totalExecutionTime = Date.now() - startTime;
 
       logger.error('Strategy execution failed', {
@@ -297,10 +324,12 @@ export class LeadAgent extends BaseAgent {
    * Delegate task to specialized agent
    */
   private async delegateToAgent(agentType: AgentType, taskPayload: unknown): Promise<TaskResult> {
+    const payload = taskPayload as { type: string };
+    
     logger.info('Delegating task to agent', {
       leadAgentId: this.id,
       agentType,
-      taskType: taskPayload.type,
+      taskType: payload.type,
     });
 
     const agent = this.agentRegistry.getAgentByType(agentType);
@@ -310,7 +339,7 @@ export class LeadAgent extends BaseAgent {
 
     const task: AgentTask = {
       id: uuidv4(),
-      type: taskPayload.type,
+      type: payload.type,
       status: 'queued',
       priority: 1,
       payload: taskPayload,
@@ -332,7 +361,7 @@ export class LeadAgent extends BaseAgent {
   /**
    * Generate ZK proof for verification
    */
-  private async generateZKProof(proofType: string, data: unknown): Promise<Record<string, unknown>> {
+  private async generateZKProof(proofType: string, data: unknown): Promise<{ proofType: string; proofHash: string; verified: boolean; }> {
     // In production, this would call the actual ZK proof generator
     // For now, return a mock proof structure
     logger.info('Generating ZK proof', {
@@ -344,7 +373,6 @@ export class LeadAgent extends BaseAgent {
       proofType,
       proofHash: `0x${Buffer.from(JSON.stringify(data)).toString('hex').substring(0, 64)}`,
       verified: true,
-      timestamp: new Date(),
     };
   }
 

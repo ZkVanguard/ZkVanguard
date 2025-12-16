@@ -41,7 +41,7 @@ export function Footer() {
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <span className="text-xl font-bold gradient-text">
-                Chronos Vanguard
+                ZkVanguard
               </span>
             </div>
             <p className="text-slate-600 dark:text-slate-400 mb-4 max-w-md leading-relaxed">
@@ -86,7 +86,7 @@ export function Footer() {
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-slate-600 dark:text-slate-400 text-sm mb-4 md:mb-0">
-            © {currentYear} Chronos Vanguard. Demo platform for investor preview.
+            © {currentYear} ZkVanguard. Demo platform for investor preview.
           </p>
           <div className="flex space-x-6 text-sm">
             <Link href="/privacy" className="text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">Privacy Policy</Link>

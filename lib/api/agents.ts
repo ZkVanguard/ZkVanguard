@@ -195,17 +195,18 @@ export async function getAgentActivity(_address: string) {
  * Format agent message for display
  */
 export function formatAgentMessage(msg: Record<string, unknown>): string {
+  const payload = msg.payload as Record<string, unknown> | undefined;
   if (msg.type === 'RISK_ALERT') {
-    return `⚠️ Risk Alert: ${msg.payload?.message}`;
+    return `⚠️ Risk Alert: ${payload?.message}`;
   }
   if (msg.type === 'HEDGE_RECOMMENDATION') {
-    return `Hedge: ${msg.payload?.action} ${msg.payload?.asset} ${msg.payload?.size}x`;
+    return `Hedge: ${payload?.action} ${payload?.asset} ${payload?.size}x`;
   }
   if (msg.type === 'SETTLEMENT_BATCH') {
-    return `Batch settlement: ${msg.payload?.count || 0} transactions`;
+    return `Batch settlement: ${payload?.count || 0} transactions`;
   }
   if (msg.type === 'REPORT_GENERATED') {
-    return `${msg.payload?.period || 'Portfolio'} report generated`;
+    return `${payload?.period || 'Portfolio'} report generated`;
   }
-  return msg.type;
+  return String(msg.type);
 }

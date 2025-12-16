@@ -1,6 +1,6 @@
-# 📚 Chronos Vanguard Documentation
+# 📚 ZkVanguard Documentation
 
-Complete technical and operational documentation for the Chronos Vanguard platform.
+Complete technical and operational documentation for the ZkVanguard platform.
 
 ---
 

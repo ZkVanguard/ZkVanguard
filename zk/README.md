@@ -1,6 +1,6 @@
 # ZK-STARK System Integration
 
-This directory contains the integration of an authentic ZK-STARK (Zero-Knowledge Scalable Transparent ARgument of Knowledge) proof system into Chronos Vanguard.
+This directory contains the integration of an authentic ZK-STARK (Zero-Knowledge Scalable Transparent ARgument of Knowledge) proof system into ZkVanguard.
 
 ## Overview
 

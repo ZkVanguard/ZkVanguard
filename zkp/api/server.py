@@ -73,7 +73,7 @@ class LargeIntJSONResponse(JSONResponse):
 
 # Initialize FastAPI with custom response for lossless large integer serialization
 app = FastAPI(
-    title="Chronos Vanguard ZK System",
+    title="ZkVanguard ZK System",
     description="CUDA-accelerated ZK-STARK proof generation and verification",
     version="1.0.0",
     default_response_class=LargeIntJSONResponse  # Custom handler for big integers as strings
@@ -165,7 +165,7 @@ class HealthResponse(BaseModel):
 async def root():
     """Root endpoint"""
     test_data = {
-        "service": "Chronos Vanguard ZK System",
+        "service": "ZkVanguard ZK System",
         "status": "operational",
         "version": "1.0.0",
         "test_boolean": False,
@@ -478,7 +478,7 @@ def _prepare_rebalance_witness(data: Dict[str, Any]) -> Dict[str, Any]:
 if __name__ == "__main__":
     import secrets
     
-    print("🚀 Starting Chronos Vanguard ZK System API")
+    print("🚀 Starting ZkVanguard ZK System API")
     print("=" * 60)
     print(f"📍 Server: http://0.0.0.0:8000")
     print(f"📖 Docs: http://0.0.0.0:8000/docs")

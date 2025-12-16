@@ -1,7 +1,7 @@
-# Chronos Vanguard - System Architecture
+# ZkVanguard - System Architecture
 
 ## Overview
-Chronos Vanguard is a verifiable multi-agent AI swarm system for institutional RWA risk orchestration on Cronos EVM. The system enables natural language strategy input and autonomous execution through specialized AI agents.
+ZkVanguard is a verifiable multi-agent AI swarm system for institutional RWA risk orchestration on Cronos zkEVM with Zero-Knowledge proofs. The system enables natural language strategy input and autonomous execution through specialized AI agents.
 
 ## High-Level Architecture
 
@@ -463,4 +463,4 @@ chronos-vanguard/
 
 **Last Updated**: December 13, 2025  
 **Version**: 1.0.0  
-**Maintainers**: Chronos Vanguard Team
+**Maintainers**: ZkVanguard Team

@@ -1,4 +1,4 @@
-# Chronos Vanguard - Deployment Guide
+# ZkVanguard - Deployment Guide
 
 ## 🚀 Quick Deploy to Vercel
 
@@ -366,7 +366,7 @@ npm run build:next
 
 **Deployment Status**: ✅ READY
 
-Your Chronos Vanguard app is now production-ready!
+Your ZkVanguard app is now production-ready!
 
 🌐 Development: http://localhost:3000
 🚀 Production: https://your-app.vercel.app

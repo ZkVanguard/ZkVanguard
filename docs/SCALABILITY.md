@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the organized, scalable architecture of Chronos Vanguard, designed for easy expansion and maintenance.
+This document outlines the organized, scalable architecture of ZkVanguard, designed for easy expansion and maintenance.
 
 ## Directory Structure
 
@@ -636,4 +636,4 @@ npx hardhat verify --network cronos-mainnet <address>
 
 **Last Updated**: December 2025
 **Version**: 1.0.0
-**Maintained By**: Chronos Vanguard Team
+**Maintained By**: ZkVanguard Team

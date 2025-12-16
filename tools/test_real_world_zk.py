@@ -1,6 +1,6 @@
 """
 Real-World ZK System Integration Test
-Tests ZK proofs with actual Chronos Vanguard agent workflows
+Tests ZK proofs with actual ZkVanguard agent workflows
 
 This demonstrates REAL Zero-Knowledge proofs with production-like data:
 - Portfolio risk assessment with hidden positions
@@ -15,7 +15,7 @@ from datetime import datetime
 from zkp.core.zk_system import AuthenticZKStark
 
 print("=" * 80)
-print("CHRONOS VANGUARD - REAL-WORLD ZK PROOF DEMONSTRATION")
+print("ZKVANGUARD - REAL-WORLD ZK PROOF DEMONSTRATION")
 print("Proving Portfolio Operations WITHOUT Revealing Sensitive Data")
 print("=" * 80)
 print()
@@ -277,7 +277,7 @@ if all_passed:
     print("  ✓ Statement binding cryptographically secure")
     print("  ✓ Cannot reuse proofs for different claims")
     print()
-    print("🚀 CHRONOS VANGUARD ZK SYSTEM IS PRODUCTION-READY!")
+    print("🚀 ZKVANGUARD ZK SYSTEM IS PRODUCTION-READY!")
     print()
     print("💡 Real-World Use Cases Demonstrated:")
     print("  1. Portfolio Risk Management - Prove compliance without revealing positions")

@@ -1,8 +1,8 @@
 {
-  "name": "chronos-vanguard",
+  "name": "zkvanguard",
   "version": "0.1.0",
-  "description": "Verifiable Multi-Agent AI Swarm for Institutional RWA Risk Orchestration on Cronos EVM",
-  "author": "Chronos Vanguard Team",
+  "description": "Verifiable Multi-Agent AI Swarm for Institutional RWA Risk Orchestration with Zero-Knowledge Proofs on Cronos zkEVM",
+  "author": "ZkVanguard Team",
   "license": "MIT",
   "keywords": [
     "cronos",
@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/chronos-vanguard.git"
+    "url": "https://github.com/yourusername/zkvanguard.git"
   },
   "engines": {
     "node": ">=18.0.0",

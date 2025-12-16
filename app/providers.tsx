@@ -44,7 +44,7 @@ const config = createConfig({
       target: 'trust',
     }),
     coinbaseWallet({
-      appName: 'Chronos Vanguard',
+      appName: 'ZkVanguard',
       darkMode: false,
     }),
   ],

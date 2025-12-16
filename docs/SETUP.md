@@ -1,4 +1,4 @@
-# Chronos Vanguard - Setup & Quick Start Guide
+# ZkVanguard - Setup & Quick Start Guide
 
 ## Prerequisites
 

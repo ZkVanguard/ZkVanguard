@@ -50,16 +50,13 @@ export function AgentActivity({ address }: { address: string }) {
 
     fetchAgentActivity();
 
-    // Poll for updates every 5 seconds if real-time enabled
-    let interval: NodeJS.Timeout;
-    if (realTimeEnabled) {
-      interval = setInterval(fetchAgentActivity, 5000);
-    }
+    // Poll for updates every 5 seconds
+    const interval = setInterval(fetchAgentActivity, 5000);
 
     return () => {
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
     };
-  }, [address, realTimeEnabled]);
+  }, [address]);
 
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-96" />;

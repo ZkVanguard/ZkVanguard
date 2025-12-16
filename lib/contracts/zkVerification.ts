@@ -96,7 +96,7 @@ export async function verifyProofGasless(
   proof: ZKProof,
   gaslessVerifierAddress: Address,
   relayerAddress: Address,
-  signer: unknown
+  signer: { signMessage: (args: { message: string }) => Promise<string>; getAddress: () => Promise<string> }
 ): Promise<{ hash: `0x${string}`; success: boolean }> {
   try {
     const contractFormat = convertProofToContractFormat(proof);
@@ -146,7 +146,7 @@ export async function verifyProofGasless(
 export async function isProofVerifiedOnChain(
   proofHash: string,
   zkVerifierAddress: Address,
-  publicClient: unknown
+  publicClient: { readContract: (args: Record<string, unknown>) => Promise<unknown> }
 ): Promise<boolean> {
   try {
     const result = await publicClient.readContract({
@@ -177,7 +177,7 @@ export async function isProofVerifiedOnChain(
 export async function getVerificationHistory(
   address: Address,
   zkVerifierAddress: Address,
-  publicClient: unknown
+  publicClient: { getLogs: (args: Record<string, unknown>) => Promise<unknown[]> }
 ): Promise<Array<{ proofHash: string; timestamp: number; verified: boolean }>> {
   try {
     // Query VerificationComplete events
@@ -200,11 +200,14 @@ export async function getVerificationHistory(
       toBlock: 'latest'
     });
 
-    return logs.map((log: Record<string, unknown>) => ({
-      proofHash: log.args.proofHash,
-      timestamp: Number(log.args.timestamp),
-      verified: log.args.verified
-    }));
+    return logs.map((log: unknown) => {
+      const logData = log as Record<string, { proofHash: string; timestamp: bigint; verified: boolean }>;
+      return {
+        proofHash: logData.args.proofHash,
+        timestamp: Number(logData.args.timestamp),
+        verified: logData.args.verified
+      };
+    });
   } catch (error) {
     console.error('Failed to get verification history:', error);
     return [];

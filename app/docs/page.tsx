@@ -20,9 +20,9 @@ export default function DocsPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent mb-2">
-            Chronos Vanguard Documentation
+            ZkVanguard Documentation
           </h1>
-          <p className="text-gray-400">Complete guide to building with Chronos Vanguard on Cronos zkEVM</p>
+          <p className="text-gray-400">Complete guide to building with ZkVanguard on Cronos zkEVM</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -75,7 +75,7 @@ function OverviewSection() {
       
       <div className="mb-6">
         <p className="text-gray-300 mb-4">
-          Chronos Vanguard is a multi-agent AI system for institutional RWA (Real-World Assets) risk management on Cronos zkEVM. 
+          ZkVanguard is a multi-agent AI system for institutional RWA (Real-World Assets) risk management with Zero-Knowledge proofs on Cronos zkEVM. 
           <strong className="text-green-400"> ZK-STARK proofs and gasless transactions are fully operational on Cronos testnet.</strong> Five specialized 
           AI agents coordinate to analyze risk, recommend hedging strategies, execute settlements with ZK proofs, and generate reports.
         </p>

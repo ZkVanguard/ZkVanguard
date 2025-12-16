@@ -4,7 +4,7 @@
  */
 
 import { BaseAgent } from '../core/BaseAgent';
-import { AgentCapability, AgentTask, TaskResult } from '@shared/types/agent';
+import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { X402Client } from '@integrations/x402/X402Client';
 import { ethers } from 'ethers';
 import { logger } from '@shared/utils/logger';
@@ -161,7 +161,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async createSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, beneficiary, amount, token, purpose, priority, validAfter, validBefore } = task.parameters;
+    const parameters = task.parameters as { portfolioId: string; beneficiary: string; amount: string; token: string; purpose: string; priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'; validAfter?: number; validBefore?: number };
+    const { portfolioId, beneficiary, amount, token, purpose, priority, validAfter, validBefore } = parameters;
 
     try {
       const settlement: SettlementRequest = {
@@ -215,7 +216,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async processSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { requestId } = task.parameters;
+    const parameters = task.parameters as { requestId: string };
+    const { requestId } = parameters;
 
     try {
       const settlement = this.pendingSettlements.get(requestId);
@@ -282,7 +284,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async batchSettlements(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { requestIds, maxBatchSize } = task.parameters;
+    const parameters = task.parameters as { requestIds?: string[]; maxBatchSize?: number };
+    const { requestIds, maxBatchSize } = parameters;
 
     try {
       // Get pending settlements
@@ -338,7 +341,7 @@ export class SettlementAgent extends BaseAgent {
       // Process each token group as a batch
       const results = [];
       for (const [token, settlements] of tokenGroups.entries()) {
-        const batchRequest: Record<string, unknown> = {
+        const batchRequest = {
           token,
           from: await this.signer.getAddress(),
           recipients: settlements.map(s => s.beneficiary),
@@ -423,7 +426,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async cancelSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { requestId } = task.parameters;
+    const parameters = task.parameters as { requestId: string };
+    const { requestId } = parameters;
 
     try {
       const settlement = this.pendingSettlements.get(requestId);
@@ -456,7 +460,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async createSchedule(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { frequency, minBatchSize, maxBatchSize, minAmount } = task.parameters;
+    const parameters = task.parameters as { frequency?: 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY'; minBatchSize?: number; maxBatchSize?: number; minAmount?: string };
+    const { frequency, minBatchSize, maxBatchSize, minAmount } = parameters;
 
     try {
       const schedule: SettlementSchedule = {
@@ -490,7 +495,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async generateReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { startDate, endDate } = task.parameters;
+    const parameters = task.parameters as { startDate?: number; endDate?: number };
+    const { startDate, endDate } = parameters;
 
     try {
       const start = startDate || Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days ago
@@ -552,7 +558,8 @@ export class SettlementAgent extends BaseAgent {
    */
   private async checkSettlementStatus(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { requestId } = task.parameters;
+    const parameters = task.parameters as { requestId: string };
+    const { requestId } = parameters;
 
     try {
       let settlement = this.pendingSettlements.get(requestId);

@@ -81,14 +81,15 @@ export class ProofGenerator {
 
       // Call Python ZK-STARK system
       const result = await this.callPythonProver(proofType, statement, witness);
+      const resultProof = result.proof as Record<string, unknown>;
 
       const proof: ZKProof = {
-        proof: result.proof,
-        proofHash: result.proof.trace_merkle_root || this.hashProofSync(result.proof),
+        proof: resultProof,
+        proofHash: (resultProof.trace_merkle_root as string) || this.hashProofSync(resultProof),
         proofType,
-        verified: result.verified || false,
+        verified: (result.verified as boolean) || false,
         generationTime: Date.now() - startTime,
-        protocol: result.proof.protocol || 'ZK-STARK',
+        protocol: (resultProof.protocol as string) || 'ZK-STARK',
       };
 
       logger.info('ZK-STARK proof generated successfully', {

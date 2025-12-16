@@ -1,5 +1,5 @@
 /**
- * @fileoverview Deploy script for Chronos Vanguard contracts
+ * @fileoverview Deploy script for ZkVanguard contracts
  * @module scripts/deploy/deploy-contracts
  */
 

@@ -355,11 +355,11 @@ export async function generateProofForOnChain(
   let jobStatus: ZKProofStatus;
   
   if (proofType === 'settlement') {
-    jobStatus = await generateSettlementProof(data.payments, portfolioId);
+    jobStatus = await generateSettlementProof(data.payments as Array<{ recipient: string; amount: number; token: string }>, portfolioId);
   } else if (proofType === 'risk') {
-    jobStatus = await generateRiskProof(data, portfolioId);
+    jobStatus = await generateRiskProof(data as { portfolio_value: number; volatility: number; value_at_risk: number }, portfolioId);
   } else {
-    jobStatus = await generateRebalanceProof(data, portfolioId);
+    jobStatus = await generateRebalanceProof(data as { old_allocations: number[]; new_allocations: number[] }, portfolioId);
   }
   
   // Wait for proof generation (CUDA-accelerated, NIST P-521)

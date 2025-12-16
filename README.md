@@ -109,8 +109,8 @@ All documentation organized in [`docs/`](./docs):
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/chronos-vanguard.git
-cd chronos-vanguard
+git clone https://github.com/yourusername/zkvanguard.git
+cd zkvanguard
 
 # Install dependencies
 npm install
@@ -254,7 +254,7 @@ See [docs/GASLESS_FINAL_SOLUTION.md](./docs/GASLESS_FINAL_SOLUTION.md) for techn
 
 ## 📄 License
 
-Copyright 2025 Chronos Vanguard Team
+Copyright 2025 ZkVanguard Team
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 

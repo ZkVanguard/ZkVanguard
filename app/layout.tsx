@@ -8,12 +8,12 @@ import { Footer } from '@/components/Footer';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Chronos Vanguard - AI-Powered RWA Risk Management',
+  title: 'ZkVanguard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
   description: 'Multi-agent AI system for real-world asset risk management on Cronos zkEVM',
   keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
-  authors: [{ name: 'Chronos Vanguard Team' }],
+  authors: [{ name: 'ZkVanguard Team' }],
   openGraph: {
-    title: 'Chronos Vanguard',
+    title: 'ZkVanguard',
     description: 'AI-Powered RWA Risk Management Platform',
     type: 'website',
   },

@@ -4,7 +4,7 @@
  */
 
 import { BaseAgent } from '../core/BaseAgent';
-import { AgentCapability, AgentTask, TaskResult } from '@shared/types/agent';
+import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { MoonlanderClient } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
 import { logger } from '@shared/utils/logger';
@@ -149,7 +149,8 @@ export class HedgingAgent extends BaseAgent {
    */
   private async analyzeHedgeOpportunity(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, assetSymbol, notionalValue } = task.parameters;
+    const parameters = task.parameters as { portfolioId: string; assetSymbol: string; notionalValue: number };
+    const { portfolioId, assetSymbol, notionalValue } = parameters;
 
     try {
       // Get current market data
@@ -182,7 +183,7 @@ export class HedgingAgent extends BaseAgent {
         portfolioId,
         exposure: {
           asset: assetSymbol,
-          notionalValue,
+          notionalValue: notionalValue.toString(),
           currentPrice: priceData.price.toString(),
           volatility,
         },
@@ -190,14 +191,14 @@ export class HedgingAgent extends BaseAgent {
           action: shouldHedge ? 'OPEN' : 'HOLD',
           market: hedgeMarket,
           side: 'SHORT', // Typically short perp to hedge long spot
-          size: (parseFloat(notionalValue) * hedgeRatio).toFixed(4),
+          size: (notionalValue * hedgeRatio).toFixed(4),
           leverage: Math.min(Math.floor(1 / volatility), 5),
           reason: shouldHedge
             ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
             : 'Volatility acceptable, no immediate hedge needed',
         },
         riskMetrics: {
-          portfolioVar: parseFloat(notionalValue) * volatility * 1.65, // 95% confidence
+          portfolioVar: notionalValue * volatility * 1.65, // 95% confidence
           hedgeEffectiveness,
           basisRisk: (1 - spotFutureCorrelation) * 100,
           fundingCost: avgFundingRate * 100,
@@ -223,7 +224,8 @@ export class HedgingAgent extends BaseAgent {
    */
   private async openHedgePosition(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { market, side, notionalValue, leverage, stopLoss, takeProfit } = task.parameters;
+    const parameters = task.parameters as { market: string; side: 'LONG' | 'SHORT'; notionalValue: string; leverage?: number; stopLoss?: string; takeProfit?: string };
+    const { market, side, notionalValue, leverage, stopLoss, takeProfit } = parameters;
 
     try {
       logger.info('Opening hedge position', { market, side, notionalValue });
@@ -270,7 +272,8 @@ export class HedgingAgent extends BaseAgent {
    */
   private async closeHedgePosition(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { market, size } = task.parameters;
+    const parameters = task.parameters as { market: string; size: string };
+    const { market, size } = parameters;
 
     try {
       logger.info('Closing hedge position', { market });
@@ -300,7 +303,8 @@ export class HedgingAgent extends BaseAgent {
    */
   private async rebalanceHedge(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { strategyId } = task.parameters;
+    const parameters = task.parameters as { strategyId: string };
+    const { strategyId } = parameters;
 
     try {
       const strategy = this.activeStrategies.get(strategyId);
@@ -391,9 +395,10 @@ export class HedgingAgent extends BaseAgent {
    */
   private async createHedgeStrategy(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
+    const params = task.parameters as Omit<HedgeStrategy, 'strategyId' | 'active'>;
     const strategy: HedgeStrategy = {
       strategyId: `strategy-${Date.now()}`,
-      ...task.parameters,
+      ...params,
       active: true,
     };
 
@@ -468,7 +473,7 @@ export class HedgingAgent extends BaseAgent {
    */
   private async calculateOptimalHedgeRatio(
     assetSymbol: string,
-    notionalValue: string,
+    notionalValue: number,
     volatility: number
   ): Promise<number> {
     // Simplified hedge ratio calculation

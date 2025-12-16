@@ -6,7 +6,7 @@
 import { EventEmitter } from 'eventemitter3';
 import { BaseAgent } from './BaseAgent';
 import { logger } from '@shared/utils/logger';
-import { AgentType } from '@shared/types/agent';
+import { AgentType, AgentStatus } from '@shared/types/agent';
 
 /**
  * Agent Registry class for agent discovery and management
@@ -99,7 +99,16 @@ export class AgentRegistry extends EventEmitter {
   /**
    * Get agent statuses
    */
-  getAgentStatuses(): AgentStatus[] {
+  getAgentStatuses(): Array<{
+    id: string;
+    name: string;
+    type: string;
+    status: AgentStatus;
+    queueLength: number;
+    currentTask: string | null;
+    executionHistoryCount: number;
+    capabilities: string[];
+  }> {
     return this.getAllAgents().map((agent) => agent.getStatus());
   }
 
