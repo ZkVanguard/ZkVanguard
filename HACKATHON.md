@@ -52,7 +52,7 @@ This project is eligible for **multiple tracks**:
 - **Testnet**: Cronos EVM Testnet (Chain ID: 338)
 - **RPC Endpoint**: https://evm.cronos.org (Mainnet)
 - **Testnet RPC**: https://evm-t3.cronos.org
-- **Block Explorer**: https://cronoscan.com
+- **Block Explorer**: https://explorer.cronos.org
 
 ### Smart Contract Deployments
 - Settlement contracts on Cronos EVM
@@ -147,7 +147,7 @@ npm run frontend:build
    - RPC URL: https://evm-t3.cronos.org
    - Chain ID: 338
    - Symbol: tCRO
-   - Explorer: https://testnet.cronoscan.com
+   - Explorer: https://explorer.cronos.org/testnet
 
 3. Get testnet tokens: https://cronos.org/faucet
 

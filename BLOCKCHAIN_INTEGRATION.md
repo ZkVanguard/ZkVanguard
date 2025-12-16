@@ -90,7 +90,7 @@ createPortfolio(BigInt(1000), BigInt(50)); // 🔐 Requires wallet signature
 
 ### 3. Verify On-Chain
 ```
-1. Open Cronoscan: https://testnet.cronoscan.com/address/0x170E8232E9e18eeB1839dB1d939501994f1e272F
+1. Open Cronos Explorer: https://explorer.cronos.org/testnet/address/0x170E8232E9e18eeB1839dB1d939501994f1e272F
 2. Click "Contract" tab
 3. Click "Read Contract"
 4. Find "portfolioCount" function

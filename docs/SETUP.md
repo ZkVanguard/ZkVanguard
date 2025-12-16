@@ -52,7 +52,7 @@ Add Cronos Testnet to MetaMask:
 - **RPC URL**: `https://evm-t3.cronos.org/`
 - **Chain ID**: `338`
 - **Currency Symbol**: `TCRO`
-- **Block Explorer**: `https://testnet.cronoscan.com/`
+- **Block Explorer**: `https://explorer.cronos.org/testnet/`
 
 Get test TCRO from the [faucet](https://cronos.org/faucet).
 

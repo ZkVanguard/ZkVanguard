@@ -11,9 +11,9 @@ All three smart contracts have been successfully deployed to **Cronos Testnet (C
 | **PaymentRouter** | `0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b` | ✅ Deployed |
 
 **View on Cronoscan:**
-- [ZKVerifier](https://testnet.cronoscan.com/address/0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8)
-- [RWAManager](https://testnet.cronoscan.com/address/0x170E8232E9e18eeB1839dB1d939501994f1e272F)
-- [PaymentRouter](https://testnet.cronoscan.com/address/0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b)
+- [ZKVerifier](https://explorer.cronos.org/testnet/address/0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8)
+- [RWAManager](https://explorer.cronos.org/testnet/address/0x170E8232E9e18eeB1839dB1d939501994f1e272F)
+- [PaymentRouter](https://explorer.cronos.org/testnet/address/0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b)
 
 ## Frontend Integration
 
