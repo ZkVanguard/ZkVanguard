@@ -88,6 +88,7 @@ chronos-vanguard/
 All documentation organized in [`docs/`](./docs):
 
 - **[Architecture](./docs/ARCHITECTURE.md)** - System design and tech stack
+- **[Scalability Guide](./docs/SCALABILITY.md)** - Scalable architecture patterns ⭐
 - **[Setup Guide](./docs/SETUP.md)** - Installation and configuration
 - **[Testing](./docs/TEST_GUIDE.md)** - Comprehensive testing guide
 - **[Gasless System](./docs/GASLESS_FINAL_SOLUTION.md)** - Gasless transaction implementation
