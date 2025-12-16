@@ -1,61 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import fs from 'fs/promises';
-import path from 'path';
 
-const execAsync = promisify(exec);
+const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { scenario, statement, witness } = body;
 
-    // Create a temporary Python script to generate proof
-    const scriptContent = `
-import json
-import sys
-from zkp.core.zk_system import AuthenticZKStark
-
-zk = AuthenticZKStark()
-
-statement = ${JSON.stringify(statement)}
-witness = ${JSON.stringify(witness)}
-
-result = zk.generate_proof(statement, witness)
-proof = result['proof']
-
-# Output proof as JSON
-print(json.dumps({
-    'success': True,
-    'proof': proof,
-    'statement': statement,
-    'scenario': '${scenario}'
-}))
-`;
-
-    const scriptPath = path.join(process.cwd(), 'temp_generate_proof.py');
-    await fs.writeFile(scriptPath, scriptContent);
-
-    // Execute Python script
-    const { stdout, stderr } = await execAsync(`python "${scriptPath}"`, {
-      cwd: process.cwd(),
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+    // Call the real FastAPI ZK server
+    const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        proof_type: scenario,
+        data: {
+          statement: statement,
+          witness: witness
+        }
+      })
     });
 
-    // Clean up
-    await fs.unlink(scriptPath).catch(() => {});
-
-    if (stderr && !stderr.includes('ZK Core System loaded')) {
-      console.error('Python stderr:', stderr);
+    if (!response.ok) {
+      throw new Error(`ZK API error: ${response.statusText}`);
     }
 
-    // Parse the last line of output (the JSON result)
-    const lines = stdout.trim().split('\n');
-    const jsonLine = lines[lines.length - 1];
-    const result = JSON.parse(jsonLine);
+    const result = await response.json();
+    
+    // Check if proof generation is complete
+    if (result.status === 'pending') {
+      // Poll for completion
+      const jobId = result.job_id;
+      const maxAttempts = 30; // 30 seconds max
+      
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        
+        const statusResponse = await fetch(`${ZK_API_URL}/api/zk/proof/${jobId}`);
+        if (!statusResponse.ok) {
+          throw new Error('Failed to check proof status');
+        }
+        
+        const statusResult = await statusResponse.json();
+        
+        if (statusResult.status === 'completed' && statusResult.proof) {
+          return NextResponse.json({
+            success: true,
+            proof: statusResult.proof,
+            statement: statement,
+            scenario: scenario
+          });
+        } else if (statusResult.status === 'failed') {
+          throw new Error(statusResult.error || 'Proof generation failed');
+        }
+      }
+      
+      throw new Error('Proof generation timeout');
+    }
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      proof: result.proof,
+      statement: statement,
+      scenario: scenario
+    });
   } catch (error: any) {
     console.error('Error generating proof:', error);
     return NextResponse.json(

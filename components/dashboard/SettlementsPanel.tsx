@@ -81,7 +81,7 @@ export function SettlementsPanel({ address }: { address: string }) {
         </p>
         <div className="flex gap-3">
           <a
-            href={`https://testnet.cronoscan.com/tx/${hash}`}
+            href={`https://explorer.cronos.org/testnet/tx/${hash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
