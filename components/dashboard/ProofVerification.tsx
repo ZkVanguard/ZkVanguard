@@ -13,9 +13,13 @@ interface VerificationResult {
   exists: boolean;
 }
 
-export function ProofVerification() {
+interface ProofVerificationProps {
+  defaultTxHash?: string;
+}
+
+export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}) {
   const [proofHash, setProofHash] = useState('');
-  const [txHash, setTxHash] = useState('');
+  const [txHash, setTxHash] = useState(defaultTxHash || '');
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);

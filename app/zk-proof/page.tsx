@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
 import { ProofVerification } from '@/components/dashboard/ProofVerification';
+import { useAccount } from 'wagmi';
 
 interface Proof {
   statement_hash: number;
@@ -85,6 +86,7 @@ const scenarios = [
 ];
 
 function ZKProofPage() {
+  const { isConnected } = useAccount();
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0]);
   const [proofResult, setProofResult] = useState<ProofResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -92,11 +94,15 @@ function ZKProofPage() {
   const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
   const [showSecrets, setShowSecrets] = useState(false);
   const [showProofDetails, setShowProofDetails] = useState(false);
+  const [onChainTxHash, setOnChainTxHash] = useState<string | null>(null);
+  const [isStoringOnChain, setIsStoringOnChain] = useState(false);
 
   const generateProof = async () => {
     setIsGenerating(true);
     setProofResult(null);
     setVerificationResult(null);
+    setOnChainTxHash(null);
+    
     try {
       const response = await fetch('/api/zk-proof/generate', {
         method: 'POST',
@@ -110,6 +116,11 @@ function ZKProofPage() {
       const data = await response.json();
       if (data.success) {
         setProofResult(data);
+        
+        // Auto-store on-chain if wallet connected
+        if (isConnected && data.proof) {
+          await storeProofOnChain(data.proof);
+        }
       } else {
         alert('Error generating proof: ' + data.error);
       }
@@ -117,6 +128,46 @@ function ZKProofPage() {
       alert('Error: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const storeProofOnChain = async (proof: Proof) => {
+    if (!isConnected) {
+      alert('Please connect your wallet to store proof on-chain');
+      return;
+    }
+
+    setIsStoringOnChain(true);
+    try {
+      console.log('⛓️  Storing proof on Cronos testnet...');
+      
+      // Import the gasless storage function dynamically
+      const { storeCommitmentOnChainGasless } = await import('@/lib/api/onchain-gasless');
+      const { convertToContractFormat } = await import('@/lib/api/zk');
+      
+      // Convert proof to contract format
+      const commitment = convertToContractFormat(proof as any);
+      
+      console.log('📝 Proof Hash:', commitment.proofHash);
+      console.log('🌲 Merkle Root:', commitment.merkleRoot);
+      console.log('🔒 Security:', commitment.metadata.security_level, 'bits');
+      
+      // Store on-chain with gasless transaction
+      const result = await storeCommitmentOnChainGasless(
+        commitment.proofHash,
+        commitment.merkleRoot,
+        BigInt(commitment.metadata.field_bits)
+      );
+      
+      setOnChainTxHash(result.txHash);
+      console.log('✅ Stored on-chain! TX:', result.txHash);
+      console.log('💰 Gas refunded - you paid $0.00!');
+      
+    } catch (error) {
+      console.error('❌ Failed to store on-chain:', error);
+      alert('Failed to store proof on-chain: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsStoringOnChain(false);
     }
   };
 
@@ -364,6 +415,68 @@ function ZKProofPage() {
               </div>
             </div>
 
+            {/* On-Chain Storage Status */}
+            {isConnected && (
+              <div className="glass rounded-2xl p-6 border border-purple-500/30 bg-purple-900/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      isStoringOnChain ? 'bg-yellow-500/20' : onChainTxHash ? 'bg-emerald-500/20' : 'bg-purple-500/20'
+                    }`}>
+                      {isStoringOnChain ? (
+                        <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />
+                      ) : onChainTxHash ? (
+                        <CheckCircle className="w-6 h-6 text-emerald-400" />
+                      ) : (
+                        <Shield className="w-6 h-6 text-purple-400" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-lg">
+                        {isStoringOnChain ? 'Storing On-Chain...' : onChainTxHash ? 'Stored On-Chain ✓' : 'On-Chain Storage'}
+                      </div>
+                      <div className="text-gray-400 text-sm">
+                        {isStoringOnChain ? 'Submitting gasless transaction...' : onChainTxHash ? 'Permanent proof commitment on Cronos testnet' : 'Wallet connected - storing automatically'}
+                      </div>
+                    </div>
+                  </div>
+                  {onChainTxHash && (
+                    <a
+                      href={`https://explorer.cronos.org/testnet/tx/${onChainTxHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all flex items-center gap-2"
+                    >
+                      View TX
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                {onChainTxHash && (
+                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg">
+                    <div className="text-xs text-gray-400 mb-1">Transaction Hash:</div>
+                    <div className="text-sm text-cyan-400 font-mono break-all">{onChainTxHash}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isConnected && (
+              <div className="glass rounded-2xl p-6 border border-yellow-500/30 bg-yellow-900/10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                    <Shield className="w-6 h-6 text-yellow-400" />
+                  </div>
+                  <div>
+                    <div className="text-white font-bold">Connect Wallet to Store On-Chain</div>
+                    <div className="text-gray-400 text-sm">Proof generated successfully, but not stored on blockchain yet</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Proof Details */}
             <div className="glass rounded-2xl p-8 border border-white/10">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -474,14 +587,20 @@ function ZKProofPage() {
                     )}
                   </button>
 
-                  <a
-                    href="/dashboard"
-                    className="px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/30 transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2 text-center"
+                  <button
+                    onClick={() => {
+                      // Scroll to verification section
+                      document.getElementById('on-chain-verification')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    disabled={!onChainTxHash}
+                    className="px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2 text-center"
                   >
                     <Shield className="w-5 h-5" />
                     <span>Verify On-Chain</span>
-                    <span className="text-xs opacity-75">Cronos Testnet (Permanent)</span>
-                  </a>
+                    <span className="text-xs opacity-75">
+                      {onChainTxHash ? 'Scroll to verify ↓' : 'Store on-chain first'}
+                    </span>
+                  </button>
 
                   <div className="px-6 py-4 glass border border-emerald-500/30 rounded-xl flex flex-col items-center justify-center gap-2">
                     <Lock className="w-5 h-5 text-cyan-400" />
@@ -534,8 +653,8 @@ function ZKProofPage() {
         </div>
 
         {/* On-Chain Verification Section */}
-        <div className="mt-8">
-          <ProofVerification />
+        <div id="on-chain-verification" className="mt-8 scroll-mt-8">
+          <ProofVerification defaultTxHash={onChainTxHash || undefined} />
         </div>
       </div>
     </div>
