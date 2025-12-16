@@ -24,6 +24,7 @@ export function Navbar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/agents', label: 'Agents' },
     { href: '/zk-proof', label: 'ZK Proofs' },
+    { href: '/zk-authenticity', label: '🔐 Verify Authenticity' },
     { href: '/docs', label: 'Documentation' },
   ];
 
