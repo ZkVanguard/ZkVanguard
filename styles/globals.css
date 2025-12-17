@@ -132,7 +132,7 @@ body::before {
 }
 
 @layer utilities {
-  /* Apple-style Light Cards */
+  /* Premium Light Cards */
   .glass-light {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 250, 252, 0.98) 100%);
     backdrop-filter: blur(30px) saturate(180%);
@@ -145,7 +145,7 @@ body::before {
     color: #1d1d1f;
   }
 
-  /* Card Yang - Apple Light Card */
+  /* Card Yang - Light Gradient Card */
   .card-yang {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 249, 250, 0.95) 100%);
     border: 0.5px solid rgba(0, 0, 0, 0.06);
