@@ -1,28 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["sin1"],
-  "env": {
-    "NODE_ENV": "production",
-    "NEXT_PUBLIC_CRONOS_RPC_URL": "@cronos_rpc_url",
-    "NEXT_PUBLIC_CHAIN_ID": "@chain_id",
-    "NEXT_PUBLIC_MOONLANDER_API": "@moonlander_api",
-    "NEXT_PUBLIC_VVS_API": "@vvs_api",
-    "NEXT_PUBLIC_MCP_API": "@mcp_api",
-    "NEXT_PUBLIC_X402_API": "@x402_api",
-    "NEXT_PUBLIC_DELPHI_API": "@delphi_api"
-  },
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1"
-    }
-  },
-  "functions": {
-    "api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 10
     }
   },
   "headers": [

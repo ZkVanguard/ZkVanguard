@@ -8,7 +8,7 @@
 [![Cronos](https://img.shields.io/badge/Cronos-zkEVM-blue)](https://cronos.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue)](https://www.typescriptlang.org/)
 
-**[📹 Demo Video](./docs/guides/DEMO_SCRIPT.md) • [🚀 Live Demo](http://localhost:3000) • [📊 Test Report](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)**
+**[📹 Demo Video](./docs/guides/DEMO_SCRIPT.md) • [🚀 Live Demo](https://zkvanguard.vercel.app) • [📊 Test Report](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)**
 
 ---
 
@@ -258,7 +258,8 @@ pip install -r requirements.txt
 python server.py  # Runs on localhost:8000
 
 # 3️⃣ Start Frontend (Terminal 2)
-npm run dev  # Opens http://localhost:3000
+npm run dev  # Opens http://localhost:3000 (for local development)
+# Live Demo: https://zkvanguard.vercel.app
 
 # 4️⃣ Run Complete System Test (Terminal 3)
 npx tsx scripts/complete-system-test.ts

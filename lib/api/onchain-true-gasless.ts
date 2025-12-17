@@ -15,8 +15,16 @@ import { config } from '@/app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
 import { logger } from '@/lib/utils/logger';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { X402Client } from '@/integrations/x402/X402Client';
 import { ethers } from 'ethers';
+
+// Import X402Client only on server-side to avoid node:crypto issues in browser
+const getX402Client = async () => {
+  if (typeof window === 'undefined') {
+    const { X402Client } = await import('@/integrations/x402/X402Client.server');
+    return X402Client;
+  }
+  throw new Error('X402Client can only be used server-side');
+};
 
 const X402_VERIFIER_ADDRESS = '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852' as `0x${string}`; // TRUE gasless contract
 const USDC_TOKEN = '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`; // DevUSDCe testnet
@@ -161,7 +169,8 @@ export async function storeCommitmentTrueGasless(
   logger.info('Step 1: Approve USDC (x402 gasless)');
   
   // Use x402 for gasless USDC approval
-  const x402Client = new X402Client();
+  const X402ClientClass = await getX402Client();
+  const x402Client = new X402ClientClass();
   x402Client.setSigner(signer);
   
   const approvalResult = await x402Client.executeGaslessTransfer({
@@ -237,7 +246,8 @@ export async function storeCommitmentsBatchTrueGasless(
 
   // Approve and transfer via x402
   const userAddress = await signer.getAddress();
-  const x402Client = new X402Client();
+  const X402ClientClass = await getX402Client();
+  const x402Client = new X402ClientClass();
   x402Client.setSigner(signer);
   
   await x402Client.executeGaslessTransfer({
