@@ -63,6 +63,7 @@
     "start": "npm run agents:start"
   },
   "dependencies": {
+    "@crypto.com/ai-agent-client": "^1.0.2",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",
     "@rainbow-me/rainbowkit": "^2.2.10",
@@ -78,6 +79,7 @@
     "lucide-react": "^0.303.0",
     "next": "^14.0.4",
     "next-themes": "^0.2.1",
+    "openai": "^4.77.3",
     "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",

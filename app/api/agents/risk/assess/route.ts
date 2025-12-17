@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 /**
  * Risk Assessment API Route
- * Returns portfolio risk metrics
+ * Uses Crypto.com AI for intelligent risk analysis
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address } = body;
+    const { address, portfolioData } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -16,18 +17,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Simulate risk assessment calculation
+    // Use Crypto.com AI service for risk assessment
+    const aiService = getCryptocomAIService();
+    const riskAssessment = await aiService.assessRisk(portfolioData || { address });
+
     const riskMetrics = {
-      var: 0.12 + Math.random() * 0.08,
-      volatility: 0.18 + Math.random() * 0.15,
-      sharpeRatio: 1.5 + Math.random() * 1.0,
-      liquidationRisk: 0.03 + Math.random() * 0.07,
-      healthScore: 75 + Math.random() * 20,
+      var: riskAssessment.var95,
+      volatility: riskAssessment.volatility,
+      sharpeRatio: riskAssessment.sharpeRatio,
+      liquidationRisk: riskAssessment.riskScore > 70 ? 0.08 : riskAssessment.riskScore > 50 ? 0.05 : 0.02,
+      healthScore: 100 - riskAssessment.riskScore,
+      overallRisk: riskAssessment.overallRisk,
+      riskScore: riskAssessment.riskScore,
+      factors: riskAssessment.factors,
       recommendations: [
-        'Consider hedging positions with high volatility',
-        'Portfolio diversification is recommended',
-        'Monitor market conditions closely'
+        `Overall risk level: ${riskAssessment.overallRisk}`,
+        `Risk score: ${riskAssessment.riskScore.toFixed(1)}/100`,
+        ...riskAssessment.factors.map(f => `${f.factor}: ${f.description}`),
       ],
+      aiPowered: aiService.isAvailable(),
       timestamp: new Date().toISOString()
     };
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Brain } from 'lucide-react';
 import { sendAgentCommand } from '@/lib/api/agents';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 interface Message {
   id: string;
@@ -10,6 +11,7 @@ interface Message {
   content: string;
   timestamp: Date;
   agentType?: string;
+  aiPowered?: boolean;
 }
 
 export function ChatInterface({ address: _address }: { address: string }) {
@@ -17,8 +19,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your AI Lead Agent. I coordinate with specialized agents to help you manage risk, create hedges, execute settlements, and generate reports. Try asking: "Analyze my portfolio risk" or "Suggest hedges for my positions"',
+      content: 'Hello! I\'m your AI-powered Lead Agent with Crypto.com AI integration. I can analyze your portfolio, assess risk, suggest hedges, and execute settlements using natural language understanding. Try: "Analyze my portfolio" or "What\'s my risk level?"',
       timestamp: new Date(),
+      aiPowered: true,
     },
   ]);
   const [input, setInput] = useState('');
@@ -49,15 +52,38 @@ export function ChatInterface({ address: _address }: { address: string }) {
     setLoading(true);
 
     try {
-      // Send command to real Lead Agent
-      const response = await sendAgentCommand(userInput);
+      // Use Crypto.com AI for intent parsing
+      const aiService = getCryptocomAIService();
+      const intent = await aiService.parseIntent(userInput);
+      
+      console.log('🤖 AI Intent:', intent);
+
+      // Route to appropriate agent based on intent
+      let response;
+      if (intent.intent === 'analyze_portfolio') {
+        const analysis = await aiService.analyzePortfolio(_address, {});
+        response = {
+          response: `Portfolio Analysis (AI-Powered):\n\nTotal Value: $${(analysis.totalValue / 1000000).toFixed(2)}M\nPositions: ${analysis.positions}\nHealth Score: ${analysis.healthScore.toFixed(0)}%\n\nRecommendations:\n${analysis.recommendations.join('\n')}`,
+          agent: 'ai_portfolio',
+        };
+      } else if (intent.intent === 'assess_risk') {
+        const risk = await aiService.assessRisk({});
+        response = {
+          response: `Risk Assessment (AI-Powered):\n\nOverall Risk: ${risk.overallRisk.toUpperCase()}\nRisk Score: ${risk.riskScore.toFixed(1)}/100\nVolatility: ${(risk.volatility * 100).toFixed(1)}%\nVaR (95%): ${(risk.var95 * 100).toFixed(1)}%\nSharpe Ratio: ${risk.sharpeRatio.toFixed(2)}`,
+          agent: 'ai_risk',
+        };
+      } else {
+        // Fallback to agent command
+        response = await sendAgentCommand(userInput);
+      }
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.response || 'I\'ve processed your request. ' + JSON.stringify(response.data),
+        content: response.response || 'I\'ve processed your request.',
         timestamp: new Date(),
-        agentType: response.agent
+        agentType: response.agent,
+        aiPowered: true,
       };
       
       setMessages(prev => [...prev, aiMessage]);
@@ -106,7 +132,13 @@ export function ChatInterface({ address: _address }: { address: string }) {
                     : 'bg-gray-700 text-gray-100'
                 }`}
               >
-                {message.content}
+                <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.aiPowered && message.role === 'assistant' && (
+                  <div className="flex items-center gap-1 mt-2 text-xs text-cyan-400">
+                    <Brain className="w-3 h-3" />
+                    <span>Crypto.com AI</span>
+                  </div>
+                )}
               </div>
               {message.role === 'user' && (
                 <div className="flex-shrink-0 w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">

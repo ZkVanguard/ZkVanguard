@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertTriangle, TrendingUp, Shield, Activity } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Shield, Activity, Brain } from 'lucide-react';
 import { assessPortfolioRisk } from '@/lib/api/agents';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 interface RiskMetric {
   label: string;
@@ -14,12 +15,48 @@ interface RiskMetric {
 export function RiskMetrics({ address }: { address: string }) {
   const [metrics, setMetrics] = useState<RiskMetric[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiPowered, setAiPowered] = useState(false);
 
   useEffect(() => {
-    // Fetch real risk assessment from Risk Agent
+    // Fetch AI-enhanced risk assessment
     async function fetchRiskMetrics() {
       try {
-        const riskData = await assessPortfolioRisk(address);
+        // Try AI service first
+        const aiService = getCryptocomAIService();
+        const aiRiskData = await aiService.assessRisk({ address });
+        
+        setMetrics([
+          { 
+            label: 'VaR (95%)', 
+            value: `${(aiRiskData.var95 * 100).toFixed(1)}%`, 
+            status: aiRiskData.var95 > 0.08 ? 'high' : aiRiskData.var95 > 0.04 ? 'medium' : 'low', 
+            icon: Shield 
+          },
+          { 
+            label: 'Volatility', 
+            value: `${(aiRiskData.volatility * 100).toFixed(1)}%`, 
+            status: aiRiskData.volatility > 0.15 ? 'high' : aiRiskData.volatility > 0.08 ? 'medium' : 'low', 
+            icon: TrendingUp 
+          },
+          { 
+            label: 'Risk Score', 
+            value: `${aiRiskData.riskScore.toFixed(0)}/100`, 
+            status: aiRiskData.riskScore > 60 ? 'high' : aiRiskData.riskScore > 40 ? 'medium' : 'low', 
+            icon: AlertTriangle 
+          },
+          { 
+            label: 'Sharpe Ratio', 
+            value: aiRiskData.sharpeRatio.toFixed(2), 
+            status: aiRiskData.sharpeRatio > 1.5 ? 'low' : aiRiskData.sharpeRatio > 0.8 ? 'medium' : 'high', 
+            icon: Activity 
+          },
+        ]);
+        setAiPowered(true);
+        setLoading(false);
+      } catch (aiError) {
+        // Fallback to agent API
+        try {
+          const riskData = await assessPortfolioRisk(address);
         
         setMetrics([
           { 
@@ -83,7 +120,15 @@ export function RiskMetrics({ address }: { address: string }) {
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <h2 className="text-2xl font-semibold mb-6">Risk Metrics</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-semibold">Risk Metrics</h2>
+        {aiPowered && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-cyan-500/10 rounded-full border border-cyan-500/30">
+            <Brain className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-semibold text-cyan-400">AI Analysis</span>
+          </div>
+        )}
+      </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {metrics.map((metric, index) => {
