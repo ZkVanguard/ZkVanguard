@@ -11,8 +11,10 @@ export const CONTRACT_ADDRESSES = {
     // Legacy gasless contracts (archived)
     universalRelayer: (process.env.NEXT_PUBLIC_RELAYER_CONTRACT || '0x9E5512b683d92290ccD20F483D20699658bcb9f3') as `0x${string}`,
     gaslessZKVerifier: (process.env.NEXT_PUBLIC_GASLESS_ZK_VERIFIER || '0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F') as `0x${string}`,
-    // Production gasless contract ⭐
+    // Production gasless contract (gas refund model)
     gaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_GASLESS_COMMITMENT_VERIFIER || '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9') as `0x${string}`,
+    // TRUE gasless contract (x402 + USDC) ⭐ DEPLOYED
+    x402GaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852') as `0x${string}`,
   },
   cronos_mainnet: {
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
@@ -21,6 +23,7 @@ export const CONTRACT_ADDRESSES = {
     universalRelayer: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     gaslessZKVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    x402GaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
 } as const;
 
