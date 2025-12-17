@@ -525,7 +525,7 @@ CRYPTOCOM_AI_API_KEY=your_key_here
 
 ## 📝 Summary
 
-Chronos Vanguard now features **complete real market data integration**:
+ZkVanguard now features **complete real market data integration**:
 
 1. **Real Portfolio Data**: Fetched directly from Cronos blockchain
 2. **Real Prices**: Live from CoinGecko + VVS DEX

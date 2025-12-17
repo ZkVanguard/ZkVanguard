@@ -1,4 +1,4 @@
-# 🎥 DEMO VIDEO SCRIPT - Chronos Vanguard
+# 🎥 DEMO VIDEO SCRIPT - ZkVanguard
 
 **Duration**: 3 minutes  
 **Format**: Screen recording + narration  
@@ -51,7 +51,7 @@ python server.py
 **Screen**: HACKATHON.md or architecture diagram  
 **Narration**:
 
-> "Chronos Vanguard is an AI-powered multi-agent system for Real-World Asset risk management on Cronos zkEVM. We've built five specialized AI agents—Risk, Hedging, Settlement, Reporting, and Lead—that work together to monitor portfolios, generate hedging strategies, and execute gasless settlements via x402. What makes us unique is combining real ZK-STARK privacy proofs with autonomous agent execution."
+> "ZkVanguard is an AI-powered multi-agent system for Real-World Asset risk management on Cronos zkEVM. We've built five specialized AI agents—Risk, Hedging, Settlement, Reporting, and Lead—that work together to monitor portfolios, generate hedging strategies, and execute gasless settlements via x402. What makes us unique is combining real ZK-STARK privacy proofs with autonomous agent execution."
 
 **Visual**:
 - Show agent architecture section
@@ -174,7 +174,7 @@ Risk Score: 12.2/100 (LOW)
 **Screen**: Return to GitHub repo  
 **Narration**:
 
-> "Chronos Vanguard: the only hackathon project combining multi-agent AI, ZK-STARK privacy, and x402 gasless transactions in a production-ready system. Built for Cronos zkEVM, powered by Crypto.com AI, and ready to deploy. Check out the code on GitHub."
+> "ZkVanguard: the only hackathon project combining multi-agent AI, ZK-STARK privacy, and x402 gasless transactions in a production-ready system. Built for Cronos zkEVM, powered by Crypto.com AI, and ready to deploy. Check out the code on GitHub."
 
 **Visual**:
 - Show GitHub URL prominently
@@ -188,7 +188,7 @@ Risk Score: 12.2/100 (LOW)
 ### Editing Checklist
 - [ ] Trim any dead air/loading times
 - [ ] Add captions/subtitles for accessibility
-- [ ] Add title screen: "Chronos Vanguard - AI-Powered RWA Risk Management"
+- [ ] Add title screen: "ZkVanguard - AI-Powered RWA Risk Management"
 - [ ] Add end screen with:
   - GitHub URL
   - DoraHacks submission link
@@ -198,10 +198,10 @@ Risk Score: 12.2/100 (LOW)
 
 ### Upload Checklist
 - [ ] YouTube upload (unlisted or public)
-- [ ] Title: "Chronos Vanguard - Multi-Agent AI Risk Management on Cronos zkEVM"
+- [ ] Title: "ZkVanguard - Multi-Agent AI Risk Management on Cronos zkEVM"
 - [ ] Description:
 ```
-Chronos Vanguard: AI-Powered Risk Management with ZK Privacy
+ZkVanguard: AI-Powered Risk Management with ZK Privacy
 
 Submission for Cronos x402 Paytech Hackathon
 - Track 1: x402 Applications

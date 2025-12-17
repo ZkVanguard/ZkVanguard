@@ -231,7 +231,7 @@ export class X402Client {
 
     // EIP-712 domain separator
     const domain = {
-      name: 'ChronosVanguardPaymentRouter',
+      name: 'ZkVanguardPaymentRouter',
       version: '1',
       chainId: (await this.provider.getNetwork()).chainId,
       verifyingContract: request.token, // Token contract address

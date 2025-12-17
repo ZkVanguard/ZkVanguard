@@ -62,7 +62,7 @@ ZkVanguard is a verifiable multi-agent AI swarm system for institutional RWA ris
 ## Directory Structure
 
 ```
-chronos-vanguard/
+ZkVanguard/
 ├── contracts/                      # Smart contracts (Solidity)
 │   ├── core/
 │   │   ├── RWAManager.sol         # Main RWA portfolio management

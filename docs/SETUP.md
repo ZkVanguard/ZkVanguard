@@ -16,8 +16,8 @@ Before starting, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/chronos-vanguard.git
-cd chronos-vanguard
+git clone https://github.com/yourusername/ZkVanguard.git
+cd ZkVanguard
 
 # Install all dependencies
 npm install
@@ -59,7 +59,7 @@ Get test TCRO from the [faucet](https://cronos.org/faucet).
 ## Project Structure Overview
 
 ```
-chronos-vanguard/
+ZkVanguard/
 ├── contracts/          # Solidity smart contracts
 │   ├── core/          # Core contracts (RWAManager, PaymentRouter)
 │   ├── verifiers/     # ZK verification contracts
@@ -366,7 +366,7 @@ const x402Client = new X402Client({
 
 ## Getting Help
 
-- **Issues**: https://github.com/yourusername/chronos-vanguard/issues
+- **Issues**: https://github.com/yourusername/ZkVanguard/issues
 - **Cronos Discord**: https://discord.gg/cronos
 - **Telegram**: https://t.me/cronoschain
 

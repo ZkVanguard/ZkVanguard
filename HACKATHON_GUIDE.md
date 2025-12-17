@@ -1,6 +1,6 @@
-# 🏆 Chronos Vanguard - Hackathon Submission Guide
+# 🏆 ZkVanguard - Hackathon Submission Guide
 
-**Project**: Chronos Vanguard  
+**Project**: ZkVanguard  
 **Hackathon**: Cronos x402 Paytech Hackathon  
 **Prize Pool**: $42,000 USD  
 **Deadline**: January 23, 2026, 12:00 UTC  
@@ -113,7 +113,7 @@
 
 **Information Needed**:
 
-1. **Project Name**: Chronos Vanguard
+1. **Project Name**: ZkVanguard
 
 2. **Tagline**: "AI-Powered Multi-Agent DeFi Platform with TRUE x402 Gasless Transactions"
 
@@ -354,7 +354,7 @@ npm run dev
 
 ## 🏆 Final Words
 
-**Chronos Vanguard** represents the most sophisticated multi-agent DeFi platform in the hackathon:
+**ZkVanguard** represents the most sophisticated multi-agent DeFi platform in the hackathon:
 
 ✅ **Real x402 gasless** (not simulated)  
 ✅ **5 AI agents** (fully operational)  

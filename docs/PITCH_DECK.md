@@ -192,13 +192,13 @@
 
 ## 📞 Contact
 
-**Website:** [chronos-vanguard.vercel.app](#)
-**Deck:** [pitch.chronos-vanguard.com](#)
-**Demo:** [demo.chronos-vanguard.com](#)
+**Website:** [ZkVanguard.vercel.app](#)
+**Deck:** [pitch.ZkVanguard.com](#)
+**Demo:** [demo.ZkVanguard.com](#)
 
-**Email:** [founders@chronos-vanguard.com](#)
-**Twitter:** [@ChronosVanguard](#)
-**Telegram:** [@ChronosVanguardHQ](#)
+**Email:** [founders@ZkVanguard.com](#)
+**Twitter:** [@ZkVanguard](#)
+**Telegram:** [@ZkVanguardHQ](#)
 
 ---
 

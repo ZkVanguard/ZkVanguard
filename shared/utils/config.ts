@@ -141,7 +141,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || '',
   dbHost: process.env.DB_HOST || 'localhost',
   dbPort: parseInt(process.env.DB_PORT || '5432'),
-  dbName: process.env.DB_NAME || 'chronos_vanguard',
+  dbName: process.env.DB_NAME || 'zk_vanguard',
   dbUser: process.env.DB_USER || 'chronos_user',
   dbPassword: process.env.DB_PASSWORD || '',
 

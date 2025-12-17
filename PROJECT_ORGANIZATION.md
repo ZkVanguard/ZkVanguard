@@ -1,4 +1,4 @@
-# 📁 Chronos Vanguard - Project Organization
+# 📁 ZkVanguard - Project Organization
 
 **Last Updated**: December 16, 2025  
 **Status**: ✅ Cleaned, Organized, Ready for Hackathon

@@ -1,4 +1,4 @@
-# Chronos Vanguard 🛡️
+# ZkVanguard 🛡️
 
 > **AI-Powered Multi-Agent System for RWA Risk Management**  
 > *5 Autonomous Agents • Real ZK-STARK Privacy • x402 Gasless Settlements*
@@ -84,7 +84,7 @@ verify(proof) → ✅ Valid (but contents remain secret)
 // Traditional: User pays $5-10 in gas
 await contract.settle({ value: gasEstimate })
 
-// Chronos Vanguard: User pays $0.00
+// ZkVanguard: User pays $0.00
 await x402Facilitator.settle({ gasless: true })
 // ⚡ $0.00 CRO, powered by x402 payment rails
 ```
@@ -93,7 +93,7 @@ await x402Facilitator.settle({ gasless: true })
 
 ## 🏆 Why We're Different
 
-| Feature | Competitors | Chronos Vanguard |
+| Feature | Competitors | ZkVanguard |
 |---------|-------------|------------------|
 | **AI Agents** | 0-1 simple bots | **5 specialized agents** with full orchestration |
 | **ZK Privacy** | Mock data or none | **Real STARK proofs** (CUDA, 521-bit, on-chain) |
@@ -248,8 +248,8 @@ await x402Facilitator.settle({ gasless: true })
 
 ```bash
 # 1️⃣ Clone & Install
-git clone https://github.com/yourusername/chronos-vanguard.git
-cd chronos-vanguard
+git clone https://github.com/yourusername/ZkVanguard.git
+cd ZkVanguard
 npm install
 
 # 2️⃣ Start ZK Backend (Terminal 1)
@@ -385,7 +385,7 @@ X402GaslessZKCommitmentVerifier
 
 Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
-Copyright 2025 Chronos Vanguard Team
+Copyright 2025 ZkVanguard Team
 
 ## 🎖️ Production Metrics
 
@@ -426,7 +426,7 @@ Copyright 2025 Chronos Vanguard Team
 
 <div align="center">
 
-**Chronos Vanguard** - *Autonomous AI for RWA Risk Management*
+**ZkVanguard** - *Autonomous AI for RWA Risk Management*
 
 Built with ❤️ for Cronos zkEVM
 

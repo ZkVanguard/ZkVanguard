@@ -21,7 +21,7 @@ async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 async function runCompleteTest() {
   console.log('\n' + '='.repeat(80));
-  log('  🚀 CHRONOS VANGUARD - COMPLETE PORTFOLIO MANAGEMENT TEST', colors.cyan);
+  log('  🚀 ZkVanguard - COMPLETE PORTFOLIO MANAGEMENT TEST', colors.cyan);
   console.log('='.repeat(80) + '\n');
   
   const portfolio = new SimulatedPortfolioManager(10000);

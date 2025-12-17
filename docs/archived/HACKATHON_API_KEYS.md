@@ -61,7 +61,7 @@ Your project has **professional demo modes** that work perfectly for hackathon j
 3. Post:
    ```
    Hi! I'm participating in the Cronos x402 Paytech Hackathon.
-   My project: Chronos Vanguard (Multi-Agent AI Risk Management)
+   My project: ZkVanguard (Multi-Agent AI Risk Management)
    GitHub: [your repo URL]
    Can I get an x402 API key for testing?
    ```
@@ -75,7 +75,7 @@ Your project has **professional demo modes** that work perfectly for hackathon j
 #### Option C: DoraHacks Q&A (Official Platform)
 - Direct link: https://dorahacks.io/hackathon/cronos-x402/qa
 - Click "Ask Question"
-- Subject: "API Key Request - Chronos Vanguard"
+- Subject: "API Key Request - ZkVanguard"
 - Include: Your project name, GitHub repo, hackathon tracks
 
 #### Option D: Email
@@ -136,7 +136,7 @@ npm run dev
 4. Fill out the form:
    - Name
    - Email
-   - Project: "Chronos Vanguard - AI Risk Management for RWAs"
+   - Project: "ZkVanguard - AI Risk Management for RWAs"
    - Use case: "Hackathon submission for multi-agent portfolio management"
 5. You should receive API key via email within 24-48 hours
 
@@ -190,7 +190,7 @@ Join official hackathon Discord channel and post in `#x402-hackathon`:
 ```
 Hi Cronos team! 👋
 
-I'm participating in the Cronos x402 Paytech Hackathon with my project "Chronos Vanguard" - an AI-powered multi-agent risk management platform.
+I'm participating in the Cronos x402 Paytech Hackathon with my project "ZkVanguard" - an AI-powered multi-agent risk management platform.
 
 DoraHacks Profile: [your_profile]
 GitHub: [your_repo_url]

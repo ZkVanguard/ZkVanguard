@@ -8,7 +8,7 @@
 
 ## 🎯 Summary
 
-**Chronos Vanguard** is a complete, production-ready AI-powered multi-agent system for RWA risk management with real ZK-STARK privacy and x402 gasless settlements.
+**ZkVanguard** is a complete, production-ready AI-powered multi-agent system for RWA risk management with real ZK-STARK privacy and x402 gasless settlements.
 
 ### Key Achievements
 
@@ -305,5 +305,5 @@ All systems validated, all tests passing, ready for hackathon submission and pro
 ---
 
 *Last Updated: December 17, 2025*  
-*Project: Chronos Vanguard - AI-Powered RWA Risk Management*  
+*Project: ZkVanguard - AI-Powered RWA Risk Management*  
 *For: Cronos x402 Paytech Hackathon*

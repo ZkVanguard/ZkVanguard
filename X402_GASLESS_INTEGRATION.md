@@ -351,4 +351,4 @@ console.log('Total gas cost:', '$0.00'); // ✅ All gasless!
 
 ---
 
-**Chronos Vanguard** is now powered by TRUE x402 gasless technology! 🚀
+**ZkVanguard** is now powered by TRUE x402 gasless technology! 🚀

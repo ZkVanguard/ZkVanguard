@@ -100,7 +100,7 @@
 1. **Go to**: https://dorahacks.io/hackathon/cronos-x402/detail
 2. **Click**: "Submit BUIDL" button
 3. **Fill out submission form**:
-   - Project Name: **Chronos Vanguard**
+   - Project Name: **ZkVanguard**
    - Tagline: "AI-Powered Multi-Agent Risk Management with x402 Settlement"
    - Description: Use content from `FINAL_SUBMISSION.md`
    - GitHub: [Your repo URL]
@@ -127,7 +127,7 @@ Hi Cronos Labs team! 👋
 
 I'm participating in the Cronos x402 Paytech Hackathon.
 
-Project: Chronos Vanguard
+Project: ZkVanguard
 DoraHacks: [your submission URL]
 GitHub: [your repo]
 
@@ -166,7 +166,7 @@ Thank you! 🙏
 **Recommended Structure** (3-5 minutes total):
 
 #### Part 1: Introduction (30 seconds)
-- "Hi, I'm [name], presenting Chronos Vanguard"
+- "Hi, I'm [name], presenting ZkVanguard"
 - "An AI-powered multi-agent risk management platform"
 - "Built for the Cronos x402 Paytech Hackathon"
 

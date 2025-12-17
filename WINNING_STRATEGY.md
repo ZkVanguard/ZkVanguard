@@ -1,4 +1,4 @@
-# 🏆 WINNING STRATEGY ANALYSIS - Chronos Vanguard
+# 🏆 WINNING STRATEGY ANALYSIS - ZkVanguard
 
 **Analysis Date**: December 17, 2025  
 **Objective**: Bulletproof submission for Cronos x402 Paytech Hackathon  
@@ -181,7 +181,7 @@ Time: 30 minutes to create
 1. Visit: https://dorahacks.io/hackathon/cronos-x402/detail
 2. Create project submission (15 minutes)
 3. Fill required fields:
-   - Project name: Chronos Vanguard
+   - Project name: ZkVanguard
    - Description: Copy from HACKATHON.md
    - GitHub repo: Add public link
    - Demo video: Upload/link
@@ -214,7 +214,7 @@ Enhancements:
 ```
 Create UNIQUE_VALUE.md:
 
-"Chronos Vanguard is the ONLY hackathon project combining:
+"ZkVanguard is the ONLY hackathon project combining:
 1. Multi-agent AI (5 specialized agents)
 2. ZK-STARK privacy (real proofs, not mocked)
 3. x402 gasless (automated settlements)
@@ -287,7 +287,7 @@ npx tsx scripts/complete-system-test.ts
 ```
 
 **Required Info**:
-- **Name**: Chronos Vanguard
+- **Name**: ZkVanguard
 - **Tagline**: AI-Powered Risk Management with ZK Privacy
 - **Description**: See HACKATHON.md (copy relevant sections)
 - **Tracks**: All 3 (x402 Apps, Agentic Finance, Cronos Ecosystem)
@@ -357,7 +357,7 @@ vercel --prod
 
 ## 🎤 ELEVATOR PITCH (30 seconds)
 
-> "Chronos Vanguard is an AI-powered risk management platform for Real-World Assets on Cronos zkEVM. Our system uses 5 specialized AI agents—Risk, Hedging, Settlement, Reporting, and Lead—to autonomously monitor portfolios, generate hedging strategies, and execute gasless settlements via x402. We're the only project combining multi-agent AI, ZK-STARK privacy proofs, and x402 gasless transactions in a production-ready system with 100% test coverage. While competitors demo single features, we deliver the complete workflow."
+> "ZkVanguard is an AI-powered risk management platform for Real-World Assets on Cronos zkEVM. Our system uses 5 specialized AI agents—Risk, Hedging, Settlement, Reporting, and Lead—to autonomously monitor portfolios, generate hedging strategies, and execute gasless settlements via x402. We're the only project combining multi-agent AI, ZK-STARK privacy proofs, and x402 gasless transactions in a production-ready system with 100% test coverage. While competitors demo single features, we deliver the complete workflow."
 
 ---
 

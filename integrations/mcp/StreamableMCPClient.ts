@@ -63,7 +63,7 @@ class StreamableMCPClient {
 
       // Create MCP client
       this.client = new Client({
-        name: 'chronos-vanguard',
+        name: 'ZkVanguard',
         version: '1.0.0',
       }, {
         capabilities: {},

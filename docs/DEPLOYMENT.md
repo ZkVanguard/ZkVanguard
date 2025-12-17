@@ -14,7 +14,7 @@ git init
 git add .
 git commit -m "Initial Next.js build"
 git branch -M main
-git remote add origin https://github.com/yourusername/chronos-vanguard.git
+git remote add origin https://github.com/yourusername/ZkVanguard.git
 git push -u origin main
 ```
 
@@ -122,8 +122,8 @@ CMD ["npm", "run", "start:next"]
 ```
 
 ```bash
-docker build -t chronos-vanguard .
-docker run -p 3000:3000 chronos-vanguard
+docker build -t ZkVanguard .
+docker run -p 3000:3000 ZkVanguard
 ```
 
 ---

@@ -86,7 +86,7 @@ vercel --prod
 4. Test deployment
 5. Add live URL to README + DoraHacks
 
-**Deliverable**: Live URL (e.g., chronos-vanguard.vercel.app)
+**Deliverable**: Live URL (e.g., ZkVanguard.vercel.app)
 
 **Validation**:
 - [ ] Frontend accessible publicly
@@ -407,4 +407,4 @@ The hard work is done. The system is bulletproof. Just show it to the judges.
 
 ---
 
-*Created: 2024 | For: Cronos x402 Paytech Hackathon | Project: Chronos Vanguard*
+*Created: 2024 | For: Cronos x402 Paytech Hackathon | Project: ZkVanguard*

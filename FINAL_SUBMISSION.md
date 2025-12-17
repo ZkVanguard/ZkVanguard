@@ -2,7 +2,7 @@
 
 ## 📋 Executive Summary
 
-**Project**: Chronos Vanguard - AI-Powered RWA Risk Management Platform
+**Project**: ZkVanguard - AI-Powered RWA Risk Management Platform
 **Submission Date**: December 16, 2025
 **Team**: Solo Developer
 **Status**: ✅ **PRODUCTION READY**
@@ -160,7 +160,7 @@ class CustomAgent extends BaseAgent {
 ```typescript
 // X402Client.ts - EIP-712 Signature
 const domain = {
-  name: 'ChronosVanguardPaymentRouter',
+  name: 'ZkVanguardPaymentRouter',
   version: '1',
   chainId: (await this.provider.getNetwork()).chainId,
   verifyingContract: request.token,
@@ -401,7 +401,7 @@ Others: Broken demos, no tests
 ```bash
 # Clone repo
 git clone [repo-url]
-cd Chronos-Vanguard
+cd ZkVanguard
 
 # Install dependencies
 npm install

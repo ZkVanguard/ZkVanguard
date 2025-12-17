@@ -26,14 +26,14 @@
 **Simple Edits Only**:
 - [ ] Trim intro/outro (remove dead air)
 - [ ] Speed up loading times (2x speed)
-- [ ] Add title screen (5 seconds): "Chronos Vanguard"
+- [ ] Add title screen (5 seconds): "ZkVanguard"
 - [ ] Add end screen (5 seconds): GitHub URL
 - [ ] Add captions/subtitles (optional but recommended)
 - [ ] Export in 1080p H.264
 
 ### Minutes 50-60: Upload (10 min)
 - [ ] Upload to YouTube (unlisted)
-- [ ] Title: "Chronos Vanguard - Multi-Agent AI Risk Management"
+- [ ] Title: "ZkVanguard - Multi-Agent AI Risk Management"
 - [ ] Description: Copy from DORAHACKS_SUBMISSION.md
 - [ ] Tags: blockchain, ai, cronos, x402, zk-proofs
 - [ ] Wait for processing
@@ -121,7 +121,7 @@ winget install OBSProject.OBSStudio
 ### Scene 4: Close (2:20-2:30)
 **Screen**: GitHub repo  
 **Say**:
-> "Chronos Vanguard: Five AI agents, ZK privacy, gasless transactions. Production-ready. Check out the code on GitHub."
+> "ZkVanguard: Five AI agents, ZK privacy, gasless transactions. Production-ready. Check out the code on GitHub."
 
 **Action**: Show GitHub URL prominently
 
@@ -145,7 +145,7 @@ winget install OBSProject.OBSStudio
 ### Quick Edits Needed:
 - **Trim start/end**: Remove silence before/after
 - **Speed up waits**: When test is loading, select clip → right-click → Change Speed → 2x
-- **Add title**: Text overlay at start "Chronos Vanguard - AI Risk Management"
+- **Add title**: Text overlay at start "ZkVanguard - AI Risk Management"
 - **Add end screen**: Text overlay at end with GitHub URL
 - **Add captions**: (Optional) Auto-generate in YouTube Studio after upload
 
@@ -161,7 +161,7 @@ winget install OBSProject.OBSStudio
 
 **Title**:
 ```
-Chronos Vanguard - Multi-Agent AI Risk Management on Cronos zkEVM
+ZkVanguard - Multi-Agent AI Risk Management on Cronos zkEVM
 ```
 
 **Description**:

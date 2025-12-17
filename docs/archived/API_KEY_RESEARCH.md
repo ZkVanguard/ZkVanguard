@@ -291,7 +291,7 @@ If you want to double-check or get early access:
 ```
 Hi Cronos team!
 
-I'm working on Chronos Vanguard for the hackathon and did some research:
+I'm working on ZkVanguard for the hackathon and did some research:
 
 1. x402 Facilitator - Confirmed NO API key needed (public SDK) ✅
 2. Market Data MCP - Confirmed free, no key needed ✅

@@ -12,7 +12,7 @@ The Cronos x402 Paytech Hackathon provides **FREE** access to premium APIs for a
 1. **Crypto.com AI Agent SDK** - AI-powered portfolio analysis, risk assessment, and hedge recommendations
 2. **Crypto.com MCP (Market Context Protocol)** - Real-time market data, historical prices, and volatility calculations
 
-Both services are **FREE** for hackathon participants and fully integrated into Chronos Vanguard!
+Both services are **FREE** for hackathon participants and fully integrated into ZkVanguard!
 
 ---
 
@@ -53,7 +53,7 @@ CRYPTOCOM_DEVELOPER_API_KEY=sk-proj-4f7a1d35ebda50644eef9b61da0458b3:2a038aa93e7
 
 ```
 ┌─────────────────────────────────────────────────┐
-│           Chronos Vanguard Platform             │
+│           ZkVanguard Platform             │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │  ┌─────────────────┐      ┌──────────────────┐ │
@@ -346,7 +346,7 @@ If you don't have an API key yet:
 2. Go to #x402-hackathon channel
 3. Send message:
 ```
-Hi! I'm in the Cronos x402 Hackathon with "Chronos Vanguard"
+Hi! I'm in the Cronos x402 Hackathon with "ZkVanguard"
 (AI Multi-Agent Risk Management). Could I get these FREE keys:
 • x402 Facilitator SDK
 • Crypto.com AI SDK
@@ -367,7 +367,7 @@ https://dorahacks.io/hackathon/cronos-x402/qa
 
 ---
 
-## 🚀 Benefits for Chronos Vanguard
+## 🚀 Benefits for ZkVanguard
 
 ### Before Hackathon APIs:
 - ⚠️ Custom market data scraping (rate limits, reliability issues)
@@ -435,7 +435,7 @@ https://dorahacks.io/hackathon/cronos-x402/qa
 - **Discord #x402-hackathon**: Direct support from Cronos team
 - **Workshop Recordings**: January 8, 2026 - Agentic payments demo
 
-### Chronos Vanguard Docs
+### ZkVanguard Docs
 - `API_KEY_SETUP_COMPLETE.md` - API configuration guide
 - `X402_GASLESS_INTEGRATION.md` - x402 integration details
 - `HACKATHON_GUIDE.md` - Submission guide

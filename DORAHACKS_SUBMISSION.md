@@ -10,7 +10,7 @@
 
 ### 1. Project Name
 ```
-Chronos Vanguard
+ZkVanguard
 ```
 
 ### 2. Tagline (One-liner)
@@ -40,7 +40,7 @@ Real-World Asset portfolios on blockchain face critical challenges:
 
 ## Our Solution
 
-Chronos Vanguard is the first AI-powered multi-agent system that combines:
+ZkVanguard is the first AI-powered multi-agent system that combines:
 1. **5 Specialized AI Agents** working autonomously
 2. **ZK-STARK Privacy** for cryptographic proof generation
 3. **x402 Gasless Transactions** for zero-cost settlements
@@ -221,7 +221,7 @@ npx tsx scripts/complete-system-test.ts
 
 ## Conclusion
 
-Chronos Vanguard is the most technically advanced project in this hackathon:
+ZkVanguard is the most technically advanced project in this hackathon:
 - **Only 5-agent system** with full orchestration
 - **Only real ZK-STARK proofs** (not mocked)
 - **100% test coverage** with live integrations
@@ -245,7 +245,7 @@ We've built not just a demo, but a production-ready platform that solves real pr
 
 ### 6. GitHub Repository
 ```
-https://github.com/[your-username]/Chronos-Vanguard
+https://github.com/[your-username]/ZkVanguard
 ```
 *Make sure repo is PUBLIC*
 
@@ -261,7 +261,7 @@ https://youtu.be/[your-video-id]
 
 ### 8. Live Demo URL (Optional)
 ```
-https://chronos-vanguard.vercel.app
+https://ZkVanguard.vercel.app
 ```
 *If deployed to Vercel/Netlify/etc.*
 
@@ -311,7 +311,7 @@ To verify our claims, judges can:
 1. **Clone the repository**:
 ```bash
 git clone https://github.com/[your-repo]
-cd Chronos-Vanguard
+cd ZkVanguard
 npm install
 ```
 
@@ -403,7 +403,7 @@ Complete before submitting:
 - [ ] All integrations working
 
 ### Submission Form
-- [ ] Project name: "Chronos Vanguard"
+- [ ] Project name: "ZkVanguard"
 - [ ] All 3 tracks selected
 - [ ] GitHub URL added
 - [ ] Video URL added

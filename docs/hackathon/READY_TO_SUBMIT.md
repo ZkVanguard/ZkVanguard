@@ -61,7 +61,7 @@ All of these are **FREE** but your project works without them:
 Hi Cronos team! 👋
 
 I'm participating in the Cronos x402 Paytech Hackathon.
-Project: Chronos Vanguard (AI Multi-Agent Risk Management)
+Project: ZkVanguard (AI Multi-Agent Risk Management)
 GitHub: [your_repo_url]
 
 Could I get API keys for:
@@ -81,7 +81,7 @@ Thanks! 🙏
 
 ### Option 3: Email
 - Email: developers@cronos.org
-- Subject: "Hackathon API Keys - Chronos Vanguard"
+- Subject: "Hackathon API Keys - ZkVanguard"
 - They typically respond within 24 hours
 
 ---

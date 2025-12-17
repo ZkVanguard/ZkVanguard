@@ -47,7 +47,7 @@
 **Link**: https://dorahacks.io/hackathon/cronos-x402/detail
 
 Click "Submit BUIDL" and fill:
-- Project: Chronos Vanguard
+- Project: ZkVanguard
 - Description: Use `FINAL_SUBMISSION.md`
 - Tracks: Select all 3 ✅
 - GitHub: [Your repo URL]
@@ -64,7 +64,7 @@ Click "Submit BUIDL" and fill:
 
 **Quick Message**:
 ```
-Hi! I'm in the Cronos x402 Hackathon with "Chronos Vanguard" 
+Hi! I'm in the Cronos x402 Hackathon with "ZkVanguard" 
 (AI Multi-Agent Risk Management). Could I get these FREE keys:
 • x402 Facilitator SDK
 • Moonlander testnet
@@ -296,7 +296,7 @@ Your project works 100% without keys (demo mode). Keys just enable live executio
 
 ### Discord API Key Request:
 ```
-Hi Cronos team! I'm in the x402 Hackathon with "Chronos Vanguard" 
+Hi Cronos team! I'm in the x402 Hackathon with "ZkVanguard" 
 (AI Multi-Agent Risk Management). Could I get these FREE keys:
 • x402 Facilitator SDK • Moonlander testnet 
 • Crypto.com AI SDK • Crypto.com MCP
@@ -311,7 +311,7 @@ AI-Powered Multi-Agent Risk Management with x402 Gasless Settlement
 
 ### One-Sentence Description:
 ```
-Chronos Vanguard uses 5 specialized AI agents to autonomously monitor portfolio 
+ZkVanguard uses 5 specialized AI agents to autonomously monitor portfolio 
 risk, execute hedging strategies on Moonlander, and settle payments via x402 
 gasless transactions—all powered by Crypto.com AI SDK and Market Data MCP.
 ```

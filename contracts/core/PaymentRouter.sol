@@ -305,7 +305,7 @@ contract PaymentRouter is AccessControl, ReentrancyGuard {
         return keccak256(
             abi.encode(
                 DOMAIN_SEPARATOR_TYPEHASH,
-                keccak256(bytes("ChronosVanguardPaymentRouter")),
+                keccak256(bytes("ZkVanguardPaymentRouter")),
                 keccak256(bytes("1")),
                 block.chainid,
                 address(this)

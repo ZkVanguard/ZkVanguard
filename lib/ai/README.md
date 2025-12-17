@@ -2,7 +2,7 @@
 
 ## Overview
 
-Chronos Vanguard now integrates **Crypto.com AI Agent Client** for intelligent portfolio analysis, risk assessment, and natural language intent parsing. This enhances the multi-agent system with advanced AI capabilities.
+ZkVanguard now integrates **Crypto.com AI Agent Client** for intelligent portfolio analysis, risk assessment, and natural language intent parsing. This enhances the multi-agent system with advanced AI capabilities.
 
 ## Features
 
