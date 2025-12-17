@@ -14,7 +14,7 @@ export function ZKProofDemo() {
   const [proofType, setProofType] = useState<'settlement' | 'risk' | 'rebalance'>('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
-  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; gasRefunded: boolean; message: string } | null>(null);
+  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; gasless: true; x402Powered: true; message: string } | null>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {

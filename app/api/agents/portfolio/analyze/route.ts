@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
+import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 
 /**
  * AI-Powered Portfolio Analysis API
- * Provides comprehensive portfolio insights using Crypto.com AI
+ * Provides comprehensive portfolio insights using real RiskAgent + Crypto.com AI
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, portfolioData } = body;
+    const { address, portfolioData, useRealAgent = true } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -17,6 +18,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Use real agent orchestration if enabled
+    if (useRealAgent) {
+      const orchestrator = getAgentOrchestrator();
+      const result = await orchestrator.analyzePortfolio({ address, portfolioData });
+
+      if (result.success && result.data) {
+        return NextResponse.json({
+          success: true,
+          analysis: result.data,
+          agentId: result.agentId,
+          executionTime: result.executionTime,
+          realAgent: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Fallback to AI service
     const aiService = getCryptocomAIService();
     const analysis = await aiService.analyzePortfolio(address, portfolioData || {});
 
@@ -31,6 +50,7 @@ export async function POST(request: NextRequest) {
         topAssets: analysis.topAssets,
       },
       aiPowered: aiService.isAvailable(),
+      realAgent: false,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

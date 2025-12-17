@@ -80,7 +80,7 @@ class CryptocomAIService {
         this.client = null;
       }
     } else {
-      console.warn('CRYPTOCOM_AI_API_KEY not set - AI features will use fallback logic');
+      console.warn('CRYPTOCOM_DEVELOPER_API_KEY not set - AI features will use fallback logic');
     }
   }
 

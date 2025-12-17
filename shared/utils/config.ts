@@ -124,7 +124,7 @@ export const config = {
   deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY || '',
   
   // APIs
-  cryptocomAiApiKey: process.env.CRYPTOCOM_AI_API_KEY || '',
+  cryptocomAiApiKey: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY || '',
   cryptocomApiSecret: process.env.CRYPTOCOM_API_SECRET || '',
   x402ApiKey: process.env.X402_API_KEY || '',
   x402FacilitatorUrl: process.env.X402_FACILITATOR_URL || 'https://api.x402.io',

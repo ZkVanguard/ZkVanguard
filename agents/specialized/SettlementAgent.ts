@@ -229,18 +229,16 @@ export class SettlementAgent extends BaseAgent {
         throw new Error(`Settlement ${requestId} already ${settlement.status}`);
       }
 
-      logger.info('Processing settlement', { requestId });
+      logger.info('Processing settlement via x402 (GASLESS)', { requestId });
       settlement.status = 'PROCESSING';
 
-      // Execute gasless transfer via x402
+      // Execute TRUE gasless transfer via x402 Facilitator
+      // NO GAS COSTS - x402 handles everything!
       const result = await this.x402Client.executeGaslessTransfer({
         token: settlement.token,
         from: await this.signer.getAddress(),
         to: settlement.beneficiary,
         amount: settlement.amount,
-        validAfter: settlement.validAfter || 0,
-        validBefore: settlement.validBefore || Math.floor(Date.now() / 1000) + 3600,
-        nonce: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
       });
 
       settlement.status = 'COMPLETED';
@@ -338,7 +336,7 @@ export class SettlementAgent extends BaseAgent {
         tokenGroups.set(settlement.token, group);
       }
 
-      // Process each token group as a batch
+      // Process each token group as a batch via x402 (GASLESS)
       const results = [];
       for (const [token, settlements] of tokenGroups.entries()) {
         const batchRequest = {
@@ -346,12 +344,10 @@ export class SettlementAgent extends BaseAgent {
           from: await this.signer.getAddress(),
           recipients: settlements.map(s => s.beneficiary),
           amounts: settlements.map(s => s.amount),
-          validAfter: Math.min(...settlements.map(s => s.validAfter || 0)),
-          validBefore: Math.max(...settlements.map(s => s.validBefore || Math.floor(Date.now() / 1000) + 3600)),
-          nonce: `batch-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         };
 
         try {
+          // Execute TRUE gasless batch via x402 - NO GAS COSTS!
           const batchResult = await this.x402Client.executeBatchTransfer(batchRequest);
           
           // Update settlement statuses

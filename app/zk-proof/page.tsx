@@ -173,8 +173,8 @@ function ZKProofPage() {
         statement: selectedScenario?.statement || {},
         proof: proof, // Store full proof for comprehensive ZK verification
         timestamp: Date.now(),
-        gasRefunded: result.gasRefunded,
-        refundDetails: result.refundDetails,
+        gasless: result.gasless,
+        x402Powered: result.x402Powered,
       };
       localStorage.setItem(`proof_${commitment.proofHash}`, JSON.stringify(proofMetadata));
       localStorage.setItem(`proof_tx_${result.txHash}`, JSON.stringify(proofMetadata));
