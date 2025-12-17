@@ -31,7 +31,7 @@ export function Navbar() {
   return (
     <nav 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-white/80 dark:bg-black/80 backdrop-blur-xl shadow-ios-lg' : 'bg-white/90 dark:bg-black/90 backdrop-blur-xl'
+        scrolled ? 'bg-black/80 backdrop-blur-xl shadow-ios-lg' : 'bg-black/90 backdrop-blur-xl'
       }`}
     >
       <div className="container mx-auto px-4">
@@ -51,7 +51,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-4 py-2 text-gray-600 hover:text-primary-500 dark:text-gray-400 dark:hover:text-primary-400 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all font-medium"
+                className="px-4 py-2 text-gray-400 hover:text-primary-400 rounded-xl hover:bg-gray-800 transition-all font-medium"
               >
                 {link.label}
               </Link>
@@ -59,7 +59,7 @@ export function Navbar() {
             <div className="ml-4 pl-4 border-l border-gray-200 dark:border-gray-700 flex items-center gap-3">
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-all shadow-ios"
+                className="p-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-all shadow-ios"
                 aria-label="Toggle theme"
               >
                 {theme === 'light' ? (

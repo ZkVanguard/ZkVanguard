@@ -22,7 +22,7 @@ export function CTASection() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
             <Link
               href="/dashboard"
-              className="w-full sm:w-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-4 bg-white text-black hover:bg-gray-100 rounded-2xl font-semibold text-sm sm:text-base lg:text-lg transition-all flex items-center justify-center space-x-2 group shadow-ios-lg"
+              className="w-full sm:w-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-4 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl font-semibold text-sm sm:text-base lg:text-lg transition-all flex items-center justify-center space-x-2 group shadow-ios-lg"
             >
               <span>Try Dashboard</span>
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />

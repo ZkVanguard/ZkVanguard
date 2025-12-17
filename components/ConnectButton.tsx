@@ -65,7 +65,7 @@ export function ConnectButton() {
                   <button
                     onClick={openChainModal}
                     type="button"
-                    className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 rounded-2xl transition-all shadow-ios hidden sm:flex items-center gap-2"
+                    className="px-3 py-2 bg-gray-800 border border-gray-700 hover:border-primary-500 rounded-2xl transition-all shadow-ios hidden sm:flex items-center gap-2"
                   >
                     {chain.hasIcon && (
                       <div
@@ -86,7 +86,7 @@ export function ConnectButton() {
                         )}
                       </div>
                     )}
-                    <span className="text-sm font-medium text-black dark:text-white">
+                    <span className="text-sm font-medium text-white">
                       {chain.name}
                     </span>
                   </button>
@@ -94,10 +94,10 @@ export function ConnectButton() {
                   <button
                     onClick={openAccountModal}
                     type="button"
-                    className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 rounded-2xl transition-all flex items-center space-x-2 shadow-ios"
+                    className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-primary-500 rounded-2xl transition-all flex items-center space-x-2 shadow-ios"
                   >
                     <Wallet className="w-4 h-4 text-primary-500" />
-                    <span className="text-black dark:text-white font-medium">
+                    <span className="text-white font-medium">
                       {account.displayName}
                     </span>
                   </button>

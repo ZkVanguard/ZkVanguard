@@ -6,7 +6,7 @@ import { ArrowRight, Shield, Zap, Sparkles, ChevronDown, BarChart3, Lock } from 
 export function Hero() {
 
   return (
-    <div className="relative bg-gray-50 dark:bg-black overflow-hidden">
+    <div className="relative bg-black overflow-hidden">
       {/* Subtle gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-gray-50 via-gray-100/50 to-gray-50 dark:from-black dark:via-gray-950/50 dark:to-black" />
       
@@ -16,9 +16,9 @@ export function Hero() {
             {/* Left Column - Content */}
             <div className="space-y-3 sm:space-y-4">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-200/50 dark:border-gray-700/50 shadow-ios">
+              <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 bg-gray-800 rounded-full border border-gray-700/50 shadow-ios">
                 <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary-500" />
-                <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <span className="text-xs sm:text-sm font-semibold text-gray-100">
                   AI-Powered • ZK-STARK Verified
                 </span>
               </div>
@@ -28,7 +28,7 @@ export function Hero() {
                 <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight tracking-tight">
                   <span className="bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">AI-Powered</span>
                   <br />
-                  <span className="text-black dark:text-white">RWA Risk Protection</span>
+                  <span className="text-white">RWA Risk Protection</span>
                 </h1>
                 
                 <p className="text-sm sm:text-base lg:text-lg text-gray-600 dark:text-gray-300 leading-relaxed max-w-2xl font-normal">
@@ -77,7 +77,7 @@ export function Hero() {
                     <item.icon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-sm sm:text-base lg:text-lg font-bold text-black dark:text-white mb-0.5 sm:mb-1">{item.title}</h3>
+                    <h3 className="text-sm sm:text-base lg:text-lg font-bold text-white mb-0.5 sm:mb-1">{item.title}</h3>
                     <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{item.desc}</p>
                   </div>
                 </div>

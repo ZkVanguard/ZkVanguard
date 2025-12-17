@@ -36,20 +36,20 @@ const features = [
 export function Features() {
   return (
     <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
-      <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Key Features</h3>
+      <h3 className="text-lg font-bold mb-4 text-white">Key Features</h3>
       <div className="grid grid-cols-1 gap-3">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
               <div
                 key={index}
-                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-xl hover:bg-gray-800 transition-all"
               >
                 <div className={`flex-shrink-0 p-2 ${feature.bgColor} rounded-lg`}>
                   <Icon className={`w-5 h-5 ${feature.color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-black dark:text-white">{feature.title}</h4>
+                  <h4 className="text-sm font-semibold text-white">{feature.title}</h4>
                   <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{feature.description}</p>
                 </div>
               </div>

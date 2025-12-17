@@ -18,7 +18,7 @@ export function Stats() {
 
   return (
     <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
-      <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Platform Stats</h3>
+      <h3 className="text-lg font-bold mb-4 text-white">Platform Stats</h3>
       <div className="grid grid-cols-2 gap-4">
         {stats.map((stat, index) => (
           <div
