@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const publicClient = createPublicClient({
-      chain: cronosTestnet,
+      chain: CronosTestnet,
       transport: http()
     });
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     if (txHash && !proofHash) {
       // Extract proofHash from transaction logs
       const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
-      const commitmentLog = receipt.logs.find(log => 
+      const commitmentLog = receipt.logs.find((log: any) => 
         log.address.toLowerCase() === GASLESS_VERIFIER_ADDRESS.toLowerCase()
       );
       

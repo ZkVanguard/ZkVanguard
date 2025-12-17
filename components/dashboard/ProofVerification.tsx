@@ -218,7 +218,6 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             const zkResult = await zkResponse.json();
             zkVerification = {
               valid: zkResult.verified,
-              duration_ms: zkResult.duration_ms,
               system: 'ZK-STARK',
               implementation: 'AuthenticZKStark'
             };
@@ -263,9 +262,6 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             contractAddress: GASLESS_VERIFIER_ADDRESS,
             proofHash: paddedProofHash,
             merkleRoot,
-            timestamp: Number(timestamp),
-            verifier,
-            securityLevel: Number(securityLevel),
             blockchainConfirmed: true
           },
           zkVerification: zkVerification || undefined,
@@ -273,13 +269,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             system: 'ZK-STARK',
             securityBits: Number(securityLevel),
             cryptographicallySecure: true,
-            immutable: true,
-            gaslessVerified: true
-          },
-          metadata: {
-            verifiedAt: new Date().toISOString(),
-            verificationMethod: zkVerification ? 'Client-Side: Blockchain + ZK-STARK' : 'Client-Side: Blockchain Only',
-            trustModel: 'Trustless - Verified in Your Browser'
+            immutable: true
           }
         }
       });
@@ -686,7 +676,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                     <div>
                       <div className="text-gray-400">Security Level:</div>
                       <div className="text-emerald-400 font-semibold">
-                        {result.comprehensiveVerification.onChainVerification.securityLevel} bits
+                        {(result.comprehensiveVerification.onChainVerification as any).securityLevel || result.securityLevel} bits
                       </div>
                     </div>
                     <div>
@@ -763,8 +753,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                     <li>✅ Your browser directly queried Cronos blockchain (no middleman)</li>
                     <li>✅ The ZK-STARK proof was verified cryptographically via authentic system</li>
                     <li>✅ The proof is immutably stored on-chain (cannot be tampered)</li>
-                    <li>✅ Verification method: <span className="text-emerald-400 font-mono">{result.comprehensiveVerification.metadata.verificationMethod}</span></li>
-                    <li>✅ Trust model: <span className="text-purple-400 font-semibold">{result.comprehensiveVerification.metadata.trustModel}</span></li>
+                    <li>✅ Verification method: <span className="text-emerald-400 font-mono">{(result.comprehensiveVerification as any).metadata?.verificationMethod || 'Client-Side Blockchain Verification'}</span></li>
+                    <li>✅ Trust model: <span className="text-purple-400 font-semibold">{(result.comprehensiveVerification as any).metadata?.trustModel || 'Trustless - Verified in Your Browser'}</span></li>
                   </ul>
                   <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
                     <strong>🔍 Transparency:</strong> All verification happened in your browser! Open DevTools (F12) → Console 

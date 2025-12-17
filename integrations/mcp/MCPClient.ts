@@ -65,27 +65,29 @@ export class MCPClient extends EventEmitter {
         },
       });
 
-      this.eventSource.onopen = () => {
-        logger.info('✅ Connected to Crypto.com MCP via SSE');
-        this.connected = true;
-        this.reconnectAttempts = 0;
-        this.emit('connected');
-      };
+      if (this.eventSource) {
+        this.eventSource.onopen = () => {
+          logger.info('✅ Connected to Crypto.com MCP via SSE');
+          this.connected = true;
+          this.reconnectAttempts = 0;
+          this.emit('connected');
+        };
 
-      this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleMCPMessage(data);
-        } catch (error) {
-          logger.error('Failed to parse MCP message', { error });
-        }
-      };
+        this.eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this.handleMCPMessage(data);
+          } catch (error) {
+            logger.error('Failed to parse MCP message', { error });
+          }
+        };
 
-      this.eventSource.onerror = (error) => {
-        logger.error('MCP SSE connection error', { error });
-        this.connected = false;
-        this.handleReconnect();
-      };
+        this.eventSource.onerror = (error) => {
+          logger.error('MCP SSE connection error', { error });
+          this.connected = false;
+          this.handleReconnect();
+        };
+      }
 
     } catch (error) {
       logger.error('Failed to connect to MCP Server', { error });

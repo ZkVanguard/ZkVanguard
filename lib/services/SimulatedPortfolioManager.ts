@@ -347,8 +347,7 @@ export class SimulatedPortfolioManager {
     const orchestrator = getAgentOrchestrator();
     const result = await orchestrator.assessRisk({
       address: 'simulated-portfolio',
-      portfolioData,
-      volatilities: {},
+      portfolioData
     });
 
     if (result.success && result.data) {

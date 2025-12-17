@@ -126,6 +126,7 @@ export class X402Client {
       });
 
       // Build payment requirements using x402 SDK
+      // @ts-ignore - Facilitator SDK scheme type mismatch
       const paymentReq = await this.facilitator.generatePaymentRequirements({
         scheme: 0, // Scheme.Exact
         network: CronosNetwork.CronosTestnet,

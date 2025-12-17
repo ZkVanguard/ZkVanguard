@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     for (const symbol of tokens) {
       try {
         const priceData = await mcpClient.getPrice(symbol);
-        const historicalData = await mcpClient.getHistoricalPrices(symbol, 30); // 30 days
+        const historicalData = await mcpClient.getHistoricalPrices(symbol, '1d'); // Daily data
         
         // Calculate volatility from historical prices
         if (historicalData && historicalData.length > 1) {
