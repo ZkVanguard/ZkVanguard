@@ -11,6 +11,7 @@
  * Only the portfolio positions are simulated - all data and analysis is REAL.
  */
 
+import { logger } from '@/lib/utils/logger';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import axios from 'axios';
@@ -81,7 +82,7 @@ export class SimulatedPortfolioManager {
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
     
-    console.log('✅ Simulated Portfolio Manager initialized');
+    logger.info('Simulated Portfolio Manager initialized');
     this.isInitialized = true;
   }
 
@@ -149,7 +150,7 @@ export class SimulatedPortfolioManager {
         // If rate limited (429), use cached price or wait
         if (error.response?.status === 429) {
           const retryAfter = error.response?.headers['retry-after'] || 60;
-          console.log(`⏳ Rate limited. Using cached price for ${symbol} (retry after ${retryAfter}s)`);
+          logger.debug('Rate limited, using cached price', { symbol, retryAfter });
           
           if (cached) {
             return cached.price; // Use stale cache
@@ -173,7 +174,7 @@ export class SimulatedPortfolioManager {
 
         console.warn(`Failed to fetch price for ${symbol} after ${maxRetries} attempts`);
         if (cached) {
-          console.log(`Using stale cached price for ${symbol}`);
+          logger.debug('Using stale cached price', { symbol });
           return cached.price;
         }
         throw error;
@@ -230,7 +231,7 @@ export class SimulatedPortfolioManager {
     };
 
     this.trades.push(trade);
-    console.log(`✅ BUY ${amount} ${symbol} @ $${price.toFixed(4)} = $${total.toFixed(2)} - ${reason}`);
+    logger.info('BUY transaction', { amount, symbol, price: price.toFixed(4), total: total.toFixed(2), reason });
 
     return trade;
   }
@@ -269,7 +270,7 @@ export class SimulatedPortfolioManager {
     };
 
     this.trades.push(trade);
-    console.log(`✅ SELL ${amount} ${symbol} @ $${price.toFixed(4)} = $${total.toFixed(2)} - ${reason}`);
+    logger.info('SELL transaction', { amount, symbol, price: price.toFixed(4), total: total.toFixed(2), reason });
 
     return trade;
   }
@@ -538,8 +539,7 @@ export class SimulatedPortfolioManager {
    */
   async disconnect(): Promise<void> {
     const finalValue = await this.getPortfolioValue();
-    console.log('\n📊 Portfolio simulation complete');
-    console.log(`Final value: $${finalValue.toFixed(2)}`);
+    logger.info('Portfolio simulation complete', { finalValue: finalValue.toFixed(2) });
   }
 }
 

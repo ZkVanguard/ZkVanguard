@@ -126,17 +126,14 @@ export class X402Client {
       });
 
       // Build payment requirements using x402 SDK
-      // @ts-ignore - Facilitator SDK scheme type mismatch
       const paymentReq = await this.facilitator.generatePaymentRequirements({
-        scheme: 0, // Scheme.Exact
         network: CronosNetwork.CronosTestnet,
         payTo: request.to,
-        asset: request.token as any,
+        asset: request.token,
         description: 'Gasless payment via x402',
-        mimeType: 'application/json',
         maxAmountRequired: request.amount,
         maxTimeoutSeconds: 300,
-      });
+      } as Parameters<typeof this.facilitator.generatePaymentRequirements>[0]);
 
       // Generate payment header (EIP-3009 signature)
       const paymentHeader = await this.facilitator.generatePaymentHeader({
@@ -366,3 +363,4 @@ export class X402Client {
 
 // Singleton instance
 export const x402Client = new X402Client();
+

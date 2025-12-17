@@ -12,7 +12,7 @@ const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
  * 4. Verifiable test proof generation
  * 5. Source code references
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Get system status from backend
     const healthResponse = await fetch(`${ZK_API_URL}/health`);

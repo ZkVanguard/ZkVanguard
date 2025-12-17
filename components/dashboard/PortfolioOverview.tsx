@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Activity, RefreshCw, Brain } from 'lucide-react';
 import { usePortfolioCount } from '@/lib/contracts/hooks';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
+import type { PortfolioAnalysis } from '@/lib/ai/cryptocom-service';
 
 interface PortfolioData {
   totalValue: number;
@@ -22,7 +23,7 @@ interface PortfolioData {
 export function PortfolioOverview({ address }: { address: string }) {
   const { data: portfolioCount, isLoading: countLoading, refetch } = usePortfolioCount();
   const [loading, setLoading] = useState(true);
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
   
   // Demo data for UI (since portfolios might be empty)
   const [data, setData] = useState<PortfolioData>({

@@ -5,6 +5,8 @@
  * intent parsing using Crypto.com's AI Agent SDK.
  */
 
+import { logger } from '@/lib/utils/logger';
+
 // Note: @crypto.com/ai-agent-client types will be available at runtime
 // Using any for now until proper types are available
 type AIAgentClient = any;
@@ -72,7 +74,7 @@ class CryptocomAIService {
             apiKey: this.apiKey,
             baseUrl: 'https://api.crypto.com/ai-agent/v1', // Crypto.com Developer Platform
           });
-          console.log('✅ Crypto.com AI Agent SDK initialized (hackathon API)');
+          logger.info('Crypto.com AI Agent SDK initialized (hackathon API)');
         }).catch((error) => {
           console.warn('Crypto.com AI client initialization failed:', error);
           console.warn('Using fallback rule-based logic');
@@ -277,7 +279,7 @@ class CryptocomAIService {
     };
   }
 
-  private fallbackPortfolioAnalysis(portfolioData: any): PortfolioAnalysis {
+  private fallbackPortfolioAnalysis(_portfolioData: unknown): PortfolioAnalysis {
     // Simple rule-based analysis
     const mockValue = Math.random() * 5000000 + 1000000;
     const mockPositions = Math.floor(Math.random() * 15) + 3;

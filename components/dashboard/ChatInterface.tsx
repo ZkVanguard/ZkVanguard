@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Brain } from 'lucide-react';
+import { logger } from '@/lib/utils/logger';
 import { sendAgentCommand } from '@/lib/api/agents';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
@@ -56,7 +57,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
       const aiService = getCryptocomAIService();
       const intent = await aiService.parseIntent(userInput);
       
-      console.log('🤖 AI Intent:', intent);
+      logger.debug('AI Intent classified', { intent });
 
       // Route to appropriate agent based on intent
       let response;

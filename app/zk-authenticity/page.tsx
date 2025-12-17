@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Shield, CheckCircle, Code, Cpu, Lock, ExternalLink, FileCode, Zap } from 'lucide-react';
+import { Shield, CheckCircle, Code, Cpu, Lock, FileCode, Zap } from 'lucide-react';
 
 interface AuthenticityData {
   authentic: boolean;

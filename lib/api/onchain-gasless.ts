@@ -6,6 +6,7 @@
 import { config } from '@/app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { logger } from '@/lib/utils/logger';
 
 // x402-powered gasless verifier (uses x402 Facilitator for zero gas costs)
 const GASLESS_VERIFIER_ADDRESS = CONTRACT_ADDRESSES.cronos_testnet.gaslessZKCommitmentVerifier;
@@ -100,11 +101,12 @@ export async function storeCommitmentOnChainGasless(
   merkleRoot: string,
   securityLevel: bigint
 ): Promise<OnChainGaslessResult> {
-  console.log('⚡ Storing commitment via x402 GASLESS...');
-  console.log('   Proof Hash:', proofHash);
-  console.log('   Merkle Root:', merkleRoot);
-  console.log('   Security Level:', securityLevel.toString(), 'bits');
-  console.log('   💎 x402 Facilitator handles gas - NET COST: $0.00!');
+  logger.info('Storing commitment via x402 GASLESS', {
+    proofHash,
+    merkleRoot,
+    securityLevel: securityLevel.toString() + ' bits',
+    gasless: true,
+  });
 
   const hash = await writeContract(config, {
     address: GASLESS_VERIFIER_ADDRESS,
@@ -113,15 +115,16 @@ export async function storeCommitmentOnChainGasless(
     args: [proofHash as `0x${string}`, merkleRoot as `0x${string}`, securityLevel],
   });
 
-  console.log('📤 Transaction submitted:', hash);
-  console.log('⏳ Waiting for gasless confirmation via x402...');
+  logger.info('Transaction submitted', { hash });
+  logger.info('Waiting for gasless confirmation via x402');
 
   const receipt = await waitForTransactionReceipt(config, { hash });
 
   if (receipt.status === 'success') {
-    console.log('✅ Commitment stored via x402 GASLESS!');
-    console.log('   Transaction:', hash);
-    console.log('   🎉 x402 Facilitator paid gas - Your cost: $0.00!');
+    logger.info('Commitment stored via x402 GASLESS', {
+      transaction: hash,
+      userCost: '$0.00',
+    });
     
     return {
       txHash: hash,
@@ -144,8 +147,10 @@ export async function storeCommitmentsBatchOnChainGasless(
     securityLevel: bigint;
   }>
 ): Promise<OnChainGaslessResult> {
-  console.log('⚡ Storing', commitments.length, 'commitments via x402 GASLESS (BATCH)...');
-  console.log('   💎 x402 Facilitator handles ALL gas costs!');
+  logger.info('Storing commitments via x402 GASLESS (BATCH)', {
+    count: commitments.length,
+    gasless: true,
+  });
 
   const proofHashes = commitments.map(c => c.proofHash as `0x${string}`);
   const merkleRoots = commitments.map(c => c.merkleRoot as `0x${string}`);
@@ -158,16 +163,17 @@ export async function storeCommitmentsBatchOnChainGasless(
     args: [proofHashes, merkleRoots, securityLevels],
   });
 
-  console.log('📤 Batch transaction submitted:', hash);
-  console.log('⏳ Waiting for gasless confirmation via x402...');
+  logger.info('Batch transaction submitted', { hash });
+  logger.info('Waiting for gasless confirmation via x402');
 
   const receipt = await waitForTransactionReceipt(config, { hash });
 
   if (receipt.status === 'success') {
-    console.log('✅ Batch stored via x402 GASLESS!');
-    console.log('   Transaction:', hash);
-    console.log('   Commitments:', commitments.length);
-    console.log('   🎉 x402 Facilitator paid gas - Your cost: $0.00!');
+    logger.info('Batch stored via x402 GASLESS', {
+      transaction: hash,
+      commitments: commitments.length,
+      userCost: '$0.00',
+    });
     
     return {
       txHash: hash,

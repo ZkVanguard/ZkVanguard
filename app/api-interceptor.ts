@@ -1,5 +1,6 @@
 // API Interceptor to block WalletConnect Cloud 403 errors
 // This must run before any wallet initialization code
+import { logger } from '@/lib/utils/logger';
 
 if (typeof window !== 'undefined') {
   const blockedDomains = [
@@ -38,7 +39,7 @@ if (typeof window !== 'undefined') {
     const isBlocked = blockedDomains.some((domain) => url.includes(domain));
 
     if (isBlocked) {
-      console.log('[API Interceptor] Blocked request to:', url);
+      logger.debug('[API Interceptor] Blocked request', { url });
 
       // Find appropriate mock response
       const mockKey = Object.keys(mockResponses).find((key) => url.includes(key));
@@ -69,7 +70,7 @@ if (typeof window !== 'undefined') {
     const isBlocked = blockedDomains.some((domain) => urlString.includes(domain));
 
     if (isBlocked) {
-      console.log('[API Interceptor] Blocked XHR request to:', urlString);
+      logger.debug('[API Interceptor] Blocked XHR request', { url: urlString });
       // Override send to return mock data
       this.send = function () {
         Object.defineProperty(this, 'status', { value: 200 });
@@ -86,7 +87,7 @@ if (typeof window !== 'undefined') {
     return originalXHROpen.call(this, method, url, async, username, password);
   };
 
-  console.log('[API Interceptor] WalletConnect Cloud API blocker initialized');
+  logger.info('[API Interceptor] WalletConnect Cloud API blocker initialized');
 }
 
 export {};

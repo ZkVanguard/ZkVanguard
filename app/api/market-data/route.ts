@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     await mcpClient.connect();
 
     switch (action) {
-      case 'price':
+      case 'price': {
         const prices = await mcpClient.getMultiplePrices(symbols);
         return NextResponse.json({
           success: true,
@@ -72,8 +72,8 @@ export async function POST(request: NextRequest) {
           demoMode: mcpClient.isDemoMode(),
           timestamp: new Date().toISOString(),
         });
-
-      case 'ticker':
+      }
+      case 'ticker': {
         const tickers = await Promise.all(
           symbols.map(symbol => mcpClient.getTicker(symbol))
         );
@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
           demoMode: mcpClient.isDemoMode(),
           timestamp: new Date().toISOString(),
         });
-
-      case 'ohlcv':
+      }
+      case 'ohlcv': {
         const { timeframe = '1h', limit = 100 } = body;
         const ohlcvData = await Promise.all(
           symbols.map(symbol => mcpClient.getOHLCV(symbol, timeframe, limit))
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
           demoMode: mcpClient.isDemoMode(),
           timestamp: new Date().toISOString(),
         });
+      }
 
       default:
         return NextResponse.json(

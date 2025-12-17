@@ -66,7 +66,7 @@ export class MCPClient extends EventEmitter {
       });
 
       if (this.eventSource) {
-        // @ts-ignore - EventSource types from external library
+        // @ts-expect-error - EventSource types from external library
         this.eventSource.onopen = () => {
           logger.info('✅ Connected to Crypto.com MCP via SSE');
           this.connected = true;
@@ -74,7 +74,7 @@ export class MCPClient extends EventEmitter {
           this.emit('connected');
         };
 
-        // @ts-ignore - EventSource types from external library
+        // @ts-expect-error - EventSource types from external library
         this.eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -84,7 +84,7 @@ export class MCPClient extends EventEmitter {
           }
         };
 
-        // @ts-ignore - EventSource types from external library
+        // @ts-expect-error - EventSource types from external library
         this.eventSource.onerror = (error) => {
           logger.error('MCP SSE connection error', { error });
           this.connected = false;
@@ -241,7 +241,7 @@ export class MCPClient extends EventEmitter {
    * Get market sentiment data
    * Note: May not be supported by MCP SSE - placeholder for future enhancement
    */
-  async getMarketSentiment(symbols?: string[]): Promise<Record<string, unknown>> {
+  async getMarketSentiment(_symbols?: string[]): Promise<Record<string, unknown>> {
     logger.warn('Market sentiment not yet implemented via MCP SSE');
     throw new Error('Market sentiment not supported via SSE');
   }
@@ -250,7 +250,7 @@ export class MCPClient extends EventEmitter {
    * Get volatility data
    * Note: May not be supported by MCP SSE - placeholder for future enhancement
    */
-  async getVolatility(symbol: string, period: number = 30): Promise<number> {
+  async getVolatility(symbol: string, _period: number = 30): Promise<number> {
     logger.warn('Volatility data not yet implemented via MCP SSE', { symbol });
     throw new Error('Volatility not supported via SSE');
   }
@@ -280,3 +280,4 @@ export class MCPClient extends EventEmitter {
 
 // Singleton instance
 export const mcpClient = new MCPClient();
+

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useBalance, useChainId } from 'wagmi';
+import { logger } from '@/lib/utils/logger';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { AgentActivity } from '@/components/dashboard/AgentActivity';
 import { RiskMetrics } from '@/components/dashboard/RiskMetrics';
@@ -33,8 +34,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isConnected && contractAddresses) {
-      console.log('📝 Contract Addresses:', contractAddresses);
-      console.log('📊 Portfolio Count:', portfolioCount?.toString());
+      logger.debug('Contract Addresses', { addresses: contractAddresses });
+      logger.debug('Portfolio Count', { count: portfolioCount?.toString() });
     }
   }, [isConnected, contractAddresses, portfolioCount]);
 

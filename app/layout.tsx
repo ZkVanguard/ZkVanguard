@@ -50,7 +50,7 @@ export default function RootLayout({
                   // Check if URL contains blocked domain
                   for (let i = 0; i < blockedDomains.length; i++) {
                     if (url.indexOf(blockedDomains[i]) !== -1) {
-                      console.log('[API Blocked]', url.substring(0, 100));
+                      logger.debug('[API Blocked]', { url: url.substring(0, 100) });
                       
                       // Return mock successful response immediately
                       return Promise.resolve(new Response(

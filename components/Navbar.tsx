@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from './ConnectButton';
-import { Menu, X, Zap, FlaskConical, Sun, Moon } from 'lucide-react';
+import { Menu, X, FlaskConical, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export function Navbar() {

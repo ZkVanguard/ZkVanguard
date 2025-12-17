@@ -13,6 +13,7 @@
 
 import { config } from '@/app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
+import { logger } from '@/lib/utils/logger';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { X402Client } from '@/integrations/x402/X402Client';
 import { ethers } from 'ethers';
@@ -130,10 +131,9 @@ export async function storeCommitmentTrueGasless(
   securityLevel: bigint,
   signer: ethers.Signer
 ): Promise<TrueGaslessResult> {
-  console.log('🚀 TRUE GASLESS storage via x402 + USDC!');
-  console.log('   ✅ User pays ZERO CRO gas');
-  console.log('   ✅ Only tiny USDC fee (~$0.01)');
-  console.log('   ✅ x402 Facilitator makes it gasless');
+  logger.info('TRUE GASLESS storage via x402 + USDC', {
+    features: ['Zero CRO gas', 'Tiny USDC fee (~$0.01)', 'x402 Facilitator powered']
+  });
 
   // Get fee amount
   const feePerCommitment = await readContract(config, {
@@ -142,7 +142,7 @@ export async function storeCommitmentTrueGasless(
     functionName: 'feePerCommitment',
   });
 
-  console.log('💰 USDC fee:', (Number(feePerCommitment) / 1e6).toFixed(2), 'USDC');
+  logger.info('USDC fee calculated', { usdcFee: (Number(feePerCommitment) / 1e6).toFixed(2) });
 
   // Step 1: Check USDC balance
   const userAddress = await signer.getAddress();
@@ -158,7 +158,7 @@ export async function storeCommitmentTrueGasless(
   }
 
   // Step 2: Approve USDC via x402 (gasless!)
-  console.log('📝 Step 1: Approve USDC (x402 gasless)...');
+  logger.info('Step 1: Approve USDC (x402 gasless)');
   
   // Use x402 for gasless USDC approval
   const x402Client = new X402Client();
@@ -171,11 +171,10 @@ export async function storeCommitmentTrueGasless(
     amount: feePerCommitment.toString(),
   });
 
-  console.log('✅ USDC approved via x402 (gasless!)');
-  console.log('   User paid: $0.00 CRO');
+  logger.info('USDC approved via x402 (gasless)', { croPaid: '0.00' });
 
   // Step 3: Store commitment (contract pays CRO gas)
-  console.log('📝 Step 2: Store commitment on-chain...');
+  logger.info('Step 2: Store commitment on-chain');
   
   const hash = await writeContract(config, {
     address: X402_VERIFIER_ADDRESS,
@@ -184,16 +183,17 @@ export async function storeCommitmentTrueGasless(
     args: [proofHash as `0x${string}`, merkleRoot as `0x${string}`, securityLevel],
   });
 
-  console.log('📤 Transaction submitted:', hash);
-  console.log('⏳ Waiting for TRUE gasless confirmation...');
+  logger.info('Transaction submitted', { hash });
+  logger.info('Waiting for TRUE gasless confirmation');
 
   const receipt = await waitForTransactionReceipt(config, { hash });
 
   if (receipt.status === 'success') {
-    console.log('✅ Commitment stored with TRUE GASLESS!');
-    console.log('   Transaction:', hash);
-    console.log('   💰 USDC paid:', (Number(feePerCommitment) / 1e6).toFixed(2), 'USDC');
-    console.log('   🎉 CRO gas paid: $0.00 (x402 + contract sponsored)');
+    logger.info('Commitment stored with TRUE GASLESS', {
+      transaction: hash,
+      usdcPaid: (Number(feePerCommitment) / 1e6).toFixed(2) + ' USDC',
+      croGasPaid: '$0.00',
+    });
     
     return {
       txHash: hash,
@@ -219,9 +219,10 @@ export async function storeCommitmentsBatchTrueGasless(
   }>,
   signer: ethers.Signer
 ): Promise<TrueGaslessResult> {
-  console.log('⚡ TRUE GASLESS BATCH storage via x402 + USDC!');
-  console.log('   Commitments:', commitments.length);
-  console.log('   ✅ User pays ZERO CRO gas');
+  logger.info('TRUE GASLESS BATCH storage via x402 + USDC', {
+    commitments: commitments.length,
+    userPaysZeroCRO: true,
+  });
 
   const feePerCommitment = await readContract(config, {
     address: X402_VERIFIER_ADDRESS,
@@ -230,7 +231,9 @@ export async function storeCommitmentsBatchTrueGasless(
   });
 
   const totalFee = feePerCommitment * BigInt(commitments.length);
-  console.log('💰 Total USDC fee:', (Number(totalFee) / 1e6).toFixed(2), 'USDC');
+  logger.info('Total USDC fee calculated', {
+    totalFee: (Number(totalFee) / 1e6).toFixed(2) + ' USDC',
+  });
 
   // Approve and transfer via x402
   const userAddress = await signer.getAddress();
@@ -256,11 +259,14 @@ export async function storeCommitmentsBatchTrueGasless(
     args: [proofHashes, merkleRoots, securityLevels],
   });
 
-  console.log('📤 Batch transaction submitted:', hash);
+  logger.info('Batch transaction submitted', { hash });
   const receipt = await waitForTransactionReceipt(config, { hash });
 
   if (receipt.status === 'success') {
-    console.log('✅ Batch stored with TRUE GASLESS!');
+    logger.info('Batch stored with TRUE GASLESS', {
+      commitments: commitments.length,
+      txHash: hash,
+    });
     
     return {
       txHash: hash,

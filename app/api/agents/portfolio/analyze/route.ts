@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { MCPClient } from '@/integrations/mcp/MCPClient';
 import { ethers } from 'ethers';
+import type { PortfolioData } from '@/shared/types/portfolio';
 
 /**
  * AI-Powered Portfolio Analysis API
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     
     // Fetch portfolio data using MCP
     const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
-    const portfolioData: any = {
+    const portfolioData: PortfolioData = {
       address,
       tokens: [],
       totalValue: 0,

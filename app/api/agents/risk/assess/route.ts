@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { MCPClient } from '@/integrations/mcp/MCPClient';
 import { ethers } from 'ethers';
+import type { PortfolioData } from '@/shared/types/portfolio';
 
 /**
  * Risk Assessment API Route
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     
     // Fetch portfolio and historical data using MCP
     const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
-    const portfolioData: any = {
+    const portfolioData: PortfolioData = {
       address,
       tokens: [],
       totalValue: 0,
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
           balance: balanceInToken,
           price: priceData.price,
           value,
-          volatility: volatilities.get(symbol) || 0,
+          // Note: volatility handled separately in risk assessment
         });
         portfolioData.totalValue += value;
       } catch (error) {

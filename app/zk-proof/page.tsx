@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
 import { ProofVerification } from '@/components/dashboard/ProofVerification';
 import { useAccount } from 'wagmi';
@@ -139,8 +140,8 @@ function ZKProofPage() {
 
     setIsStoringOnChain(true);
     try {
-      console.log('⛓️  Storing proof on Cronos testnet with TRUE gasless...');
-      console.log('💰 Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
+      logger.info('Storing proof on Cronos testnet with TRUE gasless');
+      logger.info('Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
       
       // Import the TRUE gasless storage function
       const { storeCommitmentTrueGasless } = await import('@/lib/api/onchain-true-gasless');
@@ -159,11 +160,14 @@ function ZKProofPage() {
       const signer = await provider.getSigner();
       
       // Convert proof to contract format
-      const commitment = convertToContractFormat(proof as any);
+      // @ts-expect-error - proof structure conversion between frontend and contract format
+      const commitment = convertToContractFormat(proof);
       
-      console.log('📝 Proof Hash:', commitment.proofHash);
-      console.log('🌲 Merkle Root:', commitment.merkleRoot);
-      console.log('🔒 Security:', commitment.metadata.security_level, 'bits');
+      logger.debug('Proof commitment generated', {
+        proofHash: commitment.proofHash,
+        merkleRoot: commitment.merkleRoot,
+        securityLevel: commitment.metadata.security_level
+      });
       
       // Store on-chain with TRUE gasless via x402 + USDC
       const result = await storeCommitmentTrueGasless(
@@ -174,10 +178,11 @@ function ZKProofPage() {
       );
       
       setOnChainTxHash(result.txHash);
-      console.log('✅ Stored on-chain! TX:', result.txHash);
-      console.log('💰 TRUE gasless via x402 + USDC!');
-      console.log('   USDC paid:', result.usdcFee);
-      console.log('   CRO paid:', result.croGasPaid);
+      logger.info('Stored on-chain! TRUE gasless via x402 + USDC', {
+        txHash: result.txHash,
+        usdcFee: result.usdcFee,
+        croGasPaid: result.croGasPaid
+      });
       
       // Store statement_hash and statement for ZK verification
       const proofMetadata = {

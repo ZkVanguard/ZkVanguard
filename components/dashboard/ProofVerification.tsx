@@ -1,9 +1,9 @@
 'use client';
+import { logger } from '@/lib/utils/logger';
 
 import { useState } from 'react';
 import { Shield, ExternalLink, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { usePublicClient } from 'wagmi';
-import { CronosTestnet } from '@/lib/chains';
 
 interface VerificationResult {
   onChain: boolean;
@@ -11,7 +11,7 @@ interface VerificationResult {
   securityLevel: number;
   timestamp: number;
   exists: boolean;
-  statement?: Record<string, any>;
+  statement?: Record<string, unknown>;
   statement_hash?: string | number;
   statementVerified?: boolean;
   gasRefunded?: boolean;
@@ -84,8 +84,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
     setResult(null);
 
     try {
-      console.log('🔍 STARTING CLIENT-SIDE COMPREHENSIVE VERIFICATION...');
-      console.log('═══════════════════════════════════════════════════════');
+      logger.debug('🔍 STARTING CLIENT-SIDE COMPREHENSIVE VERIFICATION...');
+      logger.debug('═══════════════════════════════════════════════════════');
       
       // Get stored proof and statement from localStorage
       let storedProof = null;
@@ -95,7 +95,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       let refundDetails = null;
       
       if (txHash) {
-        console.log('📝 Loading proof metadata from localStorage (txHash)...');
+        logger.debug('📝 Loading proof metadata from localStorage (txHash)...');
         const metadata = localStorage.getItem(`proof_tx_${txHash}`);
         if (metadata) {
           const parsed = JSON.parse(metadata);
@@ -104,7 +104,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           storedProofHash = parsed.proofHash;
           gasRefunded = parsed.gasRefunded;
           refundDetails = parsed.refundDetails;
-          console.log('✅ Proof metadata loaded:', {
+          logger.debug('✅ Proof metadata loaded:', {
             proofHash: storedProofHash,
             hasProof: !!storedProof,
             hasStatement: !!storedStatement
@@ -112,7 +112,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         }
       } else if (proofHash) {
         const normalized = proofHash.startsWith('0x') ? proofHash : '0x' + proofHash;
-        console.log('📝 Loading proof metadata from localStorage (proofHash)...');
+        logger.debug('📝 Loading proof metadata from localStorage (proofHash)...');
         const metadata = localStorage.getItem(`proof_${normalized}`);
         if (metadata) {
           const parsed = JSON.parse(metadata);
@@ -121,7 +121,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           storedProofHash = normalized;
           gasRefunded = parsed.gasRefunded;
           refundDetails = parsed.refundDetails;
-          console.log('✅ Proof metadata loaded:', {
+          logger.debug('✅ Proof metadata loaded:', {
             proofHash: storedProofHash,
             hasProof: !!storedProof,
             hasStatement: !!storedStatement
@@ -130,14 +130,14 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       }
 
       // STEP 1: Query Cronos blockchain directly (CLIENT-SIDE!)
-      console.log('\n🔗 STEP 1: Querying Cronos Blockchain (Client-Side)...');
+      logger.debug('\n🔗 STEP 1: Querying Cronos Blockchain (Client-Side)...');
       
       let normalizedProofHash = storedProofHash || proofHash;
       const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract
       
       // If we have txHash but no proofHash, extract from transaction
       if (txHash && !normalizedProofHash) {
-        console.log('🔍 Extracting proof hash from transaction...');
+        logger.debug('🔍 Extracting proof hash from transaction...');
         const receipt = await publicClient?.getTransactionReceipt({ hash: txHash as `0x${string}` });
         const commitmentLog = receipt?.logs.find(log => 
           log.address.toLowerCase() === GASLESS_VERIFIER_ADDRESS.toLowerCase()
@@ -184,7 +184,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
       const [onChainProofHash, merkleRoot, timestamp, verifier, verified, securityLevel] = commitment;
 
-      console.log('✅ ON-CHAIN COMMITMENT VERIFIED:');
+      logger.debug('✅ ON-CHAIN COMMITMENT VERIFIED:');
       console.log('   Proof Hash:', onChainProofHash);
       console.log('   Merkle Root:', merkleRoot);
       console.log('   Timestamp:', new Date(Number(timestamp) * 1000).toISOString());
@@ -199,9 +199,9 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       // STEP 2: Verify ZK-STARK proof mathematically (if proof available)
       let zkVerification = null;
       if (storedProof && storedStatement) {
-        console.log('\n🔐 STEP 2: Verifying ZK-STARK Proof (Client → Backend API)...');
-        console.log('   This calls the authentic ZK-STARK verification system');
-        console.log('   Proving mathematical validity of the proof...');
+        logger.debug('\n🔐 STEP 2: Verifying ZK-STARK Proof (Client → Backend API)...');
+        logger.debug('   This calls the authentic ZK-STARK verification system');
+        logger.debug('   Proving mathematical validity of the proof...');
         
         try {
           const zkResponse = await fetch('/api/zk-proof/verify', {
@@ -222,24 +222,24 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               implementation: 'AuthenticZKStark'
             };
             
-            console.log('✅ ZK-STARK PROOF VERIFIED:');
+            logger.debug('✅ ZK-STARK PROOF VERIFIED:');
             console.log('   Valid:', zkResult.verified);
             console.log('   Verification Time:', zkResult.duration_ms, 'ms');
-            console.log('   System: ZK-STARK (Authentic)');
+            logger.debug('   System: ZK-STARK (Authentic)');
           } else {
-            console.log('⚠️  ZK verification endpoint not responding (backend may be down)');
+            logger.debug('⚠️  ZK verification endpoint not responding (backend may be down)');
           }
         } catch (zkError) {
           console.log('⚠️  ZK verification error:', zkError);
-          console.log('   On-chain proof still valid - ZK backend verification optional');
+          logger.debug('   On-chain proof still valid - ZK backend verification optional');
         }
       } else {
-        console.log('\n⚠️  STEP 2: Skipped ZK-STARK verification (proof not in localStorage)');
-        console.log('   On-chain commitment is still cryptographically secure');
+        logger.debug('\n⚠️  STEP 2: Skipped ZK-STARK verification (proof not in localStorage)');
+        logger.debug('   On-chain commitment is still cryptographically secure');
       }
 
-      console.log('\n✅ COMPREHENSIVE VERIFICATION COMPLETE!');
-      console.log('═══════════════════════════════════════════════════════');
+      logger.debug('\n✅ COMPREHENSIVE VERIFICATION COMPLETE!');
+      logger.debug('═══════════════════════════════════════════════════════');
 
       // Build comprehensive result
       setResult({
@@ -346,7 +346,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             );
             
             if (commitmentStoredLog) {
-              console.log('✅ Found event log with topics');
+              logger.debug('✅ Found event log with topics');
               console.log('   From contract:', commitmentStoredLog.address);
               console.log('   Topics:', commitmentStoredLog.topics);
               
@@ -360,18 +360,18 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                 console.log('📍 Using contract address:', contractAddress);
               }
             } else {
-              console.log('⚠️ No event logs with topics found');
+              logger.debug('⚠️ No event logs with topics found');
               console.log('   All logs:', receipt.logs.map(l => ({ address: l.address, topics: l.topics.length })));
             }
           }
           
-          console.log('✅ Transaction found:', { txExists, txSuccess, contractAddress });
+          logger.debug('✅ Transaction found:', { txExists, txSuccess, contractAddress });
         }
       }
       
       // Use extracted proof hash if we got it from transaction
       if (extractedProofHash && !proofHash.trim()) {
-        console.log('🔄 Using proof hash from transaction logs');
+        logger.debug('🔄 Using proof hash from transaction logs');
         normalizedHash = extractedProofHash.toLowerCase();
         hashWithoutPrefix = normalizedHash.slice(2);
         paddedProofHash = '0x' + hashWithoutPrefix;
@@ -407,7 +407,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       // Destructure the array result: [proofHash, merkleRoot, timestamp, verifier, verified, securityLevel]
       const [, merkleRoot, timestamp, verifier, verified, securityLevel] = commitment;
       
-      console.log('📊 On-chain commitment:', {
+      logger.debug('📊 On-chain commitment:', {
         merkleRoot,
         timestamp: timestamp.toString(),
         verifier,
@@ -461,7 +461,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               statementVerified = (providedClaim === storedClaim);
               
               // Log for debugging
-              console.log('Statement verification:', {
+              logger.debug('Statement verification:', {
                 providedClaim: parsed,
                 storedStatement,
                 statement_hash,

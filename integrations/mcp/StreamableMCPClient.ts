@@ -57,33 +57,32 @@ class StreamableMCPClient {
       });
 
       // Create Streamable HTTP transport
-      // @ts-ignore - StreamableHTTPClientTransport SDK type mismatch
-      this.transport = new StreamableHTTPClientTransport({
-        url: this.MCP_SERVER_URL,
-      });
+      this.transport = new StreamableHTTPClientTransport(
+        new URL(this.MCP_SERVER_URL)
+      ) as unknown as typeof this.transport;
 
       // Create MCP client
-      // @ts-ignore - Client SDK capabilities type mismatch
       this.client = new Client({
         name: 'chronos-vanguard',
         version: '1.0.0',
       }, {
-        capabilities: {
-          tools: {},
-          resources: {},
-        },
-      });
+        capabilities: {},
+      } as any);
 
       // Connect client to transport
-      if (this.transport && this.client) {
-        await this.client.connect(this.transport!);
+      if (!this.transport || !this.client) {
+        throw new Error('Transport or client not initialized');
       }
+      
+      const transport = this.transport as StreamableHTTPClientTransport;
+      const client = this.client as Client;
+      await client.connect(transport as any);
 
       this.connected = true;
       logger.info('✅ Connected to Crypto.com MCP via Streamable HTTP');
 
       // List available tools
-      const toolsResult = await this.client!.listTools();
+      const toolsResult = await client.listTools();
       logger.info('Available MCP tools', {
         tools: toolsResult.tools.map(t => t.name),
       });
@@ -186,3 +185,4 @@ class StreamableMCPClient {
 // Singleton instance
 export const streamableMCPClient = new StreamableMCPClient();
 export default streamableMCPClient;
+

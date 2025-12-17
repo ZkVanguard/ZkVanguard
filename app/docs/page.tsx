@@ -620,8 +620,8 @@ function ZKProofsSection() {
 
 // Real ZK-STARK proof generation via Python backend
 const proofStatus = await generateSettlementProof(transactions);
-console.log('Real proof:', proofStatus.proof); // 77KB STARK proof
-console.log('On-chain:', proofStatus.commitmentHash); // Stored on Cronos testnet`}
+// 77KB STARK proof generated and stored on Cronos testnet
+logger.debug('Proof generated', { commitmentHash: proofStatus.commitmentHash });`}
         </pre>
       </div>
       <div className="bg-gray-900 rounded-lg p-4">

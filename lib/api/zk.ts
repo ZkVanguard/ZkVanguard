@@ -3,6 +3,8 @@
  * Connects frontend to actual ZK proof generation system
  */
 
+import { logger } from '@/lib/utils/logger';
+
 const ZK_API_URL = process.env.NEXT_PUBLIC_ZK_API_URL || 'http://localhost:8000';
 
 export interface ZKProof {
@@ -78,7 +80,7 @@ export async function generateSettlementProof(
   portfolioId?: number
 ): Promise<ZKProofStatus> {
   try {
-    console.log(`🔐 Generating ZK proof for ${payments.length} payments...`);
+    logger.info('Generating ZK proof for payments', { count: payments.length });
     
     const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
       method: 'POST',
@@ -103,7 +105,7 @@ export async function generateSettlementProof(
     }
 
     const result: ZKProofStatus = await response.json();
-    console.log(`✅ Proof job created: ${result.job_id}`);
+    logger.info('Proof job created', { jobId: result.job_id });
     
     return result;
   } catch (error: unknown) {
@@ -131,7 +133,7 @@ export async function generateRiskProof(
   portfolioId?: number
 ): Promise<ZKProofStatus> {
   try {
-    console.log('🔐 Generating ZK proof for risk calculation...');
+    logger.info('Generating ZK proof for risk calculation');
     
     const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
       method: 'POST',
@@ -167,7 +169,7 @@ export async function generateRebalanceProof(
   portfolioId?: number
 ): Promise<ZKProofStatus> {
   try {
-    console.log('🔐 Generating ZK proof for rebalance...');
+    logger.info('Generating ZK proof for rebalance');
     
     const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
       method: 'POST',
@@ -222,7 +224,7 @@ export async function waitForProof(
     const status = await getProofStatus(jobId);
     
     if (status.status === 'completed' && status.proof) {
-      console.log(`✅ Proof ready after ${status.duration_ms}ms`);
+      logger.info('Proof ready', { durationMs: status.duration_ms });
       return { 
         proof: status.proof,
         claim: status.claim || '' 
@@ -233,7 +235,7 @@ export async function waitForProof(
       throw new Error(status.error || 'Proof generation failed');
     }
     
-    console.log(`⏳ Proof ${status.status}... (attempt ${attempt + 1}/${maxAttempts})`);
+    logger.debug('Proof status', { status: status.status, attempt: attempt + 1, maxAttempts });
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   
@@ -249,9 +251,10 @@ export async function verifyProofOffChain(
   publicInputs: number[] = []
 ): Promise<{ valid: boolean; duration_ms?: number; cuda_accelerated?: boolean }> {
   try {
-    console.log('🔍 Sending verification request to backend...');
-    console.log('   Proof keys:', Object.keys(proof).slice(0, 10));
-    console.log('   Claim:', claim);
+    logger.info('Sending verification request to backend', {
+      proofKeys: Object.keys(proof).slice(0, 10),
+      claim,
+    });
     
     const response = await fetch(`${ZK_API_URL}/api/zk/verify`, {
       method: 'POST',
@@ -272,7 +275,7 @@ export async function verifyProofOffChain(
     }
 
     const result = await response.json();
-    console.log('✅ Off-chain verification response:', result);
+    logger.info('Off-chain verification response', { result });
     return result;
   } catch (error) {
     console.error('❌ Proof verification failed:', error);
@@ -365,9 +368,10 @@ export async function generateProofForOnChain(
   // Wait for proof generation (CUDA-accelerated, NIST P-521)
   const { proof: starkProof, claim } = await waitForProof(jobStatus.job_id);
   
-  console.log('🔍 Verifying proof off-chain with full 521-bit precision...');
-  console.log('   Proof statement_hash:', starkProof.statement_hash);
-  console.log('   Claim:', claim);
+  logger.info('Verifying proof off-chain with full 521-bit precision', {
+    statementHash: starkProof.statement_hash,
+    claim,
+  });
   
   // Verify proof OFF-CHAIN with full 521-bit precision
   const offChainVerification = await verifyProofOffChain(starkProof, claim);
@@ -381,11 +385,12 @@ export async function generateProofForOnChain(
   // Create on-chain commitment (preserves security, fits in 256-bit)
   const commitment = convertToContractFormat(starkProof);
   
-  console.log('✅ ZK-STARK proof verified with 521-bit security');
-  console.log(`   Off-chain verification: PASSED`);
-  console.log(`   Security level: ${starkProof.security_level}-bit`);
-  console.log(`   Field: NIST P-521 (521-bit)`);
-  console.log(`   On-chain commitment: ${commitment.proofHash}`);
+  logger.info('ZK-STARK proof verified with 521-bit security', {
+    verification: 'PASSED',
+    securityLevel: starkProof.security_level + '-bit',
+    field: 'NIST P-521 (521-bit)',
+    onChainCommitment: commitment.proofHash,
+  });
   
   return {
     starkProof,

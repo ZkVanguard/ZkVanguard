@@ -3,6 +3,8 @@
  * For perpetual futures positions on Cronos zkEVM
  */
 
+import { logger } from '@/lib/utils/logger';
+
 export interface Position {
   id: string;
   asset: string;
@@ -25,7 +27,7 @@ export async function getMoonlanderPositions(address: string): Promise<Position[
   // TODO: Integrate with real Moonlander API when available
   // For demo, return realistic simulated positions
   
-  console.log(`Fetching positions for ${address} from Moonlander...`);
+  logger.info('Fetching positions from Moonlander', { address });
   
   return [
     {
@@ -142,7 +144,7 @@ export async function openPosition(
   leverage: number
 ): Promise<{ success: boolean; positionId?: string; error?: string }> {
   try {
-    console.log(`Opening ${type} position: ${size} ${asset} at ${leverage}x`);
+    logger.info('Opening position', { type, size, asset, leverage });
     
     // In production, this calls Moonlander smart contract
     // For demo, simulate successful position opening
@@ -168,7 +170,7 @@ export async function closePosition(positionId: string): Promise<{
   error?: string 
 }> {
   try {
-    console.log(`Closing position ${positionId}`);
+    logger.info('Closing position', { positionId });
     
     const position = await getPositionDetails(positionId);
     if (!position) {

@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       args: [paddedProofHash as `0x${string}`],
     }) as [string, string, bigint, string, boolean, bigint];
 
-    const [onChainProofHash, merkleRoot, timestamp, verifier, verified, securityLevel] = commitment;
+    const [, merkleRoot, timestamp, verifier, verified, securityLevel] = commitment;
 
     if (!verified) {
       return NextResponse.json({
