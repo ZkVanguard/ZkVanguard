@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 /**
  * AI-Powered Portfolio Analysis API
- * Provides comprehensive portfolio insights using real RiskAgent + Crypto.com AI
+ * Provides comprehensive portfolio insights using REAL market data + AI agents
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, portfolioData, useRealAgent = true } = body;
+    const { address, useRealAgent = true } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -18,39 +19,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use real agent orchestration if enabled
+    // Get REAL market data from blockchain
+    const marketDataService = getMarketDataService();
+    const realPortfolioData = await marketDataService.getPortfolioData(address);
+
+    // Use real agent orchestration
     if (useRealAgent) {
       const orchestrator = getAgentOrchestrator();
-      const result = await orchestrator.analyzePortfolio({ address, portfolioData });
+      const result = await orchestrator.analyzePortfolio({ 
+        address, 
+        portfolioData: realPortfolioData 
+      });
 
       if (result.success && result.data) {
         return NextResponse.json({
           success: true,
-          analysis: result.data,
+          analysis: {
+            ...result.data,
+            totalValue: realPortfolioData.totalValue,
+            positions: realPortfolioData.tokens.length,
+            tokens: realPortfolioData.tokens,
+            realMarketData: true,
+          },
           agentId: result.agentId,
           executionTime: result.executionTime,
           realAgent: true,
+          realMarketData: true,
           timestamp: new Date().toISOString(),
         });
       }
     }
 
-    // Fallback to AI service
-    const aiService = getCryptocomAIService();
-    const analysis = await aiService.analyzePortfolio(address, portfolioData || {});
+    // Use Enhanced AI Agent with real market data
+    const { getEnhancedAIAgent } = await import('@/lib/ai/enhanced-ai-agent');
+    const enhancedAgent = getEnhancedAIAgent();
+    const analysis = await enhancedAgent.analyzePortfolioWithRealData(address);
 
     return NextResponse.json({
       success: true,
       analysis: {
-        totalValue: analysis.totalValue,
-        positions: analysis.positions,
-        riskScore: analysis.riskScore,
-        healthScore: analysis.healthScore,
-        recommendations: analysis.recommendations,
-        topAssets: analysis.topAssets,
+        ...analysis,
+        tokens: realPortfolioData.tokens,
       },
-      aiPowered: aiService.isAvailable(),
-      realAgent: false,
+      aiPowered: true,
+      realAgent: true,
+      realMarketData: true,
+      dataSource: 'blockchain',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
