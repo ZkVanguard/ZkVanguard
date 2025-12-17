@@ -14,7 +14,7 @@ export const CONTRACT_ADDRESSES = {
     // Production gasless contract (gas refund model)
     gaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_GASLESS_COMMITMENT_VERIFIER || '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9') as `0x${string}`,
     // TRUE gasless contract (x402 + USDC) ⭐ DEPLOYED
-    x402GaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852') as `0x${string}`,
+    x402GaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27') as `0x${string}`,
   },
   cronos_mainnet: {
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,

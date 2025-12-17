@@ -204,7 +204,7 @@ Real cryptographic implementation with on-chain storage:
 
 ### Deployed Contracts (Cronos Testnet)
 
-- **X402GaslessZKCommitmentVerifier** - `0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852` ⭐
+- **X402GaslessZKCommitmentVerifier** - `0xC81C1c09533f75Bc92a00eb4081909975e73Fd27` ⭐
   - **TRUE gasless via x402 + USDC** - Users pay $0.00 CRO
   - Fee: $0.01 USDC per commitment (gasless payment via x402)
   - Contract sponsors CRO gas from funded balance

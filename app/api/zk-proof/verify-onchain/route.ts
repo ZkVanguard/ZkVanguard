@@ -3,7 +3,7 @@ import { createPublicClient, http } from 'viem';
 import { cronosTestnet } from '@/lib/chains';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
-const GASLESS_VERIFIER_ADDRESS = '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852'; // TRUE gasless contract (x402 + USDC)
+const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract (x402 + USDC)
 
 const GASLESS_VERIFIER_ABI = [
   {
