@@ -10,7 +10,7 @@ import { CTASection } from '@/components/CTASection';
 
 export default function Home() {
   return (
-    <div className="relative">
+    <div className="relative bg-slate-900">
       <Hero />
       
       {/* Compact iOS-style sections */}

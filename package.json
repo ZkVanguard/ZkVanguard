@@ -59,7 +59,8 @@
     "logs:contracts": "tail -f logs/contracts.log",
     "fund:wallets": "node -r ts-node/register scripts/setup/fund-wallets.ts",
     "dev": "npm run dev:next",
-    "build": "npm run compile && npm run frontend:build",
+    "build": "next build",
+    "build:full": "npm run compile && npm run frontend:build",
     "start": "npm run agents:start"
   },
   "dependencies": {

@@ -22,12 +22,19 @@ const nextConfig = {
         '@react-native-async-storage/async-storage': false,
         'pino-pretty': false,
       };
+      
+      // Mark x402 client as server-only (uses node:crypto)
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@crypto.com/facilitator-client': false,
+      };
     }
 
     // Suppress specific module warnings
     config.ignoreWarnings = [
       { module: /node_modules\/@metamask\/sdk/ },
       { module: /node_modules\/pino/ },
+      { module: /node_modules\/@crypto\.com/ },
     ];
 
     // Handle .node files

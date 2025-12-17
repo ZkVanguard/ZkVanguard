@@ -5,7 +5,7 @@ import { WagmiProvider, createConfig, http } from 'wagmi';
 import { injected, coinbaseWallet } from 'wagmi/connectors';
 import { CronosTestnet, CronosMainnet } from '@/lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '@/contexts/ThemeContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -69,7 +69,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             modalSize="compact"
-            theme={lightTheme({
+            theme={darkTheme({
               accentColor: '#007aff',
               accentColorForeground: 'white',
               borderRadius: 'large',

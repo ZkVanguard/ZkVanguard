@@ -407,5 +407,5 @@ Open browser console:
 ---
 
 **Status:** ✅ ALL FEATURES WORKING
-**Demo:** http://localhost:3000
+**Demo:** https://zkvanguard.vercel.app
 **Date:** December 14, 2025
