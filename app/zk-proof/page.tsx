@@ -161,7 +161,7 @@ function ZKProofPage() {
       
       setOnChainTxHash(result.txHash);
       console.log('✅ Stored on-chain! TX:', result.txHash);
-      console.log('💰 Gas refunded - you paid $0.00!');
+      console.log('💰 TRUE gasless via x402 - you paid $0.00!');
       
       // Store statement_hash and statement for ZK verification
       // The statement_hash is already committed on-chain as part of proofHash

@@ -94,7 +94,7 @@ function OverviewSection() {
         </div>
         <div className="bg-green-900/30 border border-green-700 rounded-lg p-4">
           <h4 className="text-lg font-semibold text-green-400 mb-2">⚡ Gasless Transactions</h4>
-          <p className="text-gray-300 text-sm">97%+ coverage with automatic refunds. Smart contract deployed at 0x5290...11f9</p>
+          <p className="text-gray-300 text-sm">97%+ coverage with TRUE gasless via x402 Facilitator. Smart contract deployed at 0x5290...11f9</p>
         </div>
         <div className="bg-green-900/30 border border-green-700 rounded-lg p-4">
           <h4 className="text-lg font-semibold text-green-400 mb-2">🔗 Protocol Integrations</h4>

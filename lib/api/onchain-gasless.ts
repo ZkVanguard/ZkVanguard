@@ -114,7 +114,7 @@ export async function storeCommitmentOnChainGasless(
   });
 
   console.log('📤 Transaction submitted:', hash);
-  console.log('⏳ Waiting for confirmation + gas refund...');
+  console.log('⏳ Waiting for gasless confirmation via x402...');
 
   const receipt = await waitForTransactionReceipt(config, { hash });
 
@@ -159,7 +159,7 @@ export async function storeCommitmentsBatchOnChainGasless(
   });
 
   console.log('📤 Batch transaction submitted:', hash);
-  console.log('⏳ Waiting for confirmation + gas refund...');
+  console.log('⏳ Waiting for gasless confirmation via x402...');
 
   const receipt = await waitForTransactionReceipt(config, { hash });
 
