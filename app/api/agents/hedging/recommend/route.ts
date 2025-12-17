@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
-import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { MCPClient } from '@/integrations/mcp/MCPClient';
+import { ethers } from 'ethers';
 
 /**
  * Hedging Recommendations API Route
- * Uses REAL market data + AI agents + Moonlander integration
+ * Uses HACKATHON-PROVIDED services:
+ * - Crypto.com AI SDK (FREE for hackathon)
+ * - Crypto.com MCP (FREE market data)
+ * - Moonlander integration for perpetuals
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, useRealAgent = true } = body;
+    const { address } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -19,57 +22,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get REAL market data
-    const marketDataService = getMarketDataService();
-    const realPortfolioData = await marketDataService.getPortfolioData(address);
+    // Get market data from Crypto.com MCP (FREE hackathon service)
+    const mcpClient = new MCPClient();
+    await mcpClient.connect();
+    
+    // Fetch portfolio data using MCP
+    const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
+    const portfolioData: any = {
+      address,
+      tokens: [],
+      totalValue: 0,
+    };
 
-    // Find dominant asset
-    const dominantAsset = realPortfolioData.tokens.reduce((max, token) => 
-      token.usdValue > (max?.usdValue || 0) ? token : max
-    , realPortfolioData.tokens[0]);
-
-    // Use real agent orchestration
-    if (useRealAgent && dominantAsset) {
-      const orchestrator = getAgentOrchestrator();
-      const result = await orchestrator.generateHedgeRecommendations({
-        portfolioId: address,
-        assetSymbol: dominantAsset.symbol,
-        notionalValue: realPortfolioData.totalValue,
-      });
-
-      if (result.success && result.data) {
-        // Format HedgeAnalysis to API response format
-        const hedgeAnalysis = result.data;
-        return NextResponse.json({
-          recommendations: [{
-            strategy: `${hedgeAnalysis.recommendation.action} ${hedgeAnalysis.recommendation.side} Position`,
-            confidence: hedgeAnalysis.riskMetrics.hedgeEffectiveness,
-            expectedReduction: hedgeAnalysis.exposure.volatility * 60,
-            description: hedgeAnalysis.recommendation.reason,
-            actions: [{
-              action: hedgeAnalysis.recommendation.action,
-              market: hedgeAnalysis.recommendation.market,
-              asset: hedgeAnalysis.exposure.asset,
-              size: parseFloat(hedgeAnalysis.recommendation.size),
-              leverage: hedgeAnalysis.recommendation.leverage,
-              reason: hedgeAnalysis.recommendation.reason,
-              expectedGasSavings: 0.97,
-            }]
-          }],
-          agentId: result.agentId,
-          executionTime: result.executionTime,
-          realAgent: true,
-          timestamp: new Date().toISOString()
+    for (const symbol of tokens) {
+      try {
+        const priceData = await mcpClient.getPrice(symbol);
+        const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+        const balance = await provider.getBalance(address);
+        const balanceInToken = parseFloat(ethers.formatEther(balance));
+        const value = balanceInToken * priceData.price;
+        
+        portfolioData.tokens.push({
+          symbol,
+          balance: balanceInToken,
+          price: priceData.price,
+          value,
         });
+        portfolioData.totalValue += value;
+      } catch (error) {
+        console.warn(`Failed to fetch ${symbol} data:`, error);
       }
     }
 
-    // Use Enhanced AI Agent with real market data
-    const { getEnhancedAIAgent } = await import('@/lib/ai/enhanced-ai-agent');
-    const enhancedAgent = getEnhancedAIAgent();
-    const aiRecommendations = await enhancedAgent.generateHedgeRecommendationsWithRealData(address);
+    // Find dominant asset for hedging
+    const dominantAsset = portfolioData.tokens.reduce((max: any, token: any) => 
+      token.value > (max?.value || 0) ? token : max
+    , portfolioData.tokens[0]);
 
-    // Format for API response
+    // Prepare risk profile for AI
+    const riskProfile = {
+      dominantAsset: dominantAsset.symbol,
+      concentration: (dominantAsset.value / portfolioData.totalValue) * 100,
+      totalValue: portfolioData.totalValue,
+    };
+
+    // Use Crypto.com AI SDK for hedge recommendations (FREE hackathon service)
+    const aiService = getCryptocomAIService();
+    const aiRecommendations = await aiService.generateHedgeRecommendations(portfolioData, riskProfile);
+
+    // Format for API response with Moonlander integration
     const recommendations = aiRecommendations.map(rec => ({
       strategy: rec.strategy,
       confidence: rec.confidence,
@@ -80,18 +81,21 @@ export async function POST(request: NextRequest) {
         asset: action.asset,
         size: action.amount,
         leverage: 5,
+        protocol: 'Moonlander', // Hackathon-integrated perpetuals
         reason: rec.description,
-        expectedGasSavings: 0.97 // TRUE gasless via x402
+        expectedGasSavings: 0.97, // TRUE gasless via x402
       })),
-      realData: rec.realData,
     }));
 
     return NextResponse.json({
       recommendations,
-      aiPowered: true,
-      realAgent: true,
+      hackathonAPIs: {
+        aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+        marketData: 'Crypto.com MCP (FREE)',
+        perpetuals: 'Moonlander (hackathon integrated)',
+      },
+      realAgent: aiService.isAvailable(),
       realMarketData: true,
-      dataSource: 'blockchain + historical volatility',
       timestamp: new Date().toISOString()
     });
   } catch (error) {

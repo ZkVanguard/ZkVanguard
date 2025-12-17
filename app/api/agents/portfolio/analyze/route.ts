@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
-import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { MCPClient } from '@/integrations/mcp/MCPClient';
+import { ethers } from 'ethers';
 
 /**
  * AI-Powered Portfolio Analysis API
- * Provides comprehensive portfolio insights using REAL market data + AI agents
+ * Uses HACKATHON-PROVIDED services:
+ * - Crypto.com AI SDK (FREE for hackathon)
+ * - Crypto.com MCP (FREE market data)
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, useRealAgent = true } = body;
+    const { address } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -19,52 +21,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get REAL market data from blockchain
-    const marketDataService = getMarketDataService();
-    const realPortfolioData = await marketDataService.getPortfolioData(address);
+    // Get market data from Crypto.com MCP (FREE hackathon service)
+    const mcpClient = new MCPClient();
+    await mcpClient.connect();
+    
+    // Fetch portfolio data using MCP
+    const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
+    const portfolioData: any = {
+      address,
+      tokens: [],
+      totalValue: 0,
+    };
 
-    // Use real agent orchestration
-    if (useRealAgent) {
-      const orchestrator = getAgentOrchestrator();
-      const result = await orchestrator.analyzePortfolio({ 
-        address, 
-        portfolioData: realPortfolioData 
-      });
-
-      if (result.success && result.data) {
-        return NextResponse.json({
-          success: true,
-          analysis: {
-            ...result.data,
-            totalValue: realPortfolioData.totalValue,
-            positions: realPortfolioData.tokens.length,
-            tokens: realPortfolioData.tokens,
-            realMarketData: true,
-          },
-          agentId: result.agentId,
-          executionTime: result.executionTime,
-          realAgent: true,
-          realMarketData: true,
-          timestamp: new Date().toISOString(),
+    for (const symbol of tokens) {
+      try {
+        const priceData = await mcpClient.getPrice(symbol);
+        // Get balance from blockchain
+        const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+        const balance = await provider.getBalance(address);
+        const balanceInToken = parseFloat(ethers.formatEther(balance));
+        const value = balanceInToken * priceData.price;
+        
+        portfolioData.tokens.push({
+          symbol,
+          balance: balanceInToken,
+          price: priceData.price,
+          value,
         });
+        portfolioData.totalValue += value;
+      } catch (error) {
+        console.warn(`Failed to fetch ${symbol} data:`, error);
       }
     }
 
-    // Use Enhanced AI Agent with real market data
-    const { getEnhancedAIAgent } = await import('@/lib/ai/enhanced-ai-agent');
-    const enhancedAgent = getEnhancedAIAgent();
-    const analysis = await enhancedAgent.analyzePortfolioWithRealData(address);
+    // Use Crypto.com AI SDK for analysis (FREE hackathon service)
+    const aiService = getCryptocomAIService();
+    const analysis = await aiService.analyzePortfolio(address, portfolioData);
 
     return NextResponse.json({
       success: true,
       analysis: {
         ...analysis,
-        tokens: realPortfolioData.tokens,
+        tokens: portfolioData.tokens,
+        totalValue: portfolioData.totalValue,
       },
-      aiPowered: true,
-      realAgent: true,
+      hackathonAPIs: {
+        aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+        marketData: 'Crypto.com MCP (FREE)',
+      },
+      realAgent: aiService.isAvailable(),
       realMarketData: true,
-      dataSource: 'blockchain',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -83,7 +89,10 @@ export async function GET() {
   const aiService = getCryptocomAIService();
   return NextResponse.json({
     status: 'AI Portfolio Analysis API operational',
-    aiAvailable: aiService.isAvailable(),
-    provider: 'Crypto.com AI Agent Service',
+    hackathonAPIs: {
+      'Crypto.com AI SDK': aiService.isAvailable() ? '✅ Active (FREE)' : '⚠️ Fallback mode',
+      'Crypto.com MCP': '✅ Available (FREE market data)',
+    },
+    note: 'Using hackathon-provided FREE APIs from Crypto.com',
   });
 }

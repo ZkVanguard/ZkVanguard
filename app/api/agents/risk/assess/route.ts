@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
-import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { MCPClient } from '@/integrations/mcp/MCPClient';
+import { ethers } from 'ethers';
 
 /**
  * Risk Assessment API Route
- * Uses REAL market data + AI agents for intelligent risk analysis
+ * Uses HACKATHON-PROVIDED services:
+ * - Crypto.com AI SDK (FREE for hackathon)
+ * - Crypto.com MCP (FREE market data with historical prices)
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, useRealAgent = true } = body;
+    const { address } = body;
 
     if (!address) {
       return NextResponse.json(
@@ -19,50 +21,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get REAL market data
-    const marketDataService = getMarketDataService();
-    const realPortfolioData = await marketDataService.getPortfolioData(address);
+    // Get market data from Crypto.com MCP (FREE hackathon service)
+    const mcpClient = new MCPClient();
+    await mcpClient.connect();
+    
+    // Fetch portfolio and historical data using MCP
+    const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
+    const portfolioData: any = {
+      address,
+      tokens: [],
+      totalValue: 0,
+    };
 
-    // Calculate real volatilities for each token
     const volatilities = new Map<string, number>();
-    for (const token of realPortfolioData.tokens) {
+
+    for (const symbol of tokens) {
       try {
-        const historicalPrices = await marketDataService.getHistoricalPrices(token.symbol, 30);
-        if (historicalPrices.length > 0) {
-          const prices = historicalPrices.map(h => h.price);
-          const volatility = marketDataService.calculateVolatility(prices);
-          volatilities.set(token.symbol, volatility);
+        const priceData = await mcpClient.getPrice(symbol);
+        const historicalData = await mcpClient.getHistoricalPrices(symbol, 30); // 30 days
+        
+        // Calculate volatility from historical prices
+        if (historicalData && historicalData.length > 1) {
+          const returns = [];
+          for (let i = 1; i < historicalData.length; i++) {
+            returns.push((historicalData[i].price - historicalData[i-1].price) / historicalData[i-1].price);
+          }
+          const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+          const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+          const volatility = Math.sqrt(variance) * Math.sqrt(252); // Annualized
+          volatilities.set(symbol, volatility);
         }
-      } catch (error) {
-        console.warn(`Failed to calculate volatility for ${token.symbol}`);
-      }
-    }
 
-    // Use real agent orchestration
-    if (useRealAgent) {
-      const orchestrator = getAgentOrchestrator();
-      const result = await orchestrator.assessRisk({ 
-        address, 
-        portfolioData: realPortfolioData,
-        volatilities: Object.fromEntries(volatilities),
-      });
-
-      if (result.success && result.data) {
-        return NextResponse.json({
-          ...result.data,
-          agentId: result.agentId,
-          executionTime: result.executionTime,
-          realAgent: true,
-          realMarketData: true,
-          timestamp: new Date().toISOString(),
+        // Get balance from blockchain
+        const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+        const balance = await provider.getBalance(address);
+        const balanceInToken = parseFloat(ethers.formatEther(balance));
+        const value = balanceInToken * priceData.price;
+        
+        portfolioData.tokens.push({
+          symbol,
+          balance: balanceInToken,
+          price: priceData.price,
+          value,
+          volatility: volatilities.get(symbol) || 0,
         });
+        portfolioData.totalValue += value;
+      } catch (error) {
+        console.warn(`Failed to fetch ${symbol} data:`, error);
       }
     }
 
-    // Use Enhanced AI Agent with real market data
-    const { getEnhancedAIAgent } = await import('@/lib/ai/enhanced-ai-agent');
-    const enhancedAgent = getEnhancedAIAgent();
-    const riskAssessment = await enhancedAgent.assessRiskWithRealData(address);
+    // Use Crypto.com AI SDK for risk assessment (FREE hackathon service)
+    const aiService = getCryptocomAIService();
+    const riskAssessment = await aiService.assessRisk(portfolioData);
 
     const riskMetrics = {
       var: riskAssessment.var95,
@@ -79,10 +90,12 @@ export async function POST(request: NextRequest) {
         `Portfolio volatility: ${(riskAssessment.volatility * 100).toFixed(1)}%`,
         ...riskAssessment.factors.map(f => `${f.factor}: ${f.description}`),
       ],
-      aiPowered: true,
-      realAgent: true,
+      hackathonAPIs: {
+        aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+        marketData: 'Crypto.com MCP (FREE with historical data)',
+      },
+      realAgent: aiService.isAvailable(),
       realMarketData: true,
-      dataSource: 'blockchain + historical prices',
       timestamp: new Date().toISOString()
     };
 
