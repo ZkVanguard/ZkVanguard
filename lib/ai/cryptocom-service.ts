@@ -5,7 +5,9 @@
  * intent parsing using Crypto.com's AI Agent SDK.
  */
 
-import { AIAgentClient } from '@crypto.com/ai-agent-client';
+// Note: @crypto.com/ai-agent-client types will be available at runtime
+// Using any for now until proper types are available
+type AIAgentClient = any;
 
 // Types for AI analysis
 export interface PortfolioAnalysis {
@@ -63,8 +65,15 @@ class CryptocomAIService {
     
     if (this.apiKey) {
       try {
-        this.client = new AIAgentClient({
-          apiKey: this.apiKey,
+        // Dynamic import for Crypto.com AI client
+        import('@crypto.com/ai-agent-client').then((module: any) => {
+          const AIAgentClient = module.AIAgentClient || module.default;
+          this.client = new AIAgentClient({
+            apiKey: this.apiKey,
+          });
+        }).catch((error) => {
+          console.warn('Crypto.com AI client initialization failed:', error);
+          this.client = null;
         });
       } catch (error) {
         console.warn('Crypto.com AI client initialization failed:', error);
