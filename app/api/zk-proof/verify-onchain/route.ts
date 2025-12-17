@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
-import { cronosTestnet } from '@/lib/chains';
+import { CronosTestnet } from '@/lib/chains';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract (x402 + USDC)

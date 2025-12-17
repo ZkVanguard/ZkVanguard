@@ -12,6 +12,7 @@ module.exports = {
     '^.+\\.ts$': 'ts-jest',
   },
   moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
     '^@agents/(.*)$': '<rootDir>/agents/$1',
     '^@integrations/(.*)$': '<rootDir>/integrations/$1',
     '^@shared/(.*)$': '<rootDir>/shared/$1',

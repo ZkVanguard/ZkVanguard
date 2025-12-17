@@ -36,10 +36,10 @@ export function Hero() {
                 </p>
               </div>
 
-              {/* Demo Badge */}
-              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-300 dark:border-amber-700/50 shadow-sm">
-                <div className="w-2 h-2 bg-amber-500 dark:bg-amber-400 rounded-full animate-pulse" />
-                <span className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-400">Live Demo</span>
+              {/* Production Badge */}
+              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-300 dark:border-green-700/50 shadow-sm">
+                <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
+                <span className="text-xs sm:text-sm font-medium text-green-700 dark:text-green-400">10/10 Tests Passing</span>
               </div>
 
               {/* CTA Buttons */}

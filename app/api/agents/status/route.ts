@@ -52,7 +52,7 @@ export async function GET() {
         },
         mcp: {
           enabled: !!process.env.MCP_API_KEY,
-          serverUrl: process.env.MCP_SERVER_URL || 'https://mcp.cronos.org',
+          serverUrl: process.env.MCP_SERVER_URL || 'https://mcp.crypto.com/market-data/mcp',
         },
       },
       timestamp: new Date().toISOString(),

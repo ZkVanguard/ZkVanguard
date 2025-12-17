@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Shield, ExternalLink, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { usePublicClient } from 'wagmi';
-import { cronosTestnet } from '@/lib/chains';
+import { CronosTestnet } from '@/lib/chains';
 
 interface VerificationResult {
   onChain: boolean;

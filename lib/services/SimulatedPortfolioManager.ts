@@ -2,11 +2,12 @@
  * Simulated Portfolio Manager
  * 
  * Manages a simulated trading portfolio using REAL system components:
- * - CoinGecko API (real-time prices - FREE)
- * - Crypto.com AI SDK (AI-powered analysis)
- * - Real agent orchestration system
- * - Real risk assessment agents
+ * - CoinGecko API (real-time prices - FREE, no registration needed)
+ * - Crypto.com AI SDK (AI-powered analysis with API key)
+ * - Real agent orchestration system (5 specialized agents)
+ * - Real risk assessment and hedge generation
  * 
+ * Note: Crypto.com MCP is for Claude Desktop integration, not programmatic access.
  * Only the portfolio positions are simulated - all data and analysis is REAL.
  */
 
@@ -44,7 +45,7 @@ export interface Trade {
   reason: string;
 }
 
-// CoinGecko ID mapping
+// CoinGecko ID mapping (FREE API, no registration required)
 const COINGECKO_IDS: Record<string, string> = {
   'CRO': 'crypto-com-chain',
   'BTC': 'bitcoin',
@@ -104,42 +105,82 @@ export class SimulatedPortfolioManager {
 
   /**
    * Get current price from CoinGecko (REAL market data - FREE)
+   * Note: Crypto.com MCP is for Claude Desktop integration, not direct API access
    */
   private async getCurrentPrice(symbol: string): Promise<number> {
-    // Check cache first (1 minute TTL)
+    // Check cache first (5 minute TTL to avoid rate limiting)
     const cached = this.priceCache.get(symbol);
-    if (cached && Date.now() - cached.timestamp < 60000) {
+    if (cached && Date.now() - cached.timestamp < 300000) {
       return cached.price;
     }
 
-    // Fetch fresh price from CoinGecko
+    // Fetch from CoinGecko with retry logic
     const coinId = COINGECKO_IDS[symbol];
     if (!coinId) {
       throw new Error(`Unknown symbol: ${symbol}`);
     }
 
-    try {
-      const response = await axios.get(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`,
-        { timeout: 5000 }
-      );
-      
-      const price = response.data[coinId]?.usd;
-      if (!price) {
-        throw new Error(`Price not available for ${symbol}`);
-      }
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Add delay between requests to avoid rate limiting
+        if (attempt > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+        }
 
-      this.priceCache.set(symbol, { price, timestamp: Date.now() });
-      return price;
-    } catch (error) {
-      console.warn(`Failed to fetch price for ${symbol}:`, error);
-      // Return cached price if available, even if stale
-      if (cached) {
-        console.warn(`Using stale cached price for ${symbol}`);
-        return cached.price;
+        const response = await axios.get(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`,
+          { 
+            timeout: 10000,
+            headers: {
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        const price = response.data[coinId]?.usd;
+        if (!price) {
+          throw new Error(`Price not available for ${symbol}`);
+        }
+
+        this.priceCache.set(symbol, { price, timestamp: Date.now() });
+        return price;
+      } catch (error: any) {
+        // If rate limited (429), use cached price or wait
+        if (error.response?.status === 429) {
+          const retryAfter = error.response?.headers['retry-after'] || 60;
+          console.log(`⏳ Rate limited. Using cached price for ${symbol} (retry after ${retryAfter}s)`);
+          
+          if (cached) {
+            return cached.price; // Use stale cache
+          }
+          
+          // If no cache and this is last attempt, throw
+          if (attempt === maxRetries - 1) {
+            throw new Error(`Rate limited and no cached price for ${symbol}`);
+          }
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, Math.min(retryAfter * 1000, 10000)));
+          continue;
+        }
+
+        // For other errors, retry or use cache
+        if (attempt < maxRetries - 1) {
+          console.warn(`Attempt ${attempt + 1} failed for ${symbol}, retrying...`);
+          continue;
+        }
+
+        console.warn(`Failed to fetch price for ${symbol} after ${maxRetries} attempts`);
+        if (cached) {
+          console.log(`Using stale cached price for ${symbol}`);
+          return cached.price;
+        }
+        throw error;
       }
-      throw error;
     }
+
+    throw new Error(`Failed to get price for ${symbol}`);
   }
 
   /**

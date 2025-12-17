@@ -128,7 +128,7 @@ export const config = {
   cryptocomApiSecret: process.env.CRYPTOCOM_API_SECRET || '',
   x402ApiKey: process.env.X402_API_KEY || '',
   x402FacilitatorUrl: process.env.X402_FACILITATOR_URL || 'https://api.x402.io',
-  mcpServerUrl: process.env.MCP_SERVER_URL || 'https://mcp.cronos.org',
+  mcpServerUrl: process.env.MCP_SERVER_URL || 'https://mcp.crypto.com/market-data/mcp',
   mcpApiKey: process.env.MCP_API_KEY || '',
   cronoscanApiKey: process.env.CRONOSCAN_API_KEY || '',
 

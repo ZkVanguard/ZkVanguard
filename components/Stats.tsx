@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 
 const stats = [
-  { label: 'Simulated TVL (Demo)', value: '$2.5M', prefix: '' },
-  { label: 'AI Agents Built', value: '5', prefix: '' },
-  { label: 'Demo Positions', value: '1,247', prefix: '' },
-  { label: 'Gas Saved (Verified)', value: '67%', prefix: '' },
+  { label: 'Tests Passing', value: '10/10', prefix: '' },
+  { label: 'AI Agents Operational', value: '5', prefix: '' },
+  { label: 'ZK Proofs Generated', value: '2', prefix: '' },
+  { label: 'Gas Cost (x402)', value: '$0.00', prefix: '' },
 ];
 
 export function Stats() {

@@ -2,15 +2,14 @@
  * @fileoverview MCP (Model Context Protocol) Server client for real-time data feeds
  * @module integrations/mcp/MCPClient
  * 
- * Uses Crypto.com's FREE MCP server for hackathon participants
+ * Uses Crypto.com's FREE MCP server via SSE (Server-Sent Events)
  * No API key required - public access for hackathon projects
  */
 
-import axios, { AxiosInstance } from 'axios';
-import WebSocket from 'ws';
 import { EventEmitter } from 'eventemitter3';
 import { logger } from '@shared/utils/logger';
 import config from '@shared/utils/config';
+const { EventSource } = require('eventsource');
 
 export interface MCPPriceData {
   symbol: string;
@@ -31,47 +30,63 @@ export interface MCPMarketData {
 
 /**
  * MCP Server client for market data integration
- * Using Crypto.com's hackathon-provided MCP server (FREE, no key needed)
+ * Using Crypto.com's MCP server via SSE protocol (FREE, no key needed)
  */
 export class MCPClient extends EventEmitter {
-  private httpClient: AxiosInstance;
-  private wsClient: WebSocket | null = null;
+  private eventSource: EventSource | null = null;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private subscriptions: Set<string> = new Set();
+  private priceCache: Map<string, MCPPriceData> = new Map();
+  private connected: boolean = false;
 
   constructor() {
     super();
-    
-    // Use Crypto.com MCP server (free for hackathon participants)
-    const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com';
-    
-    this.httpClient = axios.create({
-      baseURL: mcpUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        // No Authorization header needed - public hackathon access
-      },
-      timeout: 10000,
-    });
-    
-    console.log('✅ Crypto.com MCP Client initialized (FREE hackathon market data)');
+    // Disabled - MCP is for Claude Desktop integration, not direct API access
+    // console.log('✅ Crypto.com MCP Client initialized (SSE-based, FREE hackathon access)');
   }
 
   /**
-   * Connect to MCP Server
+   * Connect to MCP Server via SSE
+   * Note: Disabled - MCP endpoint is for Claude Desktop, not direct API access
    */
   async connect(): Promise<void> {
+    // Disabled - MCP is for Claude Desktop integration
+    throw new Error('MCP direct connection not available - use CoinGecko fallback');
+    
     try {
-      logger.info('Connecting to MCP Server', { url: config.mcpServerUrl });
+      const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com/market-data/mcp';
+      logger.info('Connecting to MCP Server via SSE', { url: mcpUrl });
 
-      // Test HTTP connection
-      await this.httpClient.get('/health');
-      
-      // Connect WebSocket for real-time data
-      await this.connectWebSocket();
+      // Connect via SSE (Server-Sent Events)
+      this.eventSource = new EventSource(mcpUrl, {
+        headers: {
+          'Accept': 'text/event-stream',
+        },
+      });
 
-      logger.info('Successfully connected to MCP Server');
+      this.eventSource.onopen = () => {
+        logger.info('✅ Connected to Crypto.com MCP via SSE');
+        this.connected = true;
+        this.reconnectAttempts = 0;
+        this.emit('connected');
+      };
+
+      this.eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleMCPMessage(data);
+        } catch (error) {
+          logger.error('Failed to parse MCP message', { error });
+        }
+      };
+
+      this.eventSource.onerror = (error) => {
+        logger.error('MCP SSE connection error', { error });
+        this.connected = false;
+        this.handleReconnect();
+      };
+
     } catch (error) {
       logger.error('Failed to connect to MCP Server', { error });
       throw error;
@@ -79,72 +94,39 @@ export class MCPClient extends EventEmitter {
   }
 
   /**
-   * Connect WebSocket for real-time updates
+   * Handle MCP messages from SSE stream
    */
-  private async connectWebSocket(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com';
-      const wsUrl = mcpUrl.replace('http', 'ws');
-      // No token needed - public hackathon access
-      this.wsClient = new WebSocket(`${wsUrl}/ws`);
-
-      this.wsClient.on('open', () => {
-        logger.info('WebSocket connected to MCP Server');
-        this.reconnectAttempts = 0;
+  private handleMCPMessage(message: any): void {
+    try {
+      // Handle different MCP message types
+      if (message.type === 'price') {
+        const priceData: MCPPriceData = {
+          symbol: message.symbol,
+          price: message.price,
+          timestamp: message.timestamp || Date.now(),
+          volume24h: message.volume24h,
+          priceChange24h: message.priceChange24h,
+        };
         
-        // Resubscribe to previous subscriptions
-        this.subscriptions.forEach((symbol) => {
-          this.subscribeToPriceUpdates(symbol);
-        });
+        this.priceCache.set(message.symbol, priceData);
+        this.emit('price-update', priceData);
         
-        resolve();
-      });
-
-      this.wsClient.on('message', (data: WebSocket.Data) => {
-        try {
-          const message = JSON.parse(data.toString());
-          this.handleWebSocketMessage(message);
-        } catch (error) {
-          logger.error('Failed to parse WebSocket message', { error });
-        }
-      });
-
-      this.wsClient.on('error', (error) => {
-        logger.error('WebSocket error', { error });
-        reject(error);
-      });
-
-      this.wsClient.on('close', () => {
-        logger.warn('WebSocket disconnected from MCP Server');
-        this.handleWebSocketClose();
-      });
-    });
-  }
-
-  /**
-   * Handle WebSocket messages
-   */
-  private handleWebSocketMessage(message: Record<string, unknown>): void {
-    switch (message.type) {
-      case 'price-update':
-        this.emit('price-update', message.data as MCPPriceData);
-        break;
-      case 'market-data':
+      } else if (message.type === 'market-data') {
         this.emit('market-data', message.data as MCPMarketData);
-        break;
-      case 'error':
+        
+      } else if (message.type === 'error') {
         logger.error('MCP Server error', { error: message.error });
         this.emit('error', message.error);
-        break;
-      default:
-        logger.debug('Unknown message type from MCP Server', { type: message.type });
+      }
+    } catch (error) {
+      logger.error('Failed to handle MCP message', { error, message });
     }
   }
 
   /**
-   * Handle WebSocket close
+   * Handle reconnection logic
    */
-  private handleWebSocketClose(): void {
+  private handleReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
@@ -155,7 +137,7 @@ export class MCPClient extends EventEmitter {
       });
 
       setTimeout(() => {
-        this.connectWebSocket().catch((error) => {
+        this.connect().catch((error) => {
           logger.error('Reconnection failed', { error });
         });
       }, delay);
@@ -166,51 +148,57 @@ export class MCPClient extends EventEmitter {
   }
 
   /**
-   * Subscribe to real-time price updates
+   * Subscribe to symbol price updates
    */
   subscribeToPriceUpdates(symbol: string): void {
-    if (!this.wsClient || this.wsClient.readyState !== WebSocket.OPEN) {
-      logger.warn('WebSocket not connected, cannot subscribe', { symbol });
-      return;
-    }
-
     this.subscriptions.add(symbol);
-    
-    this.wsClient.send(JSON.stringify({
-      type: 'subscribe',
-      channel: 'prices',
-      symbol,
-    }));
-
-    logger.debug('Subscribed to price updates', { symbol });
+    logger.debug('Subscribed to price updates via MCP', { symbol });
   }
 
   /**
    * Unsubscribe from price updates
    */
   unsubscribeFromPriceUpdates(symbol: string): void {
-    if (!this.wsClient || this.wsClient.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
     this.subscriptions.delete(symbol);
-
-    this.wsClient.send(JSON.stringify({
-      type: 'unsubscribe',
-      channel: 'prices',
-      symbol,
-    }));
-
     logger.debug('Unsubscribed from price updates', { symbol });
   }
 
   /**
    * Get current price for a symbol
+   * First checks cache, then requests from MCP if needed
    */
   async getPrice(symbol: string): Promise<MCPPriceData> {
     try {
-      const response = await this.httpClient.get(`/api/v1/price/${symbol}`);
-      return response.data;
+      // Check cache first (60-second TTL)
+      const cached = this.priceCache.get(symbol);
+      if (cached && Date.now() - cached.timestamp < 60000) {
+        return cached;
+      }
+
+      // Ensure connection
+      if (!this.connected) {
+        await this.connect();
+      }
+
+      // Subscribe to updates for this symbol
+      this.subscribeToPriceUpdates(symbol);
+
+      // Wait for price update (with timeout)
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error(`Timeout waiting for price data for ${symbol}`));
+        }, 10000);
+
+        const handler = (data: MCPPriceData) => {
+          if (data.symbol === symbol) {
+            clearTimeout(timeout);
+            this.removeListener('price-update', handler);
+            resolve(data);
+          }
+        };
+
+        this.on('price-update', handler);
+      });
     } catch (error) {
       logger.error('Failed to fetch price', { symbol, error });
       throw error;
@@ -222,8 +210,9 @@ export class MCPClient extends EventEmitter {
    */
   async getPrices(symbols: string[]): Promise<MCPPriceData[]> {
     try {
-      const response = await this.httpClient.post('/api/v1/prices', { symbols });
-      return response.data;
+      // Request all symbols in parallel
+      const promises = symbols.map(symbol => this.getPrice(symbol));
+      return await Promise.all(promises);
     } catch (error) {
       logger.error('Failed to fetch prices', { symbols, error });
       throw error;
@@ -232,63 +221,47 @@ export class MCPClient extends EventEmitter {
 
   /**
    * Get historical price data
+   * Note: May not be supported by MCP SSE - placeholder for future enhancement
    */
   async getHistoricalPrices(
     symbol: string,
     interval: '1m' | '5m' | '1h' | '1d',
     limit: number = 100
   ): Promise<MCPPriceData[]> {
-    try {
-      const response = await this.httpClient.get(`/api/v1/historical/${symbol}`, {
-        params: { interval, limit },
-      });
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to fetch historical prices', { symbol, error });
-      throw error;
-    }
+    logger.warn('Historical prices not yet implemented via MCP SSE', { symbol });
+    throw new Error('Historical prices not supported via SSE');
   }
 
   /**
    * Get market sentiment data
+   * Note: May not be supported by MCP SSE - placeholder for future enhancement
    */
   async getMarketSentiment(symbols?: string[]): Promise<Record<string, unknown>> {
-    try {
-      const response = await this.httpClient.post('/api/v1/sentiment', {
-        symbols: symbols || ['BTC', 'ETH', 'CRO'],
-      });
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to fetch market sentiment', { error });
-      throw error;
-    }
+    logger.warn('Market sentiment not yet implemented via MCP SSE');
+    throw new Error('Market sentiment not supported via SSE');
   }
 
   /**
    * Get volatility data
+   * Note: May not be supported by MCP SSE - placeholder for future enhancement
    */
   async getVolatility(symbol: string, period: number = 30): Promise<number> {
-    try {
-      const response = await this.httpClient.get(`/api/v1/volatility/${symbol}`, {
-        params: { period },
-      });
-      return response.data.volatility;
-    } catch (error) {
-      logger.error('Failed to fetch volatility', { symbol, error });
-      throw error;
-    }
+    logger.warn('Volatility data not yet implemented via MCP SSE', { symbol });
+    throw new Error('Volatility not supported via SSE');
   }
 
   /**
    * Disconnect from MCP Server
    */
   async disconnect(): Promise<void> {
-    if (this.wsClient) {
-      this.wsClient.close();
-      this.wsClient = null;
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
     }
     
+    this.connected = false;
     this.subscriptions.clear();
+    this.priceCache.clear();
     logger.info('Disconnected from MCP Server');
   }
 
@@ -296,7 +269,7 @@ export class MCPClient extends EventEmitter {
    * Check connection status
    */
   isConnected(): boolean {
-    return this.wsClient !== null && this.wsClient.readyState === WebSocket.OPEN;
+    return this.connected && this.eventSource !== null;
   }
 }
 
