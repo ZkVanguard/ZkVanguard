@@ -17,7 +17,7 @@ export function Footer() {
               <div>
                 <div className="font-semibold text-amber-700 dark:text-amber-400">Demo Platform for Investor Preview</div>
                 <div className="text-xs text-amber-600 dark:text-amber-400/80">
-                  All financial data simulated - Real AI agents & infrastructure - Testnet deployment
+                  Portfolio amounts simulated with real market data - Real AI agents & infrastructure - Testnet deployment
                 </div>
               </div>
             </div>
@@ -44,7 +44,7 @@ export function Footer() {
             </p>
             <div className="text-xs text-slate-600 dark:text-slate-400 mb-4 p-4 glass border border-slate-200 dark:border-slate-700 rounded-xl">
               <strong className="text-slate-900 dark:text-slate-100">Disclaimer:</strong> This is a demonstration platform built for investor presentations. 
-              All portfolio data, positions, and transactions are simulated. Real agent infrastructure deployed on Cronos testnet.
+              Portfolio amounts are simulated, but powered by real market data. Real agent infrastructure deployed on Cronos testnet.
             </div>
             <div className="flex space-x-4">
               <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-200 dark:border-slate-700 hover:border-primary-500 rounded-lg flex items-center justify-center transition-all">

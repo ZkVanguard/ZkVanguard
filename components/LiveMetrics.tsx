@@ -42,7 +42,7 @@ export function LiveMetrics() {
                 Platform Capabilities (Testnet Simulation)
               </span>
             </h2>
-            <p className="text-slate-600 dark:text-slate-400">Live metrics demonstrating system performance with simulated data</p>
+            <p className="text-slate-600 dark:text-slate-400">Live metrics with real market data and simulated portfolio amounts</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="p-6 glass border border-slate-200 dark:border-slate-700 rounded-xl hover:border-secondary-500 transition-all">
@@ -82,7 +82,7 @@ export function LiveMetrics() {
           </h2>
           <p className="text-slate-600 dark:text-slate-400">Live metrics demonstrating system performance with simulated data</p>
           <div className="mt-3 text-xs text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-lg px-4 py-2 inline-block">
-            WARNING: Demo Environment - Real testnet infrastructure, simulated market data
+            WARNING: Demo Environment - Real testnet infrastructure with real market data, simulated portfolio amounts
           </div>
         </motion.div>
 

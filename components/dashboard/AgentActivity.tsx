@@ -96,7 +96,7 @@ export function AgentActivity({ address }: { address: string }) {
           </span>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          Real AI agents with simulated tasks • Demonstrating coordination capabilities
+          Real AI agents with real market data • Portfolio amounts simulated for demo
         </p>
       </div>
       
