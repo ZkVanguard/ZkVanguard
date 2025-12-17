@@ -66,6 +66,7 @@ export class MCPClient extends EventEmitter {
       });
 
       if (this.eventSource) {
+        // @ts-ignore - EventSource types from external library
         this.eventSource.onopen = () => {
           logger.info('✅ Connected to Crypto.com MCP via SSE');
           this.connected = true;
@@ -73,6 +74,7 @@ export class MCPClient extends EventEmitter {
           this.emit('connected');
         };
 
+        // @ts-ignore - EventSource types from external library
         this.eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -82,6 +84,7 @@ export class MCPClient extends EventEmitter {
           }
         };
 
+        // @ts-ignore - EventSource types from external library
         this.eventSource.onerror = (error) => {
           logger.error('MCP SSE connection error', { error });
           this.connected = false;
