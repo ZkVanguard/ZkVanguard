@@ -35,7 +35,7 @@ const features = [
 
 export function Features() {
   return (
-    <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
+    <div className="glass-strong rounded-3xl p-6 border border-gray-800 shadow-ios">
       <h3 className="text-lg font-bold mb-4 text-white">Key Features</h3>
       <div className="grid grid-cols-1 gap-3">
           {features.map((feature, index) => {

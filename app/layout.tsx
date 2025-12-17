@@ -36,6 +36,11 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Force dark mode immediately
+              document.documentElement.classList.add('dark');
+              document.documentElement.style.backgroundColor = '#000000';
+              document.body.style.backgroundColor = '#000000';
+              
               (function() {
                 // Aggressively block WalletConnect Cloud API calls
                 const blockedDomains = ['api.web3modal.org', 'pulse.walletconnect.org', 'explorer-api.walletconnect.com'];

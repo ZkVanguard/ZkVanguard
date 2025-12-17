@@ -54,7 +54,7 @@ export function Hero() {
                 
                 <a
                   href="#features"
-                  className="px-8 py-4 glass-strong hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-bold text-lg transition-all duration-300 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
+                  className="px-8 py-4 glass-strong hover:bg-slate-800 rounded-xl font-bold text-lg transition-all duration-300 border border-slate-700 text-slate-200"
                 >
                   Explore Features
                 </a>
@@ -71,7 +71,7 @@ export function Hero() {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className="p-3 sm:p-4 lg:p-6 glass-strong rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-all card-hover space-y-2 sm:space-y-3 lg:space-y-4 shadow-lg"
+                  className="p-3 sm:p-4 lg:p-6 glass-strong rounded-xl sm:rounded-2xl border border-gray-700 hover:border-primary-500 transition-all card-hover space-y-2 sm:space-y-3 lg:space-y-4 shadow-lg"
                 >
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-gradient-to-br ${item.gradient} rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg`}>
                     <item.icon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-white" />

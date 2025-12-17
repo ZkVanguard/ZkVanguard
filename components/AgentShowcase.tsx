@@ -31,7 +31,7 @@ const agents = [
 
 export function AgentShowcase() {
   return (
-    <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
+    <div className="glass-strong rounded-3xl p-6 border border-gray-800 shadow-ios">
       <h3 className="text-lg font-bold mb-4 text-white">AI Agents</h3>
       <div className="space-y-3">
         {agents.map((agent) => {

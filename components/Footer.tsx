@@ -42,15 +42,15 @@ export function Footer() {
             <p className="text-slate-600 dark:text-slate-400 mb-4 max-w-md leading-relaxed">
               AI-powered multi-agent system for real-world asset risk management on Cronos zkEVM.
             </p>
-            <div className="text-xs text-slate-600 dark:text-slate-400 mb-4 p-4 glass border border-slate-200 dark:border-slate-700 rounded-xl">
+            <div className="text-xs text-slate-400 mb-4 p-4 glass border border-slate-700 rounded-xl">
               <strong className="text-slate-900 dark:text-slate-100">Disclaimer:</strong> This is a demonstration platform built for investor presentations. 
               Portfolio amounts are simulated, but powered by real market data. Real agent infrastructure deployed on Cronos testnet.
             </div>
             <div className="flex space-x-4">
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-200 dark:border-slate-700 hover:border-primary-500 rounded-lg flex items-center justify-center transition-all">
+              <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-700 hover:border-primary-500 rounded-lg flex items-center justify-center transition-all">
                 <Github className="w-5 h-5 text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors" />
               </a>
-              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-200 dark:border-slate-700 hover:border-accent-500 rounded-lg flex items-center justify-center transition-all">
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-700 hover:border-accent-500 rounded-lg flex items-center justify-center transition-all">
                 <Twitter className="w-5 h-5 text-slate-600 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-400 transition-colors" />
               </a>
               <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass border border-slate-200 dark:border-slate-700 hover:border-secondary-500 rounded-lg flex items-center justify-center transition-all">
