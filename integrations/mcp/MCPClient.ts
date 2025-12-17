@@ -1,6 +1,9 @@
 /**
  * @fileoverview MCP (Model Context Protocol) Server client for real-time data feeds
  * @module integrations/mcp/MCPClient
+ * 
+ * Uses Crypto.com's FREE MCP server for hackathon participants
+ * No API key required - public access for hackathon projects
  */
 
 import axios, { AxiosInstance } from 'axios';
@@ -28,6 +31,7 @@ export interface MCPMarketData {
 
 /**
  * MCP Server client for market data integration
+ * Using Crypto.com's hackathon-provided MCP server (FREE, no key needed)
  */
 export class MCPClient extends EventEmitter {
   private httpClient: AxiosInstance;
@@ -39,14 +43,19 @@ export class MCPClient extends EventEmitter {
   constructor() {
     super();
     
+    // Use Crypto.com MCP server (free for hackathon participants)
+    const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com';
+    
     this.httpClient = axios.create({
-      baseURL: config.mcpServerUrl,
+      baseURL: mcpUrl,
       headers: {
-        'Authorization': `Bearer ${config.mcpApiKey}`,
         'Content-Type': 'application/json',
+        // No Authorization header needed - public hackathon access
       },
       timeout: 10000,
     });
+    
+    console.log('✅ Crypto.com MCP Client initialized (FREE hackathon market data)');
   }
 
   /**
@@ -74,8 +83,10 @@ export class MCPClient extends EventEmitter {
    */
   private async connectWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = config.mcpServerUrl.replace('http', 'ws');
-      this.wsClient = new WebSocket(`${wsUrl}/ws?token=${config.mcpApiKey}`);
+      const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com';
+      const wsUrl = mcpUrl.replace('http', 'ws');
+      // No token needed - public hackathon access
+      this.wsClient = new WebSocket(`${wsUrl}/ws`);
 
       this.wsClient.on('open', () => {
         logger.info('WebSocket connected to MCP Server');
