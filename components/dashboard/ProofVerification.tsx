@@ -133,7 +133,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       console.log('\n🔗 STEP 1: Querying Cronos Blockchain (Client-Side)...');
       
       let normalizedProofHash = storedProofHash || proofHash;
-      const GASLESS_VERIFIER_ADDRESS = '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9';
+      const GASLESS_VERIFIER_ADDRESS = '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852'; // TRUE gasless contract
       
       // If we have txHash but no proofHash, extract from transaction
       if (txHash && !normalizedProofHash) {

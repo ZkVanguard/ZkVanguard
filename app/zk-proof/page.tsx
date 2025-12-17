@@ -139,11 +139,24 @@ function ZKProofPage() {
 
     setIsStoringOnChain(true);
     try {
-      console.log('⛓️  Storing proof on Cronos testnet...');
+      console.log('⛓️  Storing proof on Cronos testnet with TRUE gasless...');
+      console.log('💰 Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
       
-      // Import the gasless storage function dynamically
-      const { storeCommitmentOnChainGasless } = await import('@/lib/api/onchain-gasless');
+      // Import the TRUE gasless storage function
+      const { storeCommitmentTrueGasless } = await import('@/lib/api/onchain-true-gasless');
       const { convertToContractFormat } = await import('@/lib/api/zk');
+      const { useWalletClient } = await import('wagmi');
+      const { ethers } = await import('ethers');
+      
+      // Get signer from wagmi
+      const { data: walletClient } = useWalletClient();
+      if (!walletClient) {
+        throw new Error('Please connect your wallet first');
+      }
+      
+      // Convert to ethers signer
+      const provider = new ethers.BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
       
       // Convert proof to contract format
       const commitment = convertToContractFormat(proof as any);
@@ -152,29 +165,32 @@ function ZKProofPage() {
       console.log('🌲 Merkle Root:', commitment.merkleRoot);
       console.log('🔒 Security:', commitment.metadata.security_level, 'bits');
       
-      // Store on-chain with gasless transaction
-      const result = await storeCommitmentOnChainGasless(
+      // Store on-chain with TRUE gasless via x402 + USDC
+      const result = await storeCommitmentTrueGasless(
         commitment.proofHash,
         commitment.merkleRoot,
-        BigInt(commitment.metadata.field_bits)
+        BigInt(commitment.metadata.field_bits),
+        signer
       );
       
       setOnChainTxHash(result.txHash);
       console.log('✅ Stored on-chain! TX:', result.txHash);
-      console.log('💰 TRUE gasless via x402 - you paid $0.00!');
+      console.log('💰 TRUE gasless via x402 + USDC!');
+      console.log('   USDC paid:', result.usdcFee);
+      console.log('   CRO paid:', result.croGasPaid);
       
       // Store statement_hash and statement for ZK verification
-      // The statement_hash is already committed on-chain as part of proofHash
-      // Users can later prove they know the statement by providing it
       const proofMetadata = {
         txHash: result.txHash,
         proofHash: commitment.proofHash,
         statement_hash: proof.statement_hash,
         statement: selectedScenario?.statement || {},
-        proof: proof, // Store full proof for comprehensive ZK verification
+        proof: proof,
         timestamp: Date.now(),
-        gasless: result.gasless,
+        trueGasless: result.trueGasless,
         x402Powered: result.x402Powered,
+        usdcFee: result.usdcFee,
+        croGasPaid: result.croGasPaid,
       };
       localStorage.setItem(`proof_${commitment.proofHash}`, JSON.stringify(proofMetadata));
       localStorage.setItem(`proof_tx_${result.txHash}`, JSON.stringify(proofMetadata));
