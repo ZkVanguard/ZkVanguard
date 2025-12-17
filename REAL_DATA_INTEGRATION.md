@@ -1,14 +1,33 @@
+# ⚠️ DEPRECATED - See HACKATHON_API_INTEGRATION.md
+
+**This document is DEPRECATED as of December 17, 2025**
+
+**👉 NEW DOCUMENTATION**: `HACKATHON_API_INTEGRATION.md`
+
+We now use **FREE hackathon-provided APIs** from Crypto.com:
+- ✅ **Crypto.com AI Agent SDK** (FREE for hackathon participants)
+- ✅ **Crypto.com MCP** (FREE market data, no API key needed)
+
+This provides better reliability, AI-powered analysis, and zero infrastructure costs!
+
+---
+
+# OLD DOCUMENTATION (FOR REFERENCE ONLY)
+
 # 🚀 Real Market Data & AI Agent Integration
 
-**Status**: ✅ **FULLY OPERATIONAL**  
-**Date**: December 17, 2025  
-**Integration**: Real blockchain data + Enhanced AI agents
+**Status**: ⚠️ **SUPERSEDED BY HACKATHON APIs**  
+**Date**: December 16, 2025 (Updated Dec 17, 2025)  
+**Integration**: ~~Custom services~~ → Now using Crypto.com APIs
 
 ---
 
 ## 📊 Overview
 
-Chronos Vanguard now uses **REAL market data** from multiple sources and **Enhanced AI agents** for intelligent portfolio management. No more mock data - everything is live from the blockchain and market APIs.
+**NOTE**: This custom implementation has been replaced by professional APIs from Crypto.com (free for hackathon).
+
+Old approach: Custom `RealMarketDataService` and `EnhancedAIAgent`  
+New approach: Crypto.com AI SDK + MCP (see `HACKATHON_API_INTEGRATION.md`)
 
 ---
 
