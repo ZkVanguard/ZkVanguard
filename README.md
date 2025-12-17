@@ -3,12 +3,12 @@
 > **AI-Powered Multi-Agent System for RWA Risk Management**  
 > *5 Autonomous Agents • Real ZK-STARK Privacy • x402 Gasless Settlements*
 
-[![Tests](https://img.shields.io/badge/Tests-10%2F10%20Passing-brightgreen)](./COMPLETE_SYSTEM_TEST_REPORT.md)
+[![Tests](https://img.shields.io/badge/Tests-10%2F10%20Passing-brightgreen)](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Cronos](https://img.shields.io/badge/Cronos-zkEVM-blue)](https://cronos.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue)](https://www.typescriptlang.org/)
 
-**[📹 Demo Video](#) • [🚀 Live Demo](http://localhost:3000) • [📊 Test Report](./COMPLETE_SYSTEM_TEST_REPORT.md)**
+**[📹 Demo Video](./docs/guides/DEMO_SCRIPT.md) • [🚀 Live Demo](http://localhost:3000) • [📊 Test Report](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)**
 
 ---
 
