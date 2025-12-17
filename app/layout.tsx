@@ -84,9 +84,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.className} bg-slate-900 text-white`}>
+      <body className={`${inter.className} bg-black text-white`}>
         <Providers>
-          <div className="flex flex-col min-h-screen bg-slate-900">
+          <div className="flex flex-col min-h-screen bg-black">
             <Navbar />
             <main className="flex-grow pt-20">
               {children}

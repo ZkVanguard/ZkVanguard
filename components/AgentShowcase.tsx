@@ -49,7 +49,7 @@ export function AgentShowcase() {
                   <h4 className="text-base font-semibold mb-1 text-white">
                     {agent.name}
                   </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{agent.description}</p>
+                  <p className="text-sm text-gray-400 mb-2">{agent.description}</p>
                   <div className="flex flex-wrap gap-2">
                     {agent.capabilities.map((capability) => (
                       <span

@@ -248,7 +248,7 @@ function ZKProofPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 transition-colors duration-300">
+    <div className="min-h-screen bg-black transition-colors duration-300">
       <div className="container mx-auto px-6 py-16">
         <div className="max-w-4xl mx-auto text-center mb-16 space-y-6">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl shadow-lg shadow-emerald-500/20">
@@ -300,7 +300,7 @@ function ZKProofPage() {
                 </div>
                 Public Statement
               </h2>
-              <div className="bg-slate-900/50 rounded-xl p-6 border border-emerald-500/30">
+              <div className="bg-gray-900/50 rounded-xl p-6 border border-emerald-500/30">
                 <pre className="text-emerald-400 text-sm overflow-auto font-mono">
                   {JSON.stringify(selectedScenario.statement, null, 2)}
                 </pre>
@@ -328,7 +328,7 @@ function ZKProofPage() {
                   {showSecrets ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <div className="bg-slate-900/50 rounded-xl p-6 border border-cyan-500/30">
+              <div className="bg-gray-900/50 rounded-xl p-6 border border-cyan-500/30">
                 {showSecrets ? (
                   <pre className="text-cyan-400 text-sm overflow-auto font-mono">
                     {JSON.stringify(selectedScenario.witness, null, 2)}
@@ -565,19 +565,19 @@ function ZKProofPage() {
                 <div className="space-y-6">
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Statement Hash</div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl font-mono text-sm text-cyan-400 break-all border border-cyan-500/30">
+                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-cyan-400 break-all border border-cyan-500/30">
                       {proofResult.proof.statement_hash}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Merkle Root</div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl font-mono text-sm text-emerald-400 break-all border border-emerald-500/30">
+                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-emerald-400 break-all border border-emerald-500/30">
                       {proofResult.proof.merkle_root}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Fiat-Shamir Challenge</div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl font-mono text-sm text-amber-400 break-all border border-amber-500/30">
+                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-amber-400 break-all border border-amber-500/30">
                       {proofResult.proof.challenge}
                     </div>
                   </div>

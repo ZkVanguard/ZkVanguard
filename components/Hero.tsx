@@ -8,7 +8,7 @@ export function Hero() {
   return (
     <div className="relative bg-black overflow-hidden">
       {/* Subtle gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-50 via-gray-100/50 to-gray-50 dark:from-black dark:via-gray-950/50 dark:to-black" />
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-950/20 via-purple-950/10 to-black" />
       
       <div className="relative container mx-auto px-4 sm:px-6 py-8 sm:py-12 lg:py-16">
         <div className="max-w-7xl mx-auto">
@@ -31,7 +31,7 @@ export function Hero() {
                   <span className="text-white">RWA Risk Protection</span>
                 </h1>
                 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-600 dark:text-gray-300 leading-relaxed max-w-2xl font-normal">
+                <p className="text-sm sm:text-base lg:text-lg text-gray-400 leading-relaxed max-w-2xl font-normal">
                   Autonomous agents manage hedging, settlements & reporting for your portfolio.
                 </p>
               </div>
