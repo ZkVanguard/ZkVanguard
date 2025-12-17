@@ -17,8 +17,8 @@ export function Stats() {
   }, []);
 
   return (
-    <div className="glass-strong rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-ios">
-      <h3 className="text-lg font-bold mb-4 text-white">Platform Stats</h3>
+    <div className="glass-light rounded-3xl p-6 border border-gray-200 shadow-ios">
+      <h3 className="text-lg font-bold mb-4 text-gray-900">Platform Stats</h3>
       <div className="grid grid-cols-2 gap-4">
         {stats.map((stat, index) => (
           <div
@@ -28,10 +28,10 @@ export function Stats() {
             }`}
             style={{ transitionDelay: `${index * 100}ms` }}
           >
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 sm:mb-2 bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 sm:mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {stat.value}
               </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400 font-medium">{stat.label}</div>
+              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-medium">{stat.label}</div>
             </div>
           ))}
         </div>
