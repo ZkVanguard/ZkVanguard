@@ -204,11 +204,12 @@ Real cryptographic implementation with on-chain storage:
 
 ### Deployed Contracts (Cronos Testnet)
 
-- **GaslessZKCommitmentVerifier** - `0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9`
-  - Self-refunding gasless commitment storage
-  - 97%+ gasless coverage with 5000 gwei gas price
-  - Funded with 12.27 TCRO (8+ transactions)
-  - Supports batch operations (37% gas savings)
+- **X402GaslessZKCommitmentVerifier** - `0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852` ⭐
+  - **TRUE gasless via x402 + USDC** - Users pay $0.00 CRO
+  - Fee: $0.01 USDC per commitment (gasless payment via x402)
+  - Contract sponsors CRO gas from funded balance
+  - Funded with 1.0 TCRO for gas sponsorship
+  - Supports batch operations with USDC payment
 
 ### Contract Architecture
 

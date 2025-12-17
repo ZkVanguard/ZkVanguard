@@ -5,16 +5,19 @@ import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap } from 'l
 import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
 import { generateProofForOnChain } from '@/lib/api/zk';
+import { useWalletClient } from 'wagmi';
+import { ethers } from 'ethers';
 
 export function ZKProofDemo() {
   const { isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const contractAddresses = useContractAddresses();
   const { isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
   const [showForm, setShowForm] = useState(false);
   const [proofType, setProofType] = useState<'settlement' | 'risk' | 'rebalance'>('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
-  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; gasless: true; x402Powered: true; message: string } | null>(null);
+  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; trueGasless: true; x402Powered: true; usdcFee: string; croGasPaid: string; message: string } | null>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -55,24 +58,31 @@ export function ZKProofDemo() {
       console.log('📝 On-chain commitment:', result.commitment);
       
       // Store commitment on-chain (if wallet connected)
-      if (isConnected) {
-        console.log('⛓️  Storing commitment on Cronos testnet...');
+      if (isConnected && walletClient) {
+        console.log('⛓️  Storing commitment with TRUE gasless (x402 + USDC)...');
         
         try {
-          // Store commitment ON-CHAIN GASLESS - Contract refunds gas automatically!
-          console.log('⚡ Storing commitment ON-CHAIN GASLESS...');
-          console.log('💎 You sign tx but get refunded - NET COST: $0.00!');
+          // Store commitment with TRUE GASLESS - x402 + USDC!
+          console.log('⚡ TRUE GASLESS: $0.01 USDC + $0.00 CRO');
+          console.log('💎 x402 makes USDC payment gasless!');
           
-          const { storeCommitmentOnChainGasless } = await import('@/lib/api/onchain-gasless');
-          const gaslessResult = await storeCommitmentOnChainGasless(
+          // Get ethers signer
+          const provider = new ethers.BrowserProvider(walletClient);
+          const signer = await provider.getSigner();
+          
+          const { storeCommitmentTrueGasless } = await import('@/lib/api/onchain-true-gasless');
+          const gaslessResult = await storeCommitmentTrueGasless(
             result.commitment.proofHash,
             result.commitment.merkleRoot,
-            BigInt(result.commitment.metadata.field_bits)
+            BigInt(result.commitment.metadata.field_bits),
+            signer
           );
           
           const txHash = gaslessResult.txHash;
           setGaslessResult(gaslessResult);
-          console.log('✅ ON-CHAIN GASLESS! Contract refunded you - NET: $0.00! 🎉');
+          console.log('✅ TRUE GASLESS COMPLETE! 🎉');
+          console.log('   USDC paid:', gaslessResult.usdcFee);
+          console.log('   CRO paid:', gaslessResult.croGasPaid);
           
           console.log('   Transaction:', txHash);
           console.log('   Proof Hash:', result.commitment.proofHash);
