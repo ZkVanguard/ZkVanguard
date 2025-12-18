@@ -34,9 +34,10 @@ export function LiveMetrics() {
   if (!mounted) {
     // Return static content for SSR
     return (
-      <section className="py-16 relative">
+      <section className="py-8 relative">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
+          <div className="glass-strong rounded-3xl p-10 border border-blue-500/10">
+            <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
               <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 Real-Time Platform Metrics
@@ -61,6 +62,7 @@ export function LiveMetrics() {
               <div className="text-sm text-gray-400 mb-2">AI Agents Online</div>
               <div className="text-4xl font-bold text-emerald-400">5</div>
             </div>
+          </div>
           </div>
         </div>
       </section>
@@ -136,6 +138,7 @@ export function LiveMetrics() {
             </div>
             <div className="text-xs text-amber-400">All online</div>
           </motion.div>
+        </div>
         </div>
       </div>
     </section>
