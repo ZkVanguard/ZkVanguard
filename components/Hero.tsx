@@ -6,9 +6,9 @@ import { ArrowRight, Shield, Zap, Sparkles, ChevronDown, BarChart3, Lock } from 
 export function Hero() {
 
   return (
-    <div className="relative bg-black overflow-hidden">
+    <div className="relative overflow-hidden" style={{background: '#0f0f1a'}}>
       {/* Subtle gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-950/20 via-purple-950/10 to-black" />
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/15 via-purple-900/10 to-transparent" />
       
       <div className="relative container mx-auto px-4 sm:px-6 py-8 sm:py-12 lg:py-16">
         <div className="max-w-7xl mx-auto">

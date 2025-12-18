@@ -40,7 +40,7 @@ export default function DashboardPage() {
   }, [isConnected, contractAddresses, portfolioCount]);
 
   return (
-    <div className="min-h-screen bg-black transition-colors duration-300">
+    <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>
       <div className="container mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12">

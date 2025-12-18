@@ -10,14 +10,14 @@ import { CTASection } from '@/components/CTASection';
 
 export default function Home() {
   return (
-    <div className="relative bg-black">
+    <div className="relative" style={{background: '#0f0f1a'}}>
       <Hero />
       
       {/* Compact iOS-style sections */}
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8 relative">
         {/* Artistic glow orbs */}
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-20 left-1/4 w-[32rem] h-[32rem] bg-blue-500/8 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-20 right-1/4 w-[32rem] h-[32rem] bg-purple-500/8 rounded-full blur-3xl pointer-events-none" />
         {/* Stats + Features Combined */}
         <div className="grid lg:grid-cols-2 gap-6 relative z-10">
           <div className="space-y-6">
