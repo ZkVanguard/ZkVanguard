@@ -34,7 +34,7 @@ export function LiveMetrics() {
   if (!mounted) {
     // Return static content for SSR
     return (
-      <section className="py-16 bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-y border-slate-300 dark:border-slate-700">
+      <section className="py-16 bg-gradient-to-b from-gray-900/50 to-transparent border-y border-blue-500/10">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">

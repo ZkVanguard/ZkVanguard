@@ -248,7 +248,7 @@ function ZKProofPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black transition-colors duration-300">
+    <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>
       <div className="container mx-auto px-6 py-16">
         <div className="max-w-4xl mx-auto text-center mb-16 space-y-6">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl shadow-lg shadow-emerald-500/20">
