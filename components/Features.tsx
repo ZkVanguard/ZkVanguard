@@ -26,10 +26,10 @@ const features = [
   },
   {
     icon: Lock,
-    title: 'Non-Custodial',
-    description: 'Full control of your assets, always.',
-    color: 'text-red-500',
-    bgColor: 'bg-red-500/10',
+    title: 'Quantum-Proof ZK-STARK',
+    description: 'Post-quantum cryptography for future security.',
+    color: 'text-cyan-500',
+    bgColor: 'bg-cyan-500/10',
   },
 ];
 

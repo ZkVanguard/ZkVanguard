@@ -16,10 +16,10 @@ export function Hero() {
             {/* Left Column - Content */}
             <div className="space-y-3 sm:space-y-4">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full border border-blue-500/30 backdrop-blur-xl">
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-                <span className="text-xs sm:text-sm font-bold text-blue-300">
-                  LIVE ON CRONOS TESTNET
+              <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-full border border-cyan-500/30 backdrop-blur-xl">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+                <span className="text-xs sm:text-sm font-bold text-cyan-300">
+                  QUANTUM-PROOF ZK-STARK • CRONOS TESTNET
                 </span>
               </div>
 
@@ -34,7 +34,7 @@ export function Hero() {
                 </h1>
                 
                 <p className="text-base sm:text-lg lg:text-xl text-gray-300 leading-relaxed max-w-2xl">
-                  Multi-agent system with zero-knowledge proofs. Automated hedging, settlements, and compliance—all gasless.
+                  Multi-agent system with <span className="text-cyan-400 font-semibold">quantum-proof ZK-STARK</span> verification. Automated hedging, settlements, and compliance—all gasless.
                 </p>
               </div>
 
@@ -63,7 +63,7 @@ export function Hero() {
                 { icon: BarChart3, title: 'Analytics', desc: 'Live insights', gradient: 'from-primary-500 to-primary-600' },
                 { icon: Shield, title: 'ZK Privacy', desc: 'Crypto proofs', gradient: 'from-secondary-500 to-secondary-600' },
                 { icon: Zap, title: 'AI Agents', desc: 'Auto execution', gradient: 'from-accent-500 to-accent-600' },
-                { icon: Lock, title: 'Secure', desc: 'Quantum-ready', gradient: 'from-amber-500 to-amber-600' },
+                { icon: Lock, title: 'ZK-STARK', desc: 'Quantum-proof', gradient: 'from-cyan-500 to-cyan-600' },
               ].map((item, i) => (
                 <div
                   key={i}

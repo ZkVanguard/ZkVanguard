@@ -18,7 +18,7 @@ export function CTASection() {
             Ready to Start?
           </h2>
           <p className="text-lg sm:text-xl text-gray-300 mb-8 font-normal">
-            Experience autonomous AI risk management on Cronos Testnet
+            Quantum-proof ZK-STARK verification meets autonomous AI agents
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
