@@ -136,7 +136,7 @@ export function LiveMetrics() {
               {metrics.agents}
               <div className="ml-2 w-2 h-2 bg-secondary-500 rounded-full animate-pulse" />
             </div>
-            <div className="text-xs text-amber-400">All online</div>
+            <div className="text-xs text-emerald-400">All online</div>
           </motion.div>
         </div>
         </div>
