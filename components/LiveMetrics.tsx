@@ -70,13 +70,14 @@ export function LiveMetrics() {
   }
 
   return (
-    <section className="py-16 bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-y border-slate-300 dark:border-slate-700">
+    <section className="py-8 relative">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
+        <div className="glass-strong rounded-3xl p-10 border border-blue-500/10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-12"
+          >
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
             <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
               Real-Time Platform Metrics
