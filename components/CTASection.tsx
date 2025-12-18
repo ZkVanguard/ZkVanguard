@@ -8,28 +8,29 @@ export function CTASection() {
   useAccount();
 
   return (
-    <section className="py-8 sm:py-10 lg:py-12 bg-gradient-to-br from-primary-500 via-accent-500 to-secondary-500 relative overflow-hidden">
-      <div className="absolute inset-0 bg-black/10" />
+    <section className="py-16 sm:py-20 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-cyan-600/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-transparent via-blue-500/5 to-purple-500/5" />
       
       <div className="container mx-auto px-4 sm:px-6 relative z-10">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-2.5 lg:mb-3 text-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-black mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
             Ready to Start?
           </h2>
-          <p className="text-sm sm:text-base lg:text-lg text-white/90 mb-3 sm:mb-4 lg:mb-5 font-normal">
-            Try AI-powered risk management today
+          <p className="text-lg sm:text-xl text-gray-300 mb-8 font-normal">
+            Experience autonomous AI risk management on Cronos Testnet
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/dashboard"
-              className="w-full sm:w-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-4 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl font-semibold text-sm sm:text-base lg:text-lg transition-all flex items-center justify-center space-x-2 group shadow-ios-lg"
+              className="group px-10 py-5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-2xl font-bold text-xl transition-all duration-300 flex items-center gap-3 shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 text-white hover:scale-105"
             >
-              <span>Try Dashboard</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+              <span>Launch Dashboard</span>
+              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
               href="/docs"
-              className="w-full sm:w-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-4 bg-white/20 backdrop-blur-xl border-2 border-white/30 text-white hover:bg-white/30 rounded-2xl font-semibold text-sm sm:text-base lg:text-lg transition-all shadow-ios"
+              className="px-10 py-5 glass-strong hover:bg-gray-800/80 rounded-2xl font-semibold text-xl transition-all duration-300 border border-blue-500/30 text-gray-200 hover:border-blue-500/50"
             >
               View Docs
             </Link>
