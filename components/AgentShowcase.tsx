@@ -31,15 +31,16 @@ const agents = [
 
 export function AgentShowcase() {
   return (
-    <div className="glass-strong rounded-3xl p-6 border border-gray-800 shadow-ios">
-      <h3 className="text-lg font-bold mb-4 text-white">AI Agents</h3>
-      <div className="space-y-3">
+    <div className="glass-strong rounded-2xl p-8 border border-blue-500/20 shadow-lg shadow-blue-500/10 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10 opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
+      <h3 className="text-xl font-semibold mb-6 text-white tracking-tight relative z-10">AI Agents</h3>
+      <div className="space-y-4 relative z-10">
         {agents.map((agent) => {
           const Icon = agent.icon;
           return (
             <div
               key={agent.id}
-              className="p-4 bg-gray-800/50 rounded-xl hover:bg-gray-800 transition-all group"
+              className="p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 hover:bg-gray-800/70 hover:border-gray-600 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5"
             >
               <div className="flex items-start space-x-3">
                 <div className={`p-2.5 bg-gradient-to-br ${agent.color} rounded-xl shadow-ios-lg flex-shrink-0`}>

@@ -17,9 +17,10 @@ export function Stats() {
   }, []);
 
   return (
-    <div className="glass-light rounded-2xl p-8">
-      <h3 className="text-lg font-semibold mb-6 text-gray-900 tracking-tight">Platform Stats</h3>
-      <div className="grid grid-cols-2 gap-4">
+    <div className="glass-light rounded-2xl p-8 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <h3 className="text-xl font-semibold mb-6 text-gray-900 tracking-tight relative z-10">Platform Stats</h3>
+      <div className="grid grid-cols-2 gap-4 relative z-10">
         {stats.map((stat, index) => (
           <div
             key={index}

@@ -35,9 +35,10 @@ const features = [
 
 export function Features() {
   return (
-    <div className="glass-light rounded-2xl p-8">
-      <h3 className="text-xl font-semibold mb-6 text-gray-900 tracking-tight">Key Features</h3>
-      <div className="grid grid-cols-1 gap-4">
+    <div className="glass-light rounded-2xl p-8 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-tl from-purple-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <h3 className="text-xl font-semibold mb-6 text-gray-900 tracking-tight relative z-10">Key Features</h3>
+      <div className="grid grid-cols-1 gap-4 relative z-10">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
