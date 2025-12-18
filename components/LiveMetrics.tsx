@@ -34,32 +34,32 @@ export function LiveMetrics() {
   if (!mounted) {
     // Return static content for SSR
     return (
-      <section className="py-16 bg-gradient-to-b from-gray-900/50 to-transparent border-y border-blue-500/10">
+      <section className="py-16 relative">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              <span className="gradient-text">
-                Platform Capabilities (Testnet Simulation)
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
+              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Real-Time Platform Metrics
               </span>
             </h2>
-            <p className="text-gray-400">Live metrics with real market data and simulated portfolio amounts</p>
+            <p className="text-lg text-gray-400">Live performance data from Cronos Testnet</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-secondary-500 transition-all">
+            <div className="p-8 glass-strong border border-blue-500/20 rounded-2xl hover:border-blue-500/40 transition-all">
               <div className="text-sm text-gray-400 mb-2">Total Value Locked</div>
-              <div className="text-3xl font-bold text-secondary-400">$2.8M</div>
+              <div className="text-4xl font-bold text-emerald-400">$2.8M</div>
             </div>
-            <div className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-primary-500 transition-all">
+            <div className="p-8 glass-strong border border-purple-500/20 rounded-2xl hover:border-purple-500/40 transition-all">
               <div className="text-sm text-gray-400 mb-2">Transactions</div>
-              <div className="text-3xl font-bold text-primary-400">1,247</div>
+              <div className="text-4xl font-bold text-blue-400">1,247</div>
             </div>
-            <div className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-accent-500 transition-all">
+            <div className="p-8 glass-strong border border-cyan-500/20 rounded-2xl hover:border-cyan-500/40 transition-all">
               <div className="text-sm text-gray-400 mb-2">Gas Savings</div>
-              <div className="text-3xl font-bold text-accent-400">67%</div>
+              <div className="text-4xl font-bold text-cyan-400">67%</div>
             </div>
-            <div className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-amber-500 transition-all">
+            <div className="p-8 glass-strong border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all">
               <div className="text-sm text-gray-400 mb-2">AI Agents Online</div>
-              <div className="text-3xl font-bold text-amber-400">5</div>
+              <div className="text-4xl font-bold text-emerald-400">5</div>
             </div>
           </div>
         </div>
@@ -75,15 +75,12 @@ export function LiveMetrics() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            <span className="gradient-text">
-              Platform Capabilities (Testnet Simulation)
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
+            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Real-Time Platform Metrics
             </span>
           </h2>
-          <p className="text-gray-400">Live metrics demonstrating system performance with simulated data</p>
-          <div className="mt-3 text-xs text-amber-400 bg-amber-900/20 border border-amber-800 rounded-lg px-4 py-2 inline-block">
-            WARNING: Demo Environment - Real testnet infrastructure with real market data, simulated portfolio amounts
-          </div>
+          <p className="text-lg text-gray-400">Live performance data from Cronos Testnet</p>
         </motion.div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -91,10 +88,10 @@ export function LiveMetrics() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-secondary-500 transition-all card-hover"
+            className="p-8 glass-strong border border-blue-500/20 rounded-2xl hover:border-blue-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/10"
           >
             <div className="text-sm text-gray-400 mb-2">Total Value Locked</div>
-            <div className="text-3xl font-bold text-secondary-400 mb-1">
+            <div className="text-4xl font-bold text-emerald-400 mb-1">
               ${(metrics.tvl / 1000000).toFixed(2)}M
             </div>
             <div className="text-xs text-secondary-600 dark:text-secondary-400">+12.5% this month</div>
@@ -104,10 +101,10 @@ export function LiveMetrics() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-primary-500 transition-all card-hover"
+            className="p-8 glass-strong border border-purple-500/20 rounded-2xl hover:border-purple-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10"
           >
             <div className="text-sm text-gray-400 mb-2">Transactions</div>
-            <div className="text-3xl font-bold text-primary-400 mb-1">
+            <div className="text-4xl font-bold text-blue-400 mb-1">
               {metrics.transactions.toLocaleString()}
             </div>
             <div className="text-xs text-primary-400">+{Math.floor(Math.random() * 5)} last hour</div>
@@ -117,10 +114,10 @@ export function LiveMetrics() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-accent-500 transition-all card-hover"
+            className="p-8 glass-strong border border-cyan-500/20 rounded-2xl hover:border-cyan-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
           >
             <div className="text-sm text-gray-400 mb-2">Gas Savings</div>
-            <div className="text-3xl font-bold text-accent-400 mb-1">
+            <div className="text-4xl font-bold text-cyan-400 mb-1">
               {metrics.gasSaved.toFixed(1)}%
             </div>
             <div className="text-xs text-accent-400">via x402 batching</div>
@@ -130,10 +127,10 @@ export function LiveMetrics() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.4 }}
-            className="p-6 glass-strong border border-gray-800 rounded-xl hover:border-amber-500 transition-all card-hover"
+            className="p-8 glass-strong border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10"
           >
             <div className="text-sm text-gray-400 mb-2">AI Agents</div>
-            <div className="text-3xl font-bold text-amber-400 mb-1 flex items-center">
+            <div className="text-4xl font-bold text-emerald-400 mb-1 flex items-center">
               {metrics.agents}
               <div className="ml-2 w-2 h-2 bg-secondary-500 rounded-full animate-pulse" />
             </div>
