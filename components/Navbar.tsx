@@ -3,13 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from './ConnectButton';
-import { Menu, X, FlaskConical, Sun, Moon } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { Menu, X } from 'lucide-react';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -40,10 +38,6 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="group flex items-center space-x-2">
             <img src="/assets/branding/logo-navbar.svg" alt="ZkVanguard" className="h-16 w-auto transition-transform group-hover:scale-105" />
-            <span className="hidden md:flex items-center space-x-2">
-              <FlaskConical className="w-3 h-3 text-orange-500" />
-              <span className="text-[10px] text-orange-500 font-semibold">DEMO</span>
-            </span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -57,18 +51,7 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
-            <div className="ml-4 pl-4 border-l border-gray-200 dark:border-gray-700 flex items-center gap-3">
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-all shadow-ios"
-                aria-label="Toggle theme"
-              >
-                {theme === 'light' ? (
-                  <Moon className="w-5 h-5 text-gray-700" />
-                ) : (
-                  <Sun className="w-5 h-5 text-gray-300" />
-                )}
-              </button>
+            <div className="ml-4 pl-4 border-l border-gray-700 flex items-center gap-3">
               <ConnectButton />
             </div>
           </div>
@@ -76,21 +59,10 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <div className="lg:hidden flex items-center gap-2">
             <button
-              onClick={toggleTheme}
-              className="p-2.5 glass-strong rounded-xl hover:bg-gradient-to-r hover:from-primary-600/10 hover:to-secondary-500/10 transition-all duration-300"
-              aria-label="Toggle theme"
-            >
-              {theme === 'light' ? (
-                <Moon className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-              ) : (
-                <Sun className="w-5 h-5 text-slate-300" />
-              )}
-            </button>
-            <button
               onClick={() => setIsOpen(!isOpen)}
               className="p-2.5 glass-strong rounded-xl hover:bg-primary-600/10 transition-all duration-300"
             >
-              {isOpen ? <X className="w-6 h-6 text-slate-700 dark:text-slate-300" /> : <Menu className="w-6 h-6 text-slate-700 dark:text-slate-300" />}
+              {isOpen ? <X className="w-6 h-6 text-gray-300" /> : <Menu className="w-6 h-6 text-gray-300" />}
             </button>
           </div>
         </div>

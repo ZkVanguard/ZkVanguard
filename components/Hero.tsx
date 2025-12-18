@@ -16,47 +16,43 @@ export function Hero() {
             {/* Left Column - Content */}
             <div className="space-y-3 sm:space-y-4">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-2.5 bg-gray-800 rounded-full border border-gray-700/50 shadow-ios">
-                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary-500" />
-                <span className="text-xs sm:text-sm font-semibold text-gray-100">
-                  AI-Powered • ZK-STARK Verified
+              <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full border border-blue-500/30 backdrop-blur-xl">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                <span className="text-xs sm:text-sm font-bold text-blue-300">
+                  LIVE ON CRONOS TESTNET
                 </span>
               </div>
 
               {/* Heading */}
-              <div className="space-y-2 sm:space-y-3">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight tracking-tight">
-                  <span className="bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">AI-Powered</span>
+              <div className="space-y-4 sm:space-y-5">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black leading-[1.1] tracking-tight">
+                  <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent animate-gradient">
+                    Autonomous AI Risk Management
+                  </span>
                   <br />
-                  <span className="text-white">RWA Risk Protection</span>
+                  <span className="text-white">for Real-World Assets</span>
                 </h1>
                 
-                <p className="text-sm sm:text-base lg:text-lg text-gray-400 leading-relaxed max-w-2xl font-normal">
-                  Autonomous agents manage hedging, settlements & reporting for your portfolio.
+                <p className="text-base sm:text-lg lg:text-xl text-gray-300 leading-relaxed max-w-2xl">
+                  Multi-agent system with zero-knowledge proofs. Automated hedging, settlements, and compliance—all gasless.
                 </p>
               </div>
 
-              {/* Production Badge */}
-              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-300 dark:border-green-700/50 shadow-sm">
-                <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
-                <span className="text-xs sm:text-sm font-medium text-green-700 dark:text-green-400">10/10 Tests Passing</span>
-              </div>
-
               {/* CTA Buttons */}
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-wrap gap-4 pt-2">
                 <Link
                   href="/dashboard"
-                  className="group px-8 py-4 bg-gradient-to-r from-primary-600 to-secondary-500 hover:from-primary-500 hover:to-secondary-400 rounded-xl font-bold text-lg transition-all duration-300 flex items-center gap-3 shadow-xl shadow-primary-500/30 text-white"
+                  className="group px-10 py-5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-2xl font-bold text-xl transition-all duration-300 flex items-center gap-3 shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 text-white hover:scale-105"
                 >
-                  <span>Launch Dashboard</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <span>Launch App</span>
+                  <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 
                 <a
                   href="#features"
-                  className="px-8 py-4 glass-strong hover:bg-slate-800 rounded-xl font-bold text-lg transition-all duration-300 border border-slate-700 text-slate-200"
+                  className="px-10 py-5 glass-strong hover:bg-gray-800/80 rounded-2xl font-semibold text-xl transition-all duration-300 border border-blue-500/30 text-gray-200 hover:border-blue-500/50"
                 >
-                  Explore Features
+                  Learn More
                 </a>
               </div>
             </div>

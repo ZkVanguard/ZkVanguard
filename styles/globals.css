@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Yin-Yang Theme - Dark with Light Accents */
+/* Professional Theme - Navy Base with Light Accent Cards */
 :root {
   /* Text Colors - High contrast */
   --foreground-rgb: 255, 255, 255;
@@ -46,45 +46,6 @@
   --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
 }
 
-/* Dark Theme - iOS Dark Mode */
-.dark {
-  /* Text Colors */
-  --foreground-rgb: 255, 255, 255;
-  --text-primary: #ffffff;        
-  --text-secondary: #98989d;      
-  --text-tertiary: #7c7c80;       
-  --text-muted: #48484a;          
-  
-  /* Background Colors - iOS dark */
-  --background-start: #000000;    
-  --background-end: #1c1c1e;      
-  --background-surface: #1c1c1e;  
-  --card-bg: #2c2c2e;             
-  --card-bg-secondary: #3a3a3c;   
-  
-  /* Brand Colors - iOS dark mode adjusted */
-  --accent-primary: #0a84ff;      
-  --accent-primary-hover: #409cff;
-  --accent-secondary: #32d74b;    
-  --accent-secondary-hover: #64d97c;
-  --accent-tertiary: #64d2ff;     
-  --accent-tertiary-hover: #90e0ff;
-  --accent-warning: #ff9f0a;      
-  --accent-danger: #ff453a;       
-  
-  /* Glass Effects */
-  --glass-bg: rgba(28, 28, 30, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-strong: rgba(28, 28, 30, 0.88);
-  
-  /* Borders & Shadows */
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-light: rgba(255, 255, 255, 0.04);
-  --shadow-sm: rgba(0, 0, 0, 0.3);
-  --shadow-md: rgba(0, 0, 0, 0.4);
-  --shadow-lg: rgba(0, 0, 0, 0.5);
-}
-
 * {
   box-sizing: border-box;
   padding: 0;
@@ -109,10 +70,6 @@ body {
 }
 
 html {
-  background: #0f0f1a;
-}
-
-.dark body {
   background: #0f0f1a;
 }
 
@@ -141,7 +98,26 @@ body::before {
   }
 }
 
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 8s ease-in-out infinite;
+}
+
 @layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
   /* Premium Light Cards - Artistic Blend */
   .glass-light {
     background: linear-gradient(135deg, rgba(248, 248, 251, 0.92) 0%, rgba(245, 245, 250, 0.95) 100%);

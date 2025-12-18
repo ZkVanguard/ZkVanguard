@@ -84,9 +84,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.className} text-white`} style={{background: '#0f0f1a'}}>
+      <body className={inter.className} style={{background: '#0f0f1a', color: '#ffffff'}}>
         <Providers>
-          <div className="flex flex-col min-h-screen" style={{background: '#0f0f1a'}}>
+          <div className="flex flex-col min-h-screen">
             <Navbar />
             <main className="flex-grow pt-20">
               {children}
