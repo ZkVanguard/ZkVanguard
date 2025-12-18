@@ -16,7 +16,7 @@ export function Footer() {
               <img src="/assets/branding/logo-navbar.svg" alt="ZkVanguard" className="h-10 w-auto" />
             </div>
             <p className="text-gray-400 mb-4 max-w-md leading-relaxed">
-              Autonomous AI agents for real-world asset risk management on Cronos zkEVM. Zero-knowledge proofs meet intelligent automation.
+              Autonomous AI agents for real-world asset risk management on Cronos zkEVM. Quantum-proof ZK-STARK verification meets intelligent automation.
             </p>
             <div className="flex space-x-4">
               <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 glass-strong border border-blue-500/20 hover:border-blue-500/50 rounded-lg flex items-center justify-center transition-all">
