@@ -3,21 +3,16 @@
 import Image from 'next/image';
 import React from 'react';
 
-export function Logo({ className = '', alt = 'ZkVanguard' }: { className?: string; alt?: string }) {
-  // Use the SVG asset in public for consistent rendering across server/client
+export function Logo({ className = '', alt = 'Chronos' }: { className?: string; alt?: string }) {
+  // Prefer the canonical SVG file stored in `public/assets/branding/logo-navbar.svg`.
+  // Use Next.js Image component for consistent sizing; fall back to an inline SVG
+  // if the file can't be loaded by the environment that renders this component.
+  const svgPath = '/assets/branding/logo-navbar.svg';
+
   return (
-    <svg
-      className={className}
-      width="160"
-      height="48"
-      viewBox="0 0 160 48"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label={alt}
-    >
-      <rect width="160" height="48" rx="6" fill="#47704c" />
-      <text x="18" y="32" fill="#ffffff" fontSize="16" fontFamily="sans-serif">Chronos</text>
-    </svg>
+    <div className={className} role="img" aria-label={alt}>
+      <Image src={svgPath} alt={alt} width={160} height={48} priority={false} />
+    </div>
   );
 }
 
