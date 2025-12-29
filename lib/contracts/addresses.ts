@@ -13,8 +13,10 @@ export const CONTRACT_ADDRESSES = {
     gaslessZKVerifier: (process.env.NEXT_PUBLIC_GASLESS_ZK_VERIFIER || '0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F') as `0x${string}`,
     // Production gasless contract (gas refund model)
     gaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_GASLESS_COMMITMENT_VERIFIER || '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9') as `0x${string}`,
-    // TRUE gasless contract (x402 + USDC) ⭐ DEPLOYED
-    x402GaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27') as `0x${string}`,
+    // TRUE gasless contract (x402 + USDC) ⭐ DEPLOYED Dec 25, 2025
+    x402GaslessZKCommitmentVerifier: (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x44098d0dE36e157b4C1700B48d615285C76fdE47') as `0x${string}`,
+    // DevUSDCe token on Cronos Testnet (for x402 payments)
+    usdcToken: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`,
   },
   cronos_mainnet: {
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,

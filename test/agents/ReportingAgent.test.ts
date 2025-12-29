@@ -25,7 +25,7 @@ describe('ReportingAgent', () => {
   describe('Initialization', () => {
     it('should initialize successfully', () => {
       expect(agent).toBeDefined();
-      expect(agent.getStatus()).toBe('active');
+      expect(agent.getStatus().status).toBe('idle');
     });
 
     it('should have correct capabilities', () => {

@@ -8,7 +8,24 @@ import { ethers } from 'ethers';
 import { SettlementAgent, SettlementRequest, BatchSettlement } from '../../agents/specialized/SettlementAgent';
 import { AgentTask } from '@shared/types/agent';
 
-jest.mock('../../integrations/x402/X402Client');
+// Mock X402Client with proper implementation
+jest.mock('../../integrations/x402/X402Client', () => ({
+  X402Client: jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    executeGaslessTransfer: jest.fn().mockResolvedValue({
+      txHash: '0x' + '1'.repeat(64),
+      success: true,
+      gasSponsored: true,
+    }),
+    batchTransfer: jest.fn().mockImplementation(async (transfers: unknown[]) => ({
+      txHash: '0x' + '2'.repeat(64),
+      success: true,
+      count: (transfers as unknown[]).length,
+    })),
+    getBalance: jest.fn().mockResolvedValue('1000000'),
+    getStatus: jest.fn().mockResolvedValue({ active: true }),
+  })),
+}));
 
 describe('SettlementAgent', () => {
   let agent: SettlementAgent;
@@ -31,7 +48,7 @@ describe('SettlementAgent', () => {
   describe('Initialization', () => {
     it('should initialize successfully', () => {
       expect(agent).toBeDefined();
-      expect(agent.getStatus()).toBe('active');
+      expect(agent.getStatus().status).toBe('idle');
     });
 
     it('should have correct capabilities', () => {

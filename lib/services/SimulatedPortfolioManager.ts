@@ -552,3 +552,9 @@ export function getSimulatedPortfolioManager(initialCapital?: number): Simulated
   }
   return portfolioManager;
 }
+/**
+ * Reset the portfolio manager singleton (for testing)
+ */
+export function resetSimulatedPortfolioManager(): void {
+  portfolioManager = null;
+}

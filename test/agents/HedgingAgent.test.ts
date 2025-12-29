@@ -8,9 +8,64 @@ import { ethers } from 'ethers';
 import { HedgingAgent, HedgeStrategy, HedgeAnalysis } from '../../agents/specialized/HedgingAgent';
 import { AgentTask } from '@shared/types/agent';
 
-// Mock dependencies
-jest.mock('../../integrations/moonlander/MoonlanderClient');
-jest.mock('../../integrations/mcp/MCPClient');
+// Mock dependencies with implementations
+jest.mock('../../integrations/moonlander/MoonlanderClient', () => ({
+  MoonlanderClient: jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    disconnect: jest.fn().mockResolvedValue(undefined),
+    getMarketInfo: jest.fn().mockResolvedValue({
+      market: 'BTC-USD-PERP',
+      baseAsset: 'BTC',
+      quoteAsset: 'USD',
+      tickSize: '0.1',
+      stepSize: '0.001',
+      minNotional: '10',
+      maxLeverage: 10,
+    }),
+    getFundingHistory: jest.fn().mockResolvedValue([
+      { rate: '0.0001', timestamp: Date.now() },
+      { rate: '0.0002', timestamp: Date.now() - 3600000 },
+    ]),
+    getPositions: jest.fn().mockResolvedValue([]),
+    createOrder: jest.fn().mockResolvedValue({
+      orderId: 'mock-order-123',
+      market: 'BTC-USD-PERP',
+      side: 'sell',
+      type: 'limit',
+      quantity: '1',
+      price: '87000',
+      status: 'open',
+    }),
+    closePosition: jest.fn().mockResolvedValue({
+      orderId: 'mock-close-123',
+      status: 'filled',
+    }),
+    getOrderStatus: jest.fn().mockResolvedValue({
+      orderId: 'mock-order-123',
+      status: 'filled',
+      filledQty: '1',
+    }),
+  })),
+}));
+
+jest.mock('../../integrations/mcp/MCPClient', () => ({
+  MCPClient: jest.fn().mockImplementation(() => ({
+    initialize: jest.fn().mockResolvedValue(undefined),
+    connect: jest.fn().mockResolvedValue(undefined),
+    disconnect: jest.fn().mockResolvedValue(undefined),
+    getPrice: jest.fn().mockResolvedValue({
+      symbol: 'BTC',
+      price: 87000,
+      timestamp: Date.now(),
+    }),
+    getHistoricalPrices: jest.fn().mockResolvedValue([
+      { price: 87000, timestamp: Date.now() },
+      { price: 86500, timestamp: Date.now() - 86400000 },
+      { price: 86000, timestamp: Date.now() - 172800000 },
+    ]),
+    getVolatility: jest.fn().mockResolvedValue(0.35),
+  })),
+}));
 
 describe('HedgingAgent', () => {
   let agent: HedgingAgent;
@@ -34,7 +89,7 @@ describe('HedgingAgent', () => {
   describe('Initialization', () => {
     it('should initialize successfully', async () => {
       expect(agent).toBeDefined();
-      expect(agent.getStatus()).toBe('active');
+      expect(agent.getStatus().status).toBe('idle'); // After shutdown in afterEach, next test starts fresh
     });
 
     it('should have correct capabilities', () => {

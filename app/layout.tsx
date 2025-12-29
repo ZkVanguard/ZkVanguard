@@ -4,6 +4,7 @@ import '../styles/globals.css';
 import { Providers } from './providers';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
+import { DebugLogToggle, DebugLogPanel } from '@/components/DebugLogPanel';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -39,7 +40,9 @@ export default function RootLayout({
               // Force dark mode immediately
               document.documentElement.classList.add('dark');
               document.documentElement.style.backgroundColor = '#000000';
-              document.body.style.backgroundColor = '#000000';
+              if (document.body) {
+                document.body.style.backgroundColor = '#000000';
+              }
               
               (function() {
                 // Aggressively block WalletConnect Cloud API calls
@@ -93,6 +96,8 @@ export default function RootLayout({
             </main>
             <Footer />
           </div>
+          <DebugLogToggle />
+          <DebugLogPanel />
         </Providers>
       </body>
     </html>

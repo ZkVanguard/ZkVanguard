@@ -21,6 +21,7 @@ import {
   HedgingStrategy,
   SettlementResult,
 } from '@shared/types/agent';
+import { ethers } from 'ethers';
 
 /**
  * Lead Agent class - Orchestrates all specialized agents
@@ -28,12 +29,20 @@ import {
 export class LeadAgent extends BaseAgent {
   private agentRegistry: AgentRegistry;
   private executionReports: Map<string, AgentExecutionReport>;
+  private provider?: ethers.Provider;
+  private signer?: ethers.Wallet | ethers.Signer;
 
-  constructor(config: AgentConfig, messageBus: EventEmitter, agentRegistry: AgentRegistry) {
-    super('LeadAgent', 'lead', config, messageBus);
-    this.agentRegistry = agentRegistry;
+  constructor(
+    agentId: string,
+    provider?: ethers.Provider,
+    signer?: ethers.Wallet | ethers.Signer,
+    agentRegistry?: AgentRegistry
+  ) {
+    super(agentId, 'LeadAgent', ['intent-parsing', 'task-delegation', 'result-aggregation', 'orchestration']);
+    this.agentRegistry = agentRegistry || new AgentRegistry();
     this.executionReports = new Map();
-    this.capabilities = ['intent-parsing', 'task-delegation', 'result-aggregation'];
+    this.provider = provider;
+    this.signer = signer;
   }
 
   protected async onInitialize(): Promise<void> {
@@ -211,9 +220,21 @@ export class LeadAgent extends BaseAgent {
   }
 
   /**
-   * Execute strategy from intent
+   * Execute strategy from intent (supports both string and StrategyIntent)
    */
-  private async executeStrategyFromIntent(intent: StrategyIntent): Promise<AgentExecutionReport> {
+  async executeStrategyFromIntent(intentInput: StrategyIntent | string): Promise<AgentExecutionReport> {
+    // If input is a string, parse it as natural language first
+    let intent: StrategyIntent;
+    if (typeof intentInput === 'string') {
+      intent = await this.parseNaturalLanguage({ naturalLanguage: intentInput, portfolioId: 0 });
+    } else {
+      // Ensure requiredAgents has a default if not provided
+      intent = {
+        ...intentInput,
+        requiredAgents: intentInput.requiredAgents || ['risk'],
+      };
+    }
+    
     const executionId = uuidv4();
     const startTime = Date.now();
 

@@ -8,13 +8,18 @@
  * 4. System properly manages state and decision-making
  */
 
-import { getSimulatedPortfolioManager } from '@/lib/services/SimulatedPortfolioManager';
+import { getSimulatedPortfolioManager, resetSimulatedPortfolioManager } from '@/lib/services/SimulatedPortfolioManager';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import axios from 'axios';
 
 describe('Real System Validation', () => {
   
+  // Reset singleton between test suites to ensure clean state
+  beforeEach(() => {
+    resetSimulatedPortfolioManager();
+  });
+
   describe('Price Data Verification', () => {
     it('should fetch REAL prices from CoinGecko API', async () => {
       const response = await axios.get(

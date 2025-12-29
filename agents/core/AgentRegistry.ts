@@ -127,6 +127,38 @@ export class AgentRegistry extends EventEmitter {
   }
 
   /**
+   * Find agents by capability
+   */
+  findAgentsByCapability(capability: string): Array<{ agentId: string; name: string; capabilities: string[] }> {
+    return this.getAllAgents()
+      .filter((agent) => agent.getCapabilities().includes(capability))
+      .map((agent) => {
+        const status = agent.getStatus();
+        return {
+          agentId: status.id,
+          name: status.name,
+          capabilities: status.capabilities,
+        };
+      });
+  }
+
+  /**
+   * Find agents by type name
+   */
+  findAgentsByType(typeName: string): Array<{ agentId: string; name: string; type: string }> {
+    return this.getAllAgents()
+      .filter((agent) => agent.getStatus().name === typeName || agent.getStatus().type === typeName.toLowerCase().replace('agent', ''))
+      .map((agent) => {
+        const status = agent.getStatus();
+        return {
+          agentId: status.id,
+          name: status.name,
+          type: status.type,
+        };
+      });
+  }
+
+  /**
    * Shutdown all agents
    */
   async shutdownAll(): Promise<void> {

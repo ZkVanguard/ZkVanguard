@@ -11,6 +11,7 @@ import { AgentMessage } from '@shared/types/agent';
  * Message Bus for routing messages between agents
  */
 export class MessageBus extends EventEmitter {
+  private static instance: MessageBus | null = null;
   private messageHistory: AgentMessage[] = [];
   private maxHistorySize: number;
 
@@ -18,6 +19,23 @@ export class MessageBus extends EventEmitter {
     super();
     this.maxHistorySize = maxHistorySize;
     this.setupMessageLogging();
+  }
+
+  /**
+   * Get singleton instance
+   */
+  static getInstance(maxHistorySize: number = 1000): MessageBus {
+    if (!MessageBus.instance) {
+      MessageBus.instance = new MessageBus(maxHistorySize);
+    }
+    return MessageBus.instance;
+  }
+
+  /**
+   * Reset the singleton instance (for testing)
+   */
+  static resetInstance(): void {
+    MessageBus.instance = null;
   }
 
   /**
@@ -64,6 +82,32 @@ export class MessageBus extends EventEmitter {
   }
 
   /**
+   * Subscribe to a channel (convenience method)
+   */
+  subscribe(channel: string, callback: (message: AgentMessage) => void): void {
+    // Subscribe to channel-specific messages
+    this.on(`message:${channel}`, callback);
+    // Also subscribe to broadcast messages (for backwards compatibility)
+    this.on('message:broadcast', callback);
+  }
+
+  /**
+   * Publish to a channel (convenience method)
+   */
+  publish(channel: string, message: Partial<AgentMessage>): void {
+    const fullMessage: AgentMessage = {
+      ...message,  // Spread first so explicit values below take precedence
+      id: message.id || `msg-${Date.now()}`,
+      from: message.from || 'system',
+      to: channel,  // Always use the channel parameter
+      type: message.type || 'broadcast',
+      payload: message.payload || {},
+      timestamp: new Date(),
+    };
+    this.send(fullMessage);
+  }
+
+  /**
    * Get message history
    */
   getHistory(limit?: number): AgentMessage[] {
@@ -71,6 +115,16 @@ export class MessageBus extends EventEmitter {
       return this.messageHistory.slice(-limit);
     }
     return this.messageHistory;
+  }
+
+  /**
+   * Get message history (alias for compatibility)
+   */
+  getMessageHistory(channel?: string, limit?: number): AgentMessage[] {
+    if (channel) {
+      return this.getAgentMessages(channel, limit);
+    }
+    return this.getHistory(limit);
   }
 
   /**

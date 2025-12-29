@@ -52,7 +52,10 @@ export class MCPClient extends EventEmitter {
    */
   async connect(): Promise<void> {
     // Disabled - MCP is for Claude Desktop integration
-    throw new Error('MCP direct connection not available - use CoinGecko fallback');
+    // In test/development mode, we use CoinGecko fallback instead
+    logger.info('MCP direct connection disabled - using CoinGecko fallback for market data');
+    this.connected = false;
+    return;
     
     try {
       const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com/market-data/mcp';

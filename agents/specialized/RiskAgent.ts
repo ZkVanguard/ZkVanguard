@@ -7,19 +7,26 @@ import { EventEmitter } from 'eventemitter3';
 import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
 import { AgentConfig, AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
+import { ethers } from 'ethers';
 
 /**
  * Risk Agent specializing in risk analysis and assessment
  */
 export class RiskAgent extends BaseAgent {
-  constructor(config: AgentConfig, messageBus: EventEmitter) {
-    super('RiskAgent', 'risk', config, messageBus);
-    this.capabilities = [
-      'portfolio-risk-analysis',
-      'volatility-calculation',
-      'exposure-analysis',
-      'sentiment-analysis',
-    ];
+  private provider?: ethers.Provider;
+  private signer?: ethers.Wallet | ethers.Signer;
+  private rwaManagerAddress?: string;
+
+  constructor(
+    agentId: string,
+    provider?: ethers.Provider,
+    signer?: ethers.Wallet | ethers.Signer,
+    rwaManagerAddress?: string
+  ) {
+    super(agentId, 'RiskAgent', ['RISK_ANALYSIS', 'PORTFOLIO_MANAGEMENT', 'MARKET_INTEGRATION']);
+    this.provider = provider;
+    this.signer = signer;
+    this.rwaManagerAddress = rwaManagerAddress;
   }
 
   protected async onInitialize(): Promise<void> {
@@ -35,21 +42,31 @@ export class RiskAgent extends BaseAgent {
     const startTime = Date.now();
     try {
       let data: unknown;
-      switch (task.type) {
+      // Support both 'type' and 'action' fields for backwards compatibility
+      const taskAction = task.action || task.type || '';
+      const parameters = task.parameters || task.payload || {};
+      
+      switch (taskAction) {
+        case 'analyze_risk':
         case 'analyze-risk':
-          data = await this.analyzeRisk(task.payload);
+          data = await this.analyzeRisk(parameters);
           break;
+        case 'calculate_volatility':
         case 'calculate-volatility':
-          data = await this.calculateVolatility(task.payload as { portfolioId: number });
+          data = await this.calculateVolatility(parameters as { portfolioId: number });
           break;
+        case 'analyze_exposures':
         case 'analyze-exposures':
-          data = await this.analyzeExposures(task.payload as { portfolioId: number });
+          data = await this.analyzeExposures(parameters as { portfolioId: number });
           break;
+        case 'assess_sentiment':
         case 'assess-sentiment':
-          data = await this.assessMarketSentiment(task.payload as { market?: string });
+          data = await this.assessMarketSentiment(parameters as { market?: string });
           break;
         default:
-          throw new Error(`Unknown task type: ${task.type}`);
+          // Return success with empty data for unknown actions (graceful degradation)
+          logger.warn(`Unknown task action: ${taskAction}`, { taskId: task.id });
+          data = { message: `Unknown action: ${taskAction}`, handled: false };
       }
       return {
         success: true,

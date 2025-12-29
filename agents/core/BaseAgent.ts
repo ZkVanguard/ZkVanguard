@@ -180,6 +180,31 @@ export abstract class BaseAgent extends EventEmitter {
   }
 
   /**
+   * Add task and execute immediately (convenience method)
+   * @param taskInput Task input object
+   * @returns TaskResult from execution
+   */
+  async addTask(taskInput: {
+    id: string;
+    action: string;
+    parameters: Record<string, unknown>;
+    priority?: number;
+    createdAt?: number;
+  }): Promise<TaskResult> {
+    const task: AgentTask = {
+      id: taskInput.id,
+      type: taskInput.action,
+      action: taskInput.action, // Set both for compatibility
+      status: 'queued',
+      priority: taskInput.priority || 1,
+      createdAt: new Date(taskInput.createdAt || Date.now()),
+      parameters: taskInput.parameters,
+    };
+    
+    return await this.executeTask(task);
+  }
+
+  /**
    * Process next task in queue
    */
   async processNextTask(): Promise<TaskResult | null> {

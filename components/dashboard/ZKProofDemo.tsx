@@ -6,7 +6,6 @@ import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
 import { generateProofForOnChain } from '@/lib/api/zk';
 import { useWalletClient } from 'wagmi';
-import { ethers } from 'ethers';
 
 export function ZKProofDemo() {
   const { isConnected } = useAccount();
@@ -66,28 +65,35 @@ export function ZKProofDemo() {
           console.log('⚡ TRUE GASLESS: $0.01 USDC + $0.00 CRO');
           console.log('💎 x402 makes USDC payment gasless!');
           
-          // Get ethers signer
-          const provider = new ethers.BrowserProvider(walletClient);
-          const signer = await provider.getSigner();
+          // Call API route for gasless storage (server-side x402)
+          const response = await fetch('/api/zk-proof/store-commitment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              proofHash: result.commitment.proofHash,
+              merkleRoot: result.commitment.merkleRoot,
+              securityLevel: result.commitment.metadata.field_bits,
+            }),
+          });
           
-          const { storeCommitmentTrueGasless } = await import('@/lib/api/onchain-true-gasless');
-          const gaslessResult = await storeCommitmentTrueGasless(
-            result.commitment.proofHash,
-            result.commitment.merkleRoot,
-            BigInt(result.commitment.metadata.field_bits),
-            signer
-          );
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
           
-          const txHash = gaslessResult.txHash;
-          setGaslessResult(gaslessResult);
-          console.log('✅ TRUE GASLESS COMPLETE! 🎉');
-          console.log('   USDC paid:', gaslessResult.usdcFee);
-          console.log('   CRO paid:', gaslessResult.croGasPaid);
+          const gaslessApiResult = await response.json();
           
-          console.log('   Transaction:', txHash);
-          console.log('   Proof Hash:', result.commitment.proofHash);
-          console.log('   Security: 521-bit NIST P-521');
-          console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
+          if (gaslessApiResult.success) {
+            setGaslessResult(gaslessApiResult);
+            console.log('✅ TRUE GASLESS COMPLETE! 🎉');
+            console.log('   USDC paid:', gaslessApiResult.usdcFee);
+            console.log('   CRO paid:', gaslessApiResult.croGasPaid);
+            console.log('   Transaction:', gaslessApiResult.txHash);
+            console.log('   Proof Hash:', result.commitment.proofHash);
+            console.log('   Security: 521-bit NIST P-521');
+            console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
+          } else {
+            throw new Error(gaslessApiResult.error || 'Storage failed');
+          }
         } catch (err) {
           console.error('❌ Failed to store commitment on-chain:', err);
           console.log('✅ But proof was still verified off-chain successfully!');
