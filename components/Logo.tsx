@@ -22,8 +22,6 @@ export function Logo({ className = '', alt = 'Chronos' }: { className?: string; 
     return (
       <svg
         className={className}
-        width="160"
-        height="48"
         viewBox="0 0 160 48"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
@@ -36,17 +34,17 @@ export function Logo({ className = '', alt = 'Chronos' }: { className?: string; 
   }
 
   return (
-    // Use a regular <img> so the browser will attempt to load the designer-supplied JPEG.
-    // `onError` will swap to the next fallback if the file isn't present in `public`.
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      width={160}
-      height={48}
-      onError={handleError}
-      style={{ objectFit: 'contain' }}
-    />
+    // Let the container `className` control sizing (e.g. `h-16 w-auto`).
+    // The <img /> fills the container height with `h-full w-auto` so Tailwind sizes work as expected.
+    <div className={className} role="img" aria-label={alt} style={{ lineHeight: 0, display: 'inline-block' }}>
+      <img
+        src={src}
+        alt={alt}
+        onError={handleError}
+        className="h-full w-auto block"
+        style={{ objectFit: 'contain' }}
+      />
+    </div>
   );
 }
 
