@@ -45,25 +45,25 @@ export async function POST(request: NextRequest) {
     
     if (scenario === 'portfolio_risk') {
       proofData = {
-        portfolio_risk: witness.actual_risk_score,
-        portfolio_value: witness.portfolio_value,
-        threshold: statement.threshold
+        portfolio_risk: (witness as any)?.actual_risk_score ?? null,
+        portfolio_value: (witness as any)?.portfolio_value ?? null,
+        threshold: (statement as any)?.threshold ?? null
       };
     } else if (scenario === 'settlement_batch') {
       proofData = {
-        transaction_count: witness.transactions?.length || 5,
-        total_amount: witness.total_amount,
-        batch_id: witness.batch_id
+        transaction_count: (witness as any)?.transactions?.length ?? 5,
+        total_amount: (witness as any)?.total_amount ?? null,
+        batch_id: (witness as any)?.batch_id ?? null
       };
     } else if (scenario === 'compliance_check') {
       proofData = {
-        kyc_score: witness.kyc_score,
-        risk_level: witness.risk_level,
-        jurisdiction: witness.jurisdiction
+        kyc_score: (witness as any)?.kyc_score ?? null,
+        risk_level: (witness as any)?.risk_level ?? null,
+        jurisdiction: (witness as any)?.jurisdiction ?? null
       };
     } else {
       // Generic data format
-      proofData = { ...statement, ...witness };
+      proofData = { ...(statement || {}), ...(witness || {}) };
     }
 
     // Call the real FastAPI ZK server
