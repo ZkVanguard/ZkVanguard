@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import fetch from 'node-fetch';
 
 export interface Position {
   id: string;
@@ -24,11 +25,39 @@ export interface Position {
  * (Currently simulated - real integration would use Moonlander API)
  */
 export async function getMoonlanderPositions(address: string): Promise<Position[]> {
-  // TODO: Integrate with real Moonlander API when available
-  // For demo, return realistic simulated positions
-  
   logger.info('Fetching positions from Moonlander', { address });
-  
+
+  const apiBase = process.env.MOONLANDER_API_URL;
+  if (apiBase) {
+    try {
+      const res = await fetch(`${apiBase}/positions?address=${encodeURIComponent(address)}`);
+      if (!res.ok) {
+        logger.warn('Moonlander API returned non-OK', { status: res.status });
+      } else {
+        const data = await res.json();
+        // Expect data.positions to be an array of Position-like objects
+        if (Array.isArray(data?.positions)) {
+          return data.positions.map((p: any) => ({
+            id: String(p.id),
+            asset: p.asset,
+            type: p.type === 'LONG' ? 'LONG' : 'SHORT',
+            size: Number(p.size),
+            entryPrice: Number(p.entryPrice),
+            currentPrice: Number(p.currentPrice),
+            pnl: Number(p.pnl),
+            pnlPercent: Number(p.pnlPercent),
+            leverage: Number(p.leverage) || 1,
+            liquidationPrice: p.liquidationPrice ? Number(p.liquidationPrice) : undefined,
+            margin: p.margin ? Number(p.margin) : undefined,
+          }));
+        }
+      }
+    } catch (err) {
+      logger.error('Moonlander API fetch failed, falling back to simulator', { err });
+    }
+  }
+
+  // Fallback: For demo, return realistic simulated positions
   return [
     {
       id: '1',
