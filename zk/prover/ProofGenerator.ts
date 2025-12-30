@@ -33,8 +33,8 @@ export class ProofGenerator {
 
   constructor() {
     // Path to Python ZK system
-    this.pythonPath = 'python';
-    this.zkSystemPath = path.join(process.cwd(), 'zkp');
+    this.pythonPath = process.env.ZK_PYTHON_PATH || 'python';
+    this.zkSystemPath = process.env.ZK_SYSTEM_PATH || path.join(process.cwd(), 'zkp');
   }
 
   /**
@@ -119,15 +119,18 @@ export class ProofGenerator {
     statement: Record<string, unknown>,
     witness: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    // In test/development mode without Python, use mock immediately
-    const isTestMode = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+    // Allow enabling the Python prover via env var. By default tests and CI use mock proofs.
+    // To enable the real prover set `ZK_PYTHON_ENABLED=1` or `ZK_PYTHON_ENABLED=true`.
+    const zkEnabledEnv = (process.env.ZK_PYTHON_ENABLED || '').toLowerCase();
+    const zkEnabled = zkEnabledEnv === '1' || zkEnabledEnv === 'true';
+    const isTestMode = !zkEnabled && (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined);
     if (isTestMode) {
       throw new Error('Test mode: using mock proof');
     }
 
     return new Promise((resolve, reject) => {
       const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
-      const timeout = 5000; // 5 second timeout
+      const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 30000; // default 30s
 
       // Set timeout to avoid hanging
       const timer = setTimeout(() => {
