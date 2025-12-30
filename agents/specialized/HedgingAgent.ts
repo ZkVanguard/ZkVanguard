@@ -214,7 +214,8 @@ export class HedgingAgent extends BaseAgent {
         agentId: this.agentId,
       };
     } catch (error) {
-      logger.error('Failed to analyze hedge opportunity', { error });
+      const details = error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) };
+      logger.error('Failed to analyze hedge opportunity', details);
       throw error;
     }
   }

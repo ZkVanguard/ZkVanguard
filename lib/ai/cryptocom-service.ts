@@ -305,33 +305,70 @@ class CryptocomAIService {
   }
 
   private fallbackRiskAssessment(portfolioData: any): RiskAssessment {
-    const baseRisk = Math.random() * 0.4 + 0.3; // 0.3-0.7
-    const riskLevel: 'low' | 'medium' | 'high' = baseRisk < 0.4 ? 'low' : baseRisk < 0.6 ? 'medium' : 'high';
+    // Deterministic fallback: compute volatility based on exposure to volatile assets
+    try {
+      const positions = Array.isArray(portfolioData.positions) ? portfolioData.positions : [];
+      const totalValue = portfolioData.totalValue || positions.reduce((s: number, p: any) => s + (p.value || 0), 0) || 1;
 
-    return {
-      overallRisk: riskLevel,
-      riskScore: baseRisk * 100,
-      volatility: Math.random() * 0.15 + 0.05, // 5-20%
-      var95: Math.random() * 0.08 + 0.02, // 2-10%
-      sharpeRatio: Math.random() * 1.5 + 0.5, // 0.5-2.0
-      factors: [
-        {
-          factor: 'Market Volatility',
-          impact: riskLevel,
-          description: 'Overall crypto market volatility is affecting portfolio stability',
-        },
-        {
-          factor: 'Concentration Risk',
-          impact: 'medium',
-          description: 'Portfolio is moderately diversified across assets',
-        },
-        {
-          factor: 'Liquidity Risk',
-          impact: 'low',
-          description: 'All positions are in highly liquid assets',
-        },
-      ],
-    };
+      const volatileSymbols = new Set(['BTC', 'ETH', 'SOL', 'ADA', 'BNB', 'CRO', 'LTC', 'DOT']);
+      const stableSymbols = new Set(['USDC', 'USDT', 'DAI']);
+
+      let volatileExposure = 0;
+      let stableExposure = 0;
+
+      for (const p of positions) {
+        const sym = (p.symbol || '').toUpperCase();
+        const val = Number(p.value || 0);
+        if (volatileSymbols.has(sym)) volatileExposure += val;
+        if (stableSymbols.has(sym)) stableExposure += val;
+      }
+
+      const volatileRatio = Math.min(1, volatileExposure / totalValue);
+      const stableRatio = Math.min(1, stableExposure / totalValue);
+
+      // Base volatility scales with volatile exposure
+      const volatility = Math.max(0.02, Math.min(1, 0.03 + volatileRatio * 0.6));
+      // Scale VaR with portfolio size so larger portfolios show larger absolute VaR
+      const sizeMultiplier = 0.05 * Math.log10(Math.max(10, totalValue));
+      const var95 = Math.max(0.005, Math.min(0.5, volatility * (0.1 + sizeMultiplier)));
+      const riskScore = Math.round(volatility * 100);
+      const overallRisk: 'low' | 'medium' | 'high' = volatility < 0.08 ? 'low' : volatility < 0.25 ? 'medium' : 'high';
+
+      return {
+        overallRisk,
+        riskScore,
+        volatility,
+        var95,
+        sharpeRatio: Math.max(0.1, 1 / (volatility * 4)),
+        factors: [
+          {
+            factor: 'Market Volatility',
+            impact: overallRisk,
+            description: 'Computed from portfolio exposure to volatile assets',
+          },
+          {
+            factor: 'Concentration Risk',
+            impact: volatileRatio > 0.5 ? 'high' : volatileRatio > 0.25 ? 'medium' : 'low',
+            description: 'Higher concentration in a few assets increases risk',
+          },
+          {
+            factor: 'Liquidity Risk',
+            impact: stableRatio > 0.5 ? 'low' : 'medium',
+            description: 'Stablecoin allocation reduces liquidity-driven volatility',
+          },
+        ],
+      };
+    } catch (e) {
+      // Fallback deterministic defaults
+      return {
+        overallRisk: 'medium',
+        riskScore: 50,
+        volatility: 0.12,
+        var95: 0.06,
+        sharpeRatio: 1,
+        factors: [],
+      };
+    }
   }
 
   private fallbackHedgeRecommendations(portfolioData: any, riskProfile: any): HedgeRecommendation[] {

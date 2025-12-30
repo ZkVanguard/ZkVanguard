@@ -549,6 +549,29 @@ export class AgentOrchestrator {
       signerAvailable: this.signer !== null,
     };
   }
+
+  /**
+   * Backwards-compatible alias used by tests: getAgentStatus
+   */
+  public getAgentStatus(): {
+    initialized: boolean;
+    riskAgent: RiskAgent | null;
+    hedgingAgent: HedgingAgent | null;
+    settlementAgent: SettlementAgent | null;
+    reportingAgent: ReportingAgent | null;
+    leadAgent: LeadAgent | null;
+    signerAvailable: boolean;
+  } {
+    return {
+      initialized: this.initialized,
+      riskAgent: this.riskAgent,
+      hedgingAgent: this.hedgingAgent,
+      settlementAgent: this.settlementAgent,
+      reportingAgent: this.reportingAgent,
+      leadAgent: this.leadAgent,
+      signerAvailable: this.signer !== null,
+    };
+  }
 }
 
 // Export singleton instance getter
