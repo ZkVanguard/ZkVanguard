@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
+const ZK_API_URL = process.env.ZK_API_URL;
 
 /**
  * ZK System Authenticity Verification
@@ -14,6 +14,23 @@ const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
  */
 export async function GET(_request: NextRequest) {
   try {
+    // If no backend URL provided (e.g. during static export), skip live checks
+    if (!ZK_API_URL) {
+      const now = new Date().toISOString();
+      return NextResponse.json({
+        authentic: false,
+        verification_timestamp: now,
+        hint: 'ZK_API_URL not configured; authenticity verification skipped during build',
+        system_status: {
+          backend_operational: false,
+          cuda_available: false,
+          cuda_enabled: false,
+          proof_generation_working: false,
+          average_proof_time: 'N/A'
+        }
+      });
+    }
+
     // Get system status from backend
     const healthResponse = await fetch(`${ZK_API_URL}/health`);
     if (!healthResponse.ok) {

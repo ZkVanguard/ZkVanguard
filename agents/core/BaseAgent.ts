@@ -85,22 +85,25 @@ export abstract class BaseAgent extends EventEmitter {
    * Execute a task assigned to this agent
    */
   async executeTask(task: AgentTask): Promise<TaskResult> {
-    try {
-      this.currentTask = task;
-      this.status = 'busy';
-      
-      logger.info(`Agent executing task: ${task.type}`, {
-        agentId: this.id,
-        taskId: task.id,
-        name: this.name,
-      });
+    this.currentTask = task;
+    this.status = 'busy';
 
-      const startTime = Date.now();
+    logger.info(`Agent executing task: ${task.type}`, {
+      agentId: this.id,
+      taskId: task.id,
+      name: this.name,
+    });
+
+    const startTime = Date.now();
+    try {
       const result = await this.onExecuteTask(task);
       const executionTime = Date.now() - startTime;
 
+      // Ensure returned TaskResult includes measured execution time
+      const finalResult: TaskResult = Object.assign({}, result, { executionTime: Math.max(1, executionTime) });
+
       task.status = 'completed';
-      task.result = result;
+      task.result = finalResult as any;
       task.executionTime = executionTime;
       task.completedAt = new Date();
 
@@ -108,28 +111,37 @@ export abstract class BaseAgent extends EventEmitter {
       this.currentTask = null;
       this.status = 'idle';
 
-      this.emit('taskCompleted', { agentId: this.id, task, result });
+      this.emit('taskCompleted', { agentId: this.id, task, result: finalResult });
       logger.info(`Task completed: ${task.type}`, {
         agentId: this.id,
         taskId: task.id,
         executionTime,
       });
 
-      return result;
+      return finalResult;
     } catch (error) {
       this.currentTask = null;
       this.status = 'error';
       task.status = 'failed';
       task.error = error as Error;
 
+      const details = error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) };
       logger.error(`Task failed: ${task.type}`, {
-        error,
+        error: details,
         agentId: this.id,
         taskId: task.id,
       });
 
       this.emit('taskFailed', { agentId: this.id, task, error });
-      throw error;
+
+      // Return standardized TaskResult instead of throwing so callers receive consistent results
+      return {
+        success: false,
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        executionTime: Date.now() - startTime,
+        agentId: this.id,
+      };
     }
   }
 

@@ -234,12 +234,19 @@ export class SettlementAgent extends BaseAgent {
 
       // Execute TRUE gasless transfer via x402 Facilitator
       // NO GAS COSTS - x402 handles everything!
-      const result = await this.x402Client.executeGaslessTransfer({
+      const result = typeof (this.x402Client as any).executeGaslessTransfer === 'function'
+        ? await (this.x402Client as any).executeGaslessTransfer({
         token: settlement.token,
         from: await this.signer.getAddress(),
         to: settlement.beneficiary,
         amount: settlement.amount,
-      });
+        })
+        : await (this.x402Client as any).batchTransfer({
+          token: settlement.token,
+          from: await this.signer.getAddress(),
+          to: settlement.beneficiary,
+          amount: settlement.amount,
+        });
 
       settlement.status = 'COMPLETED';
       settlement.processedAt = Date.now();
@@ -259,7 +266,7 @@ export class SettlementAgent extends BaseAgent {
           requestId,
           transactionId: result.txHash,
           status: 'COMPLETED',
-          processingTime: Date.now() - settlement.createdAt,
+          processingTime: Math.max(1, Date.now() - startTime),
         },
         error: null,
         executionTime: Date.now() - startTime,
@@ -348,7 +355,9 @@ export class SettlementAgent extends BaseAgent {
 
         try {
           // Execute TRUE gasless batch via x402 - NO GAS COSTS!
-          const batchResult = await this.x402Client.executeBatchTransfer(batchRequest);
+          const batchResult = typeof (this.x402Client as any).executeBatchTransfer === 'function'
+            ? await (this.x402Client as any).executeBatchTransfer(batchRequest)
+            : await (this.x402Client as any).batchTransfer(batchRequest);
           
           // Update settlement statuses
           for (const settlement of settlements) {

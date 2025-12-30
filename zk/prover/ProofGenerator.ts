@@ -100,9 +100,10 @@ export class ProofGenerator {
 
       return proof;
     } catch (error) {
+      const details = error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) };
       logger.error('Failed to generate ZK-STARK proof', {
-        error,
         proofType,
+        error: details,
       });
 
       // Fallback to mock proof for development

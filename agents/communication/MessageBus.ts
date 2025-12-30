@@ -61,12 +61,18 @@ export class MessageBus extends EventEmitter {
     // Emit message event
     this.emit('message', message);
 
-    // Emit specific event for message type
-    this.emit(`message:${message.type}`, message);
+    // Emit specific event for message type and recipient.
+    // Avoid emitting the same event twice when `type` and `to` are identical.
+    const typeEvent = `message:${message.type}`;
+    const toEvent = `message:${message.to}`;
 
-    // Emit event for specific recipient
-    if (message.to !== 'broadcast') {
-      this.emit(`message:${message.to}`, message);
+    if (typeEvent === toEvent) {
+      this.emit(typeEvent, message);
+    } else {
+      this.emit(typeEvent, message);
+      if (message.to !== 'broadcast') {
+        this.emit(toEvent, message);
+      }
     }
   }
 
@@ -87,8 +93,6 @@ export class MessageBus extends EventEmitter {
   subscribe(channel: string, callback: (message: AgentMessage) => void): void {
     // Subscribe to channel-specific messages
     this.on(`message:${channel}`, callback);
-    // Also subscribe to broadcast messages (for backwards compatibility)
-    this.on('message:broadcast', callback);
   }
 
   /**
