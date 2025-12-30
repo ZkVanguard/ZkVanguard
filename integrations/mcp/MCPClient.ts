@@ -9,6 +9,7 @@
 import { EventEmitter } from 'eventemitter3';
 import { logger } from '@shared/utils/logger';
 import config from '@shared/utils/config';
+import { RealMarketDataService } from '../../lib/services/RealMarketDataService';
 const { EventSource } = require('eventsource');
 
 export interface MCPPriceData {
@@ -39,6 +40,7 @@ export class MCPClient extends EventEmitter {
   private subscriptions: Set<string> = new Set();
   private priceCache: Map<string, MCPPriceData> = new Map();
   private connected: boolean = false;
+  private realMarket: RealMarketDataService | null = null;
 
   constructor() {
     super();
@@ -185,6 +187,33 @@ export class MCPClient extends EventEmitter {
 
       // Ensure connection
       if (!this.connected) {
+        // If MCP SSE is disabled (development/test), fall back to CoinGecko via RealMarketDataService
+        if (!this.realMarket) {
+          try {
+            this.realMarket = new RealMarketDataService();
+          } catch (e) {
+            logger.warn('Failed to initialize RealMarketDataService fallback', { error: e });
+          }
+        }
+
+        if (this.realMarket) {
+          try {
+            const mp = await this.realMarket.getTokenPrice(symbol);
+            const priceData: MCPPriceData = {
+              symbol,
+              price: mp.price,
+              timestamp: mp.timestamp || Date.now(),
+              volume24h: mp.volume24h || 0,
+              priceChange24h: mp.change24h || 0,
+            };
+            this.priceCache.set(symbol, priceData);
+            return priceData;
+          } catch (e) {
+            logger.warn('RealMarketDataService fallback failed for MCP.getPrice', { symbol, error: e });
+            // continue to attempt connect() below as last resort
+          }
+        }
+
         await this.connect();
       }
 
