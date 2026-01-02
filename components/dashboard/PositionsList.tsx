@@ -24,12 +24,21 @@ export function PositionsList({ address }: { address: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In real implementation, fetch positions from user's portfolios
-    setTimeout(() => {
-      // Demo data - would be replaced with actual portfolio positions
-      setPositions([]);
-      setLoading(false);
-    }, 1000);
+    // Fetch real positions from on-chain portfolios only
+    async function fetchPositions() {
+      try {
+        // TODO: Implement real on-chain position fetching
+        // For now, show empty state until positions are added
+        setPositions([]);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch positions:', error);
+        setPositions([]);
+        setLoading(false);
+      }
+    }
+    
+    fetchPositions();
   }, [address, portfolioCount]);
 
   if (loading) {

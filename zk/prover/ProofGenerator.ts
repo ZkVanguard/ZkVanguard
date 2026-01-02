@@ -128,17 +128,125 @@ export class ProofGenerator {
       throw new Error('Test mode: using mock proof');
     }
 
+    // Prefer HTTP API if available (useful when FastAPI server is running).
+    const zkApiUrl = process.env.ZK_API_URL || process.env.ZK_PYTHON_API_URL || '';
+    const useHttp = zkApiUrl !== '' || (process.env.ZK_PYTHON_USE_HTTP || '').toLowerCase() === '1';
+    const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 30000; // default 30s
+
+    if (useHttp) {
+      return new Promise(async (resolve, reject) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => {
+          try { controller.abort(); } catch {}
+          reject(new Error('HTTP request to ZK API timed out'));
+        }, timeout);
+
+        try {
+          const apiUrl = zkApiUrl || 'http://localhost:8000';
+          const resp = await (globalThis as any).fetch(`${apiUrl}/api/zk/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({ proof_type: proofType, data: { statement, witness } }),
+          });
+
+          if (!resp.ok) {
+            const txt = await resp.text().catch(() => '');
+            logger.warn('ZK API non-OK response, falling back to CLI', { status: resp.status, body: txt });
+          } else {
+            const result = await resp.json().catch(() => null);
+            // Poll if pending
+            if (result && (result.status === 'pending' || result.job_id)) {
+              const jobId = result.job_id || (result as any).jobId;
+              const maxAttempts = Math.max(10, Math.floor(timeout / 1000));
+              for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                await new Promise((r) => setTimeout(r, 1000));
+                try {
+                  const statusResp = await (globalThis as any).fetch(`${apiUrl}/api/zk/proof/${jobId}`);
+                  if (!statusResp.ok) continue;
+                  const statusResult = await statusResp.json().catch(() => null);
+                  if (!statusResult) continue;
+                  if (statusResult.status === 'completed' && statusResult.proof) {
+                    clearTimeout(timer);
+                    resolve(statusResult);
+                    return;
+                  }
+                  if (statusResult.status === 'failed') {
+                    clearTimeout(timer);
+                    reject(new Error(statusResult.error || 'Proof generation failed on server'));
+                    return;
+                  }
+                } catch (e) {
+                  // continue polling until timeout
+                }
+              }
+              clearTimeout(timer);
+              reject(new Error('Proof generation timeout while polling ZK API'));
+              return;
+            }
+
+            if (result) {
+              clearTimeout(timer);
+              resolve(result);
+              return;
+            }
+          }
+        } catch (err) {
+          logger.warn('HTTP ZK API request failed, will try CLI fallback', { error: err });
+        } finally {
+          try { clearTimeout(timer); } catch {}
+        }
+
+        // HTTP path failed — fall back to CLI spawn
+        try {
+          const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
+          const cliTimer = setTimeout(() => {}, timeout);
+          const pythonProcess = spawn(this.pythonPath, [
+            pythonScript,
+            '--proof-type',
+            proofType,
+            '--statement',
+            JSON.stringify(statement),
+            '--witness',
+            JSON.stringify(witness),
+          ]);
+
+          let stdout = '';
+          let stderr = '';
+          pythonProcess.stdout.on('data', (data) => { stdout += data.toString(); });
+          pythonProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+
+          pythonProcess.on('close', (code) => {
+            clearTimeout(cliTimer);
+            if (code !== 0) {
+              reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+              return;
+            }
+            try {
+              const r = JSON.parse(stdout);
+              resolve(r);
+            } catch (e) {
+              reject(new Error(`Failed to parse Python output: ${e}`));
+            }
+          });
+
+          pythonProcess.on('error', (error) => {
+            clearTimeout(cliTimer);
+            reject(new Error(`Failed to spawn Python process: ${error}`));
+          });
+        } catch (cliErr) {
+          reject(cliErr);
+        }
+      });
+    }
+
+    // If not using HTTP, use existing CLI behavior
     return new Promise((resolve, reject) => {
       const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
-      const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 30000; // default 30s
-
-      // Set timeout to avoid hanging
       const timer = setTimeout(() => {
-        pythonProcess.kill();
         reject(new Error('Python process timed out'));
       }, timeout);
 
-      // Spawn Python process
       const pythonProcess = spawn(this.pythonPath, [
         pythonScript,
         '--proof-type',
@@ -151,14 +259,8 @@ export class ProofGenerator {
 
       let stdout = '';
       let stderr = '';
-
-      pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      pythonProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
+      pythonProcess.stdout.on('data', (data) => { stdout += data.toString(); });
+      pythonProcess.stderr.on('data', (data) => { stderr += data.toString(); });
 
       pythonProcess.on('close', (code) => {
         clearTimeout(timer);
@@ -166,7 +268,6 @@ export class ProofGenerator {
           reject(new Error(`Python process exited with code ${code}: ${stderr}`));
           return;
         }
-
         try {
           const result = JSON.parse(stdout);
           resolve(result);

@@ -25,12 +25,12 @@ export function PortfolioOverview({ address }: { address: string }) {
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
   
-  // Demo data for UI (since portfolios might be empty)
+  // Real on-chain portfolio data only - no demo fallbacks
   const [data, setData] = useState<PortfolioData>({
-    totalValue: 0,
+    totalValue: 0, // Will be populated from real contract data
     dailyChange: 0,
     dailyChangePercent: 0,
-    positions: 0,
+    positions: 0, // Read from contract
     activeHedges: 0,
   });
 
@@ -41,10 +41,11 @@ export function PortfolioOverview({ address }: { address: string }) {
         const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
         
         setAiAnalysis(analysis);
+        // Use ONLY real on-chain data - no demo fallbacks
         setData(prev => ({
           ...prev,
-          totalValue: analysis.totalValue,
-          positions: Number(portfolioCount) || analysis.positions,
+          totalValue: analysis.totalValue || 0,
+          positions: Number(portfolioCount) || 0,
           healthScore: analysis.healthScore,
           topAssets: analysis.topAssets,
         }));

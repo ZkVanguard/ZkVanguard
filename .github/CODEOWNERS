@@ -1,0 +1,32 @@
+# This file tells GitHub which accounts are responsible for code in this repository
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - will be requested for review when someone opens a PR
+* @mrarejimmyz
+
+# Smart contracts - require review from contract specialists
+/contracts/ @mrarejimmyz
+/scripts/deploy/ @mrarejimmyz
+
+# Documentation - can be reviewed by anyone
+/docs/ @mrarejimmyz
+*.md @mrarejimmyz
+
+# CI/CD and tooling
+/.github/ @mrarejimmyz
+/.husky/ @mrarejimmyz
+/scripts/ @mrarejimmyz
+
+# AI Agents - require AI/ML expertise
+/agents/ @mrarejimmyz
+/lib/ai/ @mrarejimmyz
+
+# Frontend - require frontend expertise  
+/app/ @mrarejimmyz
+/components/ @mrarejimmyz
+/styles/ @mrarejimmyz
+
+# Security-critical files - require additional review
+.env.example @mrarejimmyz
+SECURITY.md @mrarejimmyz
+/contracts/core/ @mrarejimmyz

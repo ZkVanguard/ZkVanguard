@@ -87,13 +87,8 @@ export function RiskMetrics({ address }: { address: string }) {
         setLoading(false);
         } catch (error) {
           console.error('Failed to fetch risk metrics:', error);
-          // Fallback to demo data
-          setMetrics([
-            { label: 'VaR (95%)', value: '$3,500', status: 'low', icon: Shield },
-            { label: 'Volatility', value: '12.5%', status: 'medium', icon: TrendingUp },
-            { label: 'Liquidation Risk', value: 'Low', status: 'low', icon: AlertTriangle },
-            { label: 'Sharpe Ratio', value: '1.85', status: 'high', icon: Activity },
-          ]);
+          // Show empty state - no fallback demo data
+          setMetrics([]);
           setLoading(false);
         }
       }

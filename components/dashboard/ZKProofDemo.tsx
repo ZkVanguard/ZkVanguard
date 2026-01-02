@@ -34,7 +34,7 @@ export function ZKProofDemo() {
         };
       } else if (proofType === 'risk') {
         data = {
-          portfolio_value: 10000,
+          portfolio_value: 0, // Real value from on-chain data
           volatility: 250,
           value_at_risk: 500
         };

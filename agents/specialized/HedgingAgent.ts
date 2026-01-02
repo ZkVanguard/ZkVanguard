@@ -534,7 +534,7 @@ export class HedgingAgent extends BaseAgent {
       // Check each position against strategies
       const alerts = [];
       for (const position of positions) {
-        const risk = risks.find(r => r.positionId === position.positionId);
+        const risk = risks.find((r: any) => r.positionId === position.positionId);
         
         if (risk && (risk.riskLevel === 'HIGH' || risk.riskLevel === 'CRITICAL')) {
           alerts.push({

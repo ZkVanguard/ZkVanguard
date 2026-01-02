@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Verifiable Multi-Agent AI Swarm for Institutional RWA Risk Orchestration with Zero-Knowledge Proofs on Cronos zkEVM",
   "author": "ZkVanguard Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "cronos",
     "ai-agents",
@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/zkvanguard.git"
+    "url": "https://github.com/mrarejimmyz/zkvanguard.git"
   },
   "engines": {
     "node": ">=18.0.0",

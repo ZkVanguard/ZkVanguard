@@ -92,85 +92,8 @@ export function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
       
-      // Generate live simulated activity when API unavailable
-      const now = Date.now();
-      const liveActivity: (AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[] = [
-        {
-          id: `lead-${now}`,
-          agentName: 'Lead Agent',
-          agentType: 'lead-agent',
-          action: 'ORCHESTRATION',
-          description: 'Coordinating multi-agent strategy execution',
-          status: 'completed',
-          timestamp: new Date(now - 30000),
-          priority: 1,
-          createdAt: new Date(now - 30000),
-          type: 'orchestration',
-        },
-        {
-          id: `risk-${now}`,
-          agentName: 'Risk Agent',
-          agentType: 'risk-agent',
-          action: 'RISK_ANALYSIS',
-          description: 'Analyzed portfolio VaR, volatility exposure, correlation matrices',
-          status: 'completed',
-          timestamp: new Date(now - 25000),
-          priority: 1,
-          createdAt: new Date(now - 25000),
-          type: 'risk_assessment',
-          impact: { metric: 'Risk Score', before: 45, after: 32 },
-        },
-        {
-          id: `hedge-${now}`,
-          agentName: 'Hedging Agent',
-          agentType: 'hedging-agent',
-          action: 'HEDGE_EXECUTION',
-          description: 'Opened SHORT position on BTC-PERP via Moonlander',
-          status: 'completed',
-          timestamp: new Date(now - 20000),
-          priority: 2,
-          createdAt: new Date(now - 20000),
-          type: 'hedging',
-          impact: { metric: 'Hedge Ratio', before: '0%', after: '35%' },
-        },
-        {
-          id: `settlement-${now}`,
-          agentName: 'Settlement Agent',
-          agentType: 'settlement-agent',
-          action: 'BATCH_SETTLEMENT',
-          description: 'Processed 5 settlements via x402 gasless ($0.00 CRO)',
-          status: 'completed',
-          timestamp: new Date(now - 15000),
-          priority: 1,
-          createdAt: new Date(now - 15000),
-          type: 'settlement',
-          impact: { metric: 'Gas Saved', before: '$5.20', after: '$0.00' },
-        },
-        {
-          id: `report-${now}`,
-          agentName: 'Reporting Agent',
-          agentType: 'reporting-agent',
-          action: 'GENERATE_REPORT',
-          description: 'Creating compliance report with ZK privacy',
-          status: 'in-progress',
-          timestamp: new Date(now - 5000),
-          priority: 1,
-          createdAt: new Date(now - 5000),
-          type: 'reporting',
-        },
-      ];
-      
-      // Add ZK proofs to completed tasks
-      const tasksWithProofs = await Promise.all(
-        liveActivity.map(async (task) => {
-          if (task.status === 'completed') {
-            task.zkProof = await generateTaskProof(task);
-          }
-          return task;
-        })
-      );
-      
-      setTasks(tasksWithProofs);
+      // Show empty state - no simulated activity
+      setTasks([]);
     } finally {
       setLoading(false);
       setIsRefreshing(false);

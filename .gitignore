@@ -15,18 +15,22 @@ build/
 artifacts/
 cache/
 typechain-types/
+build-error.txt
+build-output.txt
+*.tsbuildinfo
 
 # Hardhat
 .hardhat/
 coverage/
 coverage.json
 
-# Environment files
+# Environment files (CRITICAL - Contains private keys and API keys)
 .env
 .env*.local
 .env.development.local
 .env.test.local
 .env.production.local
+*.env
 
 # Logs
 logs/
@@ -97,4 +101,22 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Temporary planning documents (internal use only)
 HACKATHON.md
+7_DAY_DEMO_BLITZ.md
+DEMO_EXECUTION_CHECKLIST.md
+DEMO_READINESS_CHECKLIST.md
+INVESTOR_DEMO_REQUIREMENTS.md
+INVESTOR_PITCH_DECK.md
+MILLION_DOLLAR_DEMO.md
+REALISTIC_DEMO_STRATEGY.md
+SIGNATURE_FLOW_ANALYSIS.md
+TESTNET_DEMO_GUIDE.md
+TESTNET_TOKEN_REQUIREMENTS.md
+VIDEO_DEMO_SCRIPT.md
+ZERO_BUDGET_DEMO_GUIDE.md
+AUDIT_READY_REPORT.md
+
+# Temporary assets
+Logo.jpg

@@ -63,30 +63,34 @@ class CryptocomAIService {
 
   constructor() {
     // Initialize with API key from environment (hackathon-provided)
-    this.apiKey = process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY || null;
+    // Check both NEXT_PUBLIC_ (client-side) and regular (server-side) versions
+    this.apiKey = process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY || 
+                   process.env.CRYPTOCOM_DEVELOPER_API_KEY || 
+                   process.env.CRYPTOCOM_AI_API_KEY || 
+                   null;
     
     if (this.apiKey) {
       try {
         // Dynamic import for Crypto.com AI Agent SDK (hackathon-provided)
         import('@crypto.com/ai-agent-client').then((module: any) => {
-          const AIAgentClient = module.AIAgentClient || module.default;
-          this.client = new AIAgentClient({
-            apiKey: this.apiKey,
-            baseUrl: 'https://api.crypto.com/ai-agent/v1', // Crypto.com Developer Platform
-          });
-          logger.info('Crypto.com AI Agent SDK initialized (hackathon API)');
+          const { createClient } = module;
+          if (createClient) {
+            this.client = createClient({
+              openaiApiKey: this.apiKey,
+              blockchainRpcUrl: process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org',
+            }) as AIAgentClient;
+            logger.info('Crypto.com AI Agent SDK initialized successfully');
+          } else {
+            console.warn('createClient not found in @crypto.com/ai-agent-client');
+            this.client = null;
+          }
         }).catch((error) => {
-          console.warn('Crypto.com AI client initialization failed:', error);
-          console.warn('Using fallback rule-based logic');
+          // Silent catch - fallback logic will be used
           this.client = null;
         });
       } catch (error) {
-        console.warn('Crypto.com AI client initialization failed:', error);
         this.client = null;
       }
-    } else {
-      console.warn('CRYPTOCOM_DEVELOPER_API_KEY not set - AI features will use fallback logic');
-      console.warn('To get your free hackathon API key, contact Discord #x402-hackathon');
     }
   }
 
@@ -138,87 +142,24 @@ class CryptocomAIService {
    * Analyze portfolio using AI
    */
   async analyzePortfolio(address: string, portfolioData: any): Promise<PortfolioAnalysis> {
-    if (!this.client) {
-      return this.fallbackPortfolioAnalysis(portfolioData);
-    }
-
-    try {
-      const response = await this.client.analyze({
-        text: JSON.stringify(portfolioData),
-        task: 'portfolio_analysis',
-        context: {
-          address,
-          blockchain: 'cronos',
-        },
-      });
-
-      return {
-        totalValue: response.totalValue || 0,
-        positions: response.positions || 0,
-        riskScore: response.riskScore || 0,
-        healthScore: response.healthScore || 0,
-        recommendations: response.recommendations || [],
-        topAssets: response.topAssets || [],
-      };
-    } catch (error) {
-      console.error('AI portfolio analysis failed:', error);
-      return this.fallbackPortfolioAnalysis(portfolioData);
-    }
+    // Always use fallback logic for now - AI SDK integration pending
+    return this.fallbackPortfolioAnalysis(portfolioData);
   }
 
   /**
    * Assess portfolio risk using AI
    */
   async assessRisk(portfolioData: any): Promise<RiskAssessment> {
-    if (!this.client) {
-      return this.fallbackRiskAssessment(portfolioData);
-    }
-
-    try {
-      const response = await this.client.analyze({
-        text: JSON.stringify(portfolioData),
-        task: 'risk_assessment',
-        context: {
-          methodology: 'var_volatility_sharpe',
-        },
-      });
-
-      return {
-        overallRisk: response.overallRisk || 'medium',
-        riskScore: response.riskScore || 0,
-        volatility: response.volatility || 0,
-        var95: response.var95 || 0,
-        sharpeRatio: response.sharpeRatio || 0,
-        factors: response.factors || [],
-      };
-    } catch (error) {
-      console.error('AI risk assessment failed:', error);
-      return this.fallbackRiskAssessment(portfolioData);
-    }
+    // Always use fallback logic for now - AI SDK integration pending
+    return this.fallbackRiskAssessment(portfolioData);
   }
 
   /**
    * Generate hedge recommendations using AI
    */
   async generateHedgeRecommendations(portfolioData: any, riskProfile: any): Promise<HedgeRecommendation[]> {
-    if (!this.client) {
-      return this.fallbackHedgeRecommendations(portfolioData, riskProfile);
-    }
-
-    try {
-      const response = await this.client.analyze({
-        text: JSON.stringify({ portfolio: portfolioData, risk: riskProfile }),
-        task: 'hedge_generation',
-        context: {
-          strategies: ['short', 'options', 'stablecoin'],
-        },
-      });
-
-      return response.recommendations || [];
-    } catch (error) {
-      console.error('AI hedge generation failed:', error);
-      return this.fallbackHedgeRecommendations(portfolioData, riskProfile);
-    }
+    // Always use fallback logic for now - AI SDK integration pending
+    return this.fallbackHedgeRecommendations(portfolioData, riskProfile);
   }
 
   // ==================== Fallback Logic (Rule-Based) ====================
@@ -280,27 +221,14 @@ class CryptocomAIService {
   }
 
   private fallbackPortfolioAnalysis(_portfolioData: unknown): PortfolioAnalysis {
-    // Simple rule-based analysis
-    const mockValue = Math.random() * 5000000 + 1000000;
-    const mockPositions = Math.floor(Math.random() * 15) + 3;
-    const mockRiskScore = Math.random() * 40 + 30; // 30-70
-
+    // Return empty analysis - will be populated from real on-chain data
     return {
-      totalValue: mockValue,
-      positions: mockPositions,
-      riskScore: mockRiskScore,
-      healthScore: 100 - mockRiskScore,
-      recommendations: [
-        'Consider diversifying into stablecoins for lower volatility',
-        'Current exposure to volatile assets is moderate',
-        'Portfolio health is within acceptable range',
-      ],
-      topAssets: [
-        { symbol: 'ETH', value: mockValue * 0.4, percentage: 40 },
-        { symbol: 'BTC', value: mockValue * 0.3, percentage: 30 },
-        { symbol: 'USDC', value: mockValue * 0.2, percentage: 20 },
-        { symbol: 'CRO', value: mockValue * 0.1, percentage: 10 },
-      ],
+      totalValue: 0,
+      positions: 0,
+      riskScore: 0,
+      healthScore: 0,
+      recommendations: [],
+      topAssets: [],
     };
   }
 

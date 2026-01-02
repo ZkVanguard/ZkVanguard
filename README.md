@@ -248,7 +248,7 @@ await x402Facilitator.settle({ gasless: true })
 
 ```bash
 # 1️⃣ Clone & Install
-git clone https://github.com/yourusername/ZkVanguard.git
+git clone https://github.com/mrarejimmyz/ZkVanguard.git
 cd ZkVanguard
 npm install
 

@@ -206,7 +206,7 @@ function QuickStartSection() {
       <div className="bg-gray-900 rounded-lg p-4 mb-6">
         <pre className="text-gray-300 text-sm overflow-x-auto">
 {`# Clone the repository
-git clone https://github.com/yourusername/chronos-vanguard.git
+git clone https://github.com/mrarejimmyz/chronos-vanguard.git
 cd chronos-vanguard
 
 # Install dependencies

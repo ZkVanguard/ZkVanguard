@@ -23,16 +23,22 @@ async function simulateAgentCall<T>(fn: () => T): Promise<T> {
  */
 export async function assessPortfolioRisk(address: string) {
   if (DEMO_MODE) {
+    // Calculate based on real wallet balance - example for 30 USDC with leverage
+    const portfolioValue = 30; // Real USDC balance
+    const leverage = 20; // 20x leverage
+    const leveragedExposure = portfolioValue * leverage; // $600 notional
+    
     return simulateAgentCall(() => ({
-      var: 0.15 + Math.random() * 0.1,
-      volatility: 0.24 + Math.random() * 0.05,
-      sharpeRatio: 1.8 + Math.random() * 0.4,
-      liquidationRisk: 0.05 + Math.random() * 0.03,
-      healthScore: 80 + Math.random() * 15,
+      var: leveragedExposure * 0.05, // 5% VaR
+      volatility: 28.5, // Higher volatility due to leverage
+      sharpeRatio: 1.2, // Moderate Sharpe with leverage
+      liquidationRisk: 8.5, // Higher liquidation risk with 20x leverage
+      healthScore: 72, // Good but not perfect due to leverage
       recommendations: [
-        'Portfolio shows moderate risk exposure',
-        'Consider hedging positions with >10x leverage',
-        'Current volatility within acceptable range'
+        `Portfolio value: $${portfolioValue} with ${leverage}x leverage = $${leveragedExposure} exposure`,
+        `Liquidation risk: ${8.5}% - consider reducing leverage if volatility increases`,
+        'Current position size appropriate for testnet demonstration',
+        'Monitor closely - high leverage requires active management'
       ]
     }));
   }
@@ -50,22 +56,33 @@ export async function assessPortfolioRisk(address: string) {
  */
 export async function getHedgingRecommendations(address: string, positions: unknown[]) {
   if (DEMO_MODE) {
+    // Real portfolio: 30 USDC @ 20x leverage = $600 exposure
+    const portfolioValue = 30;
+    const leverage = 20;
+    const exposure = portfolioValue * leverage; // $600
+    
     return simulateAgentCall(() => [
       {
         action: 'SHORT',
         asset: 'BTC-PERP',
-        size: 0.5,
-        leverage: 5,
-        reason: 'Hedge against long BTC exposure',
-        expectedGasSavings: 0.67
+        size: 0.007, // ~$300 hedge (50% of exposure)
+        leverage: 10,
+        reason: `Protect $${exposure} leveraged position from >10% drawdown`,
+        expectedGasSavings: 2.50,
+        estimatedCost: 0.00, // x402 gasless
+        targetPrice: 42800,
+        stopLoss: 45200,
+        capitalRequired: portfolioValue * 0.5 // $15 USDC for hedge
       },
       {
-        action: 'LONG',
-        asset: 'ETH-PERP',
-        size: 1.0,
-        leverage: 3,
-        reason: 'Counter-hedge ETH shorts',
-        expectedGasSavings: 0.65
+        action: 'REBALANCE',
+        asset: 'PORTFOLIO',
+        size: 0,
+        leverage: 1,
+        reason: 'Consider reducing leverage from 20x to 15x to lower liquidation risk',
+        expectedGasSavings: 0.00,
+        estimatedCost: 0.00,
+        note: `Current exposure: $${exposure} on $${portfolioValue} capital`
       }
     ]);
   }
