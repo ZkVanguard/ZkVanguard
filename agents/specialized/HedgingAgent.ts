@@ -364,7 +364,7 @@ export class HedgingAgent extends BaseAgent {
     try {
       logger.info('Closing hedge position', { market });
 
-      const order = await this.moonlanderClient.closePosition(market, size);
+      const order = await this.moonlanderClient.closePosition({ market, size });
 
       return {
         success: true,
