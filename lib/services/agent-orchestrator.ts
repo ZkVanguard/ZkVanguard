@@ -61,6 +61,48 @@ export class AgentOrchestrator {
   }
 
   /**
+   * Reset singleton instance for testing
+   */
+  public static async resetInstance(): Promise<void> {
+    if (AgentOrchestrator.instance) {
+      await AgentOrchestrator.instance.shutdown();
+      AgentOrchestrator.instance = null;
+    }
+  }
+
+  /**
+   * Shutdown all agents
+   */
+  public async shutdown(): Promise<void> {
+    if (!this.initialized) {
+      return;
+    }
+    logger.info('Shutting down AgentOrchestrator...');
+    const shutdownResults = await Promise.allSettled([
+      this.riskAgent?.shutdown(),
+      this.hedgingAgent?.shutdown(),
+      this.settlementAgent?.shutdown(),
+      this.reportingAgent?.shutdown(),
+      this.leadAgent?.shutdown(),
+    ]);
+
+    shutdownResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const agentNames = ['RiskAgent', 'HedgingAgent', 'SettlementAgent', 'ReportingAgent', 'LeadAgent'];
+        logger.warn(`${agentNames[index]} shutdown failed:`, { error: result.reason });
+      }
+    });
+
+    this.initialized = false;
+    this.riskAgent = null;
+    this.hedgingAgent = null;
+    this.settlementAgent = null;
+    this.reportingAgent = null;
+    this.leadAgent = null;
+    logger.info('AgentOrchestrator shutdown complete.');
+  }
+
+  /**
    * Initialize all agents
    */
   public async initialize(): Promise<void> {
@@ -576,5 +618,12 @@ export class AgentOrchestrator {
 
 // Export singleton instance getter
 export const getAgentOrchestrator = () => AgentOrchestrator.getInstance();
+
+/**
+ * Reset orchestrator for tests
+ */
+export const resetAgentOrchestrator = async () => {
+  await AgentOrchestrator.resetInstance();
+};
 
 

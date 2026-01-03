@@ -3,7 +3,7 @@
  * Connects frontend to actual ZK proof generation system
  */
 
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../utils/logger';
 
 const ZK_API_URL = process.env.NEXT_PUBLIC_ZK_API_URL || 'http://localhost:8000';
 

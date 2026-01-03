@@ -11,10 +11,10 @@
  * Result: User needs ZERO CRO, only USDC!
  */
 
-import { config } from '@/app/providers';
+import { config } from '../../app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
-import { logger } from '@/lib/utils/logger';
-import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { logger } from '../utils/logger';
+import { CONTRACT_ADDRESSES } from '../contracts/addresses';
 import { ethers } from 'ethers';
 
 // Import X402Client only on server-side to avoid node:crypto issues in browser

@@ -4,7 +4,7 @@
  */
 
 import { createPublicClient, http } from 'viem';
-import { CronosTestnet } from '@/lib/chains';
+import { CronosTestnet } from '../chains';
 
 // Contract addresses (deployed on testnet)
 export const CONTRACTS = {

@@ -3,7 +3,7 @@
  * Frontend interface to AI agents
  */
 
-import { AgentTask as SharedAgentTask } from '@/shared/types/agent';
+import { AgentTask as SharedAgentTask } from '../../shared/types/agent';
 
 // Re-export for backward compatibility
 export type AgentTask = SharedAgentTask;

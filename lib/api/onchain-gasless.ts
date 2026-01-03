@@ -3,10 +3,10 @@
  * TRUE GASLESS via x402 Facilitator - No gas costs for users!
  */
 
-import { config } from '@/app/providers';
+import { config } from '../../app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
-import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { logger } from '@/lib/utils/logger';
+import { CONTRACT_ADDRESSES } from '../contracts/addresses';
+import { logger } from '../utils/logger';
 
 // x402-powered gasless verifier (uses x402 Facilitator for zero gas costs)
 const GASLESS_VERIFIER_ADDRESS = CONTRACT_ADDRESSES.cronos_testnet.gaslessZKCommitmentVerifier;
