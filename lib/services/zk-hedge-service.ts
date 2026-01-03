@@ -67,12 +67,11 @@ export async function generatePrivateHedges(
  */
 async function generateHedgeProof(hedge: any): Promise<{ proofHash: string; verified: boolean }> {
   try {
-    // Use ZK proof generation
+    // Use ZK proof generation with dummy allocations for hedge proof
     const result = await generateRebalanceProof(
       {
-        strategy: 'HEDGE', // Public: type of operation
-        effectiveness: hedge.effectiveness, // Public: how effective
-        riskReduction: hedge.riskReduction || 0.15, // Public: expected risk reduction
+        old_allocations: [100], // Dummy: represents pre-hedge state
+        new_allocations: [Math.floor((1 - (hedge.riskReduction || 0.15)) * 100)], // Post-hedge risk reduction
       },
       undefined // No portfolio ID in public proof
     );
@@ -164,12 +163,11 @@ export async function executePrivateHedge(hedgeId: string): Promise<HedgeExecuti
     // Execute the hedge (private backend operation)
     // Details are NOT exposed to frontend
     
-    // Generate execution proof
+    // Generate execution proof with dummy allocations
     const proof = await generateRebalanceProof(
       {
-        hedgeId,
-        executed: true,
-        timestamp: Date.now(),
+        old_allocations: [100],
+        new_allocations: [100], // Execution proof, no allocation change shown
       },
       undefined
     );
