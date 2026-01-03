@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ethers } from 'ethers';
 import { HedgingAgent, HedgeStrategy, HedgeAnalysis } from '../../agents/specialized/HedgingAgent';
-import { AgentTask } from '@shared/types/agent';
+import { AgentTask } from '../../shared/types/agent';
 
 // Mock dependencies with implementations
 jest.mock('../../integrations/moonlander/MoonlanderClient', () => ({
@@ -36,14 +36,33 @@ jest.mock('../../integrations/moonlander/MoonlanderClient', () => ({
       price: '87000',
       status: 'open',
     }),
-    closePosition: jest.fn().mockResolvedValue({
-      orderId: 'mock-close-123',
-      status: 'filled',
+    closePosition: jest.fn().mockImplementation(async ({ market, size }) => {
+      if (market === 'ETH-USD-PERP' && size) {
+        return Promise.resolve({
+          orderId: 'mock-partial-close-123',
+          market: 'ETH-USD-PERP',
+          filledSize: size,
+          avgExitPrice: '3000',
+          status: 'FILLED',
+        });
+      }
+      return Promise.resolve({
+        orderId: 'mock-close-123',
+        market: 'ETH-USD-PERP',
+        filledSize: '1.0',
+        avgExitPrice: '3000',
+        status: 'FILLED',
+      });
     }),
-    getOrderStatus: jest.fn().mockResolvedValue({
-      orderId: 'mock-order-123',
-      status: 'filled',
-      filledQty: '1',
+    openHedge: jest.fn().mockImplementation(async (params) => {
+      return Promise.resolve({
+        orderId: 'mock-open-123',
+        market: params.market,
+        side: params.side,
+        notionalValue: params.notionalValue,
+        leverage: params.leverage,
+        status: 'OPEN',
+      });
     }),
   })),
 }));

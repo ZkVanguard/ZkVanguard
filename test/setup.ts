@@ -5,8 +5,7 @@
 
 import { jest } from '@jest/globals';
 
-// Mock environment variables (cannot reassign NODE_ENV in production builds)
-// process.env.NODE_ENV is set by test runner
+// Mock environment variables
 if (process.env.LOG_LEVEL === undefined) {
   process.env.LOG_LEVEL = 'error'; // Reduce noise in tests
 }
@@ -99,39 +98,20 @@ if (process.env.LOG_LEVEL === undefined) {
   mockTaskResult: (success: boolean = true, data: any = {}) => ({
     success,
     data,
-    error: success ? null : 'Mock error',
-    executionTime: Math.floor(Math.random() * 1000),
-    agentId: 'test-agent',
+    error: null,
+  }),
+
+  // Mock agent
+  mockAgent: (id: string, type: string, capabilities: string[]) => ({
+    id,
+    type,
+    capabilities,
+    isBusy: () => false,
+    isShutdown: () => false,
+    getCapabilities: () => capabilities,
+    getTaskLoad: () => 0,
+    getAgentInfo: () => ({ id, type, capabilities, load: 0, status: 'idle' }),
+    addTask: jest.fn().mockResolvedValue({ success: true }),
+    shutdown: jest.fn().mockResolvedValue(undefined),
   }),
 };
-
-// Setup console for test output
-const originalConsole = global.console;
-(global as any).console = {
-  ...originalConsole,
-  log: jest.fn((...args) => {
-    if (process.env.DEBUG === 'true') {
-      originalConsole.log(...args);
-    }
-  }),
-  info: jest.fn((...args) => {
-    if (process.env.DEBUG === 'true') {
-      originalConsole.info(...args);
-    }
-  }),
-  debug: jest.fn(), // Suppress debug in tests
-};
-
-// Cleanup after each test
-afterEach(() => {
-  jest.clearAllMocks();
-});
-
-// Global error handling
-process.on('unhandledRejection', (error) => {
-  console.error('Unhandled rejection in tests:', error);
-});
-
-console.log('Test environment initialized successfully');
-
-export {};

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ethers } from 'ethers';
 import { SettlementAgent, SettlementRequest, BatchSettlement } from '../../agents/specialized/SettlementAgent';
-import { AgentTask } from '@shared/types/agent';
+import { AgentTask } from '../../shared/types/agent';
 
 // Mock X402Client with proper implementation
 jest.mock('../../integrations/x402/X402Client', () => ({

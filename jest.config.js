@@ -9,7 +9,12 @@ module.exports = {
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: 'tsconfig.test.json',
+      },
+    ],
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
@@ -37,4 +42,5 @@ module.exports = {
   testTimeout: 30000,
   verbose: true,
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  globalTeardown: '<rootDir>/test/teardown-runner.js',
 };

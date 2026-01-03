@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { ethers } from 'ethers';
 import { ReportingAgent } from '../../agents/specialized/ReportingAgent';
-import { AgentTask } from '@shared/types/agent';
+import { AgentTask } from '../../shared/types/agent';
 
 describe('ReportingAgent', () => {
   let agent: ReportingAgent;
