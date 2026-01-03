@@ -149,12 +149,18 @@ export class HedgingAgent extends BaseAgent {
    */
   private async analyzeHedgeOpportunity(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { portfolioId: string; assetSymbol: string; notionalValue: number };
-    const { portfolioId, assetSymbol, notionalValue } = parameters;
+    const { portfolioId, assetSymbol, notionalValue } = task.parameters as { portfolioId: string; assetSymbol: string; notionalValue: number };
+
+    if (!portfolioId || !assetSymbol || !notionalValue) {
+      throw new Error('Missing required parameters: portfolioId, assetSymbol, or notionalValue');
+    }
 
     try {
       // Get current market data
       const priceData = await this.mcpClient.getPrice(assetSymbol);
+      if (!priceData) {
+        throw new Error(`Could not retrieve price data for ${assetSymbol}`);
+      }
       const volatility = await this.calculateVolatility(assetSymbol);
 
       // Determine hedge market (e.g., BTC-USD-PERP for BTC exposure)
