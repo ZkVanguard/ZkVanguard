@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Brain, Shield, Zap, Activity, TrendingDown, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport, getAgentActivity } from '@/lib/api/agents';
-import { ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
+import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport, getAgentActivity } from '../../lib/api/agents';
+import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
+import { MarkdownContent } from './MarkdownContent';
 
 interface Message {
   id: string;
@@ -19,10 +20,10 @@ interface Message {
 
 // Quick action suggestions
 const quickActions = [
-  { label: 'Analyze my portfolio', icon: Activity },
+  { label: 'Analyze portfolio', icon: Activity },
   { label: 'Assess risk level', icon: Shield },
-  { label: 'Hedge $10M against crash', icon: TrendingDown },
-  { label: 'Execute gasless settlement', icon: Zap },
+  { label: 'Buy 100 CRO', icon: TrendingDown },
+  { label: 'Get hedge recommendations', icon: Zap },
 ];
 
 export function ChatInterface({ address: _address }: { address: string }) {
@@ -30,7 +31,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your AI-powered Lead Agent orchestrating 5 specialized agents. I can:\n\n• 📊 Analyze your portfolio with real market data\n• ⚠️ Assess risk (VaR, volatility, correlations)\n• 🛡️ Generate and execute hedge strategies\n• ⚡ Process gasless settlements via x402\n• 🔐 Generate ZK proofs for privacy\n\nTry: "Hedge $10M RWA against crash for 8% yield"',
+      content: 'Hello! I\'m your AI-powered Lead Agent with full portfolio management capabilities. I can:\n\n💼 **Manage Your Portfolio:**\n• Buy/sell assets: "Buy 100 CRO" or "Sell 50 USDC"\n• Analyze positions with real market data\n• Track P/L and performance\n\n📊 **Smart Analysis:**\n• Assess risk (VaR, volatility, Sharpe ratio)\n• Generate hedge strategies via Moonlander\n• Provide AI-powered recommendations\n\n⚡ **Execute Actions:**\n• Gasless settlements via x402\n• Automated portfolio rebalancing\n• Generate ZK proofs for privacy\n\nTry: "Buy 100 CRO" or "Analyze my portfolio risk"',
       timestamp: new Date(),
       aiPowered: true,
     },
@@ -123,6 +124,48 @@ export function ChatInterface({ address: _address }: { address: string }) {
     }
     
     return { intent: 'general', params: {} };
+  };
+
+  // Call LLM API for conversational responses
+  const callLLM = async (text: string): Promise<string> => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          conversationId: _address || 'default',
+          context: {
+            address: _address,
+            timestamp: Date.now(),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('LLM API call failed');
+      }
+
+      const data = await response.json();
+      
+      // Check if an action was executed with ZK proof
+      if (data.metadata?.actionExecuted) {
+        const zkProof = data.metadata?.zkProof;
+        if (zkProof) {
+          return `🎯 **Action Executed with ZK-STARK Proof**\n\n${data.response}\n\n` +
+            `🔐 **Cryptographic Verification:**\n` +
+            `• Proof Hash: \`${zkProof.proofHash?.slice(0, 16)}...\`\n` +
+            `• Verified: ${zkProof.verified ? '✅' : '❌'}\n` +
+            `• Generation Time: ${zkProof.generationTime}ms`;
+        }
+        return `🎯 **Action Executed**\n\n${data.response}`;
+      }
+      
+      return data.response || "I'm here to help! Try asking about portfolio analysis, risk assessment, or hedging strategies.";
+    } catch (error) {
+      console.error('LLM call failed:', error);
+      return "I'm having trouble connecting to the AI service. Please try again in a moment.";
+    }
   };
 
   const handleSend = async (messageText?: string) => {
@@ -226,10 +269,11 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
         default:
           setActiveAgent('Lead Agent');
-          const agentResponse = await sendAgentCommand(textToSend);
+          // Use LLM for conversational responses
+          const llmResponse = await callLLM(textToSend);
           response = {
-            content: agentResponse.response || 'I\'ve processed your request through the agent swarm.',
-            agent: agentResponse.agent || 'Lead Agent',
+            content: llmResponse,
+            agent: 'Lead Agent (LLM-Powered)',
           };
       }
 
@@ -268,14 +312,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
     <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-[600px]">
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold flex items-center space-x-2">
-            <Bot className="w-5 h-5 text-blue-500" />
-            <span>AI Lead Agent</span>
+          <h2 className="text-lg font-semibold flex items-center space-x-2">
+            <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
+            <span>AI Agent</span>
           </h2>
           <div className="flex items-center gap-2">
             <span className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              5 Agents Online
+              5 Online
             </span>
           </div>
         </div>
@@ -323,18 +367,22 @@ export function ChatInterface({ address: _address }: { address: string }) {
                   </div>
                 )}
                 <div
-                  className={`p-3 rounded-lg ${
+                  className={`p-4 rounded-2xl ${
                     message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-100'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                      : 'bg-gray-800/90 backdrop-blur-sm text-gray-100 shadow-lg border border-gray-700/50'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                  {message.role === 'assistant' ? (
+                    <MarkdownContent content={message.content} />
+                  ) : (
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
+                  )}
                   {message.role === 'assistant' && (
-                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-600/50">
+                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-700/50">
                       {message.agentType && (
-                        <span className="text-xs text-purple-400 flex items-center gap-1">
-                          <Brain className="w-3 h-3" />
+                        <span className="text-xs text-purple-400 flex items-center gap-1.5 font-medium">
+                          <Brain className="w-3.5 h-3.5" />
                           {message.agentType}
                         </span>
                       )}

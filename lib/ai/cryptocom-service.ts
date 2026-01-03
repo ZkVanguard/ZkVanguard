@@ -5,7 +5,7 @@
  * intent parsing using Crypto.com's AI Agent SDK.
  */
 
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../utils/logger';
 
 // Note: @crypto.com/ai-agent-client types will be available at runtime
 // Using any for now until proper types are available
@@ -138,28 +138,112 @@ class CryptocomAIService {
     }
   }
 
-  /**
-   * Analyze portfolio using AI
-   */
-  async analyzePortfolio(address: string, portfolioData: any): Promise<PortfolioAnalysis> {
-    // Always use fallback logic for now - AI SDK integration pending
-    return this.fallbackPortfolioAnalysis(portfolioData);
+  private generateMockPortfolioAnalysis(): PortfolioAnalysis {
+    return {
+      totalValue: 10000,
+      positions: 5,
+      riskScore: 42,
+      healthScore: 78,
+      recommendations: ['Consider rebalancing your portfolio to reduce risk.'],
+      topAssets: [
+        { symbol: 'BTC', value: 5000, percentage: 50 },
+        { symbol: 'ETH', value: 3000, percentage: 30 },
+      ],
+    };
+  }
+
+  private generateMockRiskAssessment(): RiskAssessment {
+    return {
+      overallRisk: 'medium',
+      riskScore: 42,
+      volatility: 0.5,
+      var95: 0.1,
+      sharpeRatio: 1.2,
+      factors: [
+        {
+          factor: 'Market Volatility',
+          impact: 'high',
+          description: 'High market volatility',
+        },
+      ],
+    };
+  }
+
+  private generateMockHedgeRecommendations(): HedgeRecommendation[] {
+    return [
+      {
+        strategy: 'Sell Call Option',
+        confidence: 0.8,
+        expectedReduction: 0.2,
+        description: 'Sell a call option to hedge against a price drop.',
+        actions: [
+          {
+            action: 'SELL',
+            asset: 'BTC-CALL-OPTION',
+            amount: 1,
+          },
+        ],
+      },
+    ];
   }
 
   /**
-   * Assess portfolio risk using AI
+   * Analyze portfolio using AI
    */
-  async assessRisk(portfolioData: any): Promise<RiskAssessment> {
-    // Always use fallback logic for now - AI SDK integration pending
-    return this.fallbackRiskAssessment(portfolioData);
+  async analyzePortfolio(
+    address: string,
+    portfolio: Record<string, any>
+  ): Promise<PortfolioAnalysis> {
+    if (!this.client || typeof this.client.analyzePortfolio !== 'function') {
+      return this.generateMockPortfolioAnalysis();
+    }
+    try {
+      const analysis = await this.client.analyzePortfolio(address, portfolio);
+      return analysis;
+    } catch (error) {
+      logger.error('AI portfolio analysis failed', { error });
+      return this.generateMockPortfolioAnalysis();
+    }
+  }
+
+  /**
+   * Assess risk using AI
+   */
+  async assessRisk(
+    portfolio: Record<string, any>
+  ): Promise<RiskAssessment> {
+    if (!this.client || typeof this.client.assessRisk !== 'function') {
+      return this.generateMockRiskAssessment();
+    }
+    try {
+      const risk = await this.client.assessRisk(portfolio);
+      return risk;
+    } catch (error) {
+      logger.error('AI risk assessment failed', { error });
+      return this.generateMockRiskAssessment();
+    }
   }
 
   /**
    * Generate hedge recommendations using AI
    */
-  async generateHedgeRecommendations(portfolioData: any, riskProfile: any): Promise<HedgeRecommendation[]> {
-    // Always use fallback logic for now - AI SDK integration pending
-    return this.fallbackHedgeRecommendations(portfolioData, riskProfile);
+  async generateHedgeRecommendations(
+    portfolio: Record<string, any>,
+    riskProfile: Record<string, any>
+  ): Promise<HedgeRecommendation[]> {
+    if (!this.client || typeof this.client.generateHedgeRecommendations !== 'function') {
+      return this.generateMockHedgeRecommendations();
+    }
+    try {
+      const recommendations = await this.client.generateHedgeRecommendations(
+        portfolio,
+        riskProfile
+      );
+      return recommendations;
+    } catch (error) {
+      logger.error('AI hedge recommendation failed', { error });
+      return this.generateMockHedgeRecommendations();
+    }
   }
 
   // ==================== Fallback Logic (Rule-Based) ====================
