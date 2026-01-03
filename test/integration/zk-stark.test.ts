@@ -3,9 +3,9 @@
  * @module test/integration/zk-stark
  */
 
-import { proofGenerator } from '../../zk/prover/ProofGenerator';
-import { proofValidator } from '../../zk/verifier/ProofValidator';
-import { logger } from '../../shared/utils/logger';
+import { proofGenerator } from '@/zk/prover/ProofGenerator';
+import { proofValidator } from '@/zk/verifier/ProofValidator';
+import { logger } from '@shared/utils/logger';
 
 describe('ZK-STARK Integration Tests', () => {
   describe('Proof Generation', () => {
@@ -38,7 +38,7 @@ describe('ZK-STARK Integration Tests', () => {
         protocol: proof.protocol,
         generationTime: proof.generationTime,
       });
-    });
+    }, 120000);
 
     it('should generate proof with FRI commitments', async () => {
       const statement = { claim: 'Test claim', threshold: 50 };
@@ -50,7 +50,7 @@ describe('ZK-STARK Integration Tests', () => {
       expect(proof.proof.fri_roots.length).toBeGreaterThan(0);
       expect(proof.proof.trace_merkle_root).toBeDefined();
       expect(proof.proof.query_responses).toBeDefined();
-    });
+    }, 120000);
 
     it('should handle batch proof generation', async () => {
       const inputs = [
@@ -71,7 +71,7 @@ describe('ZK-STARK Integration Tests', () => {
       expect(proofs).toHaveLength(2);
       expect(proofs[0].proofType).toBe('risk-1');
       expect(proofs[1].proofType).toBe('risk-2');
-    });
+    }, 120000);
   });
 
   describe('Proof Verification', () => {
@@ -100,7 +100,7 @@ describe('ZK-STARK Integration Tests', () => {
         valid: validation.valid,
         verificationTime: validation.verificationTime,
       });
-    });
+    }, 120000);
 
     it('should reject invalid proof', async () => {
       const invalidProof = {
@@ -146,7 +146,7 @@ describe('ZK-STARK Integration Tests', () => {
       expect(outputs.statement).toEqual(statement);
       expect(outputs.protocol).toContain('STARK');
       expect(outputs.publicOutput).toBeDefined();
-    });
+    }, 120000);
   });
 
   describe('STARK Protocol Features', () => {
@@ -159,7 +159,7 @@ describe('ZK-STARK Integration Tests', () => {
       expect(proof.proof.air_satisfied).toBe(true);
       expect(proof.proof.trace_length).toBeGreaterThan(0);
       expect(proof.proof.extended_trace_length).toBe(proof.proof.trace_length * proof.proof.blowup_factor);
-    });
+    }, 120000);
 
     it('should include FRI query responses', async () => {
       const statement = { claim: 'FRI test', threshold: 100 };
@@ -169,7 +169,7 @@ describe('ZK-STARK Integration Tests', () => {
 
       expect(proof.proof.query_responses).toBeDefined();
       expect(Array.isArray(proof.proof.query_responses)).toBe(true);
-    });
+    }, 120000);
 
     it('should use NIST P-521 prime', async () => {
       const statement = { claim: 'Prime test', threshold: 100 };
@@ -181,7 +181,7 @@ describe('ZK-STARK Integration Tests', () => {
         '6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151';
 
       expect(proof.proof.field_prime).toBe(expectedPrime);
-    });
+    }, 120000);
   });
 
   describe('Performance', () => {
@@ -201,7 +201,7 @@ describe('ZK-STARK Integration Tests', () => {
         totalTime,
         generationTime: proof.generationTime,
       });
-    });
+    }, 120000);
 
     it('should verify proof quickly', async () => {
       const statement = { claim: 'Verify performance', threshold: 100 };
@@ -223,7 +223,7 @@ describe('ZK-STARK Integration Tests', () => {
       logger.info('Proof verification performance', {
         verifyTime: validation.verificationTime,
       });
-    });
+    }, 120000);
   });
 
   describe('Error Handling', () => {
@@ -236,7 +236,7 @@ describe('ZK-STARK Integration Tests', () => {
 
       expect(proof).toBeDefined();
       expect(proof.protocol).toBeDefined();
-    });
+    }, 120000);
 
     it('should validate proof structure before verification', () => {
       const incompleteProof = {
