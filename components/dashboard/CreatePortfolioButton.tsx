@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { useCreatePortfolio, usePortfolioCount } from '@/lib/contracts/hooks';
+import { useCreatePortfolio, usePortfolioCount } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export function CreatePortfolioButton() {

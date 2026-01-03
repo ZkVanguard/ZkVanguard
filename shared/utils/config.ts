@@ -6,7 +6,7 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { NetworkConfig, ContractAddresses } from '@shared/types/blockchain';
+import { NetworkConfig, ContractAddresses } from '../types/blockchain';
 
 // Load environment variables
 dotenv.config();

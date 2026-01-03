@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { usePortfolio } from '@/lib/contracts/hooks';
+import { usePortfolio } from '../../lib/contracts/hooks';
 import { formatEther } from 'viem';
 import { RefreshCw } from 'lucide-react';
 

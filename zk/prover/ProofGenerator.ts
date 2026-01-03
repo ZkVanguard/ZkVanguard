@@ -6,8 +6,8 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
-import { logger } from '@shared/utils/logger';
-import { RiskAnalysis } from '@shared/types/agent';
+import { logger } from '../../shared/utils/logger';
+import { RiskAnalysis } from '../../shared/types/agent';
 
 export interface ZKProofInput {
   proofType: string;
@@ -60,7 +60,7 @@ export class ProofGenerator {
       portfolio_value: 10000000, // $10M example
     };
 
-    return await this.generateProof('risk-calculation', statement, witness);
+    return await this.generateProof('risk', statement, witness);
   }
 
   /**
@@ -87,7 +87,7 @@ export class ProofGenerator {
         proof: resultProof,
         proofHash: (resultProof.trace_merkle_root as string) || this.hashProofSync(resultProof),
         proofType,
-        verified: (result.verified as boolean) || false,
+        verified: (result.proof as any)?.verified ?? (result.verified as boolean) ?? false,
         generationTime: Date.now() - startTime,
         protocol: (resultProof.protocol as string) || 'ZK-STARK',
       };
@@ -124,14 +124,14 @@ export class ProofGenerator {
     const zkEnabledEnv = (process.env.ZK_PYTHON_ENABLED || '').toLowerCase();
     const zkEnabled = zkEnabledEnv === '1' || zkEnabledEnv === 'true';
     const isTestMode = !zkEnabled && (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined);
-    if (isTestMode) {
+    if (isTestMode && proofType !== 'real-proof') {
       throw new Error('Test mode: using mock proof');
     }
 
     // Prefer HTTP API if available (useful when FastAPI server is running).
     const zkApiUrl = process.env.ZK_API_URL || process.env.ZK_PYTHON_API_URL || '';
     const useHttp = zkApiUrl !== '' || (process.env.ZK_PYTHON_USE_HTTP || '').toLowerCase() === '1';
-    const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 30000; // default 30s
+    const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 120000; // default 120s
 
     if (useHttp) {
       return new Promise(async (resolve, reject) => {
@@ -147,7 +147,7 @@ export class ProofGenerator {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: controller.signal,
-            body: JSON.stringify({ proof_type: proofType, data: { statement, witness } }),
+            body: JSON.stringify({ proof_type: proofType, data: { statement, witness }, is_test: true }),
           });
 
           if (!resp.ok) {

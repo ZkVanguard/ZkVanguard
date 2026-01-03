@@ -4,8 +4,8 @@
  */
 
 import { ethers } from 'hardhat';
-import { saveContractAddresses, getCurrentNetwork } from '@shared/utils/config';
-import { logger } from '@shared/utils/logger';
+import { saveContractAddresses, getCurrentNetwork } from '../../shared/utils/config';
+import { logger } from '../../shared/utils/logger';
 
 async function main() {
   const network = await ethers.provider.getNetwork();
