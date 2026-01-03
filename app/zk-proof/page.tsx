@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from 'react';
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../../lib/utils/logger';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
-import { ProofVerification } from '@/components/dashboard/ProofVerification';
+import { ProofVerification } from '../../components/dashboard/ProofVerification';
 import { useAccount } from 'wagmi';
 
 interface Proof {

@@ -2,10 +2,10 @@
 
 import { ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
-import { CronosTestnet, CronosMainnet } from '@/lib/chains';
+import { CronosTestnet, CronosMainnet } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { ThemeProvider as CustomThemeProvider } from '@/contexts/ThemeContext';
+import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
