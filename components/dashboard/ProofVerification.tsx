@@ -1,5 +1,5 @@
 'use client';
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../../lib/utils/logger';
 
 import { useState } from 'react';
 import { Shield, ExternalLink, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';

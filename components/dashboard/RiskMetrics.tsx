@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle, TrendingUp, Shield, Activity, Brain } from 'lucide-react';
-import { assessPortfolioRisk } from '@/lib/api/agents';
-import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
+import { assessPortfolioRisk } from '../../lib/api/agents';
+import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 
 interface RiskMetric {
   label: string;

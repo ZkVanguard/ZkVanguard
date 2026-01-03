@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { DollarSign, Activity, RefreshCw, Brain } from 'lucide-react';
-import { usePortfolioCount } from '@/lib/contracts/hooks';
-import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
-import type { PortfolioAnalysis } from '@/lib/ai/cryptocom-service';
+import { usePortfolioCount } from '../../lib/contracts/hooks';
+import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
+import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
 
 interface PortfolioData {
   totalValue: number;

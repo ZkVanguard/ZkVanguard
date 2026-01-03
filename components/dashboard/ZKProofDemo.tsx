@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { useVerifyProof, useContractAddresses } from '@/lib/contracts/hooks';
-import { generateProofForOnChain } from '@/lib/api/zk';
+import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
+import { generateProofForOnChain } from '../../lib/api/zk';
 import { useWalletClient } from 'wagmi';
 
 export function ZKProofDemo() {
