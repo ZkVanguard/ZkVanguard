@@ -7,8 +7,8 @@
  */
 
 import { EventEmitter } from 'eventemitter3';
-import { logger } from '@shared/utils/logger';
-import config from '@shared/utils/config';
+import { logger } from '../../shared/utils/logger';
+import config from '../../shared/utils/config';
 import { RealMarketDataService } from '../../lib/services/RealMarketDataService';
 const { EventSource } = require('eventsource');
 

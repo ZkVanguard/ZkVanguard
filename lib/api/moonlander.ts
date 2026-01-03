@@ -3,7 +3,7 @@
  * For perpetual futures positions on Cronos zkEVM
  */
 
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../utils/logger';
 import fetch from 'node-fetch';
 
 export interface Position {

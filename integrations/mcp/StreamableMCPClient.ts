@@ -9,7 +9,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { logger } from '@shared/utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 export interface MCPPriceData {
   symbol: string;
