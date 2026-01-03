@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useBalance, useChainId } from 'wagmi';
-import { logger } from '@/lib/utils/logger';
-import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
-import { AgentActivity } from '@/components/dashboard/AgentActivity';
-import { RiskMetrics } from '@/components/dashboard/RiskMetrics';
-import { ChatInterface } from '@/components/dashboard/ChatInterface';
-import { PositionsList } from '@/components/dashboard/PositionsList';
+import { logger } from '../../lib/utils/logger';
+import { PortfolioOverview } from '../../components/dashboard/PortfolioOverview';
+import { AgentActivity } from '../../components/dashboard/AgentActivity';
+import { RiskMetrics } from '../../components/dashboard/RiskMetrics';
+import { ChatInterface } from '../../components/dashboard/ChatInterface';
+import { PositionsList } from '../../components/dashboard/PositionsList';
 import { SettlementsPanel } from '@/components/dashboard/SettlementsPanel';
 import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
-import { CreatePortfolioButton } from '@/components/dashboard/CreatePortfolioButton';
+import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfolioCreator';
 import { formatEther } from 'viem';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 
@@ -116,7 +116,9 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-6">
             {activeTab === 'overview' && (
               <>
-                <CreatePortfolioButton />
+                <div className="flex justify-center">
+                  <AdvancedPortfolioCreator />
+                </div>
                 <PortfolioOverview address={displayAddress} />
                 <RiskMetrics address={displayAddress} />
                 <ZKProofDemo />
