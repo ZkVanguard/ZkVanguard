@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import '../styles/globals.css';
 import { Providers } from './providers';
-import { Navbar } from '@/components/Navbar';
-import { Footer } from '@/components/Footer';
-import { DebugLogToggle, DebugLogPanel } from '@/components/DebugLogPanel';
+import { Navbar } from '../components/Navbar';
+import { Footer } from '../components/Footer';
+import { DebugLogToggle, DebugLogPanel } from '../components/DebugLogPanel';
 
 const inter = Inter({ subsets: ['latin'] });
 

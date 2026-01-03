@@ -616,7 +616,7 @@ function ZKProofsSection() {
       <div className="bg-gray-900 rounded-lg p-4 mb-4">
         <p className="text-xs text-gray-400 mb-2">Frontend Usage (Working Now):</p>
         <pre className="text-gray-300 text-sm overflow-x-auto">
-{`import { generateSettlementProof } from '@/lib/api/zk';
+{`import { generateSettlementProof } from '../../lib/api/zk';
 
 // Real ZK-STARK proof generation via Python backend
 const proofStatus = await generateSettlementProof(transactions);

@@ -7,7 +7,7 @@ import {
   Shield, Zap, AlertTriangle, CheckCircle, Brain, ChevronDown,
   Terminal, Eye, EyeOff, Settings, Download, XCircle
 } from 'lucide-react';
-import { ZKVerificationBadge, ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
+import { ZKVerificationBadge, ZKBadgeInline, type ZKProofData } from '../../components/ZKVerificationBadge';
 
 interface PortfolioState {
   totalValue: number;

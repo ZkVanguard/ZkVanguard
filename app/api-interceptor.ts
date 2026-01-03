@@ -1,6 +1,6 @@
 // API Interceptor to block WalletConnect Cloud 403 errors
 // This must run before any wallet initialization code
-import { logger } from '@/lib/utils/logger';
+import { logger } from '../lib/utils/logger';
 
 if (typeof window !== 'undefined') {
   const blockedDomains = [
