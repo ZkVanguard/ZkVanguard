@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Clock, CheckCircle, XCircle, Loader2, ExternalLink, Wallet, Plus, Trash2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { useProcessSettlement, useContractAddresses } from '@/lib/contracts/hooks';
+import { useProcessSettlement, useContractAddresses } from '../../lib/contracts/hooks';
 import { parseEther } from 'viem';
 
 interface Payment {

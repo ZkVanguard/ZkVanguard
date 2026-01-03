@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ExternalLink, Wallet } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { usePortfolioCount } from '@/lib/contracts/hooks';
+import { usePortfolioCount } from '../../lib/contracts/hooks';
 
 interface Position {
   id: string;
