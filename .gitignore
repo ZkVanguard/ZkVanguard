@@ -41,6 +41,16 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Temporary test scripts
+test-*.js
+test-chat-*.js
+test-zk-*.js
+test-auto-*.js
+
+# Session documentation (temporary)
+AI_CHAT_TEST_REPORT.md
+PROJECT_FIX_SUMMARY.md
+
 # IDE
 .vscode/
 .idea/
