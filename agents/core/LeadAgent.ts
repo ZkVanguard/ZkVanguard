@@ -19,7 +19,7 @@ import {
   TaskResult,
   RiskAnalysis,
   HedgingStrategy,
-  SettlementRequest,
+  SettlementResult,
 } from '@shared/types/agent';
 import { ethers } from 'ethers';
 
