@@ -5,7 +5,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { ethers } from 'ethers';
-import { logger } from '@shared/utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 export interface PerpetualPosition {
   positionId: string;
@@ -289,8 +289,9 @@ export class MoonlanderClient {
   /**
    * Close position
    */
-  async closePosition(market: string, size?: string): Promise<OrderResult> {
+  async closePosition(params: { market: string; size?: string }): Promise<OrderResult> {
     this.ensureInitialized();
+    const { market, size } = params;
 
     try {
       const position = await this.getPosition(market);

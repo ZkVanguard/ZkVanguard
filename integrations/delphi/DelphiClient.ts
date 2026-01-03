@@ -5,7 +5,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { ethers } from 'ethers';
-import { logger } from '@shared/utils/logger';
+import { logger } from '../../shared/utils/logger';
 
 export interface Market {
   marketId: string;
