@@ -121,7 +121,22 @@ export default function AuthenticityVerificationPage() {
     );
   }
 
-  if (!data || !data.implementation) return null;
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white flex items-center justify-center p-6">
+        <div className="max-w-2xl bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-8">
+          <h1 className="text-2xl font-bold text-yellow-400 mb-4">⚠️ Configuration Required</h1>
+          <p className="text-gray-300 mb-4">ZK backend is not configured. Set ZK_API_URL environment variable to enable authenticity verification.</p>
+          <button
+            onClick={fetchAuthenticityProof}
+            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-6">
@@ -147,59 +162,62 @@ export default function AuthenticityVerificationPage() {
         )}
 
         {/* Implementation Details */}
-        <div className="bg-gray-800/50 border border-purple-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Code className="w-6 h-6 text-purple-400" />
-            <h3 className="text-xl font-bold">Real Implementation</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <div className="text-gray-400">System:</div>
-              <div className="text-emerald-400 font-semibold">{data.implementation.system}</div>
+        {data.implementation && (
+          <div className="bg-gray-800/50 border border-purple-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Code className="w-6 h-6 text-purple-400" />
+              <h3 className="text-xl font-bold">Real Implementation</h3>
             </div>
-            <div>
-              <div className="text-gray-400">Type:</div>
-              <div className="text-purple-400 font-semibold">{data.implementation.type}</div>
-            </div>
-            <div>
-              <div className="text-gray-400">Source Location:</div>
-              <div className="text-blue-400 font-mono text-xs">{data.implementation.location}</div>
-            </div>
-            <div>
-              <div className="text-gray-400">Status:</div>
-              <div className="flex items-center gap-2">
-                {data.implementation.not_simulated && (
-                  <span className="text-emerald-400 font-semibold">✅ Real (Not Simulated)</span>
-                )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="text-gray-400">System:</div>
+                <div className="text-emerald-400 font-semibold">{data.implementation.system}</div>
+              </div>
+              <div>
+                <div className="text-gray-400">Type:</div>
+                <div className="text-purple-400 font-semibold">{data.implementation.type}</div>
+              </div>
+              <div>
+                <div className="text-gray-400">Source Location:</div>
+                <div className="text-blue-400 font-mono text-xs">{data.implementation.location}</div>
+              </div>
+              <div>
+                <div className="text-gray-400">Status:</div>
+                <div className="flex items-center gap-2">
+                  {data.implementation.not_simulated && (
+                    <span className="text-emerald-400 font-semibold">✅ Real (Not Simulated)</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Cryptographic Parameters */}
-        <div className="bg-gray-800/50 border border-blue-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Lock className="w-6 h-6 text-blue-400" />
-            <h3 className="text-xl font-bold">Cryptographic Parameters</h3>
-          </div>
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-gray-400">Field:</div>
-                <div className="text-blue-400 font-semibold">{data.cryptographic_parameters.field}</div>
-              </div>
-              <div>
-                <div className="text-gray-400">Security Level:</div>
-                <div className="text-emerald-400 font-semibold">{data.cryptographic_parameters.security_level} bits</div>
-              </div>
-              <div>
-                <div className="text-gray-400">Hash Function:</div>
-                <div className="text-purple-400 font-semibold">{data.cryptographic_parameters.hash_function}</div>
-              </div>
-              <div>
-                <div className="text-gray-400">Commitment Scheme:</div>
-                <div className="text-purple-400 font-semibold">{data.cryptographic_parameters.commitment_scheme}</div>
-              </div>
+        {data.cryptographic_parameters && (
+          <div className="bg-gray-800/50 border border-blue-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Lock className="w-6 h-6 text-blue-400" />
+              <h3 className="text-xl font-bold">Cryptographic Parameters</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-gray-400">Field:</div>
+                  <div className="text-blue-400 font-semibold">{data.cryptographic_parameters.field}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Security Level:</div>
+                  <div className="text-emerald-400 font-semibold">{data.cryptographic_parameters.security_level} bits</div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Hash Function:</div>
+                  <div className="text-purple-400 font-semibold">{data.cryptographic_parameters.hash_function}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Commitment Scheme:</div>
+                  <div className="text-purple-400 font-semibold">{data.cryptographic_parameters.commitment_scheme}</div>
+                </div>
             </div>
             <div>
               <div className="text-gray-400 mb-1">Field Prime (proves real math):</div>
@@ -213,6 +231,7 @@ export default function AuthenticityVerificationPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Live Test Proof */}
         {data.test_proof && data.test_proof.generated && (
@@ -246,129 +265,139 @@ export default function AuthenticityVerificationPage() {
         )}
 
         {/* CUDA Optimization */}
-        <div className="bg-gray-800/50 border border-yellow-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Cpu className="w-6 h-6 text-yellow-400" />
-            <h3 className="text-xl font-bold">Hardware Acceleration</h3>
-          </div>
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-gray-400">CUDA Available:</div>
-                <div className={`font-semibold ${data.cuda_optimization.available ? 'text-emerald-400' : 'text-gray-400'}`}>
-                  {data.cuda_optimization.available ? '✅ Yes' : '❌ No'}
+        {data.cuda_optimization && (
+          <div className="bg-gray-800/50 border border-yellow-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Cpu className="w-6 h-6 text-yellow-400" />
+              <h3 className="text-xl font-bold">Hardware Acceleration</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-gray-400">CUDA Available:</div>
+                  <div className={`font-semibold ${data.cuda_optimization.available ? 'text-emerald-400' : 'text-gray-400'}`}>
+                    {data.cuda_optimization.available ? '✅ Yes' : '❌ No'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-400">CUDA Enabled:</div>
+                  <div className={`font-semibold ${data.cuda_optimization.enabled ? 'text-emerald-400' : 'text-gray-400'}`}>
+                    {data.cuda_optimization.enabled ? '✅ Yes' : '❌ No'}
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-gray-400 mb-1">Performance Gain:</div>
+                  <div className="text-purple-400 font-semibold">{data.cuda_optimization.performance_gain}</div>
                 </div>
               </div>
               <div>
-                <div className="text-gray-400">CUDA Enabled:</div>
-                <div className={`font-semibold ${data.cuda_optimization.enabled ? 'text-emerald-400' : 'text-gray-400'}`}>
-                  {data.cuda_optimization.enabled ? '✅ Yes' : '❌ No'}
+                <div className="text-gray-400 mb-2">Accelerated Operations:</div>
+                <div className="flex flex-wrap gap-2">
+                  {data.cuda_optimization.accelerates.map((op, idx) => (
+                    <span key={idx} className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-full text-yellow-300 text-xs">
+                      {op}
+                    </span>
+                  ))}
                 </div>
-              </div>
-              <div className="md:col-span-2">
-                <div className="text-gray-400 mb-1">Performance Gain:</div>
-                <div className="text-purple-400 font-semibold">{data.cuda_optimization.performance_gain}</div>
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-400 mb-2">Accelerated Operations:</div>
-              <div className="flex flex-wrap gap-2">
-                {data.cuda_optimization.accelerates.map((op, idx) => (
-                  <span key={idx} className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-full text-yellow-300 text-xs">
-                    {op}
-                  </span>
-                ))}
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ZK Properties */}
-        <div className="bg-gray-800/50 border border-purple-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="w-6 h-6 text-purple-400" />
-            <h3 className="text-xl font-bold">ZK-STARK Properties (Mathematical Guarantees)</h3>
+        {data.zk_properties && (
+          <div className="bg-gray-800/50 border border-purple-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Shield className="w-6 h-6 text-purple-400" />
+              <h3 className="text-xl font-bold">ZK-STARK Properties (Mathematical Guarantees)</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              {Object.entries(data.zk_properties).map(([key, value]) => (
+                <div key={key}>
+                  <div className="text-gray-400 capitalize">{key.replace(/_/g, ' ')}:</div>
+                  <div className="text-emerald-400">{value}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            {Object.entries(data.zk_properties).map(([key, value]) => (
-              <div key={key}>
-                <div className="text-gray-400 capitalize">{key.replace(/_/g, ' ')}:</div>
-                <div className="text-emerald-400">{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Source Code */}
-        <div className="bg-gray-800/50 border border-blue-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <FileCode className="w-6 h-6 text-blue-400" />
-            <h3 className="text-xl font-bold">Source Code (Verifiable)</h3>
+        {data.source_code && (
+          <div className="bg-gray-800/50 border border-blue-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <FileCode className="w-6 h-6 text-blue-400" />
+              <h3 className="text-xl font-bold">Source Code (Verifiable)</h3>
+            </div>
+            <div className="space-y-2 text-sm">
+              {Object.entries(data.source_code).filter(([key]) => !['public_repository', 'auditable'].includes(key)).map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <div className="text-gray-400 capitalize">{key.replace(/_/g, ' ')}:</div>
+                  <div className="text-blue-400 font-mono text-xs">{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-3">
+              <span className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-300 text-xs">
+                ✅ Public Repository
+              </span>
+              <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-300 text-xs">
+                ✅ Fully Auditable
+              </span>
+            </div>
           </div>
-          <div className="space-y-2 text-sm">
-            {Object.entries(data.source_code).filter(([key]) => !['public_repository', 'auditable'].includes(key)).map(([key, value]) => (
-              <div key={key} className="flex items-center justify-between py-2 border-b border-gray-700">
-                <div className="text-gray-400 capitalize">{key.replace(/_/g, ' ')}:</div>
-                <div className="text-blue-400 font-mono text-xs">{value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex gap-3">
-            <span className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-300 text-xs">
-              ✅ Public Repository
-            </span>
-            <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full text-blue-300 text-xs">
-              ✅ Fully Auditable
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Verification Methods */}
-        <div className="bg-gray-800/50 border border-emerald-500/30 rounded-xl p-6">
-          <h3 className="text-xl font-bold mb-4">🔍 How YOU Can Verify Authenticity</h3>
-          <div className="space-y-4">
-            {data.verification_methods.map((method, idx) => (
-              <div key={idx} className="bg-gray-900/50 rounded-lg p-4">
-                <h4 className="font-semibold text-emerald-400 mb-2">{idx + 1}. {method.method}</h4>
-                <ol className="space-y-1 text-sm text-gray-300">
-                  {method.steps.map((step, stepIdx) => (
-                    <li key={stepIdx} className="flex items-start gap-2">
-                      <span className="text-purple-400">→</span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
+        {data.verification_methods && (
+          <div className="bg-gray-800/50 border border-emerald-500/30 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4">🔍 How YOU Can Verify Authenticity</h3>
+            <div className="space-y-4">
+              {data.verification_methods.map((method, idx) => (
+                <div key={idx} className="bg-gray-900/50 rounded-lg p-4">
+                  <h4 className="font-semibold text-emerald-400 mb-2">{idx + 1}. {method.method}</h4>
+                  <ol className="space-y-1 text-sm text-gray-300">
+                    {method.steps.map((step, stepIdx) => (
+                      <li key={stepIdx} className="flex items-start gap-2">
+                        <span className="text-purple-400">→</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* System Status */}
-        <div className="bg-gradient-to-r from-emerald-900/30 to-green-900/30 border border-emerald-500/50 rounded-xl p-6">
-          <h3 className="text-xl font-bold mb-4">🎯 Live System Status</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <div className="text-gray-400">Backend:</div>
-              <div className="text-emerald-400 font-semibold">
-                {data.system_status.backend_operational ? '✅ Operational' : '❌ Down'}
+        {data.system_status && (
+          <div className="bg-gradient-to-r from-emerald-900/30 to-green-900/30 border border-emerald-500/50 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4">🎯 Live System Status</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="text-gray-400">Backend:</div>
+                <div className="text-emerald-400 font-semibold">
+                  {data.system_status.backend_operational ? '✅ Operational' : '❌ Down'}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-gray-400">Proof Generation:</div>
-              <div className="text-emerald-400 font-semibold">
-                {data.system_status.proof_generation_working ? '✅ Working' : '❌ Failed'}
+              <div>
+                <div className="text-gray-400">Proof Generation:</div>
+                <div className="text-emerald-400 font-semibold">
+                  {data.system_status.proof_generation_working ? '✅ Working' : '❌ Failed'}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-gray-400">Avg Proof Time:</div>
-              <div className="text-purple-400 font-semibold">
-                {typeof data.system_status.average_proof_time === 'number' 
-                  ? `${(data.system_status.average_proof_time * 1000).toFixed(0)}ms`
-                  : data.system_status.average_proof_time}
+              <div>
+                <div className="text-gray-400">Avg Proof Time:</div>
+                <div className="text-purple-400 font-semibold">
+                  {typeof data.system_status.average_proof_time === 'number' 
+                    ? `${(data.system_status.average_proof_time * 1000).toFixed(0)}ms`
+                    : data.system_status.average_proof_time}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Refresh Button */}
         <div className="text-center">
