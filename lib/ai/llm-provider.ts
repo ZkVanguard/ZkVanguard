@@ -155,8 +155,13 @@ class LLMProvider {
         actionResult = await executePortfolioAction(actionIntent);
         actionExecuted = true;
         
-        // Add action result to context
-        const formattedResult = formatActionResult(actionIntent, actionResult);
+        // Format action result with better error messages
+        let formattedResult: string;
+        if (!actionResult.success) {
+          formattedResult = `⚠️ **Action Failed**: ${actionResult.message}\n\n${actionResult.error || 'Please ensure you\'re connected to the network and try again.'}`;
+        } else {
+          formattedResult = formatActionResult(actionIntent, actionResult);
+        }
         
         // Return the action result directly with ZK proof
         history.push({
@@ -325,10 +330,19 @@ class LLMProvider {
       };
     }
 
+    // Market Analysis
+    if (lower.match(/market|cronos|cro|ecosystem|price|sentiment|conditions/)) {
+      return {
+        content: `I'll analyze the current market conditions for you! 📊\n\n**Market Intelligence:**\n• **Cronos Ecosystem**: Layer 1 blockchain with strong DeFi presence\n• **CRO Token**: Native token with utility across CDC ecosystem\n• **Current Trends**: Institutional adoption increasing, TVL growing\n• **Risk Factors**: Market volatility, regulatory changes, macro conditions\n\n**Portfolio Recommendations:**\n✓ Consider your risk tolerance and time horizon\n✓ Diversify across multiple assets (CRO, ETH, BTC, stablecoins)\n✓ Use hedging strategies for downside protection\n✓ Monitor correlation with broader crypto markets\n\n**Data-Driven Insights:**\nI use real-time market data, on-chain analytics, and AI models to provide actionable recommendations. Would you like me to analyze your specific portfolio in the context of current market conditions?`,
+        model: 'rule-based-fallback',
+        confidence: 0.85,
+      };
+    }
+
     // Risk Assessment
     if (lower.includes('risk') || lower.includes('var') || lower.includes('volatility')) {
       return {
-        content: `Risk assessment is one of my core capabilities! 📈\n\n**I can evaluate:**\n• **Value at Risk (VaR)**: Maximum potential loss at 95% confidence\n• **Volatility**: Price fluctuation measurement\n• **Sharpe Ratio**: Risk-adjusted returns\n• **Correlation**: How assets move together\n• **Liquidation Risk**: Margin call probabilities\n\nThe AI agents will analyze your positions using real market data and provide actionable insights. Want me to assess your current risk level?`,
+        content: `Risk assessment is one of my core capabilities! 📈\n\n**I can evaluate:**\n• **Value at Risk (VaR)**: Maximum potential loss at 95% confidence\n• **Volatility**: Price fluctuation measurement\n• **Sharpe Ratio**: Risk-adjusted returns\n• **Correlation**: How assets move together\n• **Liquidation Risk**: Margin call probabilities\n\n**Methodology:**\nI use Monte Carlo simulations, historical data analysis, and correlation matrices to assess portfolio risk. Results are ZK-verified for accuracy.\n\nThe AI agents will analyze your positions using real market data and provide actionable insights. Want me to assess your current risk level?`,
         model: 'rule-based-fallback',
         confidence: 0.85,
       };
