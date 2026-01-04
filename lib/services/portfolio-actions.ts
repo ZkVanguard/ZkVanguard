@@ -141,11 +141,16 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
       zkProof, // Always include ZK proof
     };
   } catch (error) {
-    logger.error('Portfolio action error:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Portfolio action error:', { 
+      error: errorMsg, 
+      action: action.type,
+      baseUrl: typeof window !== 'undefined' ? 'browser' : process.env.NEXT_PUBLIC_SITE_URL 
+    });
     return {
       success: false,
-      message: 'Action execution failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      message: `Unable to connect to portfolio service. Please check your connection and try again.`,
+      error: errorMsg,
     };
   }
 }
