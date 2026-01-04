@@ -55,6 +55,10 @@ const nextConfig = {
     NEXT_PUBLIC_MCP_API: process.env.NEXT_PUBLIC_MCP_API,
     NEXT_PUBLIC_X402_API: process.env.NEXT_PUBLIC_X402_API,
     NEXT_PUBLIC_DELPHI_API: process.env.NEXT_PUBLIC_DELPHI_API,
+    // Crypto.com AI API Keys (for both client and server)
+    NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY,
+    CRYPTOCOM_DEVELOPER_API_KEY: process.env.CRYPTOCOM_DEVELOPER_API_KEY,
+    CRYPTOCOM_AI_API_KEY: process.env.CRYPTOCOM_AI_API_KEY,
   },
 
   // Production optimizations
