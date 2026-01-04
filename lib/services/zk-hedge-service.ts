@@ -78,7 +78,7 @@ async function generateHedgeProof(hedge: any): Promise<{ proofHash: string; veri
     
     if (result.status === 'completed' && result.proof) {
       return {
-        proofHash: result.proof.proof_hash || result.proof.merkle_root,
+        proofHash: String(result.proof.proof_hash || result.proof.merkle_root),
         verified: true,
       };
     }
@@ -173,12 +173,12 @@ export async function executePrivateHedge(hedgeId: string): Promise<HedgeExecuti
     );
     
     return {
-      proofHash: proof.proof?.proof_hash || `0x${Date.now().toString(16)}`,
-      merkleRoot: proof.proof?.merkle_root || '',
+      proofHash: String(proof.proof?.proof_hash || `0x${Date.now().toString(16)}`),
+      merkleRoot: String(proof.proof?.merkle_root || ''),
       timestamp: Date.now(),
       hedgesCount: 1,
       totalEffectiveness: 0.85,
-      verified: proof.success,
+      verified: proof.status === 'completed',
     };
   } catch (error) {
     logger.error('Failed to execute private hedge:', error);
