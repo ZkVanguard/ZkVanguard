@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Shield, CheckCircle, Code, Cpu, Lock, FileCode, Zap } from 'lucide-react';
+import { Shield, CheckCircle, Code, Cpu, Lock, FileCode, Zap, Upload, AlertCircle } from 'lucide-react';
 
 interface AuthenticityData {
   authentic: boolean;
@@ -71,6 +71,15 @@ export default function AuthenticityVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AuthenticityData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Proof verification state
+  const [proofInput, setProofInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{
+    verified: boolean;
+    message: string;
+    duration?: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchAuthenticityProof();
@@ -90,6 +99,55 @@ export default function AuthenticityVerificationPage() {
       setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyCustomProof = async () => {
+    if (!proofInput.trim()) {
+      setVerificationResult({
+        verified: false,
+        message: 'Please paste a proof JSON to verify'
+      });
+      return;
+    }
+
+    setVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const proofData = JSON.parse(proofInput);
+      
+      const response = await fetch('/api/zk-proof/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proof: proofData.proof || proofData,
+          statement: proofData.statement || {},
+          claim: proofData.claim
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.verified) {
+        setVerificationResult({
+          verified: true,
+          message: '✅ Proof verified successfully! This is a genuine ZK-STARK proof.',
+          duration: result.duration_ms
+        });
+      } else {
+        setVerificationResult({
+          verified: false,
+          message: `❌ Proof verification failed: ${result.error || 'Invalid proof'}`
+        });
+      }
+    } catch (err) {
+      setVerificationResult({
+        verified: false,
+        message: `❌ Error: ${err instanceof Error ? err.message : 'Invalid JSON or verification failed'}`
+      });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -160,6 +218,84 @@ export default function AuthenticityVerificationPage() {
             <p className="text-sm text-gray-400 mt-2">Not simulated • Not mocked • Fully functional</p>
           </div>
         )}
+
+        {/* Independent Proof Verification */}
+        <div className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-2 border-blue-500/50 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Upload className="w-6 h-6 text-blue-400" />
+            <h3 className="text-xl font-bold">Verify Any ZK Proof Independently</h3>
+          </div>
+          <p className="text-sm text-gray-300 mb-4">
+            Paste any ZK-STARK proof JSON (from /zk-proof page or elsewhere) to cryptographically verify its authenticity.
+          </p>
+          
+          <textarea
+            value={proofInput}
+            onChange={(e) => setProofInput(e.target.value)}
+            placeholder='Paste proof JSON here, e.g.:
+{
+  "proof": {
+    "statement_hash": "0x...",
+    "merkle_root": "0x...",
+    "security_level": 521,
+    ...
+  },
+  "statement": {...},
+  "claim": "..."
+}'
+            className="w-full h-48 bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm font-mono text-gray-300 placeholder-gray-600 focus:border-blue-500 focus:outline-none resize-none"
+          />
+
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={verifyCustomProof}
+              disabled={verifying || !proofInput.trim()}
+              className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-all"
+            >
+              {verifying ? 'Verifying...' : '🔐 Verify Proof'}
+            </button>
+            <button
+              onClick={() => {
+                setProofInput('');
+                setVerificationResult(null);
+              }}
+              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-all"
+            >
+              Clear
+            </button>
+          </div>
+
+          {verificationResult && (
+            <div className={`mt-4 p-4 rounded-lg border ${
+              verificationResult.verified 
+                ? 'bg-emerald-500/10 border-emerald-500/30' 
+                : 'bg-red-500/10 border-red-500/30'
+            }`}>
+              <div className="flex items-start gap-3">
+                {verificationResult.verified ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className={`font-semibold ${verificationResult.verified ? 'text-emerald-300' : 'text-red-300'}`}>
+                    {verificationResult.message}
+                  </p>
+                  {verificationResult.duration && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      Verification time: {verificationResult.duration.toFixed(2)}ms
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded text-sm text-blue-300">
+            💡 <strong>Tip:</strong> Go to the <a href="/zk-proof" className="underline hover:text-blue-200">/zk-proof</a> page, 
+            generate a proof, copy the JSON, and paste it here to verify it independently!
+          </div>
+        </div>
 
         {/* Implementation Details */}
         {data.implementation && (
