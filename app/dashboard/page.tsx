@@ -22,7 +22,7 @@ export default function DashboardPage() {
 
   // Contract data
   const contractAddresses = useContractAddresses();
-  const { data: portfolioCount } = usePortfolioCount();
+  const { data: portfolioCount, isLoading: isLoadingCount, isError: isCountError } = usePortfolioCount();
 
   // Network info
   const networkName = chainId === 338 ? 'Cronos Testnet' : chainId === 25 ? 'Cronos Mainnet' : 'Unknown Network';
@@ -35,9 +35,17 @@ export default function DashboardPage() {
   useEffect(() => {
     if (isConnected && contractAddresses) {
       logger.debug('Contract Addresses', { addresses: contractAddresses });
-      logger.debug('Portfolio Count', { count: portfolioCount?.toString() });
+      
+      // Only log when portfolioCount is actually available
+      if (!isLoadingCount && !isCountError && portfolioCount !== undefined) {
+        logger.debug('Portfolio Count', { count: portfolioCount.toString() });
+      } else if (isLoadingCount) {
+        logger.debug('Portfolio Count', { status: 'loading' });
+      } else if (isCountError) {
+        logger.debug('Portfolio Count', { status: 'error' });
+      }
     }
-  }, [isConnected, contractAddresses, portfolioCount]);
+  }, [isConnected, contractAddresses, portfolioCount, isLoadingCount, isCountError]);
 
   return (
     <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>

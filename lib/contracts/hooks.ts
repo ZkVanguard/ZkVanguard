@@ -19,6 +19,10 @@ export function usePortfolio(portfolioId: bigint) {
     abi: RWA_MANAGER_ABI,
     functionName: 'getPortfolio',
     args: [portfolioId],
+    query: {
+      enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000' && !!portfolioId,
+      refetchInterval: 10000,
+    },
   });
 }
 
@@ -33,6 +37,10 @@ export function usePortfolioCount() {
     address: addresses.rwaManager,
     abi: RWA_MANAGER_ABI,
     functionName: 'portfolioCount',
+    query: {
+      enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000',
+      refetchInterval: 10000, // Refetch every 10 seconds
+    },
   });
 }
 
@@ -79,6 +87,9 @@ export function useIsProofTypeSupported(proofType: string) {
     abi: ZK_VERIFIER_ABI,
     functionName: 'isProofTypeSupported',
     args: [proofType],
+    query: {
+      enabled: !!addresses.zkVerifier && addresses.zkVerifier !== '0x0000000000000000000000000000000000000000' && !!proofType,
+    },
   });
 }
 
