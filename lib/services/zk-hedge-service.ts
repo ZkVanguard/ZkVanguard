@@ -76,7 +76,7 @@ async function generateHedgeProof(hedge: any): Promise<{ proofHash: string; veri
       undefined // No portfolio ID in public proof
     );
     
-    if (result.success && result.proof) {
+    if (result.status === 'completed' && result.proof) {
       return {
         proofHash: result.proof.proof_hash || result.proof.merkle_root,
         verified: true,
