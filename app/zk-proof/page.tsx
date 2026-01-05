@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { logger } from '../../lib/utils/logger';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, QrCode, ExternalLink } from 'lucide-react';
 import { ProofVerification } from '../../components/dashboard/ProofVerification';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useSignMessage } from 'wagmi';
 
 interface Proof {
   statement_hash: number;
@@ -87,8 +87,9 @@ const scenarios = [
 ];
 
 function ZKProofPage() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { signMessageAsync } = useSignMessage();
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0]);
   const [proofResult, setProofResult] = useState<ProofResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -181,10 +182,7 @@ function ZKProofPage() {
       ].join('\n');
 
       try {
-        await walletClient.request({
-          method: 'personal_sign',
-          params: [signatureMessage, address]
-        });
+        await signMessageAsync({ message: signatureMessage });
       } catch (sigError) {
         logger.warn('User declined signature for proof storage', { error: sigError });
         alert('Signature required to proceed with on-chain storage.');

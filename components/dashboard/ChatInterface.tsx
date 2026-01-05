@@ -192,7 +192,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
     try {
       const { intent, params } = parseIntent(textToSend);
-      let response: { content: string; agent: string };
+      let response: { content: string; agent: string; actions?: { label: string; action: () => void }[] };
 
       switch (intent) {
         case 'analyze_portfolio':
@@ -244,12 +244,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             ).join('\n\n') +
             `\n\n💡 **Review and approve to execute. No action taken without your signature.**`;
           
-          response = {
-            content: recommendationText,
-            agent: 'Hedging Agent',
-          };
-          
           // Step 3: Set up approval action for execution
+          const actions: { label: string; action: () => void }[] = [];
+          
           if (hedgeRecs.length > 0) {
             const topHedge = hedgeRecs[0];
             
@@ -275,7 +272,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
             };
             
             // Add approval button to message
-            response.actions = [{
+            actions.push({
               label: '🛡️ Approve & Execute Hedge',
               action: () => {
                 setPendingAction(actionPreview);
@@ -322,8 +319,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
                 });
                 setShowApprovalModal(true);
               }
-            }];
+            });
           }
+          
+          response = {
+            content: recommendationText,
+            agent: 'Hedging Agent',
+            actions: actions,
+          };
           break;
 
         case 'execute_settlement':
