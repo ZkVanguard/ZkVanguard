@@ -1,0 +1,259 @@
+'use client';
+
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, AlertTriangle, CheckCircle, XCircle, FileSignature, Loader2 } from 'lucide-react';
+import { useSignMessage } from 'wagmi';
+
+export interface ActionPreview {
+  title: string;
+  description: string;
+  type: 'rebalance' | 'hedge' | 'strategy' | 'settlement';
+  details: {
+    label: string;
+    value: string;
+    highlight?: boolean;
+  }[];
+  risks?: string[];
+  expectedOutcome: string;
+}
+
+interface ActionApprovalModalProps {
+  isOpen: boolean;
+  action: ActionPreview;
+  onApprove: (signature: string) => Promise<void>;
+  onReject: () => void;
+  isExecuting?: boolean;
+}
+
+export function ActionApprovalModal({
+  isOpen,
+  action,
+  onApprove,
+  onReject,
+  isExecuting = false,
+}: ActionApprovalModalProps) {
+  const { signMessageAsync } = useSignMessage();
+  const [isSigning, setIsSigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleApprove = async () => {
+    setIsSigning(true);
+    setError(null);
+
+    try {
+      // Create detailed message for signature
+      const signatureMessage = `Chronos Vanguard - Manager Approval\n\n` +
+        `Action: ${action.title}\n` +
+        `Type: ${action.type.toUpperCase()}\n` +
+        `Description: ${action.description}\n\n` +
+        `Details:\n${action.details.map(d => `• ${d.label}: ${d.value}`).join('\n')}\n\n` +
+        `Expected Outcome: ${action.expectedOutcome}\n\n` +
+        `Timestamp: ${new Date().toISOString()}\n` +
+        `Nonce: ${Date.now()}`;
+
+      // Request manager signature
+      const signature = await signMessageAsync({
+        message: signatureMessage,
+      });
+
+      // Execute action with signature proof
+      await onApprove(signature);
+    } catch (err: any) {
+      console.error('Signature or execution failed:', err);
+      if (err.message?.includes('User rejected')) {
+        setError('Signature rejected. Action cancelled.');
+      } else {
+        setError(err.message || 'Failed to execute action');
+      }
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
+  const getIconForType = () => {
+    switch (action.type) {
+      case 'rebalance':
+        return '⚖️';
+      case 'hedge':
+        return '🛡️';
+      case 'strategy':
+        return '🎯';
+      case 'settlement':
+        return '💰';
+      default:
+        return '📊';
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !isSigning && !isExecuting) {
+            onReject();
+          }
+        }}
+      >
+        <motion.div
+          initial={{ scale: 0.9, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.9, y: 20 }}
+          className="bg-gray-900 rounded-2xl border border-purple-500/30 max-w-2xl w-full shadow-2xl shadow-purple-500/20"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-purple-900/50 to-cyan-900/50 p-6 rounded-t-2xl border-b border-purple-500/30">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-4xl">{getIconForType()}</div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    Manager Approval Required
+                    <Shield className="w-6 h-6 text-purple-400" />
+                  </h2>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Review and sign to authorize this action
+                  </p>
+                </div>
+              </div>
+              {!isSigning && !isExecuting && (
+                <button
+                  onClick={onReject}
+                  className="text-gray-400 hover:text-white transition-colors"
+                  title="Reject"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Action Overview */}
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <FileSignature className="w-5 h-5 text-cyan-400" />
+                Action Details
+              </h3>
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                <p className="text-xl font-semibold text-white mb-2">{action.title}</p>
+                <p className="text-gray-300 text-sm">{action.description}</p>
+              </div>
+            </div>
+
+            {/* Details */}
+            <div className="space-y-2">
+              {action.details.map((detail, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    detail.highlight
+                      ? 'bg-purple-500/10 border border-purple-500/30'
+                      : 'bg-gray-800/30'
+                  }`}
+                >
+                  <span className="text-gray-400 text-sm">{detail.label}</span>
+                  <span
+                    className={`font-semibold ${
+                      detail.highlight ? 'text-purple-400' : 'text-white'
+                    }`}
+                  >
+                    {detail.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Risks */}
+            {action.risks && action.risks.length > 0 && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-yellow-500 font-semibold text-sm">Risk Considerations:</p>
+                    <ul className="text-gray-300 text-sm space-y-1">
+                      {action.risks.map((risk, index) => (
+                        <li key={index}>• {risk}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Expected Outcome */}
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-green-500 font-semibold text-sm mb-1">Expected Outcome:</p>
+                  <p className="text-gray-300 text-sm">{action.expectedOutcome}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-4">
+              <button
+                onClick={onReject}
+                disabled={isSigning || isExecuting}
+                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2"
+              >
+                <XCircle className="w-5 h-5" />
+                Reject
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={isSigning || isExecuting}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+              >
+                {isSigning ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Waiting for Signature...
+                  </>
+                ) : isExecuting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Executing...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-5 h-5" />
+                    Approve & Sign
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Info Footer */}
+            <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700/50">
+              <p className="text-xs text-gray-400 text-center">
+                🔐 Your signature proves authorization. No action will be executed without your approval.
+                {action.type === 'settlement' && ' This transaction will be gasless via x402 protocol.'}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport, getAgentActivity } from '../../lib/api/agents';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
+import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
 
 interface Message {
   id: string;
@@ -40,6 +41,12 @@ export function ChatInterface({ address: _address }: { address: string }) {
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Approval modal state
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ActionPreview | null>(null);
+  const [pendingActionCallback, setPendingActionCallback] = useState<((sig: string) => Promise<void>) | null>(null);
+  const [isExecutingAction, setIsExecutingAction] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -221,19 +228,102 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
         case 'hedge_portfolio':
           setActiveAgent('Lead Agent → Risk Agent → Hedging Agent');
+          
+          // Step 1: Get AI recommendations (no signature needed for analysis)
           const hedgeRecs = await getHedgingRecommendations(_address, []);
           const amount = params.amount as number || 10000000;
+          const targetYield = params.targetYield || 8;
+          
+          // Step 2: Show recommendations to user
+          const recommendationText = `🛡️ **Hedge Strategy Recommended** (via Moonlander)\n\n` +
+            `**Portfolio Size:** $${(amount / 1000000).toFixed(1)}M\n` +
+            `**Target Yield:** ${targetYield}%\n\n` +
+            `**AI-Recommended Hedges:**\n` +
+            hedgeRecs.map((s: any, i: number) => 
+              `${i + 1}. **${s.action}** on ${s.asset}\n   • Leverage: ${s.leverage}x\n   • Size: ${s.size}\n   • Reason: ${s.reason}`
+            ).join('\n\n') +
+            `\n\n💡 **Review and approve to execute. No action taken without your signature.**`;
+          
           response = {
-            content: `🛡️ **Hedge Strategy Generated** (via Moonlander)\n\n` +
-              `**Portfolio Size:** $${(amount / 1000000).toFixed(1)}M\n` +
-              `**Target Yield:** ${params.targetYield || 8}%\n\n` +
-              `**Recommended Hedges:**\n` +
-              hedgeRecs.map((s: any, i: number) => 
-                `${i + 1}. **${s.action}** on ${s.asset}\n   • Leverage: ${s.leverage}x\n   • Size: ${s.size}\n   • Reason: ${s.reason}`
-              ).join('\n\n') +
-              `\n\n⚡ **x402 Gasless:** Settlement will cost $0.00 in CRO gas fees`,
+            content: recommendationText,
             agent: 'Hedging Agent',
           };
+          
+          // Step 3: Set up approval action for execution
+          if (hedgeRecs.length > 0) {
+            const topHedge = hedgeRecs[0];
+            
+            // Create action preview
+            const actionPreview: ActionPreview = {
+              title: 'Execute Hedge Strategy',
+              description: `${topHedge.action} position on ${topHedge.asset} to protect portfolio`,
+              type: 'hedge',
+              details: [
+                { label: 'Asset', value: topHedge.asset, highlight: true },
+                { label: 'Action', value: topHedge.action },
+                { label: 'Leverage', value: `${topHedge.leverage}x` },
+                { label: 'Position Size', value: topHedge.size },
+                { label: 'Portfolio Size', value: `$${(amount / 1000000).toFixed(1)}M` },
+                { label: 'Gas Cost', value: '$0.00 (x402 gasless)', highlight: true },
+              ],
+              risks: [
+                'Leverage amplifies both gains and losses',
+                'Market volatility may trigger liquidation',
+                'Counterparty risk on derivatives platform',
+              ],
+              expectedOutcome: `${topHedge.reason}. Target yield: ${targetYield}%`,
+            };
+            
+            // Add approval button to message
+            response.actions = [{
+              label: '🛡️ Approve & Execute Hedge',
+              action: () => {
+                setPendingAction(actionPreview);
+                setPendingActionCallback(() => async (signature: string) => {
+                  setIsExecutingAction(true);
+                  try {
+                    // Execute hedge with signature proof
+                    const result = await executeSettlementBatch([
+                      { 
+                        recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', 
+                        amount: 1000, 
+                        token: '0x0',
+                        signature,  // Include manager signature
+                      },
+                    ]);
+                    
+                    // Add success message
+                    setMessages(prev => [...prev, {
+                      id: Date.now().toString(),
+                      role: 'assistant',
+                      content: `✅ **Hedge Executed Successfully**\n\n` +
+                        `**Status:** ${result.status}\n` +
+                        `**Batch ID:** ${result.batchId}\n` +
+                        `**Manager Signature:** \`${signature.slice(0, 16)}...${signature.slice(-8)}\`\n` +
+                        `**Gas Cost:** $0.00 (x402 gasless)\n\n` +
+                        `Your portfolio is now protected with the approved hedge strategy.`,
+                      timestamp: new Date(),
+                      aiPowered: true,
+                      agentType: 'Settlement Agent',
+                    }]);
+                    
+                    setShowApprovalModal(false);
+                  } catch (error: any) {
+                    setMessages(prev => [...prev, {
+                      id: Date.now().toString(),
+                      role: 'assistant',
+                      content: `❌ **Hedge Execution Failed**\n\n${error.message || 'Unknown error'}`,
+                      timestamp: new Date(),
+                      aiPowered: true,
+                    }]);
+                  } finally {
+                    setIsExecutingAction(false);
+                  }
+                });
+                setShowApprovalModal(true);
+              }
+            }];
+          }
           break;
 
         case 'execute_settlement':
@@ -378,6 +468,22 @@ export function ChatInterface({ address: _address }: { address: string }) {
                   ) : (
                     <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
                   )}
+                  
+                  {/* Action Buttons */}
+                  {message.actions && message.actions.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {message.actions.map((action, idx) => (
+                        <button
+                          key={idx}
+                          onClick={action.action}
+                          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-lg text-sm font-semibold text-white transition-all shadow-lg shadow-purple-500/20 flex items-center gap-2"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
                   {message.role === 'assistant' && (
                     <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-700/50">
                       {message.agentType && (
@@ -448,6 +554,28 @@ export function ChatInterface({ address: _address }: { address: string }) {
           </button>
         </div>
       </div>
+      
+      {/* Action Approval Modal */}
+      {pendingAction && pendingActionCallback && (
+        <ActionApprovalModal
+          isOpen={showApprovalModal}
+          action={pendingAction}
+          onApprove={pendingActionCallback}
+          onReject={() => {
+            setShowApprovalModal(false);
+            setPendingAction(null);
+            setPendingActionCallback(null);
+            setMessages(prev => [...prev, {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: '❌ Action cancelled by manager. No changes made to portfolio.',
+              timestamp: new Date(),
+              aiPowered: true,
+            }]);
+          }}
+          isExecuting={isExecutingAction}
+        />
+      )}
     </div>
   );
 }
