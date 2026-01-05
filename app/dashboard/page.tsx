@@ -9,6 +9,7 @@ import { RiskMetrics } from '../../components/dashboard/RiskMetrics';
 import { ChatInterface } from '../../components/dashboard/ChatInterface';
 import { PositionsList } from '../../components/dashboard/PositionsList';
 import { SettlementsPanel } from '@/components/dashboard/SettlementsPanel';
+import { ActiveHedges } from '@/components/dashboard/ActiveHedges';
 import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
 import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfolioCreator';
 import { formatEther } from 'viem';
@@ -128,6 +129,7 @@ export default function DashboardPage() {
                   <AdvancedPortfolioCreator />
                 </div>
                 <PortfolioOverview address={displayAddress} />
+                <ActiveHedges address={displayAddress} />
                 <RiskMetrics address={displayAddress} />
                 <ZKProofDemo />
               </>
