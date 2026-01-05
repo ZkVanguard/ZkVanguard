@@ -7,12 +7,14 @@ The hedging strategies on Chronos Vanguard are now **fully privacy-protected** u
 ## 🎯 Why Privacy Matters
 
 **Without ZK Protection:**
+
 - ❌ Strategy details visible → Front-running risk
 - ❌ Entry/exit prices exposed → Competitors copy your moves
 - ❌ Position sizes public → Market manipulation vulnerability
 - ❌ No institutional-grade privacy
 
 **With ZK-STARK Protection:**
+
 - ✅ Strategy details cryptographically hidden
 - ✅ Only effectiveness and cost are public
 - ✅ Zero front-running risk
@@ -22,6 +24,7 @@ The hedging strategies on Chronos Vanguard are now **fully privacy-protected** u
 ## 🔐 What's Public vs Private
 
 ### Public Information (Safe to Share)
+
 - ✅ Hedge effectiveness (e.g., "85% risk reduction")
 - ✅ Estimated cost ($0.00 with x402 gasless)
 - ✅ Priority level (HIGH/MEDIUM/LOW)
@@ -29,6 +32,7 @@ The hedging strategies on Chronos Vanguard are now **fully privacy-protected** u
 - ✅ Number of hedges generated
 
 ### Private Information (Cryptographically Hidden)
+
 - 🔒 Entry prices and exit prices
 - 🔒 Position sizes and leverage
 - 🔒 Specific markets and assets
@@ -39,11 +43,13 @@ The hedging strategies on Chronos Vanguard are now **fully privacy-protected** u
 ## 🛡️ How It Works
 
 ### 1. User Requests Hedging
+
 ```
 User: "Get hedge recommendations"
 ```
 
 ### 2. Backend Generates Private Strategies
+
 ```typescript
 // PRIVATE - Never sent to frontend
 {
@@ -58,6 +64,7 @@ User: "Get hedge recommendations"
 ```
 
 ### 3. Generate ZK Proof
+
 ```typescript
 // Only effectiveness is proven, not strategy details
 const zkProof = generateZKProof({
@@ -68,6 +75,7 @@ const zkProof = generateZKProof({
 ```
 
 ### 4. Return ZK-Protected Hedge
+
 ```typescript
 // PUBLIC - Sent to frontend
 {
@@ -82,6 +90,7 @@ const zkProof = generateZKProof({
 ```
 
 ### 5. User Sees Only Public Info
+
 ```
 🛡️ ZK-Protected Hedge Strategies Generated
 
@@ -112,14 +121,16 @@ Only effectiveness and cost are disclosed.
 
 ## 🔍 Security Analysis
 
-### Frontend Can See:
+### Frontend Can See
+
 - Hedge ID
 - Effectiveness percentage
 - Priority level
 - Estimated cost
 - ZK proof hash
 
-### Frontend CANNOT See:
+### Frontend CANNOT See
+
 - Which market/asset
 - Entry or exit prices
 - Position size
@@ -138,6 +149,7 @@ Only effectiveness and cost are disclosed.
 ## 🚀 Usage Examples
 
 ### Generate Private Hedges
+
 ```javascript
 // User message
 "Get hedge recommendations"
@@ -147,6 +159,7 @@ Only effectiveness and cost are disclosed.
 ```
 
 ### Execute Private Hedge
+
 ```javascript
 // User confirms execution
 "Execute hedge #abc123"
@@ -156,6 +169,7 @@ Only effectiveness and cost are disclosed.
 ```
 
 ### Verify Hedge Execution
+
 ```javascript
 // Anyone can verify the proof
 verifyZKProof(hedgeProofHash)
