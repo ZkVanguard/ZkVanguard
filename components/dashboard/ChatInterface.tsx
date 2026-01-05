@@ -320,6 +320,8 @@ export function ChatInterface({ address: _address }: { address: string }) {
                       reason: topHedge.reason || 'Portfolio protection',
                     };
                     
+                    console.log('💾 [ChatInterface] Saving hedge to localStorage:', hedgeDetails);
+                    
                     const settlementHistory = JSON.parse(localStorage.getItem('settlement_history') || '{}');
                     settlementHistory[result.batchId] = {
                       ...result,
@@ -329,6 +331,12 @@ export function ChatInterface({ address: _address }: { address: string }) {
                       timestamp: Date.now(),
                     };
                     localStorage.setItem('settlement_history', JSON.stringify(settlementHistory));
+                    
+                    console.log('✅ [ChatInterface] Hedge saved to localStorage:', settlementHistory);
+                    
+                    // Dispatch custom event to notify ActiveHedges component
+                    window.dispatchEvent(new Event('hedgeAdded'));
+                    console.log('📡 [ChatInterface] Dispatched hedgeAdded event');
                     
                     setMessages(prev => [...prev, {
                       id: Date.now().toString(),

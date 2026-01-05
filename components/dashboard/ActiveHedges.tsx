@@ -51,19 +51,25 @@ export function ActiveHedges({ address }: { address: string }) {
     const loadHedges = () => {
       try {
         const settlements = localStorage.getItem('settlement_history');
+        console.log('📊 [ActiveHedges] Loading from localStorage:', settlements);
+        
         if (!settlements) {
+          console.log('📊 [ActiveHedges] No settlement history found');
           setLoading(false);
           return;
         }
 
         const settlementData = JSON.parse(settlements);
+        console.log('📊 [ActiveHedges] Parsed settlement data:', settlementData);
         const hedgePositions: HedgePosition[] = [];
 
         // Parse settlement batches to extract hedge positions
         Object.values(settlementData).forEach((batch: any) => {
+          console.log('📊 [ActiveHedges] Processing batch:', batch);
           if (batch.type === 'hedge' && batch.managerSignature) {
             // Extract hedge details from batch
             const hedgeData = batch.hedgeDetails || {};
+            console.log('✅ [ActiveHedges] Found hedge with signature:', hedgeData);
             
             // Simulate current price movement for demo
             const currentPrice = hedgeData.entryPrice * (1 + (Math.random() - 0.5) * 0.05);
@@ -120,9 +126,31 @@ export function ActiveHedges({ address }: { address: string }) {
 
     loadHedges();
 
+    // Listen for storage events (when hedges are added)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'settlement_history') {
+        console.log('📊 [ActiveHedges] Storage changed, reloading...');
+        loadHedges();
+      }
+    };
+    
+    // Listen for custom event from ChatInterface
+    const handleHedgeAdded = () => {
+      console.log('📊 [ActiveHedges] Hedge added event received, reloading...');
+      loadHedges();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('hedgeAdded', handleHedgeAdded);
+
     // Refresh every 10 seconds for price updates
     const interval = setInterval(loadHedges, 10000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('hedgeAdded', handleHedgeAdded);
+    };
   }, [address]);
 
   if (loading) {
