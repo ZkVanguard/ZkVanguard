@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Activity, RefreshCw, Brain } from 'lucide-react';
 import { usePortfolioCount } from '../../lib/contracts/hooks';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
+import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
 
 interface PortfolioData {
@@ -38,9 +39,6 @@ export function PortfolioOverview({ address }: { address: string }) {
   useEffect(() => {
     async function fetchAIAnalysis() {
       try {
-        const aiService = getCryptocomAIService();
-        const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
-        
         // Count active hedges from settlement history
         const settlements = localStorage.getItem('settlement_history');
         let activeHedgesCount = 0;
@@ -51,19 +49,42 @@ export function PortfolioOverview({ address }: { address: string }) {
           ).length;
         }
         
-        setAiAnalysis(analysis);
-        // Use ONLY real on-chain data - no demo fallbacks
-        setData(prev => ({
-          ...prev,
-          totalValue: analysis.totalValue || 0,
-          positions: Number(portfolioCount) || 0,
-          healthScore: analysis.healthScore,
-          topAssets: analysis.topAssets,
-          activeHedges: activeHedgesCount,
-        }));
-        setRecentHedgeCount(activeHedgesCount);
+        // Try AI service first
+        try {
+          const aiService = getCryptocomAIService();
+          const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
+          setAiAnalysis(analysis);
+          setData(prev => ({
+            ...prev,
+            totalValue: analysis.totalValue || 0,
+            positions: Number(portfolioCount) || 0,
+            healthScore: analysis.healthScore,
+            topAssets: analysis.topAssets,
+            activeHedges: activeHedgesCount,
+          }));
+          setRecentHedgeCount(activeHedgesCount);
+        } catch (aiError) {
+          console.warn('AI analysis failed, using real market data fallback:', aiError);
+          
+          // Fallback to RealMarketDataService for actual wallet balance
+          const marketData = getMarketDataService();
+          const portfolioData = await marketData.getPortfolioData(address);
+          
+          setData(prev => ({
+            ...prev,
+            totalValue: portfolioData.totalValue,
+            positions: Number(portfolioCount) || 0,
+            activeHedges: activeHedgesCount,
+            topAssets: portfolioData.tokens.slice(0, 5).map(t => ({
+              symbol: t.symbol,
+              value: t.usdValue,
+              percentage: (t.usdValue / portfolioData.totalValue) * 100,
+            })),
+          }));
+          setRecentHedgeCount(activeHedgesCount);
+        }
       } catch (error) {
-        console.error('AI analysis failed:', error);
+        console.error('Portfolio data fetch failed completely:', error);
       }
     }
 

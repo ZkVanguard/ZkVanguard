@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 
 // Active hedges and P/L tracking component
 interface HedgePosition {
@@ -94,8 +95,17 @@ export function ActiveHedges({ address }: { address: string }) {
               pnlPercent = batch.finalPnLPercent || 0;
               console.log('🔒 [ActiveHedges] Using locked P/L for closed position:', { pnl, pnlPercent });
             } else {
-              // Simulate current price movement for active positions only
-              currentPrice = hedgeData.entryPrice * (1 + (Math.random() - 0.5) * 0.05);
+              // Fetch REAL current price for active positions
+              try {
+                const marketData = getMarketDataService();
+                const assetSymbol = hedgeData.asset?.replace('-PERP', '') || 'BTC';
+                const priceData = await marketData.getTokenPrice(assetSymbol);
+                currentPrice = priceData.price;
+                console.log(`📊 [ActiveHedges] Real price for ${assetSymbol}:`, currentPrice);
+              } catch (error) {
+                console.warn('Failed to fetch real price, using entry price:', error);
+                currentPrice = hedgeData.entryPrice; // Fallback to entry price
+              }
               pnl = hedgeData.type === 'SHORT' 
                 ? (hedgeData.entryPrice - currentPrice) * hedgeData.size * hedgeData.leverage
                 : (currentPrice - hedgeData.entryPrice) * hedgeData.size * hedgeData.leverage;

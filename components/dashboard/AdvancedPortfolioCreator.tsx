@@ -123,7 +123,7 @@ export function AdvancedPortfolioCreator() {
           witness: {
             privateStrategy: strategy.privateStrategy,
             filters: filters,
-            secret: Math.random().toString(36),
+            secret: `${Date.now()}-${address}`.slice(0, 32), // Deterministic based on time and address
           },
         }),
       });

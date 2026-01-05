@@ -87,14 +87,19 @@ export function ChatInterface({ address: _address }: { address: string }) {
       console.warn('ZK proof generation failed:', error);
     }
     
+    // Deterministic fallback based on timestamp (not random)
+    const timestamp = Date.now();
+    const hashInput = `zkproof-${timestamp}`;
+    const deterministicHash = Array.from(hashInput).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64);
+    
     return {
-      proofHash: `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-      merkleRoot: `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-      timestamp: Date.now(),
-      verified: true,
-      protocol: 'ZK-STARK',
-      securityLevel: 521,
-      generationTime: Math.floor(Math.random() * 200) + 100,
+      proofHash: `0x${deterministicHash}`,
+      merkleRoot: `0x${deterministicHash}`,
+      timestamp,
+      verified: false, // Mark as unverified since real proof failed
+      protocol: 'ZK-STARK (Pending)',
+      securityLevel: 0,
+      generationTime: 0,
     };
   };
 
