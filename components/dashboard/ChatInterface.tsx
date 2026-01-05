@@ -307,6 +307,29 @@ export function ChatInterface({ address: _address }: { address: string }) {
                     ]);
                     
                     // Add success message
+                    // Save hedge details to localStorage for dashboard tracking
+                    const hedgeDetails = {
+                      type: 'SHORT',
+                      asset: 'BTC-PERP',
+                      size: topHedge.size || 0.007,
+                      leverage: topHedge.leverage || 10,
+                      entryPrice: 43500, // Would come from live price feed
+                      targetPrice: topHedge.targetPrice || 42800,
+                      stopLoss: topHedge.stopLoss || 45200,
+                      capitalUsed: topHedge.capitalRequired || 15,
+                      reason: topHedge.reason || 'Portfolio protection',
+                    };
+                    
+                    const settlementHistory = JSON.parse(localStorage.getItem('settlement_history') || '{}');
+                    settlementHistory[result.batchId] = {
+                      ...result,
+                      type: 'hedge',
+                      hedgeDetails,
+                      managerSignature: signature,
+                      timestamp: Date.now(),
+                    };
+                    localStorage.setItem('settlement_history', JSON.stringify(settlementHistory));
+                    
                     setMessages(prev => [...prev, {
                       id: Date.now().toString(),
                       role: 'assistant',
@@ -315,7 +338,8 @@ export function ChatInterface({ address: _address }: { address: string }) {
                         `**Batch ID:** ${result.batchId}\n` +
                         `**Manager Signature:** \`${signature.slice(0, 16)}...${signature.slice(-8)}\`\n` +
                         `**Gas Cost:** $0.00 (x402 gasless)\n\n` +
-                        `Your portfolio is now protected with the approved hedge strategy.`,
+                        `Your portfolio is now protected with the approved hedge strategy.\n\n` +
+                        `📊 **View the hedge position in the "Active Hedges & P/L" section above!**`,
                       timestamp: new Date(),
                       aiPowered: true,
                       agentType: 'Settlement Agent',

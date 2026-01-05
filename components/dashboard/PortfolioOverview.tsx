@@ -24,6 +24,7 @@ export function PortfolioOverview({ address }: { address: string }) {
   const { data: portfolioCount, isLoading: countLoading, refetch } = usePortfolioCount();
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
+  const [recentHedgeCount, setRecentHedgeCount] = useState(0);
   
   // Real on-chain portfolio data only - no demo fallbacks
   const [data, setData] = useState<PortfolioData>({
@@ -40,6 +41,16 @@ export function PortfolioOverview({ address }: { address: string }) {
         const aiService = getCryptocomAIService();
         const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
         
+        // Count active hedges from settlement history
+        const settlements = localStorage.getItem('settlement_history');
+        let activeHedgesCount = 0;
+        if (settlements) {
+          const settlementData = JSON.parse(settlements);
+          activeHedgesCount = Object.values(settlementData).filter(
+            (batch: any) => batch.type === 'hedge' && batch.status === 'completed'
+          ).length;
+        }
+        
         setAiAnalysis(analysis);
         // Use ONLY real on-chain data - no demo fallbacks
         setData(prev => ({
@@ -48,7 +59,9 @@ export function PortfolioOverview({ address }: { address: string }) {
           positions: Number(portfolioCount) || 0,
           healthScore: analysis.healthScore,
           topAssets: analysis.topAssets,
+          activeHedges: activeHedgesCount,
         }));
+        setRecentHedgeCount(activeHedgesCount);
       } catch (error) {
         console.error('AI analysis failed:', error);
       }
@@ -126,9 +139,16 @@ export function PortfolioOverview({ address }: { address: string }) {
           <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
             <div className="flex items-center space-x-2">
               <Activity className="w-5 h-5 text-green-500" />
-              <span className="text-sm text-gray-400">Contract Status</span>
+              <span className="text-sm text-gray-400">Active Hedges</span>
             </div>
-            <span className="text-lg font-semibold text-green-400">Active</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-lg font-semibold text-emerald-400">{data.activeHedges}</span>
+              {recentHedgeCount > 0 && (
+                <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full animate-pulse">
+                  NEW
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
