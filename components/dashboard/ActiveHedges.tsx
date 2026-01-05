@@ -205,7 +205,6 @@ export function ActiveHedges({ address }: { address: string }) {
     }
   };
 
-
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-96 border border-gray-700" />;
   }
