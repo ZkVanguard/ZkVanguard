@@ -59,6 +59,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
   // Generate ZK proof for response
   const generateResponseProof = async (): Promise<ZKProofData> => {
     try {
+      console.log('🔐 [ChatInterface] Requesting ZK proof generation...');
       const response = await fetch('/api/zk-proof/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,33 +72,38 @@ export function ChatInterface({ address: _address }: { address: string }) {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ [ChatInterface] ZK proof received:', { 
+          success: data.success, 
+          fallback: data.fallback,
+          verified: data.proof?.verified 
+        });
+        
         if (data.success && data.proof) {
           return {
-            proofHash: data.proof.merkle_root || `0x${Math.random().toString(16).slice(2)}`,
-            merkleRoot: data.proof.merkle_root || '',
+            proofHash: data.proof.merkle_root || data.proof.proof_hash || '0x0',
+            merkleRoot: data.proof.merkle_root || '0x0',
             timestamp: Date.now(),
-            verified: true,
-            protocol: 'ZK-STARK',
-            securityLevel: 521,
-            generationTime: data.duration_ms || 150,
+            verified: data.proof.verified !== false, // Real proofs are verified, fallback is not
+            protocol: data.proof.protocol || (data.fallback ? 'ZK-STARK (Fallback)' : 'ZK-STARK'),
+            securityLevel: data.proof.security_level || 0,
+            generationTime: data.duration_ms || 0,
           };
         }
+      } else {
+        console.error('❌ [ChatInterface] ZK proof request failed:', response.status, response.statusText);
       }
     } catch (error) {
-      console.warn('ZK proof generation failed:', error);
+      console.error('❌ [ChatInterface] ZK proof generation failed:', error);
     }
     
-    // Deterministic fallback based on timestamp (not random)
-    const timestamp = Date.now();
-    const hashInput = `zkproof-${timestamp}`;
-    const deterministicHash = Array.from(hashInput).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64);
-    
+    // Should not reach here if server is working
+    console.warn('⚠️ [ChatInterface] No proof returned from server');
     return {
-      proofHash: `0x${deterministicHash}`,
-      merkleRoot: `0x${deterministicHash}`,
-      timestamp,
-      verified: false, // Mark as unverified since real proof failed
-      protocol: 'ZK-STARK (Pending)',
+      proofHash: '0x0',
+      merkleRoot: '0x0',
+      timestamp: Date.now(),
+      verified: false,
+      protocol: 'ZK-STARK (Unavailable)',
       securityLevel: 0,
       generationTime: 0,
     };

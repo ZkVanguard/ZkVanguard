@@ -14,6 +14,7 @@ interface AgentActivityProps {
 // Generate real ZK proof for a task
 async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
   try {
+    console.log('🔐 [AgentActivity] Requesting ZK proof for task:', task.id);
     const response = await fetch('/api/zk-proof/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -33,33 +34,38 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
     
     if (response.ok) {
       const data = await response.json();
+      console.log('✅ [AgentActivity] ZK proof received:', { 
+        success: data.success, 
+        fallback: data.fallback,
+        verified: data.proof?.verified
+      });
+      
       if (data.success && data.proof) {
         return {
-          proofHash: data.proof.merkle_root || `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-          merkleRoot: data.proof.merkle_root || '',
+          proofHash: data.proof.merkle_root || data.proof.proof_hash || '0x0',
+          merkleRoot: data.proof.merkle_root || '0x0',
           timestamp: Date.now(),
-          verified: true,
-          protocol: 'ZK-STARK',
-          securityLevel: data.proof.security_level || 521,
-          generationTime: data.duration_ms || 150,
+          verified: data.proof.verified !== false, // Real proofs are verified
+          protocol: data.proof.protocol || (data.fallback ? 'ZK-STARK (Fallback)' : 'ZK-STARK'),
+          securityLevel: data.proof.security_level || 0,
+          generationTime: data.duration_ms || 0,
         };
       }
+    } else {
+      console.error('❌ [AgentActivity] ZK proof request failed:', response.status);
     }
   } catch (error) {
-    console.warn('ZK proof generation failed:', error);
+    console.error('❌ [AgentActivity] ZK proof generation failed:', error);
   }
   
-  // Deterministic fallback based on timestamp (not random)
-  const timestamp = Date.now();
-  const hashInput = `agentproof-${timestamp}`;
-  const deterministicHash = Array.from(hashInput).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64);
-  
+  // Should not reach here if server is working
+  console.warn('⚠️ [AgentActivity] No proof returned from server');
   return {
-    proofHash: `0x${deterministicHash}`,
-    merkleRoot: `0x${deterministicHash}`,
-    timestamp,
-    verified: false, // Mark as unverified since real proof failed
-    protocol: 'ZK-STARK (Pending)',
+    proofHash: '0x0',
+    merkleRoot: '0x0',
+    timestamp: Date.now(),
+    verified: false,
+    protocol: 'ZK-STARK (Unavailable)',
     securityLevel: 0,
     generationTime: 0,
   };
