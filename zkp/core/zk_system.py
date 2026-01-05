@@ -696,17 +696,7 @@ class AuthenticZKStark:
                     'proof': serializable_proof
                 })
         
-        # Ensure minimum generation time for authenticity
-        current_time = time.time() - start_time
-        minimum_time = 0.01  # 10ms minimum
-        if current_time < minimum_time:
-            remaining = minimum_time - current_time
-            work_start = time.time()
-            work_counter = 0
-            while (time.time() - work_start) < remaining and work_counter < 5000:
-                dummy = self.field.multiply(work_counter + 1, work_counter + 2)
-                work_counter += 1
-        
+        # With CUDA acceleration, fast generation is expected
         generation_time = time.time() - start_time
         
         # Standard proof structure compatible with verification
@@ -888,22 +878,7 @@ class AuthenticZKStark:
                     'proof': serializable_proof
                 })
         
-        # PERFORMANCE ENHANCEMENT: Add artificial work to reach target performance
-        # Calculate how much more time we need to reach minimum threshold
-        current_time = time.time() - start_time
-        minimum_generation_time = 0.01  # 10ms minimum for authenticity
-        
-        if current_time < minimum_generation_time:
-            # Add simple work to reach minimum time
-            remaining_time = minimum_generation_time - current_time
-            work_start = time.time()
-            work_counter = 0
-            while (time.time() - work_start) < remaining_time and work_counter < 10000:
-                # Simple cryptographic work
-                dummy = self.field.multiply(work_counter + 1, work_counter + 2)
-                dummy = self.field.add(dummy, work_counter)
-                work_counter += 1
-        
+        # With CUDA acceleration, fast proof generation is expected and desirable
         generation_time = time.time() - start_time
         
         # 8.5 ENHANCED: Witness commitment with additional security
@@ -1202,12 +1177,7 @@ class AuthenticZKStark:
                 if not isinstance(qr['index'], int) or not isinstance(qr['value'], int):
                     return False
             
-            # Ensure minimum verification time to prevent instant verification
-            elapsed = time.time() - start_time
-            if elapsed < 0.002:  # At least 2ms
-                import time as time_module
-                time_module.sleep(0.002 - elapsed)
-            
+            # No artificial delays - CUDA acceleration is fast!
             return True
             
         except Exception as e:
@@ -1290,12 +1260,6 @@ class AuthenticZKStark:
                     # Update batches for next round
                     batch_a = [(x + computational_verification) % self.prime for x in batch_a[:batch_size//2] * 2][:batch_size]
                     batch_b = [(x + batch_round) % self.prime for x in batch_b]
-                    
-                    # Ensure minimum verification time to demonstrate real work
-                    elapsed = time.time() - start_time
-                    if elapsed < 0.002:  # At least 2ms for production authenticity
-                        import time as time_module
-                        time_module.sleep(max(0.001, 0.002 - elapsed))
             else:
                 # CPU verification work (more intensive for demonstration)
                 for i in range(verification_rounds):
