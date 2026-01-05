@@ -8,6 +8,8 @@ import { logger } from '../utils/logger';
 export interface PortfolioAction {
   type: 'buy' | 'sell' | 'analyze' | 'assess-risk' | 'get-hedges' | 'execute-hedge' | 'rebalance' | 'snapshot';
   params: Record<string, any>;
+  requiresSignature?: boolean;  // Manager approval required
+  signatureMessage?: string;     // Message to sign for approval
 }
 
 export interface ZKProofData {
@@ -25,6 +27,8 @@ export interface ActionResult {
   data?: any;
   error?: string;
   zkProof?: ZKProofData;
+  requiresApproval?: boolean;    // Action needs manager signature
+  approvalMessage?: string;       // Message for manager to sign
 }
 
 /**
@@ -233,14 +237,27 @@ export function parseActionIntent(text: string): PortfolioAction | null {
       params: {
         private: true, // Use ZK-protected hedges
       },
+      requiresSignature: false, // Just recommendations, no execution
     };
   }
 
-  // REBALANCE
+  // EXECUTE HEDGE (Requires Manager Approval)
+  if (lower.match(/execute.*hedge|apply.*hedge|implement.*hedge/)) {
+    return {
+      type: 'execute-hedge',
+      params: {},
+      requiresSignature: true, // CRITICAL: Manager must sign
+      signatureMessage: `Approve hedge execution on portfolio`,
+    };
+  }
+
+  // REBALANCE (Requires Manager Approval)
   if (lower.match(/rebalance|optimize|adjust.*allocation/)) {
     return {
       type: 'rebalance',
       params: {},
+      requiresSignature: true, // CRITICAL: Manager must sign
+      signatureMessage: `Approve portfolio rebalancing`,
     };
   }
 
