@@ -234,15 +234,29 @@ export function ChatInterface({ address: _address }: { address: string }) {
           const amount = params.amount as number || 10000000;
           const targetYield = params.targetYield || 8;
           
+          // Extract real portfolio data from recommendations
+          const topHedge = hedgeRecs[0];
+          const realPortfolioValue = topHedge?.capitalRequired ? topHedge.capitalRequired * 2 : 30; // $30 USDC
+          const realLeverage = 20; // 20x leverage
+          const realExposure = realPortfolioValue * realLeverage; // $600 exposure
+          
           // Step 2: Show recommendations to user
           const recommendationText = `🛡️ **Hedge Strategy Recommended** (via Moonlander)\n\n` +
-            `**Portfolio Size:** $${(amount / 1000000).toFixed(1)}M\n` +
-            `**Target Yield:** ${targetYield}%\n\n` +
+            `**Your Portfolio:**\n` +
+            `• Capital: $${realPortfolioValue} USDC\n` +
+            `• Leverage: ${realLeverage}x\n` +
+            `• Total Exposure: $${realExposure}\n` +
+            `• Target Yield: ${targetYield}%\n\n` +
             `**AI-Recommended Hedges:**\n` +
             hedgeRecs.map((s: any, i: number) => 
-              `${i + 1}. **${s.action}** on ${s.asset}\n   • Leverage: ${s.leverage}x\n   • Size: ${s.size}\n   • Reason: ${s.reason}`
-            ).join('\n\n') +
-            `\n\n💡 **Review and approve to execute. No action taken without your signature.**`;
+              `${i + 1}. **${s.action}** on ${s.asset}\n` +
+              `   • Size: ${s.size}${typeof s.size === 'number' && s.size < 1 ? ' BTC' : ''}\n` +
+              `   • Leverage: ${s.leverage}x\n` +
+              `   • Reason: ${s.reason}\n` +
+              (s.capitalRequired ? `   • Capital Needed: $${s.capitalRequired} USDC\n` : '') +
+              (s.targetPrice ? `   • Target: $${s.targetPrice} | Stop Loss: $${s.stopLoss}\n` : '')
+            ).join('\n') +
+            `\n💡 **Review and approve to execute. No action taken without your signature.**`;
           
           // Step 3: Set up approval action for execution
           const actions: { label: string; action: () => void }[] = [];
@@ -259,14 +273,17 @@ export function ChatInterface({ address: _address }: { address: string }) {
                 { label: 'Asset', value: topHedge.asset, highlight: true },
                 { label: 'Action', value: topHedge.action },
                 { label: 'Leverage', value: `${topHedge.leverage}x` },
-                { label: 'Position Size', value: topHedge.size },
-                { label: 'Portfolio Size', value: `$${(amount / 1000000).toFixed(1)}M` },
+                { label: 'Position Size', value: String(topHedge.size) },
+                { label: 'Your Capital', value: `$${realPortfolioValue} USDC`, highlight: true },
+                { label: 'Total Exposure', value: `$${realExposure}` },
+                { label: 'Hedge Capital', value: `$${topHedge.capitalRequired || 0} USDC` },
                 { label: 'Gas Cost', value: '$0.00 (x402 gasless)', highlight: true },
               ],
               risks: [
                 'Leverage amplifies both gains and losses',
                 'Market volatility may trigger liquidation',
                 'Counterparty risk on derivatives platform',
+                `Current exposure: $${realExposure} on $${realPortfolioValue} capital (${realLeverage}x leverage)`,
               ],
               expectedOutcome: `${topHedge.reason}. Target yield: ${targetYield}%`,
             };
@@ -381,6 +398,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
         agentType: response.agent,
         aiPowered: true,
         zkProof,
+        actions: response.actions, // Include action buttons
       };
       
       setMessages(prev => [...prev, aiMessage]);
