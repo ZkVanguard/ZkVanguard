@@ -1068,6 +1068,25 @@ class AuthenticZKStark:
         try:
             start_time = time.time()
             
+            # SECURITY: Validate top-level structure first
+            # If proof has both nested 'proof' and top-level fields, they must be consistent
+            if 'proof' in proof and isinstance(proof['proof'], dict):
+                nested_proof = proof['proof']
+                # Check consistency of critical fields at both levels
+                critical_fields = ['query_responses', 'challenge', 'response', 'statement_hash', 'merkle_root']
+                for field in critical_fields:
+                    if field in proof and field in nested_proof:
+                        # Both levels have this field - they must match for security
+                        if proof[field] != nested_proof[field]:
+                            print(f"DEBUG: SECURITY - Inconsistency in {field} between top-level and nested proof")
+                            return False
+                    # If top-level has empty/tampered value but nested doesn't, reject
+                    if field in proof:
+                        top_val = proof[field]
+                        if isinstance(top_val, list) and len(top_val) == 0 and field == 'query_responses':
+                            print(f"DEBUG: SECURITY - Empty query_responses at top level")
+                            return False
+            
             # Handle both formats: direct proof and nested proof
             proof_data = proof.get('proof', proof)
             
