@@ -327,11 +327,13 @@ export function ActiveHedges({ address }: { address: string }) {
                     </div>
                     <div className={`text-sm ${
                       hedge.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>handleClosePosition(hedge)}
-                      disabled={closingPosition === hedge.id}
-                      className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {closingPosition === hedge.id ? 'Closing...' : 'Close Position'} */}
+                    }`}>
+                      {hedge.pnlPercent >= 0 ? '+' : ''}{hedge.pnlPercent.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Position Details */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-700">
                   <div>
                     <div className="text-xs text-gray-400">Size</div>
