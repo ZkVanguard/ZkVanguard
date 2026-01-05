@@ -107,6 +107,20 @@ contract RWAManager is
         bool verified
     );
 
+    // Modifiers
+    /**
+     * @notice Ensures only the portfolio owner or admin can execute actions
+     * @param _portfolioId Portfolio ID to check ownership
+     */
+    modifier onlyPortfolioOwnerOrApproved(uint256 _portfolioId) {
+        Portfolio storage portfolio = portfolios[_portfolioId];
+        require(
+            portfolio.owner == msg.sender || hasRole(ADMIN_ROLE, msg.sender),
+            "Not authorized for this portfolio"
+        );
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -217,7 +231,7 @@ contract RWAManager is
         uint256 _portfolioId,
         string calldata _strategy,
         bytes32 _zkProofHash
-    ) external onlyRole(STRATEGY_EXECUTOR_ROLE) whenNotPaused {
+    ) external onlyRole(STRATEGY_EXECUTOR_ROLE) onlyPortfolioOwnerOrApproved(_portfolioId) whenNotPaused {
         Portfolio storage portfolio = portfolios[_portfolioId];
         require(portfolio.isActive, "Portfolio not active");
 
@@ -252,7 +266,7 @@ contract RWAManager is
         address[] calldata _assets,
         uint256[] calldata _newAllocations,
         bytes32 _zkProofHash
-    ) external onlyRole(AGENT_ROLE) nonReentrant whenNotPaused {
+    ) external onlyRole(AGENT_ROLE) onlyPortfolioOwnerOrApproved(_portfolioId) nonReentrant whenNotPaused {
         Portfolio storage portfolio = portfolios[_portfolioId];
         require(portfolio.isActive, "Portfolio not active");
         require(
