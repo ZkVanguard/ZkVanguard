@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Active hedges and P/L tracking component
 interface HedgePosition {
   id: string;
   type: 'SHORT' | 'LONG';
@@ -554,5 +555,4 @@ export function ActiveHedges({ address }: { address: string }) {
       </AnimatePresence>
     </div>
   );
-
 }
