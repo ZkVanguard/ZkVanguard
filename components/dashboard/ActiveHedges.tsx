@@ -45,6 +45,13 @@ export function ActiveHedges({ address }: { address: string }) {
     worstTrade: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [closingPosition, setClosingPosition] = useState<string | null>(null);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
+  const [showClosedPositions, setShowClosedPositions] = useState(false);
+
+  const activeHedges = hedges.filter(h => h.status === 'active');
+  const closedHedges = hedges.filter(h => h.status === 'closed');
 
   useEffect(() => {
     // Load hedges from localStorage (settlement batch history)
@@ -153,6 +160,51 @@ export function ActiveHedges({ address }: { address: string }) {
     };
   }, [address]);
 
+  const handleClosePosition = async (hedge: HedgePosition) => {
+    setSelectedHedge(hedge);
+    setShowCloseConfirm(true);
+  };
+
+  const confirmClosePosition = async () => {
+    if (!selectedHedge) return;
+    
+    setClosingPosition(selectedHedge.id);
+    setShowCloseConfirm(false);
+    
+    try {
+      // Update localStorage to mark position as closed
+      const settlements = localStorage.getItem('settlement_history');
+      if (settlements) {
+        const settlementData = JSON.parse(settlements);
+        if (settlementData[selectedHedge.id]) {
+          settlementData[selectedHedge.id].status = 'closed';
+          settlementData[selectedHedge.id].closedAt = Date.now();
+          settlementData[selectedHedge.id].finalPnL = selectedHedge.pnl;
+          settlementData[selectedHedge.id].finalPnLPercent = selectedHedge.pnlPercent;
+          
+          localStorage.setItem('settlement_history', JSON.stringify(settlementData));
+          console.log('✅ [ActiveHedges] Position closed:', selectedHedge.id);
+          
+          // Dispatch event to refresh
+          window.dispatchEvent(new Event('hedgeAdded'));
+          
+          // Update local state immediately
+          setHedges(prev => prev.map(h => 
+            h.id === selectedHedge.id 
+              ? { ...h, status: 'closed' as const, closedAt: new Date() }
+              : h
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to close position:', error);
+      alert('Failed to close position. Please try again.');
+    } finally {
+      setClosingPosition(null);
+      setSelectedHedge(null);
+    }
+  };
+
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-96 border border-gray-700" />;
   }
@@ -218,9 +270,18 @@ export function ActiveHedges({ address }: { address: string }) {
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          <AnimatePresence>
-            {hedges.map((hedge) => (
+        <>
+          {/* Active Positions */}
+          {activeHedges.length > 0 && (
+            <div className="space-y-3 mb-6">
+              <h3 className="text-sm font-semibold text-gray-400 flex items-center space-x-2">
+                <span>Active Positions</span>
+                <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full">
+                  {activeHedges.length}
+                </span>
+              </h3>
+              <AnimatePresence>
+                {activeHedges.map((hedge) => (
               <motion.div
                 key={hedge.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -265,13 +326,11 @@ export function ActiveHedges({ address }: { address: string }) {
                     </div>
                     <div className={`text-sm ${
                       hedge.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {hedge.pnlPercent >= 0 ? '+' : ''}{hedge.pnlPercent.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Position Details */}
+                    }`}>handleClosePosition(hedge)}
+                      disabled={closingPosition === hedge.id}
+                      className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {closingPosition === hedge.id ? 'Closing...' : 'Close Position'} */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-700">
                   <div>
                     <div className="text-xs text-gray-400">Size</div>
@@ -310,20 +369,89 @@ export function ActiveHedges({ address }: { address: string }) {
                   </div>
                   {hedge.status === 'active' && (
                     <button
-                      onClick={() => {
-                        // TODO: Implement close position
-                        alert('Close position feature coming soon!');
-                      }}
-                      className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-xs font-semibold"
+                      onClick={() => handleClosePosition(hedge)}
+                      disabled={closingPosition === hedge.id}
+                      className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Close Position
+                      {closingPosition === hedge.id ? 'Closing...' : 'Close Position'}
                     </button>
                   )}
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-        </div>
+            </div>
+          )}
+
+          {/* Closed Positions */}
+          {closedHedges.length > 0 && (
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowClosedPositions(!showClosedPositions)}
+                className="w-full text-sm font-semibold text-gray-400 hover:text-gray-300 flex items-center space-x-2 transition-colors"
+              >
+                <span>Closed Positions ({closedHedges.length})</span>
+                <motion.div
+                  animate={{ rotate: showClosedPositions ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </motion.div>
+              </button>
+              
+              <AnimatePresence>
+                {showClosedPositions && closedHedges.map((hedge) => (
+                  <motion.div
+                    key={hedge.id}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="p-4 rounded-lg border bg-gray-900/50 border-gray-700 opacity-75"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`p-2 rounded-lg ${
+                          hedge.type === 'SHORT' ? 'bg-red-500/10' : 'bg-green-500/10'
+                        }`}>
+                          {hedge.type === 'SHORT' ? (
+                            <TrendingDown className="w-5 h-5 text-red-400" />
+                          ) : (
+                            <TrendingUp className="w-5 h-5 text-green-400" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="font-semibold">{hedge.type} {hedge.asset}</h3>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
+                              Closed
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {hedge.closedAt && `Closed ${new Date(hedge.closedAt).toLocaleString()}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-bold ${
+                          hedge.pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {hedge.pnl >= 0 ? '+' : ''}{hedge.pnl.toFixed(2)} USDC
+                        </div>
+                        <div className={`text-sm ${
+                          hedge.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {hedge.pnlPercent >= 0 ? '+' : ''}{hedge.pnlPercent.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </>
       )}
 
       {/* Footer Info */}
@@ -350,6 +478,81 @@ export function ActiveHedges({ address }: { address: string }) {
           </a>
         </div>
       )}
+
+      {/* Close Position Confirmation Modal */}
+      <AnimatePresence>
+        {showCloseConfirm && selectedHedge && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowCloseConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 rounded-2xl p-6 max-w-md w-full border border-red-500/30 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-3 bg-red-500/10 rounded-xl">
+                  <XCircle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Close Position</h3>
+                  <p className="text-sm text-gray-400">Finalize hedge with current P/L</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400">Position</span>
+                    <span className="font-semibold">{selectedHedge.type} {selectedHedge.asset}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400">Current P/L</span>
+                    <span className={`font-bold text-lg ${selectedHedge.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {selectedHedge.pnl >= 0 ? '+' : ''}{selectedHedge.pnl.toFixed(2)} USDC
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-400">Return</span>
+                    <span className={`font-semibold ${selectedHedge.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {selectedHedge.pnlPercent >= 0 ? '+' : ''}{selectedHedge.pnlPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/30 flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-yellow-200">
+                    Closing this position will lock in the current P/L. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmClosePosition}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Close Position
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
+
 }
