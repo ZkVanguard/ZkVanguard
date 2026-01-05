@@ -47,7 +47,7 @@ export function PortfolioOverview({ address }: { address: string }) {
         if (settlements) {
           const settlementData = JSON.parse(settlements);
           activeHedgesCount = Object.values(settlementData).filter(
-            (batch: any) => batch.type === 'hedge' && batch.status === 'completed'
+            (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
           ).length;
         }
         
@@ -75,6 +75,18 @@ export function PortfolioOverview({ address }: { address: string }) {
       }));
       fetchAIAnalysis();
     }
+
+    // Listen for hedge updates to refresh count
+    const handleHedgeUpdate = () => {
+      console.log('📊 [PortfolioOverview] Hedge updated, refreshing...');
+      fetchAIAnalysis();
+    };
+
+    window.addEventListener('hedgeAdded', handleHedgeUpdate);
+    
+    return () => {
+      window.removeEventListener('hedgeAdded', handleHedgeUpdate);
+    };
   }, [portfolioCount, countLoading, address]);
 
   if (loading) {
