@@ -83,6 +83,27 @@ export default function AuthenticityVerificationPage() {
 
   useEffect(() => {
     fetchAuthenticityProof();
+    
+    // Check if there's a proof in the URL (from shareable link)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const encodedProof = params.get('proof');
+      
+      if (encodedProof) {
+        try {
+          const decoded = atob(decodeURIComponent(encodedProof));
+          const proofData = JSON.parse(decoded);
+          setProofInput(JSON.stringify(proofData, null, 2));
+          
+          // Auto-verify the proof
+          setTimeout(() => {
+            verifyEmbeddedProof(proofData);
+          }, 500);
+        } catch (err) {
+          console.error('Failed to decode shared proof:', err);
+        }
+      }
+    }
   }, []);
 
   const fetchAuthenticityProof = async () => {
@@ -116,31 +137,7 @@ export default function AuthenticityVerificationPage() {
 
     try {
       const proofData = JSON.parse(proofInput);
-      
-      const response = await fetch('/api/zk-proof/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proof: proofData.proof || proofData,
-          statement: proofData.statement || {},
-          claim: proofData.claim
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success && result.verified) {
-        setVerificationResult({
-          verified: true,
-          message: '✅ Proof verified successfully! This is a genuine ZK-STARK proof.',
-          duration: result.duration_ms
-        });
-      } else {
-        setVerificationResult({
-          verified: false,
-          message: `❌ Proof verification failed: ${result.error || 'Invalid proof'}`
-        });
-      }
+      await performVerification(proofData);
     } catch (err) {
       setVerificationResult({
         verified: false,
@@ -148,6 +145,44 @@ export default function AuthenticityVerificationPage() {
       });
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const verifyEmbeddedProof = async (proofData: any) => {
+    setVerifying(true);
+    try {
+      await performVerification(proofData);
+    } catch (err) {
+      console.error('Embedded proof verification failed:', err);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const performVerification = async (proofData: any) => {
+    const response = await fetch('/api/zk-proof/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proof: proofData.proof || proofData,
+        statement: proofData.statement || {},
+        claim: proofData.claim
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success && result.verified) {
+      setVerificationResult({
+        verified: true,
+        message: '✅ Proof verified successfully! This is a genuine ZK-STARK proof.',
+        duration: result.duration_ms
+      });
+    } else {
+      setVerificationResult({
+        verified: false,
+        message: `❌ Proof verification failed: ${result.error || 'Invalid proof'}`
+      });
     }
   };
 

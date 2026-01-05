@@ -74,7 +74,10 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         proof_type: 'settlement', // Map all to settlement for now
-        data: proofData
+        data: {
+          statement: statement,  // Backend expects statement and witness inside data
+          witness: witness
+        }
       })
     });
 

@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { logger } from '../../lib/utils/logger';
-import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
+import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, QrCode, ExternalLink } from 'lucide-react';
 import { ProofVerification } from '../../components/dashboard/ProofVerification';
-import { useAccount } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 
 interface Proof {
   statement_hash: number;
@@ -88,6 +88,7 @@ const scenarios = [
 
 function ZKProofPage() {
   const { isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0]);
   const [proofResult, setProofResult] = useState<ProofResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -97,6 +98,22 @@ function ZKProofPage() {
   const [showProofDetails, setShowProofDetails] = useState(false);
   const [onChainTxHash, setOnChainTxHash] = useState<string | null>(null);
   const [isStoringOnChain, setIsStoringOnChain] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [shareableLink, setShareableLink] = useState<string>('');
+  const [showQR, setShowQR] = useState(false);
+  
+  // Editable statement and witness
+  const [editableStatement, setEditableStatement] = useState<Record<string, unknown>>(scenarios[0].statement);
+  const [editableWitness, setEditableWitness] = useState<Record<string, unknown>>(scenarios[0].witness);
+
+  // Update editable fields when scenario changes
+  const handleScenarioChange = (scenario: typeof scenarios[0]) => {
+    setSelectedScenario(scenario);
+    setEditableStatement(scenario.statement);
+    setEditableWitness(scenario.witness);
+    setProofResult(null);
+    setVerificationResult(null);
+  };
 
   const generateProof = async () => {
     setIsGenerating(true);
@@ -110,8 +127,8 @@ function ZKProofPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scenario: selectedScenario.id,
-          statement: selectedScenario.statement,
-          witness: selectedScenario.witness
+          statement: editableStatement,
+          witness: editableWitness
         })
       });
       const data = await response.json();
@@ -143,21 +160,36 @@ function ZKProofPage() {
       logger.info('Storing proof on Cronos testnet with TRUE gasless');
       logger.info('Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
       
-      // Import the TRUE gasless storage function
-      const { storeCommitmentTrueGasless } = await import('@/lib/api/onchain-true-gasless');
       const { convertToContractFormat } = await import('@/lib/api/zk');
-      const { useWalletClient } = await import('wagmi');
-      const { ethers } = await import('ethers');
+      const { useAccount } = await import('wagmi');
       
-      // Get signer from wagmi
-      const { data: walletClient } = useWalletClient();
+      // Use walletClient from component hook
       if (!walletClient) {
         throw new Error('Please connect your wallet first');
       }
       
-      // Convert to ethers signer
-      const provider = new ethers.BrowserProvider(walletClient);
-      const signer = await provider.getSigner();
+      // Get user address
+      const address = walletClient.account.address;
+
+      // Require user signature before sending to server-side storage
+      const signatureMessage = [
+        'Chronos Vanguard: Confirm proof storage',
+        `Scenario: ${selectedScenario.name}`,
+        `Address: ${address}`,
+        `Timestamp: ${new Date().toISOString()}`,
+        'This is a proof storage acknowledgement only. No funds are moved by this signature.'
+      ].join('\n');
+
+      try {
+        await walletClient.request({
+          method: 'personal_sign',
+          params: [signatureMessage, address]
+        });
+      } catch (sigError) {
+        logger.warn('User declined signature for proof storage', { error: sigError });
+        alert('Signature required to proceed with on-chain storage.');
+        return;
+      }
       
       // Convert proof to contract format
       // @ts-expect-error - proof structure conversion between frontend and contract format
@@ -169,13 +201,29 @@ function ZKProofPage() {
         securityLevel: commitment.metadata.security_level
       });
       
-      // Store on-chain with TRUE gasless via x402 + USDC
-      const result = await storeCommitmentTrueGasless(
-        commitment.proofHash,
-        commitment.merkleRoot,
-        BigInt(commitment.metadata.field_bits),
-        signer
-      );
+      // Call server-side API to store on-chain with TRUE gasless via x402 + USDC
+      const response = await fetch('/api/zk-proof/store-onchain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proofHash: commitment.proofHash,
+          merkleRoot: commitment.merkleRoot,
+          securityLevel: commitment.metadata.field_bits,
+          address: address
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        const message = errorData.error || 'Failed to store on-chain';
+        // Show actionable guidance for funding issues
+        if (message.toLowerCase().includes('balance')) {
+          alert('On-chain storage temporarily unavailable: server wallet USDC balance is low. Please fund the server wallet with at least 0.01 USDC and some CRO, then retry.');
+        }
+        throw new Error(message);
+      }
+
+      const result = await response.json();
       
       setOnChainTxHash(result.txHash);
       logger.info('Stored on-chain! TRUE gasless via x402 + USDC', {
@@ -189,7 +237,7 @@ function ZKProofPage() {
         txHash: result.txHash,
         proofHash: commitment.proofHash,
         statement_hash: proof.statement_hash,
-        statement: selectedScenario?.statement || {},
+        statement: editableStatement || {},
         proof: proof,
         timestamp: Date.now(),
         trueGasless: result.trueGasless,
@@ -202,7 +250,8 @@ function ZKProofPage() {
       
     } catch (error) {
       console.error('❌ Failed to store on-chain:', error);
-      alert('Failed to store proof on-chain: ' + (error instanceof Error ? error.message : String(error)));
+      // Don't alert in production, just log the error
+      logger.error('On-chain storage failed', { error });
     } finally {
       setIsStoringOnChain(false);
     }
@@ -247,6 +296,42 @@ function ZKProofPage() {
     URL.revokeObjectURL(url);
   };
 
+  const copyProofToClipboard = async () => {
+    if (!proofResult) return;
+    try {
+      const proofData = JSON.stringify(proofResult, null, 2);
+      await navigator.clipboard.writeText(proofData);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      alert('Failed to copy to clipboard');
+    }
+  };
+
+  const generateShareableLink = () => {
+    if (!proofResult) return;
+    try {
+      const proofData = JSON.stringify(proofResult);
+      const encoded = btoa(proofData); // Base64 encode
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const link = `${baseUrl}/zk-authenticity?proof=${encodeURIComponent(encoded)}`;
+      setShareableLink(link);
+      
+      // Copy to clipboard automatically
+      navigator.clipboard.writeText(link);
+      alert('Shareable link copied to clipboard! Anyone with this link can verify the proof.');
+    } catch (err) {
+      alert('Failed to generate shareable link');
+    }
+  };
+
+  const openVerificationPage = () => {
+    if (!proofResult) return;
+    const proofData = JSON.stringify(proofResult);
+    const encoded = btoa(proofData);
+    window.open(`/zk-authenticity?proof=${encodeURIComponent(encoded)}`, '_blank');
+  };
+
   return (
     <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>
       <div className="container mx-auto px-6 py-16">
@@ -259,6 +344,37 @@ function ZKProofPage() {
             <br />
             <span className="text-white">Proof System</span>
           </h1>
+          
+          {/* How It Works - Proof Lifecycle */}
+          <div className="glass border border-emerald-500/30 rounded-xl p-6 mt-8 text-left">
+            <h3 className="text-xl font-bold text-emerald-400 mb-4 text-center">🔄 Complete Proof Lifecycle</h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-cyan-400 font-semibold">
+                  <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center text-sm">1</div>
+                  Generate
+                </div>
+                <p className="text-sm text-gray-400">Select scenario and generate ZK-STARK proof with private witness data</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-purple-400 font-semibold">
+                  <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center text-sm">2</div>
+                  Share
+                </div>
+                <p className="text-sm text-gray-400">Copy JSON, create shareable link, or download file to send to anyone</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center text-sm">3</div>
+                  Verify
+                </div>
+                <p className="text-sm text-gray-400">Recipient verifies proof cryptographically without learning secrets</p>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm text-blue-300">
+              <strong>🔒 Privacy Guarantee:</strong> The verifier learns NOTHING about your private data - only that your claim is valid!
+            </div>
+          </div>
           <p className="text-xl text-gray-300 leading-relaxed">
             Generate real <span className="text-emerald-400 font-bold">ZK-STARK</span> proofs.
             Prove statements are true <span className="text-cyan-400 font-bold">WITHOUT</span> revealing sensitive data.
@@ -270,11 +386,7 @@ function ZKProofPage() {
           {scenarios.map((scenario, _idx) => (
             <button
               key={scenario.id}
-              onClick={() => {
-                setSelectedScenario(scenario);
-                setProofResult(null);
-                setVerificationResult(null);
-              }}
+              onClick={() => handleScenarioChange(scenario)}
               className={`group relative p-8 rounded-2xl transition-all duration-300 text-left ${
                 selectedScenario.id === scenario.id
                   ? 'glass-strong border-2 border-emerald-500 shadow-lg shadow-emerald-500/20'
@@ -300,10 +412,21 @@ function ZKProofPage() {
                 </div>
                 Public Statement
               </h2>
-              <div className="bg-gray-900/50 rounded-xl p-6 border border-emerald-500/30">
-                <pre className="text-emerald-400 text-sm overflow-auto font-mono">
-                  {JSON.stringify(selectedScenario.statement, null, 2)}
-                </pre>
+              <div className="bg-gray-900/50 rounded-xl p-6 border border-emerald-500/30 space-y-3">
+                {Object.entries(editableStatement).map(([key, value]) => (
+                  <div key={key}>
+                    <label className="text-xs text-emerald-400 font-mono block mb-1">{key}:</label>
+                    <input
+                      type="text"
+                      value={String(value)}
+                      onChange={(e) => setEditableStatement(prev => ({
+                        ...prev,
+                        [key]: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value)
+                      }))}
+                      className="w-full bg-gray-800/50 border border-emerald-500/30 rounded px-3 py-2 text-emerald-400 text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                ))}
               </div>
               <p className="text-gray-400 text-sm mt-3 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -328,14 +451,25 @@ function ZKProofPage() {
                   {showSecrets ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <div className="bg-gray-900/50 rounded-xl p-6 border border-cyan-500/30">
+              <div className="bg-gray-900/50 rounded-xl p-6 border border-cyan-500/30 space-y-3">
                 {showSecrets ? (
-                  <pre className="text-cyan-400 text-sm overflow-auto font-mono">
-                    {JSON.stringify(selectedScenario.witness, null, 2)}
-                  </pre>
+                  Object.entries(editableWitness).map(([key, value]) => (
+                    <div key={key}>
+                      <label className="text-xs text-cyan-400 font-mono block mb-1">{key}:</label>
+                      <input
+                        type="text"
+                        value={String(value)}
+                        onChange={(e) => setEditableWitness(prev => ({
+                          ...prev,
+                          [key]: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value)
+                        }))}
+                        className="w-full bg-gray-800/50 border border-cyan-500/30 rounded px-3 py-2 text-cyan-400 text-sm font-mono focus:outline-none focus:border-cyan-500 transition-colors"
+                      />
+                    </div>
+                  ))
                 ) : (
                   <div className="text-cyan-400 text-sm space-y-2 font-mono">
-                    {Object.keys(selectedScenario.witness).map((key) => (
+                    {Object.keys(editableWitness).map((key) => (
                       <div key={key}>
                         {key}: <span className="text-gray-500">████████</span>
                       </div>
@@ -385,7 +519,7 @@ function ZKProofPage() {
               </h2>
               <div className="grid gap-4">
                 {selectedScenario.secrets.map((secretKey) => {
-                  const secretValue = (selectedScenario.witness as Record<string, unknown>)[secretKey];
+                  const secretValue = (editableWitness as Record<string, unknown>)[secretKey];
                   
                   // Proper privacy check: Look for exact witness field names or clear-text values
                   // ZK-STARK proofs contain random-looking numbers that may coincidentally match
@@ -523,7 +657,28 @@ function ZKProofPage() {
                   </div>
                   Cryptographic Proof
                 </h2>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={copyProofToClipboard}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center gap-2"
+                  >
+                    {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied!' : 'Copy JSON'}
+                  </button>
+                  <button
+                    onClick={generateShareableLink}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share Link
+                  </button>
+                  <button
+                    onClick={openVerificationPage}
+                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center gap-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Verify Now
+                  </button>
                   <button
                     onClick={() => setShowProofDetails(!showProofDetails)}
                     className="px-4 py-2 glass border border-white/20 text-white rounded-lg hover:border-cyan-500 transition-all"
@@ -532,7 +687,7 @@ function ZKProofPage() {
                   </button>
                   <button
                     onClick={downloadProof}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center gap-2"
+                    className="px-4 py-2 glass border border-white/20 text-white rounded-lg hover:border-cyan-500 transition-all flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Download
@@ -543,15 +698,15 @@ function ZKProofPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="glass border border-white/10 p-6 rounded-xl">
                   <div className="text-gray-400 text-sm mb-2">Security Level</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.security_level}-bit</div>
+                  <div className="text-white font-bold text-2xl">{proofResult.proof.security_level || 0}-bit</div>
                 </div>
                 <div className="glass border border-white/10 p-6 rounded-xl">
                   <div className="text-gray-400 text-sm mb-2">Query Count</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.query_responses.length}</div>
+                  <div className="text-white font-bold text-2xl">{proofResult.proof.query_responses?.length || 0}</div>
                 </div>
                 <div className="glass border border-white/10 p-6 rounded-xl">
                   <div className="text-gray-400 text-sm mb-2">Trace Length</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.execution_trace_length}</div>
+                  <div className="text-white font-bold text-2xl">{proofResult.proof.execution_trace_length || 0}</div>
                 </div>
                 <div className="glass border border-white/10 p-6 rounded-xl">
                   <div className="text-gray-400 text-sm mb-2">Proof Size</div>
@@ -566,30 +721,30 @@ function ZKProofPage() {
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Statement Hash</div>
                     <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-cyan-400 break-all border border-cyan-500/30">
-                      {proofResult.proof.statement_hash}
+                      {proofResult.proof.statement_hash || 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Merkle Root</div>
                     <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-emerald-400 break-all border border-emerald-500/30">
-                      {proofResult.proof.merkle_root}
+                      {proofResult.proof.merkle_root || 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold">Fiat-Shamir Challenge</div>
                     <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-amber-400 break-all border border-amber-500/30">
-                      {proofResult.proof.challenge}
+                      {proofResult.proof.challenge || 0}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-sm mb-3 font-semibold flex items-center gap-2">
-                      Query Responses (First 3 of {proofResult.proof.query_responses.length})
+                      Query Responses (First 3 of {proofResult.proof.query_responses?.length || 0})
                     </div>
                     <div className="grid gap-3">
-                      {proofResult.proof.query_responses.slice(0, 3).map((query, idx) => (
+                      {(proofResult.proof.query_responses || []).slice(0, 3).map((query, idx) => (
                         <div key={idx} className="glass border border-white/10 p-4 rounded-xl">
                           <div className="text-cyan-400 text-sm font-mono">
-                            Query #{query.index}: {query.proof.length} Merkle path steps
+                            Query #{query.index}: {query.proof?.length || 0} Merkle path steps
                           </div>
                         </div>
                       ))}

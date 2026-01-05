@@ -320,10 +320,10 @@ export function convertToContractFormat(starkProof: ZKProof): {
   // Create on-chain commitment from the 521-bit proof
   // This preserves the full cryptographic security while fitting on-chain
   const proofCommitment = hashToBytes32(
-    starkProof.statement_hash.toString() +
-    starkProof.challenge.toString() +
-    starkProof.response.toString() +
-    starkProof.merkle_root
+    (starkProof.statement_hash || 0).toString() +
+    (starkProof.challenge || 0).toString() +
+    (starkProof.response || 0).toString() +
+    (starkProof.merkle_root || '0x0')
   );
   
   const merkleRootHex = starkProof.merkle_root.startsWith('0x') 
