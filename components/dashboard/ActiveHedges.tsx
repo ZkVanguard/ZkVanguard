@@ -79,12 +79,28 @@ export function ActiveHedges({ address }: { address: string }) {
             const hedgeData = batch.hedgeDetails || {};
             console.log('✅ [ActiveHedges] Found hedge with signature:', hedgeData);
             
-            // Simulate current price movement for demo
-            const currentPrice = hedgeData.entryPrice * (1 + (Math.random() - 0.5) * 0.05);
-            const pnl = hedgeData.type === 'SHORT' 
-              ? (hedgeData.entryPrice - currentPrice) * hedgeData.size * hedgeData.leverage
-              : (currentPrice - hedgeData.entryPrice) * hedgeData.size * hedgeData.leverage;
-            const pnlPercent = (pnl / hedgeData.capitalUsed) * 100;
+            // Determine if position is closed
+            const isClosed = batch.status === 'closed';
+            
+            // For closed positions, use saved final values. For active, simulate live prices
+            let currentPrice: number;
+            let pnl: number;
+            let pnlPercent: number;
+            
+            if (isClosed) {
+              // Use locked final values for closed positions
+              currentPrice = hedgeData.entryPrice || 43500; // Keep at entry for display
+              pnl = batch.finalPnL || 0;
+              pnlPercent = batch.finalPnLPercent || 0;
+              console.log('🔒 [ActiveHedges] Using locked P/L for closed position:', { pnl, pnlPercent });
+            } else {
+              // Simulate current price movement for active positions only
+              currentPrice = hedgeData.entryPrice * (1 + (Math.random() - 0.5) * 0.05);
+              pnl = hedgeData.type === 'SHORT' 
+                ? (hedgeData.entryPrice - currentPrice) * hedgeData.size * hedgeData.leverage
+                : (currentPrice - hedgeData.entryPrice) * hedgeData.size * hedgeData.leverage;
+              pnlPercent = (pnl / hedgeData.capitalUsed) * 100;
+            }
 
             hedgePositions.push({
               id: batch.batchId,
@@ -99,8 +115,9 @@ export function ActiveHedges({ address }: { address: string }) {
               capitalUsed: hedgeData.capitalUsed || 15,
               pnl,
               pnlPercent,
-              status: batch.status === 'completed' ? 'active' : 'closed',
+              status: isClosed ? 'closed' : 'active',
               openedAt: new Date(batch.timestamp),
+              closedAt: isClosed ? new Date(batch.closedAt) : undefined,
               reason: hedgeData.reason || 'Portfolio protection',
             });
           }
