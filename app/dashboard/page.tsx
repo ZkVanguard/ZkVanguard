@@ -13,6 +13,7 @@ import { ActiveHedges } from '@/components/dashboard/ActiveHedges';
 import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
 import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfolioCreator';
 import { SwapModal } from '@/components/dashboard/SwapModal';
+import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { formatEther } from 'viem';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 import { ArrowDownUp } from 'lucide-react';
@@ -21,7 +22,7 @@ export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: balance } = useBalance({ address });
-  const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements' | 'transactions'>('overview');
   const [swapModalOpen, setSwapModalOpen] = useState(false);
 
   // Contract data
@@ -106,7 +107,7 @@ export default function DashboardPage() {
         {/* Tab Navigation */}
         <div className="mb-8 flex items-center justify-between">
           <div className="glass rounded-xl p-1.5 inline-flex items-center gap-2 border border-white/10">
-            {(['overview', 'agents', 'positions', 'settlements'] as const).map((tab) => (
+            {(['overview', 'agents', 'positions', 'transactions', 'settlements'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -162,6 +163,7 @@ export default function DashboardPage() {
             )}
             {activeTab === 'agents' && <AgentActivity address={displayAddress} />}
             {activeTab === 'positions' && <PositionsList address={displayAddress} />}
+            {activeTab === 'transactions' && <RecentTransactions address={displayAddress} />}
             {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
           </div>
 
