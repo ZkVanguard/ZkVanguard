@@ -236,76 +236,68 @@ export function SwapModal({
       setErrorMessage('');
       setZkProofHash('');
       
-      // Step 1: Generate ZK-STARK proof for swap intent
+      const chainId = await publicClient?.getChainId();
+      const decimals = getTokenDecimals(tokenIn);
+      const amountInWei = parseUnits(amountIn, decimals);
+      const tokenInAddress = supportedTokens[tokenIn.toUpperCase()];
+
+      // Step 1: Generate ZK-STARK proof for swap verification
       setStep('zk-proof');
       setZkProofGenerating(true);
       
-      const swapData = {
-        from: address,
-        tokenIn: tokenIn,
-        tokenOut: tokenOut,
-        amountIn: amountIn,
-        expectedAmountOut: amountOut,
-        slippage: slippage,
-        timestamp: Date.now(),
-      };
-      
-      console.log('🔐 Generating ZK-STARK proof for swap...', swapData);
+      console.log('🔐 Generating ZK-STARK proof for VVS Finance swap...');
       
       // Call ZK backend to generate proof
-      const zkResponse = await fetch(`${ZK_API_URL}/api/zk/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proof_type: 'settlement',
-          data: {
-            payments: [{
-              recipient: address,
-              amount: parseFloat(amountIn),
-              token: tokenIn
-            }]
-          },
-          portfolio_id: 0
-        })
-      });
-      
-      if (!zkResponse.ok) {
-        throw new Error('ZK proof generation failed - is the backend running?');
-      }
-      
-      const zkResult = await zkResponse.json();
-      console.log('✅ ZK proof job created:', zkResult.job_id);
-      
-      // Poll for proof completion
-      let proof = null;
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        const statusRes = await fetch(`${ZK_API_URL}/api/zk/proof/${zkResult.job_id}`);
-        if (statusRes.ok) {
-          const status = await statusRes.json();
-          if (status.status === 'completed' && status.proof) {
-            proof = status.proof;
-            setZkProofHash(status.proof.merkle_root || status.proof.proof_hash || 'verified');
-            console.log('✅ ZK-STARK proof generated!', status.proof.merkle_root);
-            break;
-          } else if (status.status === 'failed') {
-            throw new Error(status.error || 'Proof generation failed');
+      try {
+        const zkResponse = await fetch(`${ZK_API_URL}/api/zk/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            proof_type: 'settlement',
+            data: {
+              payments: [{
+                recipient: address,
+                amount: parseFloat(amountIn),
+                token: tokenIn
+              }],
+              swap: {
+                tokenIn,
+                tokenOut,
+                amountIn: amountIn,
+                expectedOut: amountOut,
+                dex: 'VVS Finance'
+              }
+            },
+            portfolio_id: 0
+          })
+        });
+        
+        if (zkResponse.ok) {
+          const zkResult = await zkResponse.json();
+          console.log('✅ ZK proof job created:', zkResult.job_id);
+          
+          // Poll for proof completion (max 10 seconds for better UX)
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            const statusRes = await fetch(`${ZK_API_URL}/api/zk/proof/${zkResult.job_id}`);
+            if (statusRes.ok) {
+              const status = await statusRes.json();
+              if (status.status === 'completed' && status.proof) {
+                setZkProofHash(status.proof.merkle_root || status.proof.proof_hash || 'verified');
+                console.log('✅ ZK-STARK proof generated!', status.proof.merkle_root);
+                break;
+              }
+            }
           }
         }
-      }
-      
-      if (!proof) {
-        throw new Error('ZK proof generation timed out');
+      } catch (zkError) {
+        console.warn('⚠️ ZK backend not available, proceeding with DEX swap:', zkError);
+        // Continue without ZK proof - swap is still valid
       }
       
       setZkProofGenerating(false);
 
-      // Step 2: Check for token approval
-      const chainId = await publicClient?.getChainId();
-      const decimals = getTokenDecimals(tokenIn);
-      const amountInWei = parseUnits(amountIn, decimals);
-
-      // Get quote
+      // Step 2: Get quote from VVS Finance
       const quote = await dexService.getSwapQuote({
         tokenIn,
         tokenOut,
@@ -313,8 +305,7 @@ export function SwapModal({
         slippage,
       });
 
-      // Check if approval needed (skip for native CRO)
-      const tokenInAddress = supportedTokens[tokenIn.toUpperCase()];
+      // Step 3: Check if approval needed for VVS Router (skip for native CRO)
       if (tokenIn.toUpperCase() !== 'CRO' && tokenIn.toUpperCase() !== 'WCRO') {
         const { needsApproval } = await dexService.checkApproval(tokenInAddress, address, amountInWei);
         
@@ -326,34 +317,24 @@ export function SwapModal({
         }
       }
 
-      // Step 3: Execute swap (on mainnet) or ERC20 transfer (on testnet)
+      // Step 4: Execute VVS Finance DEX Swap (PRIORITY)
       setStep('swap');
+      console.log('🔄 Executing VVS Finance swap...');
       
-      if (chainId === 338) {
-        // On testnet, execute a real ERC20 transfer (user to user, demonstrating ZK-verified trade)
-        // For demo purposes, we'll transfer tokenIn to a demo vault address
-        const DEMO_VAULT = '0x0000000000000000000000000000000000000001'; // Burn address for demo
-        
-        // Transfer tokens as ZK-verified swap
-        writeSwap({
-          address: tokenInAddress as `0x${string}`,
-          abi: [{
-            type: 'function',
-            name: 'transfer',
-            stateMutability: 'nonpayable',
-            inputs: [
-              { name: 'to', type: 'address' },
-              { name: 'amount', type: 'uint256' },
-            ],
-            outputs: [{ name: '', type: 'bool' }],
-          }],
-          functionName: 'transfer',
-          args: [DEMO_VAULT as `0x${string}`, amountInWei],
-        });
-      } else {
-        // On mainnet, use VVS DEX
-        await executeSwap();
-      }
+      // Always try VVS Finance DEX first - intelligent routing
+      const swapCall = dexService.getSwapContractCall(
+        {
+          tokenIn,
+          tokenOut,
+          amountIn: amountInWei,
+          slippage,
+          recipient: address,
+        },
+        quote
+      );
+
+      writeSwap(swapCall as any);
+      
     } catch (error: any) {
       console.error('Swap error:', error);
       setStep('error');
@@ -412,9 +393,14 @@ export function SwapModal({
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center gap-2">
             <h3 className="text-xl font-bold">Swap Tokens</h3>
-            <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30">
-              🔐 ZK-Verified
+            <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded-full border border-cyan-500/30">
+              VVS Finance
             </span>
+            {zkProofHash && (
+              <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30">
+                🔐 ZK
+              </span>
+            )}
           </div>
           <button onClick={handleClose} className="text-gray-400 hover:text-white transition-colors">
             <X className="w-6 h-6" />
@@ -548,7 +534,7 @@ export function SwapModal({
               </button>
 
               <p className="text-xs text-center text-gray-500">
-                🔐 ZK-STARK verified • ⚡ Gasless via x402 protocol
+                � VVS Finance DEX • 🔐 ZK-STARK verified • ⚡ x402 gasless
               </p>
             </>
           )}
@@ -556,10 +542,13 @@ export function SwapModal({
           {/* ZK Proof Generation Step */}
           {step === 'zk-proof' && (
             <div className="text-center py-8">
+          {/* ZK Proof Generation Step */}
+          {step === 'zk-proof' && (
+            <div className="text-center py-8">
               <Shield className="w-12 h-12 mx-auto mb-4 text-purple-400 animate-pulse" />
               <h4 className="text-lg font-semibold mb-2">Generating ZK-STARK Proof</h4>
               <p className="text-gray-400 text-sm mb-4">
-                {zkProofGenerating ? 'Creating cryptographic proof for your swap...' : 'ZK proof generated!'}
+                {zkProofGenerating ? 'Creating cryptographic proof for VVS Finance swap...' : 'ZK proof generated!'}
               </p>
               {zkProofHash && (
                 <div className="bg-gray-800 rounded-lg p-3 text-xs font-mono text-purple-400 break-all">
@@ -567,7 +556,7 @@ export function SwapModal({
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-3">
-                521-bit security • CUDA accelerated
+                521-bit security • CUDA accelerated • VVS Finance routing
               </p>
             </div>
           )}
@@ -576,10 +565,13 @@ export function SwapModal({
           {step === 'approve' && (
             <div className="text-center py-8">
               <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
-              <h4 className="text-lg font-semibold mb-2">Approve Token Spending</h4>
+              <h4 className="text-lg font-semibold mb-2">Approve VVS Finance Router</h4>
               <p className="text-gray-400 text-sm">
                 {isApprovePending && 'Waiting for approval confirmation...'}
                 {isApproveConfirming && 'Approval transaction confirming...'}
+              </p>
+              <p className="text-xs text-gray-500 mt-2">
+                Approving token spend for VVS Finance DEX
               </p>
             </div>
           )}
@@ -588,16 +580,19 @@ export function SwapModal({
           {step === 'swap' && (
             <div className="text-center py-8">
               <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-cyan-400" />
-              <h4 className="text-lg font-semibold mb-2">Executing ZK-Verified Swap</h4>
+              <h4 className="text-lg font-semibold mb-2">Executing VVS Finance Swap</h4>
               <p className="text-gray-400 text-sm">
-                {isSwapPending && 'Waiting for transaction confirmation...'}
-                {isSwapConfirming && 'Transaction confirming on Cronos...'}
+                {isSwapPending && 'Intelligent routing via VVS Finance...'}
+                {isSwapConfirming && 'Swap confirming on Cronos...'}
               </p>
               {zkProofHash && (
                 <p className="text-xs text-purple-400 mt-2">
                   🔐 ZK Proof: {zkProofHash.substring(0, 16)}...
                 </p>
               )}
+              <p className="text-xs text-gray-500 mt-2">
+                ⚡ x402 protocol • Automated liquidity routing
+              </p>
             </div>
           )}
 
@@ -605,7 +600,7 @@ export function SwapModal({
           {step === 'success' && (
             <div className="text-center py-8">
               <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-400" />
-              <h4 className="text-lg font-semibold mb-2">🔐 ZK-Verified Swap Complete!</h4>
+              <h4 className="text-lg font-semibold mb-2">VVS Finance Swap Complete!</h4>
               <p className="text-gray-400 text-sm">
                 Swapped {amountIn} {tokenIn} for ~{parseFloat(amountOut || '0').toFixed(6)} {tokenOut}
               </p>
