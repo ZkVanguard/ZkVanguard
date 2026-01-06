@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { usePortfolio } from '../../lib/contracts/hooks';
+import { usePortfolio, usePortfolioAssets } from '../../lib/contracts/hooks';
 import { formatEther } from 'viem';
 import { RefreshCw } from 'lucide-react';
 
@@ -12,6 +12,7 @@ interface PortfolioCardProps {
 
 export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
   const { data: portfolio, isLoading, refetch } = usePortfolio(portfolioId);
+  const { data: assets } = usePortfolioAssets(portfolioId);
   const { address } = useAccount();
 
   if (isLoading) {
@@ -91,7 +92,7 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
         <div className="bg-gray-900 p-3 rounded-lg">
           <div className="text-xs text-gray-400 mb-1">Assets</div>
           <div className="text-lg font-bold">
-            {assets.length}
+            {assets?.length ?? 0}
           </div>
         </div>
       </div>

@@ -27,6 +27,25 @@ export function usePortfolio(portfolioId: bigint) {
 }
 
 /**
+ * Hook to read portfolio assets from RWAManager
+ */
+export function usePortfolioAssets(portfolioId: bigint) {
+  const chainId = useChainId();
+  const addresses = getContractAddresses(chainId);
+
+  return useReadContract({
+    address: addresses.rwaManager,
+    abi: RWA_MANAGER_ABI,
+    functionName: 'getPortfolioAssets',
+    args: [portfolioId],
+    query: {
+      enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000' && portfolioId !== undefined,
+      refetchInterval: 10000,
+    },
+  });
+}
+
+/**
  * Hook to read portfolio count
  */
 export function usePortfolioCount() {
