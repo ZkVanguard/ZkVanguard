@@ -57,7 +57,7 @@ export function ActiveHedges({ address }: { address: string }) {
 
   useEffect(() => {
     // Load hedges from localStorage (settlement batch history)
-    const loadHedges = () => {
+    const loadHedges = async () => {
       try {
         const settlements = localStorage.getItem('settlement_history');
         console.log('📊 [ActiveHedges] Loading from localStorage:', settlements);
@@ -73,7 +73,7 @@ export function ActiveHedges({ address }: { address: string }) {
         const hedgePositions: HedgePosition[] = [];
 
         // Parse settlement batches to extract hedge positions
-        Object.values(settlementData).forEach((batch: any) => {
+        for (const batch of Object.values(settlementData) as any[]) {
           console.log('📊 [ActiveHedges] Processing batch:', batch);
           if (batch.type === 'hedge' && batch.managerSignature) {
             // Extract hedge details from batch
@@ -83,7 +83,7 @@ export function ActiveHedges({ address }: { address: string }) {
             // Determine if position is closed
             const isClosed = batch.status === 'closed';
             
-            // For closed positions, use saved final values. For active, simulate live prices
+            // For closed positions, use saved final values. For active, fetch live market prices
             let currentPrice: number;
             let pnl: number;
             let pnlPercent: number;
@@ -131,7 +131,7 @@ export function ActiveHedges({ address }: { address: string }) {
               reason: hedgeData.reason || 'Portfolio protection',
             });
           }
-        });
+        }
 
         // Calculate performance stats
         const activeCount = hedgePositions.filter(h => h.status === 'active').length;
@@ -165,14 +165,14 @@ export function ActiveHedges({ address }: { address: string }) {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'settlement_history') {
         console.log('📊 [ActiveHedges] Storage changed, reloading...');
-        loadHedges();
+        void loadHedges();
       }
     };
     
     // Listen for custom event from ChatInterface
     const handleHedgeAdded = () => {
       console.log('📊 [ActiveHedges] Hedge added event received, reloading...');
-      loadHedges();
+      void loadHedges();
     };
     
     window.addEventListener('storage', handleStorageChange);

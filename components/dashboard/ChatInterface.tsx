@@ -7,6 +7,8 @@ import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, execu
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
+import { getVVSFinanceService } from '../../lib/services/VVSFinanceService';
+import { SwapModal } from './SwapModal';
 
 interface Message {
   id: string;
@@ -28,6 +30,9 @@ const quickActions = [
 ];
 
 export function ChatInterface({ address: _address }: { address: string }) {
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapTokenOut, setSwapTokenOut] = useState<string>('WCRO');
+  const [swapTokenIn, setSwapTokenIn] = useState<string>('devUSDC');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -112,6 +117,33 @@ export function ChatInterface({ address: _address }: { address: string }) {
   // Parse intent from user input
   const parseIntent = (text: string): { intent: string; params: Record<string, unknown> } => {
     const lower = text.toLowerCase();
+    
+    // Buy/Sell parsing
+    if (lower.includes('buy')) {
+      const amountMatch = text.match(/buy\s+([\d.]+)\s+(\w+)/i);
+      if (amountMatch) {
+        return { 
+          intent: 'buy_asset',
+          params: {
+            amount: parseFloat(amountMatch[1]),
+            asset: amountMatch[2].toUpperCase(),
+          }
+        };
+      }
+    }
+    
+    if (lower.includes('sell')) {
+      const amountMatch = text.match(/sell\s+([\d.]+)\s+(\w+)/i);
+      if (amountMatch) {
+        return { 
+          intent: 'sell_asset',
+          params: {
+            amount: parseFloat(amountMatch[1]),
+            asset: amountMatch[2].toUpperCase(),
+          }
+        };
+      }
+    }
     
     if (lower.includes('hedge') || lower.includes('protect') || lower.includes('crash')) {
       const amountMatch = text.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:m|million|k|thousand)?/i);
@@ -206,6 +238,84 @@ export function ChatInterface({ address: _address }: { address: string }) {
       let response: { content: string; agent: string; actions?: { label: string; action: () => void }[] };
 
       switch (intent) {
+        case 'buy_asset':
+          setActiveAgent('Lead Agent → DEX Agent');
+          const buyAsset = params.asset as string;
+          const buyAmount = params.amount as number;
+          
+          // Use VVS Finance DEX for on-chain swaps
+          const dexService = getVVSFinanceService(338);
+          
+          if (!dexService.isTokenSupported(buyAsset)) {
+            response = {
+              content: `❌ **Token Not Supported**\n\n` +
+                `**Asset:** ${buyAsset}\n\n` +
+                `**Supported tokens:**\n${Object.keys(dexService.getSupportedTokens()).join(', ')}\n\n` +
+                `💡 **Tip:** Try \`buy 100 USDC\` or \`buy 10 WCRO\``,
+              agent: 'DEX Agent',
+            };
+          } else {
+            response = {
+              content: `🔄 **Ready to Buy ${buyAsset}**\n\n` +
+                `**Amount:** ${buyAmount} ${buyAsset}\n` +
+                `**Method:** VVS Finance DEX (On-Chain)\n` +
+                `**Network:** Cronos Testnet\n\n` +
+                `⚡ Click "Open Swap" to proceed with the trade!\n\n` +
+                `💡 Gasless via x402 protocol - no CRO needed for gas!`,
+              agent: 'DEX Agent',
+              actions: [
+                {
+                  label: '🔄 Open Swap',
+                  action: () => {
+                    setSwapTokenOut(buyAsset.toUpperCase());
+                    setSwapTokenIn('WCRO');
+                    setSwapModalOpen(true);
+                  },
+                },
+              ],
+            };
+          }
+          break;
+          
+        case 'sell_asset':
+          setActiveAgent('Lead Agent → DEX Agent');
+          const sellAsset = params.asset as string;
+          const sellAmount = params.amount as number;
+          
+          // Use VVS Finance DEX for on-chain swaps
+          const sellDexService = getVVSFinanceService(338);
+          
+          if (!sellDexService.isTokenSupported(sellAsset)) {
+            response = {
+              content: `❌ **Token Not Supported**\n\n` +
+                `**Asset:** ${sellAsset}\n\n` +
+                `**Supported tokens:**\n${Object.keys(sellDexService.getSupportedTokens()).join(', ')}\n\n` +
+                `💡 **Tip:** Try \`sell 50 USDC\` or \`sell 5 WCRO\``,
+              agent: 'DEX Agent',
+            };
+          } else {
+            response = {
+              content: `🔄 **Ready to Sell ${sellAsset}**\n\n` +
+                `**Amount:** ${sellAmount} ${sellAsset}\n` +
+                `**Method:** VVS Finance DEX (On-Chain)\n` +
+                `**Network:** Cronos Testnet\n\n` +
+                `⚡ Click "Open Swap" to proceed with the trade!\n\n` +
+                `💡 Gasless via x402 protocol - no CRO needed for gas!`,
+              agent: 'DEX Agent',
+              actions: [
+                {
+                  label: '🔄 Open Swap',
+                  action: () => {
+                    setSwapTokenIn(sellAsset.toUpperCase());
+                    setSwapTokenOut('WCRO');
+                    setSwapModalOpen(true);
+                  },
+                },
+              ],
+            };
+          }
+          break;
+        
         case 'analyze_portfolio':
           setActiveAgent('Lead Agent → Risk Agent');
           // Real API call
@@ -640,6 +750,24 @@ export function ChatInterface({ address: _address }: { address: string }) {
           isExecuting={isExecutingAction}
         />
       )}
+
+      {/* Swap Modal */}
+      <SwapModal
+        isOpen={swapModalOpen}
+        onClose={() => setSwapModalOpen(false)}
+        defaultTokenIn={swapTokenIn}
+        defaultTokenOut={swapTokenOut}
+        onSuccess={() => {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: '✅ **Swap Successful!**\n\nYour tokens have been swapped on VVS Finance. Your wallet balance will update shortly.',
+            timestamp: new Date(),
+            agent: 'DEX Agent',
+            aiPowered: true,
+          }]);
+        }}
+      />
     </div>
   );
 }
