@@ -12,14 +12,17 @@ import { SettlementsPanel } from '@/components/dashboard/SettlementsPanel';
 import { ActiveHedges } from '@/components/dashboard/ActiveHedges';
 import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
 import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfolioCreator';
+import { SwapModal } from '@/components/dashboard/SwapModal';
 import { formatEther } from 'viem';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
+import { ArrowDownUp } from 'lucide-react';
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: balance } = useBalance({ address });
   const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements'>('overview');
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
 
   // Contract data
   const contractAddresses = useContractAddresses();
@@ -101,7 +104,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <div className="glass rounded-xl p-1.5 inline-flex items-center gap-2 border border-white/10">
             {(['overview', 'agents', 'positions', 'settlements'] as const).map((tab) => (
               <button
@@ -117,6 +120,17 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
+
+          {/* Swap Button */}
+          {isConnected && (
+            <button
+              onClick={() => setSwapModalOpen(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 rounded-xl font-bold transition-all"
+            >
+              <ArrowDownUp className="w-5 h-5" />
+              Swap Tokens
+            </button>
+          )}
         </div>
 
         {/* Content Grid */}
@@ -128,8 +142,20 @@ export default function DashboardPage() {
                 <div className="flex justify-center">
                   <AdvancedPortfolioCreator />
                 </div>
-                <PortfolioOverview address={displayAddress} />
-                <ActiveHedges address={displayAddress} />
+                <PortfolioOverview 
+                  address={displayAddress}
+                  onNavigateToPositions={() => setActiveTab('positions')}
+                  onNavigateToHedges={() => {
+                    // Scroll to ActiveHedges section
+                    setTimeout(() => {
+                      const hedgesElement = document.querySelector('[data-hedges-section]');
+                      hedgesElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                  }}
+                />
+                <div data-hedges-section>
+                  <ActiveHedges address={displayAddress} />
+                </div>
                 <RiskMetrics address={displayAddress} />
                 <ZKProofDemo />
               </>
@@ -144,6 +170,18 @@ export default function DashboardPage() {
             <ChatInterface address={displayAddress} />
           </div>
         </div>
+
+        {/* Swap Modal */}
+        <SwapModal
+          isOpen={swapModalOpen}
+          onClose={() => setSwapModalOpen(false)}
+          onSuccess={() => {
+            // Refresh balances after swap
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          }}
+        />
       </div>
     </div>
   );

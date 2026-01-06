@@ -15,24 +15,26 @@ export const RWA_MANAGER_ABI = [
     outputs: [{ name: 'portfolioId', type: 'uint256' }],
   },
   {
+    // Auto-generated getter for public mapping - returns struct fields except nested mapping
     type: 'function',
-    name: 'getPortfolio',
+    name: 'portfolios',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256' }],
+    outputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'totalValue', type: 'uint256' },
+      { name: 'targetYield', type: 'uint256' },
+      { name: 'riskTolerance', type: 'uint256' },
+      { name: 'lastRebalance', type: 'uint256' },
+      { name: 'isActive', type: 'bool' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getPortfolioAssets',
     stateMutability: 'view',
     inputs: [{ name: '_portfolioId', type: 'uint256' }],
-    outputs: [
-      {
-        type: 'tuple',
-        components: [
-          { name: 'owner', type: 'address' },
-          { name: 'totalValue', type: 'uint256' },
-          { name: 'targetYield', type: 'uint256' },
-          { name: 'riskTolerance', type: 'uint256' },
-          { name: 'lastRebalance', type: 'uint256' },
-          { name: 'isActive', type: 'bool' },
-          { name: 'assets', type: 'address[]' },
-        ],
-      },
-    ],
+    outputs: [{ name: '', type: 'address[]' }],
   },
   {
     type: 'function',
@@ -51,6 +53,27 @@ export const RWA_MANAGER_ABI = [
       { name: '_amount', type: 'uint256' },
     ],
     outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdrawAsset',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_portfolioId', type: 'uint256' },
+      { name: '_asset', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'getAssetAllocation',
+    stateMutability: 'view',
+    inputs: [
+      { name: '_portfolioId', type: 'uint256' },
+      { name: '_asset', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
   },
   {
     type: 'event',
