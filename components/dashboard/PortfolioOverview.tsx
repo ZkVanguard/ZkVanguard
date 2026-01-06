@@ -21,7 +21,13 @@ interface PortfolioData {
   }>;
 }
 
-export function PortfolioOverview({ address }: { address: string }) {
+interface PortfolioOverviewProps {
+  address: string;
+  onNavigateToPositions?: () => void;
+  onNavigateToHedges?: () => void;
+}
+
+export function PortfolioOverview({ address, onNavigateToPositions, onNavigateToHedges }: PortfolioOverviewProps) {
   const { data: portfolioCount, isLoading: countLoading, refetch } = usePortfolioCount();
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
@@ -49,37 +55,47 @@ export function PortfolioOverview({ address }: { address: string }) {
           ).length;
         }
         
-        // Try AI service first
+        // Always use RealMarketDataService for portfolio data (real prices)
+        const marketData = getMarketDataService();
+        const portfolioData = await marketData.getPortfolioData(address);
+        
+        console.log('📊 [PortfolioOverview] Portfolio data:', portfolioData);
+        
+        // Calculate top assets with safety checks
+        const topAssets = portfolioData.tokens
+          .slice(0, 5)
+          .map(t => ({
+            symbol: t.symbol,
+            value: t.usdValue || 0,
+            percentage: portfolioData.totalValue > 0 
+              ? ((t.usdValue || 0) / portfolioData.totalValue) * 100 
+              : 0,
+          }))
+          .filter(asset => asset.value > 0); // Only show assets with value
+        
+        // Try AI service for health score and recommendations only
         try {
           const aiService = getCryptocomAIService();
           const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
           setAiAnalysis(analysis);
           setData(prev => ({
             ...prev,
-            totalValue: analysis.totalValue || 0,
+            totalValue: portfolioData.totalValue, // Always use real market data
             positions: Number(portfolioCount) || 0,
-            healthScore: analysis.healthScore,
-            topAssets: analysis.topAssets,
+            healthScore: analysis.healthScore || 85, // AI-generated or default
+            topAssets,
             activeHedges: activeHedgesCount,
           }));
           setRecentHedgeCount(activeHedgesCount);
         } catch (aiError) {
-          console.warn('AI analysis failed, using real market data fallback:', aiError);
-          
-          // Fallback to RealMarketDataService for actual wallet balance
-          const marketData = getMarketDataService();
-          const portfolioData = await marketData.getPortfolioData(address);
+          console.warn('AI analysis failed, using real market data only:', aiError);
           
           setData(prev => ({
             ...prev,
             totalValue: portfolioData.totalValue,
             positions: Number(portfolioCount) || 0,
             activeHedges: activeHedgesCount,
-            topAssets: portfolioData.tokens.slice(0, 5).map(t => ({
-              symbol: t.symbol,
-              value: t.usdValue,
-              percentage: (t.usdValue / portfolioData.totalValue) * 100,
-            })),
+            topAssets,
           }));
           setRecentHedgeCount(activeHedgesCount);
         }
@@ -162,27 +178,37 @@ export function PortfolioOverview({ address }: { address: string }) {
 
         {/* Quick Stats */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+          <button
+            onClick={onNavigateToPositions}
+            className="w-full flex items-center justify-between p-3 bg-gray-900 rounded-lg hover:bg-gray-800 hover:border-cyan-500/50 border border-transparent transition-all group cursor-pointer"
+          >
             <div className="flex items-center space-x-2">
-              <DollarSign className="w-5 h-5 text-blue-500" />
-              <span className="text-sm text-gray-400">Your Portfolios</span>
+              <DollarSign className="w-5 h-5 text-blue-500 group-hover:text-cyan-400 transition-colors" />
+              <span className="text-sm text-gray-400 group-hover:text-white transition-colors">Your Portfolios</span>
             </div>
-            <span className="text-lg font-semibold">{data.positions}</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold group-hover:text-cyan-400 transition-colors">{data.positions}</span>
+              <span className="text-xs text-gray-500 group-hover:text-cyan-400 transition-opacity opacity-0 group-hover:opacity-100">→</span>
+            </div>
+          </button>
+          <button
+            onClick={onNavigateToHedges}
+            className="w-full flex items-center justify-between p-3 bg-gray-900 rounded-lg hover:bg-gray-800 hover:border-emerald-500/50 border border-transparent transition-all group cursor-pointer"
+          >
             <div className="flex items-center space-x-2">
-              <Activity className="w-5 h-5 text-green-500" />
-              <span className="text-sm text-gray-400">Active Hedges</span>
+              <Activity className="w-5 h-5 text-green-500 group-hover:text-emerald-400 transition-colors" />
+              <span className="text-sm text-gray-400 group-hover:text-white transition-colors">Active Hedges</span>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-lg font-semibold text-emerald-400">{data.activeHedges}</span>
+              <span className="text-lg font-semibold text-emerald-400 group-hover:text-emerald-300 transition-colors">{data.activeHedges}</span>
               {recentHedgeCount > 0 && (
                 <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full animate-pulse">
                   NEW
                 </span>
               )}
+              <span className="text-xs text-gray-500 group-hover:text-emerald-400 transition-opacity opacity-0 group-hover:opacity-100">→</span>
             </div>
-          </div>
+          </button>
         </div>
       </div>
       
@@ -191,13 +217,22 @@ export function PortfolioOverview({ address }: { address: string }) {
         <div className="mt-6 pt-6 border-t border-gray-700">
           <h3 className="text-sm font-semibold text-gray-400 mb-3">Top Assets</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {data.topAssets.map((asset, idx) => (
-              <div key={idx} className="p-3 bg-gray-900 rounded-lg">
-                <div className="text-xs text-gray-400">{asset.symbol}</div>
-                <div className="text-lg font-semibold">${(asset.value / 1000).toFixed(1)}K</div>
-                <div className="text-xs text-cyan-400">{asset.percentage}%</div>
-              </div>
-            ))}
+            {data.topAssets.map((asset, idx) => {
+              const valueInK = asset.value / 1000;
+              const displayValue = valueInK >= 0.1 
+                ? `$${valueInK.toFixed(1)}K` 
+                : asset.value >= 1 
+                  ? `$${asset.value.toFixed(2)}`
+                  : `$${asset.value.toFixed(4)}`;
+              
+              return (
+                <div key={idx} className="p-3 bg-gray-900 rounded-lg">
+                  <div className="text-xs text-gray-400">{asset.symbol}</div>
+                  <div className="text-lg font-semibold">{displayValue}</div>
+                  <div className="text-xs text-cyan-400">{asset.percentage.toFixed(1)}%</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
