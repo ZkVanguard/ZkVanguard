@@ -44,9 +44,9 @@ class RealMarketDataService {
   private testSequence: number = 0;
 
   constructor() {
-    // Initialize Cronos provider
+    // Initialize Cronos Testnet provider (tCRO)
     this.provider = new ethers.JsonRpcProvider(
-      process.env.CRONOS_RPC_URL || 'https://evm-cronos.crypto.org'
+      process.env.CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
     );
   }
 
@@ -56,6 +56,18 @@ class RealMarketDataService {
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
     const cached = this.priceCache.get(cacheKey);
+
+    // Handle stablecoins (always $1)
+    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI'].includes(cacheKey)) {
+      return {
+        symbol,
+        price: 1,
+        change24h: 0,
+        volume24h: 0,
+        timestamp: Date.now(),
+        source: 'stablecoin',
+      };
+    }
 
     // Return cached if fresh
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
@@ -214,16 +226,13 @@ class RealMarketDataService {
 
       totalValue += croValue;
 
-      // Get ERC20 token balances (common tokens on Cronos)
-      const commonTokens = [
-        { address: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59', symbol: 'USDC', decimals: 6 },
-        { address: '0x66e428c3f67a68878562e79A0234c1F83c208770', symbol: 'USDT', decimals: 6 },
-        { address: '0x062E66477Faf219F25D27dCED647BF57C3107d52', symbol: 'WBTC', decimals: 8 },
-        { address: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a', symbol: 'WETH', decimals: 18 },
-        { address: '0x2D03bECE6747ADC00E1a131BBA1469C15fD11e03', symbol: 'VVS', decimals: 18 },
+      // Get ERC20 token balances (Cronos Testnet tokens ONLY)
+      const testnetTokens = [
+        { address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', symbol: 'devUSDC', decimals: 6 }, // DevUSDCe on Testnet
+        { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 }, // Wrapped CRO Testnet
       ];
 
-      for (const token of commonTokens) {
+      for (const token of testnetTokens) {
         try {
           const balance = await this.getTokenBalance(address, token.address, token.decimals);
           if (parseFloat(balance) > 0) {
@@ -241,7 +250,8 @@ class RealMarketDataService {
             totalValue += value;
           }
         } catch (error) {
-          console.warn(`Failed to get balance for ${token.symbol}:`, error);
+          // Silently skip tokens that don't exist on this network
+          console.debug(`Token ${token.symbol} not available:`, error);
         }
       }
 
