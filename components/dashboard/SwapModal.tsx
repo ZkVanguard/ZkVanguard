@@ -542,9 +542,6 @@ export function SwapModal({
           {/* ZK Proof Generation Step */}
           {step === 'zk-proof' && (
             <div className="text-center py-8">
-          {/* ZK Proof Generation Step */}
-          {step === 'zk-proof' && (
-            <div className="text-center py-8">
               <Shield className="w-12 h-12 mx-auto mb-4 text-purple-400 animate-pulse" />
               <h4 className="text-lg font-semibold mb-2">Generating ZK-STARK Proof</h4>
               <p className="text-gray-400 text-sm mb-4">
