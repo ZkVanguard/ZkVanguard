@@ -26,7 +26,15 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
     return null;
   }
 
-  const { owner, totalValue, targetYield, riskTolerance, lastRebalance, isActive, assets } = portfolio;
+  // Contract returns tuple: [owner, totalValue, targetYield, riskTolerance, lastRebalance, isActive]
+  const [owner, totalValue, targetYield, riskTolerance, lastRebalance, isActive] = portfolio as [
+    `0x${string}`,
+    bigint,
+    bigint,
+    bigint,
+    bigint,
+    boolean
+  ];
   const isOwner = address?.toLowerCase() === owner.toLowerCase();
 
   return (

@@ -17,7 +17,7 @@ export function usePortfolio(portfolioId: bigint) {
   return useReadContract({
     address: addresses.rwaManager,
     abi: RWA_MANAGER_ABI,
-    functionName: 'getPortfolio',
+    functionName: 'portfolios',
     args: [portfolioId],
     query: {
       enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000' && !!portfolioId,
