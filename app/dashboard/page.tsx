@@ -279,11 +279,6 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <PredictionInsights 
-                  assets={portfolioAssets}
-                  onOpenHedge={handleOpenHedge}
-                  onTriggerAgentAnalysis={handleAgentAnalysis}
-                />
                 <div data-hedges-section>
                   <ActiveHedges address={displayAddress} />
                 </div>
@@ -319,7 +314,16 @@ export default function DashboardPage() {
                 <AgentActivity address={displayAddress} />
               </>
             )}
-            {activeTab === 'positions' && <PositionsList address={displayAddress} />}
+            {activeTab === 'positions' && (
+              <>
+                <PredictionInsights 
+                  assets={portfolioAssets}
+                  onOpenHedge={handleOpenHedge}
+                  onTriggerAgentAnalysis={handleAgentAnalysis}
+                />
+                <PositionsList address={displayAddress} />
+              </>
+            )}
             {activeTab === 'transactions' && <RecentTransactions address={displayAddress} />}
             {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
           </div>
