@@ -29,6 +29,46 @@ export class DelphiMarketService {
   private static readonly MOCK_MODE = true; // Use mock data for hackathon demo
 
   /**
+   * Get predictions relevant to a specific portfolio strategy
+   * Filters by risk level and target yield
+   */
+  static async getPortfolioRelevantPredictions(
+    assets: string[],
+    riskTolerance: number, // 0-100
+    targetYield: number // e.g., 10 = 10%
+  ): Promise<PredictionMarket[]> {
+    const allPredictions = await this.getRelevantMarkets(assets);
+    
+    // Filter predictions based on portfolio risk profile
+    return allPredictions.filter(prediction => {
+      // High risk portfolios (>60): show all predictions including high-impact ones
+      if (riskTolerance > 60) {
+        return true; // Show everything
+      }
+      
+      // Medium risk portfolios (30-60): show HIGH and MODERATE, filter LOW
+      if (riskTolerance >= 30) {
+        return prediction.impact === 'HIGH' || prediction.impact === 'MODERATE';
+      }
+      
+      // Low risk portfolios (<30): only show HIGH impact predictions
+      return prediction.impact === 'HIGH';
+    }).filter(prediction => {
+      // For high yield targets (>15%), prioritize actionable predictions
+      if (targetYield > 15) {
+        return prediction.recommendation === 'HEDGE' || prediction.recommendation === 'MONITOR';
+      }
+      
+      // For conservative yields (<=10%), only show critical hedges
+      if (targetYield <= 10) {
+        return prediction.recommendation === 'HEDGE' && prediction.probability > 65;
+      }
+      
+      return true; // Medium yield targets show all
+    });
+  }
+
+  /**
    * Get relevant prediction markets for portfolio assets
    */
   static async getRelevantMarkets(assets: string[]): Promise<PredictionMarket[]> {

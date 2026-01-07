@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, AlertTriangle, Shield, Eye } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { usePortfolioCount } from '../../lib/contracts/hooks';
 import { formatEther } from 'viem';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
+import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 
 interface TokenPosition {
   symbol: string;
@@ -26,6 +27,7 @@ interface OnChainPortfolio {
   lastRebalance: bigint;
   isActive: boolean;
   assets: string[];
+  predictions?: PredictionMarket[]; // Delphi predictions for this portfolio
 }
 
 export function PositionsList({ address }: { address: string }) {
@@ -124,7 +126,7 @@ export function PositionsList({ address }: { address: string }) {
         if (res.ok) {
           const p = await res.json();
           if (p && !p.error && p.isActive) {
-            loadedPortfolios.push({
+            const portfolio: OnChainPortfolio = {
               id: i,
               owner: p.owner,
               totalValue: BigInt(p.totalValue || 0),
@@ -133,7 +135,27 @@ export function PositionsList({ address }: { address: string }) {
               lastRebalance: BigInt(p.lastRebalance || 0),
               isActive: p.isActive,
               assets: p.assets || [],
-            });
+            };
+            
+            // Fetch Delphi predictions specific to this portfolio
+            try {
+              const portfolioAssets = positions
+                .filter(pos => parseFloat(pos.balance) > 0)
+                .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, ''));
+              
+              const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
+                portfolioAssets,
+                Number(portfolio.riskTolerance),
+                Number(portfolio.targetYield)
+              );
+              
+              portfolio.predictions = predictions;
+            } catch (error) {
+              console.warn(`Failed to fetch predictions for portfolio ${i}:`, error);
+              portfolio.predictions = [];
+            }
+            
+            loadedPortfolios.push(portfolio);
           }
         }
       } catch (err) {
@@ -414,6 +436,59 @@ export function PositionsList({ address }: { address: string }) {
                             {asset.toLowerCase() === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0' ? 'devUSDC' : `${asset.slice(0, 6)}...${asset.slice(-4)}`}
                           </span>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Portfolio-Specific Delphi Predictions */}
+                  {portfolio.predictions && portfolio.predictions.length > 0 && (
+                    <div className="mb-4 p-3 bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-4 h-4 text-purple-400" />
+                        <div className="text-xs font-semibold text-purple-300">
+                          {portfolio.predictions.length} Market Signal{portfolio.predictions.length !== 1 ? 's' : ''} for This Strategy
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {portfolio.predictions.slice(0, 2).map((pred) => (
+                          <div key={pred.id} className="flex items-start gap-2 text-xs">
+                            <div className={`mt-0.5 ${
+                              pred.recommendation === 'HEDGE' ? 'text-red-400' :
+                              pred.recommendation === 'MONITOR' ? 'text-yellow-400' :
+                              'text-green-400'
+                            }`}>
+                              {pred.recommendation === 'HEDGE' && <Shield className="w-3 h-3" />}
+                              {pred.recommendation === 'MONITOR' && <Eye className="w-3 h-3" />}
+                              {pred.recommendation === 'IGNORE' && <span>✓</span>}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-gray-300">{pred.question}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`px-1.5 py-0.5 rounded ${
+                                  pred.impact === 'HIGH' ? 'bg-red-500/20 text-red-400' :
+                                  pred.impact === 'MODERATE' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-gray-500/20 text-gray-400'
+                                }`}>
+                                  {pred.impact}
+                                </span>
+                                <span className="text-purple-400 font-semibold">{pred.probability}%</span>
+                                <span className="text-gray-500">•</span>
+                                <span className={`font-semibold ${
+                                  pred.recommendation === 'HEDGE' ? 'text-red-400' :
+                                  pred.recommendation === 'MONITOR' ? 'text-yellow-400' :
+                                  'text-green-400'
+                                }`}>
+                                  {pred.recommendation}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {portfolio.predictions.length > 2 && (
+                          <div className="text-xs text-purple-400 text-center pt-1">
+                            +{portfolio.predictions.length - 2} more prediction{portfolio.predictions.length - 2 !== 1 ? 's' : ''}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
