@@ -21,9 +21,10 @@ interface PredictionInsightsProps {
   assets?: string[];
   showAll?: boolean;
   onOpenHedge?: (market: PredictionMarket) => void;
+  onTriggerAgentAnalysis?: (market: PredictionMarket) => void;
 }
 
-export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], showAll = false, onOpenHedge }: PredictionInsightsProps) {
+export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], showAll = false, onOpenHedge, onTriggerAgentAnalysis }: PredictionInsightsProps) {
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,6 +110,11 @@ export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], sho
 
   const handleAction = (prediction: PredictionMarket, action: 'hedge' | 'monitor' | 'dismiss') => {
     console.log(`User action: ${action} for prediction:`, prediction.question);
+    
+    // Trigger agent analysis
+    if (onTriggerAgentAnalysis) {
+      onTriggerAgentAnalysis(prediction);
+    }
     
     // Show feedback
     setActionFeedback({ id: prediction.id, action });

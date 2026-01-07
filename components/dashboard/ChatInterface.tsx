@@ -157,6 +157,12 @@ export function ChatInterface({ address: _address }: { address: string }) {
       };
     }
     
+    // Delphi prediction queries
+    if (lower.includes('delphi') || lower.includes('prediction') || lower.includes('forecast') || 
+        (lower.includes('what') && (lower.includes('probability') || lower.includes('chance') || lower.includes('likely')))) {
+      return { intent: 'delphi_query', params: { query: text } };
+    }
+    
     if (lower.includes('risk') || lower.includes('var') || lower.includes('volatility')) {
       return { intent: 'assess_risk', params: {} };
     }
@@ -344,6 +350,35 @@ export function ChatInterface({ address: _address }: { address: string }) {
               `**Max Drawdown:** ${(risk.maxDrawdown * 100).toFixed(1)}%\n\n` +
               `**Risk Factors:**\n• Market correlation: ${(risk.correlation * 100).toFixed(0)}%\n• Concentration risk: ${risk.concentrationRisk || 'Moderate'}`,
             agent: 'Risk Agent',
+          };
+          break;
+
+        case 'delphi_query':
+          setActiveAgent('Lead Agent → Delphi Integration');
+          const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+          
+          // Get relevant predictions
+          const predictions = await DelphiMarketService.getTopMarkets(5);
+          const highRisk = predictions.filter(p => p.impact === 'HIGH' && p.probability > 60);
+          
+          response = {
+            content: `🔮 **Delphi Prediction Market Analysis**\n\n` +
+              `**High-Risk Alerts (>60% probability):**\n` +
+              highRisk.map(p => 
+                `• **${p.question}**\n` +
+                `  Probability: ${p.probability}% | Impact: ${p.impact}\n` +
+                `  Assets: ${p.relatedAssets.join(', ')} | Volume: ${p.volume}\n` +
+                `  AI Recommendation: ${p.recommendation} ${p.recommendation === 'HEDGE' ? '🛡️' : '👁️'}`
+              ).join('\n\n') +
+              `\n\n**Market Overview:**\n` +
+              `• Total Markets Analyzed: ${predictions.length}\n` +
+              `• High-Risk Predictions: ${highRisk.length}\n` +
+              `• Markets Requiring Hedge: ${predictions.filter(p => p.recommendation === 'HEDGE').length}\n\n` +
+              `💡 **Next Steps:**\n` +
+              `1. Review detailed predictions in the "🔮 Market Predictions" widget above\n` +
+              `2. Click "Review & Act" on any prediction to see AI recommendations\n` +
+              `3. Our Hedging Agent will automatically adjust hedge ratios based on these probabilities`,
+            agent: 'Delphi Integration',
           };
           break;
 

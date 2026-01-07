@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useBalance, useChainId } from 'wagmi';
+import { Bot } from 'lucide-react';
 import { logger } from '../../lib/utils/logger';
 import { PortfolioOverview } from '../../components/dashboard/PortfolioOverview';
 import { AgentActivity } from '../../components/dashboard/AgentActivity';
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements' | 'transactions'>('overview');
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
+  const [agentMessage, setAgentMessage] = useState<string | null>(null);
 
   // Contract data
   const contractAddresses = useContractAddresses();
@@ -55,6 +57,59 @@ export default function DashboardPage() {
       const hedgesElement = document.querySelector('[data-hedges-section]');
       hedgesElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 500);
+  };
+
+  // Handle agent analysis trigger from Delphi predictions
+  const handleAgentAnalysis = (market: PredictionMarket) => {
+    console.log('Triggering agent analysis for prediction:', market);
+    
+    // Generate agent message based on prediction
+    let message = '';
+    
+    if (market.recommendation === 'HEDGE') {
+      message = `🤖 **Hedging Agent Activated**\n\n` +
+        `**Delphi Alert:** ${market.probability}% probability - "${market.question}"\n\n` +
+        `**Analysis:**\n` +
+        `• Affected Assets: ${market.relatedAssets.join(', ')}\n` +
+        `• Impact Level: ${market.impact}\n` +
+        `• Market Volume: ${market.volume}\n` +
+        `• Confidence: ${market.confidence}%\n\n` +
+        `**Recommended Actions:**\n` +
+        `1. Open SHORT position on ${market.relatedAssets[0]}-USD-PERP\n` +
+        `2. Hedge ratio: ${Math.min(market.probability / 100 * 0.8, 0.7).toFixed(2)}x (${(market.probability / 100 * 80).toFixed(0)}% of exposure)\n` +
+        `3. Execute via Moonlander perpetual futures\n` +
+        `4. Cost: ~$${(parseFloat(market.volume.replace(/[^0-9.]/g, '')) * 0.001).toFixed(2)} (0.1% of position)\n\n` +
+        `⚡ Gasless settlement via x402 protocol - ready to execute!`;
+    } else if (market.recommendation === 'MONITOR') {
+      message = `🤖 **Risk Agent Monitoring**\n\n` +
+        `**Delphi Alert:** ${market.probability}% probability - "${market.question}"\n\n` +
+        `**Assessment:**\n` +
+        `• Affected Assets: ${market.relatedAssets.join(', ')}\n` +
+        `• Impact Level: ${market.impact}\n` +
+        `• Current Risk: MODERATE\n\n` +
+        `**Monitoring Strategy:**\n` +
+        `1. Track price action every 4 hours\n` +
+        `2. Set alert threshold at ${(market.probability + 10)}% probability\n` +
+        `3. Prepare contingency hedge if threshold breached\n` +
+        `4. Estimated time horizon: 7-14 days\n\n` +
+        `📊 Added to watchlist - I'll notify you of any changes.`;
+    } else {
+      message = `🤖 **Risk Agent Assessment**\n\n` +
+        `**Delphi Signal:** ${market.probability}% probability - "${market.question}"\n\n` +
+        `**Status:** LOW RISK - No action required\n\n` +
+        `Current portfolio exposure to ${market.relatedAssets.join(', ')} is within acceptable risk parameters. ` +
+        `I'll continue monitoring but immediate hedging is not necessary.`;
+    }
+    
+    setAgentMessage(message);
+    
+    // Clear message after 10 seconds
+    setTimeout(() => setAgentMessage(null), 10000);
+    
+    // Navigate to agents tab to show activity
+    setTimeout(() => {
+      setActiveTab('agents');
+    }, 2000);
   };
 
   useEffect(() => {
@@ -186,6 +241,7 @@ export default function DashboardPage() {
                 <PredictionInsights 
                   assets={['BTC', 'ETH', 'CRO', 'USDC']} 
                   onOpenHedge={handleOpenHedge}
+                  onTriggerAgentAnalysis={handleAgentAnalysis}
                 />
                 <div data-hedges-section>
                   <ActiveHedges address={displayAddress} />
@@ -194,7 +250,34 @@ export default function DashboardPage() {
                 <ZKProofDemo />
               </>
             )}
-            {activeTab === 'agents' && <AgentActivity address={displayAddress} />}
+            {activeTab === 'agents' && (
+              <>
+                {/* Agent Analysis Message */}
+                {agentMessage && (
+                  <div className="glass rounded-xl p-6 border border-cyan-500/30 bg-cyan-500/10 mb-6">
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 bg-cyan-500/20 rounded-lg">
+                        <Bot className="w-6 h-6 text-cyan-400" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-bold text-cyan-300">AI Agent Response</h4>
+                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/30">
+                            Active
+                          </span>
+                        </div>
+                        <div className="prose prose-invert prose-sm max-w-none">
+                          {agentMessage.split('\n').map((line, i) => (
+                            <p key={i} className="text-gray-300 text-sm mb-1">{line}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <AgentActivity address={displayAddress} />
+              </>
+            )}
             {activeTab === 'positions' && <PositionsList address={displayAddress} />}
             {activeTab === 'transactions' && <RecentTransactions address={displayAddress} />}
             {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
