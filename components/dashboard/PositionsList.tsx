@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, AlertTriangle, Shield, Eye } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, AlertTriangle, Shield, Eye, Sparkles } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { usePortfolioCount } from '../../lib/contracts/hooks';
 import { formatEther } from 'viem';
@@ -49,6 +49,11 @@ export function PositionsList({ address }: { address: string }) {
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [selectedWithdrawPortfolio, setSelectedWithdrawPortfolio] = useState<OnChainPortfolio | null>(null);
 
+  // Agent recommendation state
+  const [agentRecommendation, setAgentRecommendation] = useState<any>(null);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [showRecommendationModal, setShowRecommendationModal] = useState(false);
+
   const openDepositModal = (portfolio: OnChainPortfolio) => {
     setSelectedPortfolio(portfolio);
     setDepositModalOpen(true);
@@ -62,6 +67,49 @@ export function PositionsList({ address }: { address: string }) {
   const openWithdrawModal = (portfolio: OnChainPortfolio) => {
     setSelectedWithdrawPortfolio(portfolio);
     setWithdrawModalOpen(true);
+  };
+
+  // Fetch agent recommendation for portfolio action
+  const fetchAgentRecommendation = async (portfolio: OnChainPortfolio) => {
+    setRecommendationLoading(true);
+    try {
+      const portfolioAssets = portfolio.assets.map(asset => {
+        const addr = asset.toLowerCase();
+        if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
+        if (addr.includes('wcro')) return 'CRO';
+        return asset.slice(0, 6);
+      });
+
+      const response = await fetch('/api/agents/portfolio-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolioId: portfolio.id,
+          currentValue: Number(formatEther(portfolio.totalValue)),
+          targetYield: Number(portfolio.targetYield) / 100,
+          riskTolerance: Number(portfolio.riskTolerance),
+          assets: portfolioAssets,
+          predictions: (portfolio.predictions || []).map(p => ({
+            question: p.question,
+            probability: p.probability,
+            impact: p.impact,
+            recommendation: p.recommendation,
+          })),
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAgentRecommendation(data);
+        setShowRecommendationModal(true);
+      } else {
+        console.error('Failed to get agent recommendation');
+      }
+    } catch (error) {
+      console.error('Error fetching agent recommendation:', error);
+    } finally {
+      setRecommendationLoading(false);
+    }
   };
 
   const closeWithdrawModal = () => {
@@ -505,6 +553,14 @@ export function PositionsList({ address }: { address: string }) {
                         </div>
                         <div className="flex gap-2">
                           <button 
+                            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                            onClick={() => fetchAgentRecommendation(portfolio)}
+                            disabled={recommendationLoading}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            {recommendationLoading ? 'Analyzing...' : 'AI Analysis'}
+                          </button>
+                          <button 
                             className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
                             onClick={() => openDepositModal(portfolio)}
                           >
@@ -602,6 +658,136 @@ export function PositionsList({ address }: { address: string }) {
           totalValue={Number(selectedWithdrawPortfolio.totalValue)}
           onSuccess={handleWithdrawSuccess}
         />
+      )}
+
+      {/* Agent Recommendation Modal */}
+      {showRecommendationModal && agentRecommendation && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-2xl max-w-2xl w-full border border-purple-500/30 shadow-2xl">
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-6 h-6 text-purple-400" />
+                  <h3 className="text-xl font-bold text-white">AI Agent Analysis</h3>
+                </div>
+                <button
+                  onClick={() => setShowRecommendationModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Action Recommendation */}
+              <div className={`p-4 rounded-lg border-2 ${
+                agentRecommendation.action === 'WITHDRAW' ? 'bg-red-500/10 border-red-500/50' :
+                agentRecommendation.action === 'HEDGE' ? 'bg-orange-500/10 border-orange-500/50' :
+                agentRecommendation.action === 'ADD_FUNDS' ? 'bg-green-500/10 border-green-500/50' :
+                'bg-blue-500/10 border-blue-500/50'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-2xl font-bold text-white">
+                    {agentRecommendation.action === 'WITHDRAW' && '🚨 WITHDRAW'}
+                    {agentRecommendation.action === 'HEDGE' && '🛡️ HEDGE'}
+                    {agentRecommendation.action === 'ADD_FUNDS' && '✅ ADD FUNDS'}
+                    {agentRecommendation.action === 'HOLD' && '📊 HOLD'}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Confidence: <span className="font-semibold text-white">{(agentRecommendation.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Multi-Agent Reasoning */}
+              <div>
+                <div className="text-sm font-semibold text-purple-300 mb-3">Agent Reasoning:</div>
+                <div className="space-y-2">
+                  {agentRecommendation.reasoning.map((reason: string, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2 text-sm text-gray-300">
+                      <span className="text-purple-400 mt-1">•</span>
+                      <span>{reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Risk Score */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400">Portfolio Risk Score</span>
+                  <span className={`text-lg font-bold ${
+                    agentRecommendation.riskScore > 70 ? 'text-red-400' :
+                    agentRecommendation.riskScore > 40 ? 'text-yellow-400' :
+                    'text-green-400'
+                  }`}>{agentRecommendation.riskScore}/100</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      agentRecommendation.riskScore > 70 ? 'bg-red-500' :
+                      agentRecommendation.riskScore > 40 ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`}
+                    style={{ width: `${agentRecommendation.riskScore}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Agent Analysis Details */}
+              <div>
+                <div className="text-sm font-semibold text-purple-300 mb-3">Multi-Agent Analysis:</div>
+                <div className="space-y-2">
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Risk Agent</div>
+                    <div className="text-sm text-gray-300">{agentRecommendation.agentAnalysis.riskAgent}</div>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Hedging Agent</div>
+                    <div className="text-sm text-gray-300">{agentRecommendation.agentAnalysis.hedgingAgent}</div>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-1">Lead Agent</div>
+                    <div className="text-sm text-gray-300">{agentRecommendation.agentAnalysis.leadAgent}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              {agentRecommendation.recommendations.length > 0 && (
+                <div>
+                  <div className="text-sm font-semibold text-purple-300 mb-3">Additional Recommendations:</div>
+                  <div className="space-y-1">
+                    {agentRecommendation.recommendations.map((rec: string, idx: number) => (
+                      <div key={idx} className="text-sm text-gray-400">• {rec}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-800 flex gap-3">
+              <button
+                onClick={() => setShowRecommendationModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setShowRecommendationModal(false);
+                  // User can manually act on recommendation
+                }}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
