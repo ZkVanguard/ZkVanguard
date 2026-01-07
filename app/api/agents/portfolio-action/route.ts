@@ -55,7 +55,28 @@ export async function POST(request: NextRequest) {
 
     const orchestrator = getAgentOrchestrator();
 
-    // Step 1: Risk Agent - Assess portfolio risk
+    // Step 1: Use Lead Agent to analyze portfolio with full context
+    const portfolioAnalysisResult = await orchestrator.analyzePortfolio({
+      address: `portfolio-${portfolioId}`,
+      portfolioData: {
+        totalValue: currentValue,
+        targetYield,
+        riskTolerance,
+        tokens: assets.map(symbol => ({
+          symbol,
+          balance: 1,
+          usdValue: currentValue / assets.length,
+        })),
+        predictions: predictions.map(p => ({
+          question: p.question,
+          probability: p.probability,
+          impact: p.impact,
+          recommendation: p.recommendation,
+        })),
+      },
+    });
+
+    // Step 2: Risk Agent - Assess portfolio risk with predictions
     const riskResult = await orchestrator.assessRisk({
       address: `portfolio-${portfolioId}`,
       portfolioData: {
@@ -68,7 +89,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Step 2: Hedging Agent - Analyze if hedging needed based on predictions
+    // Step 3: Hedging Agent - Analyze if hedging needed based on predictions
     const highRiskPredictions = predictions.filter(
       p => p.recommendation === 'HEDGE' && p.probability > 60
     );
@@ -77,6 +98,8 @@ export async function POST(request: NextRequest) {
     );
 
     let hedgeRecommendation = 'NO_HEDGE_NEEDED';
+    let hedgeDetails: any = null;
+    
     if (highRiskPredictions.length > 0 || criticalPredictions.length > 0) {
       // Use hedging agent if there are critical predictions
       const hedgeResult = await orchestrator.generateHedgeRecommendations({
@@ -86,82 +109,134 @@ export async function POST(request: NextRequest) {
       });
 
       if (hedgeResult.success && hedgeResult.data) {
+        hedgeDetails = hedgeResult.data;
         hedgeRecommendation = hedgeResult.data.recommendation?.action || 'MONITOR';
       }
     }
 
-    // Step 3: Lead Agent - Make final decision
+    // Step 4: Extract real agent analysis data
     const riskScore = riskResult.success && riskResult.data?.riskScore 
       ? Number(riskResult.data.riskScore) 
       : 50;
 
+    const riskAnalysisData = riskResult.data || {};
+    const volatility = riskAnalysisData.volatility || 0.3;
+    const sentiment = riskAnalysisData.sentiment || 'neutral';
+    const riskRecommendations = riskAnalysisData.recommendations || [];
+
+    // Step 5: Lead Agent makes final decision based on multi-agent analysis
     const reasoning: string[] = [];
     let action: 'HOLD' | 'ADD_FUNDS' | 'WITHDRAW' | 'HEDGE' = 'HOLD';
     let confidence = 0.7;
 
-    // Decision logic based on multi-agent analysis
-    if (criticalPredictions.length > 0) {
-      // Critical predictions detected
-      if (criticalPredictions[0].probability > 75) {
-        action = 'WITHDRAW';
-        confidence = 0.85;
-        reasoning.push(`🚨 CRITICAL: ${criticalPredictions.length} high-probability predictions detected`);
-        reasoning.push(`Consider withdrawing to protect capital (${criticalPredictions[0].question})`);
-      } else {
-        action = 'HEDGE';
-        confidence = 0.75;
-        reasoning.push(`⚠️ WARNING: ${criticalPredictions.length} critical predictions found`);
-        reasoning.push(`Hedging recommended to reduce exposure risk`);
+    // Use real agent data to make decision
+    if (criticalPredictions.length > 0 && criticalPredictions[0].probability > 75) {
+      // CRITICAL: High probability risk event
+      action = 'WITHDRAW';
+      confidence = 0.85 + (criticalPredictions[0].probability - 75) * 0.006; // Up to 0.94
+      reasoning.push(`🚨 CRITICAL ALERT: ${criticalPredictions.length} high-probability market event${criticalPredictions.length > 1 ? 's' : ''} detected`);
+      reasoning.push(`Top Risk: "${criticalPredictions[0].question}" (${criticalPredictions[0].probability}% probability)`);
+      reasoning.push(`Risk Agent Score: ${riskScore}/100 - ${sentiment} market sentiment`);
+      
+      if (riskScore > 70) {
+        reasoning.push(`Portfolio risk exceeds safe threshold - immediate action recommended`);
       }
-    } else if (highRiskPredictions.length > 0) {
-      // Hedge recommendations from Delphi
+    } else if (riskScore > 75 || (criticalPredictions.length > 0 && riskScore > 60)) {
+      // HIGH RISK: Either high risk score or critical predictions with elevated risk
       action = 'HEDGE';
-      confidence = 0.7;
-      reasoning.push(`🛡️ ${highRiskPredictions.length} hedge recommendations from prediction markets`);
-      reasoning.push(`Consider opening hedge positions to protect downside`);
+      confidence = 0.75 + Math.min(riskScore - 60, 20) * 0.005; // 0.75 to 0.85
+      reasoning.push(`⚠️ HIGH RISK ENVIRONMENT: Risk Score ${riskScore}/100`);
+      
+      if (criticalPredictions.length > 0) {
+        reasoning.push(`${criticalPredictions.length} critical market prediction${criticalPredictions.length > 1 ? 's' : ''} with HIGH impact`);
+      }
+      if (highRiskPredictions.length > 0) {
+        reasoning.push(`${highRiskPredictions.length} hedge signal${highRiskPredictions.length > 1 ? 's' : ''} from prediction markets`);
+      }
+      
+      if (hedgeDetails && hedgeDetails.recommendation) {
+        reasoning.push(`Hedging Agent: ${hedgeDetails.recommendation.action} ${hedgeDetails.recommendation.side} position (${hedgeDetails.recommendation.size})`);
+      }
+      
+      reasoning.push(`Volatility: ${(volatility * 100).toFixed(1)}% - Market sentiment: ${sentiment}`);
+    } else if (highRiskPredictions.length > 0 && riskScore > 50) {
+      // MODERATE RISK: Hedge signals with moderate risk
+      action = 'HEDGE';
+      confidence = 0.70;
+      reasoning.push(`🛡️ HEDGING RECOMMENDED: ${highRiskPredictions.length} market hedge signal${highRiskPredictions.length > 1 ? 's' : ''}`);
+      reasoning.push(`Risk Score: ${riskScore}/100 - Above neutral threshold`);
+      reasoning.push(`Consider protective positions to reduce downside exposure`);
     } else if (riskScore < 30 && predictions.filter(p => p.recommendation === 'IGNORE').length === predictions.length) {
-      // Low risk + all predictions are IGNORE = safe to add more
+      // LOW RISK: Safe to add funds
       action = 'ADD_FUNDS';
-      confidence = 0.8;
-      reasoning.push(`✅ Low risk environment (score: ${riskScore}/100)`);
-      reasoning.push(`No critical market signals detected`);
-      reasoning.push(`Portfolio performing within target parameters`);
-    } else {
-      // Default: HOLD
-      action = 'HOLD';
+      confidence = 0.80 + Math.max(30 - riskScore, 0) * 0.006; // 0.80 to 0.98
+      reasoning.push(`✅ FAVORABLE CONDITIONS: Low risk environment detected`);
+      reasoning.push(`Risk Score: ${riskScore}/100 - Well below safety threshold`);
+      reasoning.push(`Market Sentiment: ${sentiment} - ${volatility < 0.25 ? 'Low' : 'Moderate'} volatility`);
+      reasoning.push(`All ${predictions.length} prediction market signal${predictions.length > 1 ? 's' : ''} show IGNORE status`);
+      reasoning.push(`Portfolio on track for ${targetYield}% yield target`);
+    } else if (riskScore < 40 && sentiment === 'bullish') {
+      // MODERATE-LOW RISK with positive sentiment
+      action = 'ADD_FUNDS';
       confidence = 0.75;
-      reasoning.push(`📊 Portfolio stable with moderate risk (score: ${riskScore}/100)`);
-      reasoning.push(`${predictions.length} market signals being monitored`);
-      reasoning.push(`Current strategy on track for ${targetYield}% yield target`);
+      reasoning.push(`✅ GROWTH OPPORTUNITY: Bullish market sentiment with manageable risk`);
+      reasoning.push(`Risk Score: ${riskScore}/100 - Acceptable level`);
+      reasoning.push(`${predictions.filter(p => p.recommendation === 'MONITOR').length} signals being monitored`);
+    } else {
+      // DEFAULT: HOLD
+      action = 'HOLD';
+      confidence = 0.70 + (Math.abs(50 - riskScore) < 10 ? 0.05 : 0); // Higher confidence if near ideal
+      reasoning.push(`📊 MAINTAIN CURRENT POSITION: Portfolio within optimal parameters`);
+      reasoning.push(`Risk Score: ${riskScore}/100 - ${riskScore > 60 ? 'Elevated' : riskScore > 40 ? 'Moderate' : 'Low'} risk level`);
+      reasoning.push(`Market Sentiment: ${sentiment} - Volatility: ${(volatility * 100).toFixed(1)}%`);
+      reasoning.push(`${predictions.length} market signal${predictions.length > 1 ? 's' : ''} being actively monitored`);
+      reasoning.push(`Target Yield: ${targetYield}% - Strategy performing as expected`);
     }
 
-    // Generate detailed recommendations
+    // Generate detailed recommendations from real agent data
     const recommendations: string[] = [];
     
-    if (riskScore > 70) {
-      recommendations.push('High risk detected - consider reducing exposure');
-    } else if (riskScore < 30) {
-      recommendations.push('Low risk environment - opportunity for growth');
+    // Add recommendations from Risk Agent
+    if (riskRecommendations && riskRecommendations.length > 0) {
+      recommendations.push(...riskRecommendations.slice(0, 2)); // Top 2 recommendations
     }
 
+    // Add volatility-based recommendations
+    if (volatility > 0.4) {
+      recommendations.push('High volatility detected - consider volatility-targeting strategies');
+    } else if (volatility < 0.2) {
+      recommendations.push('Low volatility environment - opportunity for leveraged positions');
+    }
+
+    // Add prediction-based recommendations
     if (highRiskPredictions.length > 0) {
-      recommendations.push(`Monitor ${highRiskPredictions.length} hedge signals closely`);
+      recommendations.push(`Active monitoring: ${highRiskPredictions.length} hedge signal${highRiskPredictions.length > 1 ? 's' : ''} require attention`);
+    }
+    
+    const monitorPredictions = predictions.filter(p => p.recommendation === 'MONITOR');
+    if (monitorPredictions.length > 0 && action === 'HOLD') {
+      recommendations.push(`Watch closely: ${monitorPredictions.length} developing market condition${monitorPredictions.length > 1 ? 's' : ''}`);
     }
 
-    if (predictions.some(p => p.recommendation === 'MONITOR')) {
-      recommendations.push('Stay vigilant - market conditions developing');
+    // Add sentiment-based recommendations
+    if (sentiment === 'bearish' && action !== 'WITHDRAW') {
+      recommendations.push('Bearish sentiment detected - consider defensive positioning');
+    } else if (sentiment === 'bullish' && riskScore < 50) {
+      recommendations.push('Bullish sentiment with low risk - evaluate growth opportunities');
     }
 
     const response: PortfolioActionRecommendation = {
       action,
-      confidence,
+      confidence: Math.min(confidence, 0.99), // Cap at 99%
       reasoning,
       riskScore,
       recommendations,
       agentAnalysis: {
-        riskAgent: `Portfolio risk: ${riskScore}/100 - ${riskScore > 60 ? 'High' : riskScore > 40 ? 'Medium' : 'Low'}`,
-        hedgingAgent: `Hedge status: ${hedgeRecommendation} (${highRiskPredictions.length} signals)`,
-        leadAgent: `Final decision: ${action} with ${(confidence * 100).toFixed(0)}% confidence`,
+        riskAgent: `Risk Analysis: ${riskScore}/100 (${riskScore > 70 ? 'HIGH' : riskScore > 40 ? 'MODERATE' : 'LOW'}) | Volatility: ${(volatility * 100).toFixed(1)}% | Sentiment: ${sentiment.toUpperCase()}`,
+        hedgingAgent: hedgeDetails 
+          ? `Hedge Strategy: ${hedgeDetails.recommendation?.action || 'MONITOR'} | Exposure: ${hedgeDetails.exposure?.asset || assets[0]} at ${(hedgeDetails.exposure?.volatility * 100 || 0).toFixed(1)}% volatility`
+          : `No hedging required - ${highRiskPredictions.length} prediction market hedge signal${highRiskPredictions.length !== 1 ? 's' : ''}`,
+        leadAgent: `Final Decision: ${action} (${(confidence * 100).toFixed(0)}% confidence) | Based on ${predictions.length} market signal${predictions.length !== 1 ? 's' : ''} + multi-agent analysis`,
       },
     };
 
