@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
-  const [portfolioAssets, setPortfolioAssets] = useState<string[]>(['CRO', 'USDC']); // Default to demo portfolio
+  const [portfolioAssets, setPortfolioAssets] = useState<string[]>(['CRO', 'USDC']); // Will be updated dynamically
 
   // Contract data
   const contractAddresses = useContractAddresses();
@@ -38,6 +38,46 @@ export default function DashboardPage() {
   // Network info
   const networkName = chainId === 338 ? 'Cronos Testnet' : chainId === 25 ? 'Cronos Mainnet' : 'Unknown Network';
   const isTestnet = chainId === 338;
+  
+  // Dynamically fetch portfolio assets for Delphi filtering
+  useEffect(() => {
+    async function fetchPortfolioAssets() {
+      if (!displayAddress || displayAddress === '0x0000...0000') {
+        // Demo mode - use default testnet assets
+        setPortfolioAssets(['CRO', 'USDC']);
+        return;
+      }
+      
+      try {
+        const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+        const marketData = getMarketDataService();
+        const portfolioData = await marketData.getPortfolioData(displayAddress);
+        
+        // Extract unique asset symbols from portfolio (only tokens with balance > 0)
+        const assets = portfolioData.tokens
+          .filter(token => parseFloat(token.balance) > 0.001) // Filter out dust
+          .map(token => token.symbol.toUpperCase().replace(/^(W|DEV)/, '')) // Normalize (WCRO->CRO, devUSDC->USDC)
+          .filter((symbol, index, arr) => arr.indexOf(symbol) === index); // Remove duplicates
+        
+        if (assets.length > 0) {
+          console.log('📊 Dynamic portfolio assets detected:', assets);
+          setPortfolioAssets(assets);
+        } else {
+          // Empty portfolio - default to CRO (native chain asset)
+          console.log('📊 Empty portfolio detected, showing CRO predictions');
+          setPortfolioAssets(['CRO']);
+        }
+      } catch (error) {
+        console.error('Failed to fetch portfolio assets:', error);
+        // Keep default ['CRO', 'USDC'] on error
+        setPortfolioAssets(['CRO', 'USDC']);
+      }
+    }
+    
+    fetchPortfolioAssets();
+    
+    // Refresh assets when address changes
+  }, [displayAddress]);
   
   // Allow access without wallet for demo purposes
   const displayAddress = address || '0x0000...0000';
