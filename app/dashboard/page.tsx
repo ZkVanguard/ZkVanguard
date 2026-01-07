@@ -15,6 +15,7 @@ import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfol
 import { SwapModal } from '@/components/dashboard/SwapModal';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { PredictionInsights } from '@/components/dashboard/PredictionInsights';
+import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { formatEther } from 'viem';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 import { ArrowDownUp } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const { data: balance } = useBalance({ address });
   const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements' | 'transactions'>('overview');
   const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
 
   // Contract data
   const contractAddresses = useContractAddresses();
@@ -37,6 +39,23 @@ export default function DashboardPage() {
   // Allow access without wallet for demo purposes
   const displayAddress = address || '0x0000...0000';
   const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
+
+  // Handle hedge action from Delphi predictions
+  const handleOpenHedge = (market: PredictionMarket) => {
+    console.log('Opening hedge for prediction:', market);
+    
+    // Show notification
+    setHedgeNotification(`🛡️ Hedge recommendation for ${market.relatedAssets.join(', ')} added to Active Hedges`);
+    
+    // Clear notification after 5 seconds
+    setTimeout(() => setHedgeNotification(null), 5000);
+    
+    // Navigate to hedges section
+    setTimeout(() => {
+      const hedgesElement = document.querySelector('[data-hedges-section]');
+      hedgesElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 500);
+  };
 
   useEffect(() => {
     if (isConnected && contractAddresses) {
@@ -155,7 +174,19 @@ export default function DashboardPage() {
                     }, 100);
                   }}
                 />
-                <PredictionInsights assets={['BTC', 'ETH', 'CRO', 'USDC']} />
+                
+                {/* Hedge Notification */}
+                {hedgeNotification && (
+                  <div className="glass rounded-xl p-4 border border-green-500/30 bg-green-500/10 flex items-center gap-3 animate-slide-in">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    <p className="text-sm text-green-300 font-medium">{hedgeNotification}</p>
+                  </div>
+                )}
+
+                <PredictionInsights 
+                  assets={['BTC', 'ETH', 'CRO', 'USDC']} 
+                  onOpenHedge={handleOpenHedge}
+                />
                 <div data-hedges-section>
                   <ActiveHedges address={displayAddress} />
                 </div>
