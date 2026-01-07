@@ -14,6 +14,7 @@ import { ZKProofDemo } from '@/components/dashboard/ZKProofDemo';
 import { AdvancedPortfolioCreator } from '@/components/dashboard/AdvancedPortfolioCreator';
 import { SwapModal } from '@/components/dashboard/SwapModal';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
+import { PredictionInsights } from '@/components/dashboard/PredictionInsights';
 import { formatEther } from 'viem';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 import { ArrowDownUp } from 'lucide-react';
@@ -154,6 +155,7 @@ export default function DashboardPage() {
                     }, 100);
                   }}
                 />
+                <PredictionInsights assets={['BTC', 'ETH', 'CRO', 'USDC']} />
                 <div data-hedges-section>
                   <ActiveHedges address={displayAddress} />
                 </div>

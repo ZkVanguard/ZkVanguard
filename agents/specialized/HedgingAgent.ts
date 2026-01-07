@@ -7,6 +7,7 @@ import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { MoonlanderClient } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
+import { DelphiMarketService, PredictionMarket } from '../../lib/services/DelphiMarketService';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 
@@ -145,7 +146,7 @@ export class HedgingAgent extends BaseAgent {
   }
 
   /**
-   * Analyze hedging opportunity
+   * Analyze hedging opportunity with Delphi prediction markets
    */
   private async analyzeHedgeOpportunity(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
@@ -163,16 +164,36 @@ export class HedgingAgent extends BaseAgent {
       }
       const volatility = await this.calculateVolatility(assetSymbol);
 
+      // 🔮 NEW: Get Delphi prediction market insights
+      const delphiInsights = await DelphiMarketService.getAssetInsights(assetSymbol);
+      const highRiskPredictions = delphiInsights.predictions.filter(p => 
+        p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
+      );
+
       // Determine hedge market (e.g., BTC-USD-PERP for BTC exposure)
       const hedgeMarket = `${assetSymbol}-USD-PERP`;
       await this.moonlanderClient.getMarketInfo(hedgeMarket);
 
       // Calculate optimal hedge ratio using delta-hedging approach
-      const hedgeRatio = await this.calculateOptimalHedgeRatio(
+      // 🔮 NEW: Adjust hedge ratio based on Delphi predictions
+      let hedgeRatio = await this.calculateOptimalHedgeRatio(
         assetSymbol,
         notionalValue,
         volatility
       );
+      
+      // Increase hedge ratio if Delphi predicts high-probability risk events
+      if (highRiskPredictions.length > 0) {
+        const maxPredictionProb = Math.max(...highRiskPredictions.map(p => p.probability));
+        const delphiMultiplier = 1 + (maxPredictionProb - 50) / 100; // 60% prob -> 1.1x, 80% prob -> 1.3x
+        hedgeRatio = Math.min(hedgeRatio * delphiMultiplier, 1.0); // Cap at 100% hedge
+        logger.info('Hedge ratio adjusted based on Delphi predictions', { 
+          original: hedgeRatio / delphiMultiplier, 
+          adjusted: hedgeRatio,
+          delphiMultiplier,
+          predictions: highRiskPredictions.length
+        });
+      }
 
       // Get funding rate (cost of holding perpetual)
       const fundingHistory = await this.moonlanderClient.getFundingHistory(hedgeMarket, 24);
@@ -183,7 +204,19 @@ export class HedgingAgent extends BaseAgent {
       const hedgeEffectiveness = Math.pow(spotFutureCorrelation, 2) * 100;
 
       // Determine recommendation
-      const shouldHedge = volatility > 0.3 && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
+      // 🔮 NEW: Factor in Delphi predictions
+      const delphiRecommendHedge = delphiInsights.overallRisk === 'HIGH' || highRiskPredictions.length >= 2;
+      const shouldHedge = (volatility > 0.3 || delphiRecommendHedge) && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
+      
+      // Build reason with Delphi insights
+      let reason = shouldHedge
+        ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
+        : 'Volatility acceptable, no immediate hedge needed';
+      
+      if (delphiRecommendHedge) {
+        const topPrediction = highRiskPredictions[0];
+        reason = `🔮 Delphi predicts ${topPrediction.probability}% chance: "${topPrediction.question}". ${reason}`;
+      }
       
       const analysis: HedgeAnalysis = {
         portfolioId,
@@ -199,9 +232,7 @@ export class HedgingAgent extends BaseAgent {
           side: 'SHORT', // Typically short perp to hedge long spot
           size: (notionalValue * hedgeRatio).toFixed(4),
           leverage: Math.min(Math.floor(1 / volatility), 5),
-          reason: shouldHedge
-            ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
-            : 'Volatility acceptable, no immediate hedge needed',
+          reason,
         },
         riskMetrics: {
           portfolioVar: notionalValue * volatility * 1.65, // 95% confidence
