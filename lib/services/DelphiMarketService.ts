@@ -92,132 +92,102 @@ export class DelphiMarketService {
 
   /**
    * Mock markets for hackathon demo
+   * Only returns predictions relevant to provided assets (portfolio-based filtering)
    */
   private static getMockMarkets(assets: string[]): PredictionMarket[] {
     const now = Date.now();
     
-    return [
-      {
-        id: 'btc-vol-spike-30d',
-        question: 'Will BTC volatility exceed 60% in next 30 days?',
-        category: 'volatility',
-        probability: 73,
-        volume: '$245,000',
-        impact: 'HIGH',
-        relatedAssets: ['BTC', 'WBTC'],
-        lastUpdate: now - 300000,
-        confidence: 85,
-        recommendation: 'HEDGE',
-      },
-      {
-        id: 'eth-price-3k',
-        question: 'Will ETH drop below $3,000 this week?',
-        category: 'price',
-        probability: 42,
-        volume: '$89,000',
-        impact: 'MODERATE',
-        relatedAssets: ['ETH', 'WETH'],
-        lastUpdate: now - 600000,
-        confidence: 68,
-        recommendation: 'MONITOR',
-      },
+    // All available predictions
+    const allMarkets = [
       {
         id: 'cro-breakout',
         question: 'Will CRO reach $0.20 in Q1 2026?',
-        category: 'price',
+        category: 'price' as const,
         probability: 58,
         volume: '$156,000',
-        impact: 'MODERATE',
+        impact: 'MODERATE' as const,
         relatedAssets: ['CRO', 'WCRO'],
         lastUpdate: now - 900000,
         confidence: 72,
-        recommendation: 'MONITOR',
+        recommendation: 'MONITOR' as const,
       },
       {
         id: 'usdc-depeg-risk',
         question: 'Will USDC depeg by >2% in next 90 days?',
-        category: 'event',
+        category: 'event' as const,
         probability: 12,
         volume: '$412,000',
-        impact: 'HIGH',
+        impact: 'HIGH' as const,
         relatedAssets: ['USDC', 'devUSDC'],
         lastUpdate: now - 1200000,
         confidence: 91,
-        recommendation: 'IGNORE',
+        recommendation: 'IGNORE' as const,
       },
       {
         id: 'defi-tvl-drop',
         question: 'Will DeFi TVL drop 30%+ in Q1 2026?',
-        category: 'event',
+        category: 'event' as const,
         probability: 28,
         volume: '$198,000',
-        impact: 'HIGH',
+        impact: 'HIGH' as const,
         relatedAssets: ['ETH', 'BTC', 'CRO'],
         lastUpdate: now - 1800000,
         confidence: 76,
-        recommendation: 'MONITOR',
-      },
-      {
-        id: 'lido-tvl-risk',
-        question: 'Will Lido TVL drop 20%+ this month?',
-        category: 'protocol',
-        probability: 31,
-        volume: '$203,000',
-        impact: 'MODERATE',
-        relatedAssets: ['ETH', 'stETH'],
-        lastUpdate: now - 2400000,
-        confidence: 64,
-        recommendation: 'MONITOR',
+        recommendation: 'MONITOR' as const,
       },
       {
         id: 'fed-rate-hike',
         question: 'Will Fed raise rates in Q1 2026?',
-        category: 'event',
+        category: 'event' as const,
         probability: 68,
         volume: '$524,000',
-        impact: 'HIGH',
+        impact: 'HIGH' as const,
         relatedAssets: ['BTC', 'ETH', 'CRO', 'USDC'],
         lastUpdate: now - 3000000,
         confidence: 88,
-        recommendation: 'HEDGE',
+        recommendation: 'HEDGE' as const,
       },
       {
         id: 'vvs-liquidity',
         question: 'Will VVS Finance maintain $150M+ TVL?',
-        category: 'protocol',
+        category: 'protocol' as const,
         probability: 79,
         volume: '$67,000',
-        impact: 'LOW',
+        impact: 'LOW' as const,
         relatedAssets: ['CRO'],
         lastUpdate: now - 3600000,
         confidence: 58,
-        recommendation: 'IGNORE',
+        recommendation: 'IGNORE' as const,
       },
       {
         id: 'cronos-upgrade',
         question: 'Will Cronos zkEVM launch by March 2026?',
-        category: 'event',
+        category: 'event' as const,
         probability: 84,
         volume: '$112,000',
-        impact: 'MODERATE',
+        impact: 'MODERATE' as const,
         relatedAssets: ['CRO'],
         lastUpdate: now - 4200000,
         confidence: 71,
-        recommendation: 'MONITOR',
-      },
-      {
-        id: 'btc-halving-rally',
-        question: 'Will BTC reach new ATH post-halving 2024?',
-        category: 'price',
-        probability: 67,
-        volume: '$789,000',
-        impact: 'MODERATE',
-        relatedAssets: ['BTC', 'WBTC'],
-        lastUpdate: now - 4800000,
-        confidence: 82,
-        recommendation: 'MONITOR',
+        recommendation: 'MONITOR' as const,
       },
     ];
+
+    // Filter markets based on portfolio assets
+    // If no assets provided, return all markets
+    if (assets.length === 0) {
+      return allMarkets;
+    }
+
+    // Normalize asset names for matching (handle variations like BTC/WBTC, USDC/devUSDC)
+    const normalizedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
+
+    return allMarkets.filter(market => {
+      return market.relatedAssets.some(relatedAsset => {
+        const normalized = relatedAsset.toUpperCase().replace(/^(W|DEV)/, '');
+        return normalizedAssets.includes(normalized);
+      });
+    });
   }
 
   /**

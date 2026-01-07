@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
+  const [portfolioAssets, setPortfolioAssets] = useState<string[]>(['CRO', 'USDC']); // Default to demo portfolio
 
   // Contract data
   const contractAddresses = useContractAddresses();
@@ -239,7 +240,7 @@ export default function DashboardPage() {
                 )}
 
                 <PredictionInsights 
-                  assets={['BTC', 'ETH', 'CRO', 'USDC']} 
+                  assets={portfolioAssets}
                   onOpenHedge={handleOpenHedge}
                   onTriggerAgentAnalysis={handleAgentAnalysis}
                 />
