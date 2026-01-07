@@ -378,11 +378,25 @@ function StrategyStep({
                   : 'border-gray-700 hover:border-gray-600'
               }`}
             >
+              <div className="text-lg mb-1">
+                {preset === 'conservative' && '🛡️'}
+                {preset === 'balanced' && '⚖️'}
+                {preset === 'aggressive' && '🚀'}
+              </div>
               <div className="text-sm font-semibold capitalize mb-1">{preset}</div>
               <div className="text-xs text-gray-400">
                 {preset === 'conservative' && 'Low risk, stable returns'}
                 {preset === 'balanced' && 'Moderate risk & reward'}
                 {preset === 'aggressive' && 'High risk, high returns'}
+              </div>
+              <div className="text-xs mt-2 font-medium ${
+                preset === 'conservative' ? 'text-blue-400' :
+                preset === 'balanced' ? 'text-purple-400' :
+                'text-orange-400'
+              }">
+                {preset === 'conservative' && 'Target: 5-8% APY'}
+                {preset === 'balanced' && 'Target: 10-15% APY'}
+                {preset === 'aggressive' && 'Target: 20-30% APY'}
               </div>
             </button>
           ))}
@@ -393,6 +407,7 @@ function StrategyStep({
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Portfolio Name
+              <span className="ml-2 text-xs text-gray-500">Give your strategy a memorable name</span>
             </label>
             <input
               type="text"
@@ -407,6 +422,7 @@ function StrategyStep({
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Target Yield (% APY)
+                <span className="ml-2 text-xs text-gray-500">Expected annual return - AI optimizes to hit this</span>
               </label>
               <input
                 type="number"
@@ -414,11 +430,15 @@ function StrategyStep({
                 onChange={(e) => setStrategy({ ...strategy, targetYield: Number(e.target.value) * 100 })}
                 className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
               />
+              <div className="mt-2 text-xs text-gray-400">
+                💡 <span className="font-medium">Recommended:</span> Conservative (5-8%), Balanced (10-15%), Aggressive (20-30%)
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Risk Tolerance (0-100)
+                <span className="ml-2 text-xs text-gray-500">How much volatility you're comfortable with</span>
               </label>
               <input
                 type="range"
@@ -428,8 +448,20 @@ function StrategyStep({
                 onChange={(e) => setStrategy({ ...strategy, riskTolerance: Number(e.target.value) })}
                 className="w-full"
               />
-              <div className="text-center text-sm text-purple-400 font-semibold mt-1">
+              <div className="text-center text-sm font-bold mt-1 ${
+                strategy.riskTolerance < 30 ? 'text-green-400' :
+                strategy.riskTolerance < 70 ? 'text-yellow-400' :
+                'text-red-400'
+              }">
                 {strategy.riskTolerance}
+              </div>
+              <div className="mt-2 flex justify-between text-xs">
+                <span className="text-green-400">🛡️ Safe (0-30)</span>
+                <span className="text-yellow-400">⚖️ Moderate (30-70)</span>
+                <span className="text-red-400">🚀 Aggressive (70-100)</span>
+              </div>
+              <div className="mt-2 text-xs text-gray-400">
+                💡 <span className="font-medium">Impact:</span> Risk Agent uses this to calculate when to trigger hedges
               </div>
             </div>
           </div>
@@ -438,6 +470,7 @@ function StrategyStep({
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Max Drawdown (%)
+                <span className="ml-2 text-xs text-gray-500">Maximum loss before AI auto-hedges - Your safety net</span>
               </label>
               <input
                 type="number"
@@ -445,11 +478,15 @@ function StrategyStep({
                 onChange={(e) => setStrategy({ ...strategy, maxDrawdown: Number(e.target.value) })}
                 className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
               />
+              <div className="mt-2 text-xs text-gray-400">
+                💡 <span className="font-medium">Example:</span> If portfolio drops {strategy.maxDrawdown}% from peak, AI opens protective hedges immediately
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Concentration Limit (%)
+                <span className="ml-2 text-xs text-gray-500">Max % allocated to single asset - Prevents over-exposure</span>
               </label>
               <input
                 type="number"
@@ -457,33 +494,54 @@ function StrategyStep({
                 onChange={(e) => setStrategy({ ...strategy, concentrationLimit: Number(e.target.value) })}
                 className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
               />
+              <div className="mt-2 text-xs text-gray-400">
+                💡 <span className="font-medium">Example:</span> With {strategy.concentrationLimit}% limit, no single token exceeds {strategy.concentrationLimit}% of portfolio value
+              </div>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Rebalance Frequency
+              <span className="ml-2 text-xs text-gray-500">How often AI checks and adjusts positions</span>
             </label>
             <select
               value={strategy.rebalanceFrequency}
               onChange={(e) => setStrategy({ ...strategy, rebalanceFrequency: e.target.value })}
               className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
             >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+              <option value="daily">Daily - Active management (best for volatile markets)</option>
+              <option value="weekly">Weekly - Balanced approach (recommended)</option>
+              <option value="monthly">Monthly - Long-term strategy (lowest gas costs)</option>
             </select>
+            <div className="mt-2 text-xs text-gray-400">
+              💡 <span className="font-medium">Gas Impact:</span> More frequent = better optimization but higher costs (mitigated by x402 gasless)
+            </div>
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={strategy.hedgingEnabled}
-              onChange={(e) => setStrategy({ ...strategy, hedgingEnabled: e.target.checked })}
-              className="w-4 h-4 rounded border-gray-700 text-purple-600 focus:ring-purple-500"
-            />
-            <span className="text-sm text-gray-300">Enable AI Hedging via Moonlander</span>
-          </label>
+          <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg p-4">
+            <label className="flex items-start cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={strategy.hedgingEnabled}
+                onChange={(e) => setStrategy({ ...strategy, hedgingEnabled: e.target.checked })}
+                className="w-5 h-5 rounded border-gray-700 text-purple-600 focus:ring-purple-500 mt-0.5 flex-shrink-0"
+              />
+              <div className="ml-3 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">Enable AI Hedging via Moonlander</span>
+                  <Shield className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="mt-2 text-xs text-gray-300 space-y-1">
+                  <p>🛡️ <span className="font-medium">Automatic Protection:</span> Hedging Agent monitors your portfolio 24/7 and opens protective positions when risks are detected</p>
+                  <p>🤖 <span className="font-medium">Smart Execution:</span> Uses Moonlander DEX aggregator to find best hedge opportunities across multiple DEXs</p>
+                  <p>📊 <span className="font-medium">Delphi Integration:</span> Leverages prediction market data to anticipate and hedge against market events</p>
+                  <p>⚡ <span className="font-medium">Gasless Trades:</span> Powered by x402 protocol - no gas fees for hedge transactions</p>
+                  <p className="text-yellow-400 mt-2">⚠️ <span className="font-medium">Recommended:</span> Keep enabled unless you prefer manual risk management</p>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
 
