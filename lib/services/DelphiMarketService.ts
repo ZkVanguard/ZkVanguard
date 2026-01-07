@@ -183,10 +183,31 @@ export class DelphiMarketService {
     const normalizedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
 
     return allMarkets.filter(market => {
-      return market.relatedAssets.some(relatedAsset => {
+      // Count how many of the market's assets are in the user's portfolio
+      const matchingAssets = market.relatedAssets.filter(relatedAsset => {
         const normalized = relatedAsset.toUpperCase().replace(/^(W|DEV)/, '');
         return normalizedAssets.includes(normalized);
       });
+
+      // VERY STRICT FILTERING: Only show predictions directly relevant to portfolio
+      // Strategy:
+      // - Single/double asset predictions: show if ANY asset matches (directly about your holdings)
+      // - Multi-asset predictions (3+): only show if ALL or most assets match
+      //   This filters out broad market events that mention your assets but aren't ABOUT them
+      
+      if (matchingAssets.length === 0) {
+        return false; // No match at all
+      }
+      
+      // For 1-2 asset predictions: show them (specific predictions)
+      if (market.relatedAssets.length <= 2) {
+        return true;
+      }
+      
+      // For 3+ asset predictions: require 75%+ match (strict)
+      // Example: "Fed rate hike affects BTC, ETH, CRO, USDC" - only show if you own 3 of 4
+      const matchPercentage = matchingAssets.length / market.relatedAssets.length;
+      return matchPercentage >= 0.75;
     });
   }
 
