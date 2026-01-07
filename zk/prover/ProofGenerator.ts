@@ -106,8 +106,8 @@ export class ProofGenerator {
         error: details,
       });
 
-      // Fallback to mock proof for development
-      return this.generateMockProof(proofType, statement);
+      // Throw error instead of falling back to mock
+      throw error;
     }
   }
 

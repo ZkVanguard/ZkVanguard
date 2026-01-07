@@ -11,7 +11,7 @@ export type AgentTask = SharedAgentTask;
 /**
  * Simulated agent responses for demo
  */
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 async function simulateAgentCall<T>(fn: () => T): Promise<T> {
   await new Promise(resolve => setTimeout(resolve, 300));

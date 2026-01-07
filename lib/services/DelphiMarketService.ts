@@ -72,10 +72,6 @@ export class DelphiMarketService {
    * Get relevant prediction markets for portfolio assets
    */
   static async getRelevantMarkets(assets: string[]): Promise<PredictionMarket[]> {
-    if (this.MOCK_MODE) {
-      return this.getMockMarkets(assets);
-    }
-
     try {
       // In production, fetch from real Delphi API
       const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`);
@@ -85,8 +81,8 @@ export class DelphiMarketService {
       return this.parseMarkets(data);
     } catch (error) {
       console.error('Error fetching Delphi markets:', error);
-      // Fallback to mock data
-      return this.getMockMarkets(assets);
+      // Return empty array if API fails - no mock fallback
+      return [];
     }
   }
 

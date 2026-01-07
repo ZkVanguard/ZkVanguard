@@ -111,8 +111,8 @@ export class ProofValidator {
 
       const timer = setTimeout(() => {
         pythonProcess.kill();
-        // On timeout, return mock validation
-        resolve({ verified: true, mock: true });
+        // Reject on timeout instead of mock validation
+        reject(new Error('Python verifier timed out'));
       }, timeout);
 
       const pythonProcess = spawn(this.pythonPath, [
