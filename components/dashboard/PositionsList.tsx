@@ -53,6 +53,7 @@ export function PositionsList({ address }: { address: string }) {
   const [agentRecommendation, setAgentRecommendation] = useState<any>(null);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [showRecommendationModal, setShowRecommendationModal] = useState(false);
+  const [analyzedPortfolio, setAnalyzedPortfolio] = useState<OnChainPortfolio | null>(null);
 
   const openDepositModal = (portfolio: OnChainPortfolio) => {
     setSelectedPortfolio(portfolio);
@@ -72,6 +73,7 @@ export function PositionsList({ address }: { address: string }) {
   // Fetch agent recommendation for portfolio action
   const fetchAgentRecommendation = async (portfolio: OnChainPortfolio) => {
     setRecommendationLoading(true);
+    setAnalyzedPortfolio(portfolio);
     try {
       const portfolioAssets = portfolio.assets.map(asset => {
         const addr = asset.toLowerCase();
@@ -779,11 +781,28 @@ export function PositionsList({ address }: { address: string }) {
               <button
                 onClick={() => {
                   setShowRecommendationModal(false);
-                  // User can manually act on recommendation
+                  // Act on recommendation
+                  if (agentRecommendation.action === 'ADD_FUNDS' && analyzedPortfolio) {
+                    openDepositModal(analyzedPortfolio);
+                  } else if (agentRecommendation.action === 'WITHDRAW' && analyzedPortfolio) {
+                    openWithdrawModal(analyzedPortfolio);
+                  }
+                  // HOLD and HEDGE just close (user is informed)
                 }}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-sm font-semibold transition-colors"
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  agentRecommendation.action === 'WITHDRAW' 
+                    ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
+                    : agentRecommendation.action === 'ADD_FUNDS'
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                    : agentRecommendation.action === 'HEDGE'
+                    ? 'bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'
+                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
+                }`}
               >
-                Understood
+                {agentRecommendation.action === 'WITHDRAW' && '🚨 Withdraw Funds'}
+                {agentRecommendation.action === 'ADD_FUNDS' && '✅ Add More Funds'}
+                {agentRecommendation.action === 'HEDGE' && '🛡️ Open Hedge Position'}
+                {agentRecommendation.action === 'HOLD' && '📊 Continue Holding'}
               </button>
             </div>
           </div>
