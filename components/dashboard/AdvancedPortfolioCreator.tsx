@@ -615,8 +615,18 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
             Minimum Market Cap ($)
+            <InfoTooltip content={[
+              "Only include tokens with at least this market capitalization",
+              "",
+              "💡 Why it matters: Higher market cap = more established projects with better liquidity",
+              "",
+              "Recommended:",
+              "• Conservative: $10M+ (established projects only)",
+              "• Balanced: $1M+ (mix of established and growing)",
+              "• Aggressive: $100K+ (includes emerging projects)"
+            ]} />
           </label>
           <input
             type="number"
@@ -627,8 +637,18 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
             Maximum Volatility (%)
+            <InfoTooltip content={[
+              "Exclude tokens that fluctuate more than this percentage - Controls risk exposure",
+              "",
+              "💡 Lower values = more stable portfolio, higher values = more growth potential",
+              "",
+              "Recommended:",
+              "• Conservative: 30-40% (stable assets only)",
+              "• Balanced: 60-80% (moderate volatility)",
+              "• Aggressive: 90-100% (high-growth tokens)"
+            ]} />
           </label>
           <input
             type="range"
@@ -644,8 +664,21 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
+          <label className="block text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
             Allowed Asset Categories
+            <InfoTooltip content={[
+              "Select which types of crypto assets AI can include in your portfolio",
+              "",
+              "🏛️ DeFi: Decentralized finance protocols (Uniswap, Aave, etc.)",
+              "🔗 Layer1: Base blockchains (BTC, ETH, CRO, SOL)",
+              "⚡ Layer2: Scaling solutions (Polygon, Arbitrum, Optimism)",
+              "🎮 Gaming: Play-to-earn and gaming tokens",
+              "🇺🇻 NFT: NFT marketplace and utility tokens",
+              "💵 Stablecoin: USD-pegged tokens (USDC, USDT, DAI)",
+              "🏢 RWA: Real-world asset tokens (tokenized bonds, real estate)",
+              "",
+              "💡 Tip: More categories = better diversification but higher risk variety"
+            ]} />
           </label>
           <div className="grid grid-cols-2 gap-2">
             {categories.map((cat) => (
@@ -669,8 +702,20 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
             Minimum Liquidity ($)
+            <InfoTooltip content={[
+              "Only include tokens with at least this much trading liquidity - Ensures you can enter/exit positions easily",
+              "",
+              "💡 Why it matters: Higher liquidity = lower slippage when trading, easier to execute large orders",
+              "",
+              "Recommended:",
+              "• Conservative: $1M+ (deep liquidity)",
+              "• Balanced: $500K+ (good liquidity)",
+              "• Aggressive: $100K+ (accepts lower liquidity for opportunities)",
+              "",
+              "⚠️ Low liquidity can cause high slippage and difficulty exiting positions"
+            ]} />
           </label>
           <input
             type="number"
@@ -723,10 +768,27 @@ function ZKProtectionStep({
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Shield className="w-5 h-5 text-emerald-400" />
-        Privacy & ZK Protection
-      </h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Shield className="w-5 h-5 text-emerald-400" />
+          Privacy & ZK Protection
+        </h3>
+        <InfoTooltip content={[
+          "Protect your trading strategy using Zero-Knowledge proofs while maintaining on-chain verifiability",
+          "",
+          "🔒 What gets protected:",
+          "• Entry and exit price points",
+          "• Risk management rules",
+          "• Custom parameters",
+          "",
+          "✅ What stays public:",
+          "• Portfolio performance",
+          "• Asset allocations",
+          "• Transaction history",
+          "",
+          "💡 Benefits: Prevents front-running and strategy copying while maintaining transparency"
+        ]} />
+      </div>
 
       <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
         <div className="flex items-start gap-3">
@@ -759,15 +821,36 @@ function ZKProtectionStep({
               ) : (
                 <Eye className="w-5 h-5 text-gray-400" />
               )}
-              <div>
-                <div className="font-semibold">
-                  {strategyPrivate ? 'Private Strategy (Recommended)' : 'Public Strategy'}
+              <div className="flex items-center gap-2">
+                <div>
+                  <div className="font-semibold">
+                    {strategyPrivate ? 'Private Strategy (Recommended)' : 'Public Strategy'}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {strategyPrivate 
+                      ? 'Strategy details hidden with ZK-STARK proofs + signature' 
+                      : 'Strategy parameters visible on-chain (still requires signature)'}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {strategyPrivate 
-                    ? 'Strategy details hidden with ZK-STARK proofs + signature' 
-                    : 'Strategy parameters visible on-chain (still requires signature)'}
-                </div>
+                <InfoTooltip content={[
+                  strategyPrivate 
+                    ? "🔒 Private Mode: Your trading strategy is encrypted using ZK-STARK proofs"
+                    : "👁️ Public Mode: Anyone can see your strategy parameters",
+                  "",
+                  strategyPrivate 
+                    ? "• Entry/exit rules: Hidden"
+                    : "• Entry/exit rules: Visible",
+                  strategyPrivate 
+                    ? "• Risk parameters: Encrypted"
+                    : "• Risk parameters: Public",
+                  strategyPrivate 
+                    ? "• Custom logic: Protected"
+                    : "• Custom logic: Open",
+                  "",
+                  "💡 " + (strategyPrivate 
+                    ? "Recommended for professional traders to prevent strategy copying"
+                    : "Useful for transparent community-managed funds")
+                ]} />
               </div>
             </div>
             <input
