@@ -26,7 +26,7 @@ export interface DelphiInsight {
 
 export class DelphiMarketService {
   private static readonly API_URL = process.env.NEXT_PUBLIC_DELPHI_API || 'https://api.delphi.markets';
-  private static readonly MOCK_MODE = true; // Use mock data for hackathon demo
+  private static readonly MOCK_MODE = false; // Disabled - using real Delphi API
 
   /**
    * Get predictions relevant to a specific portfolio strategy
