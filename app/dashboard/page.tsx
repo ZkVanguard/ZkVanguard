@@ -39,6 +39,10 @@ export default function DashboardPage() {
   const networkName = chainId === 338 ? 'Cronos Testnet' : chainId === 25 ? 'Cronos Mainnet' : 'Unknown Network';
   const isTestnet = chainId === 338;
   
+  // Allow access without wallet for demo purposes
+  const displayAddress = address || '0x0000...0000';
+  const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
+  
   // Dynamically fetch portfolio assets for Delphi filtering
   useEffect(() => {
     async function fetchPortfolioAssets() {
@@ -78,10 +82,6 @@ export default function DashboardPage() {
     
     // Refresh assets when address changes
   }, [displayAddress]);
-  
-  // Allow access without wallet for demo purposes
-  const displayAddress = address || '0x0000...0000';
-  const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
 
   // Handle hedge action from Delphi predictions
   const handleOpenHedge = (market: PredictionMarket) => {
