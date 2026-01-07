@@ -55,6 +55,9 @@ export function PositionsList({ address }: { address: string }) {
   const [showRecommendationModal, setShowRecommendationModal] = useState(false);
   const [analyzedPortfolio, setAnalyzedPortfolio] = useState<OnChainPortfolio | null>(null);
 
+  // Expanded predictions state (portfolio ID -> boolean)
+  const [expandedPredictions, setExpandedPredictions] = useState<Record<number, boolean>>({});
+
   const openDepositModal = (portfolio: OnChainPortfolio) => {
     setSelectedPortfolio(portfolio);
     setDepositModalOpen(true);
@@ -500,7 +503,10 @@ export function PositionsList({ address }: { address: string }) {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        {portfolio.predictions.slice(0, 2).map((pred) => (
+                        {(expandedPredictions[portfolio.id] 
+                          ? portfolio.predictions 
+                          : portfolio.predictions.slice(0, 2)
+                        ).map((pred) => (
                           <div key={pred.id} className="flex items-start gap-2 text-xs">
                             <div className={`mt-0.5 ${
                               pred.recommendation === 'HEDGE' ? 'text-red-400' :
@@ -535,9 +541,18 @@ export function PositionsList({ address }: { address: string }) {
                           </div>
                         ))}
                         {portfolio.predictions.length > 2 && (
-                          <div className="text-xs text-purple-400 text-center pt-1">
-                            +{portfolio.predictions.length - 2} more prediction{portfolio.predictions.length - 2 !== 1 ? 's' : ''}
-                          </div>
+                          <button
+                            onClick={() => setExpandedPredictions(prev => ({
+                              ...prev,
+                              [portfolio.id]: !prev[portfolio.id]
+                            }))}
+                            className="w-full text-xs text-purple-400 hover:text-purple-300 text-center pt-1 transition-colors cursor-pointer"
+                          >
+                            {expandedPredictions[portfolio.id] 
+                              ? '▲ Show less' 
+                              : `+${portfolio.predictions.length - 2} more prediction${portfolio.predictions.length - 2 !== 1 ? 's' : ''} ▼`
+                            }
+                          </button>
                         )}
                       </div>
                     </div>
