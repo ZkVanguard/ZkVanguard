@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import '../styles/globals.css';
 import { Providers } from './providers';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { DebugLogToggle, DebugLogPanel } from '../components/DebugLogPanel';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'ZkVanguard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
@@ -14,15 +11,15 @@ export const metadata: Metadata = {
   keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
   authors: [{ name: 'ZkVanguard Team' }],
   icons: {
-    icon: '/assets/branding/logo-icon.svg',
-    shortcut: '/assets/branding/logo-icon.svg',
-    apple: '/assets/branding/logo-navbar.svg',
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/logo-apple.svg',
   },
   openGraph: {
     title: 'ZkVanguard',
     description: 'AI-Powered RWA Risk Management Platform',
     type: 'website',
-    images: ['/logo.svg'],
+    images: ['/logo-apple.svg'],
   },
 };
 
@@ -32,16 +29,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Force dark mode immediately
-              document.documentElement.classList.add('dark');
-              document.documentElement.style.backgroundColor = '#000000';
+              // Support light mode by default
+              document.documentElement.style.backgroundColor = '#FFFFFF';
               if (document.body) {
-                document.body.style.backgroundColor = '#000000';
+                document.body.style.backgroundColor = '#F2F2F7';
               }
               
               (function() {
@@ -87,11 +83,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className} style={{background: '#0f0f1a', color: '#ffffff'}}>
+      <body className="bg-white text-label-primary">
         <Providers>
           <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-grow pt-20">
+            <main className="flex-grow pt-[52px]">
               {children}
             </main>
             <Footer />

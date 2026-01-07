@@ -3,16 +3,18 @@
 import React from 'react';
 
 export function Logo({ className = '', alt = 'ZkVanguard' }: { className?: string; alt?: string }) {
-  // Use existing SVG logo
-  const logo = '/assets/branding/logo.svg';
-
   return (
-    <img 
-      src={logo} 
-      alt={alt} 
-      className={className}
-      style={{ objectFit: 'contain' }}
-    />
+    <div className={`flex items-center gap-3 ${className}`}>
+      <img 
+        src="/logo-apple.svg" 
+        alt={alt} 
+        className="h-9 w-9 rounded-lg"
+        style={{ objectFit: 'contain' }}
+      />
+      <span className="text-title-3 font-semibold text-label-primary tracking-tight hidden sm:inline">
+        ZkVanguard
+      </span>
+    </div>
   );
 }
 

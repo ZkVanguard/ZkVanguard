@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Clean favicon with rounded square -->
+  <rect width="32" height="32" rx="7" fill="#007AFF"/>
+  
+  <!-- Shield symbol -->
+  <path d="M16 8L21 10C21 10 21.5 15 21 19C20.5 23 16 26 16 26C16 26 11.5 23 11 19C10.5 15 11 10 11 10L16 8Z" 
+        fill="white"/>
+  
+  <!-- Lock detail -->
+  <circle cx="16" cy="17" r="1.5" fill="#007AFF"/>
+  <rect x="14.8" y="17" width="2.4" height="3" rx="0.4" fill="#007AFF"/>
+</svg>
