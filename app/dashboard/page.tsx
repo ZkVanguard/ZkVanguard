@@ -315,14 +315,7 @@ export default function DashboardPage() {
               </>
             )}
             {activeTab === 'positions' && (
-              <>
-                <PredictionInsights 
-                  assets={portfolioAssets}
-                  onOpenHedge={handleOpenHedge}
-                  onTriggerAgentAnalysis={handleAgentAnalysis}
-                />
-                <PositionsList address={displayAddress} />
-              </>
+              <PositionsList address={displayAddress} />
             )}
             {activeTab === 'transactions' && <RecentTransactions address={displayAddress} />}
             {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
