@@ -147,14 +147,16 @@ export function PositionsList({ address }: { address: string }) {
 
     console.log(`📊 [PositionsList] Fetching ${portfolioCount.toString()} on-chain portfolios`);
     const count = Number(portfolioCount);
-    const loadedPortfolios: OnChainPortfolio[] = [];
     
+    // Fetch all portfolios in parallel for better performance
+    const portfolioPromises = [];
     for (let i = 0; i < count; i++) {
-      try {
-        const res = await fetch(`/api/portfolio/${i}`);
-        if (res.ok) {
-          const p = await res.json();
-          if (p && !p.error && p.isActive) {
+      portfolioPromises.push(
+        fetch(`/api/portfolio/${i}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(async (p) => {
+            if (!p || p.error || !p.isActive) return null;
+            
             const portfolio: OnChainPortfolio = {
               id: i,
               owner: p.owner,
@@ -166,13 +168,13 @@ export function PositionsList({ address }: { address: string }) {
               assets: p.assets || [],
             };
             
-            // Use positions data from context instead of fetching again
+            // Use positions data from context
             if (positionsData && positionsData.address.toLowerCase() === portfolio.owner.toLowerCase()) {
               (portfolio as any).positionsData = positionsData;
               (portfolio as any).calculatedValue = positionsData.totalValue;
             }
             
-            // Fetch Delphi predictions specific to this portfolio
+            // Fetch Delphi predictions
             try {
               const portfolioAssets = positionsData?.positions
                 ?.filter(pos => parseFloat(pos.balance) > 0)
@@ -190,13 +192,18 @@ export function PositionsList({ address }: { address: string }) {
               portfolio.predictions = [];
             }
             
-            loadedPortfolios.push(portfolio);
-          }
-        }
-      } catch (err) {
-        console.warn(`Portfolio ${i} fetch failed:`, err);
-      }
+            return portfolio;
+          })
+          .catch(err => {
+            console.warn(`Portfolio ${i} fetch failed:`, err);
+            return null;
+          })
+      );
     }
+    
+    // Wait for all portfolios in parallel
+    const results = await Promise.all(portfolioPromises);
+    const loadedPortfolios = results.filter((p): p is OnChainPortfolio => p !== null);
 
     console.log(`✅ [PositionsList] Loaded ${loadedPortfolios.length} on-chain portfolios`);
     setOnChainPortfolios(loadedPortfolios);
