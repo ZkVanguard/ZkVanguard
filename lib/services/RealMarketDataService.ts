@@ -111,9 +111,9 @@ class RealMarketDataService {
     }
 
     try {
-      // Try CoinGecko API via proxy to avoid CORS
+      // Call CoinGecko directly (server-side has no CORS issues)
       const response = await axios.get(
-        `/api/coingecko`,
+        `https://api.coingecko.com/api/v3/simple/price`,
         {
           params: {
             ids: this.symbolToCoingeckoId(symbol),
