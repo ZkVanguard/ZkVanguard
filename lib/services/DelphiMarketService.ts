@@ -75,7 +75,8 @@ export class DelphiMarketService {
   static async fetchPolymarketData(assets: string[]): Promise<PredictionMarket[]> {
     try {
       console.log('Fetching live Polymarket data for assets:', assets);
-      const response = await fetch(this.POLYMARKET_API, {
+      // Use Next.js API route to avoid CORS issues
+      const response = await fetch('/api/polymarket', {
         headers: {
           'Accept': 'application/json',
         },
