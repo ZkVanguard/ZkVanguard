@@ -252,7 +252,7 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [publicClient, address, explorerApiUrl]);
+  }, [publicClient, address, network]);
 
   useEffect(() => {
     fetchTransactions();
