@@ -70,6 +70,8 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
   const explorerUrl = chainId === 338 
     ? 'https://explorer.cronos.org/testnet' 
     : 'https://explorer.cronos.org';
+  
+  const network = chainId === 338 ? 'testnet' : 'mainnet';
 
   const fetchTransactions = useCallback(async (showRefreshIndicator = false) => {
     if (!publicClient || !address || address === '0x0000...0000') {
@@ -81,92 +83,168 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
     setError(null);
 
     try {
-      // Get recent blocks to scan for transactions
-      const currentBlock = await publicClient.getBlockNumber();
-      const fromBlock = currentBlock - BigInt(5000); // Last ~5000 blocks (~4 hours)
-
-      // Fetch transactions using logs (more efficient than scanning blocks)
-      // Get ERC20 Transfer events where user is sender or receiver
-      const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+      console.log('Fetching transactions for address:', address);
       
-      const [sentLogs, receivedLogs] = await Promise.all([
-        publicClient.getLogs({
-          fromBlock,
-          toBlock: currentBlock,
-          topics: [
-            transferTopic,
-            `0x000000000000000000000000${address.slice(2).toLowerCase()}`, // from
-          ],
-        }).catch(() => []),
-        publicClient.getLogs({
-          fromBlock,
-          toBlock: currentBlock,
-          topics: [
-            transferTopic,
-            null,
-            `0x000000000000000000000000${address.slice(2).toLowerCase()}`, // to
-          ],
-        }).catch(() => []),
-      ]);
-
-      // Combine and deduplicate logs
-      const allLogs = [...sentLogs, ...receivedLogs];
-      const uniqueTxHashes = [...new Set(allLogs.map(log => log.transactionHash))].slice(0, 20);
-
-      // Fetch transaction details
-      const txPromises = uniqueTxHashes.map(async (hash) => {
-        try {
-          const [tx, receipt] = await Promise.all([
-            publicClient.getTransaction({ hash }),
-            publicClient.getTransactionReceipt({ hash }),
-          ]);
-
-          const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
+      // Try to fetch from Cronos Explorer API first (more comprehensive)
+      let txList: Transaction[] = [];
+      
+      try {
+        // Fetch normal transactions from explorer API via proxy (avoids CORS)
+        const response = await fetch(
+          `/api/cronos-explorer?address=${address}&limit=50&network=${network}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Explorer API response:', data);
           
-          // Determine transaction type from input data
-          const methodSig = tx.input.slice(0, 10).toLowerCase();
-          const methodInfo = METHOD_SIGNATURES[methodSig];
-          
-          let txType: Transaction['type'] = methodInfo?.type || 'unknown';
-          
-          // Check if it's interacting with known contracts
-          const toAddress = tx.to?.toLowerCase();
-          if (toAddress && KNOWN_CONTRACTS[toAddress]) {
-            const contract = KNOWN_CONTRACTS[toAddress];
-            if (contract.type === 'dex') {
-              txType = 'swap';
-            }
+          if (data.result && Array.isArray(data.result)) {
+            txList = data.result.map((tx: any) => {
+              // Determine transaction type from input data or method name
+              let txType: Transaction['type'] = 'unknown';
+              const methodSig = tx.input?.slice(0, 10)?.toLowerCase() || '';
+              const methodInfo = METHOD_SIGNATURES[methodSig];
+              
+              if (methodInfo) {
+                txType = methodInfo.type;
+              } else if (tx.to?.toLowerCase() === '0x145863eb42cf62847a6ca784e6416c1682b1b2ae') {
+                txType = 'swap'; // VVS Router
+              } else if (tx.value && BigInt(tx.value) > 0) {
+                txType = tx.from?.toLowerCase() === address.toLowerCase() ? 'withdraw' : 'deposit';
+              }
+              
+              return {
+                hash: tx.hash,
+                type: txType,
+                status: tx.status === '1' || tx.status === 1 || tx.txreceipt_status === '1' ? 'success' : 'failed',
+                timestamp: tx.timeStamp ? Number(tx.timeStamp) * 1000 : Date.now(),
+                from: tx.from || '',
+                to: tx.to || '',
+                value: tx.value ? formatEther(BigInt(tx.value)) : '0',
+                gasUsed: tx.gasUsed && tx.gasPrice 
+                  ? formatEther(BigInt(tx.gasUsed) * BigInt(tx.gasPrice))
+                  : '0',
+                blockNumber: tx.blockNumber ? Number(tx.blockNumber) : 0,
+              } as Transaction;
+            });
           }
-
-          // Determine if sent or received
-          const isSent = tx.from.toLowerCase() === address.toLowerCase();
-          if (txType === 'transfer') {
-            txType = isSent ? 'withdraw' : 'deposit';
-          }
-
-          return {
-            hash: hash,
-            type: txType,
-            status: receipt.status === 'success' ? 'success' : 'failed',
-            timestamp: Number(block.timestamp) * 1000,
-            from: tx.from,
-            to: tx.to || '',
-            value: formatEther(tx.value),
-            gasUsed: formatEther(receipt.gasUsed * receipt.effectiveGasPrice),
-            blockNumber: Number(receipt.blockNumber),
-          } as Transaction;
-        } catch (err) {
-          console.error('Error fetching tx:', hash, err);
-          return null;
         }
-      });
+      } catch (apiError) {
+        console.log('Explorer API not available, falling back to RPC:', apiError);
+      }
 
-      const results = await Promise.all(txPromises);
-      const validTxs = results
-        .filter((tx): tx is Transaction => tx !== null)
-        .sort((a, b) => b.timestamp - a.timestamp);
+      // If API didn't return results, fall back to RPC log scanning
+      if (txList.length === 0) {
+        console.log('Falling back to RPC log scanning...');
+        
+        // Get recent blocks to scan for transactions
+        const currentBlock = await publicClient.getBlockNumber();
+        // Scan more blocks - up to 50000 (about 17 hours on Cronos)
+        const fromBlock = currentBlock > BigInt(50000) ? currentBlock - BigInt(50000) : BigInt(0);
+        
+        console.log(`Scanning blocks ${fromBlock} to ${currentBlock}`);
 
-      setTransactions(validTxs);
+        // Fetch transactions using logs
+        const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+        const swapTopic = '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822';
+        
+        const [sentLogs, receivedLogs, swapLogs] = await Promise.all([
+          publicClient.getLogs({
+            fromBlock,
+            toBlock: currentBlock,
+            topics: [
+              transferTopic,
+              `0x000000000000000000000000${address.slice(2).toLowerCase()}`,
+            ],
+          }).catch((e) => { console.log('Sent logs error:', e); return []; }),
+          publicClient.getLogs({
+            fromBlock,
+            toBlock: currentBlock,
+            topics: [
+              transferTopic,
+              null,
+              `0x000000000000000000000000${address.slice(2).toLowerCase()}`,
+            ],
+          }).catch((e) => { console.log('Received logs error:', e); return []; }),
+          publicClient.getLogs({
+            fromBlock,
+            toBlock: currentBlock,
+            topics: [swapTopic],
+          }).catch((e) => { console.log('Swap logs error:', e); return []; }),
+        ]);
+
+        console.log(`Found logs - Sent: ${sentLogs.length}, Received: ${receivedLogs.length}, Swaps: ${swapLogs.length}`);
+
+        // Filter swap logs to only include those where user was involved
+        const userSwapLogs = swapLogs.filter(log => 
+          log.topics.some(topic => 
+            topic?.toLowerCase().includes(address.slice(2).toLowerCase())
+          )
+        );
+
+        const allLogs = [...sentLogs, ...receivedLogs, ...userSwapLogs];
+        const uniqueTxHashes = [...new Set(allLogs.map(log => log.transactionHash))].slice(0, 30);
+        
+        console.log(`Unique transaction hashes: ${uniqueTxHashes.length}`);
+
+        // Fetch transaction details
+        const txPromises = uniqueTxHashes.map(async (hash) => {
+          try {
+            const [tx, receipt] = await Promise.all([
+              publicClient.getTransaction({ hash }),
+              publicClient.getTransactionReceipt({ hash }),
+            ]);
+
+            const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
+            
+            const methodSig = tx.input.slice(0, 10).toLowerCase();
+            const methodInfo = METHOD_SIGNATURES[methodSig];
+            
+            let txType: Transaction['type'] = methodInfo?.type || 'unknown';
+            
+            const toAddress = tx.to?.toLowerCase();
+            if (toAddress && KNOWN_CONTRACTS[toAddress]) {
+              const contract = KNOWN_CONTRACTS[toAddress];
+              if (contract.type === 'dex') {
+                txType = 'swap';
+              }
+            }
+
+            const isSent = tx.from.toLowerCase() === address.toLowerCase();
+            if (txType === 'transfer') {
+              txType = isSent ? 'withdraw' : 'deposit';
+            }
+            
+            if (txType === 'unknown' && tx.value > BigInt(0)) {
+              txType = isSent ? 'withdraw' : 'deposit';
+            }
+
+            return {
+              hash: hash,
+              type: txType,
+              status: receipt.status === 'success' ? 'success' : 'failed',
+              timestamp: Number(block.timestamp) * 1000,
+              from: tx.from,
+              to: tx.to || '',
+              value: formatEther(tx.value),
+              gasUsed: formatEther(receipt.gasUsed * receipt.effectiveGasPrice),
+              blockNumber: Number(receipt.blockNumber),
+            } as Transaction;
+          } catch (err) {
+            console.error('Error fetching tx:', hash, err);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(txPromises);
+        txList = results.filter((tx): tx is Transaction => tx !== null);
+      }
+
+      // Sort by timestamp descending
+      txList.sort((a, b) => b.timestamp - a.timestamp);
+      
+      console.log(`Final transaction count: ${txList.length}`);
+      setTransactions(txList);
     } catch (err) {
       console.error('Error fetching transactions:', err);
       setError('Failed to fetch transactions');
@@ -174,7 +252,7 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [publicClient, address]);
+  }, [publicClient, address, explorerApiUrl]);
 
   useEffect(() => {
     fetchTransactions();
@@ -298,8 +376,24 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       ) : filteredTransactions.length === 0 ? (
         <div className="text-center py-8 text-gray-400">
           <ArrowDownUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p>No transactions found</p>
-          <p className="text-xs mt-1">Transactions will appear here after you make swaps, deposits, or withdrawals</p>
+          <p className="font-medium">No transactions found</p>
+          <p className="text-xs mt-1 mb-4">Transactions will appear here after you make swaps, deposits, or withdrawals</p>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => fetchTransactions(true)}
+              className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Refresh
+            </button>
+            <a
+              href={`${explorerUrl}/address/${address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-500 hover:text-cyan-400 flex items-center gap-1"
+            >
+              View address on Explorer <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       ) : (
         <div className="space-y-2">
