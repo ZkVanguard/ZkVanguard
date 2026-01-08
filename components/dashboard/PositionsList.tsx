@@ -168,12 +168,6 @@ export function PositionsList({ address }: { address: string }) {
               assets: p.assets || [],
             };
             
-            // Use positions data from context
-            if (positionsData && positionsData.address.toLowerCase() === portfolio.owner.toLowerCase()) {
-              (portfolio as any).positionsData = positionsData;
-              (portfolio as any).calculatedValue = positionsData.totalValue;
-            }
-            
             // Fetch Delphi predictions
             try {
               const portfolioAssets = positionsData?.positions
@@ -392,21 +386,19 @@ export function PositionsList({ address }: { address: string }) {
 
           <div className="space-y-4">
             {onChainPortfolios.map((portfolio) => {
-              // Use calculated value from positions if available, otherwise fall back to totalValue
-              const calculatedValue = (portfolio as any).calculatedValue || 0;
+              // Use totalValue from blockchain - this is what's actually deposited in the portfolio contract
               const rawValue = Number(portfolio.totalValue);
-              const valueUSD = calculatedValue > 0 
-                ? calculatedValue  // Use actual positions value
-                : rawValue > 1e12 
-                  ? rawValue / 1e18  // 18 decimals (ETH-like)
-                  : rawValue / 1e6;  // 6 decimals (USDC-like)
+              const valueUSD = rawValue > 1e12 
+                ? rawValue / 1e18  // 18 decimals (ETH-like)
+                : rawValue / 1e6;  // 6 decimals (USDC-like)
+              
               const yieldPercent = Number(portfolio.targetYield) / 100;
               const riskLevel = Number(portfolio.riskTolerance) <= 33 ? 'Low' : Number(portfolio.riskTolerance) <= 66 ? 'Medium' : 'High';
               const riskColor = riskLevel === 'Low' ? 'text-green-400' : riskLevel === 'Medium' ? 'text-yellow-400' : 'text-red-400';
               const isOwner = portfolio.owner.toLowerCase() === address.toLowerCase();
               const hasFunds = valueUSD > 0 || portfolio.assets.length > 0;
               
-              console.log(`Portfolio #${portfolio.id}: calculatedValue=${calculatedValue}, rawValue=${rawValue}, valueUSD=${valueUSD}, hasFunds=${hasFunds}`);
+              console.log(`Portfolio #${portfolio.id}: rawValue=${rawValue}, valueUSD=${valueUSD}, hasFunds=${hasFunds}`);
 
               return (
                 <div key={portfolio.id} className={`bg-gray-900 rounded-lg p-5 border ${isOwner ? 'border-cyan-500/50' : 'border-gray-700'} hover:border-cyan-500/50 transition-all`}>
@@ -470,24 +462,6 @@ export function PositionsList({ address }: { address: string }) {
                           <span key={idx} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs font-mono">
                             {asset.toLowerCase() === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0' ? 'devUSDC' : `${asset.slice(0, 6)}...${asset.slice(-4)}`}
                           </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Show current positions if available */}
-                  {(portfolio as any).positionsData?.positions?.length > 0 && (
-                    <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                      <div className="text-xs text-gray-400 mb-2">Current Holdings:</div>
-                      <div className="space-y-2">
-                        {(portfolio as any).positionsData.positions.map((pos: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold text-cyan-400">{pos.symbol}</span>
-                              <span className="text-gray-400">{parseFloat(pos.balance).toFixed(4)}</span>
-                            </div>
-                            <span className="text-emerald-400 font-semibold">${parseFloat(pos.balanceUSD).toFixed(2)}</span>
-                          </div>
                         ))}
                       </div>
                     </div>
