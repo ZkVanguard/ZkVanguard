@@ -227,7 +227,9 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
               from: tx.from,
               to: tx.to || '',
               value: formatEther(tx.value),
-              gasUsed: formatEther(BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice)),
+              gasUsed: (receipt.gasUsed && receipt.effectiveGasPrice) 
+                ? formatEther(BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice))
+                : '0',
               blockNumber: Number(receipt.blockNumber),
             } as Transaction;
           } catch (err) {
