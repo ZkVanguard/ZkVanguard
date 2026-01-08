@@ -24,18 +24,18 @@ module.exports = {
           gray5: '#E5E5EA',
           gray6: '#F2F2F7',
         },
-        // Text Colors (Light Mode)
+        // Text Colors (Light Mode) - Enhanced Contrast
         label: {
-          primary: '#000000',
-          secondary: 'rgba(60, 60, 67, 0.6)',
-          tertiary: 'rgba(60, 60, 67, 0.3)',
-          quaternary: 'rgba(60, 60, 67, 0.18)',
+          primary: '#1D1D1F',
+          secondary: '#424245',
+          tertiary: '#6E6E73',
+          quaternary: '#86868B',
         },
         // Background Colors (Light Mode)
         'system-bg': {
           primary: '#FFFFFF',
-          secondary: '#F2F2F7',
-          tertiary: '#FFFFFF',
+          secondary: '#F5F5F7',
+          tertiary: '#FAFAFA',
           grouped: '#F2F2F7',
         },
         // Separator Colors

@@ -2,19 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Apple iOS Design System - Light Mode Default */
+/* Apple iOS Design System - Enhanced Contrast */
 :root {
   /* Background Colors */
   --background-primary: #FFFFFF;
-  --background-secondary: #F2F2F7;
-  --background-tertiary: #FFFFFF;
+  --background-secondary: #F5F5F7;
+  --background-tertiary: #FAFAFA;
   --background-grouped: #F2F2F7;
   
-  /* Text Colors */
-  --label-primary: #000000;
-  --label-secondary: rgba(60, 60, 67, 0.6);
-  --label-tertiary: rgba(60, 60, 67, 0.3);
-  --label-quaternary: rgba(60, 60, 67, 0.18);
+  /* Text Colors - Enhanced Contrast */
+  --label-primary: #1D1D1F;
+  --label-secondary: #424245;
+  --label-tertiary: #6E6E73;
+  --label-quaternary: #86868B;
   
   /* System Colors */
   --color-blue: #007AFF;
@@ -25,30 +25,38 @@
   
   /* Separator Colors */
   --separator-opaque: #C6C6C8;
-  --separator-non-opaque: rgba(60, 60, 67, 0.29);
+  --separator-non-opaque: rgba(60, 60, 67, 0.36);
   
   /* Borders */
-  --border-subtle: rgba(0, 0, 0, 0.04);
-  --border-medium: rgba(0, 0, 0, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-medium: rgba(0, 0, 0, 0.18);
+  
+  /* Card backgrounds with better contrast */
+  --card-bg: #FFFFFF;
+  --card-bg-hover: #FAFAFA;
 }
 
 .dark {
-  /* Dark mode overrides (optional) */
+  /* Dark mode overrides */
   --background-primary: #000000;
   --background-secondary: #1C1C1E;
   --background-tertiary: #2C2C2E;
   --background-grouped: #000000;
   
+  /* Enhanced dark mode text contrast */
   --label-primary: #FFFFFF;
-  --label-secondary: rgba(235, 235, 245, 0.6);
-  --label-tertiary: rgba(235, 235, 245, 0.3);
-  --label-quaternary: rgba(235, 235, 245, 0.18);
+  --label-secondary: #EBEBF0;
+  --label-tertiary: #AEAEB2;
+  --label-quaternary: #8E8E93;
   
-  --separator-opaque: #38383A;
+  --separator-opaque: #48484A;
   --separator-non-opaque: rgba(84, 84, 88, 0.65);
   
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.18);
+  
+  --card-bg: #1C1C1E;
+  --card-bg-hover: #2C2C2E;
 }
 
 * {
@@ -71,6 +79,29 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'system-ui', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* Ensure text is always readable */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--label-primary);
+  font-weight: 600;
+}
+
+p, span, div {
+  color: var(--label-primary);
+}
+
+.text-secondary {
+  color: var(--label-secondary) !important;
+}
+
+.text-tertiary {
+  color: var(--label-tertiary) !important;
+}
+
+.text-muted {
+  color: var(--label-quaternary) !important;
 }
 
 /* Remove all decorative background effects */
@@ -81,46 +112,79 @@ body {
     text-wrap: balance;
   }
 
-  /* Premium Light Cards - Artistic Blend */
+  /* Premium Light Cards - Enhanced Readability */
   .glass-light {
-    background: linear-gradient(135deg, rgba(248, 248, 251, 0.92) 0%, rgba(245, 245, 250, 0.95) 100%);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    border: 0.5px solid rgba(59, 130, 246, 0.15);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     box-shadow: 
-      0 4px 24px rgba(59, 130, 246, 0.12),
-      0 2px 8px rgba(139, 92, 246, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6),
-      0 0 0 1px rgba(59, 130, 246, 0.05);
-    color: #1d1d1f;
+      0 4px 24px rgba(0, 0, 0, 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    color: #1D1D1F;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   .glass-light:hover {
+    background: rgba(255, 255, 255, 0.98);
     box-shadow: 
-      0 8px 32px rgba(59, 130, 246, 0.12),
-      0 4px 16px rgba(139, 92, 246, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 0 0 1px rgba(59, 130, 246, 0.1);
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 4px 16px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
   }
 
-  /* Card Yang - Light Gradient Card */
+  /* Card Yang - High Contrast Light Card */
   .card-yang {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 249, 250, 0.95) 100%);
-    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: 
-      0 4px 24px rgba(0, 0, 0, 0.04),
-      0 1px 4px rgba(0, 0, 0, 0.02),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      0 4px 12px rgba(0, 0, 0, 0.08),
+      0 1px 4px rgba(0, 0, 0, 0.04);
+    color: #1D1D1F;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   .card-yang:hover {
+    background: #FAFAFA;
     box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.06),
-      0 2px 8px rgba(0, 0, 0, 0.03),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.06);
     transform: translateY(-2px);
+  }
+
+  /* Dark Mode Cards - Enhanced Contrast */
+  .dark .glass-light {
+    background: rgba(28, 28, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+    box-shadow: 
+      0 4px 24px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .dark .glass-light:hover {
+    background: rgba(44, 44, 46, 0.98);
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .card-yang {
+    background: #1C1C1E;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #FFFFFF;
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 1px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .dark .card-yang:hover {
+    background: #2C2C2E;
+    box-shadow: 
+      0 8px 24px rgba(0, 0, 0, 0.5),
+      0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
   .text-balance {
@@ -392,38 +456,45 @@ body {
   background-size: 50px 50px;
 }
 
-/* Utility classes */
+/* Utility classes with enhanced contrast */
 .text-primary {
-  color: var(--text-primary);
+  color: var(--label-primary) !important;
 }
 
 .text-secondary {
-  color: var(--text-secondary);
+  color: var(--label-secondary) !important;
 }
 
 .text-tertiary {
-  color: var(--text-tertiary);
+  color: var(--label-tertiary) !important;
 }
 
 .text-muted {
-  color: var(--text-muted);
+  color: var(--label-quaternary) !important;
 }
 
 .bg-surface {
-  background-color: var(--background-surface);
+  background-color: var(--background-primary);
 }
 
 .bg-card {
   background-color: var(--card-bg);
+  color: var(--label-primary);
 }
 
 .bg-card-secondary {
-  background-color: var(--card-bg-secondary);
+  background-color: var(--background-secondary);
+  color: var(--label-primary);
 }
 
 .bg-card-light {
-  background-color: var(--card-light);
-  color: #000000;
+  background-color: #FFFFFF;
+  color: #1D1D1F;
+}
+
+.dark .bg-card-light {
+  background-color: #1C1C1E;
+  color: #FFFFFF;
 }
 
 .border-default {
@@ -438,24 +509,46 @@ body {
   border-color: var(--border-glow);
 }
 
-/* Yin-Yang contrast cards */
+/* Yin-Yang contrast cards with improved readability */
 .card-yin {
-  background: linear-gradient(135deg, var(--card-bg) 0%, var(--card-bg-secondary) 100%);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #1D1D1F;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card-yin {
+  background: #1C1C1E;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .card-yang {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  color: #000000;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #1D1D1F;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card-yang {
+  background: #2C2C2E;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .glass-light {
-  background: var(--glass-light);
-  backdrop-filter: blur(12px) saturate(180%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  color: #000000;
+  color: #1D1D1F;
+}
+
+.dark .glass-light {
+  background: rgba(28, 28, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
 }
 
 /* Glow effects */
