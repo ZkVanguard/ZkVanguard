@@ -8,6 +8,7 @@ import { formatEther } from 'viem';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { usePositions } from '@/contexts/PositionsContext';
 
 interface TokenPosition {
   symbol: string;
@@ -33,13 +34,16 @@ interface OnChainPortfolio {
 export function PositionsList({ address }: { address: string }) {
   const { isConnected } = useAccount();
   const { data: portfolioCount, refetch } = usePortfolioCount();
-  const [positions, setPositions] = useState<TokenPosition[]>([]);
+  const { positionsData, loading: positionsLoading, error: positionsError, refetch: refetchPositions } = usePositions();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [totalValue, setTotalValue] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Derived from context
+  const positions = positionsData?.positions || [];
+  const totalValue = positionsData?.totalValue || 0;
+  const lastUpdated = positionsData ? new Date(positionsData.lastUpdated) : null;
+  const error = positionsError;
   
   // Deposit modal state
   const [depositModalOpen, setDepositModalOpen] = useState(false);
@@ -130,36 +134,8 @@ export function PositionsList({ address }: { address: string }) {
 
   const handleWithdrawSuccess = () => {
     // Refresh data after successful withdrawal
-    fetchPositions();
+    refetchPositions();
     fetchOnChainPortfolios();
-  };
-
-  // Fetch wallet token positions via API (real holdings)
-  const fetchPositions = async () => {
-    try {
-      setError(null);
-      console.log('📊 [PositionsList] Fetching positions for:', address);
-      
-      const res = await fetch(`/api/positions?address=${encodeURIComponent(address)}`);
-      
-      if (!res.ok) {
-        throw new Error(`API returned ${res.status}`);
-      }
-      
-      const data = await res.json();
-      console.log('📊 [PositionsList] API response:', data);
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      setPositions(data.positions || []);
-      setTotalValue(data.totalValue || 0);
-      setLastUpdated(new Date());
-    } catch (err: any) {
-      console.error('Failed to fetch positions:', err);
-      setError(err.message);
-    }
   };
 
   // Fetch on-chain portfolios from contract
@@ -190,29 +166,17 @@ export function PositionsList({ address }: { address: string }) {
               assets: p.assets || [],
             };
             
-            // Fetch actual portfolio positions to get real value
-            try {
-              const positionsRes = await fetch(`/api/positions?address=${portfolio.owner}`);
-              if (positionsRes.ok) {
-                const posData = await positionsRes.json();
-                if (posData && !posData.error) {
-                  // Store positions data on portfolio object
-                  (portfolio as any).positionsData = posData;
-                  // Calculate total value from positions
-                  const totalValue = posData.positions?.reduce((sum: number, pos: any) => 
-                    sum + (parseFloat(pos.balanceUSD) || 0), 0) || 0;
-                  (portfolio as any).calculatedValue = totalValue;
-                }
-              }
-            } catch (error) {
-              console.warn(`Failed to fetch positions for portfolio ${i}:`, error);
+            // Use positions data from context instead of fetching again
+            if (positionsData && positionsData.address.toLowerCase() === portfolio.owner.toLowerCase()) {
+              (portfolio as any).positionsData = positionsData;
+              (portfolio as any).calculatedValue = positionsData.totalValue;
             }
             
             // Fetch Delphi predictions specific to this portfolio
             try {
-              const portfolioAssets = positions
-                .filter(pos => parseFloat(pos.balance) > 0)
-                .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, ''));
+              const portfolioAssets = positionsData?.positions
+                ?.filter(pos => parseFloat(pos.balance) > 0)
+                .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, '')) || [];
               
               const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
                 portfolioAssets,
@@ -241,27 +205,19 @@ export function PositionsList({ address }: { address: string }) {
   useEffect(() => {
     async function loadAll() {
       setLoading(true);
-      await Promise.all([fetchPositions(), fetchOnChainPortfolios()]);
+      await fetchOnChainPortfolios();
       setLoading(false);
     }
     
-    if (address && isConnected) {
+    if (address && isConnected && positionsData) {
       loadAll();
     }
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(() => {
-      if (address && isConnected) {
-        fetchPositions();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
+  }, [address, isConnected, positionsData]);
   }, [address, isConnected, portfolioCount]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPositions(), fetchOnChainPortfolios()]);
+    await Promise.all([refetchPositions(), fetchOnChainPortfolios()]);
     refetch();
     setRefreshing(false);
   };

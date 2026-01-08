@@ -6,6 +6,7 @@ import { CronosTestnet, CronosMainnet } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
+import { PositionsProvider } from '../contexts/PositionsContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
@@ -44,7 +45,9 @@ export function Providers({ children }: { children: ReactNode }) {
               fontStack: 'system',
             })}
           >
-            {children}
+            <PositionsProvider>
+              {children}
+            </PositionsProvider>
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
