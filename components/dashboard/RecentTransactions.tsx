@@ -246,6 +246,8 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       txList.sort((a, b) => b.timestamp - a.timestamp);
       
       console.log(`Final transaction count: ${txList.length}`);
+      console.log('Transaction types:', txList.map(tx => tx.type).join(', '));
+      console.log('First 3 transactions:', txList.slice(0, 3));
       setTransactions(txList);
     } catch (err) {
       console.error('Error fetching transactions:', err);
@@ -271,6 +273,8 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
     if (filter === 'withdraw') return tx.type === 'withdraw';
     return true;
   });
+
+  console.log(`Transactions in state: ${transactions.length}, Filtered: ${filteredTransactions.length}, Filter: ${filter}`);
 
   const getTypeIcon = (type: Transaction['type']) => {
     switch (type) {
