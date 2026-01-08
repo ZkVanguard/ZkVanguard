@@ -139,10 +139,10 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
         
         // Get recent blocks to scan for transactions
         const currentBlock = await publicClient.getBlockNumber();
-        // Scan more blocks - up to 50000 (about 17 hours on Cronos)
-        const fromBlock = currentBlock > BigInt(50000) ? currentBlock - BigInt(50000) : BigInt(0);
+        // Cronos RPC has a 2000 block limit per request, scan last 2000 blocks
+        const fromBlock = currentBlock > BigInt(2000) ? currentBlock - BigInt(2000) : BigInt(0);
         
-        console.log(`Scanning blocks ${fromBlock} to ${currentBlock}`);
+        console.log(`Scanning blocks ${fromBlock} to ${currentBlock} (2000 block limit)`);
 
         // Fetch transactions using logs
         const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
