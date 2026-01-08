@@ -26,7 +26,8 @@ export interface DelphiInsight {
 
 export class DelphiMarketService {
   private static readonly API_URL = process.env.NEXT_PUBLIC_DELPHI_API || 'https://api.delphi.markets';
-  private static readonly MOCK_MODE = false; // Disabled - using real Delphi API
+  private static readonly POLYMARKET_API = 'https://gamma-api.polymarket.com/markets';
+  private static readonly MOCK_MODE = false; // Disabled - using real APIs
 
   /**
    * Get predictions relevant to a specific portfolio strategy
@@ -69,23 +70,151 @@ export class DelphiMarketService {
   }
 
   /**
+   * Fetch real Polymarket data as backup when Delphi API is unavailable
+   */
+  static async fetchPolymarketData(assets: string[]): Promise<PredictionMarket[]> {
+    try {
+      console.log('Fetching live Polymarket data for assets:', assets);
+      const response = await fetch(this.POLYMARKET_API, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Polymarket API failed: ${response.status}`);
+      }
+
+      const markets = await response.json();
+      console.log(`Fetched ${markets.length} Polymarket markets`);
+
+      // Filter crypto-related markets
+      const cryptoMarkets = markets
+        .filter((m: any) => {
+          const q = m.question?.toLowerCase() || '';
+          const cat = m.category?.toLowerCase() || '';
+          return cat.includes('crypto') || 
+                 q.includes('bitcoin') || 
+                 q.includes('btc') || 
+                 q.includes('ethereum') || 
+                 q.includes('eth') ||
+                 q.includes('crypto') ||
+                 q.includes('defi') ||
+                 q.includes('stablecoin');
+        })
+        .filter((m: any) => m.active && !m.closed) // Only active markets
+        .slice(0, 20); // Limit to 20 markets
+
+      console.log(`Filtered to ${cryptoMarkets.length} active crypto markets`);
+
+      // Convert Polymarket format to our format
+      return cryptoMarkets.map((market: any) => {
+        const question = market.question || 'Unknown prediction';
+        const prices = market.outcomePrices || ['0.5', '0.5'];
+        const probability = parseFloat(prices[0]) * 100; // Convert to percentage
+        const volume = parseFloat(market.volume || 0);
+        
+        // Determine related assets from question text
+        const relatedAssets: string[] = [];
+        const q = question.toLowerCase();
+        if (q.includes('bitcoin') || q.includes('btc')) relatedAssets.push('BTC');
+        if (q.includes('ethereum') || q.includes('eth')) relatedAssets.push('ETH');
+        if (q.includes('stablecoin') || q.includes('usdc') || q.includes('usdt')) {
+          relatedAssets.push('USDC', 'USDT', 'DAI');
+        }
+        if (q.includes('cronos') || q.includes('cro')) relatedAssets.push('CRO');
+        if (q.includes('crypto') && relatedAssets.length === 0) {
+          // General crypto prediction
+          relatedAssets.push('BTC', 'ETH', 'CRO');
+        }
+
+        // Determine impact based on volume
+        let impact: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
+        if (volume > 500000) impact = 'HIGH';
+        else if (volume > 100000) impact = 'MODERATE';
+
+        // Determine recommendation
+        let recommendation: 'HEDGE' | 'MONITOR' | 'IGNORE' = 'MONITOR';
+        if (probability > 70 && impact === 'HIGH') recommendation = 'HEDGE';
+        else if (probability < 30 || impact === 'LOW') recommendation = 'IGNORE';
+
+        return {
+          id: `polymarket-${market.id || Math.random()}`,
+          question,
+          category: 'price' as const,
+          probability,
+          volume: `$${(volume / 1000).toFixed(0)}K`,
+          impact,
+          relatedAssets,
+          lastUpdate: Date.now(),
+          confidence: Math.min(100, Math.floor(volume / 10000)), // Confidence based on volume
+          recommendation,
+        };
+      }).filter((pred: PredictionMarket) => pred.relatedAssets.length > 0); // Only include markets with identified assets
+
+    } catch (error) {
+      console.error('Polymarket API error:', error);
+      throw error; // Re-throw to fall back to hardcoded data
+    }
+  }
+
+  /**
    * Get relevant prediction markets for portfolio assets
    */
   static async getRelevantMarkets(assets: string[]): Promise<PredictionMarket[]> {
+    // Try Delphi API first
     try {
-      // In production, fetch from real Delphi/Polymarket API
       const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`);
-      if (!response.ok) throw new Error('Failed to fetch markets');
+      if (!response.ok) throw new Error('Delphi API unavailable');
       
       const data = await response.json();
+      console.log('Using Delphi API data');
       return this.parseMarkets(data, assets);
-    } catch (error) {
-      // API unavailable - use realistic predictions based on Polymarket data
-      console.log('Using Polymarket-based predictions for assets:', assets);
-      const predictions = this.parseMarkets([], assets);
-      console.log('Parsed predictions:', predictions.length);
-      return predictions;
+    } catch (delphiError) {
+      console.log('Delphi API unavailable, trying Polymarket API...');
+      
+      // Try Polymarket API as backup
+      try {
+        const polymarketData = await this.fetchPolymarketData(assets);
+        console.log(`Using live Polymarket data: ${polymarketData.length} predictions`);
+        
+        // Filter to relevant assets
+        return this.filterByAssets(polymarketData, assets);
+      } catch (polymarketError) {
+        console.log('Polymarket API also unavailable, using fallback predictions');
+        
+        // Last resort: use hardcoded realistic predictions
+        const predictions = this.parseMarkets([], assets);
+        console.log('Using fallback predictions:', predictions.length);
+        return predictions;
+      }
     }
+  }
+
+  /**
+   * Filter predictions by portfolio assets
+   */
+  static filterByAssets(predictions: PredictionMarket[], portfolioAssets: string[]): PredictionMarket[] {
+    if (portfolioAssets.length === 0) return predictions;
+
+    const normalizedAssets = portfolioAssets.map(a => 
+      a.toUpperCase().replace(/^(W|DEV)/, '') // Strip WBTC → BTC, devUSDC → USDC
+    );
+
+    return predictions.filter(market => {
+      const matchingAssets = market.relatedAssets.filter(asset => 
+        normalizedAssets.includes(asset)
+      );
+
+      // For specific predictions (1-2 assets): show if any asset matches
+      if (market.relatedAssets.length <= 2) {
+        return matchingAssets.length > 0;
+      }
+
+      // For broad predictions (3+ assets): require 50% match
+      const matchPercentage = matchingAssets.length / market.relatedAssets.length;
+      return matchPercentage >= 0.5;
+    });
   }
 
   /**
@@ -533,32 +662,8 @@ export class DelphiMarketService {
       },
     ];
 
-    // Filter based on portfolio assets
-    if (!portfolioAssets || portfolioAssets.length === 0) {
-      return realisticMarkets;
-    }
-
-    // Normalize asset names (handle WBTC, devUSDC, etc.)
-    const normalizedAssets = portfolioAssets.map(a => 
-      a.toUpperCase().replace(/^(W|DEV)/, '')
-    );
-
-    return realisticMarkets.filter(market => {
-      const matchingAssets = market.relatedAssets.filter(asset => {
-        const normalized = asset.toUpperCase().replace(/^(W|DEV)/, '');
-        return normalizedAssets.includes(normalized);
-      });
-
-      // No match
-      if (matchingAssets.length === 0) return false;
-
-      // Specific predictions (1-2 assets): show if any match
-      if (market.relatedAssets.length <= 2) return true;
-
-      // Broad predictions (3+ assets): require 50%+ match
-      const matchPercentage = matchingAssets.length / market.relatedAssets.length;
-      return matchPercentage >= 0.5;
-    });
+    // Filter based on portfolio assets using the shared function
+    return this.filterByAssets(realisticMarkets, portfolioAssets);
   }
 
   /**
