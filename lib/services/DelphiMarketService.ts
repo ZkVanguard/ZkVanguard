@@ -89,24 +89,40 @@ export class DelphiMarketService {
       const markets = await response.json();
       console.log(`Fetched ${markets.length} Polymarket markets`);
 
-      // Filter crypto-related markets
+      // Filter crypto-related markets (relaxed filtering)
       const cryptoMarkets = markets
         .filter((m: any) => {
           const q = m.question?.toLowerCase() || '';
           const cat = m.category?.toLowerCase() || '';
+          const tags = m.tags?.join(' ').toLowerCase() || '';
+          
+          // More relaxed crypto filtering
           return cat.includes('crypto') || 
+                 tags.includes('crypto') ||
                  q.includes('bitcoin') || 
                  q.includes('btc') || 
                  q.includes('ethereum') || 
                  q.includes('eth') ||
                  q.includes('crypto') ||
                  q.includes('defi') ||
-                 q.includes('stablecoin');
+                 q.includes('stablecoin') ||
+                 q.includes('usdc') ||
+                 q.includes('usdt') ||
+                 q.includes('dai') ||
+                 q.includes('price') ||
+                 q.includes('$');
         })
-        .filter((m: any) => m.active && !m.closed) // Only active markets
+        .filter((m: any) => {
+          // More flexible active check - accept unless explicitly closed/resolved
+          const isActive = m.closed !== true && m.resolved !== true && m.archived !== true;
+          return isActive;
+        })
         .slice(0, 20); // Limit to 20 markets
 
       console.log(`Filtered to ${cryptoMarkets.length} active crypto markets`);
+      if (cryptoMarkets.length > 0) {
+        console.log('Sample market:', cryptoMarkets[0]);
+      }
 
       // Convert Polymarket format to our format
       return cryptoMarkets.map((market: any) => {
