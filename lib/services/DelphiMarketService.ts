@@ -81,8 +81,10 @@ export class DelphiMarketService {
       return this.parseMarkets(data, assets);
     } catch (error) {
       // API unavailable - use realistic predictions based on Polymarket data
-      console.warn('Delphi API unavailable, using Polymarket-based predictions');
-      return this.parseMarkets([], assets);
+      console.log('Using Polymarket-based predictions for assets:', assets);
+      const predictions = this.parseMarkets([], assets);
+      console.log('Parsed predictions:', predictions.length);
+      return predictions;
     }
   }
 
