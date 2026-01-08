@@ -213,7 +213,6 @@ export function PositionsList({ address }: { address: string }) {
       loadAll();
     }
   }, [address, isConnected, positionsData]);
-  }, [address, isConnected, portfolioCount]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
