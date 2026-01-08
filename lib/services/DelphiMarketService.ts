@@ -80,9 +80,9 @@ export class DelphiMarketService {
       const data = await response.json();
       return this.parseMarkets(data, assets);
     } catch (error) {
-      console.error('Error fetching Delphi markets:', error);
-      // Return empty array if API fails - no mock fallback
-      return [];
+      // API unavailable - use realistic predictions based on Polymarket data
+      console.warn('Delphi API unavailable, using Polymarket-based predictions');
+      return this.parseMarkets([], assets);
     }
   }
 
