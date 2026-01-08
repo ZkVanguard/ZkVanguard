@@ -40,10 +40,10 @@ export function ConnectButton() {
                   <button
                     onClick={openConnectModal}
                     type="button"
-                    className="px-4 sm:px-6 py-2 sm:py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl font-semibold text-sm sm:text-base transition-all flex items-center space-x-2 shadow-ios-lg hover:shadow-glow-primary"
+                    className="px-5 h-11 bg-ios-blue hover:opacity-90 active:opacity-80 text-white rounded-ios-lg font-semibold text-callout transition-opacity flex items-center gap-2 shadow-ios-1"
                   >
                     <Wallet className="w-4 h-4" />
-                    <span>Connect Wallet</span>
+                    <span>Connect</span>
                   </button>
                 );
               }
@@ -53,7 +53,7 @@ export function ConnectButton() {
                   <button
                     onClick={openChainModal}
                     type="button"
-                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-500 font-medium hover:bg-red-500/20 transition-all"
+                    className="px-4 h-11 bg-ios-red/10 border border-ios-red/30 rounded-ios-lg text-ios-red font-medium hover:bg-ios-red/20 transition-all"
                   >
                     Wrong network
                   </button>
@@ -65,7 +65,7 @@ export function ConnectButton() {
                   <button
                     onClick={openChainModal}
                     type="button"
-                    className="px-3 py-2 bg-gray-800 border border-gray-700 hover:border-primary-500 rounded-2xl transition-all shadow-ios hidden sm:flex items-center gap-2"
+                    className="px-3 h-11 bg-system-bg-secondary hover:bg-ios-gray5 border border-separator-opaque rounded-ios-lg transition-colors shadow-ios-1 hidden sm:flex items-center gap-2"
                   >
                     {chain.hasIcon && (
                       <div
@@ -86,7 +86,7 @@ export function ConnectButton() {
                         )}
                       </div>
                     )}
-                    <span className="text-sm font-medium text-white">
+                    <span className="text-callout font-medium text-label-primary">
                       {chain.name}
                     </span>
                   </button>
@@ -94,10 +94,10 @@ export function ConnectButton() {
                   <button
                     onClick={openAccountModal}
                     type="button"
-                    className="px-4 py-2 bg-gray-800 border border-gray-700 hover:border-primary-500 rounded-2xl transition-all flex items-center space-x-2 shadow-ios"
+                    className="px-4 h-11 bg-system-bg-secondary hover:bg-ios-gray5 border border-separator-opaque rounded-ios-lg transition-colors flex items-center gap-2 shadow-ios-1"
                   >
-                    <Wallet className="w-4 h-4 text-primary-500" />
-                    <span className="text-white font-medium">
+                    <Wallet className="w-4 h-4 text-ios-blue" />
+                    <span className="text-label-primary font-medium text-callout">
                       {account.displayName}
                     </span>
                   </button>

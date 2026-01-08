@@ -7,67 +7,84 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
+      },
       colors: {
-        primary: {
-          50: '#e6f2ff',
-          100: '#cce5ff',
-          200: '#99ccff',
-          300: '#66b2ff',
-          400: '#3399ff',
-          500: '#007aff',  // iOS Blue
-          600: '#0062cc',
-          700: '#004999',
-          800: '#003166',
-          900: '#001933',
-          950: '#000d1a',
+        // Apple iOS System Colors - Light Mode
+        ios: {
+          blue: '#007AFF',
+          green: '#34C759',
+          orange: '#FF9500',
+          red: '#FF3B30',
+          gray: '#8E8E93',
+          gray2: '#AEAEB2',
+          gray3: '#C7C7CC',
+          gray4: '#D1D1D6',
+          gray5: '#E5E5EA',
+          gray6: '#F2F2F7',
         },
-        secondary: {
-          50: '#e6f9ed',
-          100: '#ccf3db',
-          200: '#99e7b7',
-          300: '#66db93',
-          400: '#4dd680',
-          500: '#34c759',  // iOS Green
-          600: '#2a9f47',
-          700: '#1f7735',
-          800: '#154f23',
-          900: '#0a2712',
-          950: '#051409',
+        // Text Colors (Light Mode)
+        label: {
+          primary: '#000000',
+          secondary: 'rgba(60, 60, 67, 0.6)',
+          tertiary: 'rgba(60, 60, 67, 0.3)',
+          quaternary: 'rgba(60, 60, 67, 0.18)',
         },
-        accent: {
-          50: '#e5f8fc',
-          100: '#ccf1f9',
-          200: '#99e3f3',
-          300: '#66d5ed',
-          400: '#33c7e7',
-          500: '#5ac8fa',  // iOS Light Blue
-          600: '#0082d1',
-          700: '#00619d',
-          800: '#004169',
-          900: '#002035',
-          950: '#00101a',
+        // Background Colors (Light Mode)
+        'system-bg': {
+          primary: '#FFFFFF',
+          secondary: '#F2F2F7',
+          tertiary: '#FFFFFF',
+          grouped: '#F2F2F7',
+        },
+        // Separator Colors
+        separator: {
+          opaque: '#C6C6C8',
+          nonOpaque: 'rgba(60, 60, 67, 0.29)',
         },
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, #007aff 0%, #5ac8fa 100%)',
-        'gradient-secondary': 'linear-gradient(135deg, #34c759 0%, #30d158 100%)',
-        'gradient-accent': 'linear-gradient(135deg, #5ac8fa 0%, #007aff 100%)',
+      spacing: {
+        // 8pt grid system
+        '4.5': '18px',  // 18pt
+        '5.5': '22px',  // 22pt (44pt touch target / 2)
+        '11': '44px',   // 44pt minimum touch target
+        '15': '60px',
+        '18': '72px',
       },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'spin-slow': 'spin 3s linear infinite',
-        'gradient-shift': 'gradientShift 4s ease infinite',
-        'slide-up': 'slideUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-        'fade-in': 'fadeIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      fontSize: {
+        // Apple Typography Scale
+        'large-title': ['34px', { lineHeight: '41px', letterSpacing: '0.37px', fontWeight: '700' }],
+        'title-1': ['28px', { lineHeight: '34px', letterSpacing: '0.36px', fontWeight: '700' }],
+        'title-2': ['22px', { lineHeight: '28px', letterSpacing: '0.35px', fontWeight: '700' }],
+        'title-3': ['20px', { lineHeight: '25px', letterSpacing: '0.38px', fontWeight: '600' }],
+        'headline': ['17px', { lineHeight: '22px', letterSpacing: '-0.41px', fontWeight: '600' }],
+        'body': ['17px', { lineHeight: '22px', letterSpacing: '-0.41px', fontWeight: '400' }],
+        'callout': ['16px', { lineHeight: '21px', letterSpacing: '-0.32px', fontWeight: '400' }],
+        'subheadline': ['15px', { lineHeight: '20px', letterSpacing: '-0.24px', fontWeight: '400' }],
+        'footnote': ['13px', { lineHeight: '18px', letterSpacing: '-0.08px', fontWeight: '400' }],
+        'caption-1': ['12px', { lineHeight: '16px', letterSpacing: '0px', fontWeight: '400' }],
+        'caption-2': ['11px', { lineHeight: '13px', letterSpacing: '0.06px', fontWeight: '400' }],
+      },
+      borderRadius: {
+        'ios': '10px',
+        'ios-lg': '12px',
+        'ios-xl': '16px',
       },
       boxShadow: {
-        'glow-primary': '0 0 20px rgba(0, 122, 255, 0.3)',
-        'glow-secondary': '0 0 20px rgba(52, 199, 89, 0.3)',
-        'glow-accent': '0 0 20px rgba(90, 200, 250, 0.3)',
-        'ios': '0 2px 10px rgba(0, 0, 0, 0.08)',
-        'ios-lg': '0 8px 30px rgba(0, 0, 0, 0.12)',
+        // Apple elevation (subtle shadows, no glows)
+        'ios-1': '0 1px 3px rgba(0, 0, 0, 0.04)',
+        'ios-2': '0 4px 12px rgba(0, 0, 0, 0.08)',
+        'ios-3': '0 8px 24px rgba(0, 0, 0, 0.12)',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
     },
   },
