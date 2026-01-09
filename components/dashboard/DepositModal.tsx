@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, CheckCircle, AlertCircle, Coins, ExternalLink } from 'lucide-react';
+import { X, Loader2, CheckCircle, AlertCircle, Coins, ExternalLink, Zap } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
+import { X402GaslessService } from '../../lib/services/X402GaslessService';
+import { ethers } from 'ethers';
 
 // Cronos Testnet tokens ONLY (verified contract addresses)
 const TESTNET_TOKENS = [
