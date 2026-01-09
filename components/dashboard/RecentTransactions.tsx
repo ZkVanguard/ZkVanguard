@@ -152,25 +152,38 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
-            topics: [
-              transferTopic,
-              `0x000000000000000000000000${address.slice(2).toLowerCase()}`,
-            ],
-          }).catch((e) => { console.log('Sent logs error:', e); return []; }),
+            event: {
+              type: 'event',
+              name: 'Transfer',
+              inputs: [
+                { type: 'address', indexed: true, name: 'from' },
+                { type: 'address', indexed: true, name: 'to' },
+                { type: 'uint256', indexed: false, name: 'value' }
+              ]
+            },
+          } as any).catch((e) => { console.log('Sent logs error:', e); return []; }),
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
-            topics: [
-              transferTopic,
-              null,
-              `0x000000000000000000000000${address.slice(2).toLowerCase()}`,
-            ],
-          }).catch((e) => { console.log('Received logs error:', e); return []; }),
+            event: {
+              type: 'event',
+              name: 'Transfer',
+              inputs: [
+                { type: 'address', indexed: true, name: 'from' },
+                { type: 'address', indexed: true, name: 'to' },
+                { type: 'uint256', indexed: false, name: 'value' }
+              ]
+            },
+          } as any).catch((e) => { console.log('Received logs error:', e); return []; }),
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
-            topics: [swapTopic],
-          }).catch((e) => { console.log('Swap logs error:', e); return []; }),
+            event: {
+              type: 'event',
+              name: 'Swap',
+              inputs: []
+            },
+          } as any).catch((e) => { console.log('Swap logs error:', e); return []; }),
         ]);
 
         console.log(`Found logs - Sent: ${sentLogs.length}, Received: ${receivedLogs.length}, Swaps: ${swapLogs.length}`);

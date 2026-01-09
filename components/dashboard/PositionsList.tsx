@@ -129,7 +129,7 @@ export function PositionsList({ address }: { address: string }) {
 
   const handleDepositSuccess = () => {
     // Refresh data after successful deposit
-    fetchPositions();
+    refetchPositions();
     fetchOnChainPortfolios();
   };
 
@@ -296,7 +296,7 @@ export function PositionsList({ address }: { address: string }) {
           </div>
         </div>
 
-        {positions.length === 0 || (positions.length === 1 && positions[0].usdValue === 0) ? (
+        {positions.length === 0 || (positions.length === 1 && parseFloat(positions[0].balanceUSD) === 0) ? (
           <div className="text-center py-8 text-gray-400">
             <Coins className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="font-semibold">No Token Holdings Found</p>
@@ -327,11 +327,11 @@ export function PositionsList({ address }: { address: string }) {
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-lg">
-                      ${parseFloat(position.balanceUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${parseFloat(position.balanceUSD || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="flex items-center gap-1 justify-end">
                       <span className="text-sm text-gray-400">
-                        ${parseFloat(position.price || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        ${parseFloat(position.price || '0').toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>
                       {position.change24h !== 0 && (
                         <span className={`text-xs flex items-center ${position.change24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
