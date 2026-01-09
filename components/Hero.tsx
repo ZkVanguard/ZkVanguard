@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ArrowRight, Shield, Zap, TrendingUp } from 'lucide-react';
+import { ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 
 export function Hero() {
   return (
@@ -47,14 +47,14 @@ export function Hero() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-4">
                 <Link 
                   href="/dashboard" 
-                  className="group inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 h-[52px] sm:h-[56px] bg-ios-blue text-white text-callout sm:text-headline font-semibold rounded-[14px] hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(0,122,255,0.25)] w-full sm:w-auto"
+                  className="group inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 h-[52px] sm:h-[56px] bg-ios-blue text-white text-callout sm:text-headline font-semibold rounded-[14px] hover:opacity-90 active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_30px_rgba(0,122,255,0.25)] w-full sm:w-auto"
                 >
                   <span>Get Started</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
+                  <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]" strokeWidth={2.5} />
                 </Link>
                 <a 
                   href="#features"
-                  className="text-callout sm:text-headline font-medium text-ios-blue hover:text-[#0066FF] transition-colors"
+                  className="text-callout sm:text-headline font-medium text-ios-blue hover:text-[#0066FF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                 >
                   See how it works
                 </a>
@@ -70,7 +70,7 @@ export function Hero() {
                 <div className="bg-white rounded-[20px] p-7 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-black/5">
                   <div className="flex items-start gap-4 mb-5">
                     <div className="w-14 h-14 rounded-[14px] bg-[#007AFF] flex items-center justify-center flex-shrink-0">
-                      <Shield className="w-7 h-7 text-white" strokeWidth={2} />
+                      <ShieldCheckIcon className="w-7 h-7 text-white" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-[19px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
@@ -98,7 +98,7 @@ export function Hero() {
                   {/* Real-Time Data card */}
                   <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
                     <div className="w-11 h-11 rounded-[11px] bg-[#FF9500]/10 flex items-center justify-center mb-4">
-                      <TrendingUp className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
+                      <ChartBarIcon className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
                     </div>
                     <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
                       Real-Time Data
@@ -111,7 +111,7 @@ export function Hero() {
                   {/* AI Automation card */}
                   <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
                     <div className="w-11 h-11 rounded-[11px] bg-[#34C759]/10 flex items-center justify-center mb-4">
-                      <Zap className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
+                      <BoltIcon className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
                     </div>
                     <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
                       AI Automation
@@ -128,42 +128,53 @@ export function Hero() {
 
           {/* Mobile: Better feature showcase */}
           <div className="lg:hidden mt-12 space-y-4">
-            {[
-              { 
-                icon: Shield, 
-                color: 'ios-blue', 
-                title: 'Zero-Knowledge Security',
-                desc: 'Quantum-proof privacy for your portfolio'
-              },
-              { 
-                icon: Zap, 
-                color: 'ios-green', 
-                title: 'AI Automation',
-                desc: 'Autonomous trading and risk mitigation'
-              },
-              { 
-                icon: TrendingUp, 
-                color: 'ios-orange', 
-                title: 'Real-Time Data',
-                desc: 'Live market analytics and insights'
-              },
-            ].map((item, i) => (
-              <div key={i} className="bg-white rounded-ios-xl p-5 border border-separator-opaque shadow-ios-1">
-                <div className="flex items-start gap-4">
-                  <div className={`flex-shrink-0 w-11 h-11 rounded-ios-lg bg-${item.color}/10 flex items-center justify-center`}>
-                    <item.icon className={`w-5 h-5 text-${item.color}`} strokeWidth={2} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-headline font-semibold text-label-primary mb-1">
-                      {item.title}
-                    </h3>
-                    <p className="text-subheadline text-label-secondary leading-snug">
-                      {item.desc}
-                    </p>
-                  </div>
+            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#007AFF]/10 flex items-center justify-center">
+                  <ShieldCheckIcon className="w-5 h-5 text-[#007AFF]" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
+                    Zero-Knowledge Security
+                  </h3>
+                  <p className="text-[15px] text-[#86868b] leading-snug">
+                    Quantum-proof privacy for your portfolio
+                  </p>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#34C759]/10 flex items-center justify-center">
+                  <BoltIcon className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
+                    AI Automation
+                  </h3>
+                  <p className="text-[15px] text-[#86868b] leading-snug">
+                    Autonomous trading and risk mitigation
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#FF9500]/10 flex items-center justify-center">
+                  <ChartBarIcon className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
+                    Real-Time Data
+                  </h3>
+                  <p className="text-[15px] text-[#86868b] leading-snug">
+                    Live market analytics and insights
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

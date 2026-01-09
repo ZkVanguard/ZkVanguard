@@ -14,10 +14,10 @@ export function Footer() {
             <div>
               <h3 className="text-[12px] font-semibold text-[#1d1d1f] mb-4 tracking-wide">PRODUCT</h3>
               <ul className="space-y-3">
-                <li><Link href="/dashboard" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Dashboard</Link></li>
-                <li><Link href="/agents" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Agents</Link></li>
-                <li><Link href="/simulator" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Simulator</Link></li>
-                <li><Link href="/docs" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Documentation</Link></li>
+                <li><Link href="/dashboard" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">Dashboard</Link></li>
+                <li><Link href="/agents" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">Agents</Link></li>
+                <li><Link href="/simulator" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">Simulator</Link></li>
+                <li><Link href="/docs" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">Documentation</Link></li>
               </ul>
             </div>
 
