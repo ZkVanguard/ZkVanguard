@@ -22,10 +22,10 @@ interface TokenPosition {
 interface OnChainPortfolio {
   id: number;
   owner: string;
-  totalValue: bigint;
-  targetYield: bigint;
-  riskTolerance: bigint;
-  lastRebalance: bigint;
+  totalValue: string;  // Store as string to avoid BigInt serialization issues
+  targetYield: string;
+  riskTolerance: string;
+  lastRebalance: string;
   isActive: boolean;
   assets: string[];
   predictions?: PredictionMarket[]; // Delphi predictions for this portfolio
@@ -95,9 +95,9 @@ export function PositionsList({ address }: { address: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           portfolioId: portfolio.id,
-          currentValue: Number(formatEther(portfolio.totalValue)),
-          targetYield: Number(portfolio.targetYield) / 100,
-          riskTolerance: Number(portfolio.riskTolerance),
+          currentValue: parseFloat(portfolio.totalValue) / 1e6, // Assuming USDC 6 decimals
+          targetYield: parseFloat(portfolio.targetYield) / 100,
+          riskTolerance: parseFloat(portfolio.riskTolerance),
           assets: portfolioAssets,
           predictions: (portfolio.predictions || []).map(p => ({
             question: p.question,
@@ -161,10 +161,10 @@ export function PositionsList({ address }: { address: string }) {
             const portfolio: OnChainPortfolio = {
               id: i,
               owner: p.owner,
-              totalValue: BigInt(p.totalValue || 0),
-              targetYield: BigInt(p.targetYield || 0),
-              riskTolerance: BigInt(p.riskTolerance || 0),
-              lastRebalance: BigInt(p.lastRebalance || 0),
+              totalValue: p.totalValue || '0',
+              targetYield: p.targetYield || '0',
+              riskTolerance: p.riskTolerance || '0',
+              lastRebalance: p.lastRebalance || '0',
               isActive: p.isActive,
               assets: p.assets || [],
             };
@@ -177,8 +177,8 @@ export function PositionsList({ address }: { address: string }) {
               
               const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
                 portfolioAssets,
-                Number(portfolio.riskTolerance),
-                Number(portfolio.targetYield)
+                parseFloat(portfolio.riskTolerance),
+                parseFloat(portfolio.targetYield)
               );
               
               portfolio.predictions = predictions;
@@ -392,13 +392,14 @@ export function PositionsList({ address }: { address: string }) {
           <div className="space-y-4">
             {onChainPortfolios.map((portfolio) => {
               // Use totalValue from blockchain - this is what's actually deposited in the portfolio contract
-              const rawValue = Number(portfolio.totalValue);
+              const rawValue = parseFloat(portfolio.totalValue) || 0;
               const valueUSD = rawValue > 1e12 
                 ? rawValue / 1e18  // 18 decimals (ETH-like)
                 : rawValue / 1e6;  // 6 decimals (USDC-like)
               
-              const yieldPercent = Number(portfolio.targetYield) / 100;
-              const riskLevel = Number(portfolio.riskTolerance) <= 33 ? 'Low' : Number(portfolio.riskTolerance) <= 66 ? 'Medium' : 'High';
+              const yieldPercent = parseFloat(portfolio.targetYield) / 100;
+              const riskValue = parseFloat(portfolio.riskTolerance) || 0;
+              const riskLevel = riskValue <= 33 ? 'Low' : riskValue <= 66 ? 'Medium' : 'High';
               const riskColor = riskLevel === 'Low' ? 'text-green-400' : riskLevel === 'Medium' ? 'text-yellow-400' : 'text-red-400';
               const isOwner = portfolio.owner.toLowerCase() === address.toLowerCase();
               const hasFunds = valueUSD > 0 || portfolio.assets.length > 0;
@@ -447,7 +448,7 @@ export function PositionsList({ address }: { address: string }) {
                     <div>
                       <div className="text-xs text-gray-400 mb-1">Risk Level</div>
                       <div className={`text-lg font-bold ${riskColor}`}>
-                        {riskLevel} ({Number(portfolio.riskTolerance)}/100)
+                        {riskLevel} ({riskValue}/100)
                       </div>
                     </div>
                     <div>
@@ -638,8 +639,8 @@ export function PositionsList({ address }: { address: string }) {
           isOpen={depositModalOpen}
           onClose={closeDepositModal}
           portfolioId={selectedPortfolio.id}
-          targetYield={Number(selectedPortfolio.targetYield) / 100}
-          riskTolerance={Number(selectedPortfolio.riskTolerance)}
+          targetYield={parseFloat(selectedPortfolio.targetYield) / 100}
+          riskTolerance={parseFloat(selectedPortfolio.riskTolerance)}
           onSuccess={handleDepositSuccess}
         />
       )}
@@ -651,7 +652,7 @@ export function PositionsList({ address }: { address: string }) {
           onClose={closeWithdrawModal}
           portfolioId={selectedWithdrawPortfolio.id}
           assets={selectedWithdrawPortfolio.assets}
-          totalValue={Number(selectedWithdrawPortfolio.totalValue)}
+          totalValue={parseFloat(selectedWithdrawPortfolio.totalValue)}
           onSuccess={handleWithdrawSuccess}
         />
       )}
