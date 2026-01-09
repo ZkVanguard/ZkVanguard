@@ -21,22 +21,21 @@ describe('Real System Validation', () => {
   });
 
   describe('Price Data Verification', () => {
-    it('should fetch REAL prices from CoinGecko API', async () => {
+    it('should fetch REAL prices from Crypto.com Exchange API', async () => {
       const response = await axios.get(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd'
+        'http://localhost:3000/api/prices?symbols=BTC,ETH&source=exchange'
       );
       
       expect(response.data).toBeDefined();
-      expect(response.data.bitcoin).toBeDefined();
-      expect(response.data.bitcoin.usd).toBeGreaterThan(0);
-      expect(response.data.ethereum).toBeDefined();
-      expect(response.data.ethereum.usd).toBeGreaterThan(0);
+      expect(response.data.prices).toBeDefined();
+      expect(response.data.prices.BTC).toBeGreaterThan(0);
+      expect(response.data.prices.ETH).toBeGreaterThan(0);
       
       // Prices should be in realistic ranges
-      expect(response.data.bitcoin.usd).toBeGreaterThan(20000); // BTC > $20k
-      expect(response.data.bitcoin.usd).toBeLessThan(200000); // BTC < $200k
-      expect(response.data.ethereum.usd).toBeGreaterThan(1000); // ETH > $1k
-      expect(response.data.ethereum.usd).toBeLessThan(10000); // ETH < $10k
+      expect(response.data.prices.BTC).toBeGreaterThan(20000); // BTC > $20k
+      expect(response.data.prices.BTC).toBeLessThan(200000); // BTC < $200k
+      expect(response.data.prices.ETH).toBeGreaterThan(1000); // ETH > $1k
+      expect(response.data.prices.ETH).toBeLessThan(10000); // ETH < $10k
     }, 10000);
 
     it('should get different prices at different times', async () => {

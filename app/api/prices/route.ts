@@ -1,0 +1,191 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+
+/**
+ * Enhanced Market Data API using Crypto.com Exchange API
+ * Supports both single and batch price queries
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const symbol = searchParams.get('symbol');
+    const symbols = searchParams.get('symbols')?.split(',').map(s => s.trim());
+    const source = searchParams.get('source') || 'auto'; // 'auto', 'exchange', 'fallback'
+
+    // Batch request
+    if (symbols && symbols.length > 0) {
+      console.log(`[Market Data API] Fetching batch prices for: ${symbols.join(', ')}`);
+      
+      if (source === 'exchange') {
+        // Direct from Exchange API
+        const prices = await cryptocomExchangeService.getBatchPrices(symbols);
+        return NextResponse.json({
+          success: true,
+          data: Object.entries(prices).map(([sym, price]) => ({
+            symbol: sym,
+            price,
+            source: 'cryptocom-exchange',
+          })),
+          source: 'cryptocom-exchange',
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        // Use fallback system (auto)
+        const marketData = getMarketDataService();
+        const pricePromises = symbols.map(sym => marketData.getTokenPrice(sym));
+        const prices = await Promise.all(pricePromises);
+        
+        return NextResponse.json({
+          success: true,
+          data: prices.map(p => ({
+            symbol: p.symbol,
+            price: p.price,
+            change24h: p.change24h,
+            volume24h: p.volume24h,
+            source: p.source,
+          })),
+          source: 'multi-source-fallback',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Single symbol request
+    if (!symbol) {
+      return NextResponse.json(
+        { error: 'Either symbol or symbols parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
+
+    if (source === 'exchange') {
+      // Direct from Exchange API with full market data
+      const marketData = await cryptocomExchangeService.getMarketData(symbol);
+      return NextResponse.json({
+        success: true,
+        data: {
+          symbol: marketData.symbol,
+          price: marketData.price,
+          change24h: marketData.change24h,
+          volume24h: marketData.volume24h,
+          high24h: marketData.high24h,
+          low24h: marketData.low24h,
+          source: marketData.source,
+        },
+        source: 'cryptocom-exchange',
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Use fallback system
+      const marketData = getMarketDataService();
+      const price = await marketData.getTokenPrice(symbol);
+      
+      return NextResponse.json({
+        success: true,
+        data: {
+          symbol: price.symbol,
+          price: price.price,
+          change24h: price.change24h,
+          volume24h: price.volume24h,
+          source: price.source,
+        },
+        source: 'multi-source-fallback',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error: any) {
+    console.error('[Market Data API] Error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Failed to fetch market data',
+        details: error.message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { symbols, action = 'prices' } = body;
+
+    if (!symbols || !Array.isArray(symbols)) {
+      return NextResponse.json(
+        { error: 'Symbols array is required' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Market Data API] POST request for ${symbols.length} symbols, action: ${action}`);
+
+    switch (action) {
+      case 'prices': {
+        // Batch price fetch using Exchange API
+        const prices = await cryptocomExchangeService.getBatchPrices(symbols);
+        return NextResponse.json({
+          success: true,
+          action: 'prices',
+          data: prices,
+          source: 'cryptocom-exchange',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'market-data': {
+        // Full market data for each symbol
+        const dataPromises = symbols.map(sym => 
+          cryptocomExchangeService.getMarketData(sym).catch(err => ({
+            symbol: sym,
+            error: err.message,
+          }))
+        );
+        const marketData = await Promise.all(dataPromises);
+        
+        return NextResponse.json({
+          success: true,
+          action: 'market-data',
+          data: marketData,
+          source: 'cryptocom-exchange',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'tickers': {
+        // Get all available tickers
+        const tickers = await cryptocomExchangeService.getAllTickers();
+        return NextResponse.json({
+          success: true,
+          action: 'tickers',
+          data: {
+            count: tickers.length,
+            tickers: tickers.slice(0, 100), // Limit to first 100 for response size
+          },
+          source: 'cryptocom-exchange',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      default: {
+        return NextResponse.json(
+          { error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
+      }
+    }
+  } catch (error: any) {
+    console.error('[Market Data API] POST error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Failed to process request',
+        details: error.message,
+      },
+      { status: 500 }
+    );
+  }
+}

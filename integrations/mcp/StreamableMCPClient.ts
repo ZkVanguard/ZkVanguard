@@ -45,7 +45,7 @@ class StreamableMCPClient {
    */
   async connect(): Promise<void> {
     // Disabled - MCP is for Claude Desktop integration
-    throw new Error('MCP direct connection not available - use CoinGecko fallback');
+    throw new Error('MCP direct connection not available - using Exchange API fallback');
     
     if (this.connected && this.client) {
       return; // Already connected

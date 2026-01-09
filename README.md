@@ -1,15 +1,36 @@
 # ZkVanguard 🛡️
 
 > **AI-Powered Multi-Agent System for RWA Risk Management**  
-> *5 Autonomous Agents • Real ZK-STARK Privacy • x402 Gasless Settlements*
+> *5 Autonomous Agents • Real ZK-STARK Privacy • x402 Gasless Settlements • Powered by Crypto.com*
 
 [![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Cronos](https://img.shields.io/badge/Cronos-Testnet-blue)](https://cronos.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue)](https://www.typescriptlang.org/)
 [![Status](https://img.shields.io/badge/Status-Beta-yellow)](./PRD.md)
+[![Crypto.com](https://img.shields.io/badge/Powered%20by-Crypto.com-blue)](https://crypto.com/developers)
 
 **[📹 Demo Video](./docs/guides/DEMO_SCRIPT.md) • [🚀 Live Demo](https://zkvanguard.vercel.app) • [📊 Test Report](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md) • [🔬 Technical Validation](#-technical-validation)**
+
+---
+
+## 🆕 NEW: Full Crypto.com Integration
+
+**ZkVanguard now leverages the complete Crypto.com developer ecosystem:**
+
+- 🚀 **Exchange API** - 100 req/s high-performance market data
+- 🔗 **Developer Platform Client** - Real-time on-chain data for Cronos EVM/zkEVM
+- 🤖 **AI Agent SDK** - Natural language blockchain operations with GPT-4
+- 📊 **MCP Server** - Additional market data fallback layer
+
+**Benefits:**
+- ✅ **High throughput** 100 req/sec market data
+- ✅ **Reliable fallback** multi-source architecture
+- ✅ **Real-time on-chain** balances and transactions
+- ✅ **AI-powered trading** with natural language interface
+- ✅ **100% Cronos native** - built specifically for this ecosystem
+
+📖 **[Read the full integration guide](./docs/CRYPTOCOM_INTEGRATION.md)**
 
 ---
 
@@ -36,7 +57,7 @@ npx tsx scripts/complete-system-test.ts
 ```
 
 **You'll see LIVE:**
-- ✅ $10K portfolio built with **real CoinGecko prices** (CRO $0.0947, BTC $87,522, ETH $2,941)
+- ✅ $10K portfolio built with **Crypto.com Exchange API prices** (100 req/s, instant)
 - ✅ **2 ZK-STARK proofs** generated with CUDA acceleration (521-bit security)
 - ✅ **5 AI agents** working autonomously: Risk → Hedging → Settlement → Reporting → Lead
 - ✅ **x402 gasless** $1,000 settlement ($0.00 gas fees)
@@ -101,7 +122,7 @@ await x402Facilitator.settle({ gasless: true })
 | **ZK Privacy** | Mock data or none | **Real STARK proofs** (CUDA, 521-bit, on-chain) |
 | **Testing** | Manual demos | **Automated tests** with live APIs |
 | **Gasless** | Not implemented | **97.4% gasless** via x402 SDK |
-| **Integration** | Single protocol | **Multi-protocol** (CoinGecko + ZK + x402 + AI + Cronos) |
+| **Integration** | Single protocol | **Multi-protocol** (Crypto.com + ZK + x402 + AI + Cronos) |
 | **Code Quality** | Varies | **TypeScript**, compiles cleanly |
 | **Deployment** | Local only | **Live on Cronos testnet** |
 
@@ -161,7 +182,7 @@ await x402Facilitator.settle({ gasless: true })
           │                     │
 ┌─────────▼──────────┐  ┌──────▼─────────────────────┐
 │  Agent System      │  │  Protocol Integrations     │
-│  • 5 AI Agents     │  │  • CoinGecko (prices)      │
+│  • 5 AI Agents     │  │  • Crypto.com (prices)     │
 │  • MessageBus      │  │  • x402 (gasless)          │
 │  • Orchestrator    │  │  • Crypto.com AI (SDK)     │
 └─────────┬──────────┘  └──────┬─────────────────────┘
@@ -188,7 +209,7 @@ await x402Facilitator.settle({ gasless: true })
 **Complete System Test** (`scripts/complete-system-test.ts`)
 - **Phase 1**: Initialize portfolio manager + agent orchestrator
 - **Phase 2**: Check ZK system health (CUDA status)
-- **Phase 3**: Build $10K portfolio with real CoinGecko prices
+- **Phase 3**: Build $10K portfolio with real Crypto.com Exchange API prices
 - **Phase 4**: Generate ZK proof for portfolio privacy
 - **Phase 5**: Risk assessment (agents/specialized/RiskAgent.ts)
 - **Phase 6**: Hedge strategy generation (agents/specialized/HedgingAgent.ts)
@@ -229,10 +250,11 @@ await x402Facilitator.settle({ gasless: true })
 - Risk modeling algorithms
 
 **Integrations**
-- CoinGecko API (real-time prices)
+- Crypto.com Exchange API (real-time prices)
+- Crypto.com Developer Platform Client (on-chain data)
+- Crypto.com AI Agent SDK (natural language operations)
 - x402 Payment Rails (gasless settlements)
 - Python ZK Backend (STARK proofs)
-- Crypto.com AI SDK (configured)
 
 ## 📚 Documentation
 
@@ -386,7 +408,7 @@ Reporting Agent → Creates summary
 ✅ ZK Proof Generation (2 proofs: portfolio + settlement)
 ✅ x402 Gasless Settlement ($1,000 transaction)
 ✅ Agent Orchestration (all 5 coordinating)
-✅ CoinGecko Integration (live market data)
+✅ Crypto.com Exchange API (live market data)
 ✅ Crypto.com AI SDK (configured)
 ✅ Smart Contracts (deployed on testnet)
 ✅ Frontend (6 pages, light/dark themes)

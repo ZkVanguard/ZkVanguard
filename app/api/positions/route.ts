@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,9 +22,11 @@ export async function GET(request: NextRequest) {
     console.log(`[Positions API] Found ${portfolioData.tokens.length} tokens, total value: $${portfolioData.totalValue}`);
     
     // Get prices with 24h change for each token - PARALLEL for speed
+    // Using multi-source fallback: Crypto.com Exchange API → MCP → VVS → Cache → Mock
     const pricePromises = portfolioData.tokens.map(async (token) => {
       try {
         const priceData = await marketData.getTokenPrice(token.symbol);
+        console.log(`📊 [Positions API] ${token.symbol}: $${priceData.price} from [${priceData.source}]`);
         return {
           symbol: token.symbol,
           balance: token.balance,
@@ -31,6 +34,7 @@ export async function GET(request: NextRequest) {
           price: priceData.price.toFixed(2),
           change24h: priceData.change24h,
           token: token.token,
+          source: priceData.source,
         };
       } catch {
         return {
@@ -40,6 +44,7 @@ export async function GET(request: NextRequest) {
           price: (token.usdValue / parseFloat(token.balance || '1')).toFixed(2),
           change24h: 0,
           token: token.token,
+          source: 'fallback',
         };
       }
     });
@@ -49,11 +54,19 @@ export async function GET(request: NextRequest) {
     // Sort by USD value descending
     positionsWithPrices.sort((a, b) => parseFloat(b.balanceUSD) - parseFloat(a.balanceUSD));
     
+    // Check Exchange API health
+    const exchangeHealthy = await cryptocomExchangeService.healthCheck();
+    console.log(`🏥 [Positions API] Crypto.com Exchange API: ${exchangeHealthy ? '🟢 HEALTHY' : '🔴 DOWN'}`);
+    
     return NextResponse.json({
       address: portfolioData.address,
       totalValue: portfolioData.totalValue,
       positions: positionsWithPrices,
       lastUpdated: portfolioData.lastUpdated,
+      health: {
+        exchangeAPI: exchangeHealthy,
+        timestamp: Date.now(),
+      },
     });
   } catch (error: any) {
     console.error('[Positions API] Error:', error?.message || error);

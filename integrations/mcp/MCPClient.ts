@@ -54,8 +54,8 @@ export class MCPClient extends EventEmitter {
    */
   async connect(): Promise<void> {
     // Disabled - MCP is for Claude Desktop integration
-    // In test/development mode, we use CoinGecko fallback instead
-    logger.info('MCP direct connection disabled - using CoinGecko fallback for market data');
+    // In test/development mode, we use Exchange API fallback instead
+    logger.info('MCP direct connection disabled - using Exchange API fallback for market data');
     this.connected = false;
     return;
     
@@ -187,7 +187,7 @@ export class MCPClient extends EventEmitter {
 
       // Ensure connection
       if (!this.connected) {
-        // If MCP SSE is disabled (development/test), fall back to CoinGecko via RealMarketDataService
+        // If MCP SSE is disabled (development/test), fall back to Exchange API via RealMarketDataService
         if (!this.realMarket) {
           try {
             this.realMarket = new RealMarketDataService();

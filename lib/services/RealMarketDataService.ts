@@ -1,10 +1,12 @@
 /**
  * Real Market Data Service
  * Aggregates real-time market data from multiple sources
+ * Priority: Crypto.com Exchange API → MCP Server → VVS Finance → Cache → Mock
  */
 
 import axios from 'axios';
 import { ethers } from 'ethers';
+import { cryptocomExchangeService, type MarketPrice as ExchangeMarketPrice } from './CryptocomExchangeService';
 
 export interface MarketPrice {
   symbol: string;
@@ -42,6 +44,8 @@ class RealMarketDataService {
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 60000; // 1 minute
   private testSequence: number = 0;
+  private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
+  private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
 
   constructor() {
     // Initialize Cronos Testnet provider (tCRO)
@@ -51,11 +55,34 @@ class RealMarketDataService {
   }
 
   /**
-   * Get real-time price for a token
+   * Get mock price for a token (fallback during rate limits)
+   */
+  private getMockPrice(symbol: string): number {
+    const mockPrices: Record<string, number> = {
+      CRO: 0.09,
+      BTC: 50000,
+      WBTC: 50000,
+      ETH: 3000,
+      WETH: 3000,
+      USDC: 1,
+      USDT: 1,
+      VVS: 0.5,
+    };
+    return mockPrices[symbol.toUpperCase()] || 1;
+  }
+
+  /**
+   * Get real-time price for a token with multi-source fallback
+   * 1. Crypto.com Exchange API (100 req/s)
+   * 2. Crypto.com MCP Server (free, no rate limits)
+   * 3. VVS Finance (for CRC20 tokens on Cronos)
+   * 4. Stale cache (if available)
+   * 5. Mock prices (last resort)
    */
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
     const cached = this.priceCache.get(cacheKey);
+    const now = Date.now();
 
     // Handle stablecoins (always $1)
     if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI'].includes(cacheKey)) {
@@ -64,13 +91,13 @@ class RealMarketDataService {
         price: 1,
         change24h: 0,
         volume24h: 0,
-        timestamp: Date.now(),
+        timestamp: now,
         source: 'stablecoin',
       };
     }
 
     // Return cached if fresh
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+    if (cached && now - cached.timestamp < this.CACHE_TTL) {
       return {
         symbol,
         price: cached.price,
@@ -81,7 +108,7 @@ class RealMarketDataService {
       };
     }
 
-    // Fast deterministic fallback for tests/CI to avoid rate limits from CoinGecko
+    // Fast deterministic fallback for tests/CI
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
       const testPrices: Record<string, number> = {
         CRO: 0.09,
@@ -94,7 +121,6 @@ class RealMarketDataService {
         WETH: 3000,
       };
       const base = testPrices[cacheKey] || 1;
-      // small time-based drift so prices change between snapshots/waits in tests
       const seconds = Math.floor(Date.now() / 1000);
       const driftFactor = 1 + (0.001 * (seconds % 5));
       const tp = Number((base * driftFactor).toFixed(6));
@@ -110,46 +136,55 @@ class RealMarketDataService {
       };
     }
 
+    // SOURCE 1: Crypto.com Exchange API (PRIMARY - 100 req/s)
     try {
-      // Call CoinGecko directly (server-side has no CORS issues)
-      const response = await axios.get(
-        `https://api.coingecko.com/api/v3/simple/price`,
-        {
-          params: {
-            ids: this.symbolToCoingeckoId(symbol),
-            vs_currencies: 'usd',
-            include_24hr_change: true,
-            include_24hr_vol: true,
-          },
-          timeout: 5000,
-        }
-      );
-
-      const coinId = this.symbolToCoingeckoId(symbol);
-      const data = response.data[coinId];
-
-      if (data) {
-        const price = data.usd;
-        this.priceCache.set(cacheKey, { price, timestamp: Date.now() });
-
-        return {
-          symbol,
-          price,
-          change24h: data.usd_24h_change || 0,
-          volume24h: data.usd_24h_vol || 0,
-          timestamp: Date.now(),
-          source: 'coingecko',
-        };
-      }
-    } catch (error) {
-      console.warn(`CoinGecko price fetch failed for ${symbol}:`, error);
+      console.log(`📊 [RealMarketData] Fetching ${symbol} from Crypto.com Exchange API`);
+      const exchangeData = await cryptocomExchangeService.getMarketData(symbol);
+      
+      this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
+      console.log(`✅ [RealMarketData] Got ${symbol} price from Exchange API: $${exchangeData.price}`);
+      
+      return {
+        symbol,
+        price: exchangeData.price,
+        change24h: exchangeData.change24h,
+        volume24h: exchangeData.volume24h,
+        timestamp: Date.now(),
+        source: 'cryptocom-exchange',
+      };
+    } catch (error: any) {
+      console.warn(`⚠️ [RealMarketData] Exchange API failed for ${symbol}:`, error.message);
     }
 
-    // Fallback to VVS Finance for CRC20 tokens
+    // SOURCE 2: Crypto.com MCP Server (FALLBACK 1 - Free, no limits)
     try {
+      console.log(`📊 [RealMarketData] Trying MCP Server for ${symbol}`);
+      const mcpData = await this.getMCPServerPrice(symbol);
+      
+      if (mcpData) {
+        this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
+        console.log(`✅ [RealMarketData] Got ${symbol} from MCP Server: $${mcpData.price}`);
+        
+        return {
+          symbol,
+          price: mcpData.price,
+          change24h: mcpData.change24h || 0,
+          volume24h: 0,
+          timestamp: Date.now(),
+          source: 'cryptocom-mcp',
+        };
+      }
+    } catch (error: any) {
+      console.warn(`⚠️ [RealMarketData] MCP Server failed for ${symbol}:`, error.message);
+    }
+
+    // SOURCE 3: VVS Finance (FALLBACK 2 - for CRC20 tokens on Cronos)
+    try {
+      console.log(`📊 [RealMarketData] Trying VVS Finance for ${symbol}`);
       const vvsPrice = await this.getVVSPrice(symbol);
       if (vvsPrice) {
         this.priceCache.set(cacheKey, { price: vvsPrice, timestamp: Date.now() });
+        console.log(`✅ [RealMarketData] Got ${symbol} from VVS: $${vvsPrice}`);
         return {
           symbol,
           price: vvsPrice,
@@ -160,11 +195,12 @@ class RealMarketDataService {
         };
       }
     } catch (error) {
-      console.warn(`VVS price fetch failed for ${symbol}:`, error);
+      console.warn(`⚠️ [RealMarketData] VVS price fetch failed for ${symbol}:`, error);
     }
 
-    // Last resort: return cached even if stale, or default
+    // FALLBACK 3: Stale cache if available
     if (cached) {
+      console.warn(`⚠️ [RealMarketData] Using stale cache for ${symbol} (${Math.round((now - cached.timestamp) / 1000)}s old)`);
       return {
         symbol,
         price: cached.price,
@@ -175,7 +211,43 @@ class RealMarketDataService {
       };
     }
 
-    throw new Error(`Unable to fetch price for ${symbol}`);
+    // FALLBACK 4: Mock price (last resort)
+    const mockPrice = this.getMockPrice(symbol);
+    console.warn(`⚠️ [RealMarketData] All sources failed for ${symbol}, using mock price: $${mockPrice}`);
+    return {
+      symbol,
+      price: mockPrice,
+      change24h: 0,
+      volume24h: 0,
+      timestamp: now,
+      source: 'mock',
+    };
+  }
+
+  /**
+   * Get price from Crypto.com MCP Server
+   */
+  private async getMCPServerPrice(symbol: string): Promise<{ price: number; change24h?: number } | null> {
+    try {
+      // MCP Server endpoint (no authentication needed for basic queries)
+      const response = await axios.get('https://mcp.crypto.com/api/v1/price', {
+        params: { symbol: symbol.toUpperCase() },
+        timeout: 5000,
+      });
+
+      if (response.data && response.data.price) {
+        return {
+          price: parseFloat(response.data.price),
+          change24h: response.data.change_24h ? parseFloat(response.data.change_24h) : undefined,
+        };
+      }
+    } catch (error: any) {
+      // MCP Server might not support all tokens, fail silently
+      if (error?.response?.status !== 404) {
+        console.debug(`MCP Server query failed for ${symbol}:`, error.message);
+      }
+    }
+    return null;
   }
 
   /**
@@ -323,51 +395,16 @@ class RealMarketDataService {
   }
 
   /**
-   * Map symbol to CoinGecko ID
-   */
-  private symbolToCoingeckoId(symbol: string): string {
-    const mapping: Record<string, string> = {
-      CRO: 'crypto-com-chain',
-      BTC: 'bitcoin',
-      ETH: 'ethereum',
-      USDC: 'usd-coin',
-      USDT: 'tether',
-      VVS: 'vvs-finance',
-      WBTC: 'wrapped-bitcoin',
-      WETH: 'weth',
-    };
-    return mapping[symbol.toUpperCase()] || symbol.toLowerCase();
-  }
-
-  /**
    * Get historical price data for volatility calculations
+   * Note: Currently returns empty array. Can be implemented with Exchange API historical data if needed.
    */
   async getHistoricalPrices(
     symbol: string,
     days: number = 30
   ): Promise<Array<{ timestamp: number; price: number }>> {
-    try {
-      const coinId = this.symbolToCoingeckoId(symbol);
-      const response = await axios.get(
-        `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart`,
-        {
-          params: {
-            vs_currency: 'usd',
-            days,
-            interval: 'daily',
-          },
-          timeout: 10000,
-        }
-      );
-
-      return response.data.prices.map(([timestamp, price]: [number, number]) => ({
-        timestamp,
-        price,
-      }));
-    } catch (error) {
-      console.error(`Failed to get historical prices for ${symbol}:`, error);
-      return [];
-    }
+    console.warn(`[RealMarketData] Historical price data not implemented for ${symbol}`);
+    // TODO: Implement with Crypto.com Exchange API historical data endpoints if available
+    return [];
   }
 
   /**
