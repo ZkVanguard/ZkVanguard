@@ -13,6 +13,7 @@ import {
   type Trade
 } from '@vvs-finance/swap-sdk';
 import type { Signer } from 'ethers';
+import { X402GaslessService } from './X402GaslessService';
 
 export interface VVSSwapQuote {
   amountIn: string;
@@ -98,14 +99,48 @@ export class VVSSwapSDKService {
   }
 
   /**
-   * Execute a swap using VVS SDK
+   * Execute a swap using VVS SDK with optional x402 gasless support
+   * Automatically detects if gasless mode should be used
    */
   async executeSwap(
     trade: Trade,
-    signer: Signer
-  ): Promise<{ hash: string; success: boolean }> {
+    signer: Signer,
+    options?: { forceGasless?: boolean; forceRegular?: boolean }
+  ): Promise<{ hash: string; success: boolean; gasless?: boolean; gasSaved?: string }> {
     try {
-      console.log('🔄 Executing VVS swap...');
+      const userAddress = await signer.getAddress();
+      
+      // Determine if we should use gasless mode
+      let useGasless = options?.forceGasless || false;
+      
+      if (!options?.forceRegular && !options?.forceGasless) {
+        // Auto-detect based on user's situation
+        const recommendation = await X402GaslessService.shouldUseGasless(
+          signer.provider!,
+          userAddress
+        );
+        useGasless = recommendation.shouldUse;
+        
+        if (useGasless) {
+          console.log(`🎯 Using x402 gasless mode: ${recommendation.reason}`);
+        }
+      }
+
+      // If gasless mode is requested/recommended, try it first
+      if (useGasless) {
+        try {
+          const result = await this.executeSwapGasless(trade, signer);
+          if (result.success) {
+            return result;
+          }
+          console.warn('Gasless swap failed, falling back to regular swap');
+        } catch (gaslessError) {
+          console.warn('Gasless swap error, falling back to regular:', gaslessError);
+        }
+      }
+
+      // Execute regular swap
+      console.log('🔄 Executing regular VVS swap...');
 
       // Step 1: Approve token if needed
       const approvalTx = await approveIfNeeded(this.chainId, trade, signer);
@@ -122,11 +157,55 @@ export class VVSSwapSDKService {
       return {
         hash: tx.hash,
         success: true,
+        gasless: false,
       };
     } catch (error) {
       console.error('Failed to execute VVS swap:', error);
       throw new Error(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Execute swap using x402 gasless protocol
+   */
+  private async executeSwapGasless(
+    trade: Trade,
+    signer: Signer
+  ): Promise<{ hash: string; success: boolean; gasless: boolean; gasSaved?: string }> {
+    const userAddress = await signer.getAddress();
+    const tradeData = trade as any;
+
+    // Extract swap parameters
+    const inputToken = tradeData.inputAmount?.currency?.address || '';
+    const outputToken = tradeData.outputAmount?.currency?.address || '';
+    const amountIn = tradeData.inputAmount?.quotient?.toString() || '0';
+    const amountOutMin = tradeData.minimumAmountOut?.quotient?.toString() || '0';
+    
+    // Build path from trade route
+    const path = [inputToken, outputToken];
+    const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 minutes
+
+    // Execute gasless swap via x402
+    const result = await X402GaslessService.executeGaslessSwap(signer, {
+      tokenIn: inputToken,
+      tokenOut: outputToken,
+      amountIn,
+      amountOutMin,
+      path,
+      userAddress,
+      deadline,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Gasless swap failed');
+    }
+
+    return {
+      hash: result.txHash || '',
+      success: true,
+      gasless: true,
+      gasSaved: result.gasSponsored,
+    };
   }
 
   /**
