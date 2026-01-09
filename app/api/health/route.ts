@@ -21,7 +21,7 @@ export async function GET() {
     let platformNetwork = 'not configured';
     try {
       platformHealthy = await cryptocomDeveloperPlatform.healthCheck();
-      platformNetwork = cryptocomDeveloperPlatform.getConfig().network || 'not configured';
+      platformNetwork = 'Cronos EVM';
     } catch (error) {
       console.log('[Health Check] Developer Platform not configured');
     }

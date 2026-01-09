@@ -3,7 +3,7 @@
  * Enhanced blockchain operations with natural language interface
  */
 
-import { Agent } from '@crypto.com/ai-agent-client';
+// import { Agent } from '@crypto.com/ai-agent-client';
 
 export interface AgentConfig {
   openaiApiKey?: string;
@@ -56,23 +56,23 @@ class CryptocomAIAgentService {
 
       this.config = finalConfig;
 
-      // Initialize the agent
-      this.agent = Agent.init({
-        llm_config: {
-          provider: 'OpenAI',
-          model: 'gpt-4o-mini',
-          'provider-api-key': finalConfig.openaiApiKey!,
-        },
-        blockchain_config: {
-          chainId: finalConfig.chainId!,
-          'api-key': finalConfig.dashboardApiKey!,
-          'private-key': finalConfig.privateKey,
-          timeout: 120,
-        },
-      });
+      // Initialize the agent (commented out until SDK is properly configured)
+      // this.agent = Agent.init({
+      //   llm_config: {
+      //     provider: 'OpenAI',
+      //     model: 'gpt-4o-mini',
+      //     'provider-api-key': finalConfig.openaiApiKey!,
+      //   },
+      //   blockchain_config: {
+      //     chainId: finalConfig.chainId!,
+      //     'api-key': finalConfig.dashboardApiKey!,
+      //     'private-key': finalConfig.privateKey,
+      //     timeout: 120,
+      //   },
+      // });
 
-      this.isInitialized = true;
-      console.log('[AIAgent] Initialized successfully on chain', finalConfig.chainId);
+      this.isInitialized = false; // Set to false until SDK is ready
+      console.log('[AIAgent] Configuration prepared (SDK not fully initialized)', finalConfig.chainId);
     } catch (error: any) {
       console.error('[AIAgent] Initialization failed:', error.message);
       throw new Error(`Failed to initialize AI Agent: ${error.message}`);
