@@ -3,7 +3,6 @@ import '../styles/globals.css';
 import { Providers } from './providers';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
-import { DebugLogToggle, DebugLogPanel } from '../components/DebugLogPanel';
 
 export const metadata: Metadata = {
   title: 'ZkVanguard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
@@ -92,8 +91,6 @@ export default function RootLayout({
             </main>
             <Footer />
           </div>
-          <DebugLogToggle />
-          <DebugLogPanel />
         </Providers>
       </body>
     </html>

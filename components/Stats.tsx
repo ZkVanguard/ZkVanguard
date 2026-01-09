@@ -17,25 +17,61 @@ export function Stats() {
   }, []);
 
   return (
-    <div className="glass-light rounded-2xl p-8 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-      <h3 className="text-xl font-semibold mb-6 text-gray-900 tracking-tight relative z-10">Platform Performance</h3>
-      <div className="grid grid-cols-2 gap-4 relative z-10">
+    <div>
+      {/* Mobile */}
+      <div className="lg:hidden space-y-16">
         {stats.map((stat, index) => (
           <div
             key={index}
             className={`text-center transition-all duration-700 ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
             }`}
-            style={{ transitionDelay: `${index * 100}ms` }}
+            style={{ transitionDelay: `${index * 80}ms` }}
           >
-              <div className="text-3xl sm:text-4xl md:text-5xl font-semibold mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+            <div className="text-[72px] font-semibold text-[#1d1d1f] tracking-[-0.06em] leading-none mb-2">
+              {stat.value}
+            </div>
+            <div className="text-[17px] text-[#86868b]">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop - pure centered typography */}
+      <div className="hidden lg:block">
+        {/* Hero stat - 100% */}
+        <div className="text-center mb-32">
+          <div
+            className={`transition-all duration-700 ${
+              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+            style={{ transitionDelay: '80ms' }}
+          >
+            <div className="text-[180px] font-semibold text-[#1d1d1f] tracking-[-0.08em] leading-none mb-4">
+              {stats[1].value}
+            </div>
+            <div className="text-[32px] font-semibold text-[#1d1d1f] mb-2">{stats[1].label}</div>
+            <div className="text-[17px] text-[#86868b]">x402 batching on Cronos zkEVM</div>
+          </div>
+        </div>
+
+        {/* Supporting stats - horizontal line */}
+        <div className="flex items-start justify-center gap-24">
+          {[stats[0], stats[2], stats[3]].map((stat, index) => (
+            <div
+              key={index}
+              className={`text-center transition-all duration-700 ${
+                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+              }`}
+              style={{ transitionDelay: `${(index + 2) * 80}ms` }}
+            >
+              <div className="text-[80px] font-semibold text-[#1d1d1f] tracking-[-0.06em] leading-none mb-3">
                 {stat.value}
               </div>
-              <div className="text-sm sm:text-base text-gray-600 font-medium">{stat.label}</div>
+              <div className="text-[17px] text-[#86868b]">{stat.label}</div>
             </div>
           ))}
         </div>
+      </div>
     </div>
   );
 }

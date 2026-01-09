@@ -5,21 +5,15 @@ import { ArrowRight, Shield, Zap, TrendingUp } from 'lucide-react';
 
 export function Hero() {
   return (
-    <section className="relative bg-system-bg-primary overflow-hidden">
-      {/* Subtle gradient mesh background */}
-      <div className="absolute inset-0 opacity-[0.03]">
-        <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-ios-blue rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-ios-green rounded-full blur-[100px]" />
-      </div>
-
-      <div className="relative w-full px-4 sm:px-6 lg:px-8 pt-16 pb-12 sm:pt-24 sm:pb-20 lg:pt-28 lg:pb-24">
-        <div className="max-w-[1400px] mx-auto">
+    <section className="relative overflow-hidden">
+      <div className="relative w-full px-5 lg:px-8 pt-28 pb-20 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32">
+        <div className="max-w-[1280px] mx-auto">
           
           {/* Asymmetric layout - content left, visual right */}
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+          <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 lg:gap-16 items-center">
             
             {/* Left: Main content */}
-            <div className="max-w-2xl">
+            <div className="max-w-[640px]">
               {/* Eyebrow - clean badge with emphasis */}
               <div className="inline-flex items-center gap-3 mb-6">
                 <span className="text-subheadline text-label-secondary font-medium">
@@ -69,59 +63,65 @@ export function Hero() {
 
             {/* Right: Visual representation - Desktop only */}
             <div className="hidden lg:block relative">
-              {/* Abstract 3D-ish composition */}
-              <div className="relative w-full aspect-square max-w-[500px] mx-auto">
-                {/* Large featured card with depth */}
-                <div className="absolute top-0 right-0 w-[85%] bg-white rounded-[24px] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-separator-opaque rotate-2 hover:rotate-0 transition-transform duration-500">
-                  <div className="w-16 h-16 rounded-[16px] bg-gradient-to-br from-ios-blue to-[#0052CC] flex items-center justify-center mb-6">
-                    <Shield className="w-8 h-8 text-white" strokeWidth={2} />
+              {/* Modern stacked card composition */}
+              <div className="relative w-full max-w-[520px] ml-auto space-y-4">
+                
+                {/* Primary card - Zero-Knowledge Security */}
+                <div className="bg-white rounded-[20px] p-7 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-black/5">
+                  <div className="flex items-start gap-4 mb-5">
+                    <div className="w-14 h-14 rounded-[14px] bg-[#007AFF] flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-7 h-7 text-white" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[19px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                        Zero-Knowledge Security
+                      </h3>
+                      <p className="text-[15px] text-[#86868b] leading-[1.4]">
+                        ZK-STARK verification. Your strategies remain completely private.
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-title-2 font-semibold text-label-primary mb-3">
-                    Zero-Knowledge Security
-                  </h3>
-                  <p className="text-body text-label-secondary leading-relaxed">
-                    Quantum-proof ZK-STARK verification. Your strategies remain completely private.
-                  </p>
-                  {/* Fake data visualization */}
-                  <div className="mt-6 flex items-end gap-2 h-20">
-                    {[65, 85, 70, 95, 75, 90, 80].map((height, i) => (
+                  {/* Clean minimal chart */}
+                  <div className="flex items-end gap-1.5 h-16 px-2">
+                    {[60, 82, 68, 95, 72, 88, 78].map((height, i) => (
                       <div 
                         key={i}
-                        className="flex-1 bg-gradient-to-t from-ios-blue/80 to-ios-blue/40 rounded-t"
+                        className="flex-1 bg-[#007AFF]/80 rounded-t-[3px]"
                         style={{ height: `${height}%` }}
                       />
                     ))}
                   </div>
                 </div>
 
-                {/* Smaller supporting cards */}
-                <div className="absolute bottom-8 left-0 w-[45%] bg-white rounded-[20px] p-6 shadow-[0_12px_40px_rgba(0,0,0,0.1)] border border-separator-opaque -rotate-3 hover:rotate-0 transition-transform duration-500">
-                  <div className="w-12 h-12 rounded-[12px] bg-ios-green/10 flex items-center justify-center mb-4">
-                    <Zap className="w-6 h-6 text-ios-green" strokeWidth={2} />
+                {/* Secondary cards row */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Real-Time Data card */}
+                  <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
+                    <div className="w-11 h-11 rounded-[11px] bg-[#FF9500]/10 flex items-center justify-center mb-4">
+                      <TrendingUp className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
+                    </div>
+                    <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                      Real-Time Data
+                    </h4>
+                    <p className="text-[14px] text-[#86868b] leading-[1.35]">
+                      Live market analytics and insights
+                    </p>
                   </div>
-                  <h4 className="text-headline font-semibold text-label-primary mb-2">
-                    AI Automation
-                  </h4>
-                  <p className="text-subheadline text-label-secondary leading-snug">
-                    Autonomous trading and risk mitigation
-                  </p>
+
+                  {/* AI Automation card */}
+                  <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
+                    <div className="w-11 h-11 rounded-[11px] bg-[#34C759]/10 flex items-center justify-center mb-4">
+                      <Zap className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
+                    </div>
+                    <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                      AI Automation
+                    </h4>
+                    <p className="text-[14px] text-[#86868b] leading-[1.35]">
+                      Autonomous trading and risk mitigation
+                    </p>
+                  </div>
                 </div>
 
-                <div className="absolute top-1/3 left-8 w-[42%] bg-white rounded-[20px] p-6 shadow-[0_12px_40px_rgba(0,0,0,0.1)] border border-separator-opaque rotate-6 hover:rotate-3 transition-transform duration-500">
-                  <div className="w-12 h-12 rounded-[12px] bg-ios-orange/10 flex items-center justify-center mb-4">
-                    <TrendingUp className="w-6 h-6 text-ios-orange" strokeWidth={2} />
-                  </div>
-                  <h4 className="text-headline font-semibold text-label-primary mb-2">
-                    Real-Time Data
-                  </h4>
-                  <p className="text-subheadline text-label-secondary leading-snug">
-                    Live market analytics and insights
-                  </p>
-                </div>
-
-                {/* Subtle accent circles */}
-                <div className="absolute -top-4 left-1/4 w-24 h-24 bg-ios-blue/5 rounded-full blur-xl" />
-                <div className="absolute -bottom-4 right-1/4 w-32 h-32 bg-ios-green/5 rounded-full blur-xl" />
               </div>
             </div>
           </div>
