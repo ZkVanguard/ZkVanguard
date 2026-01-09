@@ -1,71 +1,138 @@
 'use client';
 
-import { DollarSign, TrendingUp, Activity } from 'lucide-react';
-
 const agents = [
+  {
+    id: 'lead',
+    name: 'Lead Agent',
+    role: 'Orchestrator',
+    status: 'Active',
+    bgColor: 'bg-[#007AFF]/[0.08]',
+  },
   {
     id: 'risk',
     name: 'Risk Agent',
-    icon: Activity,
-    description: 'Monitors portfolio risk & provides alerts',
-    capabilities: ['VaR', 'Volatility', 'Correlation'],
-    color: 'from-red-500 to-orange-500',
+    role: 'Risk Analyzer',
+    status: 'Active',
+    bgColor: 'bg-[#FF9500]/[0.08]',
   },
   {
     id: 'hedging',
-    name: 'Hedge Agent',
-    icon: TrendingUp,
-    description: 'Executes automated hedging strategies',
-    capabilities: ['Positions', 'Leverage', 'Rebalancing'],
-    color: 'from-green-500 to-teal-500',
+    name: 'Hedging Agent',
+    role: 'Strategy Generator',
+    status: 'Active',
+    bgColor: 'bg-[#34C759]/[0.08]',
   },
   {
     id: 'settlement',
     name: 'Settlement Agent',
-    icon: DollarSign,
-    description: 'Handles batch payments & transactions',
-    capabilities: ['Batching', 'Gas Savings', 'Routing'],
-    color: 'from-blue-500 to-cyan-500',
+    role: 'Transaction Executor',
+    status: 'Active',
+    bgColor: 'bg-[#AF52DE]/[0.08]',
+  },
+  {
+    id: 'reporting',
+    name: 'Reporting Agent',
+    role: 'Analytics Generator',
+    status: 'Active',
+    bgColor: 'bg-[#FF2D55]/[0.08]',
   },
 ];
 
 export function AgentShowcase() {
   return (
-    <div className="glass-strong rounded-2xl p-8 border border-blue-500/20 shadow-lg shadow-blue-500/10 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10 opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
-      <h3 className="text-xl font-semibold mb-6 text-white tracking-tight relative z-10">AI Agents</h3>
-      <div className="space-y-4 relative z-10">
+    <div>
+      <h2 className="text-[40px] lg:text-[48px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-3 text-center">AI Agents</h2>
+      <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] text-center mb-12 lg:mb-16">24/7 autonomous portfolio management</p>
+      
+      {/* Mobile - vertical stack */}
+      <div className="lg:hidden space-y-3">
         {agents.map((agent) => {
-          const Icon = agent.icon;
           return (
             <div
               key={agent.id}
-              className="p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 hover:bg-gray-800/70 hover:border-gray-600 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5"
+              className={`${agent.bgColor} rounded-[20px] p-10`}
             >
-              <div className="flex items-start space-x-3">
-                <div className={`p-2.5 bg-gradient-to-br ${agent.color} rounded-xl shadow-ios-lg flex-shrink-0`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-base font-semibold mb-1 text-white">
-                    {agent.name}
-                  </h4>
-                  <p className="text-sm text-gray-400 mb-2">{agent.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {agent.capabilities.map((capability) => (
-                      <span
-                        key={capability}
-                        className="px-2 py-0.5 bg-gray-700 rounded-md text-xs text-gray-100 font-medium"
-                      >
-                        {capability}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <h3 className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+                {agent.name}
+              </h3>
+              <p className="text-[17px] text-[#86868b] leading-[1.47]">
+                {agent.role}
+              </p>
             </div>
           );
         })}
+      </div>
+
+      {/* Desktop - unique asymmetric layout */}
+      <div className="hidden lg:block">
+        {/* Hero Agent - Lead Agent takes full width */}
+        <div className={`${agents[0].bgColor} rounded-[30px] px-16 pt-20 pb-16 mb-3 min-h-[320px] flex flex-col justify-end`}>
+          <div>
+            <h3 className="text-[64px] font-semibold text-[#1d1d1f] tracking-[-0.03em] leading-[1.05] mb-4">
+              {agents[0].name}
+            </h3>
+            <p className="text-[28px] text-[#86868b] leading-[1.42] tracking-[-0.005em]">
+              {agents[0].role}
+            </p>
+          </div>
+        </div>
+
+        {/* Grid layout for remaining 4 agents - 2 columns, varied heights */}
+        <div className="grid grid-cols-[1.2fr_0.8fr] gap-3">
+          {/* Left column - 2 agents stacked */}
+          <div className="space-y-3">
+            {/* Risk Agent */}
+            <div className={`${agents[1].bgColor} rounded-[30px] p-12 min-h-[240px] flex flex-col justify-end`}>
+              <div>
+                <h3 className="text-[44px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+                  {agents[1].name}
+                </h3>
+                <p className="text-[21px] text-[#86868b] leading-[1.47]">
+                  {agents[1].role}
+                </p>
+              </div>
+            </div>
+
+            {/* Hedging Agent */}
+            <div className={`${agents[2].bgColor} rounded-[30px] p-12 min-h-[240px] flex flex-col justify-end`}>
+              <div>
+                <h3 className="text-[44px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+                  {agents[2].name}
+                </h3>
+                <p className="text-[21px] text-[#86868b] leading-[1.47]">
+                  {agents[2].role}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right column - 2 agents stacked, varied heights */}
+          <div className="space-y-3">
+            {/* Settlement Agent - taller */}
+            <div className={`${agents[3].bgColor} rounded-[30px] p-10 min-h-[320px] flex flex-col justify-end`}>
+              <div>
+                <h3 className="text-[40px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.1] mb-2">
+                  {agents[3].name}
+                </h3>
+                <p className="text-[19px] text-[#86868b] leading-[1.47]">
+                  {agents[3].role}
+                </p>
+              </div>
+            </div>
+
+            {/* Reporting Agent - shorter */}
+            <div className={`${agents[4].bgColor} rounded-[30px] p-10 min-h-[160px] flex flex-col justify-end`}>
+              <div>
+                <h3 className="text-[36px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.1] mb-2">
+                  {agents[4].name}
+                </h3>
+                <p className="text-[17px] text-[#86868b] leading-[1.47]">
+                  {agents[4].role}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

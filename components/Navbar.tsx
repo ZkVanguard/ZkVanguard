@@ -23,14 +23,11 @@ export function Navbar() {
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/agents', label: 'Agents' },
     { href: '/simulator', label: 'Simulator' },
-    { href: '/zk-proof', label: 'ZK Proofs' },
-    { href: '/zk-authenticity', label: 'Verify' },
-    { href: '/docs', label: 'Docs' },
   ];
 
   return (
     <nav 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
         scrolled 
           ? 'bg-white/80 backdrop-blur-xl shadow-ios-2 border-b border-separator-opaque' 
           : 'bg-white/95 backdrop-blur-lg'
@@ -39,8 +36,9 @@ export function Navbar() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-[52px]">
           {/* Logo - Always visible */}
-          <Link href="/" className="flex items-center -ml-2">
+          <Link href="/" className="flex items-center gap-2 -ml-2">
             <Logo />
+            <span className="lg:hidden text-[17px] font-semibold text-[#1d1d1f] tracking-tight">ZkVanguard</span>
           </Link>
 
           {/* Desktop Navigation - Centered with proper spacing */}
@@ -49,7 +47,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 h-11 flex items-center text-callout font-normal text-label-primary hover:text-ios-blue transition-colors whitespace-nowrap"
+                className="px-3 h-11 flex items-center text-callout font-normal text-label-primary hover:text-ios-blue active:scale-[0.98] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap"
               >
                 {link.label}
               </Link>
@@ -64,7 +62,7 @@ export function Navbar() {
           {/* Mobile Menu Button - Proper 44pt touch target */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-label-primary hover:text-ios-blue transition-colors"
+            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-label-primary hover:text-ios-blue active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
             aria-label="Toggle menu"
           >
             {isOpen ? (
@@ -83,7 +81,7 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="block px-3 h-11 flex items-center text-body text-label-primary hover:bg-system-bg-secondary rounded-ios transition-colors"
+                  className="block px-3 h-11 flex items-center text-body text-label-primary hover:bg-system-bg-secondary active:scale-[0.98] rounded-ios transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}
