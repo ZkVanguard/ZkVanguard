@@ -33,13 +33,16 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPositions = useCallback(async () => {
+  const fetchPositions = useCallback(async (isBackgroundRefresh = false) => {
     if (!address) {
       setPositionsData(null);
       return;
     }
 
-    setLoading(true);
+    // Only show loading state for initial fetch, not background refreshes
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -61,9 +64,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('❌ [PositionsContext] Error fetching positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch positions');
-      setPositionsData(null);
+      // Only clear data on initial load errors, keep stale data on refresh errors
+      if (!isBackgroundRefresh) {
+        setPositionsData(null);
+      }
     } finally {
-      setLoading(false);
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      }
     }
   }, [address]);
 
@@ -78,7 +86,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
     const interval = setInterval(() => {
       console.log('⏰ [PositionsContext] Auto-refreshing positions...');
-      fetchPositions();
+      fetchPositions(true); // Pass true to indicate background refresh
     }, 60000);
 
     return () => clearInterval(interval);

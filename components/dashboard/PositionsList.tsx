@@ -13,8 +13,8 @@ import { usePositions } from '@/contexts/PositionsContext';
 interface TokenPosition {
   symbol: string;
   balance: string;
-  usdValue: number;
-  price: number;
+  balanceUSD: string;
+  price: string;
   change24h: number;
   token: string;
 }
@@ -38,6 +38,7 @@ export function PositionsList({ address }: { address: string }) {
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   
   // Derived from context
   const positions = positionsData?.positions || [];
@@ -205,15 +206,19 @@ export function PositionsList({ address }: { address: string }) {
 
   useEffect(() => {
     async function loadAll() {
-      setLoading(true);
+      // Only show loading skeleton on initial load
+      if (!hasInitiallyLoaded) {
+        setLoading(true);
+      }
       await fetchOnChainPortfolios();
       setLoading(false);
+      setHasInitiallyLoaded(true);
     }
     
-    if (address && isConnected && positionsData) {
+    if (address && isConnected) {
       loadAll();
     }
-  }, [address, isConnected, positionsData]);
+  }, [address, isConnected]); // Removed positionsData from dependencies to prevent clearing on auto-refresh
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -322,11 +327,11 @@ export function PositionsList({ address }: { address: string }) {
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-lg">
-                      ${position.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${parseFloat(position.balanceUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="flex items-center gap-1 justify-end">
                       <span className="text-sm text-gray-400">
-                        ${position.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        ${parseFloat(position.price || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>
                       {position.change24h !== 0 && (
                         <span className={`text-xs flex items-center ${position.change24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -343,12 +348,12 @@ export function PositionsList({ address }: { address: string }) {
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
                       <span>Portfolio Allocation</span>
-                      <span>{((position.usdValue / totalValue) * 100).toFixed(1)}%</span>
+                      <span>{((parseFloat(position.balanceUSD || '0') / totalValue) * 100).toFixed(1)}%</span>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-1.5">
                       <div
                         className="bg-gradient-to-r from-cyan-500 to-emerald-500 h-1.5 rounded-full"
-                        style={{ width: `${Math.min((position.usdValue / totalValue) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((parseFloat(position.balanceUSD || '0') / totalValue) * 100, 100)}%` }}
                       />
                     </div>
                   </div>
