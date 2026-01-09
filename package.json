@@ -66,6 +66,7 @@
   "dependencies": {
     "@crypto.com/ai-agent-client": "^1.0.2",
     "@crypto.com/facilitator-client": "^1.0.1",
+    "@heroicons/react": "^2.2.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",

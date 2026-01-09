@@ -34,114 +34,98 @@ export function LiveMetrics() {
   if (!mounted) {
     // Return static content for SSR
     return (
-      <section className="py-8 relative">
-        <div className="container mx-auto px-4">
-          <div className="glass-strong rounded-3xl p-10 border border-blue-500/10">
-            <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
-              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Real-Time Platform Metrics
-              </span>
-            </h2>
-            <p className="text-lg text-gray-400">Live performance data from Cronos Testnet</p>
+      <div>
+        <div className="text-center mb-12 lg:mb-16">
+          <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
+            Real-Time Platform Metrics
+          </h2>
+          <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          <div className="p-6 lg:p-8">
+            <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
+            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">$2.8M</div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="p-8 glass-strong border border-blue-500/20 rounded-2xl hover:border-blue-500/40 transition-all">
-              <div className="text-sm text-gray-400 mb-2">Total Value Locked</div>
-              <div className="text-4xl font-bold text-emerald-400">$2.8M</div>
-            </div>
-            <div className="p-8 glass-strong border border-purple-500/20 rounded-2xl hover:border-purple-500/40 transition-all">
-              <div className="text-sm text-gray-400 mb-2">Transactions</div>
-              <div className="text-4xl font-bold text-blue-400">1,247</div>
-            </div>
-            <div className="p-8 glass-strong border border-cyan-500/20 rounded-2xl hover:border-cyan-500/40 transition-all">
-              <div className="text-sm text-gray-400 mb-2">Gas Savings</div>
-              <div className="text-4xl font-bold text-cyan-400">67%</div>
-            </div>
-            <div className="p-8 glass-strong border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all">
-              <div className="text-sm text-gray-400 mb-2">AI Agents Online</div>
-              <div className="text-4xl font-bold text-emerald-400">5</div>
-            </div>
+          <div className="p-6 lg:p-8">
+            <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
+            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">1,247</div>
           </div>
+          <div className="p-6 lg:p-8">
+            <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
+            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">67%</div>
+          </div>
+          <div className="p-6 lg:p-8">
+            <div className="text-[15px] text-[#86868b] mb-2">AI Agents Online</div>
+            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">5</div>
           </div>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="py-8 relative">
-      <div className="container mx-auto px-4">
-        <div className="glass-strong rounded-3xl p-10 border border-blue-500/10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-12"
-          >
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-3">
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Real-Time Platform Metrics
-            </span>
-          </h2>
-          <p className="text-lg text-gray-400">Live performance data from Cronos Testnet</p>
+    <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12 lg:mb-16"
+      >
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
+          Real-Time Platform Metrics
+        </h2>
+        <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
+      </motion.div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="p-6 lg:p-8"
+        >
+          <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
+            ${(metrics.tvl / 1000000).toFixed(2)}M
+          </div>
         </motion.div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="p-8 glass-strong border border-blue-500/20 rounded-2xl hover:border-blue-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/10"
-          >
-            <div className="text-sm text-gray-400 mb-2">Total Value Locked</div>
-            <div className="text-4xl font-bold text-emerald-400 mb-1">
-              ${(metrics.tvl / 1000000).toFixed(2)}M
-            </div>
-            <div className="text-xs text-secondary-600 dark:text-secondary-400">+12.5% this month</div>
-          </motion.div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="p-6 lg:p-8"
+        >
+          <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
+            {metrics.transactions.toLocaleString()}
+          </div>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="p-8 glass-strong border border-purple-500/20 rounded-2xl hover:border-purple-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10"
-          >
-            <div className="text-sm text-gray-400 mb-2">Transactions</div>
-            <div className="text-4xl font-bold text-blue-400 mb-1">
-              {metrics.transactions.toLocaleString()}
-            </div>
-            <div className="text-xs text-primary-400">+{Math.floor(Math.random() * 5)} last hour</div>
-          </motion.div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+          className="p-6 lg:p-8"
+        >
+          <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
+            {metrics.gasSaved.toFixed(1)}%
+          </div>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className="p-8 glass-strong border border-cyan-500/20 rounded-2xl hover:border-cyan-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-          >
-            <div className="text-sm text-gray-400 mb-2">Gas Savings</div>
-            <div className="text-4xl font-bold text-cyan-400 mb-1">
-              {metrics.gasSaved.toFixed(1)}%
-            </div>
-            <div className="text-xs text-accent-400">via x402 batching</div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-            className="p-8 glass-strong border border-emerald-500/20 rounded-2xl hover:border-emerald-500/40 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10"
-          >
-            <div className="text-sm text-gray-400 mb-2">AI Agents</div>
-            <div className="text-4xl font-bold text-emerald-400 mb-1 flex items-center">
-              {metrics.agents}
-              <div className="ml-2 w-2 h-2 bg-secondary-500 rounded-full animate-pulse" />
-            </div>
-            <div className="text-xs text-emerald-400">All online</div>
-          </motion.div>
-        </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4 }}
+          className="p-6 lg:p-8"
+        >
+          <div className="text-[15px] text-[#86868b] mb-2">AI Agents</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter flex items-center gap-2">
+            {metrics.agents}
+            <div className="w-2 h-2 bg-[#34C759] rounded-full" />
+          </div>
+        </motion.div>
       </div>
-    </section>
+    </div>
   );
 }
