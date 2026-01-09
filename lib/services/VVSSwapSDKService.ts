@@ -85,7 +85,7 @@ export class VVSSwapSDKService {
 
       return {
         amountIn: amount,
-        amountOut: trade.outputAmount.toExact(),
+        amountOut: (trade as any).outputAmount?.toExact?.() || '0',
         priceImpact,
         route,
         trade,

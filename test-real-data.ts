@@ -60,7 +60,7 @@ async function testRealData() {
     console.log('\n📊 Test 7: Fetching available trading pairs...');
     const tickers = await cryptocomExchangeService.getAllTickers();
     console.log(`✅ Available trading pairs: ${tickers.length} instruments`);
-    console.log(`   Sample pairs: ${tickers.slice(0, 5).map(t => t.i).join(', ')}...`);
+    console.log(`   Sample pairs: ${tickers.slice(0, 5).map((t: any) => t.i || t.symbol).join(', ')}...`);
 
     // Calculate portfolio value example
     console.log('\n📊 Test 8: Calculating sample portfolio value...');

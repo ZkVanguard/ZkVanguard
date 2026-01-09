@@ -54,10 +54,7 @@ async function testServices() {
       console.log('   Get your key from: https://developers.zkevm.cronos.org/user/apikeys');
       results.developerPlatform = true; // Not a failure
     } else {
-      await cryptocomDeveloperPlatform.initialize({
-        apiKey,
-        network: 'CronosEvm.Testnet',
-      });
+      await cryptocomDeveloperPlatform.initialize(apiKey);
       
       const block = await cryptocomDeveloperPlatform.getLatestBlock();
       const isHealthy = await cryptocomDeveloperPlatform.healthCheck();
