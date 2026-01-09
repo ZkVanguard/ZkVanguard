@@ -169,18 +169,35 @@ export function PositionsList({ address }: { address: string }) {
               assets: p.assets || [],
             };
             
-            // Fetch Delphi predictions
+            // Fetch Delphi/Polymarket predictions
             try {
-              const portfolioAssets = positionsData?.positions
+              // Get assets from both wallet positions AND portfolio contract
+              const walletAssets = positionsData?.positions
                 ?.filter(pos => parseFloat(pos.balance) > 0)
                 .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, '')) || [];
               
+              // Map contract addresses to symbols
+              const contractAssets = (portfolio.assets || []).map(addr => {
+                const lowerAddr = addr.toLowerCase();
+                if (lowerAddr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
+                if (lowerAddr.includes('wcro') || lowerAddr === '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23') return 'CRO';
+                if (lowerAddr.includes('weth')) return 'ETH';
+                if (lowerAddr.includes('wbtc')) return 'BTC';
+                return 'CRYPTO'; // Generic fallback
+              });
+              
+              // Combine unique assets, always include major cryptos for broader predictions
+              const allAssets = [...new Set([...walletAssets, ...contractAssets, 'BTC', 'ETH', 'CRO'])];
+              
+              console.log(`Fetching predictions for portfolio ${i} with assets:`, allAssets);
+              
               const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
-                portfolioAssets,
+                allAssets,
                 parseFloat(portfolio.riskTolerance),
                 parseFloat(portfolio.targetYield)
               );
               
+              console.log(`Got ${predictions.length} predictions for portfolio ${i}`);
               portfolio.predictions = predictions;
             } catch (error) {
               console.warn(`Failed to fetch predictions for portfolio ${i}:`, error);
