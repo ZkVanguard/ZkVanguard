@@ -38,35 +38,53 @@ export class DelphiMarketService {
     riskTolerance: number, // 0-100
     targetYield: number // e.g., 10 = 10%
   ): Promise<PredictionMarket[]> {
-    const allPredictions = await this.getRelevantMarkets(assets);
+    console.log(`Getting predictions for assets: ${assets.join(', ')}, risk: ${riskTolerance}, yield: ${targetYield}%`);
     
-    // Filter predictions based on portfolio risk profile
-    return allPredictions.filter(prediction => {
-      // High risk portfolios (>60): show all predictions including high-impact ones
+    const allPredictions = await this.getRelevantMarkets(assets);
+    console.log(`Got ${allPredictions.length} raw predictions`);
+    
+    // Less strict filtering - show more predictions for demo
+    const filtered = allPredictions.filter(prediction => {
+      // High risk portfolios (>60): show all predictions
       if (riskTolerance > 60) {
-        return true; // Show everything
+        return true;
       }
       
-      // Medium risk portfolios (30-60): show HIGH and MODERATE, filter LOW
+      // Medium risk portfolios (30-60): show all but LOW impact IGNORE recommendations
       if (riskTolerance >= 30) {
-        return prediction.impact === 'HIGH' || prediction.impact === 'MODERATE';
+        if (prediction.impact === 'LOW' && prediction.recommendation === 'IGNORE') {
+          return prediction.probability > 50; // Only show if high probability
+        }
+        return true;
       }
       
-      // Low risk portfolios (<30): only show HIGH impact predictions
-      return prediction.impact === 'HIGH';
-    }).filter(prediction => {
-      // For high yield targets (>15%), prioritize actionable predictions
-      if (targetYield > 15) {
-        return prediction.recommendation === 'HEDGE' || prediction.recommendation === 'MONITOR';
-      }
-      
-      // For conservative yields (<=10%), only show critical hedges
-      if (targetYield <= 10) {
-        return prediction.recommendation === 'HEDGE' && prediction.probability > 65;
-      }
-      
-      return true; // Medium yield targets show all
+      // Low risk portfolios (<30): prioritize important predictions
+      return prediction.impact === 'HIGH' || prediction.recommendation === 'HEDGE';
     });
+    
+    // Sort by relevance: HEDGE first, then by impact and probability
+    const sorted = filtered.sort((a, b) => {
+      const recOrder: Record<string, number> = { HEDGE: 0, MONITOR: 1, IGNORE: 2 };
+      const impactOrder: Record<string, number> = { HIGH: 0, MODERATE: 1, LOW: 2 };
+      
+      const recA = recOrder[a.recommendation || 'MONITOR'] ?? 1;
+      const recB = recOrder[b.recommendation || 'MONITOR'] ?? 1;
+      if (recA !== recB) {
+        return recA - recB;
+      }
+      
+      const impA = impactOrder[a.impact || 'MODERATE'] ?? 1;
+      const impB = impactOrder[b.impact || 'MODERATE'] ?? 1;
+      if (impA !== impB) {
+        return impA - impB;
+      }
+      return b.probability - a.probability;
+    });
+    
+    // Limit to top 8 predictions for cleaner UI
+    const result = sorted.slice(0, 8);
+    console.log(`Returning ${result.length} filtered predictions`);
+    return result;
   }
 
   /**
@@ -177,8 +195,11 @@ export class DelphiMarketService {
 
   /**
    * Get relevant prediction markets for portfolio assets
+   * Combines real Polymarket data with curated mock predictions for comprehensive coverage
    */
   static async getRelevantMarkets(assets: string[]): Promise<PredictionMarket[]> {
+    let realPredictions: PredictionMarket[] = [];
+    
     // Try Delphi API first
     try {
       const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`);
@@ -186,7 +207,7 @@ export class DelphiMarketService {
       
       const data = await response.json();
       console.log('Using Delphi API data');
-      return this.parseMarkets(data, assets);
+      realPredictions = this.parseMarkets(data, assets);
     } catch (delphiError) {
       console.log('Delphi API unavailable, trying Polymarket API...');
       
@@ -196,16 +217,26 @@ export class DelphiMarketService {
         console.log(`Using live Polymarket data: ${polymarketData.length} predictions`);
         
         // Filter to relevant assets
-        return this.filterByAssets(polymarketData, assets);
+        realPredictions = this.filterByAssets(polymarketData, assets);
       } catch (polymarketError) {
-        console.log('Polymarket API also unavailable, using fallback predictions');
-        
-        // Last resort: use hardcoded realistic predictions
-        const predictions = this.parseMarkets([], assets);
-        console.log('Using fallback predictions:', predictions.length);
-        return predictions;
+        console.log('Polymarket API also unavailable');
       }
     }
+    
+    // Always include mock predictions for demo reliability
+    // This ensures predictions show up even when APIs fail
+    const mockPredictions = this.getMockMarkets(assets);
+    
+    // Merge: real predictions first, then mock ones that don't duplicate
+    const realIds = new Set(realPredictions.map(p => p.question.toLowerCase()));
+    const uniqueMocks = mockPredictions.filter(mock => 
+      !realIds.has(mock.question.toLowerCase())
+    );
+    
+    const combined = [...realPredictions, ...uniqueMocks];
+    console.log(`Returning ${combined.length} predictions (${realPredictions.length} real, ${uniqueMocks.length} mock)`);
+    
+    return combined;
   }
 
   /**
@@ -432,39 +463,34 @@ export class DelphiMarketService {
     // Filter markets based on portfolio assets
     // If no assets provided, return all markets
     if (assets.length === 0) {
+      console.log('No assets provided, returning all mock markets');
       return allMarkets;
     }
 
     // Normalize asset names for matching (handle variations like BTC/WBTC, USDC/devUSDC)
     const normalizedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
+    console.log('Filtering mock markets for normalized assets:', normalizedAssets);
 
-    return allMarkets.filter(market => {
+    const filtered = allMarkets.filter(market => {
       // Count how many of the market's assets are in the user's portfolio
       const matchingAssets = market.relatedAssets.filter(relatedAsset => {
         const normalized = relatedAsset.toUpperCase().replace(/^(W|DEV)/, '');
         return normalizedAssets.includes(normalized);
       });
 
-      // VERY STRICT FILTERING: Only show predictions directly relevant to portfolio
-      // Strategy:
-      // - Single/double asset predictions: show if ANY asset matches (directly about your holdings)
-      // - Multi-asset predictions (3+): only show if ALL or most assets match
-      //   This filters out broad market events that mention your assets but aren't ABOUT them
+      // RELAXED FILTERING for demo: Show predictions if ANY asset matches
+      // This ensures predictions always appear for better demo experience
       
       if (matchingAssets.length === 0) {
         return false; // No match at all
       }
       
-      // For 1-2 asset predictions: show them (specific predictions)
-      if (market.relatedAssets.length <= 2) {
-        return true;
-      }
-      
-      // For 3+ asset predictions: require 75%+ match (strict)
-      // Example: "Fed rate hike affects BTC, ETH, CRO, USDC" - only show if you own 3 of 4
-      const matchPercentage = matchingAssets.length / market.relatedAssets.length;
-      return matchPercentage >= 0.75;
+      // Show all predictions that have at least one matching asset
+      return true;
     });
+    
+    console.log(`Filtered to ${filtered.length} mock markets from ${allMarkets.length} total`);
+    return filtered;
   }
 
   /**
