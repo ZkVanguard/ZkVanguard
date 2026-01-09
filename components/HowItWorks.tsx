@@ -1,49 +1,71 @@
 'use client';
 
-import { MessageSquare, Brain, CheckCircle } from 'lucide-react';
-
 const steps = [
   {
-    icon: MessageSquare,
+    number: '01',
     title: 'Connect',
     description: 'Link your wallet & set preferences',
-    example: 'Web3 wallet integration',
+    detail: 'Web3 wallet integration',
   },
   {
-    icon: Brain,
+    number: '02',
     title: 'Monitor',
     description: 'AI agents analyze portfolio risk 24/7',
-    example: 'Real-time risk analysis',
+    detail: 'Real-time risk analysis',
   },
   {
-    icon: CheckCircle,
+    number: '03',
     title: 'Execute',
     description: 'Auto-hedge & settle transactions',
-    example: 'Automated protection',
+    detail: 'Automated protection',
   },
 ];
 
 export function HowItWorks() {
   return (
-    <div className="glass-strong rounded-2xl p-8 border border-purple-500/20 shadow-lg shadow-purple-500/10 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-tl from-purple-500/10 via-transparent to-blue-500/10 opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
-      <h3 className="text-xl font-semibold mb-6 text-white tracking-tight relative z-10">How It Works</h3>
-      <div className="space-y-4 relative z-10">
+    <div>
+      <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.03em] leading-[1.05] mb-4 text-center">How It Works</h2>
+      <p className="text-[19px] lg:text-[24px] text-[#86868b] leading-[1.45] text-center mb-20 lg:mb-28">Get started in three simple steps</p>
+      
+      {/* Mobile - vertical stack */}
+      <div className="lg:hidden space-y-20">
         {steps.map((step, index) => {
-          const Icon = step.icon;
           return (
-            <div key={index} className="flex items-start gap-4 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 hover:bg-gray-800/70 hover:border-gray-600 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5">
-              <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-500 rounded-xl flex items-center justify-center shadow-lg">
-                <Icon className="w-6 h-6 text-white" />
+            <div key={index} className="text-center">
+              <div className="text-[96px] font-semibold text-[#007AFF]/10 tracking-[-0.05em] leading-[1] mb-6">
+                {step.number}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold text-primary-400">Step {index + 1}</span>
-                  <h4 className="text-base font-semibold text-white">{step.title}</h4>
-                </div>
-                <p className="text-sm text-gray-400 mb-2">{step.description}</p>
-                <code className="text-xs text-primary-400 bg-gray-900/50 px-2 py-1 rounded">{step.example}</code>
+              <h3 className="text-[36px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-4">
+                {step.title}
+              </h3>
+              <p className="text-[21px] text-[#1d1d1f] leading-[1.47] mb-3 font-normal">
+                {step.description}
+              </p>
+              <p className="text-[17px] text-[#86868b] leading-[1.47] font-normal">
+                {step.detail}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop - 3 column grid with more space */}
+      <div className="hidden lg:grid lg:grid-cols-3 gap-20">
+        {steps.map((step, index) => {
+          return (
+            <div key={index} className="text-center">
+              <div className="text-[140px] font-semibold text-[#007AFF]/10 tracking-[-0.05em] leading-[1] mb-8">
+                {step.number}
               </div>
+              <h3 className="text-[44px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-5">
+                {step.title}
+              </h3>
+              <p className="text-[24px] text-[#1d1d1f] leading-[1.45] mb-4 font-normal">
+                {step.description}
+              </p>
+              <p className="text-[19px] text-[#86868b] leading-[1.47] font-normal">
+                {step.detail}
+              </p>
             </div>
           );
         })}
