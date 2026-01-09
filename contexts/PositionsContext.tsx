@@ -72,14 +72,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     fetchPositions();
   }, [fetchPositions]);
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 60 seconds (reduced from 30s to minimize load)
   useEffect(() => {
     if (!address) return;
 
     const interval = setInterval(() => {
       console.log('⏰ [PositionsContext] Auto-refreshing positions...');
       fetchPositions();
-    }, 30000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [address, fetchPositions]);
