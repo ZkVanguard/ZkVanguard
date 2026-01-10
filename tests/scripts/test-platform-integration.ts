@@ -3,10 +3,10 @@
  * Verifies all Crypto.com services are integrated correctly throughout the platform
  */
 
-import { cryptocomExchangeService } from './lib/services/CryptocomExchangeService';
-import { cryptocomDeveloperPlatform } from './lib/services/CryptocomDeveloperPlatformService';
-import { cryptocomAIAgent } from './lib/services/CryptocomAIAgentService';
-import { getMarketDataService } from './lib/services/RealMarketDataService';
+import { cryptocomExchangeService } from '../../lib/services/CryptocomExchangeService';
+import { cryptocomDeveloperPlatform } from '../../lib/services/CryptocomDeveloperPlatformService';
+import { cryptocomAIAgent } from '../../lib/services/CryptocomAIAgentService';
+import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 
 const marketData = getMarketDataService();
 

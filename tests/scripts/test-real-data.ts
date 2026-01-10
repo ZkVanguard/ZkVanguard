@@ -2,8 +2,8 @@
  * Quick Test: Verify Real Data from Crypto.com
  */
 
-import { cryptocomExchangeService } from './lib/services/CryptocomExchangeService';
-import { getMarketDataService } from './lib/services/RealMarketDataService';
+import { cryptocomExchangeService } from '../../lib/services/CryptocomExchangeService';
+import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 
 const realMarketData = getMarketDataService();
 

@@ -248,13 +248,70 @@ export class RiskAgent extends BaseAgent {
   }
 
   /**
-   * Internal sentiment assessment
+   * Internal sentiment assessment using Delphi prediction markets
    */
   private async assessMarketSentimentInternal(): Promise<'bullish' | 'bearish' | 'neutral'> {
-    // Simulate sentiment analysis
-    // In production: integrate with Delphi prediction markets
-    const sentiments: ('bullish' | 'bearish' | 'neutral')[] = ['bullish', 'bearish', 'neutral'];
-    return sentiments[Math.floor(Math.random() * sentiments.length)];
+    try {
+      // Import and use DelphiMarketService for real prediction data
+      const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+      
+      // Get predictions for major assets
+      const btcInsights = await DelphiMarketService.getAssetInsights('BTC');
+      const ethInsights = await DelphiMarketService.getAssetInsights('ETH');
+      
+      // Aggregate sentiment from predictions
+      let bullishCount = 0;
+      let bearishCount = 0;
+      
+      const allPredictions = [
+        ...btcInsights.predictions,
+        ...ethInsights.predictions,
+      ];
+      
+      for (const prediction of allPredictions) {
+        // High probability positive events = bullish
+        if (prediction.probability > 60) {
+          if (prediction.recommendation === 'HEDGE' || prediction.impact === 'HIGH') {
+            bearishCount++;
+          } else {
+            bullishCount++;
+          }
+        } else if (prediction.probability < 40) {
+          // Low probability of positive events = bearish
+          bearishCount++;
+        }
+      }
+      
+      // Determine overall sentiment
+      if (bullishCount > bearishCount + 1) {
+        logger.info('Market sentiment assessed from Delphi data', { 
+          sentiment: 'bullish', 
+          bullishCount, 
+          bearishCount,
+          predictionsAnalyzed: allPredictions.length 
+        });
+        return 'bullish';
+      } else if (bearishCount > bullishCount + 1) {
+        logger.info('Market sentiment assessed from Delphi data', { 
+          sentiment: 'bearish', 
+          bullishCount, 
+          bearishCount,
+          predictionsAnalyzed: allPredictions.length 
+        });
+        return 'bearish';
+      }
+      
+      logger.info('Market sentiment assessed from Delphi data', { 
+        sentiment: 'neutral', 
+        bullishCount, 
+        bearishCount,
+        predictionsAnalyzed: allPredictions.length 
+      });
+      return 'neutral';
+    } catch (error) {
+      logger.warn('Failed to fetch Delphi predictions, using neutral fallback', { error });
+      return 'neutral';
+    }
   }
 
   /**

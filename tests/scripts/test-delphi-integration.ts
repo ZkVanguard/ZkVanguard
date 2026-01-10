@@ -3,7 +3,7 @@
  * Verify DelphiMarketService and PredictionInsights work correctly
  */
 
-import { DelphiMarketService } from './lib/services/DelphiMarketService';
+import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 
 async function testDelphiIntegration() {
   console.log('🔮 Testing Delphi Integration...\n');

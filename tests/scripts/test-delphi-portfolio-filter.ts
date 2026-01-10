@@ -3,7 +3,7 @@
  * Demonstrates how predictions are filtered based on portfolio holdings
  */
 
-import { DelphiMarketService } from './lib/services/DelphiMarketService';
+import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 
 async function testPortfolioFiltering() {
   console.log('🔮 Testing Delphi Portfolio-Based Filtering...\n');

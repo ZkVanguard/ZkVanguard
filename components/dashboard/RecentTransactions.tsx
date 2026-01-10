@@ -18,7 +18,7 @@ import {
 
 interface Transaction {
   hash: string;
-  type: 'swap' | 'deposit' | 'withdraw' | 'approve' | 'transfer' | 'unknown';
+  type: 'swap' | 'deposit' | 'withdraw' | 'approve' | 'transfer' | 'gasless' | 'unknown';
   status: 'success' | 'pending' | 'failed';
   timestamp: number;
   from: string;
