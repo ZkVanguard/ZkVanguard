@@ -55,7 +55,7 @@ ZkVanguard:  Polymarket signals → AI correlates → Auto-hedge BEFORE crash
 ## Quick Start
 
 ```bash
-git clone https://github.com/mrarejimmyz/ZkVanguard.git && cd ZkVanguard && npm install
+git clone https://github.com/mrarejimmyz/Chronos-Vanguard.git && cd Chronos-Vanguard && npm install
 
 # Terminal 1: ZK Backend
 cd zkp/api && pip install -r requirements.txt && python server.py
