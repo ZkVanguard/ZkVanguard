@@ -147,9 +147,22 @@ export class AgentOrchestrator {
       this.reportingAgent = new ReportingAgent('reporting-agent-001', this.provider);
 
       logger.info('Creating LeadAgent...');
-      // LeadAgent requires config, messageBus, and agentRegistry
-      // Skip for now as orchestrator pattern may need refactoring
-      // this.leadAgent = new LeadAgent(config, messageBus, agentRegistry);
+      // Create LeadAgent with provider, signer, and registry for agent delegation
+      const { AgentRegistry } = await import('@/agents/core/AgentRegistry');
+      const agentRegistry = new AgentRegistry();
+      
+      this.leadAgent = new LeadAgent(
+        'lead-agent-001',
+        this.provider,
+        signerToUse,
+        agentRegistry
+      );
+      
+      // Register specialized agents with the registry so LeadAgent can delegate
+      if (this.riskAgent) agentRegistry.register(this.riskAgent);
+      if (this.hedgingAgent) agentRegistry.register(this.hedgingAgent);
+      if (this.settlementAgent) agentRegistry.register(this.settlementAgent);
+      if (this.reportingAgent) agentRegistry.register(this.reportingAgent);
 
       // Initialize all agents with individual error handling
       logger.info('Initializing agents...');
@@ -158,8 +171,7 @@ export class AgentOrchestrator {
         this.hedgingAgent.initialize().then(() => logger.info('✅ HedgingAgent initialized')),
         this.settlementAgent.initialize().then(() => logger.info('✅ SettlementAgent initialized')),
         this.reportingAgent.initialize().then(() => logger.info('✅ ReportingAgent initialized')),
-        // LeadAgent initialization skipped - requires refactoring
-        // this.leadAgent?.initialize().then(() => logger.info('✅ LeadAgent initialized')),
+        this.leadAgent.initialize().then(() => logger.info('✅ LeadAgent initialized')),
       ]);
 
       // Log any initialization failures
@@ -613,6 +625,31 @@ export class AgentOrchestrator {
       leadAgent: this.leadAgent,
       signerAvailable: this.signer !== null,
     };
+  }
+
+  /**
+   * Get LeadAgent for direct orchestration
+   * Ensures orchestrator is initialized first
+   */
+  public async getLeadAgent(): Promise<LeadAgent | null> {
+    await this.ensureInitialized();
+    return this.leadAgent;
+  }
+
+  /**
+   * Get RiskAgent for direct access
+   */
+  public async getRiskAgent(): Promise<RiskAgent | null> {
+    await this.ensureInitialized();
+    return this.riskAgent;
+  }
+
+  /**
+   * Get HedgingAgent for direct access
+   */
+  public async getHedgingAgent(): Promise<HedgingAgent | null> {
+    await this.ensureInitialized();
+    return this.hedgingAgent;
   }
 }
 

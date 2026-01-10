@@ -3,8 +3,8 @@
  * Demonstrates how portfolio assets are extracted dynamically from on-chain data
  */
 
-import { getMarketDataService } from './lib/services/RealMarketDataService';
-import { DelphiMarketService } from './lib/services/DelphiMarketService';
+import { RealMarketDataService, getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 
 async function testDynamicAssetDetection() {
   console.log('🔮 Testing Dynamic Portfolio Asset Detection\n');

@@ -1,18 +1,36 @@
 /**
- * Chat API Route - LLM-powered conversational interface
+ * Chat API Route - LLM-powered conversational interface with AI Agent orchestration
  * Supports both standard and streaming responses
+ * Routes requests through LeadAgent for intelligent decision-making
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { llmProvider } from '@/lib/ai/llm-provider';
 import { logger } from '@/lib/utils/logger';
+import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Keywords that indicate the user wants agent orchestration
+const AGENT_KEYWORDS = [
+  'hedge', 'hedging', 'risk', 'analyze', 'portfolio', 'rebalance',
+  'optimize', 'swap', 'trade', 'buy', 'sell', 'position', 'exposure',
+  'volatility', 'var', 'sharpe', 'settlement', 'gasless', 'prediction',
+  'polymarket', 'delphi', 'market', 'btc', 'eth', 'cro', 'usdc'
+];
+
+/**
+ * Check if message should be routed through agents
+ */
+function shouldUseAgents(message: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  return AGENT_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+}
+
 /**
  * POST /api/chat
- * Generate LLM response for user message
+ * Generate LLM response for user message, routing through agents when appropriate
  */
 export async function POST(request: NextRequest) {
   try {
@@ -26,11 +44,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if this should go through agent orchestration
+    const useAgents = shouldUseAgents(message);
+    
+    if (useAgents) {
+      logger.info('Routing message through LeadAgent', { message: message.substring(0, 50) });
+      
+      try {
+        const orchestrator = getAgentOrchestrator();
+        const leadAgent = await orchestrator.getLeadAgent();
+        
+        if (leadAgent) {
+          // Execute through LeadAgent
+          const report = await leadAgent.executeStrategyFromIntent(message);
+          
+          // Format the agent response
+          const agentResponse = formatAgentResponse(report);
+          
+          return NextResponse.json({
+            success: true,
+            response: agentResponse.content,
+            metadata: {
+              model: 'lead-agent-orchestration',
+              tokensUsed: 0,
+              confidence: 0.95,
+              isRealAI: true,
+              actionExecuted: true,
+              agentReport: report,
+              zkProof: report.zkProofs?.[0],
+            },
+          });
+        }
+      } catch (agentError) {
+        logger.warn('LeadAgent execution failed, falling back to LLM', { error: agentError });
+        // Fall through to LLM response
+      }
+    }
+
     // Handle streaming response
     if (stream) {
       const encoder = new TextEncoder();
       
-      const stream = new ReadableStream({
+      const readableStream = new ReadableStream({
         async start(controller) {
           try {
             for await (const chunk of llmProvider.streamResponse(message, conversationId, context)) {
@@ -46,7 +101,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return new NextResponse(stream, {
+      return new NextResponse(readableStream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -68,7 +123,7 @@ export async function POST(request: NextRequest) {
         isRealAI: llmProvider.isAvailable(),
         actionExecuted: response.actionExecuted || false,
         actionResult: response.actionResult,
-        zkProof: response.zkProof, // Include ZK proof in API response
+        zkProof: response.zkProof,
       },
     });
   } catch (error) {
@@ -81,6 +136,61 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Format agent execution report into readable response
+ */
+function formatAgentResponse(report: any): { content: string } {
+  const lines: string[] = [];
+  
+  lines.push(`## Agent Execution Report\n`);
+  lines.push(`**Strategy:** ${report.strategy || 'Analysis'}`);
+  lines.push(`**Status:** ${report.status === 'success' ? '✅ Success' : '❌ Failed'}`);
+  lines.push(`**Execution Time:** ${report.totalExecutionTime}ms\n`);
+  
+  if (report.riskAnalysis) {
+    lines.push(`### Risk Analysis`);
+    lines.push(`- **Total Risk Score:** ${report.riskAnalysis.totalRisk || 'N/A'}`);
+    lines.push(`- **Volatility:** ${report.riskAnalysis.volatility || 'N/A'}`);
+    lines.push(`- **Market Sentiment:** ${report.riskAnalysis.sentiment || 'N/A'}`);
+    if (report.riskAnalysis.recommendations?.length > 0) {
+      lines.push(`\n**Recommendations:**`);
+      report.riskAnalysis.recommendations.forEach((rec: string) => {
+        lines.push(`- ${rec}`);
+      });
+    }
+    lines.push('');
+  }
+  
+  if (report.hedgingStrategy) {
+    lines.push(`### Hedging Strategy`);
+    lines.push(`- **Recommended Action:** ${report.hedgingStrategy.action || 'N/A'}`);
+    lines.push(`- **Confidence:** ${report.hedgingStrategy.confidence || 'N/A'}`);
+    if (report.hedgingStrategy.positions?.length > 0) {
+      lines.push(`\n**Suggested Positions:**`);
+      report.hedgingStrategy.positions.forEach((pos: any) => {
+        lines.push(`- ${pos.asset}: ${pos.direction} ${pos.size}`);
+      });
+    }
+    lines.push('');
+  }
+  
+  if (report.settlement) {
+    lines.push(`### Settlement`);
+    lines.push(`- **Transactions:** ${report.settlement.transactionCount || 0}`);
+    lines.push(`- **Gasless:** ${report.settlement.gasless ? '✅ Yes' : '❌ No'}`);
+    lines.push('');
+  }
+  
+  if (report.zkProofs?.length > 0) {
+    lines.push(`### ZK Proofs Generated`);
+    report.zkProofs.forEach((proof: any) => {
+      lines.push(`- **${proof.proofType}:** ${proof.verified ? '✅ Verified' : '⏳ Pending'}`);
+    });
+  }
+  
+  return { content: lines.join('\n') };
 }
 
 /**

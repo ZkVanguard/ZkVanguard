@@ -3,7 +3,7 @@
  * Demonstrates real VVS Finance swap functionality on Cronos Testnet
  */
 
-import { getVVSSwapSDKService, VVSSwapSDKService } from './lib/services/VVSSwapSDKService';
+import { getVVSSwapSDKService, VVSSwapSDKService } from '../../lib/services/VVSSwapSDKService';
 
 async function testVVSSwapSDK() {
   console.log('🔄 Testing VVS Swap SDK Integration\n');
