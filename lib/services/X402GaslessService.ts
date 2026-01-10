@@ -5,6 +5,7 @@
  */
 
 import { ethers } from 'ethers';
+import { addTransactionToCache } from '../utils/transactionCache';
 
 export interface X402Config {
   contractAddress: string;
@@ -202,6 +203,23 @@ export class X402GaslessService {
 
       // Get gas sponsored info
       const totalGasSponsored = await x402Contract.totalGasSponsored();
+
+      // Cache the transaction
+      if (receipt?.hash) {
+        addTransactionToCache({
+          hash: receipt.hash,
+          type: 'gasless',
+          status: 'success',
+          timestamp: Date.now(),
+          from: params.userAddress,
+          to: params.to,
+          value: '0',
+          tokenSymbol: 'USDC',
+          gasUsed: '0',
+          blockNumber: receipt.blockNumber,
+          description: 'X402 Gasless Transaction',
+        });
+      }
 
       return {
         success: true,

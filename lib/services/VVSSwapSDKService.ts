@@ -12,8 +12,10 @@ import {
   utils as SwapSdkUtils,
   type Trade
 } from '@vvs-finance/swap-sdk';
+import { ethers } from 'ethers';
 import type { Signer } from 'ethers';
 import { X402GaslessService } from './X402GaslessService';
+import { addTransactionToCache } from '../utils/transactionCache';
 
 export interface VVSSwapQuote {
   amountIn: string;
@@ -154,6 +156,21 @@ export class VVSSwapSDKService {
       const tx = await executeTrade(this.chainId, trade, signer);
       console.log('✅ Swap tx submitted:', tx.hash);
 
+      // Cache the transaction
+      const senderAddress = await signer.getAddress();
+      const tradeAny = trade as any;
+      addTransactionToCache({
+        hash: tx.hash,
+        type: 'swap',
+        status: 'pending',
+        timestamp: Date.now(),
+        from: senderAddress,
+        to: '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae', // VVS Router
+        value: tradeAny.inputAmount?.toSignificant(6) || '0',
+        tokenSymbol: tradeAny.inputAmount?.currency?.symbol || 'Unknown',
+        description: `Swap tokens via VVS`,
+      });
+
       return {
         hash: tx.hash,
         success: true,
@@ -198,6 +215,22 @@ export class VVSSwapSDKService {
 
     if (!result.success) {
       throw new Error(result.error || 'Gasless swap failed');
+    }
+
+    // Cache the gasless swap
+    if (result.txHash) {
+      addTransactionToCache({
+        hash: result.txHash,
+        type: 'swap',
+        status: 'success',
+        timestamp: Date.now(),
+        from: userAddress,
+        to: '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae',
+        value: ethers.formatUnits(amountIn, 18),
+        tokenSymbol: 'Token',
+        gasUsed: '0',
+        description: 'Gasless Swap via X402',
+      });
     }
 
     return {
