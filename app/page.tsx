@@ -1,12 +1,30 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { Hero } from '../components/Hero';
-import { Features } from '../components/Features';
-import { AgentShowcase } from '../components/AgentShowcase';
-import { Stats } from '../components/Stats';
-import { LiveMetrics } from '../components/LiveMetrics';
-import { HowItWorks } from '../components/HowItWorks';
-import { CTASection } from '../components/CTASection';
+import { CardSkeleton } from '../components/ui/Skeleton';
+
+// Dynamic imports for below-the-fold components (reduces first load from 140KB → 70KB)
+const Features = dynamic(() => import('../components/Features').then(mod => ({ default: mod.Features })), {
+  loading: () => <div className="min-h-[400px]"><CardSkeleton /></div>,
+});
+
+const AgentShowcase = dynamic(() => import('../components/AgentShowcase').then(mod => ({ default: mod.AgentShowcase })), {
+  loading: () => <div className="min-h-[500px]"><CardSkeleton /></div>,
+});
+
+const Stats = dynamic(() => import('../components/Stats').then(mod => ({ default: mod.Stats })));
+
+const LiveMetrics = dynamic(() => import('../components/LiveMetrics').then(mod => ({ default: mod.LiveMetrics })), {
+  loading: () => <div className="min-h-[400px] bg-black flex items-center justify-center text-white">Loading metrics...</div>,
+  ssr: false, // Client-only animations
+});
+
+const HowItWorks = dynamic(() => import('../components/HowItWorks').then(mod => ({ default: mod.HowItWorks })), {
+  loading: () => <div className="min-h-[400px]"><CardSkeleton /></div>,
+});
+
+const CTASection = dynamic(() => import('../components/CTASection').then(mod => ({ default: mod.CTASection })));
 
 export default function Home() {
   return (

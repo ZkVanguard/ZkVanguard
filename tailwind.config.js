@@ -79,11 +79,16 @@ module.exports = {
       },
       animation: {
         'fade-in': 'fadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        'shimmer': 'shimmer 2s infinite linear',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-1000px 0' },
+          '100%': { backgroundPosition: '1000px 0' },
         },
       },
     },

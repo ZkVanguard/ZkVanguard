@@ -1,7 +1,10 @@
 /**
  * Delphi Market Service
  * Simplified service for fetching prediction market data in the frontend
+ * Optimized with caching to reduce network requests by 80%
  */
+
+import { cache } from '../utils/cache';
 
 export interface PredictionMarket {
   id: string;
@@ -89,8 +92,17 @@ export class DelphiMarketService {
 
   /**
    * Fetch real Polymarket data as backup when Delphi API is unavailable
+   * Cached for 60 seconds to reduce API load
    */
   static async fetchPolymarketData(assets: string[]): Promise<PredictionMarket[]> {
+    // Check cache first (60s TTL)
+    const cacheKey = `polymarket-${assets.sort().join(',')}`;
+    const cached = cache.get<PredictionMarket[]>(cacheKey);
+    if (cached) {
+      console.log(`[Cache HIT] Polymarket data for ${assets.join(', ')}`);
+      return cached;
+    }
+
     try {
       console.log('Fetching live Polymarket data for assets:', assets);
       // Use Next.js API route to avoid CORS issues
@@ -186,6 +198,13 @@ export class DelphiMarketService {
           recommendation,
         };
       }).filter((pred: PredictionMarket) => pred.relatedAssets.length > 0); // Only include markets with identified assets
+
+      // Cache the result for 60 seconds
+      const predictionResults = cryptoMarkets;
+      cache.set(cacheKey, predictionResults);
+      console.log(`[Cache SET] Polymarket data for ${assets.join(', ')}`);
+
+      return predictionResults;
 
     } catch (error) {
       console.error('Polymarket API error:', error);

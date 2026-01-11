@@ -1,9 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 
-export function LiveMetrics() {
+// Memoized metric card to prevent unnecessary re-renders
+const MetricCard = memo(function MetricCard({ 
+  label, 
+  value, 
+  delay 
+}: { 
+  label: string; 
+  value: string | number; 
+  delay: number 
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay }}
+      className="p-6 lg:p-8"
+    >
+      <div className="text-[15px] text-[#86868b] mb-2">{label}</div>
+      <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
+        {value}
+      </div>
+    </motion.div>
+  );
+});
+
+export const LiveMetrics = memo(function LiveMetrics() {
   const [mounted, setMounted] = useState(false);
   const [metrics, setMetrics] = useState({
     tvl: 2847500,
@@ -19,14 +44,15 @@ export function LiveMetrics() {
   useEffect(() => {
     if (!mounted) return;
     
+    // Reduced update frequency from 3s to 5s to save CPU
     const interval = setInterval(() => {
       setMetrics((prev) => ({
         tvl: prev.tvl + Math.random() * 5000 - 2500,
         transactions: prev.transactions + Math.floor(Math.random() * 3),
         gasSaved: Math.min(75, prev.gasSaved + Math.random() * 0.1),
-        agents: 5,
+        agents: 5, // Static value, doesn't change
       }));
-    }, 3000);
+    }, 5000); // Changed from 3000ms to 5000ms
 
     return () => clearInterval(interval);
   }, [mounted]);
@@ -63,6 +89,14 @@ export function LiveMetrics() {
     );
   }
 
+  // Memoize formatted values to prevent recalculation on every render
+  const formattedMetrics = useMemo(() => ({
+    tvl: `$${(metrics.tvl / 1000000).toFixed(2)}M`,
+    transactions: metrics.transactions.toLocaleString(),
+    gasSaved: `${metrics.gasSaved.toFixed(1)}%`,
+    agents: metrics.agents,
+  }), [metrics]);
+
   return (
     <div>
       <motion.div
@@ -77,42 +111,9 @@ export function LiveMetrics() {
       </motion.div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="p-6 lg:p-8"
-        >
-          <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
-            ${(metrics.tvl / 1000000).toFixed(2)}M
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="p-6 lg:p-8"
-        >
-          <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
-            {metrics.transactions.toLocaleString()}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3 }}
-          className="p-6 lg:p-8"
-        >
-          <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
-            {metrics.gasSaved.toFixed(1)}%
-          </div>
-        </motion.div>
-
+        <MetricCard label="Total Value Locked" value={formattedMetrics.tvl} delay={0.1} />
+        <MetricCard label="Transactions" value={formattedMetrics.transactions} delay={0.2} />
+        <MetricCard label="Gas Savings" value={formattedMetrics.gasSaved} delay={0.3} />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -121,11 +122,11 @@ export function LiveMetrics() {
         >
           <div className="text-[15px] text-[#86868b] mb-2">AI Agents</div>
           <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter flex items-center gap-2">
-            {metrics.agents}
+            {formattedMetrics.agents}
             <div className="w-2 h-2 bg-[#34C759] rounded-full" />
           </div>
         </motion.div>
       </div>
     </div>
   );
-}
+});
