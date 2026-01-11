@@ -419,45 +419,52 @@ export default function SimulatorPage() {
           });
         }
         
-        // Second 5: Moonlander perpetual setup
+        // Second 5: Check liquidity FIRST (before hedge recommendation)
         if (currentStep === 5) {
-          addLog('🌙 Hedging Agent: Connecting to Moonlander perpetuals...', 'info');
-          addLog('   └─ BTC-PERP available: $847M open interest', 'info');
-          addLog('   └─ ETH-PERP available: $312M open interest', 'info');
-          addLog('   └─ Max leverage: 20x | Funding rate: -0.012%', 'info');
-          addAgentAction('Hedging', 'MOONLANDER_CONNECT', 'Perpetual futures markets ready for hedge execution');
+          addLog('💱 Settlement Agent: Pre-flight liquidity check...', 'info');
+          addLog('   └─ Moonlander BTC-PERP: $847M open interest ✓', 'info');
+          addLog('   └─ Moonlander ETH-PERP: $312M open interest ✓', 'info');
+          addLog('   └─ VVS WCRO/USDC: $42.8M TVL | 0.08% slippage ✓', 'info');
+          addLog('✅ Liquidity sufficient for emergency hedge execution', 'success');
+          addAgentAction('Settlement', 'LIQUIDITY_CHECK', 'Pre-flight check: DEX and perpetual liquidity confirmed', {
+            metric: 'Liquidity Score',
+            before: 0,
+            after: 98,
+          });
         }
         
-        // Second 6: Emergency hedge activation
+        // Second 6: Hedging Agent RECOMMENDS hedge (not executes yet)
         if (currentStep === 6) {
-          hedgeActivated = true;
           const btcExposure = newPositions.find(p => p.symbol === 'BTC')?.value || 0;
           const ethExposure = newPositions.find(p => p.symbol === 'ETH')?.value || 0;
           const btcHedgeSize = btcExposure * 0.65;
           const ethHedgeSize = ethExposure * 0.25;
-          addLog(`🛡️ Hedging Agent: EMERGENCY HEDGE ACTIVATED`, 'warning');
+          addLog(`🛡️ Hedging Agent: EMERGENCY HEDGE RECOMMENDED`, 'warning');
           addLog(`   └─ BTC-PERP: $${(btcHedgeSize/1000000).toFixed(1)}M SHORT @ 10x leverage`, 'warning');
           addLog(`   └─ ETH-PERP: $${(ethHedgeSize/1000000).toFixed(1)}M SHORT @ 8x leverage`, 'warning');
-          addAgentAction('Hedging', 'EMERGENCY_HEDGE', `Opening multi-asset SHORT positions via Moonlander perpetuals`, {
-            metric: 'Total Hedge Coverage',
+          addLog('⏳ Awaiting manager signature...', 'info');
+          addAgentAction('Hedging', 'HEDGE_RECOMMENDATION', `Proposing multi-asset SHORT positions via Moonlander`, {
+            metric: 'Proposed Hedge %',
             before: 0,
             after: Math.round((btcHedgeSize + ethHedgeSize) / initialPortfolio.totalValue * 100),
           });
         }
         
-        // Second 8: Manager signature
+        // Second 8: Manager signature APPROVES the hedge
         if (currentStep === 8) {
-          addLog('✍️ Lead Agent: Requesting manager signature for emergency hedge execution', 'info');
+          addLog('✍️ Lead Agent: Requesting manager signature for emergency hedge...', 'info');
           addLog('✅ Manager signature confirmed: 0x7a3f...b29c (gasless via x402)', 'success');
-          addAgentAction('Lead', 'MANAGER_APPROVAL', 'Hedge strategy approved by portfolio manager - executing gaslessly');
+          addLog('🔓 Hedge authorization granted - proceeding to execution', 'success');
+          addAgentAction('Lead', 'MANAGER_APPROVAL', 'Portfolio manager approved emergency hedge - generating ZK proof');
         }
         
-        // Second 10: ZK proof for hedge authorization
-        if (currentStep === 10) {
+        // Second 9: ZK proof for hedge authorization (after approval, before execution)
+        if (currentStep === 9) {
           addLog('🔐 ZK Engine: Generating STARK proof for hedge authorization...', 'info');
           addLog('   └─ Statement: "Hedge within policy limits"', 'info');
-          addLog('   └─ Security: 521-bit (NIST P-521)', 'info');
-          addLog('   └─ Proof size: 77KB | Generation: 1.8s (CUDA)', 'success');
+          addLog('   └─ Private: Position sizes, entry prices, leverage', 'info');
+          addLog('   └─ Public: Policy compliance verified', 'info');
+          addLog('   └─ Security: 521-bit | Size: 77KB | Time: 1.8s (CUDA)', 'success');
           addAgentAction('Reporting', 'ZK_PROOF_GEN', 'Hedge authorization proven without revealing position sizes', {
             metric: 'Proof Security',
             before: 0,
@@ -465,53 +472,65 @@ export default function SimulatorPage() {
           });
         }
         
-        // Second 12: Settlement with tx hash
-        if (currentStep === 12) {
-          addLog('💸 Settlement Agent: Processing hedge via x402 gasless protocol', 'info');
+        // Second 10: NOW execute the hedge on-chain
+        if (currentStep === 10) {
+          hedgeActivated = true;
+          addLog('⚡ Settlement Agent: EXECUTING HEDGE ON-CHAIN...', 'warning');
           const txHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
           addLog(`   └─ Tx Hash: ${txHash.slice(0, 18)}...${txHash.slice(-8)}`, 'success');
-          addLog('   └─ Gas: $0.00 CRO (sponsored) | Fee: $0.01 USDC', 'success');
+          addLog('   └─ Gas: $0.00 CRO (x402 sponsored) | Fee: $0.01 USDC', 'success');
           addLog('   └─ Block: #14,892,347 | Confirmations: 3', 'success');
-          addAgentAction('Settlement', 'GASLESS_EXECUTION', 'Hedge executed on-chain via x402 sponsorship', {
+          addLog('✅ HEDGE POSITIONS OPENED SUCCESSFULLY', 'success');
+          addAgentAction('Settlement', 'HEDGE_EXECUTED', 'Hedge executed on-chain via x402 gasless protocol', {
             metric: 'Gas Saved',
             before: 0,
-            after: 127, // $127 in gas saved
+            after: 127,
           });
         }
         
-        // Second 14: VVS Finance liquidity check
-        if (currentStep === 14) {
-          addLog('💱 Settlement Agent: Checking VVS Finance for rebalance liquidity...', 'info');
-          addLog('   └─ WCRO/USDC pool: $42.8M TVL | 0.08% slippage', 'info');
-          addLog('   └─ Route optimized: WCRO → USDC (direct pair)', 'info');
-          addAgentAction('Settlement', 'VVS_LIQUIDITY', 'DEX liquidity sufficient for emergency rebalance if needed');
+        // Second 12: Confirm positions are live
+        if (currentStep === 12) {
+          addLog('📋 Hedging Agent: Confirming hedge positions...', 'info');
+          addLog('   └─ Position #1: BTC-PERP SHORT | Entry: $84,050 | Active ✓', 'success');
+          addLog('   └─ Position #2: ETH-PERP SHORT | Entry: $3,037 | Active ✓', 'success');
+          addAgentAction('Hedging', 'POSITIONS_CONFIRMED', 'All hedge positions confirmed on Moonlander', {
+            metric: 'Active Hedges',
+            before: 0,
+            after: 2,
+          });
         }
         
-        // Second 16: Real-time P&L update
-        if (currentStep === 16) {
+        // Second 14: Real-time P&L update (hedges making money)
+        if (currentStep === 14) {
           const savedAmount = Math.abs(hedgePnL);
-          addLog(`📈 Hedge P&L Update: SHORT position +$${(savedAmount/1000).toFixed(0)}K as BTC drops`, 'success');
+          addLog(`📈 Hedge P&L Update: SHORT positions profiting as prices drop`, 'success');
+          addLog(`   └─ BTC-PERP SHORT: +$${((savedAmount * 0.75)/1000).toFixed(0)}K`, 'success');
+          addLog(`   └─ ETH-PERP SHORT: +$${((savedAmount * 0.25)/1000).toFixed(0)}K`, 'success');
           addAgentAction('Hedging', 'PNL_UPDATE', `Perpetual shorts profiting from price decline`, {
-            metric: 'Hedge P&L',
+            metric: 'Hedge P&L ($K)',
             before: 0,
             after: Math.round(savedAmount / 1000),
           });
         }
         
-        // Second 20: Mid-event status
-        if (currentStep === 20) {
+        // Second 18: Mid-event status comparison
+        if (currentStep === 18) {
           const portfolioLoss = initialPortfolio.totalValue - currentPortfolio.totalValue;
           const wouldBeLoss = portfolioLoss + Math.abs(hedgePnL);
-          addLog(`📊 STATUS: Portfolio down $${(portfolioLoss/1000000).toFixed(2)}M WITH hedge protection`, 'info');
-          addLog(`📊 WITHOUT ZkVanguard: Would be down $${(wouldBeLoss/1000000).toFixed(2)}M`, 'error');
-          addAgentAction('Lead', 'STATUS_UPDATE', `Hedge saved $${(Math.abs(hedgePnL)/1000000).toFixed(2)}M so far - continuing to monitor`);
+          addLog(`━━━━━ 📊 MID-EVENT STATUS REPORT ━━━━━`, 'info');
+          addLog(`📊 Portfolio Value: $${(currentPortfolio.totalValue/1000000).toFixed(2)}M`, 'info');
+          addLog(`📊 Current Loss: $${(portfolioLoss/1000000).toFixed(2)}M (WITH hedge protection)`, 'info');
+          addLog(`❌ Without ZkVanguard: Would be down $${(wouldBeLoss/1000000).toFixed(2)}M`, 'error');
+          addLog(`✅ Hedge Savings So Far: $${(Math.abs(hedgePnL)/1000000).toFixed(2)}M`, 'success');
+          addAgentAction('Lead', 'STATUS_REPORT', `Hedge protecting portfolio - ${((Math.abs(hedgePnL)/wouldBeLoss)*100).toFixed(0)}% of losses offset`);
         }
         
-        // Second 24: Sharpe ratio impact
-        if (currentStep === 24) {
+        // Second 22: Sharpe ratio impact
+        if (currentStep === 22) {
           addLog('📉 Risk Agent: Updating risk-adjusted metrics...', 'info');
           addLog('   └─ Sharpe Ratio: 1.82 → 0.94 (market stress)', 'info');
-          addLog('   └─ Max Drawdown: 2.1% → 6.2% (within 20% limit)', 'info');
+          addLog('   └─ Max Drawdown: 2.1% → 6.2% (within 20% limit ✓)', 'info');
+          addLog('   └─ VaR: 6.8% → 5.2% (hedge reducing risk)', 'info');
           addAgentAction('Risk', 'METRICS_UPDATE', 'Risk metrics recalculated with hedge factored in', {
             metric: 'Sharpe Ratio',
             before: 1.82,
@@ -519,30 +538,34 @@ export default function SimulatorPage() {
           });
         }
         
-        // Second 28: Market stabilizing
-        if (currentStep === 28) {
-          addLog('📉 Risk Agent: Volatility declining - market finding support level', 'info');
+        // Second 26: Market stabilizing
+        if (currentStep === 26) {
+          addLog('📉 Risk Agent: Market stabilization detected', 'info');
+          addLog('   └─ Volatility: 75 → 52 (declining)', 'info');
+          addLog('   └─ Bid support emerging at $84K (BTC)', 'info');
+          addLog('   └─ Selling pressure: -45% from peak', 'info');
           addAgentAction('Risk', 'STABILIZATION_DETECTED', 'Selling pressure easing, bid support emerging at key levels', {
-            metric: 'Risk Score',
-            before: newRiskScore,
-            after: Math.max(45, newRiskScore - 15),
+            metric: 'Volatility Index',
+            before: 75,
+            after: 52,
           });
         }
         
-        // Second 32: Crypto.com API price feed
-        if (currentStep === 32) {
-          addLog('📡 Data Feed: Crypto.com Exchange API (100 req/s)', 'info');
-          addLog(`   └─ BTC: $${newPositions.find(p => p.symbol === 'BTC')?.price.toLocaleString() || 'N/A'}`, 'info');
+        // Second 30: Crypto.com API price feed update
+        if (currentStep === 30) {
+          addLog('📡 Data Feed: Live prices from Crypto.com Exchange API', 'info');
+          addLog(`   └─ BTC: $${newPositions.find(p => p.symbol === 'BTC')?.price.toLocaleString() || 'N/A'} (100 req/s)`, 'info');
           addLog(`   └─ ETH: $${newPositions.find(p => p.symbol === 'ETH')?.price.toLocaleString() || 'N/A'}`, 'info');
           addLog(`   └─ CRO: $${newPositions.find(p => p.symbol === 'CRO')?.price.toFixed(4) || 'N/A'}`, 'info');
-          addAgentAction('Lead', 'PRICE_FEED', 'Live prices from Crypto.com Exchange API');
+          addAgentAction('Lead', 'PRICE_FEED', 'Real-time prices streaming from Crypto.com Exchange API');
         }
         
-        // Second 35: Hedge adjustment
-        if (currentStep === 35) {
-          addLog('🔄 Hedging Agent: Reducing hedge ratio as volatility normalizes', 'info');
-          addLog('   └─ Closing 40% of BTC-PERP SHORT (locking gains)', 'info');
+        // Second 34: Hedge adjustment - scaling down
+        if (currentStep === 34) {
+          addLog('🔄 Hedging Agent: Adjusting hedge as volatility normalizes', 'info');
+          addLog('   └─ Closing 40% of BTC-PERP SHORT (locking $2.8M profit)', 'info');
           addLog('   └─ Maintaining ETH-PERP SHORT (still elevated vol)', 'info');
+          addLog('   └─ New hedge ratio: 35% → 20%', 'info');
           addAgentAction('Hedging', 'HEDGE_ADJUSTMENT', 'Scaling down SHORT positions - locking in gains', {
             metric: 'Hedge Ratio',
             before: 35,
@@ -550,12 +573,13 @@ export default function SimulatorPage() {
           });
         }
         
-        // Second 38: Active Hedges panel update
-        if (currentStep === 38) {
+        // Second 37: Active Hedges panel update
+        if (currentStep === 37) {
+          const savedAmount = Math.abs(hedgePnL);
           addLog('📋 Dashboard: Active Hedges panel updated', 'info');
-          addLog('   └─ Position #1: BTC-PERP SHORT | +$4.1M P&L | 65% filled', 'success');
-          addLog('   └─ Position #2: ETH-PERP SHORT | +$1.3M P&L | 100% filled', 'success');
-          addAgentAction('Lead', 'UI_UPDATE', 'Real-time hedge positions displayed in dashboard');
+          addLog(`   └─ BTC-PERP SHORT: +$${((savedAmount * 0.75)/1000000).toFixed(1)}M P&L | Partially closed`, 'success');
+          addLog(`   └─ ETH-PERP SHORT: +$${((savedAmount * 0.25)/1000000).toFixed(1)}M P&L | Active`, 'success');
+          addAgentAction('Lead', 'DASHBOARD_UPDATE', 'Real-time hedge positions updated in Active Hedges panel');
         }
         
         // Second 40: ZK Report generation
