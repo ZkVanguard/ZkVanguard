@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { AlertTriangle, TrendingUp, Shield, Activity, Brain } from 'lucide-react';
 import { assessPortfolioRisk } from '../../lib/api/agents';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { usePolling, useLoading } from '@/lib/hooks';
 
 interface RiskMetric {
   label: string;
@@ -13,32 +14,31 @@ interface RiskMetric {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-export function RiskMetrics({ address }: { address: string }) {
+export const RiskMetrics = memo(function RiskMetrics({ address }: { address: string }) {
   const [metrics, setMetrics] = useState<RiskMetric[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isLoading: loading } = useLoading(true);
   const [aiPowered, setAiPowered] = useState(false);
 
-  useEffect(() => {
-    // Fetch AI-enhanced risk assessment
-    async function fetchRiskMetrics() {
-      try {
-        // Try AI service first
-        const aiService = getCryptocomAIService();
-        const aiRiskData = await aiService.assessRisk({ address });
-        
-        setMetrics([
-          { 
-            label: 'VaR (95%)', 
-            value: `${(aiRiskData.var95 * 100).toFixed(1)}%`, 
-            status: aiRiskData.var95 > 0.08 ? 'high' : aiRiskData.var95 > 0.04 ? 'medium' : 'low', 
-            icon: Shield 
-          },
-          { 
-            label: 'Volatility', 
-            value: `${(aiRiskData.volatility * 100).toFixed(1)}%`, 
-            status: aiRiskData.volatility > 0.15 ? 'high' : aiRiskData.volatility > 0.08 ? 'medium' : 'low', 
-            icon: TrendingUp 
-          },
+  // Fetch AI-enhanced risk assessment
+  const fetchRiskMetrics = useCallback(async () => {
+    try {
+      // Try AI service first
+      const aiService = getCryptocomAIService();
+      const aiRiskData = await aiService.assessRisk({ address });
+      
+      setMetrics([
+        { 
+          label: 'VaR (95%)', 
+          value: `${(aiRiskData.var95 * 100).toFixed(1)}%`, 
+          status: aiRiskData.var95 > 0.08 ? 'high' : aiRiskData.var95 > 0.04 ? 'medium' : 'low', 
+          icon: Shield 
+        },
+        { 
+          label: 'Volatility', 
+          value: `${(aiRiskData.volatility * 100).toFixed(1)}%`, 
+          status: aiRiskData.volatility > 0.15 ? 'high' : aiRiskData.volatility > 0.08 ? 'medium' : 'low', 
+          icon: TrendingUp 
+        },
           { 
             label: 'Risk Score', 
             value: `${aiRiskData.riskScore.toFixed(0)}/100`, 
@@ -53,7 +53,6 @@ export function RiskMetrics({ address }: { address: string }) {
           },
         ]);
         setAiPowered(true);
-        setLoading(false);
       } catch (aiError) {
         // Fallback to agent API
         try {
@@ -85,7 +84,6 @@ export function RiskMetrics({ address }: { address: string }) {
             icon: Activity 
           },
         ]);
-        setLoading(false);
         } catch (error) {
           console.error('Failed to fetch risk metrics from agent API:', error);
           
@@ -137,25 +135,19 @@ export function RiskMetrics({ address }: { address: string }) {
                 label: 'Sharpe Ratio', 
                 value: sharpeRatio.toFixed(2), 
                 status: sharpeRatio > 1.5 ? 'low' : sharpeRatio > 0.8 ? 'medium' : 'high', 
-                icon: Activity 
-              },
-            ]);
-            setLoading(false);
-          } catch (fallbackError) {
-            console.error('Fallback risk calculation failed:', fallbackError);
-            setMetrics([]);
-            setLoading(false);
-          }
+              icon: Activity 
+            },
+          ]);
+        } catch (fallbackError) {
+          console.error('Fallback risk calculation failed:', fallbackError);
+          setMetrics([]);
         }
       }
     }
-
-    fetchRiskMetrics();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchRiskMetrics, 30000);
-    return () => clearInterval(interval);
   }, [address]);
+
+  // Use custom polling hook - replaces 5 lines of useEffect logic
+  usePolling(fetchRiskMetrics, 30000);
 
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-48" />;
@@ -198,4 +190,4 @@ export function RiskMetrics({ address }: { address: string }) {
       </div>
     </div>
   );
-}
+});

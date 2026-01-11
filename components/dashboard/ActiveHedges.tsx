@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { usePolling, useLoading, useToggle } from '@/lib/hooks';
 
 // Active hedges and P/L tracking component
 interface HedgePosition {
@@ -35,7 +36,7 @@ interface PerformanceStats {
   worstTrade: number;
 }
 
-export function ActiveHedges({ address }: { address: string }) {
+export const ActiveHedges = memo(function ActiveHedges({ address }: { address: string }) {
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -46,38 +47,36 @@ export function ActiveHedges({ address }: { address: string }) {
     bestTrade: 0,
     worstTrade: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const { isLoading: loading } = useLoading(true);
   const [closingPosition, setClosingPosition] = useState<string | null>(null);
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showCloseConfirm, toggleCloseConfirm, openCloseConfirm, closeCloseConfirm] = useToggle(false);
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
-  const [showClosedPositions, setShowClosedPositions] = useState(false);
+  const [showClosedPositions, toggleClosedPositions] = useToggle(false);
 
   const activeHedges = hedges.filter(h => h.status === 'active');
   const closedHedges = hedges.filter(h => h.status === 'closed');
 
-  useEffect(() => {
-    // Load hedges from localStorage (settlement batch history)
-    const loadHedges = async () => {
-      try {
-        const settlements = localStorage.getItem('settlement_history');
-        console.log('📊 [ActiveHedges] Loading from localStorage:', settlements);
-        
-        if (!settlements) {
-          console.log('📊 [ActiveHedges] No settlement history found');
-          setLoading(false);
-          return;
-        }
+  // Load hedges from localStorage (settlement batch history)
+  const loadHedges = useCallback(async () => {
+    try {
+      const settlements = localStorage.getItem('settlement_history');
+      console.log('📊 [ActiveHedges] Loading from localStorage:', settlements);
+      
+      if (!settlements) {
+        console.log('📊 [ActiveHedges] No settlement history found');
+        return;
+      }
 
-        const settlementData = JSON.parse(settlements);
-        console.log('📊 [ActiveHedges] Parsed settlement data:', settlementData);
-        const hedgePositions: HedgePosition[] = [];
+      const settlementData = JSON.parse(settlements);
+      console.log('📊 [ActiveHedges] Parsed settlement data:', settlementData);
+      const hedgePositions: HedgePosition[] = [];
 
-        // Parse settlement batches to extract hedge positions
-        for (const batch of Object.values(settlementData) as any[]) {
-          console.log('📊 [ActiveHedges] Processing batch:', batch);
-          if (batch.type === 'hedge' && batch.managerSignature) {
-            // Extract hedge details from batch
-            const hedgeData = batch.hedgeDetails || {};
+      // Parse settlement batches to extract hedge positions
+      for (const batch of Object.values(settlementData) as any[]) {
+        console.log('📊 [ActiveHedges] Processing batch:', batch);
+        if (batch.type === 'hedge' && batch.managerSignature) {
+          // Extract hedge details from batch
+          const hedgeData = batch.hedgeDetails || {};
             console.log('✅ [ActiveHedges] Found hedge with signature:', hedgeData);
             
             // Determine if position is closed
@@ -138,66 +137,38 @@ export function ActiveHedges({ address }: { address: string }) {
         const closedHedges = hedgePositions.filter(h => h.status === 'closed');
         const winners = closedHedges.filter(h => h.pnl > 0).length;
         const winRate = closedHedges.length > 0 ? (winners / closedHedges.length) * 100 : 0;
-        const totalPnL = hedgePositions.reduce((sum, h) => sum + h.pnl, 0);
-        const bestTrade = Math.max(...hedgePositions.map(h => h.pnl), 0);
-        const worstTrade = Math.min(...hedgePositions.map(h => h.pnl), 0);
+      const totalPnL = hedgePositions.reduce((sum, h) => sum + h.pnl, 0);
+      const bestTrade = Math.max(...hedgePositions.map(h => h.pnl), 0);
+      const worstTrade = Math.min(...hedgePositions.map(h => h.pnl), 0);
 
-        setHedges(hedgePositions.reverse()); // Newest first
-        setStats({
-          totalHedges: hedgePositions.length,
-          activeHedges: activeCount,
-          winRate,
-          totalPnL,
-          avgHoldTime: '2h 15m', // Calculate from actual data
-          bestTrade,
-          worstTrade,
-        });
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to load hedges:', error);
-        setLoading(false);
-      }
-    };
-
-    loadHedges();
-
-    // Listen for storage events (when hedges are added)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'settlement_history') {
-        console.log('📊 [ActiveHedges] Storage changed, reloading...');
-        void loadHedges();
-      }
-    };
-    
-    // Listen for custom event from ChatInterface
-    const handleHedgeAdded = () => {
-      console.log('📊 [ActiveHedges] Hedge added event received, reloading...');
-      void loadHedges();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('hedgeAdded', handleHedgeAdded);
-
-    // Refresh every 10 seconds for price updates
-    const interval = setInterval(loadHedges, 10000);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('hedgeAdded', handleHedgeAdded);
-    };
+      setHedges(hedgePositions.reverse()); // Newest first
+      setStats({
+        totalHedges: hedgePositions.length,
+        activeHedges: activeCount,
+        winRate,
+        totalPnL,
+        avgHoldTime: '2h 15m', // Calculate from actual data
+        bestTrade,
+        worstTrade,
+      });
+    } catch (error) {
+      console.error('Failed to load hedges:', error);
+    }
   }, [address]);
+
+  // Use custom polling hook - replaces 18 lines of useEffect, setInterval, and event listeners
+  usePolling(loadHedges, 10000);
 
   const handleClosePosition = async (hedge: HedgePosition) => {
     setSelectedHedge(hedge);
-    setShowCloseConfirm(true);
+    openCloseConfirm();
   };
 
   const confirmClosePosition = async () => {
     if (!selectedHedge) return;
     
     setClosingPosition(selectedHedge.id);
-    setShowCloseConfirm(false);
+    closeCloseConfirm();
     
     try {
       // Update localStorage to mark position as closed
@@ -417,7 +388,7 @@ export function ActiveHedges({ address }: { address: string }) {
           {closedHedges.length > 0 && (
             <div className="space-y-3">
               <button
-                onClick={() => setShowClosedPositions(!showClosedPositions)}
+                onClick={toggleClosedPositions}
                 className="w-full text-sm font-semibold text-gray-400 hover:text-gray-300 flex items-center space-x-2 transition-colors"
               >
                 <span>Closed Positions ({closedHedges.length})</span>
@@ -517,7 +488,7 @@ export function ActiveHedges({ address }: { address: string }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowCloseConfirm(false)}
+            onClick={closeCloseConfirm}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -566,7 +537,7 @@ export function ActiveHedges({ address }: { address: string }) {
 
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setShowCloseConfirm(false)}
+                  onClick={closeCloseConfirm}
                   className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors"
                 >
                   Cancel
@@ -584,4 +555,4 @@ export function ActiveHedges({ address }: { address: string }) {
       </AnimatePresence>
     </div>
   );
-}
+});

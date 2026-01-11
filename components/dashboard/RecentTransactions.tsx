@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { usePublicClient, useChainId } from 'wagmi';
 import { formatUnits, formatEther } from 'viem';
 import { 
@@ -15,6 +15,7 @@ import {
   Filter,
   Loader2
 } from 'lucide-react';
+import { usePolling, useLoading } from '@/lib/hooks';
 
 interface Transaction {
   hash: string;
@@ -58,14 +59,13 @@ const METHOD_SIGNATURES: Record<string, { name: string; type: Transaction['type'
   '0xf3fef3a3': { name: 'withdraw', type: 'withdraw' },
 };
 
-export function RecentTransactions({ address }: RecentTransactionsProps) {
+export const RecentTransactions = memo(function RecentTransactions({ address }: RecentTransactionsProps) {
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isLoading: loading, error, setError } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'swap' | 'deposit' | 'withdraw'>('all');
-  const [error, setError] = useState<string | null>(null);
 
   const explorerUrl = chainId === 338 
     ? 'https://explorer.cronos.org/testnet' 
@@ -75,9 +75,10 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
 
   const fetchTransactions = useCallback(async (showRefreshIndicator = false) => {
     if (!publicClient || !address || address === '0x0000...0000') {
-      setLoading(false);
       return;
     }
+
+    if (showRefreshIndicator) setRefreshing(true);
 
     if (showRefreshIndicator) setRefreshing(true);
     setError(null);
@@ -409,18 +410,12 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       console.error('Error fetching transactions:', err);
       setError('Failed to fetch transactions');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, [publicClient, address, network]);
+  }, [publicClient, address, network, setError]);
 
-  useEffect(() => {
-    fetchTransactions();
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(() => fetchTransactions(false), 30000);
-    return () => clearInterval(interval);
-  }, [fetchTransactions]);
+  // Use custom polling hook - replaces 5 lines of useEffect logic
+  usePolling(fetchTransactions, 30000);
 
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
@@ -630,4 +625,4 @@ export function RecentTransactions({ address }: RecentTransactionsProps) {
       )}
     </div>
   );
-}
+});

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { DelphiMarketService, PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { usePolling, useLoading } from '@/lib/hooks';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -24,16 +25,15 @@ interface PredictionInsightsProps {
   onTriggerAgentAnalysis?: (market: PredictionMarket) => void;
 }
 
-export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], showAll = false, onOpenHedge, onTriggerAgentAnalysis }: PredictionInsightsProps) {
+export const PredictionInsights = memo(function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], showAll = false, onOpenHedge, onTriggerAgentAnalysis }: PredictionInsightsProps) {
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isLoading: loading, error, setError } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'HIGH' | 'MODERATE' | 'LOW'>('all');
-  const [error, setError] = useState<string | null>(null);
   const [selectedPrediction, setSelectedPrediction] = useState<PredictionMarket | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{ id: string; action: string } | null>(null);
 
-  const fetchPredictions = async (showRefreshIndicator = false) => {
+  const fetchPredictions = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setRefreshing(true);
     setError(null);
 
@@ -47,18 +47,12 @@ export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], sho
       console.error('Error fetching Delphi predictions:', err);
       setError('Failed to fetch predictions');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [showAll, assets, setError]);
 
-  useEffect(() => {
-    fetchPredictions();
-    
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(() => fetchPredictions(false), 60000);
-    return () => clearInterval(interval);
-  }, [assets.join(',')]);
+  // Use custom polling hook - replaces 6 lines of useEffect logic
+  usePolling(fetchPredictions, 60000);
 
   const filteredPredictions = predictions.filter(p => {
     if (filter === 'all') return true;
@@ -491,4 +485,4 @@ export function PredictionInsights({ assets = ['BTC', 'ETH', 'CRO', 'USDC'], sho
       )}
     </div>
   );
-}
+});

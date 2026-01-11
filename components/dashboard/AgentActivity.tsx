@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Activity, CheckCircle, Clock, XCircle, Shield, Brain, Zap, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
 import { getAgentActivity, type AgentTask } from '@/lib/api/agents';
+import { usePolling, useLoading, useToggle } from '@/lib/hooks';
 
 interface AgentActivityProps {
   address: string;
@@ -71,12 +72,11 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
   };
 }
 
-export function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
+export const AgentActivity = memo(function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
   const [tasks, setTasks] = useState<(AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isLoading: loading, error, setError } = useLoading(true);
+  const [autoRefresh, toggleAutoRefresh] = useToggle(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchActivity = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
@@ -105,31 +105,12 @@ export function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
       // Show empty state - no simulated activity
       setTasks([]);
     } finally {
-      setLoading(false);
       setIsRefreshing(false);
     }
-  }, [address]);
+  }, [address, setError]);
 
-  useEffect(() => {
-    fetchActivity();
-    
-    // Auto-refresh every 5 seconds
-    let interval: NodeJS.Timeout;
-    if (autoRefresh) {
-      interval = setInterval(() => fetchActivity(false), 5000);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [fetchActivity, autoRefresh]);
-
-  // Notify parent when tasks complete
-  useEffect(() => {
-    tasks.filter(t => t.status === 'completed').forEach(task => {
-      onTaskComplete?.(task);
-    });
-  }, [tasks, onTaskComplete]);
+  // Use custom polling hook - replaces 12 lines of useEffect logic
+  usePolling(fetchActivity, 5000, autoRefresh);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -194,7 +175,7 @@ export function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
+              onClick={toggleAutoRefresh}
               className={`text-xs px-2 py-1 rounded border transition-colors ${
                 autoRefresh 
                   ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' 
@@ -295,4 +276,4 @@ export function AgentActivity({ address, onTaskComplete }: AgentActivityProps) {
       </div>
     </div>
   );
-}
+});
