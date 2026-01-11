@@ -377,7 +377,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
-                <AgentActivity address={displayAddress} />
+                <AgentActivity address={displayAddress || ''} />
               </>
             )}
             {activeTab === 'positions' && (
