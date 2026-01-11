@@ -10,15 +10,15 @@ export const metadata: Metadata = {
   keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
   authors: [{ name: 'ZkVanguard Team' }],
   icons: {
-    icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
-    apple: '/logo-apple.svg',
+    icon: '/logo-official.svg',
+    shortcut: '/logo-official.svg',
+    apple: '/logo-official.svg',
   },
   openGraph: {
     title: 'ZkVanguard',
     description: 'AI-Powered RWA Risk Management Platform',
     type: 'website',
-    images: ['/logo-apple.svg'],
+    images: ['/logo-official.svg'],
   },
 };
 
