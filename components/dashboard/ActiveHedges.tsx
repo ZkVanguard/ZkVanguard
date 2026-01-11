@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useMemo, useEffect, useRef } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
-import { usePolling, useLoading, useToggle } from '@/lib/hooks';
+import { usePolling, useToggle } from '@/lib/hooks';
+import { cache } from '@/lib/utils/cache';
 
 // Active hedges and P/L tracking component
 interface HedgePosition {
@@ -36,7 +37,7 @@ interface PerformanceStats {
   worstTrade: number;
 }
 
-export const ActiveHedges = memo(function ActiveHedges({ address }: { address: string }) {
+export const ActiveHedges = memo(function ActiveHedges({ address }: { address?: string }) {
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -47,37 +48,62 @@ export const ActiveHedges = memo(function ActiveHedges({ address }: { address: s
     bestTrade: 0,
     worstTrade: 0,
   });
-  const { isLoading: loading } = useLoading(true);
+  const [loading, setLoading] = useState(true);
   const [closingPosition, setClosingPosition] = useState<string | null>(null);
   const [showCloseConfirm, toggleCloseConfirm, openCloseConfirm, closeCloseConfirm] = useToggle(false);
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
+  const processingRef = useRef(false);
+  const lastProcessedRef = useRef<string>('');
 
-  const activeHedges = hedges.filter(h => h.status === 'active');
-  const closedHedges = hedges.filter(h => h.status === 'closed');
+  // Memoize active and closed hedges to prevent recalculation
+  const activeHedges = useMemo(() => hedges.filter(h => h.status === 'active'), [hedges]);
+  const closedHedges = useMemo(() => hedges.filter(h => h.status === 'closed'), [hedges]);
 
-  // Load hedges from localStorage (settlement batch history)
+  // Load hedges from localStorage with caching and deduplication
   const loadHedges = useCallback(async () => {
+    // Prevent concurrent processing
+    if (processingRef.current) {
+      return;
+    }
+
     try {
-      const settlements = localStorage.getItem('settlement_history');
-      console.log('📊 [ActiveHedges] Loading from localStorage:', settlements);
+      processingRef.current = true;
       
+      const settlements = localStorage.getItem('settlement_history');
+      
+      // Skip if no data or data hasn't changed
       if (!settlements) {
-        console.log('📊 [ActiveHedges] No settlement history found');
+        setHedges([]);
+        setLoading(false);
+        return;
+      }
+
+      // Check if data has changed using hash
+      const dataHash = settlements.substring(0, 100); // Quick hash
+      if (dataHash === lastProcessedRef.current) {
+        setLoading(false);
+        return; // Data unchanged, skip processing
+      }
+      lastProcessedRef.current = dataHash;
+
+      // Check cache first (30s TTL)
+      const cacheKey = `active-hedges-${dataHash}`;
+      const cached = cache.get<HedgePosition[]>(cacheKey);
+      if (cached) {
+        setHedges(cached);
+        setLoading(false);
         return;
       }
 
       const settlementData = JSON.parse(settlements);
-      console.log('📊 [ActiveHedges] Parsed settlement data:', settlementData);
       const hedgePositions: HedgePosition[] = [];
 
       // Parse settlement batches to extract hedge positions
       for (const batch of Object.values(settlementData) as any[]) {
-        console.log('📊 [ActiveHedges] Processing batch:', batch);
         if (batch.type === 'hedge' && batch.managerSignature) {
           // Extract hedge details from batch
           const hedgeData = batch.hedgeDetails || {};
-            console.log('✅ [ActiveHedges] Found hedge with signature:', hedgeData);
             
             // Determine if position is closed
             const isClosed = batch.status === 'closed';
@@ -89,20 +115,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address }: { address: s
             
             if (isClosed) {
               // Use locked final values for closed positions
-              currentPrice = hedgeData.entryPrice || 43500; // Keep at entry for display
+              currentPrice = hedgeData.entryPrice || 43500;
               pnl = batch.finalPnL || 0;
               pnlPercent = batch.finalPnLPercent || 0;
-              console.log('🔒 [ActiveHedges] Using locked P/L for closed position:', { pnl, pnlPercent });
             } else {
-              // Fetch REAL current price for active positions
+              // Fetch REAL current price for active positions (with caching)
               try {
                 const marketData = getMarketDataService();
                 const assetSymbol = hedgeData.asset?.replace('-PERP', '') || 'BTC';
                 const priceData = await marketData.getTokenPrice(assetSymbol);
                 currentPrice = priceData.price;
-                console.log(`📊 [ActiveHedges] Real price for ${assetSymbol}:`, currentPrice);
               } catch (error) {
-                console.warn('Failed to fetch real price, using entry price:', error);
                 currentPrice = hedgeData.entryPrice; // Fallback to entry price
               }
               pnl = hedgeData.type === 'SHORT' 
@@ -132,6 +155,9 @@ export const ActiveHedges = memo(function ActiveHedges({ address }: { address: s
           }
         }
 
+        // Cache processed data (30s TTL)
+        cache.set(cacheKey, hedgePositions, 30000);
+
         // Calculate performance stats
         const activeCount = hedgePositions.filter(h => h.status === 'active').length;
         const closedHedges = hedgePositions.filter(h => h.status === 'closed');
@@ -151,13 +177,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address }: { address: s
         bestTrade,
         worstTrade,
       });
+      setLoading(false);
     } catch (error) {
-      console.error('Failed to load hedges:', error);
+      console.error('❌ [ActiveHedges] Error loading hedges:', error);
+      setLoading(false);
+    } finally {
+      processingRef.current = false;
     }
   }, [address]);
 
-  // Use custom polling hook - replaces 18 lines of useEffect, setInterval, and event listeners
-  usePolling(loadHedges, 10000);
+  // Use custom polling hook with longer interval (30s instead of 10s)
+  usePolling(loadHedges, 30000);
 
   const handleClosePosition = async (hedge: HedgePosition) => {
     setSelectedHedge(hedge);

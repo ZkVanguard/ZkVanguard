@@ -5,7 +5,7 @@ import { AlertTriangle, TrendingUp, Shield, Activity, Brain } from 'lucide-react
 import { assessPortfolioRisk } from '../../lib/api/agents';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
-import { usePolling, useLoading } from '@/lib/hooks';
+import { usePolling } from '@/lib/hooks';
 
 interface RiskMetric {
   label: string;
@@ -14,13 +14,25 @@ interface RiskMetric {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-export const RiskMetrics = memo(function RiskMetrics({ address }: { address: string }) {
+export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: string }) {
   const [metrics, setMetrics] = useState<RiskMetric[]>([]);
-  const { isLoading: loading } = useLoading(true);
+  const [loading, setLoading] = useState(true);
   const [aiPowered, setAiPowered] = useState(false);
 
   // Fetch AI-enhanced risk assessment
   const fetchRiskMetrics = useCallback(async () => {
+    if (!address) {
+      // No wallet connected - show default risk metrics
+      setMetrics([
+        { label: 'VaR (95%)', value: '--', status: 'low', icon: Shield },
+        { label: 'Volatility', value: '--', status: 'low', icon: TrendingUp },
+        { label: 'Risk Score', value: '--', status: 'low', icon: AlertTriangle },
+        { label: 'Sharpe Ratio', value: '--', status: 'low', icon: Activity },
+      ]);
+      setLoading(false);
+      return;
+    }
+
     try {
       // Try AI service first
       const aiService = getCryptocomAIService();
@@ -39,24 +51,25 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address: str
           status: aiRiskData.volatility > 0.15 ? 'high' : aiRiskData.volatility > 0.08 ? 'medium' : 'low', 
           icon: TrendingUp 
         },
-          { 
-            label: 'Risk Score', 
-            value: `${aiRiskData.riskScore.toFixed(0)}/100`, 
-            status: aiRiskData.riskScore > 60 ? 'high' : aiRiskData.riskScore > 40 ? 'medium' : 'low', 
-            icon: AlertTriangle 
-          },
-          { 
-            label: 'Sharpe Ratio', 
-            value: aiRiskData.sharpeRatio.toFixed(2), 
-            status: aiRiskData.sharpeRatio > 1.5 ? 'low' : aiRiskData.sharpeRatio > 0.8 ? 'medium' : 'high', 
-            icon: Activity 
-          },
-        ]);
-        setAiPowered(true);
-      } catch (aiError) {
-        // Fallback to agent API
-        try {
-          const riskData = await assessPortfolioRisk(address);
+        { 
+          label: 'Risk Score', 
+          value: `${aiRiskData.riskScore.toFixed(0)}/100`, 
+          status: aiRiskData.riskScore > 60 ? 'high' : aiRiskData.riskScore > 40 ? 'medium' : 'low', 
+          icon: AlertTriangle 
+        },
+        { 
+          label: 'Sharpe Ratio', 
+          value: aiRiskData.sharpeRatio.toFixed(2), 
+          status: aiRiskData.sharpeRatio > 1.5 ? 'low' : aiRiskData.sharpeRatio > 0.8 ? 'medium' : 'high', 
+          icon: Activity 
+        },
+      ]);
+      setAiPowered(true);
+      setLoading(false);
+    } catch (aiError) {
+      // Fallback to agent API
+      try {
+        const riskData = await assessPortfolioRisk(address);
         
         setMetrics([
           { 
@@ -84,63 +97,66 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address: str
             icon: Activity 
           },
         ]);
-        } catch (error) {
-          console.error('Failed to fetch risk metrics from agent API:', error);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch risk metrics from agent API:', error);
           
-          // Fallback: Calculate basic risk metrics from real portfolio data
-          try {
-            const marketData = getMarketDataService();
-            const portfolioData = await marketData.getPortfolioData(address);
+        // Fallback: Calculate basic risk metrics from real portfolio data
+        try {
+          const marketData = getMarketDataService();
+          const portfolioData = await marketData.getPortfolioData(address);
             
-            // Calculate concentration risk
-            const concentration = portfolioData.tokens.length > 0
-              ? Math.max(...portfolioData.tokens.map(t => t.usdValue / portfolioData.totalValue))
-              : 0;
+          // Calculate concentration risk
+          const concentration = portfolioData.tokens.length > 0
+            ? Math.max(...portfolioData.tokens.map(t => t.usdValue / portfolioData.totalValue))
+            : 0;
             
-            // Simple risk score based on concentration (0-100)
-            const riskScore = concentration > 0.7 ? 75 : concentration > 0.5 ? 55 : 35;
+          // Simple risk score based on concentration (0-100)
+          const riskScore = concentration > 0.7 ? 75 : concentration > 0.5 ? 55 : 35;
             
-            // Estimate volatility based on portfolio composition
-            const hasHighVolAssets = portfolioData.tokens.some(t => 
-              ['BTC', 'ETH', 'CRO'].includes(t.symbol)
-            );
-            const volatility = hasHighVolAssets ? 0.12 : 0.06;
+          // Estimate volatility based on portfolio composition
+          const hasHighVolAssets = portfolioData.tokens.some(t => 
+            ['BTC', 'ETH', 'CRO'].includes(t.symbol)
+          );
+          const volatility = hasHighVolAssets ? 0.12 : 0.06;
             
-            // Calculate VaR (simplified)
-            const var95 = volatility * 1.65; // 95% confidence interval
+          // Calculate VaR (simplified)
+          const var95 = volatility * 1.65; // 95% confidence interval
             
-            // Calculate Sharpe ratio (simplified, assuming 5% risk-free rate)
-            const sharpeRatio = portfolioData.totalValue > 0 ? 1.2 : 0;
+          // Calculate Sharpe ratio (simplified, assuming 5% risk-free rate)
+          const sharpeRatio = portfolioData.totalValue > 0 ? 1.2 : 0;
             
-            setMetrics([
-              { 
-                label: 'VaR (95%)', 
-                value: `${(var95 * 100).toFixed(1)}%`, 
-                status: var95 > 0.20 ? 'high' : var95 > 0.10 ? 'medium' : 'low', 
-                icon: Shield 
-              },
-              { 
-                label: 'Volatility', 
-                value: `${(volatility * 100).toFixed(1)}%`, 
-                status: volatility > 0.15 ? 'high' : volatility > 0.08 ? 'medium' : 'low', 
-                icon: TrendingUp 
-              },
-              { 
-                label: 'Risk Score', 
-                value: `${riskScore}/100`, 
-                status: riskScore > 60 ? 'high' : riskScore > 40 ? 'medium' : 'low', 
-                icon: AlertTriangle 
-              },
-              { 
-                label: 'Sharpe Ratio', 
-                value: sharpeRatio.toFixed(2), 
-                status: sharpeRatio > 1.5 ? 'low' : sharpeRatio > 0.8 ? 'medium' : 'high', 
+          setMetrics([
+            { 
+              label: 'VaR (95%)', 
+              value: `${(var95 * 100).toFixed(1)}%`, 
+              status: var95 > 0.20 ? 'high' : var95 > 0.10 ? 'medium' : 'low', 
+              icon: Shield 
+            },
+            { 
+              label: 'Volatility', 
+              value: `${(volatility * 100).toFixed(1)}%`, 
+              status: volatility > 0.15 ? 'high' : volatility > 0.08 ? 'medium' : 'low', 
+              icon: TrendingUp 
+            },
+            { 
+              label: 'Risk Score', 
+              value: `${riskScore}/100`, 
+              status: riskScore > 60 ? 'high' : riskScore > 40 ? 'medium' : 'low', 
+              icon: AlertTriangle 
+            },
+            { 
+              label: 'Sharpe Ratio', 
+              value: sharpeRatio.toFixed(2), 
+              status: sharpeRatio > 1.5 ? 'low' : sharpeRatio > 0.8 ? 'medium' : 'high', 
               icon: Activity 
             },
           ]);
+          setLoading(false);
         } catch (fallbackError) {
           console.error('Fallback risk calculation failed:', fallbackError);
           setMetrics([]);
+          setLoading(false);
         }
       }
     }

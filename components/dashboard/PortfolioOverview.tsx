@@ -22,7 +22,7 @@ interface PortfolioData {
 }
 
 interface PortfolioOverviewProps {
-  address: string;
+  address?: string;
   onNavigateToPositions?: () => void;
   onNavigateToHedges?: () => void;
 }
@@ -44,6 +44,11 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
 
   useEffect(() => {
     async function fetchAIAnalysis() {
+      if (!address) {
+        setLoading(false);
+        return;
+      }
+      
       try {
         // Count active hedges from settlement history
         const settlements = localStorage.getItem('settlement_history');
@@ -101,6 +106,16 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         }
       } catch (error) {
         console.error('Portfolio data fetch failed completely:', error);
+        // Still show the UI with portfolio count even if market data fails
+        setData(prev => ({
+          ...prev,
+          totalValue: 0,
+          positions: Number(portfolioCount) || 0,
+          activeHedges: 0,
+          topAssets: [],
+        }));
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -111,6 +126,8 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         positions: Number(portfolioCount),
       }));
       fetchAIAnalysis();
+    } else {
+      setLoading(false);
     }
 
     // Listen for hedge updates to refresh count
@@ -128,6 +145,18 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
 
   if (loading) {
     return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-64" />;
+  }
+
+  if (!address) {
+    return (
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <div className="text-center py-12">
+          <DollarSign className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Connect Your Wallet</h3>
+          <p className="text-gray-400">Connect your wallet to view your portfolio</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -160,7 +189,12 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         <div className="col-span-2">
           <div className="text-sm text-gray-400 mb-2">Total Portfolio Value</div>
           <div className="text-4xl font-bold mb-2">
-            ${data.totalValue ? (data.totalValue / 1000000).toFixed(2) : '0.00'}M
+            {data.totalValue >= 1000000 
+              ? `$${(data.totalValue / 1000000).toFixed(2)}M`
+              : data.totalValue >= 1000 
+                ? `$${(data.totalValue / 1000).toFixed(2)}K`
+                : `$${data.totalValue.toFixed(2)}`
+            }
           </div>
           <div className="text-gray-400 text-sm">
             {portfolioCount !== undefined ? portfolioCount.toString() : '0'} portfolios on-chain
