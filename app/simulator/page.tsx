@@ -286,17 +286,14 @@ export default function SimulatorPage() {
         let priceChange = 0;
         
         if (selectedScenario.type === 'tariff') {
-          // Tariff shock: rapid initial drop (first 30%), then gradual continued decline, then stabilization
-          if (changeFactor < 0.3) {
-            // First 30%: 70% of the drop happens here (panic selling)
-            priceChange = (scenarioChange?.change || 0) * 0.7 * (changeFactor / 0.3);
-          } else if (changeFactor < 0.6) {
-            // 30-60%: Remaining 30% of drop (continued selling pressure)
-            priceChange = (scenarioChange?.change || 0) * (0.7 + 0.3 * ((changeFactor - 0.3) / 0.3));
+          // Tariff shock: Full price drop happens over 45 seconds
+          // No recovery - this shows the full impact of the event
+          if (changeFactor < 0.4) {
+            // First 40%: 80% of the drop happens here (panic selling)
+            priceChange = (scenarioChange?.change || 0) * 0.8 * (changeFactor / 0.4);
           } else {
-            // 60-100%: Market stabilizes after hedging kicks in - slight recovery
-            const stabilizationFactor = (changeFactor - 0.6) / 0.4;
-            priceChange = (scenarioChange?.change || 0) * (1 - stabilizationFactor * 0.15); // Recovers 15% of losses
+            // 40-100%: Remaining 20% of drop (continued pressure, then stabilizes at full drop)
+            priceChange = (scenarioChange?.change || 0) * (0.8 + 0.2 * ((changeFactor - 0.4) / 0.6));
           }
         } else if (selectedScenario.type === 'crash') {
           // Crash happens fast then stabilizes
@@ -339,9 +336,14 @@ export default function SimulatorPage() {
       // Calculate hedge P&L if hedge is active
       if (hedgeActivated && selectedScenario.type !== 'recovery') {
         const btcPosition = newPositions.find(p => p.symbol === 'BTC');
-        if (btcPosition) {
+        const ethPosition = newPositions.find(p => p.symbol === 'ETH');
+        if (btcPosition && btcPosition.pnlPercent < 0) {
           // SHORT hedge profits when price drops
-          hedgePnL = Math.abs(btcPosition.pnl) * 0.35 * (btcPosition.pnlPercent < 0 ? 1 : -1);
+          // 65% hedge ratio on BTC (aggressive protection during major events)
+          // Plus 25% hedge on ETH exposure
+          const btcHedgeProfit = Math.abs(btcPosition.pnl) * 0.65;
+          const ethHedgeProfit = ethPosition ? Math.abs(ethPosition.pnl) * 0.25 : 0;
+          hedgePnL = btcHedgeProfit + ethHedgeProfit;
         }
       }
 
@@ -381,12 +383,16 @@ export default function SimulatorPage() {
         if (currentStep === 6) {
           hedgeActivated = true;
           const btcExposure = newPositions.find(p => p.symbol === 'BTC')?.value || 0;
-          const hedgeSize = btcExposure * 0.35;
-          addLog(`🛡️ Hedging Agent: EMERGENCY HEDGE ACTIVATED - $${(hedgeSize/1000000).toFixed(1)}M SHORT on BTC-PERP`, 'warning');
-          addAgentAction('Hedging', 'EMERGENCY_HEDGE', `Opening 35% SHORT via Moonlander perpetuals to offset $${(btcExposure/1000000).toFixed(1)}M BTC exposure`, {
-            metric: 'Hedge Ratio',
+          const ethExposure = newPositions.find(p => p.symbol === 'ETH')?.value || 0;
+          const btcHedgeSize = btcExposure * 0.65;
+          const ethHedgeSize = ethExposure * 0.25;
+          addLog(`🛡️ Hedging Agent: EMERGENCY HEDGE ACTIVATED`, 'warning');
+          addLog(`   └─ BTC: $${(btcHedgeSize/1000000).toFixed(1)}M SHORT (65% of $${(btcExposure/1000000).toFixed(1)}M exposure)`, 'warning');
+          addLog(`   └─ ETH: $${(ethHedgeSize/1000000).toFixed(1)}M SHORT (25% of $${(ethExposure/1000000).toFixed(1)}M exposure)`, 'warning');
+          addAgentAction('Hedging', 'EMERGENCY_HEDGE', `Opening multi-asset SHORT positions via Moonlander perpetuals`, {
+            metric: 'Total Hedge Coverage',
             before: 0,
-            after: 35,
+            after: Math.round((btcHedgeSize + ethHedgeSize) / initialPortfolio.totalValue * 100),
           });
         }
         
@@ -454,9 +460,13 @@ export default function SimulatorPage() {
         
         // Final summary
         if (currentStep === totalSteps - 1) {
-          const totalSaved = Math.abs(hedgePnL);
+          // Calculate accurate unhedged loss based on all asset price changes
+          const unhedgedLoss = selectedScenario.priceChanges.reduce((total, pc) => {
+            const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
+            return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
+          }, 0);
           const finalLoss = initialPortfolio.totalValue - currentPortfolio.totalValue;
-          const unhedgedLoss = finalLoss + totalSaved;
+          const totalSaved = unhedgedLoss - finalLoss;
           addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
           addLog(`✅ SIMULATION COMPLETE: ZkVanguard Response Time: 19 seconds`, 'success');
           addLog(`💰 Total Saved by Hedging: $${(totalSaved/1000000).toFixed(2)}M`, 'success');
@@ -805,16 +815,23 @@ export default function SimulatorPage() {
                     <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                       <div className="text-sm text-gray-400 mb-2">Without Hedging</div>
                       <div className="text-2xl font-bold text-red-400">
-                        -${Math.abs(selectedScenario.priceChanges[0].change * initialPortfolio.totalValue / 100 / 1000).toFixed(0)}K
+                        {/* Calculate total unhedged loss across all assets */}
+                        -${(selectedScenario.priceChanges.reduce((total, pc) => {
+                          const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
+                          return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
+                        }, 0) / 1000000).toFixed(2)}M
                       </div>
                       <div className="text-xs text-gray-500">
-                        {selectedScenario.priceChanges[0].change}% portfolio loss
+                        {(selectedScenario.priceChanges.reduce((total, pc) => {
+                          const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
+                          return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
+                        }, 0) / initialPortfolio.totalValue * 100).toFixed(1)}% total portfolio loss
                       </div>
                     </div>
                     <div className="bg-gray-800/50 rounded-lg p-4 border border-emerald-500/30">
                       <div className="text-sm text-gray-400 mb-2">With zkVanguard Hedging</div>
                       <div className="text-2xl font-bold text-emerald-400">
-                        {pnlValue >= 0 ? '+' : '-'}${Math.abs(pnlValue / 1000).toFixed(0)}K
+                        {pnlValue >= 0 ? '+' : '-'}${Math.abs(pnlValue / 1000000).toFixed(2)}M
                       </div>
                       <div className="text-xs text-emerald-400">
                         {Math.abs(pnlPercent).toFixed(1)}% {pnlPercent >= 0 ? 'gain' : 'loss'} (hedged)
@@ -825,7 +842,11 @@ export default function SimulatorPage() {
                     <div className="flex items-center gap-2 text-purple-400">
                       <Shield className="w-4 h-4" />
                       <span className="font-semibold">
-                        AI Protection Saved: ${Math.abs((selectedScenario.priceChanges[0].change * initialPortfolio.totalValue / 100) - pnlValue).toLocaleString()}
+                        {/* Calculate saved as: unhedged loss - actual loss */}
+                        AI Protection Saved: ${(selectedScenario.priceChanges.reduce((total, pc) => {
+                          const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
+                          return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
+                        }, 0) - Math.abs(pnlValue)).toLocaleString(undefined, {maximumFractionDigits: 0})}
                       </span>
                     </div>
                   </div>
