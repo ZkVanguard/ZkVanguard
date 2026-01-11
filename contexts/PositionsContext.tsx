@@ -1,7 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
+import { dedupedFetch } from '@/lib/utils/request-deduplication';
+import { cache } from '@/lib/utils/cache';
 
 interface Position {
   symbol: string;
@@ -32,10 +34,28 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchRef = useRef<number>(0);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchPositions = useCallback(async (isBackgroundRefresh = false) => {
     if (!address) {
       setPositionsData(null);
+      return;
+    }
+
+    // Debounce: prevent fetching more than once per 5 seconds
+    const now = Date.now();
+    if (now - lastFetchRef.current < 5000 && !isBackgroundRefresh) {
+      console.log('⏭️ [PositionsContext] Skipping fetch - too soon after last request');
+      return;
+    }
+
+    // Check cache first (30s TTL)
+    const cacheKey = `positions-${address}`;
+    const cached = cache.get<PositionsData>(cacheKey);
+    if (cached && !isBackgroundRefresh) {
+      console.log('⚡ [PositionsContext] Using cached positions');
+      setPositionsData(cached);
       return;
     }
 
@@ -46,8 +66,11 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      console.log(`🔄 [PositionsContext] Fetching positions for ${address} (single source of truth)`);
-      const res = await fetch(`/api/positions?address=${address}`);
+      console.log(`🔄 [PositionsContext] Fetching positions for ${address} (deduped)`);
+      lastFetchRef.current = now;
+      
+      // Use deduped fetch to prevent duplicate requests
+      const res = await dedupedFetch(`/api/positions?address=${address}`);
       
       if (!res.ok) {
         throw new Error(`Failed to fetch positions: ${res.status}`);
@@ -61,6 +84,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
       console.log(`✅ [PositionsContext] Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`);
       setPositionsData(data);
+      
+      // Cache for 30 seconds
+      cache.set(cacheKey, data, 30000);
     } catch (err) {
       console.error('❌ [PositionsContext] Error fetching positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch positions');
@@ -80,16 +106,33 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     fetchPositions();
   }, [fetchPositions]);
 
-  // Auto-refresh every 60 seconds (reduced from 30s to minimize load)
+  // Reduced auto-refresh: Only refresh when user is actively viewing (page visible)
+  // Increased interval to 2 minutes to reduce server load
   useEffect(() => {
     if (!address) return;
 
-    const interval = setInterval(() => {
-      console.log('⏰ [PositionsContext] Auto-refreshing positions...');
-      fetchPositions(true); // Pass true to indicate background refresh
-    }, 60000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ [PositionsContext] Page visible - refreshing positions');
+        fetchPositions(true);
+      }
+    };
 
-    return () => clearInterval(interval);
+    // Refresh when page becomes visible
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Longer polling interval: 2 minutes instead of 1 minute
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        console.log('⏰ [PositionsContext] Auto-refreshing positions...');
+        fetchPositions(true);
+      }
+    }, 120000); // 2 minutes
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, [address, fetchPositions]);
 
   const value: PositionsContextType = {
