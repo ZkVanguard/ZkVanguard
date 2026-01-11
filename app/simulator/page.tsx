@@ -54,6 +54,12 @@ interface SimulationScenario {
     marketContext: string;
     liquidations: string;
     priceAtEvent: { symbol: string; price: number }[];
+    predictionData?: {
+      polymarket: { question: string; before: number; after: number; volume: number };
+      kalshi: { question: string; before: number; after: number; volume: number };
+      predictit: { question: string; before: number; after: number; volume: number };
+      consensus: number;
+    };
   };
 }
 
