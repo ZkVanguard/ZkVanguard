@@ -3,6 +3,16 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
+  // Performance optimizations
+  experimental: {
+    optimizePackageImports: ['@rainbow-me/rainbowkit', 'wagmi', 'viem', 'lucide-react', '@heroicons/react'],
+  },
+  
+  // Compiler optimizations
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
+  
   // Webpack configuration for web3 libraries
   webpack: (config, { isServer }) => {
     // Handle node modules for browser
