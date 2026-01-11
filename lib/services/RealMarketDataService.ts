@@ -284,19 +284,24 @@ class RealMarketDataService {
 
     try {
       // Get native CRO balance
-      const croBalance = await this.provider.getBalance(address);
-      const croPrice = await this.getTokenPrice('CRO');
-      const croValue = parseFloat(ethers.formatEther(croBalance)) * croPrice.price;
+      try {
+        const croBalance = await this.provider.getBalance(address);
+        const croPrice = await this.getTokenPrice('CRO');
+        const croValue = parseFloat(ethers.formatEther(croBalance)) * croPrice.price;
 
-      tokens.push({
-        token: 'native',
-        symbol: 'CRO',
-        balance: ethers.formatEther(croBalance),
-        decimals: 18,
-        usdValue: croValue,
-      });
+        tokens.push({
+          token: 'native',
+          symbol: 'CRO',
+          balance: ethers.formatEther(croBalance),
+          decimals: 18,
+          usdValue: croValue,
+        });
 
-      totalValue += croValue;
+        totalValue += croValue;
+      } catch (croError) {
+        console.error('Failed to fetch CRO balance:', croError);
+        // Continue with other tokens even if CRO fails
+      }
 
       // Get ERC20 token balances (Cronos Testnet tokens ONLY)
       const testnetTokens = [
@@ -337,7 +342,15 @@ class RealMarketDataService {
       };
     } catch (error) {
       console.error('Failed to get portfolio data:', error);
-      throw error;
+      // Return empty portfolio data instead of throwing
+      return {
+        address,
+        totalValue: 0,
+        tokens: [],
+        nfts: [],
+        defiPositions: {},
+        lastUpdated: Date.now(),
+      };
     }
   }
 
