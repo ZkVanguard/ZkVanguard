@@ -86,7 +86,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       setPositionsData(data);
       
       // Cache for 30 seconds
-      cache.set(cacheKey, data, 30000);
+      cache.set(cacheKey, data);
     } catch (err) {
       console.error('❌ [PositionsContext] Error fetching positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch positions');
