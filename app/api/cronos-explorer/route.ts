@@ -3,67 +3,104 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * Cronos Explorer API Proxy
  * 
- * Proxies requests to the Cronos Explorer API to avoid CORS issues
- * in the browser. Supports both testnet and mainnet.
+ * Uses the Blockscout-compatible API endpoint for Cronos testnet.
+ * No API key required for basic queries.
  */
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
   const limit = searchParams.get('limit') || '50';
-  const network = searchParams.get('network') || 'testnet'; // testnet or mainnet
+  const network = searchParams.get('network') || 'testnet';
+  const contracts = searchParams.get('contracts'); // Comma-separated list of contract addresses
 
-  if (!address) {
+  if (!address && !contracts) {
     return NextResponse.json(
-      { error: 'Address parameter is required' },
+      { error: 'Address or contracts parameter is required' },
       { status: 400 }
     );
   }
 
   try {
-    // Determine the correct API URL based on network
-    const explorerApiUrl = network === 'testnet'
-      ? 'https://explorer-api.cronos.org/testnet/api/v1'
-      : 'https://explorer-api.cronos.org/mainnet/api/v1';
+    // Use Blockscout-compatible API (no auth required)
+    const baseUrl = network === 'testnet'
+      ? 'https://cronos.org/explorer/testnet3/api'
+      : 'https://cronos.org/explorer/api';
 
-    const url = `${explorerApiUrl}/addresses/${address}/transactions?limit=${limit}`;
+    const allResults: any[] = [];
     
-    console.log(`[Cronos Explorer Proxy] Fetching from: ${url}`);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Chronos-Vanguard/1.0',
-      },
-    });
-
-    if (!response.ok) {
-      console.error(`[Cronos Explorer Proxy] Error: ${response.status} ${response.statusText}`);
+    // Fetch transactions for user address
+    if (address) {
+      const userUrl = `${baseUrl}?module=account&action=txlist&address=${address}&page=1&offset=${limit}&sort=desc`;
+      console.log(`[Cronos Explorer Proxy] Fetching user txs: ${userUrl}`);
       
-      // Return empty result instead of error to allow fallback to RPC
-      return NextResponse.json(
-        { 
-          result: [], 
-          message: `Explorer API returned ${response.status}` 
-        },
-        { 
-          status: 200,
-          headers: {
-            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
-          },
+      try {
+        const response = await fetch(userUrl, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(10000), // 10s timeout
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.result && Array.isArray(data.result)) {
+            allResults.push(...data.result);
+          }
         }
-      );
+      } catch (e) {
+        console.log('[Cronos Explorer Proxy] User txs fetch failed:', e);
+      }
     }
+    
+    // Fetch transactions for platform contracts
+    if (contracts) {
+      const contractList = contracts.split(',');
+      for (const contractAddr of contractList.slice(0, 5)) { // Limit to 5 contracts
+        try {
+          const contractUrl = `${baseUrl}?module=account&action=txlist&address=${contractAddr.trim()}&page=1&offset=20&sort=desc`;
+          console.log(`[Cronos Explorer Proxy] Fetching contract txs: ${contractUrl}`);
+          
+          const response = await fetch(contractUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.result && Array.isArray(data.result)) {
+              // Filter to only include txs involving the user (if address provided)
+              const relevantTxs = address
+                ? data.result.filter((tx: any) => 
+                    tx.from?.toLowerCase() === address.toLowerCase() ||
+                    tx.to?.toLowerCase() === address.toLowerCase()
+                  )
+                : data.result;
+              allResults.push(...relevantTxs);
+            }
+          }
+        } catch (e) {
+          console.log(`[Cronos Explorer Proxy] Contract ${contractAddr} fetch failed:`, e);
+        }
+      }
+    }
+    
+    // Deduplicate by hash and sort by timestamp
+    const uniqueTxs = Array.from(
+      new Map(allResults.map(tx => [tx.hash, tx])).values()
+    ).sort((a, b) => Number(b.timeStamp || 0) - Number(a.timeStamp || 0));
+    
+    console.log(`[Cronos Explorer Proxy] Total unique txs: ${uniqueTxs.length}`);
 
-    const data = await response.json();
-    console.log(`[Cronos Explorer Proxy] Success: ${data.result?.length || 0} transactions found`);
-
-    return NextResponse.json(data, {
-      status: 200,
-      headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
-      },
-    });
+    return NextResponse.json(
+      { result: uniqueTxs.slice(0, Number(limit)), status: '1' },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        },
+      }
+    );
   } catch (error) {
     console.error('[Cronos Explorer Proxy] Fetch error:', error);
     
