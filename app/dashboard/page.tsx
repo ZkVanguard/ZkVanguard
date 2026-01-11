@@ -326,7 +326,7 @@ export default function DashboardPage() {
                   <AdvancedPortfolioCreator />
                 </div>
                 <PortfolioOverview 
-                  address={displayAddress}
+                  address={displayAddress || ''}
                   onNavigateToPositions={() => setActiveTab('positions')}
                   onNavigateToHedges={() => {
                     // Scroll to ActiveHedges section
@@ -346,9 +346,9 @@ export default function DashboardPage() {
                 )}
 
                 <div data-hedges-section>
-                  <ActiveHedges address={displayAddress} />
+                  <ActiveHedges address={displayAddress || ''} />
                 </div>
-                <RiskMetrics address={displayAddress} />
+                <RiskMetrics address={displayAddress || ''} />
                 <ZKProofDemo />
               </>
             )}
@@ -381,15 +381,15 @@ export default function DashboardPage() {
               </>
             )}
             {activeTab === 'positions' && (
-              <PositionsList address={displayAddress} />
+              <PositionsList address={displayAddress || ''} />
             )}
-            {activeTab === 'transactions' && <RecentTransactions address={displayAddress} />}
-            {activeTab === 'settlements' && <SettlementsPanel address={displayAddress} />}
+            {activeTab === 'transactions' && <RecentTransactions address={displayAddress || ''} />}
+            {activeTab === 'settlements' && <SettlementsPanel address={displayAddress || ''} />}
           </div>
 
           {/* Chat Sidebar */}
           <div className="lg:col-span-1">
-            <ChatInterface address={displayAddress} />
+            <ChatInterface address={displayAddress || ''} />
           </div>
         </div>
 
