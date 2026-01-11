@@ -667,11 +667,11 @@ Navigate to: `/simulator` page
 > **[Final Summary]**
 > "Look at the final numbers:
 > - **Response time: 19 seconds** (vs 40 minutes manual)
-> - **Saved by hedging**: ~$4 million
-> - **Final loss with protection**: ~$9 million (6%)
-> - **Without ZkVanguard**: Would have lost ~$13 million (8.4%)
+> - **Saved by hedging**: ~$5.4 million
+> - **Final loss with protection**: ~$9.4 million (6.3%)
+> - **Without ZkVanguard**: Would have lost ~$14.8 million (9.9%)
 >
-> That's **$4 million saved** in 19 seconds. This isn't a simulation - this is what would have happened with our AI agents."
+> That's **$5.4 million saved** in 19 seconds. This isn't a simulation - this is what would have happened with our AI agents."
 >
 > **[Point to ZK Badge]**
 > "And every action is ZK-verified. Auditors can confirm the hedge happened without seeing our strategy."
