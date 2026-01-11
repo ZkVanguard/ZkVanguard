@@ -19,11 +19,11 @@ ZkVanguard automates institutional crypto portfolio management with **predictive
 
 | Feature | What It Does |
 |---------|--------------|
-| **🔮 Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
-| **🤖 5 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting - autonomous coordination |
-| **🛡️ Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
-| **⚡ Gasless (x402)** | $0.00 CRO gas, $0.01 USDC flat fee per transaction |
-| **🔄 VVS Finance DEX** | Native Cronos swaps with best-price routing (V2/V3 pools) |
+| **Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
+| **5 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting - autonomous coordination |
+| **Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
+| **Gasless (x402)** | $0.00 CRO gas, $0.01 USDC flat fee per transaction |
+| **VVS Finance DEX** | Native Cronos swaps with best-price routing (V2/V3 pools) |
 
 ---
 
