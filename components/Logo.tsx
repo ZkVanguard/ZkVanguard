@@ -6,7 +6,7 @@ export function Logo({ className = '', alt = 'ZkVanguard' }: { className?: strin
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <img 
-        src="/logo-apple.svg" 
+        src="/logo-official.svg" 
         alt={alt} 
         className="h-9 w-9 rounded-lg"
         style={{ objectFit: 'contain' }}

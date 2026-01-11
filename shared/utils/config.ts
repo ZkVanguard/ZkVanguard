@@ -124,8 +124,8 @@ export const config = {
   deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY || '',
   
   // APIs
-  cryptocomAiApiKey: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY || '',
-  cryptocomApiSecret: process.env.CRYPTOCOM_API_SECRET || '',
+  cryptocomAiApiKey: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY || process.env.NEXT_PUBLIC_CRYPTOCOM_API_KEY || '',
+  cryptocomApiSecret: process.env.CRYPTOCOM_API_SECRET || process.env.NEXT_PUBLIC_CRYPTOCOM_API_SECRET || '',
   x402ApiKey: process.env.X402_API_KEY || '',
   x402FacilitatorUrl: process.env.X402_FACILITATOR_URL || 'https://api.x402.io',
   mcpServerUrl: process.env.MCP_SERVER_URL || 'https://mcp.crypto.com/market-data/mcp',
