@@ -79,9 +79,15 @@ const scenarios: SimulationScenario[] = [
     eventData: {
       date: 'October 10, 2025 - 6:47 PM EST',
       headline: 'BREAKING: Trump Imposes 100% Tariffs on Chinese Imports',
-      source: 'Reuters, Bloomberg, CNBC',
+      source: 'Polymarket • Kalshi • PredictIt • Delphi • Crypto.com API',
       marketContext: 'Markets closed for the week. Asian markets set to open in turmoil. Crypto markets react immediately as 24/7 liquidity absorbs panic selling.',
       liquidations: '$2.1 billion in leveraged positions liquidated within 4 hours. 127,000 trader accounts affected.',
+      predictionData: {
+        polymarket: { question: 'Trump tariff announcement', before: 34, after: 94, volume: 12400000 },
+        kalshi: { question: 'Trade war escalation Q4', before: 45, after: 82, volume: 8100000 },
+        predictit: { question: 'Major economic policy change', before: 41, after: 89, volume: 2300000 },
+        consensus: 0.91,
+      },
       priceAtEvent: [
         { symbol: 'BTC', price: 91750 },
         { symbol: 'ETH', price: 3420 },
@@ -243,8 +249,6 @@ export default function SimulatorPage() {
       addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'warning');
       addLog(`🚨 REAL EVENT REPLAY: ${event.date}`, 'warning');
       addLog(`📰 ${event.headline}`, 'warning');
-      addLog(`📊 Sources: ${event.source}`, 'info');
-      addLog(`💰 ${event.liquidations}`, 'error');
       addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'warning');
       addLog(`Market Context: ${event.marketContext}`, 'info');
       addLog(`Pre-crash prices: BTC $${event.priceAtEvent[0].price.toLocaleString()}, ETH $${event.priceAtEvent[1].price.toLocaleString()}`, 'info');
@@ -256,10 +260,16 @@ export default function SimulatorPage() {
     let hedgeActivated = false;
     let hedgePnL = 0;
 
-    // Phase 1: Market event begins
+    // Phase 1: Market event begins - Multi-source detection
     if (selectedScenario.type === 'tariff') {
-      addLog('🔔 ALERT: Unusual market activity detected via Polymarket prediction signals', 'warning');
-      addLog('📡 Lead Agent: "Breaking news detected - initiating emergency protocol"', 'info');
+      addLog('━━━━━ 🔍 MULTI-SOURCE EVENT DETECTION ━━━━━', 'warning');
+      addLog('📊 Polymarket: "Trump tariff announcement" spiked 34% → 87%', 'warning');
+      addLog('📊 Kalshi: "Trade war escalation Q4" jumped 45% → 82%', 'warning');
+      addLog('📊 Delphi Aggregator: Confidence score 0.91 (HIGH)', 'warning');
+      addLog('📡 Crypto.com API: BTC volatility +180% in 2 minutes', 'info');
+      addLog('📰 News Feed: Reuters, Bloomberg, CNBC confirming tariff news', 'info');
+      addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'warning');
+      addLog('🤖 Lead Agent: "Multiple signals aligned - HIGH CONFIDENCE macro event"', 'success');
     } else {
       addLog('Market event detected - initiating agent swarm', 'warning');
     }
@@ -359,6 +369,17 @@ export default function SimulatorPage() {
 
       // Tariff-specific agent actions with realistic timing
       if (selectedScenario.type === 'tariff') {
+        // Second 1: VaR threshold breach detection
+        if (currentStep === 1) {
+          addLog('🚨 Risk Agent: VaR THRESHOLD BREACH DETECTED', 'error');
+          addLog('   └─ Current VaR: 6.8% (Threshold: 4.0%)', 'error');
+          addAgentAction('Risk', 'VAR_BREACH', 'Value-at-Risk exceeded institutional policy limit', {
+            metric: 'VaR %',
+            before: 3.2,
+            after: 6.8,
+          });
+        }
+        
         // Second 2: Risk detection
         if (currentStep === 2) {
           addLog('⚡ Risk Agent: Volatility spike detected - 340% above baseline', 'warning');
@@ -366,6 +387,25 @@ export default function SimulatorPage() {
             metric: 'Volatility',
             before: 22,
             after: 75,
+          });
+        }
+        
+        // Second 3: Delphi prediction details - MULTI-SOURCE
+        if (currentStep === 3) {
+          addLog('🔮 Delphi Agent: Aggregating prediction market signals...', 'info');
+          addLog('   ┌─ Polymarket (Volume: $12.4M)', 'info');
+          addLog('   │  └─ "Trump tariff announcement" → 94% ⬆️', 'info');
+          addLog('   │  └─ "China retaliates by Monday" → 78% ⬆️', 'info');
+          addLog('   ├─ Kalshi (Volume: $8.1M)', 'info');
+          addLog('   │  └─ "Trade war escalation Q4" → 82% ⬆️', 'info');
+          addLog('   │  └─ "BTC below $85K this week" → 71% ⬆️', 'info');
+          addLog('   └─ PredictIt (Volume: $2.3M)', 'info');
+          addLog('      └─ "Major economic policy change" → 89% ⬆️', 'info');
+          addLog('✅ Delphi Consensus: 0.91 correlation across 3 markets', 'success');
+          addAgentAction('Risk', 'DELPHI_AGGREGATION', 'Multiple prediction markets confirm macro event - triggering hedge protocol', {
+            metric: 'Market Consensus',
+            before: 0.34,
+            after: 0.91,
           });
         }
         
@@ -379,6 +419,15 @@ export default function SimulatorPage() {
           });
         }
         
+        // Second 5: Moonlander perpetual setup
+        if (currentStep === 5) {
+          addLog('🌙 Hedging Agent: Connecting to Moonlander perpetuals...', 'info');
+          addLog('   └─ BTC-PERP available: $847M open interest', 'info');
+          addLog('   └─ ETH-PERP available: $312M open interest', 'info');
+          addLog('   └─ Max leverage: 20x | Funding rate: -0.012%', 'info');
+          addAgentAction('Hedging', 'MOONLANDER_CONNECT', 'Perpetual futures markets ready for hedge execution');
+        }
+        
         // Second 6: Emergency hedge activation
         if (currentStep === 6) {
           hedgeActivated = true;
@@ -387,8 +436,8 @@ export default function SimulatorPage() {
           const btcHedgeSize = btcExposure * 0.65;
           const ethHedgeSize = ethExposure * 0.25;
           addLog(`🛡️ Hedging Agent: EMERGENCY HEDGE ACTIVATED`, 'warning');
-          addLog(`   └─ BTC: $${(btcHedgeSize/1000000).toFixed(1)}M SHORT (65% of $${(btcExposure/1000000).toFixed(1)}M exposure)`, 'warning');
-          addLog(`   └─ ETH: $${(ethHedgeSize/1000000).toFixed(1)}M SHORT (25% of $${(ethExposure/1000000).toFixed(1)}M exposure)`, 'warning');
+          addLog(`   └─ BTC-PERP: $${(btcHedgeSize/1000000).toFixed(1)}M SHORT @ 10x leverage`, 'warning');
+          addLog(`   └─ ETH-PERP: $${(ethHedgeSize/1000000).toFixed(1)}M SHORT @ 8x leverage`, 'warning');
           addAgentAction('Hedging', 'EMERGENCY_HEDGE', `Opening multi-asset SHORT positions via Moonlander perpetuals`, {
             metric: 'Total Hedge Coverage',
             before: 0,
@@ -403,20 +452,50 @@ export default function SimulatorPage() {
           addAgentAction('Lead', 'MANAGER_APPROVAL', 'Hedge strategy approved by portfolio manager - executing gaslessly');
         }
         
-        // Second 12: Settlement
+        // Second 10: ZK proof for hedge authorization
+        if (currentStep === 10) {
+          addLog('🔐 ZK Engine: Generating STARK proof for hedge authorization...', 'info');
+          addLog('   └─ Statement: "Hedge within policy limits"', 'info');
+          addLog('   └─ Security: 521-bit (NIST P-521)', 'info');
+          addLog('   └─ Proof size: 77KB | Generation: 1.8s (CUDA)', 'success');
+          addAgentAction('Reporting', 'ZK_PROOF_GEN', 'Hedge authorization proven without revealing position sizes', {
+            metric: 'Proof Security',
+            before: 0,
+            after: 521,
+          });
+        }
+        
+        // Second 12: Settlement with tx hash
         if (currentStep === 12) {
           addLog('💸 Settlement Agent: Processing hedge via x402 gasless protocol', 'info');
-          addAgentAction('Settlement', 'GASLESS_EXECUTION', 'Hedge executed: $0.00 CRO gas, $0.01 USDC x402 fee', {
+          const txHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+          addLog(`   └─ Tx Hash: ${txHash.slice(0, 18)}...${txHash.slice(-8)}`, 'success');
+          addLog('   └─ Gas: $0.00 CRO (sponsored) | Fee: $0.01 USDC', 'success');
+          addLog('   └─ Block: #14,892,347 | Confirmations: 3', 'success');
+          addAgentAction('Settlement', 'GASLESS_EXECUTION', 'Hedge executed on-chain via x402 sponsorship', {
             metric: 'Gas Saved',
             before: 0,
             after: 127, // $127 in gas saved
           });
         }
         
+        // Second 14: VVS Finance liquidity check
+        if (currentStep === 14) {
+          addLog('💱 Settlement Agent: Checking VVS Finance for rebalance liquidity...', 'info');
+          addLog('   └─ WCRO/USDC pool: $42.8M TVL | 0.08% slippage', 'info');
+          addLog('   └─ Route optimized: WCRO → USDC (direct pair)', 'info');
+          addAgentAction('Settlement', 'VVS_LIQUIDITY', 'DEX liquidity sufficient for emergency rebalance if needed');
+        }
+        
         // Second 16: Real-time P&L update
         if (currentStep === 16) {
           const savedAmount = Math.abs(hedgePnL);
           addLog(`📈 Hedge P&L Update: SHORT position +$${(savedAmount/1000).toFixed(0)}K as BTC drops`, 'success');
+          addAgentAction('Hedging', 'PNL_UPDATE', `Perpetual shorts profiting from price decline`, {
+            metric: 'Hedge P&L',
+            before: 0,
+            after: Math.round(savedAmount / 1000),
+          });
         }
         
         // Second 20: Mid-event status
@@ -426,6 +505,18 @@ export default function SimulatorPage() {
           addLog(`📊 STATUS: Portfolio down $${(portfolioLoss/1000000).toFixed(2)}M WITH hedge protection`, 'info');
           addLog(`📊 WITHOUT ZkVanguard: Would be down $${(wouldBeLoss/1000000).toFixed(2)}M`, 'error');
           addAgentAction('Lead', 'STATUS_UPDATE', `Hedge saved $${(Math.abs(hedgePnL)/1000000).toFixed(2)}M so far - continuing to monitor`);
+        }
+        
+        // Second 24: Sharpe ratio impact
+        if (currentStep === 24) {
+          addLog('📉 Risk Agent: Updating risk-adjusted metrics...', 'info');
+          addLog('   └─ Sharpe Ratio: 1.82 → 0.94 (market stress)', 'info');
+          addLog('   └─ Max Drawdown: 2.1% → 6.2% (within 20% limit)', 'info');
+          addAgentAction('Risk', 'METRICS_UPDATE', 'Risk metrics recalculated with hedge factored in', {
+            metric: 'Sharpe Ratio',
+            before: 1.82,
+            after: 0.94,
+          });
         }
         
         // Second 28: Market stabilizing
@@ -438,23 +529,59 @@ export default function SimulatorPage() {
           });
         }
         
+        // Second 32: Crypto.com API price feed
+        if (currentStep === 32) {
+          addLog('📡 Data Feed: Crypto.com Exchange API (100 req/s)', 'info');
+          addLog(`   └─ BTC: $${newPositions.find(p => p.symbol === 'BTC')?.price.toLocaleString() || 'N/A'}`, 'info');
+          addLog(`   └─ ETH: $${newPositions.find(p => p.symbol === 'ETH')?.price.toLocaleString() || 'N/A'}`, 'info');
+          addLog(`   └─ CRO: $${newPositions.find(p => p.symbol === 'CRO')?.price.toFixed(4) || 'N/A'}`, 'info');
+          addAgentAction('Lead', 'PRICE_FEED', 'Live prices from Crypto.com Exchange API');
+        }
+        
         // Second 35: Hedge adjustment
         if (currentStep === 35) {
           addLog('🔄 Hedging Agent: Reducing hedge ratio as volatility normalizes', 'info');
-          addAgentAction('Hedging', 'HEDGE_ADJUSTMENT', 'Scaling down SHORT from 35% to 20% - locking in gains', {
+          addLog('   └─ Closing 40% of BTC-PERP SHORT (locking gains)', 'info');
+          addLog('   └─ Maintaining ETH-PERP SHORT (still elevated vol)', 'info');
+          addAgentAction('Hedging', 'HEDGE_ADJUSTMENT', 'Scaling down SHORT positions - locking in gains', {
             metric: 'Hedge Ratio',
             before: 35,
             after: 20,
           });
         }
         
+        // Second 38: Active Hedges panel update
+        if (currentStep === 38) {
+          addLog('📋 Dashboard: Active Hedges panel updated', 'info');
+          addLog('   └─ Position #1: BTC-PERP SHORT | +$4.1M P&L | 65% filled', 'success');
+          addLog('   └─ Position #2: ETH-PERP SHORT | +$1.3M P&L | 100% filled', 'success');
+          addAgentAction('Lead', 'UI_UPDATE', 'Real-time hedge positions displayed in dashboard');
+        }
+        
         // Second 40: ZK Report generation
         if (currentStep === 40) {
           addLog('📝 Reporting Agent: Generating ZK-verified compliance report', 'info');
+          addLog('   └─ Claim: "All hedges within policy limits"', 'info');
+          addLog('   └─ Private: Position sizes, entry prices, leverage', 'info');
+          addLog('   └─ Public: Compliance status, timestamp, proof hash', 'info');
           addAgentAction('Reporting', 'ZK_REPORT', 'Creating private compliance report - positions hidden, performance verified', {
             metric: 'Report Data Points',
             before: 0,
             after: 847,
+          });
+        }
+        
+        // Second 42: On-chain proof storage
+        if (currentStep === 42) {
+          const proofHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+          addLog('⛓️ Reporting Agent: Storing proof commitment on-chain...', 'info');
+          addLog(`   └─ Proof Hash: ${proofHash.slice(0, 22)}...`, 'success');
+          addLog('   └─ Contract: ZKVerifier (0x46A4...FD8)', 'success');
+          addLog('   └─ Gas: $0.00 (x402 sponsored)', 'success');
+          addAgentAction('Settlement', 'PROOF_STORAGE', 'ZK proof commitment stored on Cronos blockchain', {
+            metric: 'On-Chain Proofs',
+            before: 0,
+            after: 1,
           });
         }
         
@@ -699,6 +826,42 @@ export default function SimulatorPage() {
                 <p className="text-gray-300 text-sm mb-3">
                   {selectedScenario.eventData.marketContext}
                 </p>
+                
+                {/* Prediction Market Signals */}
+                {selectedScenario.eventData.predictionData && (
+                  <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 mb-3">
+                    <div className="text-purple-400 font-semibold text-sm mb-2 flex items-center gap-2">
+                      <span>🔮</span> Prediction Market Signals (Delphi Aggregated)
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-gray-800/50 rounded p-2">
+                        <div className="text-gray-400">Polymarket</div>
+                        <div className="text-white font-mono">
+                          {selectedScenario.eventData.predictionData.polymarket.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.polymarket.after}%</span>
+                        </div>
+                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.polymarket.volume/1000000).toFixed(1)}M vol</div>
+                      </div>
+                      <div className="bg-gray-800/50 rounded p-2">
+                        <div className="text-gray-400">Kalshi</div>
+                        <div className="text-white font-mono">
+                          {selectedScenario.eventData.predictionData.kalshi.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.kalshi.after}%</span>
+                        </div>
+                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.kalshi.volume/1000000).toFixed(1)}M vol</div>
+                      </div>
+                      <div className="bg-gray-800/50 rounded p-2">
+                        <div className="text-gray-400">PredictIt</div>
+                        <div className="text-white font-mono">
+                          {selectedScenario.eventData.predictionData.predictit.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.predictit.after}%</span>
+                        </div>
+                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.predictit.volume/1000000).toFixed(1)}M vol</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-center text-emerald-400 font-semibold">
+                      Consensus: {(selectedScenario.eventData.predictionData.consensus * 100).toFixed(0)}% confidence
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="bg-gray-800/50 rounded-lg p-3">
                     <div className="text-gray-400 mb-1">Market Impact</div>
@@ -716,7 +879,7 @@ export default function SimulatorPage() {
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-gray-500">
-                  Sources: {selectedScenario.eventData.source}
+                  Data Sources: {selectedScenario.eventData.source}
                 </div>
               </div>
             </div>
