@@ -128,13 +128,13 @@ export default function DashboardPage() {
       if (assets.length > 0) {
         console.log('📊 Dynamic portfolio assets detected:', assets);
         setPortfolioAssets(assets);
-        cache.set(cacheKey, assets, 300000); // 5 min cache
+        cache.set(cacheKey, assets);
       } else {
         // Empty portfolio - default to CRO (native chain asset)
         console.log('📊 Empty portfolio detected, showing CRO predictions');
         const defaultAssets = ['CRO'];
         setPortfolioAssets(defaultAssets);
-        cache.set(cacheKey, defaultAssets, 300000);
+        cache.set(cacheKey, defaultAssets);
       }
     } catch (error) {
       console.error('Failed to fetch portfolio assets:', error);
