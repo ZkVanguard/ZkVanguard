@@ -156,7 +156,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address }: { address?: 
         }
 
         // Cache processed data (30s TTL)
-        cache.set(cacheKey, hedgePositions, 30000);
+        cache.set(cacheKey, hedgePositions);
 
         // Calculate performance stats
         const activeCount = hedgePositions.filter(h => h.status === 'active').length;
