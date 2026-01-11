@@ -30,6 +30,20 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Resource hints for faster loading */}
+        <link rel="preconnect" href="https://api.crypto.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.crypto.com" />
+        <link rel="preconnect" href="https://testnet.cronos.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://testnet.cronos.org" />
+        
+        {/* Preload critical fonts (system fonts, no external fonts needed) */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Critical inline CSS for instant render */
+          * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+          body { margin: 0; background: #fff; }
+          @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+        `}} />
+        
         <script
           dangerouslySetInnerHTML={{
             __html: `
