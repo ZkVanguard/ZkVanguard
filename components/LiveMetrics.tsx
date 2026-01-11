@@ -3,6 +3,38 @@
 import { useEffect, useState, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
 
+// Static fallback component for SSR and loading states
+function StaticMetrics() {
+  return (
+    <div>
+      <div className="text-center mb-12 lg:mb-16">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
+          Real-Time Platform Metrics
+        </h2>
+        <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">$2.8M</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">1,247</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">67%</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">AI Agents Online</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">5</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Memoized metric card to prevent unnecessary re-renders
 const MetricCard = memo(function MetricCard({ 
   label, 
@@ -57,45 +89,18 @@ export const LiveMetrics = memo(function LiveMetrics() {
     return () => clearInterval(interval);
   }, [mounted]);
 
+  // Return static content until client-side mount is complete
   if (!mounted) {
-    // Return static content for SSR
-    return (
-      <div>
-        <div className="text-center mb-12 lg:mb-16">
-          <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
-            Real-Time Platform Metrics
-          </h2>
-          <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          <div className="p-6 lg:p-8">
-            <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
-            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">$2.8M</div>
-          </div>
-          <div className="p-6 lg:p-8">
-            <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
-            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">1,247</div>
-          </div>
-          <div className="p-6 lg:p-8">
-            <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
-            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">67%</div>
-          </div>
-          <div className="p-6 lg:p-8">
-            <div className="text-[15px] text-[#86868b] mb-2">AI Agents Online</div>
-            <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">5</div>
-          </div>
-        </div>
-      </div>
-    );
+    return <StaticMetrics />;
   }
 
   // Memoize formatted values to prevent recalculation on every render
-  const formattedMetrics = useMemo(() => ({
+  const formattedMetrics = {
     tvl: `$${(metrics.tvl / 1000000).toFixed(2)}M`,
     transactions: metrics.transactions.toLocaleString(),
     gasSaved: `${metrics.gasSaved.toFixed(1)}%`,
     agents: metrics.agents,
-  }), [metrics]);
+  };
 
   return (
     <div>

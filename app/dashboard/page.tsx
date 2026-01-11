@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useAccount, useBalance, useChainId } from 'wagmi';
 import { Bot } from 'lucide-react';
@@ -13,6 +13,7 @@ import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
 import { ArrowDownUp } from 'lucide-react';
 import { DashboardSkeleton, CardSkeleton, ChartSkeleton } from '@/components/ui/Skeleton';
 import { cache } from '@/lib/utils/cache';
+import { withDeduplication } from '@/lib/utils/request-deduplication';
 
 // Dynamic imports for heavy components (reduces initial bundle by ~55%)
 const AgentActivity = dynamic(() => import('../../components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {
@@ -70,61 +71,77 @@ export default function DashboardPage() {
   const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [portfolioAssets, setPortfolioAssets] = useState<string[]>(['CRO', 'USDC']); // Will be updated dynamically
+  const fetchInProgressRef = useRef(false);
 
   // Contract data
   const contractAddresses = useContractAddresses();
   const { data: portfolioCount, isLoading: isLoadingCount, isError: isCountError } = usePortfolioCount();
 
   // Network info
-  const networkName = chainId === 338 ? 'Cronos Testnet' : chainId === 25 ? 'Cronos Mainnet' : 'Unknown Network';
+  const displayAddress = address || undefined;
   const isTestnet = chainId === 338;
-  
-  // Allow access without wallet for demo purposes
-  const displayAddress = address || '0x0000...0000';
+  const networkName = isTestnet ? 'Cronos Testnet' : 'Cronos';
   const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
   
-  // Dynamically fetch portfolio assets for Delphi filtering (with caching)
+  // Dynamically fetch portfolio assets for Delphi filtering (with aggressive caching and deduplication)
   const fetchPortfolioAssets = useCallback(async () => {
-    if (!displayAddress || displayAddress === '0x0000...0000') {
+    if (!displayAddress) {
       // Demo mode - use default testnet assets
       setPortfolioAssets(['CRO', 'USDC']);
       return;
     }
     
-    // Check cache first (60s TTL)
+    // Prevent concurrent fetches
+    if (fetchInProgressRef.current) {
+      console.log('⏭️ [Dashboard] Portfolio assets fetch already in progress, skipping');
+      return;
+    }
+    
+    // Check cache first (5 min TTL - longer since portfolio composition changes slowly)
     const cacheKey = `portfolio-assets-${displayAddress}`;
     const cached = cache.get<string[]>(cacheKey);
     if (cached) {
+      console.log('⚡ [Dashboard] Using cached portfolio assets:', cached);
       setPortfolioAssets(cached);
       return;
     }
     
+    fetchInProgressRef.current = true;
+    
     try {
-      const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
-      const marketData = getMarketDataService();
-      const portfolioData = await marketData.getPortfolioData(displayAddress);
-      
-      // Extract unique asset symbols from portfolio (only tokens with balance > 0)
-      const assets = portfolioData.tokens
-        .filter(token => parseFloat(token.balance) > 0.001) // Filter out dust
-        .map(token => token.symbol.toUpperCase().replace(/^(W|DEV)/, '')) // Normalize (WCRO->CRO, devUSDC->USDC)
-        .filter((symbol, index, arr) => arr.indexOf(symbol) === index); // Remove duplicates
+      // Use deduplication wrapper
+      const assets = await withDeduplication(
+        `fetch-portfolio-assets-${displayAddress}`,
+        async () => {
+          const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+          const marketData = getMarketDataService();
+          const portfolioData = await marketData.getPortfolioData(displayAddress);
+          
+          // Extract unique asset symbols from portfolio (only tokens with balance > 0)
+          return portfolioData.tokens
+            .filter(token => parseFloat(token.balance) > 0.001) // Filter out dust
+            .map(token => token.symbol.toUpperCase().replace(/^(W|DEV)/, '')) // Normalize (WCRO->CRO, devUSDC->USDC)
+            .filter((symbol, index, arr) => arr.indexOf(symbol) === index); // Remove duplicates
+        }
+      );
       
       if (assets.length > 0) {
         console.log('📊 Dynamic portfolio assets detected:', assets);
         setPortfolioAssets(assets);
-        cache.set(cacheKey, assets);
+        cache.set(cacheKey, assets, 300000); // 5 min cache
       } else {
         // Empty portfolio - default to CRO (native chain asset)
         console.log('📊 Empty portfolio detected, showing CRO predictions');
         const defaultAssets = ['CRO'];
         setPortfolioAssets(defaultAssets);
-        cache.set(cacheKey, defaultAssets);
+        cache.set(cacheKey, defaultAssets, 300000);
       }
     } catch (error) {
       console.error('Failed to fetch portfolio assets:', error);
       // Keep default ['CRO', 'USDC'] on error
       setPortfolioAssets(['CRO', 'USDC']);
+    } finally {
+      fetchInProgressRef.current = false;
     }
   }, [displayAddress]);
 
@@ -254,7 +271,7 @@ export default function DashboardPage() {
               <div className="glass px-6 py-4 rounded-xl border border-white/10">
                 <div className="text-xs text-gray-400 mb-1 font-medium">CONNECTED ADDRESS</div>
                 <div className="text-lg font-mono font-bold text-white">
-                  {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
+                  {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not connected'}
                 </div>
               </div>
               {isConnected && balance && (
