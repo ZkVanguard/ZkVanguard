@@ -1,0 +1,28 @@
+# Bun configuration for ZkVanguard
+# https://bun.sh/docs/runtime/bunfig
+
+[install]
+# Use faster lockfile format
+lockfile = "bun.lockb"
+
+# Auto-install peer dependencies
+peer = true
+
+# Production mode for cleaner installs
+production = false
+
+[run]
+# Enable source maps for debugging
+sourcemap = "external"
+
+[test]
+# Test configuration
+coverage = true
+coverageDir = "coverage"
+
+[install.cache]
+# Enable global cache for faster installs
+dir = "~/.bun/install/cache"
+
+# Disable cache for CI environments
+# disable = true
