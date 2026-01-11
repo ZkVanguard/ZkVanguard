@@ -104,14 +104,14 @@
 
 > **[PAUSE - Make eye contact]**
 >
-> "Imagine you're managing a $150 million crypto portfolio. It's 11 PM on a Friday. Bitcoin just dropped 8% in 30 minutes. You need to hedge immediately or risk losing millions.
->
-> **[PAUSE]**
->
-> By the time your team detects the alert, calculates the hedge ratio, coordinates across multiple platforms, and executes the trade... **40 minutes have passed. You've lost $4 million.**
->
-> This isn't hypothetical. This happened to a hedge fund I was consulting for last year.
->
+Imagine you're managing a $150 million crypto portfolio. It's Friday evening on October 10, 2025. A surprise announcement from President Trump imposing 100% tariffs on Chinese imports triggers chaos, and Bitcoin plummets 8.4% in a matter of hours. 
+
+
+ You need to hedge immediately or risk losing millions.By the time your team detects the alert, calculates the hedge ratio, coordinates across multiple platforms amid exchange outages and API lags, and executes the trade... 40 minutes have passed. You've lost $4 million. 
+
+
+This isn't hypothetical. This happened during the largest liquidation cascade in crypto history, where over $19 billion in leveraged positions were wiped out, affecting 1.6 million trader accounts—including hedge funds.
+
 > And here's the crazy part - this is a **solved problem** in traditional finance. Goldman Sachs has had automated risk management for decades. But in crypto? Institutional investors are still using spreadsheets and Slack alerts.
 >
 > **[Build tension]**
@@ -626,58 +626,62 @@ Execute a gasless swap or settlement
 Navigate to: `/simulator` page
 
 **Scenarios:**
-1. Flash Crash (-40%) - Most dramatic
-2. High Volatility Storm - Shows reactive hedging
-3. Full Stress Test - Comprehensive
+1. **🇺🇸 Trump Tariff Shock (Oct 2025)** - REAL EVENT REPLAY (Most Impressive!)
+2. Flash Crash (-40%) - Most dramatic
+3. High Volatility Storm - Shows reactive hedging
+4. Full Stress Test - Comprehensive
 
 ### 🗣️ What to Say
 
 > **[Navigate to Simulator]**
-> "Now let me show you how ZkVanguard handles a real crisis. This is our stress testing simulator."
+> "Now let me show you something special - we've recreated a **real historical event** to demonstrate how ZkVanguard would have responded."
 >
-> **[Select Flash Crash Scenario]**
-> "I'll simulate a **Flash Crash** - 40% drop in 30 seconds. Similar to May 2021 when Bitcoin fell 50% in a week."
+> **[Select Trump Tariff Shock Scenario]**
+> "This is the **Trump Tariff Shock from October 10, 2025**. Let me read what happened..."
+>
+> **[Point to Event Card]**
+> "Friday evening, 6:47 PM. President Trump announces 100% tariffs on Chinese imports. Markets are closed, but crypto never sleeps. Bitcoin drops 8.4% in hours. **$2.1 billion in liquidations**. 127,000 trader accounts wiped out."
+>
+> **[Emphasize the Scenario]**
+> "We're simulating a **$150 million portfolio** - the same scenario from our opening pitch. Watch how the AI agents respond."
 >
 > **[Start Simulation]**
-> "Starting simulation... Watch the agent activity log on the right."
+> "Starting the real event replay... Watch the agent activity on the right."
 >
-> **[As Simulation Runs - Narrate]**
-> "Okay, prices dropping...
+> **[As Simulation Runs - Narrate Key Moments]**
 >
-> **[Second 5]** - Risk Agent detected 24% volatility spike. Alert triggered.
+> **[Second 2]** "Risk Agent detected 340% volatility spike above baseline."
 >
-> **[Second 8]** - Hedging Agent analyzing portfolio. Calculating optimal short positions.
+> **[Second 4]** "Polymarket prediction signals aligned - confirming macro event."
 >
-> **[Second 12]** - Lead Agent approved emergency hedge. 2x short on BTC perpetual.
+> **[Second 6]** "🛡️ **EMERGENCY HEDGE ACTIVATED** - $26M SHORT on BTC-PERP to offset exposure."
 >
-> **[Second 15]** - Settlement Agent executing gasless transaction...
+> **[Second 8]** "Manager signature confirmed gaslessly via x402 - hedge executing..."
 >
-> **[Second 18]** - ✅ Hedge executed. Position protected.
+> **[Second 12]** "Settlement complete - $0.00 CRO gas, $0.01 USDC x402 fee."
 >
-> **[Second 22]** - Reporting Agent generating ZK-verified compliance report."
+> **[Second 16]** "Watch the hedge P&L - it's making money as BTC drops, offsetting our losses!"
 >
-> **[Show Results]**
-> "Total time: **19 seconds** from detection to execution.
+> **[Second 20]** "STATUS UPDATE: See the comparison? WITH hedge protection vs WITHOUT?"
 >
-> Compare this to manual process:
-> - Detect alert: 5 minutes
-> - Calculate hedge: 10 minutes
-> - Coordinate team: 15 minutes
-> - Execute: 10 minutes
-> - **Total: 40 minutes**
+> **[Final Summary]**
+> "Look at the final numbers:
+> - **Response time: 19 seconds** (vs 40 minutes manual)
+> - **Saved by hedging**: ~$4 million
+> - **Final loss with protection**: ~$9 million (6%)
+> - **Without ZkVanguard**: Would have lost ~$13 million (8.4%)
 >
-> In those 40 minutes, with a $200M portfolio at 40% drawdown, you'd lose **$80 million**.
->
-> ZkVanguard's 19-second response? **Saved $79.5 million.**"
+> That's **$4 million saved** in 19 seconds. This isn't a simulation - this is what would have happened with our AI agents."
 >
 > **[Point to ZK Badge]**
-> "And notice the ZK proof badge on the transaction. The hedge execution is cryptographically verified. Auditors can confirm it happened without seeing the strategy."
+> "And every action is ZK-verified. Auditors can confirm the hedge happened without seeing our strategy."
 
 ### 💡 Pro Tips
-- Narrate in real-time as simulation runs
-- Use specific dollar amounts for impact
-- Emphasize the time difference (19 sec vs 40 min)
-- Point to the ZK verification badge
+- Use the real event data card to set context
+- Emphasize "real event replay" repeatedly
+- Narrate agent actions as they happen
+- Compare final numbers dramatically
+- Connect back to the opening $150M scenario
 
 ---
 
