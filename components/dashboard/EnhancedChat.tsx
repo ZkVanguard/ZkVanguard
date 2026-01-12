@@ -131,32 +131,32 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 to-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+    <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 to-gray-800 rounded-xl border border-[#e8e8ed] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+      <div className="flex items-center justify-between p-4 border-b border-[#e8e8ed] bg-white/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 via-cyan-500 to-emerald-500 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
+            <Bot className="w-6 h-6 text-[#1d1d1f]" />
           </div>
           <div>
-            <h3 className="font-semibold text-white">AI Assistant</h3>
-            <p className="text-xs text-gray-400">LLM-Powered • Always Learning</p>
+            <h3 className="font-semibold text-[#1d1d1f]">AI Assistant</h3>
+            <p className="text-xs text-[#86868b]">LLM-Powered • Always Learning</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          <span className="text-xs text-emerald-400">Online</span>
+          <span className="text-xs text-[#34C759]">Online</span>
         </div>
       </div>
 
       {/* Quick Prompts */}
-      <div className="flex gap-2 p-3 overflow-x-auto border-b border-gray-700/50 bg-gray-800/30">
+      <div className="flex gap-2 p-3 overflow-x-auto border-b border-[#e8e8ed]/50 bg-white/30">
         {QUICK_PROMPTS.map((prompt, idx) => (
           <button
             key={idx}
             onClick={() => handleQuickPrompt(prompt.prompt)}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-700/50 hover:bg-gray-700 text-gray-300 hover:text-white rounded-full border border-gray-600/50 hover:border-gray-500 whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-700/50 hover:bg-gray-700 text-[#1d1d1f] hover:text-[#1d1d1f] rounded-full border border-gray-600/50 hover:border-gray-500 whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <prompt.icon className="w-3.5 h-3.5" />
             {prompt.label}
@@ -184,9 +184,9 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                     : 'bg-gradient-to-br from-purple-500 to-cyan-500'
                 }`}>
                   {message.role === 'user' ? (
-                    <User className="w-5 h-5 text-white" />
+                    <User className="w-5 h-5 text-[#1d1d1f]" />
                   ) : (
-                    <Bot className="w-5 h-5 text-white" />
+                    <Bot className="w-5 h-5 text-[#1d1d1f]" />
                   )}
                 </div>
 
@@ -194,7 +194,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                 <div
                   className={`rounded-2xl px-4 py-3 ${
                     message.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-tr-sm'
+                      ? 'bg-blue-600 text-[#1d1d1f] rounded-tr-sm'
                       : 'bg-gray-700 text-gray-100 rounded-tl-sm border border-gray-600'
                   }`}
                 >
@@ -223,7 +223,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
           >
             <div className="flex gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white" />
+                <Bot className="w-5 h-5 text-[#1d1d1f]" />
               </div>
               <div className="bg-gray-700 rounded-2xl rounded-tl-sm px-4 py-3 border border-gray-600">
                 <div className="flex gap-1">
@@ -240,7 +240,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-gray-700 bg-gray-800/50">
+      <div className="p-4 border-t border-[#e8e8ed] bg-white/50">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -250,14 +250,14 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
             onKeyPress={handleKeyPress}
             placeholder="Ask me anything about your portfolio or DeFi..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-[#1d1d1f] placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
             className="px-4 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-xl transition-all transform hover:scale-105 active:scale-95"
           >
-            <Send className="w-5 h-5 text-white" />
+            <Send className="w-5 h-5 text-[#1d1d1f]" />
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-2 text-center">

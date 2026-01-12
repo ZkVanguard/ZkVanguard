@@ -218,12 +218,12 @@ export function DepositModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl">
+      <div className="bg-white rounded-2xl border border-[#e8e8ed] w-full max-w-md shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-[#e8e8ed]">
           <div>
             <h2 className="text-xl font-bold">Fund Portfolio #{portfolioId}</h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-[#86868b] mt-1">
               {targetYield}% yield target • {riskTolerance}/100 risk
             </p>
           </div>
@@ -241,7 +241,7 @@ export function DepositModal({
             <>
               {/* Token Selection */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
                   Select Token
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -252,7 +252,7 @@ export function DepositModal({
                       className={`p-3 rounded-lg border transition-all ${
                         selectedToken.symbol === token.symbol
                           ? 'border-cyan-500 bg-cyan-500/10'
-                          : 'border-gray-600 hover:border-gray-500 bg-gray-900'
+                          : 'border-gray-600 hover:border-gray-500 bg-[#f5f5f7]'
                       }`}
                     >
                       <div className="text-sm font-semibold">{token.symbol}</div>
@@ -263,7 +263,7 @@ export function DepositModal({
 
               {/* Amount Input */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
                   Amount
                 </label>
                 <div className="relative">
@@ -272,29 +272,29 @@ export function DepositModal({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full bg-[#f5f5f7] border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
                   />
                   <button
                     onClick={() => setAmount(tokenBalance)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-cyan-400 hover:text-cyan-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#007AFF] hover:text-cyan-300"
                   >
                     MAX
                   </button>
                 </div>
                 <div className="flex justify-between mt-2 text-sm">
-                  <span className="text-gray-400">Available:</span>
-                  <span className="text-gray-300">
+                  <span className="text-[#86868b]">Available:</span>
+                  <span className="text-[#1d1d1f]">
                     {parseFloat(tokenBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })} {selectedToken.symbol}
                   </span>
                 </div>
               </div>
 
               {/* Info Box */}
-              <div className="bg-gray-900 rounded-lg p-4 mb-6">
+              <div className="bg-[#f5f5f7] rounded-lg p-4 mb-6">
                 <div className="flex items-start gap-3">
-                  <Coins className="w-5 h-5 text-cyan-400 mt-0.5" />
+                  <Coins className="w-5 h-5 text-[#007AFF] mt-0.5" />
                   <div className="text-sm">
-                    <p className="text-gray-300 mb-1">
+                    <p className="text-[#1d1d1f] mb-1">
                       Depositing to smart contract portfolio
                     </p>
                     <p className="text-gray-500 text-xs">
@@ -314,7 +314,7 @@ export function DepositModal({
               </button>
 
               {parseFloat(tokenBalance) === 0 && (
-                <p className="text-center text-yellow-400 text-sm mt-3">
+                <p className="text-center text-[#FF9500] text-sm mt-3">
                   You don't have any {selectedToken.symbol}. Try a different token or get testnet tokens first.
                 </p>
               )}
@@ -323,17 +323,17 @@ export function DepositModal({
 
           {(step === 'approve' || step === 'deposit') && (
             <div className="text-center py-8">
-              <Loader2 className="w-16 h-16 text-cyan-400 animate-spin mx-auto mb-4" />
+              <Loader2 className="w-16 h-16 text-[#007AFF] animate-spin mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">
                 {step === 'approve' ? 'Approving Token...' : 'Depositing...'}
               </h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-[#86868b] mb-4">
                 {step === 'approve' 
                   ? 'Please confirm the approval in your wallet'
                   : 'Please confirm the deposit in your wallet'}
               </p>
               {(isApproveConfirming || isDepositConfirming) && (
-                <p className="text-sm text-cyan-400">
+                <p className="text-sm text-[#007AFF]">
                   Waiting for confirmation...
                 </p>
               )}
@@ -342,9 +342,9 @@ export function DepositModal({
 
           {step === 'success' && (
             <div className="text-center py-8">
-              <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+              <CheckCircle className="w-16 h-16 text-[#34C759] mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Deposit Successful!</h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-[#86868b] mb-4">
                 {amount} {selectedToken.symbol} has been deposited to Portfolio #{portfolioId}
               </p>
               {depositHash && (
@@ -352,7 +352,7 @@ export function DepositModal({
                   href={`https://explorer.cronos.org/testnet/tx/${depositHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300"
+                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-cyan-300"
                 >
                   View Transaction <ExternalLink className="w-4 h-4" />
                 </a>
@@ -368,9 +368,9 @@ export function DepositModal({
 
           {step === 'error' && (
             <div className="text-center py-8">
-              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <AlertCircle className="w-16 h-16 text-[#FF3B30] mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Transaction Failed</h3>
-              <p className="text-gray-400 mb-4 text-sm break-words">
+              <p className="text-[#86868b] mb-4 text-sm break-words">
                 {errorMessage.slice(0, 200)}
               </p>
               <button

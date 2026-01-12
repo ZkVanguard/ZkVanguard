@@ -53,17 +53,19 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
   if (!isConnected) {
     return (
-      <div className="glass p-6 rounded-xl border border-white/10">
-        <div className="flex items-center space-x-2 mb-4">
-          <Clock className="w-6 h-6 text-cyan-500" />
-          <h2 className="text-2xl font-semibold">Payment Settlement</h2>
+      <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-black/5 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-[#007AFF] rounded-[12px] flex items-center justify-center">
+            <Clock className="w-5 h-5 text-white" />
+          </div>
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Settlements</h3>
         </div>
-        <div className="text-center py-12">
-          <Wallet className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Connect Your Wallet</h3>
-          <p className="text-gray-400">
-            Connect your wallet to process batch settlements on-chain
-          </p>
+        <div className="text-center py-8 bg-[#f5f5f7] rounded-[14px]">
+          <div className="w-12 h-12 bg-[#007AFF]/10 rounded-[14px] flex items-center justify-center mx-auto mb-3">
+            <Wallet className="w-6 h-6 text-[#007AFF]" />
+          </div>
+          <p className="text-[14px] font-medium text-[#1d1d1f] mb-1">Connect Wallet</p>
+          <p className="text-[12px] text-[#86868b]">Process batch settlements on-chain</p>
         </div>
       </div>
     );
@@ -71,33 +73,40 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
   if (isConfirmed) {
     return (
-      <div className="glass p-6 rounded-xl border border-green-500/30 bg-green-500/5">
-        <div className="flex items-center gap-3 mb-4">
-          <CheckCircle className="w-6 h-6 text-green-400" />
-          <h3 className="text-xl font-bold text-green-400">Settlement Processed!</h3>
-        </div>
-        <p className="text-gray-300 mb-4">
-          Your batch settlement has been successfully processed by the PaymentRouter contract.
-        </p>
-        <div className="flex gap-3">
-          <a
-            href={`https://explorer.cronos.org/testnet/tx/${hash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
-          >
-            View Transaction
-            <ExternalLink className="w-4 h-4" />
-          </a>
-          <button
-            onClick={() => {
-              setShowForm(false);
-              setPayments([{ recipient: '', amount: '', token: '0x0000000000000000000000000000000000000000' }]);
-            }}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
-          >
-            New Settlement
-          </button>
+      <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-[#34C759]/20 overflow-hidden">
+        <div className="p-4 sm:p-6 bg-gradient-to-br from-[#34C759]/5 to-transparent">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-[#34C759] rounded-[12px] flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-[17px] font-semibold text-[#34C759]">Settlement Processed</h3>
+              <p className="text-[12px] text-[#86868b]">Successfully completed</p>
+            </div>
+          </div>
+          <p className="text-[13px] text-[#1d1d1f] mb-4">
+            Your batch settlement has been successfully processed by the PaymentRouter contract.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <a
+              href={`https://explorer.cronos.org/testnet/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#34C759] text-white text-[13px] font-semibold rounded-[10px] active:scale-[0.98] transition-transform"
+            >
+              View Transaction
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <button
+              onClick={() => {
+                setShowForm(false);
+                setPayments([{ recipient: '', amount: '', token: '0x0000000000000000000000000000000000000000' }]);
+              }}
+              className="flex-1 px-4 py-2.5 bg-[#f5f5f7] text-[#1d1d1f] text-[13px] font-semibold rounded-[10px] active:bg-[#e8e8ed] transition-colors"
+            >
+              New Settlement
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -105,184 +114,195 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
   if (error) {
     return (
-      <div className="glass p-6 rounded-xl border border-red-500/30 bg-red-500/5">
-        <div className="flex items-center gap-3 mb-4">
-          <XCircle className="w-6 h-6 text-red-400" />
-          <h3 className="text-xl font-bold text-red-400">Settlement Failed</h3>
+      <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-[#FF3B30]/20 overflow-hidden">
+        <div className="p-4 sm:p-6 bg-gradient-to-br from-[#FF3B30]/5 to-transparent">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-[#FF3B30] rounded-[12px] flex items-center justify-center">
+              <XCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-[17px] font-semibold text-[#FF3B30]">Settlement Failed</h3>
+              <p className="text-[12px] text-[#86868b]">Could not process</p>
+            </div>
+          </div>
+          <p className="text-[13px] text-[#1d1d1f] mb-4">
+            {error.message || 'Failed to process settlement'}
+          </p>
+          <button
+            onClick={() => setShowForm(true)}
+            className="w-full px-4 py-2.5 bg-[#FF3B30] text-white text-[13px] font-semibold rounded-[10px] active:scale-[0.98] transition-transform"
+          >
+            Try Again
+          </button>
         </div>
-        <p className="text-gray-300 mb-4 text-sm">
-          {error.message || 'Failed to process settlement'}
-        </p>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
-        >
-          Try Again
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="glass p-6 rounded-xl border border-white/10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Clock className="w-6 h-6 text-cyan-500" />
-            <h2 className="text-2xl font-semibold">Batch Settlement</h2>
-            <span className="text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded-full border border-cyan-500/30">
-              On-Chain
-            </span>
+    <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-black/5 overflow-hidden">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-[#007AFF] rounded-[10px] sm:rounded-[12px] flex items-center justify-center">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Process multiple payments in a single transaction via PaymentRouter
-          </p>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">Settlements</h3>
+              <span className="px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] text-[10px] font-bold rounded-full">
+                On-Chain
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-[12px] text-[#86868b]">Process multiple payments in a single transaction via PaymentRouter</p>
+          </div>
         </div>
       </div>
 
-      {!showForm ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-900 p-4 rounded-lg border border-cyan-500/20">
-              <h3 className="font-semibold text-cyan-400 mb-2">Contract Address</h3>
-              <p className="text-xs font-mono text-gray-400 break-all">
-                {contractAddresses.paymentRouter}
+      <div className="px-4 sm:px-6 py-4 sm:py-6">
+        {!showForm ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="bg-[#f5f5f7] p-3 rounded-[12px] border border-black/5">
+                <h4 className="text-[12px] font-semibold text-[#007AFF] mb-1">Contract Address</h4>
+                <p className="text-[10px] font-mono text-[#86868b] break-all">
+                  {contractAddresses.paymentRouter}
+                </p>
+              </div>
+              <div className="bg-[#f5f5f7] p-3 rounded-[12px] border border-black/5">
+                <h4 className="text-[12px] font-semibold text-[#007AFF] mb-1">Settlement Type</h4>
+                <p className="text-[12px] text-[#1d1d1f] font-medium">Batch Payment Processing</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowForm(true)}
+              className="w-full px-6 py-3 bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] text-white text-[14px] font-semibold rounded-[12px] active:scale-[0.98] transition-transform"
+            >
+              Create Batch Settlement
+            </button>
+
+            <div className="bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px] p-3">
+              <p className="text-[11px] text-[#FF9500]">
+                ℹ️ Batch settlements allow you to process multiple payments in a single transaction, saving gas fees.
               </p>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-cyan-500/20">
-              <h3 className="font-semibold text-cyan-400 mb-2">Settlement Type</h3>
-              <p className="text-sm text-gray-300">Batch Payment Processing</p>
-            </div>
           </div>
-
-          <button
-            onClick={() => setShowForm(true)}
-            className="w-full px-6 py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 rounded-lg font-bold text-white transition-all duration-300"
-          >
-            Create Batch Settlement
-          </button>
-
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-            <p className="text-xs text-amber-400">
-              ℹ️ Batch settlements allow you to process multiple payments in a single transaction, saving gas fees.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Portfolio ID
-            </label>
-            <input
-              type="number"
-              value={portfolioId}
-              onChange={(e) => setPortfolioId(e.target.value)}
-              placeholder="0"
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-              disabled={isPending || isConfirming}
-            />
-          </div>
-
+        ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-300">
-                Payments ({payments.length})
+            <div>
+              <label className="block text-[13px] font-semibold text-[#1d1d1f] mb-2">
+                Portfolio ID
               </label>
-              <button
-                onClick={addPayment}
-                className="flex items-center gap-1 px-3 py-1 bg-cyan-600 hover:bg-cyan-700 rounded text-sm font-semibold transition-colors"
+              <input
+                type="number"
+                value={portfolioId}
+                onChange={(e) => setPortfolioId(e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-2.5 bg-[#f5f5f7] border border-black/10 rounded-[10px] text-[13px] text-[#1d1d1f] font-medium focus:border-[#007AFF] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
                 disabled={isPending || isConfirming}
-              >
-                <Plus className="w-4 h-4" />
-                Add Payment
-              </button>
+              />
             </div>
 
-            {payments.map((payment, index) => (
-              <div key={index} className="bg-gray-900 p-4 rounded-lg border border-gray-700 space-y-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-cyan-400">Payment #{index + 1}</span>
-                  {payments.length > 1 && (
-                    <button
-                      onClick={() => removePayment(index)}
-                      className="text-red-400 hover:text-red-300"
-                      disabled={isPending || isConfirming}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                
-                <input
-                  type="text"
-                  value={payment.recipient}
-                  onChange={(e) => updatePayment(index, 'recipient', e.target.value)}
-                  placeholder="Recipient Address (0x...)"
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[13px] font-semibold text-[#1d1d1f]">
+                  Payments ({payments.length})
+                </label>
+                <button
+                  onClick={addPayment}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#007AFF] text-white text-[12px] font-semibold rounded-[8px] active:scale-[0.95] transition-transform"
                   disabled={isPending || isConfirming}
-                />
-                
-                <div className="grid grid-cols-2 gap-3">
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              </div>
+
+              {payments.map((payment, index) => (
+                <div key={index} className="bg-[#f5f5f7] p-3 rounded-[12px] border border-black/5 space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-semibold text-[#007AFF]">Payment #{index + 1}</span>
+                    {payments.length > 1 && (
+                      <button
+                        onClick={() => removePayment(index)}
+                        className="w-6 h-6 flex items-center justify-center bg-[#FF3B30]/10 rounded-[8px] active:bg-[#FF3B30]/20 transition-colors"
+                        disabled={isPending || isConfirming}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-[#FF3B30]" />
+                      </button>
+                    )}
+                  </div>
+                  
                   <input
                     type="text"
-                    value={payment.amount}
-                    onChange={(e) => updatePayment(index, 'amount', e.target.value)}
-                    placeholder="Amount (CRO)"
-                    className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+                    value={payment.recipient}
+                    onChange={(e) => updatePayment(index, 'recipient', e.target.value)}
+                    placeholder="Recipient Address (0x...)"
+                    className="w-full px-3 py-2 bg-white border border-black/10 rounded-[8px] text-[12px] text-[#1d1d1f] placeholder:text-[#86868b] focus:border-[#007AFF] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
                     disabled={isPending || isConfirming}
                   />
-                  <input
-                    type="text"
-                    value={payment.token}
-                    onChange={(e) => updatePayment(index, 'token', e.target.value)}
-                    placeholder="Token Address"
-                    className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
-                    disabled={isPending || isConfirming}
-                  />
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={payment.amount}
+                      onChange={(e) => updatePayment(index, 'amount', e.target.value)}
+                      placeholder="Amount (CRO)"
+                      className="px-3 py-2 bg-white border border-black/10 rounded-[8px] text-[12px] text-[#1d1d1f] placeholder:text-[#86868b] focus:border-[#007AFF] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+                      disabled={isPending || isConfirming}
+                    />
+                    <input
+                      type="text"
+                      value={payment.token}
+                      onChange={(e) => updatePayment(index, 'token', e.target.value)}
+                      placeholder="Token Address"
+                      className="px-3 py-2 bg-white border border-black/10 rounded-[8px] text-[12px] text-[#1d1d1f] placeholder:text-[#86868b] focus:border-[#007AFF] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+                      disabled={isPending || isConfirming}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {isPending || isConfirming ? (
+              <div className="bg-[#007AFF]/5 border border-[#007AFF]/20 rounded-[12px] p-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#007AFF]">
+                      {isPending ? 'Waiting for signature...' : 'Processing settlement...'}
+                    </p>
+                    <p className="text-[11px] text-[#86868b] mt-0.5">
+                      {isPending ? 'Please sign in your wallet' : 'PaymentRouter is processing'}
+                    </p>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {isPending || isConfirming ? (
-            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
-                <div>
-                  <p className="font-semibold text-cyan-400">
-                    {isPending ? 'Waiting for signature...' : 'Processing settlement...'}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {isPending ? 'Please sign the transaction in your wallet' : 'PaymentRouter is processing your batch'}
-                  </p>
-                </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 px-4 py-2.5 bg-[#f5f5f7] text-[#1d1d1f] text-[13px] font-semibold rounded-[10px] active:bg-[#e8e8ed] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProcessSettlement}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] text-white text-[13px] font-semibold rounded-[10px] active:scale-[0.98] transition-transform"
+                >
+                  Process Settlement
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowForm(false)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleProcessSettlement}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 rounded-lg font-semibold transition-colors"
-              >
-                Process Settlement
-              </button>
-            </div>
-          )}
+            )}
 
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-            <p className="text-xs text-amber-400">
-              ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.3-0.5 tCRO.
-            </p>
+            <div className="bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px] p-3">
+              <p className="text-[11px] text-[#FF9500]">
+                ⚠️ This will create a real transaction on Cronos Testnet. Gas cost: ~0.3-0.5 tCRO.
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
