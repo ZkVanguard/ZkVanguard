@@ -138,53 +138,181 @@ class CryptocomAIService {
     }
   }
 
-  private generateMockPortfolioAnalysis(): PortfolioAnalysis {
+  private calculateRealPortfolioAnalysis(portfolio?: Record<string, any>): PortfolioAnalysis {
+    // Calculate analysis from REAL portfolio data
+    if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
+      const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
+      const totalValue = portfolio.totalValue as number;
+      
+      // Sort by value and get top assets
+      const sortedTokens = [...tokens].sort((a, b) => b.usdValue - a.usdValue);
+      const topAssets = sortedTokens.slice(0, 5).map(t => ({
+        symbol: t.symbol,
+        value: t.usdValue,
+        percentage: (t.usdValue / totalValue) * 100,
+      }));
+      
+      // Calculate real risk score based on concentration
+      const weights = tokens.map(t => t.usdValue / totalValue);
+      const herfindahl = weights.reduce((sum, w) => sum + w * w, 0);
+      const riskScore = Math.min(100, Math.round(herfindahl * 100 + 20));
+      
+      // Health score based on diversification
+      const healthScore = Math.max(0, Math.min(100, 100 - riskScore + 30));
+      
+      // Generate recommendations based on real data
+      const recommendations: string[] = [];
+      if (herfindahl > 0.5) {
+        recommendations.push('Consider diversifying - portfolio is concentrated in few assets.');
+      }
+      if (tokens.length < 3) {
+        recommendations.push('Adding more assets could reduce overall portfolio risk.');
+      }
+      if (tokens.some(t => t.symbol === 'USDC' || t.symbol === 'USDT')) {
+        if (tokens.filter(t => ['USDC', 'USDT', 'DAI'].includes(t.symbol)).reduce((sum, t) => sum + t.usdValue, 0) / totalValue < 0.1) {
+          recommendations.push('Consider holding more stablecoins for reduced volatility.');
+        }
+      }
+      if (recommendations.length === 0) {
+        recommendations.push('Portfolio appears well-balanced for current market conditions.');
+      }
+      
+      return {
+        totalValue,
+        positions: tokens.length,
+        riskScore,
+        healthScore,
+        recommendations,
+        topAssets,
+      };
+    }
+    
+    // No portfolio data - return empty state
     return {
-      totalValue: 10000,
-      positions: 5,
-      riskScore: 42,
-      healthScore: 78,
-      recommendations: ['Consider rebalancing your portfolio to reduce risk.'],
-      topAssets: [
-        { symbol: 'BTC', value: 5000, percentage: 50 },
-        { symbol: 'ETH', value: 3000, percentage: 30 },
-      ],
+      totalValue: 0,
+      positions: 0,
+      riskScore: 0,
+      healthScore: 0,
+      recommendations: ['Connect wallet to see portfolio analysis.'],
+      topAssets: [],
     };
   }
 
-  private generateMockRiskAssessment(): RiskAssessment {
+  private calculateRealRiskAssessment(portfolio?: Record<string, any>): RiskAssessment {
+    // Calculate REAL risk metrics from portfolio data
+    if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
+      const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
+      const totalValue = portfolio.totalValue as number;
+      
+      // Calculate concentration risk (Herfindahl index)
+      const weights = tokens.map(t => t.usdValue / totalValue);
+      const herfindahl = weights.reduce((sum, w) => sum + w * w, 0);
+      
+      // Volatility estimates by asset class (annualized)
+      const volatilityMap: Record<string, number> = {
+        BTC: 0.60, ETH: 0.65, CRO: 0.75, SOL: 0.80, 
+        USDC: 0.01, USDT: 0.01, DAI: 0.01, DEVUSDC: 0.01,
+        DEFAULT: 0.50
+      };
+      
+      // Calculate portfolio weighted volatility
+      const portfolioVolatility = tokens.reduce((vol, token) => {
+        const weight = token.usdValue / totalValue;
+        const assetVol = volatilityMap[token.symbol.toUpperCase()] || volatilityMap.DEFAULT;
+        return vol + weight * assetVol;
+      }, 0);
+      
+      // Diversification benefit (correlation assumed 0.5 between assets)
+      const diversificationFactor = Math.sqrt(herfindahl + (1 - herfindahl) * 0.5);
+      const adjustedVolatility = portfolioVolatility * diversificationFactor;
+      
+      // Value at Risk (95% confidence) - parametric VaR
+      const var95 = adjustedVolatility * 1.645 * Math.sqrt(1/252); // Daily VaR
+      
+      // Risk score (0-100) based on volatility and concentration
+      const riskScore = Math.min(100, Math.round(
+        (adjustedVolatility * 100) + (herfindahl * 30)
+      ));
+      
+      // Sharpe Ratio estimate (assuming 5% risk-free rate, 10% expected return for crypto)
+      const expectedReturn = 0.10;
+      const riskFreeRate = 0.05;
+      const sharpeRatio = adjustedVolatility > 0 
+        ? (expectedReturn - riskFreeRate) / adjustedVolatility 
+        : 0;
+      
+      return {
+        overallRisk: riskScore > 60 ? 'high' : riskScore > 40 ? 'medium' : 'low',
+        riskScore,
+        volatility: adjustedVolatility,
+        var95,
+        sharpeRatio: Math.max(0, Math.min(3, sharpeRatio)), // Clamp to reasonable range
+        factors: [
+          {
+            factor: 'Concentration Risk',
+            impact: herfindahl > 0.5 ? 'high' : herfindahl > 0.25 ? 'medium' : 'low',
+            description: `Portfolio concentration index: ${(herfindahl * 100).toFixed(1)}%`,
+          },
+          {
+            factor: 'Market Volatility',
+            impact: adjustedVolatility > 0.5 ? 'high' : adjustedVolatility > 0.3 ? 'medium' : 'low',
+            description: `Estimated annualized volatility: ${(adjustedVolatility * 100).toFixed(1)}%`,
+          },
+        ],
+      };
+    }
+    
+    // No portfolio data - return empty/unknown state
     return {
-      overallRisk: 'medium',
-      riskScore: 42,
-      volatility: 0.5,
-      var95: 0.1,
-      sharpeRatio: 1.2,
+      overallRisk: 'low',
+      riskScore: 0,
+      volatility: 0,
+      var95: 0,
+      sharpeRatio: 0,
       factors: [
         {
-          factor: 'Market Volatility',
-          impact: 'high',
-          description: 'High market volatility',
+          factor: 'No Portfolio Data',
+          impact: 'low',
+          description: 'Connect wallet to see real risk metrics',
         },
       ],
     };
   }
 
-  private generateMockHedgeRecommendations(): HedgeRecommendation[] {
-    return [
-      {
-        strategy: 'Sell Call Option',
-        confidence: 0.8,
-        expectedReduction: 0.2,
-        description: 'Sell a call option to hedge against a price drop.',
-        actions: [
-          {
-            action: 'SELL',
-            asset: 'BTC-CALL-OPTION',
-            amount: 1,
-          },
-        ],
-      },
-    ];
+  private generateRealHedgeRecommendations(portfolio?: Record<string, any>): HedgeRecommendation[] {
+    // No portfolio data - return empty
+    if (!portfolio || !portfolio.tokens || portfolio.totalValue <= 0) {
+      return [];
+    }
+    
+    const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
+    const totalValue = portfolio.totalValue as number;
+    const recommendations: HedgeRecommendation[] = [];
+    
+    // Analyze each position and generate real recommendations
+    for (const token of tokens) {
+      const weight = token.usdValue / totalValue;
+      
+      // If position is >30% of portfolio, recommend hedging
+      if (weight > 0.3) {
+        recommendations.push({
+          strategy: `Reduce ${token.symbol} Concentration`,
+          confidence: Math.min(0.95, 0.5 + weight),
+          expectedReduction: weight * 0.3,
+          description: `${token.symbol} represents ${(weight * 100).toFixed(1)}% of portfolio. Consider diversifying to reduce concentration risk.`,
+          actions: [
+            {
+              action: 'SWAP',
+              asset: token.symbol,
+              amount: token.usdValue * 0.2, // Suggest reducing by 20%
+            },
+          ],
+        });
+      }
+    }
+    
+    // If portfolio is well-balanced, no recommendations needed
+    return recommendations;
   }
 
   /**
@@ -195,32 +323,34 @@ class CryptocomAIService {
     portfolio: Record<string, any>
   ): Promise<PortfolioAnalysis> {
     if (!this.client || typeof this.client.analyzePortfolio !== 'function') {
-      return this.generateMockPortfolioAnalysis();
+      return this.calculateRealPortfolioAnalysis(portfolio);
     }
     try {
       const analysis = await this.client.analyzePortfolio(address, portfolio);
       return analysis;
     } catch (error) {
       logger.error('AI portfolio analysis failed', { error });
-      return this.generateMockPortfolioAnalysis();
+      return this.calculateRealPortfolioAnalysis(portfolio);
     }
   }
 
   /**
-   * Assess risk using AI
+   * Assess risk using AI or calculate from real portfolio data
    */
   async assessRisk(
     portfolio: Record<string, any>
   ): Promise<RiskAssessment> {
     if (!this.client || typeof this.client.assessRisk !== 'function') {
-      return this.generateMockRiskAssessment();
+      // No AI client - calculate real metrics from portfolio data
+      return this.calculateRealRiskAssessment(portfolio);
     }
     try {
       const risk = await this.client.assessRisk(portfolio);
       return risk;
     } catch (error) {
       logger.error('AI risk assessment failed', { error });
-      return this.generateMockRiskAssessment();
+      // Fallback to calculated metrics
+      return this.calculateRealRiskAssessment(portfolio);
     }
   }
 
@@ -232,7 +362,7 @@ class CryptocomAIService {
     riskProfile: Record<string, any>
   ): Promise<HedgeRecommendation[]> {
     if (!this.client || typeof this.client.generateHedgeRecommendations !== 'function') {
-      return this.generateMockHedgeRecommendations();
+      return this.generateRealHedgeRecommendations(portfolio);
     }
     try {
       const recommendations = await this.client.generateHedgeRecommendations(
@@ -242,7 +372,7 @@ class CryptocomAIService {
       return recommendations;
     } catch (error) {
       logger.error('AI hedge recommendation failed', { error });
-      return this.generateMockHedgeRecommendations();
+      return this.generateRealHedgeRecommendations(portfolio);
     }
   }
 

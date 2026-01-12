@@ -34,40 +34,48 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: st
     }
 
     try {
-      // Try AI service first
+      // First, get REAL portfolio data from connected wallet
+      const marketData = getMarketDataService();
+      const portfolioData = await marketData.getPortfolioData(address);
+      
+      // Try AI service with real portfolio data
       const aiService = getCryptocomAIService();
-      const aiRiskData = await aiService.assessRisk({ address });
+      const aiRiskData = await aiService.assessRisk({ 
+        address,
+        tokens: portfolioData.tokens,
+        totalValue: portfolioData.totalValue,
+      });
       
       setMetrics([
         { 
           label: 'VaR (95%)', 
-          value: `${(aiRiskData.var95 * 100).toFixed(1)}%`, 
+          value: aiRiskData.var95 > 0 ? `${(aiRiskData.var95 * 100).toFixed(1)}%` : '--', 
           status: aiRiskData.var95 > 0.08 ? 'high' : aiRiskData.var95 > 0.04 ? 'medium' : 'low', 
           icon: Shield 
         },
         { 
           label: 'Volatility', 
-          value: `${(aiRiskData.volatility * 100).toFixed(1)}%`, 
-          status: aiRiskData.volatility > 0.15 ? 'high' : aiRiskData.volatility > 0.08 ? 'medium' : 'low', 
+          value: aiRiskData.volatility > 0 ? `${(aiRiskData.volatility * 100).toFixed(1)}%` : '--', 
+          status: aiRiskData.volatility > 0.50 ? 'high' : aiRiskData.volatility > 0.30 ? 'medium' : 'low', 
           icon: TrendingUp 
         },
         { 
           label: 'Risk Score', 
-          value: `${aiRiskData.riskScore.toFixed(0)}/100`, 
+          value: aiRiskData.riskScore > 0 ? `${aiRiskData.riskScore.toFixed(0)}/100` : '--', 
           status: aiRiskData.riskScore > 60 ? 'high' : aiRiskData.riskScore > 40 ? 'medium' : 'low', 
           icon: AlertTriangle 
         },
         { 
           label: 'Sharpe Ratio', 
-          value: aiRiskData.sharpeRatio.toFixed(2), 
+          value: aiRiskData.sharpeRatio > 0 ? aiRiskData.sharpeRatio.toFixed(2) : '--', 
           status: aiRiskData.sharpeRatio > 1.5 ? 'low' : aiRiskData.sharpeRatio > 0.8 ? 'medium' : 'high', 
           icon: Activity 
         },
       ]);
-      setAiPowered(true);
+      setAiPowered(portfolioData.totalValue > 0);
       setLoading(false);
     } catch (aiError) {
-      // Fallback to agent API
+      console.error('Risk assessment failed:', aiError);
       try {
         const riskData = await assessPortfolioRisk(address);
         
