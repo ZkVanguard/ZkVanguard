@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DollarSign, RefreshCw, ChevronRight, TrendingUp, Shield } from 'lucide-react';
-import { usePortfolioCount } from '../../lib/contracts/hooks';
+import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
@@ -28,7 +28,8 @@ interface PortfolioOverviewProps {
 }
 
 export function PortfolioOverview({ address, onNavigateToPositions, onNavigateToHedges }: PortfolioOverviewProps) {
-  const { data: portfolioCount, isLoading: countLoading, refetch } = usePortfolioCount();
+  // Get only portfolios owned by the connected wallet
+  const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(address);
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
   const [recentHedgeCount, setRecentHedgeCount] = useState(0);
@@ -81,12 +82,12 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         // Try AI service for health score and recommendations only
         try {
           const aiService = getCryptocomAIService();
-          const analysis = await aiService.analyzePortfolio(address, { portfolioCount });
+          const analysis = await aiService.analyzePortfolio(address, { userPortfolioCount });
           setAiAnalysis(analysis);
           setData(prev => ({
             ...prev,
             totalValue: portfolioData.totalValue, // Always use real market data
-            positions: Number(portfolioCount) || 0,
+            positions: userPortfolioCount,
             healthScore: analysis.healthScore || 85, // AI-generated or default
             topAssets,
             activeHedges: activeHedgesCount,
@@ -111,7 +112,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
           setData(prev => ({
             ...prev,
             totalValue: portfolioData.totalValue,
-            positions: Number(portfolioCount) || 0,
+            positions: userPortfolioCount,
             activeHedges: activeHedgesCount,
             healthScore: Math.min(calculatedHealth, 100), // Always show health score
             topAssets,
@@ -124,7 +125,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         setData(prev => ({
           ...prev,
           totalValue: 0,
-          positions: Number(portfolioCount) || 0,
+          positions: userPortfolioCount,
           activeHedges: 0,
           topAssets: [],
         }));
@@ -134,11 +135,15 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
     }
 
     setLoading(countLoading);
-    if (portfolioCount !== undefined) {
-      setData(prev => ({
-        ...prev,
-        positions: Number(portfolioCount),
-      }));
+    
+    // Always update positions from user's portfolio count
+    setData(prev => ({
+      ...prev,
+      positions: userPortfolioCount,
+    }));
+    
+    // Only fetch additional data if address is available
+    if (address) {
       fetchAIAnalysis();
     } else {
       setLoading(false);
@@ -155,7 +160,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
     return () => {
       window.removeEventListener('hedgeAdded', handleHedgeUpdate);
     };
-  }, [portfolioCount, countLoading, address]);
+  }, [userPortfolioCount, countLoading, address]);
 
   if (loading) {
     return (

@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { useCreatePortfolio, usePortfolioCount } from '../../lib/contracts/hooks';
+import { useCreatePortfolio, useUserPortfolios } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export function CreatePortfolioButton() {
-  const { isConnected } = useAccount();
-  const { data: portfolioCount } = usePortfolioCount();
+  const { isConnected, address } = useAccount();
+  // Get only portfolios owned by the connected wallet
+  const { count: userPortfolioCount } = useUserPortfolios(address);
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
   
   const [targetYield, setTargetYield] = useState('1000'); // 10% in basis points
@@ -40,7 +41,7 @@ export function CreatePortfolioButton() {
           <h3 className="text-xl font-bold text-[#34C759]">Portfolio Created!</h3>
         </div>
         <p className="text-[#1d1d1f] mb-4">
-          Your portfolio has been created on-chain. Portfolio #{portfolioCount?.toString() || '...'}
+          Your portfolio has been created on-chain. You now have {userPortfolioCount + 1} portfolio(s).
         </p>
         <button
           onClick={() => {

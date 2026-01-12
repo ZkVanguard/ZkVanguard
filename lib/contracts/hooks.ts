@@ -2,6 +2,7 @@
  * React hooks for interacting with deployed smart contracts
  */
 
+import { useState, useEffect } from 'react';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useChainId } from 'wagmi';
 import { getContractAddresses } from './addresses';
@@ -46,12 +47,12 @@ export function usePortfolioAssets(portfolioId: bigint) {
 }
 
 /**
- * Hook to read portfolio count
+ * Hook to read total portfolio count from contract
  */
 export function usePortfolioCount() {
   const chainId = useChainId();
   const addresses = getContractAddresses(chainId);
-
+  
   return useReadContract({
     address: addresses.rwaManager,
     abi: RWA_MANAGER_ABI,
@@ -61,6 +62,86 @@ export function usePortfolioCount() {
       refetchInterval: 10000, // Refetch every 10 seconds
     },
   });
+}
+
+/**
+ * Hook to get portfolios owned by the connected wallet
+ */
+export function useUserPortfolios(userAddress?: string) {
+  const chainId = useChainId();
+  const addresses = getContractAddresses(chainId);
+  const { data: totalCount } = usePortfolioCount();
+  const [userPortfolios, setUserPortfolios] = useState<Array<{
+    id: number;
+    owner: string;
+    totalValue: bigint;
+    targetYield: bigint;
+    riskTolerance: bigint;
+    lastRebalance: bigint;
+    isActive: boolean;
+  }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUserPortfolios() {
+      if (!userAddress || !totalCount || !addresses.rwaManager) {
+        setUserPortfolios([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { ethers } = await import('ethers');
+        const provider = new ethers.JsonRpcProvider(
+          process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
+        );
+        
+        const contract = new ethers.Contract(
+          addresses.rwaManager,
+          RWA_MANAGER_ABI,
+          provider
+        );
+
+        const count = Number(totalCount);
+        const portfolios = [];
+        
+        // Check each portfolio to see if it belongs to the user
+        for (let i = 0; i < count; i++) {
+          try {
+            const portfolio = await contract.portfolios(i);
+            if (portfolio.owner.toLowerCase() === userAddress.toLowerCase()) {
+              portfolios.push({
+                id: i,
+                owner: portfolio.owner,
+                totalValue: portfolio.totalValue,
+                targetYield: portfolio.targetYield,
+                riskTolerance: portfolio.riskTolerance,
+                lastRebalance: portfolio.lastRebalance,
+                isActive: portfolio.isActive,
+              });
+            }
+          } catch (err) {
+            console.warn(`Error fetching portfolio ${i}:`, err);
+          }
+        }
+        
+        setUserPortfolios(portfolios);
+      } catch (error) {
+        console.error('Error fetching user portfolios:', error);
+        setUserPortfolios([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchUserPortfolios();
+  }, [userAddress, totalCount, addresses.rwaManager]);
+
+  return {
+    data: userPortfolios,
+    count: userPortfolios.length,
+    isLoading,
+  };
 }
 
 /**

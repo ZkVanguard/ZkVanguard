@@ -9,7 +9,7 @@ import {
   Menu, X, Settings, ArrowUpRight
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
-import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
+import { useContractAddresses, useUserPortfolios } from '@/lib/contracts/hooks';
 import { logger } from '@/lib/utils/logger';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 
@@ -99,7 +99,8 @@ export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
   const contractAddresses = useContractAddresses();
-  const { data: portfolioCount } = usePortfolioCount();
+  // Get only portfolios owned by the connected wallet
+  const { count: userPortfolioCount } = useUserPortfolios(address);
   
   const [activeNav, setActiveNav] = useState<NavId>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -368,8 +369,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Create Portfolio CTA */}
-      {(!portfolioCount || portfolioCount === 0n) && isConnected && (
+      {/* Create Portfolio CTA - show only if user has no portfolios */}
+      {userPortfolioCount === 0 && isConnected && (
         <div className="fixed bottom-20 lg:bottom-6 left-4 lg:left-[280px] z-40">
           <AdvancedPortfolioCreator />
         </div>

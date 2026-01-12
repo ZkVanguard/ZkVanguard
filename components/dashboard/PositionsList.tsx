@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, AlertTriangle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { usePortfolioCount } from '../../lib/contracts/hooks';
+import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
@@ -23,7 +23,8 @@ interface OnChainPortfolio {
 
 export function PositionsList({ address }: { address: string }) {
   const { isConnected } = useAccount();
-  const { data: portfolioCount, refetch } = usePortfolioCount();
+  // Get only portfolios owned by the connected wallet
+  const { data: userPortfolios, count: userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
   const { positionsData, error: positionsError, refetch: refetchPositions } = usePositions();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,85 +133,84 @@ export function PositionsList({ address }: { address: string }) {
     fetchOnChainPortfolios();
   };
 
-  // Fetch on-chain portfolios from contract
+  // Fetch on-chain portfolios from contract - uses userPortfolios from hook
   const fetchOnChainPortfolios = async () => {
-    if (!portfolioCount || portfolioCount === 0n) {
+    if (!userPortfolios || userPortfolios.length === 0) {
       setOnChainPortfolios([]);
       return;
     }
 
-    console.log(`📊 [PositionsList] Fetching ${portfolioCount.toString()} on-chain portfolios`);
-    const count = Number(portfolioCount);
+    console.log(`📊 [PositionsList] Processing ${userPortfolios.length} user portfolios`);
     
-    // Fetch all portfolios in parallel for better performance
-    const portfolioPromises = [];
-    for (let i = 0; i < count; i++) {
-      portfolioPromises.push(
-        fetch(`/api/portfolio/${i}`)
-          .then(res => res.ok ? res.json() : null)
-          .then(async (p) => {
-            if (!p || p.error || !p.isActive) return null;
-            
-            const portfolio: OnChainPortfolio = {
-              id: i,
-              owner: p.owner,
-              totalValue: p.totalValue || '0',
-              targetYield: p.targetYield || '0',
-              riskTolerance: p.riskTolerance || '0',
-              lastRebalance: p.lastRebalance || '0',
-              isActive: p.isActive,
-              assets: p.assets || [],
-            };
-            
-            // Fetch Delphi/Polymarket predictions
-            try {
-              // Get assets from both wallet positions AND portfolio contract
-              const walletAssets = positionsData?.positions
-                ?.filter(pos => parseFloat(pos.balance) > 0)
-                .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, '')) || [];
-              
-              // Map contract addresses to symbols
-              const contractAssets = (portfolio.assets || []).map(addr => {
-                const lowerAddr = addr.toLowerCase();
-                if (lowerAddr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
-                if (lowerAddr.includes('wcro') || lowerAddr === '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23') return 'CRO';
-                if (lowerAddr.includes('weth')) return 'ETH';
-                if (lowerAddr.includes('wbtc')) return 'BTC';
-                return 'CRYPTO'; // Generic fallback
-              });
-              
-              // Combine unique assets, always include major cryptos for broader predictions
-              const allAssets = [...new Set([...walletAssets, ...contractAssets, 'BTC', 'ETH', 'CRO'])];
-              
-              console.log(`Fetching predictions for portfolio ${i} with assets:`, allAssets);
-              
-              const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
-                allAssets,
-                parseFloat(portfolio.riskTolerance),
-                parseFloat(portfolio.targetYield)
-              );
-              
-              console.log(`Got ${predictions.length} predictions for portfolio ${i}`);
-              portfolio.predictions = predictions;
-            } catch (error) {
-              console.warn(`Failed to fetch predictions for portfolio ${i}:`, error);
-              portfolio.predictions = [];
-            }
-            
-            return portfolio;
-          })
-          .catch(err => {
-            console.warn(`Portfolio ${i} fetch failed:`, err);
-            return null;
-          })
-      );
-    }
+    // Process user portfolios and fetch predictions
+    const portfolioPromises = userPortfolios.map(async (p) => {
+      if (!p.isActive) return null;
+      
+      const portfolio: OnChainPortfolio = {
+        id: p.id,
+        owner: p.owner,
+        totalValue: p.totalValue.toString(),
+        targetYield: p.targetYield.toString(),
+        riskTolerance: p.riskTolerance.toString(),
+        lastRebalance: p.lastRebalance.toString(),
+        isActive: p.isActive,
+        assets: [], // Will be fetched separately
+      };
+      
+      // Fetch assets from API
+      try {
+        const assetsRes = await fetch(`/api/portfolio/${p.id}`);
+        if (assetsRes.ok) {
+          const data = await assetsRes.json();
+          portfolio.assets = data.assets || [];
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch assets for portfolio ${p.id}:`, err);
+      }
+      
+      // Fetch Delphi/Polymarket predictions
+      try {
+        // Get assets from both wallet positions AND portfolio contract
+        const walletAssets = positionsData?.positions
+          ?.filter(pos => parseFloat(pos.balance) > 0)
+          .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, '')) || [];
+        
+        // Map contract addresses to symbols
+        const contractAssets = (portfolio.assets || []).map(addr => {
+          const lowerAddr = addr.toLowerCase();
+          if (lowerAddr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
+          if (lowerAddr.includes('wcro') || lowerAddr === '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23') return 'CRO';
+          if (lowerAddr.includes('weth')) return 'ETH';
+          if (lowerAddr.includes('wbtc')) return 'BTC';
+          return 'CRYPTO'; // Generic fallback
+        });
+        
+        // Combine unique assets, always include major cryptos for broader predictions
+        const allAssets = [...new Set([...walletAssets, ...contractAssets, 'BTC', 'ETH', 'CRO'])];
+        
+        console.log(`Fetching predictions for portfolio ${p.id} with assets:`, allAssets);
+        
+        const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
+          allAssets,
+          Number(p.riskTolerance),
+          Number(p.targetYield)
+        );
+        
+        console.log(`Got ${predictions.length} predictions for portfolio ${p.id}`);
+        portfolio.predictions = predictions;
+      } catch (error) {
+        console.warn(`Failed to fetch predictions for portfolio ${p.id}:`, error);
+        portfolio.predictions = [];
+      }
+      
+      return portfolio;
+    });
     
     // Wait for all portfolios in parallel
     const results = await Promise.all(portfolioPromises);
     const loadedPortfolios = results.filter((p): p is OnChainPortfolio => p !== null);
 
-    console.log(`✅ [PositionsList] Loaded ${loadedPortfolios.length} on-chain portfolios`);
+    console.log(`✅ [PositionsList] Loaded ${loadedPortfolios.length} user portfolios`);
     setOnChainPortfolios(loadedPortfolios);
   };
 
@@ -228,12 +228,11 @@ export function PositionsList({ address }: { address: string }) {
     if (address && isConnected) {
       loadAll();
     }
-  }, [address, isConnected]); // Removed positionsData from dependencies to prevent clearing on auto-refresh
+  }, [address, isConnected, userPortfolios]); // Re-fetch when userPortfolios changes
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([refetchPositions(), fetchOnChainPortfolios()]);
-    refetch();
     setRefreshing(false);
   };
 
