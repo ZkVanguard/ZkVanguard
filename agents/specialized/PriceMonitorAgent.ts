@@ -290,7 +290,7 @@ export class PriceMonitorAgent {
       });
 
       logger.info('Hedge action initiated via x402', { 
-        paymentId: challenge.paymentId,
+        paymentId: challenge.accepts?.[0]?.extra?.paymentId,
         symbol: alert.symbol,
       });
     } catch (error) {
