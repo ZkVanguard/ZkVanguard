@@ -189,7 +189,7 @@ export class X402SwapService {
         },
       });
       
-      if (!paymentResult.success) {
+      if (!paymentResult.ok) {
         return {
           success: false,
           error: paymentResult.error || 'x402 settlement failed',
