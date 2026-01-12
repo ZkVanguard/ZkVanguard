@@ -7,6 +7,7 @@
 
 import { logger } from '../../lib/utils/logger';
 import { X402FacilitatorService } from '../../lib/services/x402-facilitator';
+import { CronosNetwork } from '@crypto.com/facilitator-client';
 
 // Price thresholds for different alert levels
 export interface PriceAlert {
@@ -60,7 +61,7 @@ export class PriceMonitorAgent {
       enableX402Settlement: config.enableX402Settlement ?? true,
       alertWebhookUrl: config.alertWebhookUrl,
     };
-    this.x402Service = new X402FacilitatorService('testnet');
+    this.x402Service = new X402FacilitatorService(CronosNetwork.CronosTestnet);
     logger.info('PriceMonitorAgent initialized', { config: this.config });
   }
 
