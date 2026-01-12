@@ -11,6 +11,7 @@
 import { X402FacilitatorService, PaymentChallenge, PaymentResult } from './x402-facilitator';
 import { VVS_ROUTER_ABI, ERC20_ABI } from './VVSFinanceService';
 import { logger } from '../utils/logger';
+import { CronosNetwork, Contract } from '@crypto.com/facilitator-client';
 
 // Token addresses on Cronos zkEVM Testnet (from SDK)
 export const TESTNET_TOKENS = {
@@ -177,9 +178,14 @@ export class X402SwapService {
         paymentId: `swap-${timestamp}`,
         paymentHeader,
         paymentRequirements: {
-          amount: BigInt(10000), // 0.01 USDC (6 decimals)
-          token: TESTNET_TOKENS.DEVUSDC,
-          recipient: '0x0000000000000000000000000000000000000000', // Protocol treasury
+          scheme: 'exact' as const,
+          network: CronosNetwork.CronosTestnet,
+          payTo: process.env.MERCHANT_ADDRESS || '0x0000000000000000000000000000000000000000',
+          asset: Contract.DevUSDCe,
+          description: `x402 swap fee: ${request.tokenIn} -> ${request.tokenOut}`,
+          mimeType: 'application/json',
+          maxAmountRequired: '10000', // 0.01 USDC (6 decimals)
+          maxTimeoutSeconds: 300,
         },
       });
       
