@@ -10,7 +10,8 @@ import { PositionsProvider } from '../contexts/PositionsContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID';
+// Trim to remove any accidental whitespace/newlines from env vars
+const projectId = (process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID').trim();
 
 // Create config and queryClient OUTSIDE component to prevent recreation
 // This fixes the "WalletConnect Core is already initialized" warning
