@@ -208,7 +208,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.06em]">Portfolio</span>
-                  {portfolioCount !== undefined && (
+                  {userPortfolioCount > 0 && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#34C759]/10 rounded-full">
                       <span className="w-1.5 h-1.5 bg-[#34C759] rounded-full animate-pulse" />
                       <span className="text-[9px] font-bold text-[#34C759]">LIVE</span>
