@@ -216,19 +216,20 @@ export function PositionsList({ address }: { address: string }) {
 
   useEffect(() => {
     async function loadAll() {
-      // Only show loading skeleton on initial load
-      if (!hasInitiallyLoaded) {
-        setLoading(true);
-      }
+      // Don't block on portfolio loading - show tokens immediately
       await fetchOnChainPortfolios();
-      setLoading(false);
       setHasInitiallyLoaded(true);
+    }
+    
+    // Set loading to false as soon as we have positions data
+    if (positionsData) {
+      setLoading(false);
     }
     
     if (address && isConnected) {
       loadAll();
     }
-  }, [address, isConnected, userPortfolios]); // Re-fetch when userPortfolios changes
+  }, [address, isConnected, userPortfolios, positionsData]); // Re-fetch when userPortfolios changes
 
   const handleRefresh = async () => {
     setRefreshing(true);
