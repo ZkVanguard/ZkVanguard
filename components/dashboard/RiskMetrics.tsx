@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo } from 'react';
-import { AlertTriangle, TrendingUp, Shield, Activity, Brain } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Shield, Activity } from 'lucide-react';
 import { assessPortfolioRisk } from '../../lib/api/agents';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
@@ -166,40 +166,52 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: st
   usePolling(fetchRiskMetrics, 30000);
 
   if (loading) {
-    return <div className="bg-gray-800 rounded-xl p-6 animate-pulse h-48" />;
+    return (
+      <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-20 sm:h-24 animate-pulse bg-[#f5f5f7] rounded-[12px] sm:rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'low': return 'text-green-500 bg-green-500/10';
-      case 'medium': return 'text-yellow-500 bg-yellow-500/10';
-      case 'high': return 'text-red-500 bg-red-500/10';
-      default: return 'text-gray-500 bg-gray-500/10';
+      case 'low': return { bg: 'bg-[#34C759]/10', text: 'text-[#34C759]', dot: 'bg-[#34C759]' };
+      case 'medium': return { bg: 'bg-[#FF9500]/10', text: 'text-[#FF9500]', dot: 'bg-[#FF9500]' };
+      case 'high': return { bg: 'bg-[#FF3B30]/10', text: 'text-[#FF3B30]', dot: 'bg-[#FF3B30]' };
+      default: return { bg: 'bg-[#8E8E93]/10', text: 'text-[#8E8E93]', dot: 'bg-[#8E8E93]' };
     }
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Risk Metrics</h2>
-        {aiPowered && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-cyan-500/10 rounded-full border border-cyan-500/30">
-            <Brain className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-semibold text-cyan-400">AI Analysis</span>
-          </div>
-        )}
-      </div>
+    <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+      {aiPowered && (
+        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+          <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#007AFF]" />
+          <span className="text-[10px] sm:text-[11px] font-medium text-[#007AFF]">AI Analysis</span>
+        </div>
+      )}
       
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {metrics.map((metric, index) => {
           const Icon = metric.icon;
+          const colors = getStatusColor(metric.status);
+          
           return (
-            <div key={index} className="p-4 bg-gray-900 rounded-lg">
-              <div className={`inline-flex p-2 rounded-lg mb-2 ${getStatusColor(metric.status)}`}>
-                <Icon className="w-5 h-5" />
+            <div key={index} className={`${colors.bg} rounded-[12px] sm:rounded-xl p-3 sm:p-4`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text}`} />
+                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 ${colors.dot} rounded-full`} />
               </div>
-              <div className="text-sm text-gray-400 mb-1">{metric.label}</div>
-              <div className="text-xl font-semibold">{metric.value}</div>
+              <div className="text-[18px] sm:text-[22px] font-semibold text-[#1d1d1f] mb-0.5 leading-none">
+                {metric.value}
+              </div>
+              <div className="text-[9px] sm:text-[11px] font-medium text-[#86868b] uppercase tracking-[0.04em]">
+                {metric.label}
+              </div>
             </div>
           );
         })}
