@@ -7,7 +7,7 @@
       "dependencies": {
         "@crypto.com/ai-agent-client": "^1.0.2",
         "@crypto.com/developer-platform-client": "^1.1.2",
-        "@crypto.com/facilitator-client": "^1.0.1",
+        "@crypto.com/facilitator-client": "^1.0.4",
         "@heroicons/react": "^2.2.0",
         "@modelcontextprotocol/sdk": "^1.25.1",
         "@openzeppelin/contracts": "^5.4.0",
@@ -241,7 +241,7 @@
 
     "@crypto.com/developer-platform-client": ["@crypto.com/developer-platform-client@1.1.2", "", { "peerDependencies": { "tslib": "^2.6.2" } }, "sha512-BG0yu93FxsUM2Za/EWHyr5WXFxKwJ/chj/aNP7RtR3gk+w7kuvHlI6O/F9edGZDI+C8NPbuCaUNWKllopmPCNg=="],
 
-    "@crypto.com/facilitator-client": ["@crypto.com/facilitator-client@1.0.1", "", { "dependencies": { "ethers": "^6.15.0" }, "peerDependencies": { "tslib": "^2.6.2" } }, "sha512-KNsqMSw9AL0OBI3EUFDEv43wRMI8tS5B4noEbj+OPQBFAgXiJo6KahAy+3vISs9/LnoyhygJMrfetM17RzuUMQ=="],
+    "@crypto.com/facilitator-client": ["@crypto.com/facilitator-client@1.0.4", "", { "dependencies": { "ethers": "^6.15.0" }, "peerDependencies": { "tslib": "^2.6.2" } }, "sha512-cHqy/8femcAdv44DdAvxCTCHfFDTrg7hp9sYwjhkmZo8TigEEDFjjYHibCp0RzocBcfYD/n6KNsCNQ86UwUZ9A=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 

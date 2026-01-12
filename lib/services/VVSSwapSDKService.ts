@@ -30,15 +30,18 @@ export class VVSSwapSDKService {
   private chainId: number;
   private quoteApiClientId: string | undefined;
 
-  constructor(chainId: number = 338) {
+  constructor(chainId: number = BuiltInChainId.CRONOS_TESTNET) {
     this.chainId = chainId;
-    // Quote API Client ID (optional - request from VVS Discord if needed for production)
+    // Quote API Client ID - use environment variable matching VVS SDK convention
     this.quoteApiClientId = process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID || 
                             process.env[`SWAP_SDK_QUOTE_API_CLIENT_ID_${chainId}`];
+    
+    console.log(`🔧 VVS SDK initialized for chain ${chainId} with API key: ${this.quoteApiClientId ? 'present' : 'missing'}`);
   }
 
   /**
    * Get the best trade quote from VVS Finance
+   * Uses official @vvs-finance/swap-sdk
    */
   async getQuote(
     inputToken: string,
@@ -46,7 +49,7 @@ export class VVSSwapSDKService {
     amount: string
   ): Promise<VVSSwapQuote> {
     try {
-      // Convert token addresses (use "NATIVE" for CRO)
+      // Convert token inputs - VVS SDK accepts 'NATIVE' for native CRO
       const inputTokenArg = inputToken === 'CRO' || inputToken === 'TCRO' ? 'NATIVE' : inputToken;
       const outputTokenArg = outputToken === 'CRO' || outputToken === 'TCRO' ? 'NATIVE' : outputToken;
 
@@ -55,6 +58,7 @@ export class VVSSwapSDKService {
         inputToken: inputTokenArg,
         outputToken: outputTokenArg,
         amount,
+        quoteApiClientId: this.quoteApiClientId ? `${this.quoteApiClientId.slice(0, 8)}...` : 'none',
       });
 
       // Fetch best trade using VVS SDK
@@ -86,9 +90,24 @@ export class VVSSwapSDKService {
       // Calculate price impact (if available)
       const priceImpact = this.calculatePriceImpact(trade);
 
+      // Extract output amount - parse from formatted trade if direct access fails
+      let amountOut = '0';
+      const tradeAny = trade as any;
+      if (tradeAny.outputAmount?.toExact) {
+        amountOut = tradeAny.outputAmount.toExact();
+      } else if (tradeAny.outputAmount?.toSignificant) {
+        amountOut = tradeAny.outputAmount.toSignificant(8);
+      } else {
+        // Parse from formatted trade string: "X.XXXXX TOKEN => Y.YYYYY TOKEN (...)"
+        const match = formattedTrade.match(/=>\s*([\d.]+)/);
+        if (match) {
+          amountOut = match[1];
+        }
+      }
+
       return {
         amountIn: amount,
-        amountOut: (trade as any).outputAmount?.toExact?.() || '0',
+        amountOut,
         priceImpact,
         route,
         trade,
