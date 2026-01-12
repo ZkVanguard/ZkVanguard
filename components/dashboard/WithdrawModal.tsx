@@ -123,12 +123,12 @@ export function WithdrawModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl">
+      <div className="bg-white rounded-2xl border border-[#e8e8ed] w-full max-w-md shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-[#e8e8ed]">
           <div>
             <h2 className="text-xl font-bold">Withdraw from Portfolio #{portfolioId}</h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-[#86868b] mt-1">
               Current balance: ${totalValue.toFixed(2)}
             </p>
           </div>
@@ -147,7 +147,7 @@ export function WithdrawModal({
               {/* Asset Selection */}
               {assets.length > 1 && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
                     Select Asset to Withdraw
                   </label>
                   <div className="flex gap-2">
@@ -160,7 +160,7 @@ export function WithdrawModal({
                           className={`px-4 py-2 rounded-lg border transition-all ${
                             selectedAsset === asset
                               ? 'border-cyan-500 bg-cyan-500/10'
-                              : 'border-gray-600 hover:border-gray-500 bg-gray-900'
+                              : 'border-gray-600 hover:border-gray-500 bg-[#f5f5f7]'
                           }`}
                         >
                           {info.symbol}
@@ -172,15 +172,15 @@ export function WithdrawModal({
               )}
 
               {/* Current Asset */}
-              <div className="mb-4 p-4 bg-gray-900 rounded-lg">
+              <div className="mb-4 p-4 bg-[#f5f5f7] rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm text-gray-400">Withdrawing</div>
+                    <div className="text-sm text-[#86868b]">Withdrawing</div>
                     <div className="text-lg font-bold">{tokenInfo.symbol}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-gray-400">Available</div>
-                    <div className="text-lg font-bold text-emerald-400">
+                    <div className="text-sm text-[#86868b]">Available</div>
+                    <div className="text-lg font-bold text-[#34C759]">
                       {parseFloat(assetBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })}
                     </div>
                   </div>
@@ -189,7 +189,7 @@ export function WithdrawModal({
 
               {/* Amount Input */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
                   Amount to Withdraw
                 </label>
                 <div className="relative">
@@ -198,11 +198,11 @@ export function WithdrawModal({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full bg-[#f5f5f7] border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
                   />
                   <button
                     onClick={handleWithdrawAll}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-cyan-400 hover:text-cyan-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#007AFF] hover:text-cyan-300"
                   >
                     MAX
                   </button>
@@ -210,11 +210,11 @@ export function WithdrawModal({
               </div>
 
               {/* Info Box */}
-              <div className="bg-gray-900 rounded-lg p-4 mb-6">
+              <div className="bg-[#f5f5f7] rounded-lg p-4 mb-6">
                 <div className="flex items-start gap-3">
-                  <ArrowDownToLine className="w-5 h-5 text-cyan-400 mt-0.5" />
+                  <ArrowDownToLine className="w-5 h-5 text-[#007AFF] mt-0.5" />
                   <div className="text-sm">
-                    <p className="text-gray-300 mb-1">
+                    <p className="text-[#1d1d1f] mb-1">
                       Withdraw to your wallet
                     </p>
                     <p className="text-gray-500 text-xs">
@@ -245,13 +245,13 @@ export function WithdrawModal({
 
           {step === 'withdraw' && (
             <div className="text-center py-8">
-              <Loader2 className="w-16 h-16 text-cyan-400 animate-spin mx-auto mb-4" />
+              <Loader2 className="w-16 h-16 text-[#007AFF] animate-spin mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Processing Withdrawal...</h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-[#86868b] mb-4">
                 Please confirm the transaction in your wallet
               </p>
               {isWithdrawConfirming && (
-                <p className="text-sm text-cyan-400">
+                <p className="text-sm text-[#007AFF]">
                   Waiting for confirmation...
                 </p>
               )}
@@ -260,9 +260,9 @@ export function WithdrawModal({
 
           {step === 'success' && (
             <div className="text-center py-8">
-              <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+              <CheckCircle className="w-16 h-16 text-[#34C759] mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Withdrawal Successful!</h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-[#86868b] mb-4">
                 {amount} {tokenInfo.symbol} has been withdrawn to your wallet
               </p>
               {withdrawHash && (
@@ -270,7 +270,7 @@ export function WithdrawModal({
                   href={`https://explorer.cronos.org/testnet/tx/${withdrawHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300"
+                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-cyan-300"
                 >
                   View Transaction <ExternalLink className="w-4 h-4" />
                 </a>
@@ -286,9 +286,9 @@ export function WithdrawModal({
 
           {step === 'error' && (
             <div className="text-center py-8">
-              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <AlertCircle className="w-16 h-16 text-[#FF3B30] mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">Withdrawal Failed</h3>
-              <p className="text-gray-400 mb-4 text-sm break-words">
+              <p className="text-[#86868b] mb-4 text-sm break-words">
                 {errorMessage.slice(0, 200)}
               </p>
               <button
