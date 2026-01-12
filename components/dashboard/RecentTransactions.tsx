@@ -12,8 +12,8 @@ import {
   XCircle, 
   ExternalLink,
   RefreshCw,
-  Filter,
-  Loader2
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { usePolling, useLoading } from '@/lib/hooks';
 
@@ -63,9 +63,11 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { isLoading: loading, error, setError } = useLoading(true);
+  const { isLoading: loading, error, setError} = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'swap' | 'deposit' | 'withdraw'>('all');
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const explorerUrl = chainId === 338 
     ? 'https://explorer.cronos.org/testnet' 
@@ -469,26 +471,36 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
   const getTypeIcon = (type: Transaction['type']) => {
     switch (type) {
       case 'swap':
-        return <ArrowDownUp className="w-4 h-4 text-cyan-400" />;
+        return <ArrowDownUp className="w-3.5 h-3.5" />;
       case 'deposit':
-        return <ArrowDown className="w-4 h-4 text-green-400" />;
+        return <ArrowDown className="w-3.5 h-3.5" />;
       case 'withdraw':
-        return <ArrowUp className="w-4 h-4 text-orange-400" />;
+        return <ArrowUp className="w-3.5 h-3.5" />;
       case 'approve':
-        return <CheckCircle className="w-4 h-4 text-purple-400" />;
+        return <CheckCircle className="w-3.5 h-3.5" />;
       default:
-        return <ArrowDownUp className="w-4 h-4 text-gray-400" />;
+        return <ArrowDownUp className="w-3.5 h-3.5" />;
+    }
+  };
+
+  const getTypeStyles = (type: Transaction['type']) => {
+    switch (type) {
+      case 'swap': return { bg: 'bg-[#007AFF]', text: 'text-[#007AFF]' };
+      case 'deposit': return { bg: 'bg-[#34C759]', text: 'text-[#34C759]' };
+      case 'withdraw': return { bg: 'bg-[#FF9500]', text: 'text-[#FF9500]' };
+      case 'approve': return { bg: 'bg-[#AF52DE]', text: 'text-[#AF52DE]' };
+      default: return { bg: 'bg-[#86868b]', text: 'text-[#86868b]' };
     }
   };
 
   const getStatusIcon = (status: Transaction['status']) => {
     switch (status) {
       case 'success':
-        return <CheckCircle className="w-4 h-4 text-green-400" />;
+        return <CheckCircle className="w-4 h-4 text-[#34C759]" />;
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />;
+        return <Clock className="w-4 h-4 text-[#FF9500] animate-pulse" />;
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-400" />;
+        return <XCircle className="w-4 h-4 text-[#FF3B30]" />;
     }
   };
 
@@ -504,163 +516,212 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
 
   if (!address || address === '0x0000...0000') {
     return (
-      <div className="glass rounded-2xl p-6 border border-white/10">
-        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <ArrowDownUp className="w-5 h-5 text-cyan-400" />
-          Recent Transactions
-        </h3>
-        <div className="text-center py-8 text-gray-400">
-          <p>Connect your wallet to view transactions</p>
+      <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-black/5 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-[#007AFF] rounded-[12px] flex items-center justify-center">
+            <ArrowDownUp className="w-5 h-5 text-white" />
+          </div>
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f]">History</h3>
+        </div>
+        <div className="text-center py-8 bg-[#f5f5f7] rounded-[14px]">
+          <p className="text-[14px] text-[#86868b]">Connect wallet to view history</p>
         </div>
       </div>
     );
   }
 
+  const displayTransactions = showAll ? filteredTransactions : filteredTransactions.slice(0, 5);
+
   return (
-    <div className="glass rounded-2xl p-6 border border-white/10">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold flex items-center gap-2">
-          <ArrowDownUp className="w-5 h-5 text-cyan-400" />
-          Recent Transactions
-        </h3>
+    <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-black/5 overflow-hidden">
+      {/* Header - Collapseable */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="w-full px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between active:bg-[#f9f9f9] sm:hover:bg-[#f9f9f9] transition-colors"
+      >
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-[#007AFF] rounded-[10px] sm:rounded-[12px] flex items-center justify-center">
+            <ArrowDownUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">History</h3>
+              {transactions.length > 0 && (
+                <span className="px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] text-[10px] font-bold rounded-full">
+                  {transactions.length}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] sm:text-[12px] text-[#86868b]">Recent transactions</p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          {/* Filter */}
-          <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
-            {(['all', 'swap', 'deposit', 'withdraw'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                  filter === f
-                    ? 'bg-cyan-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-          
-          {/* Refresh */}
           <button
-            onClick={() => fetchTransactions(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              fetchTransactions(true);
+            }}
             disabled={refreshing}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            className="w-8 h-8 flex items-center justify-center bg-[#f5f5f7] rounded-full"
           >
-            <RefreshCw className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#86868b] ${refreshing ? 'animate-spin' : ''}`} />
           </button>
+          {isCollapsed ? (
+            <ChevronDown className="w-5 h-5 text-[#86868b]" />
+          ) : (
+            <ChevronUp className="w-5 h-5 text-[#86868b]" />
+          )}
         </div>
-      </div>
+      </button>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-        </div>
-      ) : error ? (
-        <div className="text-center py-8 text-red-400">
-          <XCircle className="w-8 h-8 mx-auto mb-2" />
-          <p>{error}</p>
-          <button
-            onClick={() => fetchTransactions(true)}
-            className="mt-2 text-sm text-cyan-400 hover:underline"
-          >
-            Try again
-          </button>
-        </div>
-      ) : filteredTransactions.length === 0 ? (
-        <div className="text-center py-8 text-gray-400">
-          <ArrowDownUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="font-medium">No transactions found</p>
-          <p className="text-xs mt-1 mb-4">Transactions will appear here after you make swaps, deposits, or withdrawals</p>
-          <div className="flex flex-col items-center gap-2">
-            <button
-              onClick={() => fetchTransactions(true)}
-              className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3" /> Refresh
-            </button>
-            <a
-              href={`${explorerUrl}/address/${address}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-gray-500 hover:text-cyan-400 flex items-center gap-1"
-            >
-              View address on Explorer <ExternalLink className="w-3 h-3" />
-            </a>
+      {!isCollapsed && (
+        <>
+          {/* Filter Pills */}
+          <div className="px-4 sm:px-6 pb-3">
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+              {(['all', 'swap', 'deposit', 'withdraw'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-all whitespace-nowrap ${
+                    filter === f
+                      ? 'bg-[#007AFF] text-white'
+                      : 'bg-[#f5f5f7] text-[#86868b] active:bg-[#e8e8ed]'
+                  }`}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filteredTransactions.map((tx) => (
-            <div
-              key={tx.hash}
-              className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                {/* Type Icon */}
-                <div className="p-2 bg-gray-900 rounded-lg">
-                  {getTypeIcon(tx.type)}
-                </div>
-                
-                {/* Details */}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold capitalize">{tx.type}</span>
-                    {getStatusIcon(tx.status)}
-                  </div>
-                  <div className="text-xs text-gray-400 flex items-center gap-2">
-                    <span className="font-mono">{tx.hash.slice(0, 8)}...{tx.hash.slice(-6)}</span>
-                    <span>•</span>
-                    <span>{formatTime(tx.timestamp)}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Value & Link */}
-              <div className="flex items-center gap-3">
-                {parseFloat(tx.value) > 0 && (
-                  <div className="text-right">
-                    <div className="font-semibold text-sm">
-                      {parseFloat(tx.value).toFixed(4)} CRO
-                    </div>
-                    {tx.gasUsed && (
-                      <div className="text-xs text-gray-500">
-                        Gas: {parseFloat(tx.gasUsed).toFixed(6)}
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* Content */}
+          {loading ? (
+            <div className="px-4 sm:px-6 pb-6">
+              <div className="flex items-center justify-center py-8">
+                <div className="w-7 h-7 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+              </div>
+            </div>
+          ) : error ? (
+            <div className="px-4 sm:px-6 pb-6">
+              <div className="text-center py-6 bg-[#f5f5f7] rounded-[14px]">
+                <div className="w-12 h-12 bg-[#FF3B30]/10 rounded-[14px] flex items-center justify-center mx-auto mb-3">
+                  <XCircle className="w-6 h-6 text-[#FF3B30]" />
+                </div>
+                <p className="text-[15px] text-[#1d1d1f] mb-2">{error}</p>
+                <button
+                  onClick={() => fetchTransactions(true)}
+                  className="text-[13px] text-[#007AFF] font-medium"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="px-4 sm:px-6 pb-6">
+              <div className="text-center py-8 bg-[#f5f5f7] rounded-[14px]">
+                <ArrowDownUp className="w-8 h-8 text-[#86868b] mx-auto mb-2 opacity-50" />
+                <p className="text-[14px] font-medium text-[#1d1d1f] mb-1">No transactions found</p>
+                <p className="text-[12px] text-[#86868b] mb-4">Transactions will appear here after activity</p>
                 <a
-                  href={`${explorerUrl}/tx/${tx.hash}`}
+                  href={`${explorerUrl}/address/${address}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1 text-[12px] text-[#007AFF] font-medium"
                 >
-                  <ExternalLink className="w-4 h-4 text-gray-400 hover:text-cyan-400" />
+                  View on Explorer <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="divide-y divide-black/5">
+              {displayTransactions.map((tx) => {
+                const typeStyles = getTypeStyles(tx.type);
+                return (
+                  <div
+                    key={tx.hash}
+                    className="px-4 sm:px-6 py-3 active:bg-[#f9f9f9] sm:hover:bg-[#f9f9f9] transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Type Icon */}
+                        <div className={`w-8 h-8 ${typeStyles.bg} rounded-[10px] flex items-center justify-center flex-shrink-0`}>
+                          <span className="text-white">
+                            {getTypeIcon(tx.type)}
+                          </span>
+                        </div>
+                        
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-semibold text-[#1d1d1f] capitalize">{tx.type}</span>
+                            {getStatusIcon(tx.status)}
+                          </div>
+                          <div className="text-[11px] text-[#86868b] flex items-center gap-1.5">
+                            <span className="font-mono truncate">{tx.hash.slice(0, 8)}...{tx.hash.slice(-6)}</span>
+                            <span>•</span>
+                            <span className="whitespace-nowrap">{formatTime(tx.timestamp)}</span>
+                          </div>
+                        </div>
+                      </div>
 
-      {/* Footer */}
-      {filteredTransactions.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
-          <span className="text-xs text-gray-500">
-            Showing {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
-          </span>
-          <a
-            href={`${explorerUrl}/address/${address}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
-          >
-            View all on Explorer <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
+                      {/* Value & Link */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {parseFloat(tx.value) > 0 && (
+                          <div className="text-right hidden sm:block">
+                            <div className="text-[13px] font-semibold text-[#1d1d1f]">
+                              {parseFloat(tx.value).toFixed(4)}
+                            </div>
+                            <div className="text-[10px] text-[#86868b]">
+                              {tx.tokenSymbol || 'CRO'}
+                            </div>
+                          </div>
+                        )}
+                        <a
+                          href={`${explorerUrl}/tx/${tx.hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-8 h-8 flex items-center justify-center bg-[#f5f5f7] rounded-full"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-[#86868b]" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Footer */}
+          {filteredTransactions.length > 5 && (
+            <div className="px-4 sm:px-6 py-3 border-t border-black/5">
+              <button
+                onClick={() => setShowAll(!showAll)}
+                className="w-full py-2 text-[13px] font-medium text-[#007AFF] active:text-[#0051D5]"
+              >
+                {showAll ? 'Show less' : `View all ${filteredTransactions.length} transactions`}
+              </button>
+            </div>
+          )}
+
+          {filteredTransactions.length > 0 && filteredTransactions.length <= 5 && (
+            <div className="px-4 sm:px-6 py-3 border-t border-black/5 flex items-center justify-between">
+              <span className="text-[11px] text-[#86868b]">
+                {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
+              </span>
+              <a
+                href={`${explorerUrl}/address/${address}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[11px] text-[#007AFF] font-medium"
+              >
+                Explorer <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

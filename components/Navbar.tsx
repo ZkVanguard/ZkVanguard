@@ -29,7 +29,7 @@ export function Navbar() {
     <nav 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
         scrolled 
-          ? 'bg-white/80 backdrop-blur-xl shadow-ios-2 border-b border-separator-opaque' 
+          ? 'bg-white/80 backdrop-blur-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] border-b border-black/10' 
           : 'bg-white/95 backdrop-blur-lg'
       }`}
     >
@@ -47,7 +47,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 h-11 flex items-center text-callout font-normal text-label-primary hover:text-ios-blue active:scale-[0.98] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap"
+                className="px-3 h-11 flex items-center text-[16px] font-normal text-[#1d1d1f] hover:text-[#007AFF] active:scale-[0.98] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap"
               >
                 {link.label}
               </Link>
@@ -62,7 +62,7 @@ export function Navbar() {
           {/* Mobile Menu Button - Proper 44pt touch target */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-label-primary hover:text-ios-blue active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-[#1d1d1f] hover:text-[#007AFF] active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
             aria-label="Toggle menu"
           >
             {isOpen ? (
@@ -75,20 +75,20 @@ export function Navbar() {
 
         {/* Mobile Navigation - Clean iOS-style list */}
         {isOpen && (
-          <div className="lg:hidden pb-4 border-t border-separator-non-opaque animate-fade-in">
+          <div className="lg:hidden pb-4 border-t border-black/10 animate-fade-in">
             <div className="py-2 space-y-0.5">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="block px-3 h-11 flex items-center text-body text-label-primary hover:bg-system-bg-secondary active:scale-[0.98] rounded-ios transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  className="block px-3 h-11 flex items-center text-[17px] text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-[0.98] rounded-[10px] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}
                 </Link>
               ))}
             </div>
-            <div className="mt-3 pt-3 px-3 border-t border-separator-non-opaque">
+            <div className="mt-3 pt-3 px-3 border-t border-black/10">
               <ConnectButton />
             </div>
           </div>

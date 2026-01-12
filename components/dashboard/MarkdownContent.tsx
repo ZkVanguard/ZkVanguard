@@ -29,7 +29,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
                 key={i} 
                 className="flex items-start gap-2.5"
                 dangerouslySetInnerHTML={{ 
-                  __html: '<span class="text-cyan-400 mt-0.5 flex-shrink-0">•</span><span class="flex-1">' + processInlineMarkdown(item) + '</span>'
+                  __html: '<span class="text-[#007AFF] mt-0.5 flex-shrink-0">•</span><span class="flex-1 text-[#1d1d1f]">' + processInlineMarkdown(item) + '</span>'
                 }} 
               />
             ))}
@@ -61,7 +61,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       // Headers
       if (line.startsWith('### ')) {
         elements.push(
-          <h3 key={`h3-${key++}`} className="text-base font-semibold mt-4 mb-2 text-gray-100">
+          <h3 key={`h3-${key++}`} className="text-base font-semibold mt-4 mb-2 text-[#1d1d1f]">
             {processInlineMarkdown(line.replace(/^###\s+/, ''))}
           </h3>
         );
@@ -69,7 +69,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       }
       if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={`h2-${key++}`} className="text-lg font-semibold mt-5 mb-2.5 text-white">
+          <h2 key={`h2-${key++}`} className="text-lg font-semibold mt-5 mb-2.5 text-[#1d1d1f]">
             {processInlineMarkdown(line.replace(/^##\s+/, ''))}
           </h2>
         );
@@ -77,7 +77,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       }
       if (line.startsWith('# ')) {
         elements.push(
-          <h1 key={`h1-${key++}`} className="text-xl font-bold mt-5 mb-3 text-white">
+          <h1 key={`h1-${key++}`} className="text-xl font-bold mt-5 mb-3 text-[#1d1d1f]">
             {processInlineMarkdown(line.replace(/^#\s+/, ''))}
           </h1>
         );
@@ -88,7 +88,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       elements.push(
         <p
           key={`p-${key++}`}
-          className="my-2 leading-relaxed text-gray-200"
+          className="my-2 leading-relaxed text-[#1d1d1f]"
           dangerouslySetInnerHTML={{ __html: processInlineMarkdown(line) }}
         />
       );
@@ -111,21 +111,21 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     // Then apply markdown formatting
     result = result
       // Code: `text` (do first to avoid conflicts)
-      .replace(/`([^`]+)`/g, '<code class="bg-gray-800/70 px-2 py-1 rounded text-sm font-mono text-cyan-300 border border-gray-700">$1</code>')
+      .replace(/`([^`]+)`/g, '<code class="bg-[#f5f5f7] px-1.5 py-0.5 rounded-[4px] text-[12px] font-mono text-[#AF52DE] border border-black/5">$1</code>')
       // Bold: **text** or __text__
-      .replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-semibold text-white">$1</strong>')
-      .replace(/__([^_]+)__/g, '<strong class="font-semibold text-white">$1</strong>')
+      .replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-semibold text-[#1d1d1f]">$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong class="font-semibold text-[#1d1d1f]">$1</strong>')
       // Italic: *text* or _text_
-      .replace(/\*([^\*]+)\*/g, '<em class="italic text-gray-300">$1</em>')
-      .replace(/_([^_]+)_/g, '<em class="italic text-gray-300">$1</em>')
+      .replace(/\*([^\*]+)\*/g, '<em class="italic text-[#1d1d1f]">$1</em>')
+      .replace(/_([^_]+)_/g, '<em class="italic text-[#1d1d1f]">$1</em>')
       // Links: [text](url)
-      .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 transition-colors">$1</a>');
+      .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#007AFF] hover:text-[#0051D5] underline decoration-[#007AFF]/40 transition-colors">$1</a>');
 
     return result;
   };
 
   return (
-    <div className={`markdown-content text-sm leading-relaxed ${className}`}>
+    <div className={`markdown-content text-sm leading-relaxed text-[#1d1d1f] ${className}`}>
       {renderMarkdown(content)}
     </div>
   );

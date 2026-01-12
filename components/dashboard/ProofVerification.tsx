@@ -504,33 +504,33 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
+    <div className="bg-white/50 backdrop-blur-sm border border-[#e8e8ed] rounded-xl p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Shield className="w-6 h-6 text-purple-400" />
+        <Shield className="w-6 h-6 text-[#AF52DE]" />
         <h2 className="text-xl font-bold">Verify ZK Proof On-Chain</h2>
       </div>
 
       <div className="space-y-4">
         {/* Transaction Hash Input (Recommended) */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Transaction Hash <span className="text-xs text-emerald-400">(✨ easiest method)</span>
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
+            Transaction Hash <span className="text-xs text-[#34C759]">(✨ easiest method)</span>
           </label>
           <input
             type="text"
             value={txHash}
             onChange={(e) => setTxHash(e.target.value)}
             placeholder="0x92577669354a4bc9d1965ff27a0d68956ad36641530456ec4949ca6b5da15a2f"
-            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none font-mono text-sm"
+            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none font-mono text-sm"
           />
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-[#86868b] mt-2">
             Just paste your transaction hash - we'll automatically extract the proof hash from the logs!
           </p>
         </div>
 
         {/* Proof Hash Input (Alternative) */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
             Or Enter Proof Hash Directly <span className="text-xs text-gray-500">(optional)</span>
           </label>
           <input
@@ -538,26 +538,26 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             value={proofHash}
             onChange={(e) => setProofHash(e.target.value)}
             placeholder="0x0000000000000000000000000000000000000000000000000000000675e9ab3"
-            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none font-mono text-sm"
+            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none font-mono text-sm"
           />
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-[#86868b] mt-2">
             💡 Find this in Dashboard console logs after generating a proof (look for "Proof Hash:")
           </p>
         </div>
         
         {/* Statement Input (ZK Proof of Knowledge) */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Prove Statement Knowledge <span className="text-xs text-purple-400">(⚡ zero-knowledge verification)</span>
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
+            Prove Statement Knowledge <span className="text-xs text-[#AF52DE]">(⚡ zero-knowledge verification)</span>
           </label>
           <textarea
             value={claimedStatement}
             onChange={(e) => setClaimedStatement(e.target.value)}
             placeholder='{"claim": "Portfolio risk is below threshold", "threshold": 100, "portfolio_id": "DEMO_001"}'
             rows={3}
-            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none font-mono text-sm"
+            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] placeholder-gray-500 focus:border-purple-500 focus:outline-none font-mono text-sm"
           />
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-[#86868b] mt-1">
             💡 Provide the statement JSON to prove you know what was proven (verified against on-chain commitment)
           </p>
         </div>
@@ -602,14 +602,14 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         </div>
         
         <div className="bg-gradient-to-r from-emerald-500/10 to-purple-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs">
-          <div className="font-semibold text-emerald-400 mb-1">⚡ Full ZK Verification (Client-Side):</div>
-          <ul className="space-y-0.5 text-gray-300">
+          <div className="font-semibold text-[#34C759] mb-1">⚡ Full ZK Verification (Client-Side):</div>
+          <ul className="space-y-0.5 text-[#1d1d1f]">
             <li>✅ Queries Cronos blockchain directly in your browser</li>
             <li>✅ Verifies ZK-STARK proof cryptographically</li>
             <li>✅ All verification visible in browser console (F12)</li>
             <li>✅ No backend needed - fully transparent!</li>
           </ul>
-          <div className="mt-2 text-xs text-purple-400 font-semibold">
+          <div className="mt-2 text-xs text-[#AF52DE] font-semibold">
             💡 Open browser console (F12) to see real-time verification!
           </div>
         </div>
@@ -617,7 +617,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         {/* Error Display */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
-            <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <XCircle className="w-5 h-5 text-[#FF3B30] flex-shrink-0 mt-0.5" />
             <div className="text-sm text-red-300">{error}</div>
           </div>
         )}
@@ -625,7 +625,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         {/* Results Display */}
         {result && (
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 space-y-4">
-            <div className="flex items-center gap-2 text-green-400 font-semibold">
+            <div className="flex items-center gap-2 text-[#34C759] font-semibold">
               <CheckCircle className="w-5 h-5" />
               Verification Results
             </div>
@@ -634,54 +634,54 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             {result.comprehensiveVerification && (
               <div className="bg-gradient-to-br from-emerald-900/30 via-purple-900/30 to-blue-900/30 border-2 border-emerald-500/50 rounded-lg p-5 space-y-4">
                 <div className="text-center">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-purple-500 rounded-full font-bold text-white text-lg mb-3">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-purple-500 rounded-full font-bold text-[#1d1d1f] text-lg mb-3">
                     <Shield className="w-6 h-6" />
                     🔐 VERIFIED IN YOUR BROWSER
                   </div>
-                  <p className="text-sm text-gray-300">Client-Side Verification • No Backend Trust Required</p>
-                  <p className="text-xs text-emerald-400 mt-1">
+                  <p className="text-sm text-[#1d1d1f]">Client-Side Verification • No Backend Trust Required</p>
+                  <p className="text-xs text-[#34C759] mt-1">
                     💡 Check browser console (F12) to see the verification process!
                   </p>
                 </div>
 
                 {/* On-Chain Verification */}
-                <div className="bg-gray-900/80 border border-emerald-500/30 rounded-lg p-4">
-                  <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-3">
+                <div className="bg-[#f5f5f7]/80 border border-emerald-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-[#34C759] font-semibold mb-3">
                     <CheckCircle className="w-5 h-5" />
                     ✅ On-Chain Verification (Cronos Blockchain)
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <div className="text-gray-400">Blockchain:</div>
-                      <div className="text-emerald-400 font-semibold">{result.comprehensiveVerification.onChainVerification.blockchain}</div>
+                      <div className="text-[#86868b]">Blockchain:</div>
+                      <div className="text-[#34C759] font-semibold">{result.comprehensiveVerification.onChainVerification.blockchain}</div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Contract Address:</div>
-                      <div className="text-purple-400 font-mono text-[10px] break-all">
+                      <div className="text-[#86868b]">Contract Address:</div>
+                      <div className="text-[#AF52DE] font-mono text-[10px] break-all">
                         {result.comprehensiveVerification.onChainVerification.contractAddress}
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Proof Hash:</div>
+                      <div className="text-[#86868b]">Proof Hash:</div>
                       <div className="text-blue-400 font-mono text-[10px] break-all">
                         {result.comprehensiveVerification.onChainVerification.proofHash}
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Merkle Root:</div>
-                      <div className="text-purple-400 font-mono text-[10px] break-all">
+                      <div className="text-[#86868b]">Merkle Root:</div>
+                      <div className="text-[#AF52DE] font-mono text-[10px] break-all">
                         {result.comprehensiveVerification.onChainVerification.merkleRoot}
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Security Level:</div>
-                      <div className="text-emerald-400 font-semibold">
+                      <div className="text-[#86868b]">Security Level:</div>
+                      <div className="text-[#34C759] font-semibold">
                         {(result.comprehensiveVerification.onChainVerification as any).securityLevel || result.securityLevel} bits
                       </div>
                     </div>
                     <div>
-                      <div className="text-gray-400">Status:</div>
-                      <div className="flex items-center gap-1 text-emerald-400 font-semibold">
+                      <div className="text-[#86868b]">Status:</div>
+                      <div className="flex items-center gap-1 text-[#34C759] font-semibold">
                         <CheckCircle className="w-4 h-4" />
                         Immutable
                       </div>
@@ -691,56 +691,56 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
                 {/* ZK-STARK Verification */}
                 {result.comprehensiveVerification.zkVerification && (
-                  <div className="bg-gray-900/80 border border-purple-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-purple-400 font-semibold mb-3">
+                  <div className="bg-[#f5f5f7]/80 border border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-[#AF52DE] font-semibold mb-3">
                       <CheckCircle className="w-5 h-5" />
                       ✅ ZK-STARK Cryptographic Verification
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                       <div>
-                        <div className="text-gray-400">System:</div>
-                        <div className="text-purple-400 font-semibold">{result.comprehensiveVerification.zkVerification.system}</div>
+                        <div className="text-[#86868b]">System:</div>
+                        <div className="text-[#AF52DE] font-semibold">{result.comprehensiveVerification.zkVerification.system}</div>
                       </div>
                       <div>
-                        <div className="text-gray-400">Implementation:</div>
-                        <div className="text-purple-400 font-semibold">{result.comprehensiveVerification.zkVerification.implementation}</div>
+                        <div className="text-[#86868b]">Implementation:</div>
+                        <div className="text-[#AF52DE] font-semibold">{result.comprehensiveVerification.zkVerification.implementation}</div>
                       </div>
                       <div>
-                        <div className="text-gray-400">Proof Validity:</div>
-                        <div className="flex items-center gap-1 text-emerald-400 font-semibold">
+                        <div className="text-[#86868b]">Proof Validity:</div>
+                        <div className="flex items-center gap-1 text-[#34C759] font-semibold">
                           <CheckCircle className="w-4 h-4" />
                           Mathematically Valid
                         </div>
                       </div>
                       <div>
-                        <div className="text-gray-400">Zero-Knowledge:</div>
-                        <div className="text-emerald-400 font-semibold">Privacy Preserved ✨</div>
+                        <div className="text-[#86868b]">Zero-Knowledge:</div>
+                        <div className="text-[#34C759] font-semibold">Privacy Preserved ✨</div>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Security Guarantees */}
-                <div className="bg-gray-900/80 border border-blue-500/30 rounded-lg p-4">
+                <div className="bg-[#f5f5f7]/80 border border-blue-500/30 rounded-lg p-4">
                   <div className="flex items-center gap-2 text-blue-400 font-semibold mb-3">
                     <Shield className="w-5 h-5" />
                     🛡️ Security Guarantees
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[#1d1d1f]">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <CheckCircle className="w-4 h-4 text-[#34C759]" />
                       <span>Cryptographically Secure ({result.comprehensiveVerification.proof.securityBits} bits)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <CheckCircle className="w-4 h-4 text-[#34C759]" />
                       <span>Immutable On-Chain Storage</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <CheckCircle className="w-4 h-4 text-[#34C759]" />
                       <span>Trustless Verification</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <CheckCircle className="w-4 h-4 text-[#34C759]" />
                       <span>Zero-Knowledge Privacy</span>
                     </div>
                   </div>
@@ -748,13 +748,13 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
                 {/* Trust Model */}
                 <div className="bg-gradient-to-r from-emerald-500/10 to-purple-500/10 border border-emerald-500/30 rounded-lg p-3">
-                  <div className="text-sm font-semibold text-emerald-400 mb-2">🎯 What This Client-Side Verification Proves:</div>
-                  <ul className="space-y-1 text-xs text-gray-300">
+                  <div className="text-sm font-semibold text-[#34C759] mb-2">🎯 What This Client-Side Verification Proves:</div>
+                  <ul className="space-y-1 text-xs text-[#1d1d1f]">
                     <li>✅ Your browser directly queried Cronos blockchain (no middleman)</li>
                     <li>✅ The ZK-STARK proof was verified cryptographically via authentic system</li>
                     <li>✅ The proof is immutably stored on-chain (cannot be tampered)</li>
-                    <li>✅ Verification method: <span className="text-emerald-400 font-mono">{(result.comprehensiveVerification as any).metadata?.verificationMethod || 'Client-Side Blockchain Verification'}</span></li>
-                    <li>✅ Trust model: <span className="text-purple-400 font-semibold">{(result.comprehensiveVerification as any).metadata?.trustModel || 'Trustless - Verified in Your Browser'}</span></li>
+                    <li>✅ Verification method: <span className="text-[#34C759] font-mono">{(result.comprehensiveVerification as any).metadata?.verificationMethod || 'Client-Side Blockchain Verification'}</span></li>
+                    <li>✅ Trust model: <span className="text-[#AF52DE] font-semibold">{(result.comprehensiveVerification as any).metadata?.trustModel || 'Trustless - Verified in Your Browser'}</span></li>
                   </ul>
                   <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
                     <strong>🔍 Transparency:</strong> All verification happened in your browser! Open DevTools (F12) → Console 
@@ -765,31 +765,31 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             )}
 
             {/* What Was Proven Section */}
-            <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
-              <div className="text-sm font-semibold text-purple-400 mb-2">✨ What Was Proven:</div>
-              <div className="text-gray-300 space-y-1 text-sm">
+            <div className="bg-[#f5f5f7]/50 border border-[#e8e8ed] rounded-lg p-4">
+              <div className="text-sm font-semibold text-[#AF52DE] mb-2">✨ What Was Proven:</div>
+              <div className="text-[#1d1d1f] space-y-1 text-sm">
                 <div>• A zero-knowledge proof was generated and stored on-chain</div>
                 <div>• The proof demonstrates knowledge of private data without revealing it</div>
-                <div>• The commitment is cryptographically secured with <span className="text-purple-400 font-semibold">{result.securityLevel}-bit security</span></div>
+                <div>• The commitment is cryptographically secured with <span className="text-[#AF52DE] font-semibold">{result.securityLevel}-bit security</span></div>
                 
                 {result.statement && (
-                  <div className="mt-2 bg-gray-800 rounded p-3 border border-purple-500/30">
+                  <div className="mt-2 bg-white rounded p-3 border border-purple-500/30">
                     <div className="flex items-center gap-2 text-xs mb-1">
-                      <span className="text-gray-400">📋 Public Statement:</span>
+                      <span className="text-[#86868b]">📋 Public Statement:</span>
                       {result.statementVerified && (
-                        <span className="flex items-center gap-1 text-green-400">
+                        <span className="flex items-center gap-1 text-[#34C759]">
                           <CheckCircle className="w-3 h-3" />
                           ZK Verified
                         </span>
                       )}
                       {result.statementVerified === false && (
-                        <span className="flex items-center gap-1 text-red-400">
+                        <span className="flex items-center gap-1 text-[#FF3B30]">
                           <XCircle className="w-3 h-3" />
                           Hash Mismatch
                         </span>
                       )}
                     </div>
-                    <div className="text-emerald-400 font-mono text-xs">
+                    <div className="text-[#34C759] font-mono text-xs">
                       {JSON.stringify(result.statement, null, 2)}
                     </div>
                     {result.statement_hash && (
@@ -801,9 +801,9 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                 )}
                 
                 {!result.statement && result.statement_hash && (
-                  <div className="mt-2 bg-gray-800 rounded p-3 border border-yellow-500/30">
-                    <div className="text-xs text-yellow-400 mb-1">🔐 Statement Hash Committed:</div>
-                    <div className="text-gray-400 font-mono text-xs break-all">
+                  <div className="mt-2 bg-white rounded p-3 border border-yellow-500/30">
+                    <div className="text-xs text-[#FF9500] mb-1">🔐 Statement Hash Committed:</div>
+                    <div className="text-[#86868b] font-mono text-xs break-all">
                       {result.statement_hash}
                     </div>
                     <div className="text-xs text-gray-500 mt-2">
@@ -812,7 +812,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                   </div>
                 )}
               </div>
-              <div className="mt-3 text-xs text-gray-400 bg-gray-800 rounded p-2 font-mono">
+              <div className="mt-3 text-xs text-[#86868b] bg-white rounded p-2 font-mono">
                 💡 Note: The statement_hash is committed in the on-chain proofHash. 
                 {result.statementVerified && " You successfully proved knowledge of the statement via ZK verification!"}
                 {!result.statement && " Provide the statement to prove your knowledge without revealing private witness data."}
@@ -822,14 +822,14 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             <div className="space-y-2 text-sm">
               {/* Exists Check */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-300">Proof Exists On-Chain:</span>
+                <span className="text-[#1d1d1f]">Proof Exists On-Chain:</span>
                 {result.exists ? (
-                  <span className="flex items-center gap-1 text-green-400">
+                  <span className="flex items-center gap-1 text-[#34C759]">
                     <CheckCircle className="w-4 h-4" />
                     Yes
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-red-400">
+                  <span className="flex items-center gap-1 text-[#FF3B30]">
                     <XCircle className="w-4 h-4" />
                     No
                   </span>
@@ -839,14 +839,14 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               {/* Transaction Check */}
               {txHash && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Transaction Verified:</span>
+                  <span className="text-[#1d1d1f]">Transaction Verified:</span>
                   {result.onChain ? (
-                    <span className="flex items-center gap-1 text-green-400">
+                    <span className="flex items-center gap-1 text-[#34C759]">
                       <CheckCircle className="w-4 h-4" />
                       Success
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-yellow-400">
+                    <span className="flex items-center gap-1 text-[#FF9500]">
                       <Clock className="w-4 h-4" />
                       Pending/Not Found
                     </span>
@@ -856,8 +856,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
               {/* Security Level */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-300">Security Level:</span>
-                <span className="text-purple-400 font-semibold">
+                <span className="text-[#1d1d1f]">Security Level:</span>
+                <span className="text-[#AF52DE] font-semibold">
                   {result.securityLevel} bits
                 </span>
               </div>
@@ -865,8 +865,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               {/* Timestamp */}
               {result.timestamp > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Stored At:</span>
-                  <span className="text-gray-400">
+                  <span className="text-[#1d1d1f]">Stored At:</span>
+                  <span className="text-[#86868b]">
                     {new Date(result.timestamp * 1000).toLocaleString()}
                   </span>
                 </div>
@@ -875,8 +875,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               {/* Age */}
               {result.timestamp > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Proof Age:</span>
-                  <span className="text-gray-400">
+                  <span className="text-[#1d1d1f]">Proof Age:</span>
+                  <span className="text-[#86868b]">
                     {Math.floor((Date.now() / 1000 - result.timestamp) / 60)} minutes ago
                   </span>
                 </div>
@@ -885,29 +885,29 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               {/* Gas Refund Info */}
               {result.gasRefunded && (
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 mt-2">
-                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm mb-2">
+                  <div className="flex items-center gap-2 text-[#34C759] font-semibold text-sm mb-2">
                     <CheckCircle className="w-4 h-4" />
                     Gas Refunded - You Paid $0.00!
                   </div>
                   {result.refundDetails && (
-                    <div className="space-y-1 text-xs text-gray-300">
+                    <div className="space-y-1 text-xs text-[#1d1d1f]">
                       <div className="flex items-center justify-between">
                         <span>Gas Used:</span>
-                        <span className="font-mono text-emerald-400">
+                        <span className="font-mono text-[#34C759]">
                           {parseInt(result.refundDetails.gasUsed).toLocaleString()} units
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Refund Amount:</span>
-                        <span className="font-mono text-emerald-400">
+                        <span className="font-mono text-[#34C759]">
                           {(Number(result.refundDetails.refundAmount) / 1e18).toFixed(6)} CRO
                         </span>
                       </div>
                       <div className="flex items-center justify-between font-semibold">
                         <span>Your Net Cost:</span>
-                        <span className="text-emerald-400">$0.00 💚</span>
+                        <span className="text-[#34C759]">$0.00 💚</span>
                       </div>
-                      <div className="text-xs text-gray-400 mt-2 bg-gray-800 rounded p-2">
+                      <div className="text-xs text-[#86868b] mt-2 bg-white rounded p-2">
                         💡 The smart contract automatically refunded your gas within the same transaction!
                       </div>
                     </div>
@@ -922,7 +922,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                 href={`https://explorer.cronos.org/testnet/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                className="flex items-center gap-2 text-sm text-[#AF52DE] hover:text-purple-300 transition-colors"
               >
                 View on Cronos Explorer
                 <ExternalLink className="w-4 h-4" />
@@ -932,7 +932,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         )}
 
         {/* Info Box */}
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-sm text-gray-300">
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-sm text-[#1d1d1f]">
           <div className="font-semibold text-blue-400 mb-2">How Verification Works:</div>
           <ul className="space-y-1 text-xs">
             <li>• Queries the Cronos blockchain for your proof commitment</li>
