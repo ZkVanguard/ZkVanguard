@@ -210,7 +210,7 @@ export class X402SwapService {
       return {
         success: true,
         swapTxHash,
-        settlementTxHash: paymentResult.transactionHash,
+        settlementTxHash: paymentResult.txHash,
         amountOut: quote.amountOut,
         gasSaved: gasSavedWei,
         x402Fee: BigInt(10000), // 0.01 USDC
