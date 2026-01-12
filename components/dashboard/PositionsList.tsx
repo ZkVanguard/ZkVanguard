@@ -216,13 +216,12 @@ export function PositionsList({ address }: { address: string }) {
 
   useEffect(() => {
     async function loadAll() {
-      // Don't block on portfolio loading - show tokens immediately
       await fetchOnChainPortfolios();
       setHasInitiallyLoaded(true);
     }
     
-    // Set loading to false as soon as we have positions data
-    if (positionsData) {
+    // Set loading to false only when we have positions data
+    if (positionsData && positionsData.positions.length >= 0) {
       setLoading(false);
     }
     
@@ -255,15 +254,21 @@ export function PositionsList({ address }: { address: string }) {
     }
   };
 
-  if (loading) {
+  // Show loading state with progress bar until positions are ready
+  if (loading || !positionsData) {
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-[20px] p-6 animate-pulse">
-          <div className="h-8 bg-[#f5f5f7] rounded-lg w-1/3 mb-4" />
-          <div className="grid grid-cols-3 gap-4">
-            <div className="h-20 bg-[#f5f5f7] rounded-[14px]" />
-            <div className="h-20 bg-[#f5f5f7] rounded-[14px]" />
-            <div className="h-20 bg-[#f5f5f7] rounded-[14px]" />
+        <div className="bg-white rounded-[20px] shadow-sm border border-black/5 p-8">
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-12 h-12 bg-[#007AFF]/10 rounded-full flex items-center justify-center mb-4">
+              <RefreshCw className="w-6 h-6 text-[#007AFF] animate-spin" />
+            </div>
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Loading Positions</h3>
+            <p className="text-[13px] text-[#86868b] mb-4">Fetching your token holdings...</p>
+            {/* Progress bar */}
+            <div className="w-full max-w-[200px] h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
+              <div className="h-full bg-[#007AFF] rounded-full animate-pulse" style={{ width: '60%' }} />
+            </div>
           </div>
         </div>
       </div>
