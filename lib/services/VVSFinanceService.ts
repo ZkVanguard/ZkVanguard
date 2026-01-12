@@ -14,11 +14,15 @@ const VVS_ROUTER_MAINNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
 const VVS_ROUTER_TESTNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae'; // Same as mainnet for now
 
 // Common token addresses on Cronos Testnet
+// Use VVS testnet tokens that have actual liquidity pools
 const TOKENS_TESTNET: Record<string, string> = {
   WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
   CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4', // Wrapped CRO
-  DEVUSDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0',
-  USDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0', // Same as devUSDC on testnet
+  // VVS token - has liquidity pools on testnet
+  VVS: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
+  // Map common stablecoin names to VVS token (has pools)
+  DEVUSDC: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
+  USDC: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
 };
 
 // VVS Router ABI (minimal for swaps)
@@ -169,7 +173,7 @@ export class VVSFinanceService {
 
   /**
    * Get quote for a swap
-   * Returns expected output amount and price impact
+   * Uses the x402/swap API which integrates with @vvs-finance/swap-sdk
    */
   async getSwapQuote(params: Omit<SwapParams, 'recipient'>): Promise<SwapQuote> {
     try {
@@ -179,37 +183,54 @@ export class VVSFinanceService {
 
       const path = this.buildSwapPath(tokenInAddress, tokenOutAddress);
 
-      logger.info('Getting swap quote', { 
+      logger.info('Getting swap quote via VVS SDK', { 
         tokenIn: params.tokenIn, 
         tokenOut: params.tokenOut, 
         amountIn: params.amountIn.toString(),
         path 
       });
 
-      // In a real implementation, call VVS Router's getAmountsOut
-      // For now, return estimated values
-      // const publicClient = ... get public client
-      // const amounts = await publicClient.readContract({
-      //   address: this.routerAddress,
-      //   abi: VVS_ROUTER_ABI,
-      //   functionName: 'getAmountsOut',
-      //   args: [params.amountIn, path as `0x${string}`[]],
-      // });
-
-      // Simulated quote (replace with actual on-chain call)
-      const amountOut = params.amountIn * 95n / 100n; // Simplified
+      // Convert wei to human-readable for the API
+      const amountInHuman = (Number(params.amountIn) / 1e18).toString();
+      
+      // Call x402/swap API which uses the real VVS SDK
+      const response = await fetch(`/api/x402/swap?tokenIn=${params.tokenIn}&tokenOut=${params.tokenOut}&amountIn=${amountInHuman}`);
+      
+      if (!response.ok) {
+        throw new Error(`VVS SDK API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to get quote from VVS SDK');
+      }
+      
+      // Convert output back to wei
+      const amountOutNum = parseFloat(result.data.amountOut);
+      const amountOut = BigInt(Math.floor(amountOutNum * 1e18));
+      
       const slippageBps = BigInt(Math.floor(slippage * 100));
       const amountOutMin = amountOut * (10000n - slippageBps) / 10000n;
+      
+      // Extract route from formattedTrade or use path
+      const routeDisplay = result.data.formattedTrade || path.map(addr => {
+        const symbol = Object.entries(this.tokens).find(([_, a]) => a.toLowerCase() === addr.toLowerCase())?.[0];
+        return symbol || `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+      }).join(' → ');
+
+      logger.info('VVS SDK quote received', {
+        amountOut: amountOut.toString(),
+        source: result.data.source,
+        route: routeDisplay,
+      });
 
       return {
         amountOut,
         amountOutMin,
         path,
-        priceImpact: 0.5, // Would calculate from reserves
-        route: path.map(addr => {
-          const symbol = Object.entries(this.tokens).find(([_, a]) => a.toLowerCase() === addr.toLowerCase())?.[0];
-          return symbol || `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-        }).join(' → '),
+        priceImpact: result.data.priceImpact || 0.1,
+        route: routeDisplay,
       };
     } catch (error) {
       logger.error('Failed to get swap quote', { error });
