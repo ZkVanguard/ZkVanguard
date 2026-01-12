@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataMCPClient } from '@/lib/services/market-data-mcp';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 /**
  * Market Data API via Crypto.com MCP Server
  */

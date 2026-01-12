@@ -235,9 +235,15 @@ class CryptocomDeveloperPlatformService {
       //   tag: 'latest',
       //   network: this.network,
       // });
-      const block = { data: { number: '0', timestamp: '0', transactions: [] } } as any;
-
-      const blockData = block.data.block;
+      // Mock block data for now until SDK is properly configured
+      const blockData = { 
+        number: Math.floor(Date.now() / 1000).toString(), 
+        hash: '0x' + 'a'.repeat(64),
+        timestamp: Math.floor(Date.now() / 1000).toString(), 
+        transactions: [],
+        gasUsed: '0',
+        gasLimit: '0'
+      };
 
       return {
         number: parseInt(blockData.number),

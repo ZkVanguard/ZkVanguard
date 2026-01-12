@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

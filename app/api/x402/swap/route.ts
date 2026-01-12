@@ -9,6 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 // Token addresses on Cronos Testnet (338) with VVS liquidity pools
 // Note: Use VVS testnet tokens that have actual liquidity pools
 const TESTNET_TOKENS: Record<string, string> = {

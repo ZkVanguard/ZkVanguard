@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 /**
  * Enhanced Market Data API using Crypto.com Exchange API
  * Supports both single and batch price queries
