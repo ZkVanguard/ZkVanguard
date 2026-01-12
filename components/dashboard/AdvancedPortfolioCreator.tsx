@@ -193,7 +193,7 @@ export function AdvancedPortfolioCreator() {
   if (!isConnected) {
     return (
       <button
-        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-xl font-semibold text-white transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/20"
+        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-xl font-semibold text-[#1d1d1f] transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/20"
         disabled
       >
         <Lock className="w-5 h-5" />
@@ -206,7 +206,7 @@ export function AdvancedPortfolioCreator() {
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-xl font-semibold text-white transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/20"
+        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-xl font-semibold text-[#1d1d1f] transition-all duration-300 flex items-center gap-2 shadow-lg shadow-purple-500/20"
       >
         <Sparkles className="w-5 h-5" />
         Create AI-Managed Portfolio
@@ -226,24 +226,24 @@ export function AdvancedPortfolioCreator() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gray-900 rounded-2xl border border-gray-700 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="bg-[#f5f5f7] rounded-2xl border border-[#e8e8ed] max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               {/* Header */}
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 z-10">
+              <div className="sticky top-0 bg-[#f5f5f7] border-b border-[#e8e8ed] p-6 z-10">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <Sparkles className="w-6 h-6 text-purple-400" />
+                      <Sparkles className="w-6 h-6 text-[#AF52DE]" />
                       AI Fund Manager Setup
                     </h2>
-                    <p className="text-sm text-gray-400 mt-1">
+                    <p className="text-sm text-[#86868b] mt-1">
                       Create ZK-protected portfolio with custom strategy
                     </p>
                   </div>
                   {!isPending && !isConfirming && (
                     <button
                       onClick={() => setShowModal(false)}
-                      className="text-gray-400 hover:text-white transition-colors"
+                      className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
                     >
                       <XCircle className="w-6 h-6" />
                     </button>
@@ -272,9 +272,9 @@ export function AdvancedPortfolioCreator() {
                     animate={{ opacity: 1, y: 0 }}
                     className="text-center py-12"
                   >
-                    <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-                    <h3 className="text-2xl font-bold text-green-400 mb-2">Portfolio Created!</h3>
-                    <p className="text-gray-300 mb-6">
+                    <CheckCircle className="w-16 h-16 text-[#34C759] mx-auto mb-4" />
+                    <h3 className="text-2xl font-bold text-[#34C759] mb-2">Portfolio Created!</h3>
+                    <p className="text-[#1d1d1f] mb-6">
                       Your AI-managed portfolio is now active with ZK-protected strategy
                     </p>
                     <button
@@ -293,9 +293,9 @@ export function AdvancedPortfolioCreator() {
                     animate={{ opacity: 1, y: 0 }}
                     className="text-center py-12"
                   >
-                    <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                    <h3 className="text-2xl font-bold text-red-400 mb-2">Creation Failed</h3>
-                    <p className="text-gray-300 mb-6 text-sm">
+                    <XCircle className="w-16 h-16 text-[#FF3B30] mx-auto mb-4" />
+                    <h3 className="text-2xl font-bold text-[#FF3B30] mb-2">Creation Failed</h3>
+                    <p className="text-[#1d1d1f] mb-6 text-sm">
                       {error.message || 'Failed to create portfolio'}
                     </p>
                     <button
@@ -358,18 +358,18 @@ function InfoTooltip({ content }: { content: string | string[] }) {
   return (
     <div className="relative inline-block">
       <Info 
-        className="w-4 h-4 text-gray-400 hover:text-purple-400 cursor-help transition-colors"
+        className="w-4 h-4 text-[#86868b] hover:text-[#AF52DE] cursor-help transition-colors"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       />
       {isHovered && (
-        <div className="absolute left-6 top-0 z-50 w-80 bg-gray-800 border border-purple-500/30 rounded-lg p-3 shadow-xl">
-          <div className="text-xs text-gray-300 space-y-1.5">
+        <div className="absolute left-6 top-0 z-50 w-80 bg-white border border-purple-500/30 rounded-lg p-3 shadow-xl">
+          <div className="text-xs text-[#1d1d1f] space-y-1.5">
             {lines.map((line, idx) => (
               <p key={idx} className="leading-relaxed">{line}</p>
             ))}
           </div>
-          <div className="absolute left-0 top-2 w-2 h-2 bg-gray-800 border-l border-t border-purple-500/30 transform -translate-x-1 rotate-45" />
+          <div className="absolute left-0 top-2 w-2 h-2 bg-white border-l border-t border-purple-500/30 transform -translate-x-1 rotate-45" />
         </div>
       )}
     </div>
@@ -388,7 +388,7 @@ function StrategyStep({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5 text-purple-400" />
+          <Target className="w-5 h-5 text-[#AF52DE]" />
           AI Strategy Configuration
         </h3>
 
@@ -401,7 +401,7 @@ function StrategyStep({
               className={`p-4 rounded-xl border-2 transition-all ${
                 aiPreset === preset
                   ? 'border-purple-500 bg-purple-500/10'
-                  : 'border-gray-700 hover:border-gray-600'
+                  : 'border-[#e8e8ed] hover:border-gray-600'
               }`}
             >
               <div className="text-lg mb-1">
@@ -410,14 +410,14 @@ function StrategyStep({
                 {preset === 'aggressive' && '🚀'}
               </div>
               <div className="text-sm font-semibold capitalize mb-1">{preset}</div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[#86868b]">
                 {preset === 'conservative' && 'Low risk, stable returns'}
                 {preset === 'balanced' && 'Moderate risk & reward'}
                 {preset === 'aggressive' && 'High risk, high returns'}
               </div>
               <div className="text-xs mt-2 font-medium ${
                 preset === 'conservative' ? 'text-blue-400' :
-                preset === 'balanced' ? 'text-purple-400' :
+                preset === 'balanced' ? 'text-[#AF52DE]' :
                 'text-orange-400'
               }">
                 {preset === 'conservative' && 'Target: 5-8% APY'}
@@ -431,7 +431,7 @@ function StrategyStep({
         {/* Custom Fields */}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
               Portfolio Name
               <InfoTooltip content="Give your strategy a memorable name that describes its purpose" />
             </label>
@@ -440,13 +440,13 @@ function StrategyStep({
               value={strategy.name}
               onChange={(e) => setStrategy({ ...strategy, name: e.target.value })}
               placeholder="e.g., Conservative DeFi Fund"
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+              className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
                 Target Yield (% APY)
                 <InfoTooltip content={[
                   "Expected annual return - AI optimizes portfolio to hit this target",
@@ -460,12 +460,12 @@ function StrategyStep({
                 type="number"
                 value={strategy.targetYield / 100}
                 onChange={(e) => setStrategy({ ...strategy, targetYield: Number(e.target.value) * 100 })}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
                 Risk Tolerance (0-100)
                 <InfoTooltip content={[
                   "How much volatility you're comfortable with - Higher values = more aggressive trades",
@@ -485,23 +485,23 @@ function StrategyStep({
                 className="w-full"
               />
               <div className="text-center text-sm font-bold mt-1 ${
-                strategy.riskTolerance < 30 ? 'text-green-400' :
-                strategy.riskTolerance < 70 ? 'text-yellow-400' :
-                'text-red-400'
+                strategy.riskTolerance < 30 ? 'text-[#34C759]' :
+                strategy.riskTolerance < 70 ? 'text-[#FF9500]' :
+                'text-[#FF3B30]'
               }">
                 {strategy.riskTolerance}
               </div>
               <div className="mt-2 flex justify-between text-xs">
-                <span className="text-green-400">🛡️ Safe</span>
-                <span className="text-yellow-400">⚖️ Moderate</span>
-                <span className="text-red-400">🚀 Aggressive</span>
+                <span className="text-[#34C759]">🛡️ Safe</span>
+                <span className="text-[#FF9500]">⚖️ Moderate</span>
+                <span className="text-[#FF3B30]">🚀 Aggressive</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
                 Max Drawdown (%)
                 <InfoTooltip content={[
                   "Maximum portfolio loss before AI automatically opens protective hedges - Your safety net",
@@ -515,12 +515,12 @@ function StrategyStep({
                 type="number"
                 value={strategy.maxDrawdown}
                 onChange={(e) => setStrategy({ ...strategy, maxDrawdown: Number(e.target.value) })}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
                 Concentration Limit (%)
                 <InfoTooltip content={[
                   "Maximum percentage of portfolio value that can be allocated to a single asset - Prevents over-exposure to any one token",
@@ -534,13 +534,13 @@ function StrategyStep({
                 type="number"
                 value={strategy.concentrationLimit}
                 onChange={(e) => setStrategy({ ...strategy, concentrationLimit: Number(e.target.value) })}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+            <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
               Rebalance Frequency
               <InfoTooltip content={[
                 "How often AI agents check and adjust your portfolio positions",
@@ -555,7 +555,7 @@ function StrategyStep({
             <select
               value={strategy.rebalanceFrequency}
               onChange={(e) => setStrategy({ ...strategy, rebalanceFrequency: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:outline-none"
+              className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none"
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -569,11 +569,11 @@ function StrategyStep({
                 type="checkbox"
                 checked={strategy.hedgingEnabled}
                 onChange={(e) => setStrategy({ ...strategy, hedgingEnabled: e.target.checked })}
-                className="w-5 h-5 rounded border-gray-700 text-purple-600 focus:ring-purple-500 flex-shrink-0"
+                className="w-5 h-5 rounded border-[#e8e8ed] text-purple-600 focus:ring-purple-500 flex-shrink-0"
               />
               <div className="ml-3 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-purple-400" />
-                <span className="text-sm font-semibold text-white">Enable AI Hedging via Moonlander</span>
+                <Shield className="w-5 h-5 text-[#AF52DE]" />
+                <span className="text-sm font-semibold text-[#1d1d1f]">Enable AI Hedging via Moonlander</span>
                 <InfoTooltip content={[
                   "🛡️ Automatic Protection: Hedging Agent monitors portfolio 24/7 and opens protective positions when risks are detected",
                   "",
@@ -609,13 +609,13 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Filter className="w-5 h-5 text-cyan-400" />
+        <Filter className="w-5 h-5 text-[#007AFF]" />
         Asset Selection Filters
       </h3>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
             Minimum Market Cap ($)
             <InfoTooltip content={[
               "Only include tokens with at least this market capitalization",
@@ -632,12 +632,12 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
             type="number"
             value={filters.minMarketCap}
             onChange={(e) => setFilters({ ...filters, minMarketCap: Number(e.target.value) })}
-            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+            className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-cyan-500 focus:outline-none"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
             Maximum Volatility (%)
             <InfoTooltip content={[
               "Exclude tokens that fluctuate more than this percentage - Controls risk exposure",
@@ -658,13 +658,13 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
             onChange={(e) => setFilters({ ...filters, maxVolatility: Number(e.target.value) })}
             className="w-full"
           />
-          <div className="text-center text-sm text-cyan-400 font-semibold mt-1">
+          <div className="text-center text-sm text-[#007AFF] font-semibold mt-1">
             {filters.maxVolatility}%
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-3 flex items-center gap-2">
             Allowed Asset Categories
             <InfoTooltip content={[
               "Select which types of crypto assets AI can include in your portfolio",
@@ -682,7 +682,7 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
           </label>
           <div className="grid grid-cols-2 gap-2">
             {categories.map((cat) => (
-              <label key={cat} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-800 transition-colors">
+              <label key={cat} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
                 <input
                   type="checkbox"
                   checked={filters.allowedCategories.includes(cat)}
@@ -693,16 +693,16 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
                       setFilters({ ...filters, allowedCategories: filters.allowedCategories.filter((c: string) => c !== cat) });
                     }
                   }}
-                  className="w-4 h-4 rounded border-gray-700 text-cyan-600 focus:ring-cyan-500"
+                  className="w-4 h-4 rounded border-[#e8e8ed] text-cyan-600 focus:ring-cyan-500"
                 />
-                <span className="text-sm text-gray-300">{cat}</span>
+                <span className="text-sm text-[#1d1d1f]">{cat}</span>
               </label>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+          <label className="block text-sm font-medium text-[#1d1d1f] mb-2 flex items-center gap-2">
             Minimum Liquidity ($)
             <InfoTooltip content={[
               "Only include tokens with at least this much trading liquidity - Ensures you can enter/exit positions easily",
@@ -721,7 +721,7 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
             type="number"
             value={filters.minLiquidity}
             onChange={(e) => setFilters({ ...filters, minLiquidity: Number(e.target.value) })}
-            className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+            className="w-full px-4 py-2 bg-white border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-cyan-500 focus:outline-none"
           />
         </div>
       </div>
@@ -770,7 +770,7 @@ function ZKProtectionStep({
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="w-5 h-5 text-emerald-400" />
+          <Shield className="w-5 h-5 text-[#34C759]" />
           Privacy & ZK Protection
         </h3>
         <InfoTooltip content={[
@@ -792,20 +792,20 @@ function ZKProtectionStep({
 
       <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
         <div className="flex items-start gap-3">
-          <FileSignature className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-gray-300">
-            <p className="font-semibold text-cyan-400 mb-1">Signature Required</p>
+          <FileSignature className="w-5 h-5 text-[#007AFF] flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-[#1d1d1f]">
+            <p className="font-semibold text-[#007AFF] mb-1">Signature Required</p>
             <p>All portfolio operations require wallet signature for on-chain verification. Your strategy will be cryptographically signed and stored on Cronos zkEVM.</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <div className="bg-white rounded-xl p-6 border border-[#e8e8ed]">
         <div className="flex items-start gap-4">
-          <Lock className="w-8 h-8 text-emerald-400 flex-shrink-0" />
+          <Lock className="w-8 h-8 text-[#34C759] flex-shrink-0" />
           <div>
             <h4 className="font-semibold mb-2">Zero-Knowledge Strategy Protection</h4>
-            <p className="text-sm text-gray-400 leading-relaxed">
+            <p className="text-sm text-[#86868b] leading-relaxed">
               Your AI fund management strategy can be cryptographically protected using ZK-STARK proofs. 
               This ensures your entry points, exit rules, and risk parameters remain private while still 
               being verifiable on-chain.
@@ -814,19 +814,19 @@ function ZKProtectionStep({
         </div>
 
         <div className="mt-6 space-y-4">
-          <label className="flex items-center justify-between p-4 rounded-lg border-2 border-gray-700 hover:border-emerald-500 cursor-pointer transition-colors">
+          <label className="flex items-center justify-between p-4 rounded-lg border-2 border-[#e8e8ed] hover:border-emerald-500 cursor-pointer transition-colors">
             <div className="flex items-center gap-3">
               {strategyPrivate ? (
-                <EyeOff className="w-5 h-5 text-emerald-400" />
+                <EyeOff className="w-5 h-5 text-[#34C759]" />
               ) : (
-                <Eye className="w-5 h-5 text-gray-400" />
+                <Eye className="w-5 h-5 text-[#86868b]" />
               )}
               <div className="flex items-center gap-2">
                 <div>
                   <div className="font-semibold">
                     {strategyPrivate ? 'Private Strategy (Recommended)' : 'Public Strategy'}
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">
+                  <div className="text-xs text-[#86868b] mt-1">
                     {strategyPrivate 
                       ? 'Strategy details hidden with ZK-STARK proofs + signature' 
                       : 'Strategy parameters visible on-chain (still requires signature)'}
@@ -857,7 +857,7 @@ function ZKProtectionStep({
               type="checkbox"
               checked={strategyPrivate}
               onChange={(e) => setStrategyPrivate(e.target.checked)}
-              className="w-5 h-5 rounded border-gray-700 text-emerald-600 focus:ring-emerald-500"
+              className="w-5 h-5 rounded border-[#e8e8ed] text-emerald-600 focus:ring-emerald-500"
             />
           </label>
 
@@ -868,8 +868,8 @@ function ZKProtectionStep({
               className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4"
             >
               <div className="flex items-center gap-2 mb-3">
-                <Shield className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-semibold text-emerald-400">ZK-STARK Protection + Signature</span>
+                <Shield className="w-4 h-4 text-[#34C759]" />
+                <span className="text-sm font-semibold text-[#34C759]">ZK-STARK Protection + Signature</span>
               </div>
               
               {!zkProofGenerated ? (
@@ -892,18 +892,18 @@ function ZKProtectionStep({
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                  <div className="flex items-center gap-2 text-[#34C759] text-sm">
                     <CheckCircle className="w-4 h-4" />
                     <span>ZK Proof Generated • 521-bit Security</span>
                   </div>
-                  <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                  <div className="flex items-center gap-2 text-[#34C759] text-sm">
                     <CheckCircle className="w-4 h-4" />
                     <span>Strategy Signed • Verified On-Chain</span>
                   </div>
                 </div>
               )}
 
-              <div className="mt-3 text-xs text-gray-400 space-y-1">
+              <div className="mt-3 text-xs text-[#86868b] space-y-1">
                 <div>• Entry/exit points encrypted</div>
                 <div>• Risk parameters hidden</div>
                 <div>• Verifiable without revealing strategy</div>
@@ -948,62 +948,62 @@ function ReviewStep({
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <CheckCircle className="w-5 h-5 text-purple-400" />
+        <CheckCircle className="w-5 h-5 text-[#AF52DE]" />
         Review Configuration
       </h3>
 
       <div className="space-y-4">
         {/* Strategy Summary */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div className="bg-white rounded-xl p-4 border border-[#e8e8ed]">
           <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-purple-400" />
+            <Target className="w-4 h-4 text-[#AF52DE]" />
             Strategy
           </h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Name:</span>
+              <span className="text-[#86868b]">Name:</span>
               <span className="font-semibold">{strategy.name || 'Unnamed Portfolio'}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Target Yield:</span>
-              <span className="font-semibold text-green-400">{strategy.targetYield / 100}% APY</span>
+              <span className="text-[#86868b]">Target Yield:</span>
+              <span className="font-semibold text-[#34C759]">{strategy.targetYield / 100}% APY</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Risk Tolerance:</span>
+              <span className="text-[#86868b]">Risk Tolerance:</span>
               <span className="font-semibold">{strategy.riskTolerance}/100</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Max Drawdown:</span>
-              <span className="font-semibold text-red-400">{strategy.maxDrawdown}%</span>
+              <span className="text-[#86868b]">Max Drawdown:</span>
+              <span className="font-semibold text-[#FF3B30]">{strategy.maxDrawdown}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Rebalance:</span>
+              <span className="text-[#86868b]">Rebalance:</span>
               <span className="font-semibold capitalize">{strategy.rebalanceFrequency}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Hedging:</span>
+              <span className="text-[#86868b]">Hedging:</span>
               <span className="font-semibold">{strategy.hedgingEnabled ? '✓ Enabled' : '✗ Disabled'}</span>
             </div>
           </div>
         </div>
 
         {/* Filters Summary */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div className="bg-white rounded-xl p-4 border border-[#e8e8ed]">
           <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <Filter className="w-4 h-4 text-cyan-400" />
+            <Filter className="w-4 h-4 text-[#007AFF]" />
             Asset Filters
           </h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Min Market Cap:</span>
+              <span className="text-[#86868b]">Min Market Cap:</span>
               <span className="font-semibold">${(filters.minMarketCap / 1000000).toFixed(1)}M</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Max Volatility:</span>
+              <span className="text-[#86868b]">Max Volatility:</span>
               <span className="font-semibold">{filters.maxVolatility}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Categories:</span>
+              <span className="text-[#86868b]">Categories:</span>
               <span className="font-semibold">{filters.allowedCategories.length} selected</span>
             </div>
           </div>
@@ -1013,28 +1013,28 @@ function ReviewStep({
         <div className={`rounded-xl p-4 border ${
           strategyPrivate
             ? 'bg-emerald-500/10 border-emerald-500/30'
-            : 'bg-gray-800 border-gray-700'
+            : 'bg-white border-[#e8e8ed]'
         }`}>
           <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-emerald-400" />
+            <Shield className="w-4 h-4 text-[#34C759]" />
             Privacy Protection
           </h4>
           <div className="text-sm space-y-2">
             <div className="flex items-center gap-2">
               {strategyPrivate ? (
                 <>
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  <span className="text-emerald-400 font-semibold">ZK-Protected Strategy</span>
+                  <Lock className="w-4 h-4 text-[#34C759]" />
+                  <span className="text-[#34C759] font-semibold">ZK-Protected Strategy</span>
                 </>
               ) : (
                 <>
-                  <Eye className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-400">Public Strategy</span>
+                  <Eye className="w-4 h-4 text-[#86868b]" />
+                  <span className="text-[#86868b]">Public Strategy</span>
                 </>
               )}
             </div>
             {strategyPrivate && zkProofGenerated && (
-              <div className="text-xs text-emerald-400">
+              <div className="text-xs text-[#34C759]">
                 ✓ ZK-STARK proof generated • 521-bit security
               </div>
             )}
@@ -1045,12 +1045,12 @@ function ReviewStep({
       {isPending || isConfirming ? (
         <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-6">
           <div className="flex items-center gap-3">
-            <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+            <Loader2 className="w-6 h-6 text-[#AF52DE] animate-spin" />
             <div>
-              <p className="font-semibold text-purple-400">
+              <p className="font-semibold text-[#AF52DE]">
                 {isPending ? 'Awaiting Signature...' : 'Creating Portfolio...'}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-[#86868b] mt-1">
                 {isPending ? 'Please sign the transaction in your wallet' : 'Transaction is being confirmed on Cronos zkEVM'}
               </p>
             </div>
@@ -1076,9 +1076,9 @@ function ReviewStep({
 
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-gray-300">
-            <p className="font-semibold text-yellow-400 mb-1">On-Chain Commitment</p>
+          <AlertTriangle className="w-5 h-5 text-[#FF9500] flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-[#1d1d1f]">
+            <p className="font-semibold text-[#FF9500] mb-1">On-Chain Commitment</p>
             <p className="mb-2">This will commit your portfolio and strategy to Cronos zkEVM Testnet:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li>Portfolio creation requires wallet signature</li>

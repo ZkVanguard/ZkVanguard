@@ -608,16 +608,22 @@ export function ChatInterface({ address: _address }: { address: string }) {
   };
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-[600px]">
-      <div className="p-4 border-b border-gray-700">
+    <div className="bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-black/5">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center space-x-2">
-            <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
-            <span>AI Agent</span>
-          </h2>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[12px] flex items-center justify-center shadow-[0_2px_8px_rgba(0,122,255,0.25)]">
+              <Bot className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">AI Assistant</h2>
+              <p className="text-[11px] sm:text-[12px] text-[#86868b]">Portfolio management</p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 bg-[#34C759]/10 text-[#34C759] rounded-full text-[10px] sm:text-[11px] font-semibold">
+              <span className="w-1.5 h-1.5 bg-[#34C759] rounded-full animate-pulse" />
               5 Online
             </span>
           </div>
@@ -626,7 +632,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-2 text-xs text-cyan-400 flex items-center gap-1"
+            className="mt-2 text-[11px] text-[#007AFF] flex items-center gap-1.5 font-medium"
           >
             <Brain className="w-3 h-3 animate-pulse" />
             {activeAgent}
@@ -634,23 +640,23 @@ export function ChatInterface({ address: _address }: { address: string }) {
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div className="px-4 py-2 border-b border-gray-700/50 flex gap-2 overflow-x-auto">
+      {/* Quick Actions - Horizontal scroll */}
+      <div className="px-3 sm:px-4 py-2.5 border-b border-black/5 flex gap-2 overflow-x-auto scrollbar-hide">
         {quickActions.map((action, i) => (
           <button
             key={i}
             onClick={() => handleSend(action.label)}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700/50 hover:bg-gray-700 rounded-full border border-gray-600 whitespace-nowrap transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] sm:text-[12px] bg-[#f5f5f7] hover:bg-[#e8e8ed] active:scale-[0.97] rounded-full text-[#1d1d1f] font-medium whitespace-nowrap transition-all disabled:opacity-50"
           >
-            <action.icon className="w-3 h-3 text-purple-400" />
+            <action.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#007AFF]" />
             {action.label}
           </button>
         ))}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 bg-[#f5f5f7]">
         <AnimatePresence>
           {messages.map((message) => (
             <motion.div
@@ -659,33 +665,35 @@ export function ChatInterface({ address: _address }: { address: string }) {
               animate={{ opacity: 1, y: 0 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex items-start space-x-2 max-w-[85%]`}>
+              <div className={`flex items-start gap-2 max-w-[90%] sm:max-w-[85%]`}>
                 {message.role === 'assistant' && (
-                  <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
+                  <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center">
+                    <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                   </div>
                 )}
                 <div
-                  className={`p-4 rounded-2xl ${
+                  className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-[16px] sm:rounded-[18px] ${
                     message.role === 'user'
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                      : 'bg-gray-800/90 backdrop-blur-sm text-gray-100 shadow-lg border border-gray-700/50'
+                      ? 'bg-[#007AFF] text-white'
+                      : 'bg-white text-[#1d1d1f] shadow-[0_1px_3px_rgba(0,0,0,0.06)] border border-black/5'
                   }`}
                 >
                   {message.role === 'assistant' ? (
-                    <MarkdownContent content={message.content} />
+                    <div className="text-[13px] sm:text-[14px] leading-[1.45]">
+                      <MarkdownContent content={message.content} />
+                    </div>
                   ) : (
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
+                    <div className="whitespace-pre-wrap text-[13px] sm:text-[14px] leading-[1.45]">{message.content}</div>
                   )}
                   
                   {/* Action Buttons */}
                   {message.actions && message.actions.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {message.actions.map((action, idx) => (
                         <button
                           key={idx}
                           onClick={action.action}
-                          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 rounded-lg text-sm font-semibold text-white transition-all shadow-lg shadow-purple-500/20 flex items-center gap-2"
+                          className="px-3 sm:px-4 py-2 bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.97] rounded-[10px] text-[12px] sm:text-[13px] font-semibold text-white transition-all"
                         >
                           {action.label}
                         </button>
@@ -694,10 +702,10 @@ export function ChatInterface({ address: _address }: { address: string }) {
                   )}
                   
                   {message.role === 'assistant' && (
-                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-700/50">
+                    <div className="flex items-center gap-2 sm:gap-3 mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-black/5">
                       {message.agentType && (
-                        <span className="text-xs text-purple-400 flex items-center gap-1.5 font-medium">
-                          <Brain className="w-3.5 h-3.5" />
+                        <span className="text-[10px] sm:text-[11px] text-[#AF52DE] flex items-center gap-1 font-medium">
+                          <Brain className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                           {message.agentType}
                         </span>
                       )}
@@ -708,8 +716,8 @@ export function ChatInterface({ address: _address }: { address: string }) {
                   )}
                 </div>
                 {message.role === 'user' && (
-                  <div className="flex-shrink-0 w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-white" />
+                  <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 bg-[#86868b] rounded-full flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                   </div>
                 )}
               </div>
@@ -723,18 +731,18 @@ export function ChatInterface({ address: _address }: { address: string }) {
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-full flex items-center justify-center">
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-pulse" />
               </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
+              <div className="bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-[16px] shadow-[0_1px_3px_rgba(0,0,0,0.06)] border border-black/5">
                 <div className="flex items-center gap-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#007AFF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#5856D6] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#AF52DE] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span className="text-xs text-gray-400">Processing...</span>
+                  <span className="text-[11px] sm:text-[12px] text-[#86868b]">Processing...</span>
                 </div>
               </div>
             </div>
@@ -744,22 +752,22 @@ export function ChatInterface({ address: _address }: { address: string }) {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-700">
-        <div className="flex space-x-2">
+      <div className="p-3 sm:p-4 border-t border-black/5 bg-white">
+        <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask the agent swarm anything..."
-            className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+            placeholder="Ask anything..."
+            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#f5f5f7] border border-black/5 rounded-[12px] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30 focus:border-[#007AFF] text-[14px] sm:text-[15px] text-[#1d1d1f] placeholder:text-[#86868b] transition-all"
           />
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || loading}
-            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-lg transition-all"
+            className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.95] disabled:bg-[#86868b] disabled:cursor-not-allowed rounded-[12px] transition-all"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </button>
         </div>
       </div>

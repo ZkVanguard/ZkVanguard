@@ -1,410 +1,618 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { useAccount, useBalance, useChainId } from 'wagmi';
-import { Bot } from 'lucide-react';
-import { logger } from '../../lib/utils/logger';
-import { PortfolioOverview } from '../../components/dashboard/PortfolioOverview';
-import { ChatInterface } from '../../components/dashboard/ChatInterface';
-import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
-import { formatEther } from 'viem';
+import { useAccount, useBalance } from 'wagmi';
+import { 
+  Bot, Shield, Briefcase, TrendingUp, History, 
+  BarChart3, Zap, MessageSquare, ChevronRight, 
+  Menu, X, Settings, ArrowUpRight
+} from 'lucide-react';
+import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses, usePortfolioCount } from '@/lib/contracts/hooks';
-import { ArrowDownUp } from 'lucide-react';
-import { DashboardSkeleton, CardSkeleton, ChartSkeleton } from '@/components/ui/Skeleton';
-import { cache } from '@/lib/utils/cache';
-import { withDeduplication } from '@/lib/utils/request-deduplication';
+import { logger } from '@/lib/utils/logger';
+import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 
-// Dynamic imports for heavy components (reduces initial bundle by ~55%)
-const AgentActivity = dynamic(() => import('../../components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {
-  loading: () => <CardSkeleton />,
-  ssr: false,
+// Dynamic imports for code splitting
+const AgentActivity = dynamic(() => import('@/components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
 
-const RiskMetrics = dynamic(() => import('../../components/dashboard/RiskMetrics').then(mod => ({ default: mod.RiskMetrics })), {
-  loading: () => <ChartSkeleton />,
-  ssr: false, // Chart.js doesn't need SSR
+const RiskMetrics = dynamic(() => import('@/components/dashboard/RiskMetrics').then(mod => ({ default: mod.RiskMetrics })), {
+  loading: () => <LoadingSkeleton height="h-32" />,
+  ssr: false
 });
 
-const PositionsList = dynamic(() => import('../../components/dashboard/PositionsList').then(mod => ({ default: mod.PositionsList })), {
-  loading: () => <CardSkeleton />,
+const PositionsList = dynamic(() => import('@/components/dashboard/PositionsList').then(mod => ({ default: mod.PositionsList })), {
+  loading: () => <LoadingSkeleton height="h-60" />,
+  ssr: false
 });
 
 const SettlementsPanel = dynamic(() => import('@/components/dashboard/SettlementsPanel').then(mod => ({ default: mod.SettlementsPanel })), {
-  loading: () => <CardSkeleton />,
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
 
 const ActiveHedges = dynamic(() => import('@/components/dashboard/ActiveHedges').then(mod => ({ default: mod.ActiveHedges })), {
-  loading: () => <CardSkeleton />,
-  ssr: false,
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
 
 const ZKProofDemo = dynamic(() => import('@/components/dashboard/ZKProofDemo').then(mod => ({ default: mod.ZKProofDemo })), {
-  loading: () => <div className="p-6 text-center text-gray-500">Loading ZK proof system...</div>,
-  ssr: false, // Heavy crypto operations, client-only
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
 
 const AdvancedPortfolioCreator = dynamic(() => import('@/components/dashboard/AdvancedPortfolioCreator').then(mod => ({ default: mod.AdvancedPortfolioCreator })), {
-  loading: () => <CardSkeleton />,
-  ssr: false,
+  loading: () => null,
+  ssr: false
 });
 
 const SwapModal = dynamic(() => import('@/components/dashboard/SwapModal').then(mod => ({ default: mod.SwapModal })), {
-  ssr: false, // Only load when needed
+  ssr: false
 });
 
 const RecentTransactions = dynamic(() => import('@/components/dashboard/RecentTransactions').then(mod => ({ default: mod.RecentTransactions })), {
-  loading: () => <CardSkeleton />,
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
 
 const PredictionInsights = dynamic(() => import('@/components/dashboard/PredictionInsights').then(mod => ({ default: mod.PredictionInsights })), {
-  loading: () => <CardSkeleton />,
-  ssr: false, // API-heavy component
+  loading: () => <LoadingSkeleton />,
+  ssr: false
 });
+
+const ChatInterface = dynamic(() => import('@/components/dashboard/ChatInterface').then(mod => ({ default: mod.ChatInterface })), {
+  loading: () => null,
+  ssr: false
+});
+
+// Reusable loading skeleton
+function LoadingSkeleton({ height = "h-40" }: { height?: string }) {
+  return (
+    <div className={`animate-pulse bg-[#f5f5f7] ${height} rounded-[24px]`} />
+  );
+}
+
+// Navigation configuration
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}
+
+const navItems: NavItem[] = [
+  { id: 'overview', label: 'Overview', icon: BarChart3 },
+  { id: 'positions', label: 'Positions', icon: Briefcase },
+  { id: 'hedges', label: 'Hedges', icon: Shield },
+  { id: 'agents', label: 'AI Agents', icon: Bot, badge: 'Live' },
+  { id: 'insights', label: 'Insights', icon: TrendingUp },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'zk-proofs', label: 'ZK Proofs', icon: Zap },
+];
+
+type NavId = NavItem['id'];
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
   const { data: balance } = useBalance({ address });
-  const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'positions' | 'settlements' | 'transactions'>('overview');
-  const [swapModalOpen, setSwapModalOpen] = useState(false);
-  const [hedgeNotification, setHedgeNotification] = useState<string | null>(null);
-  const [agentMessage, setAgentMessage] = useState<string | null>(null);
-  const [portfolioAssets, setPortfolioAssets] = useState<string[]>(['CRO', 'USDC']); // Will be updated dynamically
-  const fetchInProgressRef = useRef(false);
-
-  // Contract data
   const contractAddresses = useContractAddresses();
-  const { data: portfolioCount, isLoading: isLoadingCount, isError: isCountError } = usePortfolioCount();
-
-  // Network info
-  const displayAddress = address || undefined;
-  const isTestnet = chainId === 338;
-  const networkName = isTestnet ? 'Cronos Testnet' : 'Cronos';
-  const displayBalance = balance ? parseFloat(formatEther(balance.value)).toFixed(4) : '0.00';
+  const { data: portfolioCount } = usePortfolioCount();
   
-  // Dynamically fetch portfolio assets for Delphi filtering (with aggressive caching and deduplication)
-  const fetchPortfolioAssets = useCallback(async () => {
-    if (!displayAddress) {
-      // Demo mode - use default testnet assets
-      setPortfolioAssets(['CRO', 'USDC']);
-      return;
-    }
-    
-    // Prevent concurrent fetches
-    if (fetchInProgressRef.current) {
-      console.log('⏭️ [Dashboard] Portfolio assets fetch already in progress, skipping');
-      return;
-    }
-    
-    // Check cache first (5 min TTL - longer since portfolio composition changes slowly)
-    const cacheKey = `portfolio-assets-${displayAddress}`;
-    const cached = cache.get<string[]>(cacheKey);
-    if (cached) {
-      console.log('⚡ [Dashboard] Using cached portfolio assets:', cached);
-      setPortfolioAssets(cached);
-      return;
-    }
-    
-    fetchInProgressRef.current = true;
-    
-    try {
-      // Use deduplication wrapper
-      const assets = await withDeduplication(
-        `fetch-portfolio-assets-${displayAddress}`,
-        async () => {
-          const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
-          const marketData = getMarketDataService();
-          const portfolioData = await marketData.getPortfolioData(displayAddress);
-          
-          // Extract unique asset symbols from portfolio (only tokens with balance > 0)
-          return portfolioData.tokens
-            .filter(token => parseFloat(token.balance) > 0.001) // Filter out dust
-            .map(token => token.symbol.toUpperCase().replace(/^(W|DEV)/, '')) // Normalize (WCRO->CRO, devUSDC->USDC)
-            .filter((symbol, index, arr) => arr.indexOf(symbol) === index); // Remove duplicates
-        }
-      );
-      
-      if (assets.length > 0) {
-        console.log('📊 Dynamic portfolio assets detected:', assets);
-        setPortfolioAssets(assets);
-        cache.set(cacheKey, assets);
-      } else {
-        // Empty portfolio - default to CRO (native chain asset)
-        console.log('📊 Empty portfolio detected, showing CRO predictions');
-        const defaultAssets = ['CRO'];
-        setPortfolioAssets(defaultAssets);
-        cache.set(cacheKey, defaultAssets);
-      }
-    } catch (error) {
-      console.error('Failed to fetch portfolio assets:', error);
-      // Keep default ['CRO', 'USDC'] on error
-      setPortfolioAssets(['CRO', 'USDC']);
-    } finally {
-      fetchInProgressRef.current = false;
-    }
-  }, [displayAddress]);
-
-  useEffect(() => {
-    fetchPortfolioAssets();
-  }, [fetchPortfolioAssets]);
-
-  // Handle hedge action from Delphi predictions
-  const handleOpenHedge = (market: PredictionMarket) => {
-    console.log('Opening hedge for prediction:', market);
-    
-    // Show notification
-    setHedgeNotification(`🛡️ Hedge recommendation for ${market.relatedAssets.join(', ')} added to Active Hedges`);
-    
-    // Clear notification after 5 seconds
-    setTimeout(() => setHedgeNotification(null), 5000);
-    
-    // Navigate to hedges section
-    setTimeout(() => {
-      const hedgesElement = document.querySelector('[data-hedges-section]');
-      hedgesElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 500);
+  const [activeNav, setActiveNav] = useState<NavId>('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [agentMessage, setAgentMessage] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  
+  const displayAddress = address?.toString() || '';
+  const portfolioAssets = ['CRO', 'USDC', 'WBTC', 'ETH'];
+  
+  // Close mobile menu on nav change
+  const handleNavChange = (id: NavId) => {
+    setActiveNav(id);
+    setMobileMenuOpen(false);
   };
 
-  // Handle agent analysis trigger from Delphi predictions
+  const handleOpenHedge = (market: PredictionMarket) => {
+    logger.info('Opening hedge', { market: market.question });
+    setNotification(`Creating hedge for ${market.relatedAssets.join(', ')}...`);
+    setTimeout(() => setNotification(null), 3000);
+  };
+  
   const handleAgentAnalysis = (market: PredictionMarket) => {
-    console.log('Triggering agent analysis for prediction:', market);
-    
-    // Generate agent message based on prediction
-    let message = '';
-    
-    if (market.recommendation === 'HEDGE') {
-      message = `🤖 **Hedging Agent Activated**\n\n` +
-        `**Delphi Alert:** ${market.probability}% probability - "${market.question}"\n\n` +
-        `**Analysis:**\n` +
-        `• Affected Assets: ${market.relatedAssets.join(', ')}\n` +
-        `• Impact Level: ${market.impact}\n` +
-        `• Market Volume: ${market.volume}\n` +
-        `• Confidence: ${market.confidence}%\n\n` +
-        `**Recommended Actions:**\n` +
-        `1. Open SHORT position on ${market.relatedAssets[0]}-USD-PERP\n` +
-        `2. Hedge ratio: ${Math.min(market.probability / 100 * 0.8, 0.7).toFixed(2)}x (${(market.probability / 100 * 80).toFixed(0)}% of exposure)\n` +
-        `3. Execute via Moonlander perpetual futures\n` +
-        `4. Cost: ~$${(parseFloat(market.volume.replace(/[^0-9.]/g, '')) * 0.001).toFixed(2)} (0.1% of position)\n\n` +
-        `⚡ Gasless settlement via x402 protocol - ready to execute!`;
-    } else if (market.recommendation === 'MONITOR') {
-      message = `🤖 **Risk Agent Monitoring**\n\n` +
-        `**Delphi Alert:** ${market.probability}% probability - "${market.question}"\n\n` +
-        `**Assessment:**\n` +
-        `• Affected Assets: ${market.relatedAssets.join(', ')}\n` +
-        `• Impact Level: ${market.impact}\n` +
-        `• Current Risk: MODERATE\n\n` +
-        `**Monitoring Strategy:**\n` +
-        `1. Track price action every 4 hours\n` +
-        `2. Set alert threshold at ${(market.probability + 10)}% probability\n` +
-        `3. Prepare contingency hedge if threshold breached\n` +
-        `4. Estimated time horizon: 7-14 days\n\n` +
-        `📊 Added to watchlist - I'll notify you of any changes.`;
-    } else {
-      message = `🤖 **Risk Agent Assessment**\n\n` +
-        `**Delphi Signal:** ${market.probability}% probability - "${market.question}"\n\n` +
-        `**Status:** LOW RISK - No action required\n\n` +
-        `Current portfolio exposure to ${market.relatedAssets.join(', ')} is within acceptable risk parameters. ` +
-        `I'll continue monitoring but immediate hedging is not necessary.`;
-    }
-    
-    setAgentMessage(message);
-    
-    // Clear message after 10 seconds
+    const msg = market.recommendation === 'HEDGE'
+      ? `🚨 Alert for ${market.relatedAssets.join(', ')}\n\nRecommending immediate hedge activation.`
+      : `✅ Analysis Complete\n\nNo immediate action required.`;
+    setAgentMessage(msg);
     setTimeout(() => setAgentMessage(null), 10000);
-    
-    // Navigate to agents tab to show activity
-    setTimeout(() => {
-      setActiveTab('agents');
-    }, 2000);
   };
 
   useEffect(() => {
     if (isConnected && contractAddresses) {
       logger.debug('Contract Addresses', { addresses: contractAddresses });
-      
-      // Only log when portfolioCount is actually available
-      if (!isLoadingCount && !isCountError && portfolioCount !== undefined) {
-        logger.debug('Portfolio Count', { count: portfolioCount.toString() });
-      } else if (isLoadingCount) {
-        logger.debug('Portfolio Count', { status: 'loading' });
-      } else if (isCountError) {
-        logger.debug('Portfolio Count', { status: 'error' });
-      }
     }
-  }, [isConnected, contractAddresses, portfolioCount, isLoadingCount, isCountError]);
+  }, [isConnected, contractAddresses]);
+
+  // Close mobile menu on escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>
-      <div className="container mx-auto px-6 py-12">
-        {/* Header */}
-        <div className="mb-12">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="space-y-4">
-              <h1 className="text-5xl font-black">
-                <span className="gradient-text">Dashboard</span>
-              </h1>
-              <div className="flex flex-wrap items-center gap-3">
-                {isTestnet && isConnected && (
-                  <div className="px-4 py-2 bg-green-500/10 rounded-lg border border-green-500/30 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                    <span className="text-sm font-semibold text-green-400">{networkName}</span>
-                  </div>
-                )}
-                <div className="px-4 py-2 bg-green-500/10 rounded-lg border border-green-500/30 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  <span className="text-sm font-semibold text-green-400">PRODUCTION READY</span>
-                </div>
-                <div className="px-4 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-emerald-400 rounded-full" />
-                  <span className="text-sm font-medium text-emerald-400">10/10 Tests Passing</span>
-                </div>
-                {!isConnected && (
-                  <div className="px-4 py-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-                    <span className="text-sm font-medium text-cyan-400">Connect wallet for live portfolio</span>
-                  </div>
-                )}
+    <div className="min-h-screen bg-[#f5f5f7]">
+      {/* Mobile Header - Only visible on mobile */}
+      <header className="lg:hidden fixed top-[52px] left-0 right-0 z-40 bg-white border-b border-black/5">
+        <div className="flex items-center justify-between px-4 h-14">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 -ml-2 text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+            aria-label="Open menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          
+          <h1 className="text-lg font-semibold text-[#1d1d1f]">
+            {navItems.find(n => n.id === activeNav)?.label}
+          </h1>
+          
+          <button
+            onClick={() => setShowChat(true)}
+            className="p-2 -mr-2 text-blue-600 hover:text-blue-700 transition-colors"
+            aria-label="Open chat"
+          >
+            <MessageSquare className="w-6 h-6" />
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside className={`
+        lg:hidden fixed top-0 left-0 bottom-0 w-[280px] z-50 bg-white
+        transform transition-transform duration-300 ease-out
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="flex flex-col h-full">
+          {/* Mobile Menu Header */}
+          <div className="flex items-center justify-between p-4 border-b border-black/5">
+            <span className="text-lg font-bold text-[#1d1d1f]">Menu</span>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-2 -mr-2 text-[#86868b] hover:text-[#1d1d1f]"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* Wallet Info */}
+          <div className="p-4 border-b border-black/5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <span className="text-white text-sm font-bold">
+                  {displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1d1d1f] truncate">
+                  {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not Connected'}
+                </p>
+                <p className="text-xs text-[#86868b]">
+                  {balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : 'Connect Wallet'}
+                </p>
               </div>
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="glass px-6 py-4 rounded-xl border border-white/10">
-                <div className="text-xs text-gray-400 mb-1 font-medium">CONNECTED ADDRESS</div>
-                <div className="text-lg font-mono font-bold text-white">
-                  {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not connected'}
-                </div>
-              </div>
-              {isConnected && balance && (
-                <div className="glass px-6 py-4 rounded-xl border border-white/10">
-                  <div className="text-xs text-gray-400 mb-1 font-medium">WALLET BALANCE</div>
-                  <div className="text-lg font-mono font-bold text-white">
-                    {displayBalance} {balance.symbol}
-                  </div>
-                </div>
-              )}
-            </div>
+          </div>
+          
+          {/* Mobile Nav */}
+          <nav className="flex-1 py-2 overflow-y-auto">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavChange(item.id)}
+                  className={`
+                    w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
+                    ${isActive 
+                      ? 'bg-[#007AFF]/10 border-r-2 border-[#007AFF]' 
+                      : 'hover:bg-[#f5f5f7]'
+                    }
+                  `}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-[#007AFF]' : 'text-[#86868b]'}`} />
+                  <span className={`font-medium ${isActive ? 'text-[#007AFF]' : 'text-[#1d1d1f]'}`}>{item.label}</span>
+                  {item.badge && (
+                    <span className="ml-auto px-2 py-0.5 text-xs font-semibold bg-[#34C759] text-white rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          
+          {/* Mobile Menu Footer */}
+          <div className="p-4 border-t border-black/5">
+            <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f5f5f7] rounded-[18px] transition-colors">
+              <Settings className="w-5 h-5 text-[#86868b]" />
+              <span className="font-medium text-[#1d1d1f]">Settings</span>
+            </button>
           </div>
         </div>
+      </aside>
 
-        {/* Tab Navigation */}
-        <div className="mb-8 flex items-center justify-between">
-          <div className="glass rounded-xl p-1.5 inline-flex items-center gap-2 border border-white/10">
-            {(['overview', 'agents', 'positions', 'transactions', 'settlements'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`relative px-6 py-3 font-bold capitalize transition-all duration-300 rounded-lg ${
-                  activeTab === tab
-                    ? 'text-white bg-gradient-to-r from-emerald-600 to-cyan-600'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+      {/* Desktop Layout */}
+      <div className="flex pt-[52px]">
+        {/* Desktop Sidebar - Hidden on mobile */}
+        <aside className="hidden lg:flex w-64 h-[calc(100vh-52px)] sticky top-[52px] flex-col bg-white border-r border-black/5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          {/* Wallet Section */}
+          <div className="p-5 border-b border-black/5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center shadow-[0_4px_12px_rgba(0,122,255,0.3)]">
+                <span className="text-white text-[15px] font-semibold">
+                  {displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-[#1d1d1f] truncate tracking-[-0.01em]">
+                  {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not Connected'}
+                </p>
+                <p className="text-[13px] text-[#86868b] tracking-[-0.003em]">
+                  {balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : 'Connect Wallet'}
+                </p>
+              </div>
+            </div>
           </div>
-
-          {/* Swap Button */}
-          {isConnected && (
-            <button
-              onClick={() => setSwapModalOpen(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 rounded-xl font-bold transition-all"
-            >
-              <ArrowDownUp className="w-5 h-5" />
-              Swap Tokens
+          
+          {/* Desktop Navigation */}
+          <nav className="flex-1 py-4 overflow-y-auto">
+            <p className="px-5 mb-3 text-[13px] font-semibold text-[#86868b] uppercase tracking-[0.06em]">
+              Menu
+            </p>
+            
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveNav(item.id)}
+                  className={`
+                    w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]
+                    ${isActive 
+                      ? 'bg-[#007AFF] shadow-[0_2px_8px_rgba(0,122,255,0.25)]' 
+                      : 'hover:bg-[#f5f5f7]'
+                    }
+                  `}
+                >
+                  <Icon 
+                    className={`w-5 h-5 ${isActive ? 'text-white' : 'text-[#86868b]'}`} 
+                  />
+                  <span className={`text-[15px] font-medium tracking-[-0.01em] ${isActive ? 'text-white' : 'text-[#1d1d1f]'}`}>{item.label}</span>
+                  {item.badge && (
+                    <span className={`
+                      ml-auto px-2 py-0.5 text-[11px] font-semibold rounded-full shadow-sm
+                      ${isActive ? 'bg-white/20 text-white' : 'bg-[#34C759] text-white'}
+                    `}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            
+            <div className="my-4 mx-4 border-t border-black/5" />
+            
+            <button className="w-[calc(100%-16px)] mx-2 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-colors duration-200">
+              <Settings className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
+              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Settings</span>
             </button>
+          </nav>
+          
+          {/* AI Assistant Button */}
+          <div className="p-4 border-t border-black/5">
+            <button
+              onClick={() => setShowChat(true)}
+              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-[#007AFF] text-white rounded-[14px] text-[15px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all duration-200 shadow-[0_4px_12px_rgba(0,122,255,0.3)]"
+            >
+              <MessageSquare className="w-5 h-5" strokeWidth={2.5} />
+              AI Assistant
+            </button>
+          </div>
+        </aside>
+        
+        {/* Main Content */}
+        <main className="flex-1 min-h-[calc(100vh-52px)] pt-14 lg:pt-0">
+          <div className="max-w-[1280px] mx-auto px-5 py-6 lg:px-8 lg:py-10">
+            {/* Page Header - Desktop only */}
+            <div className="hidden lg:block mb-8">
+              <h1 className="text-[34px] font-bold text-[#1d1d1f] tracking-[-0.02em] leading-[1.1]">
+                {navItems.find(n => n.id === activeNav)?.label}
+              </h1>
+            </div>
+            
+            {/* Content Area */}
+            <Suspense fallback={<LoadingSkeleton height="h-96" />}>
+              {renderContent()}
+            </Suspense>
+          </div>
+        </main>
+      </div>
+      
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-20 lg:top-[68px] left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <p className="text-sm font-medium">{notification}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Create Portfolio CTA */}
+      {(!portfolioCount || portfolioCount === 0n) && isConnected && (
+        <div className="fixed bottom-20 lg:bottom-6 left-4 lg:left-[280px] z-40">
+          <AdvancedPortfolioCreator />
+        </div>
+      )}
+
+      {/* Chat Panel */}
+      {showChat && (
+        <>
+          <div 
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none lg:pointer-events-none"
+            onClick={() => setShowChat(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 lg:bottom-6 lg:right-6 lg:left-auto z-50 lg:w-[440px] lg:pointer-events-auto">
+            <div className="bg-white lg:rounded-[24px] shadow-2xl border-t lg:border border-black/5 overflow-hidden">
+              <div className="flex items-center justify-between p-3 sm:p-4 border-b border-black/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[12px] flex items-center justify-center shadow-[0_2px_8px_rgba(0,122,255,0.25)]">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-[15px] text-[#1d1d1f] block">AI Assistant</span>
+                    <span className="text-[11px] text-[#86868b]">Your portfolio co-pilot</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowChat(false)}
+                  className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-full transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="h-[70vh] lg:h-[520px]">
+                <ChatInterface address={displayAddress} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      
+      {/* Chat FAB - Hidden when chat is open */}
+      {!showChat && (
+        <button
+          onClick={() => setShowChat(true)}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#007AFF] text-white rounded-full shadow-[0_8px_30px_rgba(0,122,255,0.3)] hover:opacity-90 hover:scale-105 transition-all flex items-center justify-center"
+        >
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Swap Modal */}
+      <SwapModal
+        isOpen={swapModalOpen}
+        onClose={() => setSwapModalOpen(false)}
+        onSuccess={() => setTimeout(() => window.location.reload(), 2000)}
+      />
+    </div>
+  );
+
+  // Content renderer
+  function renderContent() {
+    switch (activeNav) {
+      case 'overview':
+        return (
+          <div className="space-y-4 sm:space-y-6">
+            {/* Portfolio Card */}
+            <Card>
+              <PortfolioOverview 
+                address={displayAddress}
+                onNavigateToPositions={() => setActiveNav('positions')}
+                onNavigateToHedges={() => setActiveNav('hedges')}
+              />
+            </Card>
+            
+            {/* Stats Grid - Stack on mobile, 2 cols on tablet+ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-stretch">
+              <Card className="flex flex-col">
+                <CardHeader title="Risk Metrics" />
+                <div className="flex-1">
+                  <RiskMetrics address={displayAddress} />
+                </div>
+              </Card>
+              
+              <Card className="flex flex-col">
+                <CardHeader 
+                  title="Active Hedges" 
+                  action={
+                    <button 
+                      onClick={() => setActiveNav('hedges')}
+                      className="flex items-center gap-1 text-sm text-[#007AFF] font-medium hover:opacity-80 transition-opacity"
+                    >
+                      View All <ChevronRight className="w-4 h-4" />
+                    </button>
+                  }
+                />
+                <div className="flex-1">
+                  <ActiveHedges address={displayAddress} compact />
+                </div>
+              </Card>
+            </div>
+            
+            {/* Agent Alert */}
+            {agentMessage && (
+              <div className="p-4 sm:p-6 bg-[#007AFF]/5 border border-[#007AFF]/20 rounded-[24px]">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#007AFF] rounded-[18px] flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-[#1d1d1f] mb-1">AI Agent Alert</h3>
+                    <p className="text-[#86868b] text-sm sm:text-base whitespace-pre-line">{agentMessage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+        
+      case 'positions':
+        return (
+          <Card>
+            <CardHeader 
+              title="Positions" 
+              subtitle="Manage your portfolio holdings"
+            />
+            <PositionsList address={displayAddress} />
+          </Card>
+        );
+        
+      case 'hedges':
+        return (
+          <Card>
+            <CardHeader 
+              title="Active Hedges" 
+              subtitle="Your protective positions and options"
+            />
+            <ActiveHedges address={displayAddress} />
+          </Card>
+        );
+        
+      case 'agents':
+        return (
+          <div className="space-y-4 sm:space-y-6">
+            <Card>
+              <CardHeader 
+                title="AI Agents" 
+                subtitle="Autonomous trading and risk management"
+                badge={<Badge color="green">ACTIVE</Badge>}
+              />
+              <AgentActivity address={displayAddress} />
+            </Card>
+            
+            {agentMessage && (
+              <div className="p-4 sm:p-6 bg-gradient-to-br from-[#007AFF]/5 to-[#AF52DE]/5 border border-[#007AFF]/20 rounded-[24px]">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-[#007AFF] rounded-[18px] flex items-center justify-center">
+                    <Bot className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1d1d1f] mb-1">Latest Analysis</h3>
+                    <p className="text-[#86868b] whitespace-pre-line">{agentMessage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+        
+      case 'insights':
+        return (
+          <PredictionInsights 
+            onOpenHedge={handleOpenHedge}
+            onTriggerAgentAnalysis={handleAgentAnalysis}
+            assets={portfolioAssets}
+          />
+        );
+        
+      case 'history':
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <RecentTransactions address={displayAddress} />
+            <SettlementsPanel address={displayAddress} />
+          </div>
+        );
+        
+      case 'zk-proofs':
+        return <ZKProofDemo />;
+        
+      default:
+        return null;
+    }
+  }
+}
+
+// Reusable Card component
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-[20px] sm:rounded-[24px] shadow-sm border border-black/5 overflow-hidden ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+// Card Header component
+function CardHeader({ 
+  title, 
+  subtitle, 
+  action, 
+  badge 
+}: { 
+  title: string; 
+  subtitle?: string; 
+  action?: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">{title}</h2>
+            {badge}
+          </div>
+          {subtitle && (
+            <p className="text-[12px] sm:text-[13px] text-[#86868b] mt-0.5">{subtitle}</p>
           )}
         </div>
-
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {activeTab === 'overview' && (
-              <>
-                <div className="flex justify-center">
-                  <AdvancedPortfolioCreator />
-                </div>
-                <PortfolioOverview 
-                  address={displayAddress || ''}
-                  onNavigateToPositions={() => setActiveTab('positions')}
-                  onNavigateToHedges={() => {
-                    // Scroll to ActiveHedges section
-                    setTimeout(() => {
-                      const hedgesElement = document.querySelector('[data-hedges-section]');
-                      hedgesElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 100);
-                  }}
-                />
-                
-                {/* Hedge Notification */}
-                {hedgeNotification && (
-                  <div className="glass rounded-xl p-4 border border-green-500/30 bg-green-500/10 flex items-center gap-3 animate-slide-in">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                    <p className="text-sm text-green-300 font-medium">{hedgeNotification}</p>
-                  </div>
-                )}
-
-                <div data-hedges-section>
-                  <ActiveHedges address={displayAddress || ''} />
-                </div>
-                <RiskMetrics address={displayAddress || ''} />
-                <ZKProofDemo />
-              </>
-            )}
-            {activeTab === 'agents' && (
-              <>
-                {/* Agent Analysis Message */}
-                {agentMessage && (
-                  <div className="glass rounded-xl p-6 border border-cyan-500/30 bg-cyan-500/10 mb-6">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 bg-cyan-500/20 rounded-lg">
-                        <Bot className="w-6 h-6 text-cyan-400" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-bold text-cyan-300">AI Agent Response</h4>
-                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/30">
-                            Active
-                          </span>
-                        </div>
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          {agentMessage.split('\n').map((line, i) => (
-                            <p key={i} className="text-gray-300 text-sm mb-1">{line}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <AgentActivity address={displayAddress || ''} />
-              </>
-            )}
-            {activeTab === 'positions' && (
-              <PositionsList address={displayAddress || ''} />
-            )}
-            {activeTab === 'transactions' && <RecentTransactions address={displayAddress || ''} />}
-            {activeTab === 'settlements' && <SettlementsPanel address={displayAddress || ''} />}
-          </div>
-
-          {/* Chat Sidebar */}
-          <div className="lg:col-span-1">
-            <ChatInterface address={displayAddress || ''} />
-          </div>
-        </div>
-
-        {/* Swap Modal */}
-        <SwapModal
-          isOpen={swapModalOpen}
-          onClose={() => setSwapModalOpen(false)}
-          onSuccess={() => {
-            // Refresh balances after swap
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
-          }}
-        />
+        {action}
       </div>
     </div>
+  );
+}
+
+// Badge component
+function Badge({ children, color }: { children: React.ReactNode; color: 'green' | 'blue' }) {
+  const colors = {
+    green: 'bg-[#34C759] text-white',
+    blue: 'bg-[#007AFF] text-white',
+  };
+  
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${colors[color]}`}>
+      {color === 'green' && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+      {children}
+    </span>
   );
 }
