@@ -15,6 +15,9 @@ dotenv.config();
  * Network configurations
  */
 export const networks: Record<string, NetworkConfig> = {
+  // ============================================
+  // CRONOS CHAINS (EVM-Compatible)
+  // ============================================
   'cronos-testnet': {
     chainId: 338,
     name: 'Cronos Testnet',
@@ -37,6 +40,47 @@ export const networks: Record<string, NetworkConfig> = {
       decimals: 18,
     },
   },
+  
+  // ============================================
+  // SUI CHAINS (Move-based)
+  // ============================================
+  'sui-testnet': {
+    chainId: 0, // SUI uses string-based chain IDs
+    name: 'SUI Testnet',
+    rpcUrl: process.env.SUI_TESTNET_RPC || 'https://fullnode.testnet.sui.io:443',
+    explorerUrl: 'https://suiexplorer.com/?network=testnet',
+    nativeCurrency: {
+      name: 'SUI',
+      symbol: 'SUI',
+      decimals: 9,
+    },
+  },
+  'sui-mainnet': {
+    chainId: 0, // SUI uses string-based chain IDs
+    name: 'SUI Mainnet',
+    rpcUrl: process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443',
+    explorerUrl: 'https://suiexplorer.com',
+    nativeCurrency: {
+      name: 'SUI',
+      symbol: 'SUI',
+      decimals: 9,
+    },
+  },
+  'sui-devnet': {
+    chainId: 0,
+    name: 'SUI Devnet',
+    rpcUrl: process.env.SUI_DEVNET_RPC || 'https://fullnode.devnet.sui.io:443',
+    explorerUrl: 'https://suiexplorer.com/?network=devnet',
+    nativeCurrency: {
+      name: 'SUI',
+      symbol: 'SUI',
+      decimals: 9,
+    },
+  },
+  
+  // ============================================
+  // LOCAL DEVELOPMENT
+  // ============================================
   hardhat: {
     chainId: 31337,
     name: 'Hardhat Local',

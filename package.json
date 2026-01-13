@@ -69,6 +69,8 @@
     "@crypto.com/facilitator-client": "^1.0.4",
     "@heroicons/react": "^2.2.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
+    "@mysten/dapp-kit": "^0.14.0",
+    "@mysten/sui": "^1.0.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",
     "@rainbow-me/rainbowkit": "^2.2.10",
