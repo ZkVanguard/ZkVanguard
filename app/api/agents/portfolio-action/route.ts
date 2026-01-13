@@ -16,6 +16,13 @@ export interface PortfolioActionRequest {
   targetYield: number;
   riskTolerance: number;
   assets: string[];
+  realMetrics?: {
+    riskScore: number;
+    volatility: number;
+    sharpeRatio: number;
+    hedgeSignals: number;
+    totalValue: number;
+  };
   predictions: Array<{
     question: string;
     probability: number;
@@ -44,85 +51,67 @@ export interface PortfolioActionRecommendation {
 export async function POST(request: NextRequest) {
   try {
     const body: PortfolioActionRequest = await request.json();
-    const { portfolioId, currentValue, targetYield, riskTolerance, assets, predictions } = body;
+    const { portfolioId, currentValue, targetYield, riskTolerance, assets, predictions, realMetrics } = body;
 
     logger.info('Portfolio action analysis requested', {
       portfolioId,
       currentValue,
       assets: assets.length,
       predictions: predictions.length,
+      hasRealMetrics: !!realMetrics,
     });
 
-    const orchestrator = getAgentOrchestrator();
+    // Use REAL metrics if provided, otherwise fall back to agent orchestrator
+    let riskScore: number;
+    let volatility: number;
+    let sentiment: 'bullish' | 'bearish' | 'neutral';
+    let riskRecommendations: string[] = [];
+    let hedgeSignals = 0;
 
-    // Step 1: Use Lead Agent to analyze portfolio with full context
-    const portfolioAnalysisResult = await orchestrator.analyzePortfolio({
-      address: `portfolio-${portfolioId}`,
-      portfolioData: {
-        totalValue: currentValue,
-        targetYield,
-        riskTolerance,
-        tokens: assets.map(symbol => ({
-          symbol,
-          balance: 1,
-          usdValue: currentValue / assets.length,
-        })),
-        predictions: predictions.map(p => ({
-          question: p.question,
-          probability: p.probability,
-          impact: p.impact,
-          recommendation: p.recommendation,
-        })),
-      },
-    });
+    if (realMetrics) {
+      // Use real calculated metrics from PositionsContext
+      riskScore = realMetrics.riskScore;
+      volatility = realMetrics.volatility;
+      hedgeSignals = realMetrics.hedgeSignals;
+      
+      // Determine sentiment from Sharpe ratio
+      if (realMetrics.sharpeRatio > 1.5) sentiment = 'bullish';
+      else if (realMetrics.sharpeRatio < 0.5) sentiment = 'bearish';
+      else sentiment = 'neutral';
 
-    // Step 2: Risk Agent - Assess portfolio risk with predictions
-    const riskResult = await orchestrator.assessRisk({
-      address: `portfolio-${portfolioId}`,
-      portfolioData: {
-        totalValue: currentValue,
-        tokens: assets.map(symbol => ({
-          symbol,
-          balance: 1,
-          usdValue: currentValue / assets.length,
-        })),
-      },
-    });
+      logger.info('Using real portfolio metrics', { riskScore, volatility, sentiment, hedgeSignals });
+    } else {
+      // Fallback: Use agent orchestrator
+      const orchestrator = getAgentOrchestrator();
 
-    // Step 3: Hedging Agent - Analyze if hedging needed based on predictions
+      const riskResult = await orchestrator.assessRisk({
+        address: `portfolio-${portfolioId}`,
+        portfolioData: {
+          totalValue: currentValue,
+          tokens: assets.map(symbol => ({
+            symbol,
+            balance: 1,
+            usdValue: currentValue / assets.length,
+          })),
+        },
+      });
+
+      const riskAnalysisData = riskResult.data || {};
+      riskScore = riskResult.success && riskAnalysisData.riskScore 
+        ? Number(riskAnalysisData.riskScore) 
+        : 50;
+      volatility = riskAnalysisData.volatility || 0.3;
+      sentiment = riskAnalysisData.sentiment || 'neutral';
+      riskRecommendations = riskAnalysisData.recommendations || [];
+    }
+
+    // Analyze hedge requirements based on real signals
     const highRiskPredictions = predictions.filter(
       p => p.recommendation === 'HEDGE' && p.probability > 60
     );
     const criticalPredictions = predictions.filter(
       p => p.impact === 'HIGH' && p.probability > 70
     );
-
-    let hedgeRecommendation = 'NO_HEDGE_NEEDED';
-    let hedgeDetails: any = null;
-    
-    if (highRiskPredictions.length > 0 || criticalPredictions.length > 0) {
-      // Use hedging agent if there are critical predictions
-      const hedgeResult = await orchestrator.generateHedgeRecommendations({
-        portfolioId: `portfolio-${portfolioId}`,
-        assetSymbol: assets[0] || 'CRO',
-        notionalValue: currentValue,
-      });
-
-      if (hedgeResult.success && hedgeResult.data) {
-        hedgeDetails = hedgeResult.data;
-        hedgeRecommendation = hedgeResult.data.recommendation?.action || 'MONITOR';
-      }
-    }
-
-    // Step 4: Extract real agent analysis data
-    const riskScore = riskResult.success && riskResult.data?.riskScore 
-      ? Number(riskResult.data.riskScore) 
-      : 50;
-
-    const riskAnalysisData = riskResult.data || {};
-    const volatility = riskAnalysisData.volatility || 0.3;
-    const sentiment = riskAnalysisData.sentiment || 'neutral';
-    const riskRecommendations = riskAnalysisData.recommendations || [];
 
     // Step 5: Lead Agent makes final decision based on multi-agent analysis
     const reasoning: string[] = [];
@@ -156,6 +145,8 @@ export async function POST(request: NextRequest) {
       
       if (hedgeDetails && hedgeDetails.recommendation) {
         reasoning.push(`Hedging Agent: ${hedgeDetails.recommendation.action} ${hedgeDetails.recommendation.side} position (${hedgeDetails.recommendation.size})`);
+      } else if (hedgeSignals > 0) {
+        reasoning.push(`${hedgeSignals} active hedge position${hedgeSignals > 1 ? 's' : ''} currently open`);
       }
       
       reasoning.push(`Volatility: ${(volatility * 100).toFixed(1)}% - Market sentiment: ${sentiment}`);
@@ -233,9 +224,9 @@ export async function POST(request: NextRequest) {
       recommendations,
       agentAnalysis: {
         riskAgent: `Risk Analysis: ${riskScore}/100 (${riskScore > 70 ? 'HIGH' : riskScore > 40 ? 'MODERATE' : 'LOW'}) | Volatility: ${(volatility * 100).toFixed(1)}% | Sentiment: ${sentiment.toUpperCase()}`,
-        hedgingAgent: hedgeDetails 
-          ? `Hedge Strategy: ${hedgeDetails.recommendation?.action || 'MONITOR'} | Exposure: ${hedgeDetails.exposure?.asset || assets[0]} at ${(hedgeDetails.exposure?.volatility * 100 || 0).toFixed(1)}% volatility`
-          : `No hedging required - ${highRiskPredictions.length} prediction market hedge signal${highRiskPredictions.length !== 1 ? 's' : ''}`,
+        hedgingAgent: hedgeSignals > 0
+          ? `Active Monitoring: ${hedgeSignals} hedge position${hedgeSignals !== 1 ? 's' : ''} protecting portfolio`
+          : `No hedging required - ${predictions.filter(p => p.recommendation === 'HEDGE').length} prediction market hedge signal${predictions.filter(p => p.recommendation === 'HEDGE').length !== 1 ? 's' : ''}`,
         leadAgent: `Final Decision: ${action} (${(confidence * 100).toFixed(0)}% confidence) | Based on ${predictions.length} market signal${predictions.length !== 1 ? 's' : ''} + multi-agent analysis`,
       },
     };

@@ -85,6 +85,34 @@ export function PositionsList({ address }: { address: string }) {
         return asset.slice(0, 6);
       });
 
+      // Calculate REAL metrics from positions context
+      const realMetrics = derived ? {
+        volatility: derived.weightedVolatility,
+        sharpeRatio: derived.sharpeRatio,
+        topAssets: derived.topAssets,
+        totalChange24h: derived.totalChange24h,
+      } : null;
+
+      const riskScore = realMetrics 
+        ? Math.round((realMetrics.volatility * 50) + (
+            positionsData?.totalValue && realMetrics.topAssets.length > 0
+              ? (realMetrics.topAssets[0].value / positionsData.totalValue) * 50
+              : 0
+          ))
+        : 50;
+
+      // Count active hedge signals from localStorage
+      let hedgeSignals = 0;
+      if (typeof window !== 'undefined') {
+        const settlements = localStorage.getItem('settlement_history');
+        if (settlements) {
+          const settlementData = JSON.parse(settlements);
+          hedgeSignals = Object.values(settlementData).filter(
+            (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
+          ).length;
+        }
+      }
+
       const response = await fetch('/api/agents/portfolio-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,6 +122,14 @@ export function PositionsList({ address }: { address: string }) {
           targetYield: parseFloat(portfolio.targetYield) / 100,
           riskTolerance: parseFloat(portfolio.riskTolerance),
           assets: portfolioAssets,
+          // Pass real calculated metrics
+          realMetrics: {
+            riskScore,
+            volatility: realMetrics?.volatility || 0.3,
+            sharpeRatio: realMetrics?.sharpeRatio || 0,
+            hedgeSignals,
+            totalValue: positionsData?.totalValue || 0,
+          },
           predictions: (portfolio.predictions || []).map(p => ({
             question: p.question,
             probability: p.probability,

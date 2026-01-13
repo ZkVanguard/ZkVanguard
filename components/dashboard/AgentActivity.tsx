@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useMemo } from 'react';
 import { Activity, CheckCircle, Clock, XCircle, Shield, Brain, Zap, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
 import { getAgentActivity, type AgentTask } from '@/lib/api/agents';
 import { usePolling, useLoading, useToggle } from '@/lib/hooks';
+import { usePositions } from '@/contexts/PositionsContext';
 
 interface AgentActivityProps {
   address: string;
@@ -61,10 +62,93 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
 }
 
 export const AgentActivity = memo(function AgentActivity({ address, onTaskComplete: _onTaskComplete }: AgentActivityProps) {
+  const { positionsData, derived } = usePositions();
   const [tasks, setTasks] = useState<(AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[]>([]);
   const { isLoading: loading, error, setError } = useLoading(true);
   const [autoRefresh, toggleAutoRefresh] = useToggle(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Calculate real portfolio analysis from context
+  const portfolioAnalysis = useMemo(() => {
+    if (!positionsData || !derived) {
+      return {
+        recommendation: 'HOLD',
+        confidence: 0,
+        reasoning: 'Waiting for portfolio data...',
+        riskScore: 0,
+        volatility: 0,
+        sentiment: 'neutral',
+        marketSignals: 0,
+        targetYield: 0,
+      };
+    }
+
+    const { totalValue } = positionsData;
+    const { weightedVolatility, sharpeRatio, topAssets } = derived;
+
+    // Calculate concentration risk
+    const concentration = totalValue > 0 && topAssets.length > 0
+      ? topAssets[0].percentage / 100
+      : 0;
+
+    // Risk score based on volatility and concentration
+    const riskScore = Math.round((weightedVolatility * 50) + (concentration * 50));
+    
+    // Determine sentiment
+    let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+    if (sharpeRatio > 1.5) sentiment = 'bullish';
+    else if (sharpeRatio < 0.5) sentiment = 'bearish';
+
+    // Determine recommendation
+    let recommendation: 'BUY' | 'SELL' | 'HOLD' | 'HEDGE' = 'HOLD';
+    let confidence = 75;
+    let reasoning = '';
+
+    if (weightedVolatility > 0.5) {
+      recommendation = 'HEDGE';
+      confidence = 85;
+      reasoning = `High volatility (${(weightedVolatility * 100).toFixed(1)}%) detected - hedging recommended`;
+    } else if (concentration > 0.7) {
+      recommendation = 'HOLD';
+      confidence = 70;
+      reasoning = `Portfolio concentration risk (${(concentration * 100).toFixed(0)}% in top asset) - maintain diversification`;
+    } else if (riskScore < 30 && sharpeRatio > 1.5) {
+      recommendation = 'BUY';
+      confidence = 80;
+      reasoning = `Low risk (${riskScore}/100) with strong Sharpe ratio (${sharpeRatio.toFixed(2)}) - opportunity to increase position`;
+    } else if (riskScore > 70) {
+      recommendation = 'SELL';
+      confidence = 75;
+      reasoning = `High risk score (${riskScore}/100) - consider reducing exposure`;
+    } else {
+      recommendation = 'HOLD';
+      confidence = 75;
+      reasoning = `Portfolio within optimal parameters (Risk: ${riskScore}/100, Sharpe: ${sharpeRatio.toFixed(2)})`;
+    }
+
+    // Count active hedge signals (check localStorage)
+    let marketSignals = 0;
+    if (typeof window !== 'undefined') {
+      const settlements = localStorage.getItem('settlement_history');
+      if (settlements) {
+        const settlementData = JSON.parse(settlements);
+        marketSignals = Object.values(settlementData).filter(
+          (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
+        ).length;
+      }
+    }
+
+    return {
+      recommendation,
+      confidence,
+      reasoning,
+      riskScore,
+      volatility: weightedVolatility,
+      sentiment,
+      marketSignals,
+      targetYield: 10, // Could be enhanced to pull from actual portfolio settings
+    };
+  }, [positionsData, derived]);
 
   const fetchActivity = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
