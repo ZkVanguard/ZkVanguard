@@ -90,20 +90,41 @@ export class VVSSwapSDKService {
       // Calculate price impact (if available)
       const priceImpact = this.calculatePriceImpact(trade);
 
-      // Extract output amount - parse from formatted trade if direct access fails
+      // Extract output amount from trade object
+      // VVS SDK trade object has: type, amountIn, amountOut, routes, price, lpFeeRatio, lpFee, slippage
+      // amountOut structure: { amount: Fraction, address, symbol, decimals }
       let amountOut = '0';
       const tradeAny = trade as any;
-      if (tradeAny.outputAmount?.toExact) {
+      
+      // Try to extract from amountOut object structure
+      if (tradeAny.amountOut) {
+        if (tradeAny.amountOut.amount?.numerator !== undefined && tradeAny.amountOut.amount?.denominator !== undefined) {
+          // It's a Fraction - calculate the decimal value
+          const num = Number(tradeAny.amountOut.amount.numerator);
+          const denom = Number(tradeAny.amountOut.amount.denominator);
+          amountOut = (num / denom).toFixed(8);
+        } else if (typeof tradeAny.amountOut === 'string') {
+          amountOut = tradeAny.amountOut;
+        } else if (tradeAny.amountOut.toExact) {
+          amountOut = tradeAny.amountOut.toExact();
+        } else if (tradeAny.amountOut.toSignificant) {
+          amountOut = tradeAny.amountOut.toSignificant(8);
+        }
+      }
+      // Try outputAmount (older SDK versions)
+      else if (tradeAny.outputAmount?.toExact) {
         amountOut = tradeAny.outputAmount.toExact();
-      } else if (tradeAny.outputAmount?.toSignificant) {
-        amountOut = tradeAny.outputAmount.toSignificant(8);
-      } else {
-        // Parse from formatted trade string: "X.XXXXX TOKEN => Y.YYYYY TOKEN (...)"
+      }
+      
+      // Fallback: parse from formatted trade string: "X.XXXXX TOKEN => Y.YYYYY TOKEN (...)"
+      if (amountOut === '0' || !amountOut) {
         const match = formattedTrade.match(/=>\s*([\d.]+)/);
         if (match) {
           amountOut = match[1];
         }
       }
+      
+      console.log('📊 Extracted amountOut:', amountOut);
 
       return {
         amountIn: amount,

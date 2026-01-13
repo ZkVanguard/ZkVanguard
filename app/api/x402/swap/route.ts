@@ -4,6 +4,7 @@
  * GET /api/x402/swap - Get swap quote from VVS Finance SDK
  * 
  * Uses @vvs-finance/swap-sdk for real DEX quotes and swaps
+ * Note: Quotes use MAINNET for accurate pricing (testnet has no stablecoin pools)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,16 +13,21 @@ import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
-// Token addresses on Cronos Testnet (338) with VVS liquidity pools
-// Note: Use VVS testnet tokens that have actual liquidity pools
-const TESTNET_TOKENS: Record<string, string> = {
-  // VVS token - has liquidity pools on testnet
-  VVS: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
-  // Use VVS token address for USDC swaps (has pools)
-  USDC: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
-  DEVUSDC: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
+// Use MAINNET (25) for quotes - testnet (338) has no real stablecoin liquidity
+const QUOTE_CHAIN_ID = 25; // Cronos Mainnet for accurate pricing
+
+// Token addresses on Cronos MAINNET (25) - these have real liquidity
+const MAINNET_TOKENS: Record<string, string> = {
+  // Stablecoins
+  USDC: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59',
+  USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+  DAI: '0xF2001B145b43032AAF5Ee2884e456CCd805F677D',
+  // Map testnet token names to mainnet equivalents
+  DEVUSDC: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59', // Use real USDC for quotes
+  // VVS token
+  VVS: '0x2D03bECE6747ADC00E1a131BBA1469C15fD11e03',
   // Wrapped CRO
-  WCRO: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4',
+  WCRO: '0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23',
   // Native CRO
   CRO: 'NATIVE',
   TCRO: 'NATIVE',
@@ -115,6 +121,7 @@ const MOCK_PRICES: Record<string, number> = {
 
 /**
  * GET /api/x402/swap - Get swap quote from VVS Finance SDK
+ * Uses MAINNET for accurate pricing since testnet has no stablecoin liquidity
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -130,10 +137,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Get VVS SDK service
-    const vvsService = getVVSSwapSDKService();
+    // Use MAINNET service for accurate quotes (testnet has no stablecoin pools)
+    const vvsService = getVVSSwapSDKService(QUOTE_CHAIN_ID);
     
-    // Resolve tokens - VVS SDK uses 'CRO' for native, addresses for tokens
+    // Resolve tokens to MAINNET addresses for accurate pricing
     const resolvedTokenIn = resolveToken(tokenIn);
     const resolvedTokenOut = resolveToken(tokenOut);
     
@@ -147,7 +154,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       humanAmount = (numericAmount / 1e18).toString();
     }
     
-    console.log('[x402/swap] Getting VVS quote:', { 
+    console.log('[x402/swap] Getting VVS MAINNET quote:', { 
+      chainId: QUOTE_CHAIN_ID,
       tokenIn: resolvedTokenIn, 
       tokenOut: resolvedTokenOut, 
       amountIn: humanAmount,
@@ -155,41 +163,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
     
     try {
-      // Try VVS SDK first
+      // Get quote from VVS SDK using MAINNET for accurate pricing
       const quote = await vvsService.getQuote(resolvedTokenIn, resolvedTokenOut, humanAmount);
       
-      // Sanity check: VVS testnet SDK often returns unrealistic values
-      // Check if the output amount is reasonable (not more than 10000x input value)
-      const inputNum = parseFloat(humanAmount);
-      const outputNum = parseFloat(quote.amountOut);
-      const inSymbol = getTokenSymbol(tokenIn);
-      const outSymbol = getTokenSymbol(tokenOut);
-      const inPrice = MOCK_PRICES[inSymbol] || 1;
-      const outPrice = MOCK_PRICES[outSymbol] || 1;
-      
-      // Calculate expected output based on reasonable prices
-      const expectedOutput = (inputNum * inPrice) / outPrice;
-      const ratio = outputNum / expectedOutput;
-      
-      // If the VVS quote is more than 100x different from expected, use mock instead
-      if (ratio > 100 || ratio < 0.01) {
-        console.warn('[x402/swap] VVS SDK returned unrealistic quote, using mock:', {
-          vvsOutput: quote.amountOut,
-          expectedOutput,
-          ratio,
-        });
-        
-        const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
-        return NextResponse.json({
-          success: true,
-          data: {
-            ...mockQuote,
-            x402Fee: 0.01,
-            source: 'mock-validated',
-            warning: 'VVS testnet returned unrealistic quote, using estimated prices',
-          },
-        });
-      }
+      console.log('[x402/swap] VVS mainnet quote received:', {
+        amountOut: quote.amountOut,
+        formattedTrade: quote.formattedTrade,
+      });
       
       return NextResponse.json({
         success: true,
@@ -233,9 +213,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 function resolveToken(token: string): string {
   if (token.startsWith('0x')) return token;
   const upper = token.toUpperCase();
-  // VVS SDK uses 'CRO' directly for native token
-  if (upper === 'CRO' || upper === 'TCRO' || upper === 'NATIVE') return 'CRO';
-  return TESTNET_TOKENS[upper] || token;
+  // VVS SDK uses 'NATIVE' for native CRO
+  if (upper === 'CRO' || upper === 'TCRO' || upper === 'NATIVE') return 'NATIVE';
+  // Use mainnet token addresses for accurate pricing
+  return MAINNET_TOKENS[upper] || token;
 }
 
 /**
