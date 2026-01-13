@@ -172,7 +172,7 @@ export async function getAgentActivity(_address: string) {
     agentType: string;
     action: string;
     description: string;
-    status: 'completed' | 'in-progress' | 'pending';
+    status: 'completed' | 'in-progress' | 'queued';
     timestamp: Date;
     type: string;
     priority: number;
