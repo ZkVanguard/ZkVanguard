@@ -236,7 +236,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                   <select
                     value={asset}
                     onChange={(e) => setAsset(e.target.value)}
-                    className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] bg-white text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors"
+                    className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] bg-white text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                   >
                     {availableAssets.map((a) => (
                       <option key={a} value={a}>{a}-PERP</option>
@@ -256,7 +256,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       value={size}
                       onChange={(e) => setSize(e.target.value)}
                       placeholder="0.01"
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors"
+                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                     />
                   </div>
                   <div>
@@ -286,7 +286,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       value={entryPrice}
                       onChange={(e) => setEntryPrice(e.target.value)}
                       placeholder={asset === 'BTC' ? '95000' : asset === 'ETH' ? '3500' : '0.10'}
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors"
+                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                     />
                   </div>
                   <div>
@@ -299,7 +299,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       value={targetPrice}
                       onChange={(e) => setTargetPrice(e.target.value)}
                       placeholder={hedgeType === 'SHORT' ? 'Lower than entry' : 'Higher than entry'}
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors"
+                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                     />
                   </div>
                   <div>
@@ -312,7 +312,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       value={stopLoss}
                       onChange={(e) => setStopLoss(e.target.value)}
                       placeholder={hedgeType === 'SHORT' ? 'Higher than entry' : 'Lower than entry'}
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors"
+                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                     />
                   </div>
                 </div>
@@ -327,7 +327,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="Why are you creating this hedge?"
                     rows={3}
-                    className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors resize-none"
+                    className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b] resize-none"
                   />
                 </div>
 
