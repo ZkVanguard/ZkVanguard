@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useMemo, memo } from 'react';
 import { AlertTriangle, TrendingUp, Shield, Activity } from 'lucide-react';
-import { assessPortfolioRisk } from '../../lib/api/agents';
-import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
-import { getMarketDataService } from '../../lib/services/RealMarketDataService';
-import { usePolling } from '@/lib/hooks';
+import { usePositions } from '@/contexts/PositionsContext';
 
 interface RiskMetric {
   label: string;
@@ -15,163 +12,61 @@ interface RiskMetric {
 }
 
 export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: string }) {
-  const [metrics, setMetrics] = useState<RiskMetric[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [aiPowered, setAiPowered] = useState(false);
+  const { positionsData, derived, loading } = usePositions();
 
-  // Fetch AI-enhanced risk assessment
-  const fetchRiskMetrics = useCallback(async () => {
-    if (!address) {
-      // No wallet connected - show default risk metrics
-      setMetrics([
+  // Calculate metrics from context data - no fetching needed!
+  const metrics = useMemo<RiskMetric[]>(() => {
+    if (!address || !positionsData || !derived) {
+      return [
         { label: 'VaR (95%)', value: '--', status: 'low', icon: Shield },
         { label: 'Volatility', value: '--', status: 'low', icon: TrendingUp },
         { label: 'Risk Score', value: '--', status: 'low', icon: AlertTriangle },
         { label: 'Sharpe Ratio', value: '--', status: 'low', icon: Activity },
-      ]);
-      setLoading(false);
-      return;
+      ];
     }
 
-    try {
-      // First, get REAL portfolio data from connected wallet
-      const marketData = getMarketDataService();
-      const portfolioData = await marketData.getPortfolioData(address);
-      
-      // Try AI service with real portfolio data
-      const aiService = getCryptocomAIService();
-      const aiRiskData = await aiService.assessRisk({ 
-        address,
-        tokens: portfolioData.tokens,
-        totalValue: portfolioData.totalValue,
-      });
-      
-      setMetrics([
-        { 
-          label: 'VaR (95%)', 
-          value: aiRiskData.var95 > 0 ? `${(aiRiskData.var95 * 100).toFixed(1)}%` : '--', 
-          status: aiRiskData.var95 > 0.08 ? 'high' : aiRiskData.var95 > 0.04 ? 'medium' : 'low', 
-          icon: Shield 
-        },
-        { 
-          label: 'Volatility', 
-          value: aiRiskData.volatility > 0 ? `${(aiRiskData.volatility * 100).toFixed(1)}%` : '--', 
-          status: aiRiskData.volatility > 0.50 ? 'high' : aiRiskData.volatility > 0.30 ? 'medium' : 'low', 
-          icon: TrendingUp 
-        },
-        { 
-          label: 'Risk Score', 
-          value: aiRiskData.riskScore > 0 ? `${aiRiskData.riskScore.toFixed(0)}/100` : '--', 
-          status: aiRiskData.riskScore > 60 ? 'high' : aiRiskData.riskScore > 40 ? 'medium' : 'low', 
-          icon: AlertTriangle 
-        },
-        { 
-          label: 'Sharpe Ratio', 
-          value: aiRiskData.sharpeRatio > 0 ? aiRiskData.sharpeRatio.toFixed(2) : '--', 
-          status: aiRiskData.sharpeRatio > 1.5 ? 'low' : aiRiskData.sharpeRatio > 0.8 ? 'medium' : 'high', 
-          icon: Activity 
-        },
-      ]);
-      setAiPowered(portfolioData.totalValue > 0);
-      setLoading(false);
-    } catch (aiError) {
-      console.error('Risk assessment failed:', aiError);
-      try {
-        const riskData = await assessPortfolioRisk(address);
-        
-        setMetrics([
-          { 
-            label: 'VaR (95%)', 
-            value: `${(riskData.var * 100).toFixed(1)}%`, 
-            status: riskData.var > 0.20 ? 'high' : riskData.var > 0.10 ? 'medium' : 'low', 
-            icon: Shield 
-          },
-          { 
-            label: 'Volatility', 
-            value: `${(riskData.volatility * 100).toFixed(1)}%`, 
-            status: riskData.volatility > 0.30 ? 'high' : riskData.volatility > 0.15 ? 'medium' : 'low', 
-            icon: TrendingUp 
-          },
-          { 
-            label: 'Liquidation Risk', 
-            value: `${(riskData.liquidationRisk * 100).toFixed(1)}%`, 
-            status: riskData.liquidationRisk > 0.10 ? 'high' : riskData.liquidationRisk > 0.05 ? 'medium' : 'low', 
-            icon: AlertTriangle 
-          },
-          { 
-            label: 'Sharpe Ratio', 
-            value: riskData.sharpeRatio.toFixed(2), 
-            status: riskData.sharpeRatio > 2.0 ? 'low' : riskData.sharpeRatio > 1.0 ? 'medium' : 'high', 
-            icon: Activity 
-          },
-        ]);
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to fetch risk metrics from agent API:', error);
-          
-        // Fallback: Calculate basic risk metrics from real portfolio data
-        try {
-          const marketData = getMarketDataService();
-          const portfolioData = await marketData.getPortfolioData(address);
-            
-          // Calculate concentration risk
-          const concentration = portfolioData.tokens.length > 0
-            ? Math.max(...portfolioData.tokens.map(t => t.usdValue / portfolioData.totalValue))
-            : 0;
-            
-          // Simple risk score based on concentration (0-100)
-          const riskScore = concentration > 0.7 ? 75 : concentration > 0.5 ? 55 : 35;
-            
-          // Estimate volatility based on portfolio composition
-          const hasHighVolAssets = portfolioData.tokens.some(t => 
-            ['BTC', 'ETH', 'CRO'].includes(t.symbol)
-          );
-          const volatility = hasHighVolAssets ? 0.12 : 0.06;
-            
-          // Calculate VaR (simplified)
-          const var95 = volatility * 1.65; // 95% confidence interval
-            
-          // Calculate Sharpe ratio (simplified, assuming 5% risk-free rate)
-          const sharpeRatio = portfolioData.totalValue > 0 ? 1.2 : 0;
-            
-          setMetrics([
-            { 
-              label: 'VaR (95%)', 
-              value: `${(var95 * 100).toFixed(1)}%`, 
-              status: var95 > 0.20 ? 'high' : var95 > 0.10 ? 'medium' : 'low', 
-              icon: Shield 
-            },
-            { 
-              label: 'Volatility', 
-              value: `${(volatility * 100).toFixed(1)}%`, 
-              status: volatility > 0.15 ? 'high' : volatility > 0.08 ? 'medium' : 'low', 
-              icon: TrendingUp 
-            },
-            { 
-              label: 'Risk Score', 
-              value: `${riskScore}/100`, 
-              status: riskScore > 60 ? 'high' : riskScore > 40 ? 'medium' : 'low', 
-              icon: AlertTriangle 
-            },
-            { 
-              label: 'Sharpe Ratio', 
-              value: sharpeRatio.toFixed(2), 
-              status: sharpeRatio > 1.5 ? 'low' : sharpeRatio > 0.8 ? 'medium' : 'high', 
-              icon: Activity 
-            },
-          ]);
-          setLoading(false);
-        } catch (fallbackError) {
-          console.error('Fallback risk calculation failed:', fallbackError);
-          setMetrics([]);
-          setLoading(false);
-        }
-      }
-    }
-  }, [address]);
+    const { weightedVolatility, sharpeRatio } = derived;
+    const { totalValue } = positionsData;
 
-  // Use custom polling hook - replaces 5 lines of useEffect logic
-  usePolling(fetchRiskMetrics, 30000);
+    // VaR 95% (rough estimate: 1.645 * volatility * portfolio value)
+    const varPercent = weightedVolatility * 1.645 * 100;
+
+    // Risk score (0-100, based on volatility and concentration)
+    const positions = positionsData.positions || [];
+    const concentration = totalValue > 0 
+      ? Math.max(...positions.map(p => parseFloat(p.balanceUSD || '0') / totalValue))
+      : 0;
+    const riskScore = Math.round((weightedVolatility * 50) + (concentration * 50));
+    const riskStatus: 'low' | 'medium' | 'high' = 
+      riskScore < 40 ? 'low' : riskScore < 70 ? 'medium' : 'high';
+
+    return [
+      { 
+        label: 'VaR (95%)', 
+        value: `${varPercent.toFixed(1)}%`,
+        status: varPercent > 15 ? 'high' : varPercent > 8 ? 'medium' : 'low',
+        icon: Shield 
+      },
+      { 
+        label: 'Volatility', 
+        value: `${(weightedVolatility * 100).toFixed(1)}%`,
+        status: weightedVolatility > 0.4 ? 'high' : weightedVolatility > 0.2 ? 'medium' : 'low',
+        icon: TrendingUp 
+      },
+      { 
+        label: 'Risk Score', 
+        value: `${riskScore}/100`,
+        status: riskStatus,
+        icon: AlertTriangle 
+      },
+      { 
+        label: 'Sharpe Ratio', 
+        value: sharpeRatio.toFixed(2),
+        status: sharpeRatio < 0.5 ? 'low' : sharpeRatio < 1.5 ? 'medium' : 'high',
+        icon: Activity 
+      },
+    ];
+  }, [address, positionsData, derived]);
 
   if (loading) {
     return (
@@ -196,13 +91,6 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: st
 
   return (
     <div className="px-4 sm:px-6 pb-4 sm:pb-6">
-      {aiPowered && (
-        <div className="flex items-center gap-2 mb-3 sm:mb-4">
-          <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#007AFF]" />
-          <span className="text-[10px] sm:text-[11px] font-medium text-[#007AFF]">AI Analysis</span>
-        </div>
-      )}
-      
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {metrics.map((metric, index) => {
           const Icon = metric.icon;
@@ -227,3 +115,5 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: st
     </div>
   );
 });
+
+RiskMetrics.displayName = 'RiskMetrics';

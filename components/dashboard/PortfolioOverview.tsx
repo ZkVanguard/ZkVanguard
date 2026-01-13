@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, RefreshCw, ChevronRight, TrendingUp, Shield } from 'lucide-react';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
-import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { usePositions } from '@/contexts/PositionsContext';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
 
 interface PortfolioData {
@@ -28,6 +28,9 @@ interface PortfolioOverviewProps {
 }
 
 export function PortfolioOverview({ address, onNavigateToPositions, onNavigateToHedges }: PortfolioOverviewProps) {
+  // Get positions data from context - no redundant fetching!
+  const { positionsData, derived, loading: positionsLoading } = usePositions();
+  
   // Get only portfolios owned by the connected wallet
   const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(address);
   const [loading, setLoading] = useState(true);
@@ -45,7 +48,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
 
   useEffect(() => {
     async function fetchAIAnalysis() {
-      if (!address) {
+      if (!address || !positionsData || !derived) {
         setLoading(false);
         return;
       }
@@ -61,40 +64,48 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
           ).length;
         }
         
-        // Always use RealMarketDataService for portfolio data (real prices)
-        const marketData = getMarketDataService();
-        const portfolioData = await marketData.getPortfolioData(address);
+        // Use data from context - already fetched!
+        const { totalValue, totalChange24h } = positionsData;
+        const { topAssets } = derived;
         
-        console.log('📊 [PortfolioOverview] Portfolio data:', portfolioData);
-        
-        // Calculate top assets with safety checks
-        const topAssets = portfolioData.tokens
-          .slice(0, 5)
-          .map(t => ({
-            symbol: t.symbol,
-            value: t.usdValue || 0,
-            percentage: portfolioData.totalValue > 0 
-              ? ((t.usdValue || 0) / portfolioData.totalValue) * 100 
-              : 0,
-          }))
-          .filter(asset => asset.value > 0); // Only show assets with value
+        console.log('📊 [PortfolioOverview] Using context data - totalValue:', totalValue);
         
         // Try AI service for health score and recommendations only
         try {
           const aiService = getCryptocomAIService();
           const analysis = await aiService.analyzePortfolio(address, { userPortfolioCount });
           setAiAnalysis(analysis);
+          
+          // Calculate health score based on real data if AI doesn't provide one
+          let healthScore = analysis.healthScore;
+          if (!healthScore && totalValue > 0) {
+            // Base score from diversification
+            healthScore = 70;
+            if (topAssets.length >= 5) healthScore += 15;
+            else if (topAssets.length >= 3) healthScore += 10;
+            else if (topAssets.length >= 2) healthScore += 5;
+            
+            // Adjust for concentration risk
+            if (topAssets[0] && topAssets[0].percentage < 40) healthScore += 10;
+            else if (topAssets[0] && topAssets[0].percentage < 60) healthScore += 5;
+            
+            // Adjust for hedges
+            if (activeHedgesCount > 0) healthScore += 5;
+          }
+          
           setData(prev => ({
             ...prev,
-            totalValue: portfolioData.totalValue, // Always use real market data
+            totalValue,
+            dailyChange: totalChange24h,
+            dailyChangePercent: totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0,
             positions: userPortfolioCount,
-            healthScore: analysis.healthScore || 85, // AI-generated or default
+            healthScore: healthScore || 0,
             topAssets,
             activeHedges: activeHedgesCount,
           }));
           setRecentHedgeCount(activeHedgesCount);
         } catch (aiError) {
-          console.warn('AI analysis failed, using real market data only:', aiError);
+          console.warn('AI analysis failed, using context data only:', aiError);
           
           // Calculate basic health score based on portfolio metrics
           let calculatedHealth = 80; // Base healthy score
@@ -111,17 +122,19 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
           
           setData(prev => ({
             ...prev,
-            totalValue: portfolioData.totalValue,
+            totalValue,
+            dailyChange: totalChange24h,
+            dailyChangePercent: totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0,
             positions: userPortfolioCount,
             activeHedges: activeHedgesCount,
-            healthScore: Math.min(calculatedHealth, 100), // Always show health score
+            healthScore: Math.min(calculatedHealth, 100),
             topAssets,
           }));
           setRecentHedgeCount(activeHedgesCount);
         }
       } catch (error) {
-        console.error('Portfolio data fetch failed completely:', error);
-        // Still show the UI with portfolio count even if market data fails
+        console.error('Portfolio data processing failed:', error);
+        // Still show the UI with portfolio count even if processing fails
         setData(prev => ({
           ...prev,
           totalValue: 0,
@@ -134,7 +147,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
       }
     }
 
-    setLoading(countLoading);
+    setLoading(countLoading || positionsLoading);
     
     // Always update positions from user's portfolio count
     setData(prev => ({
@@ -142,9 +155,11 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
       positions: userPortfolioCount,
     }));
     
-    // Only fetch additional data if address is available
-    if (address) {
+    // Only fetch additional data if address is available and positions loaded
+    if (address && !positionsLoading && positionsData) {
       fetchAIAnalysis();
+    } else if (!address || positionsLoading) {
+      setLoading(true);
     } else {
       setLoading(false);
     }
@@ -160,7 +175,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
     return () => {
       window.removeEventListener('hedgeAdded', handleHedgeUpdate);
     };
-  }, [userPortfolioCount, countLoading, address]);
+  }, [userPortfolioCount, countLoading, address, positionsData, derived, positionsLoading]);
 
   if (loading) {
     return (

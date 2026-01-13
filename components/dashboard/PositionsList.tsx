@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ExternalLink, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, AlertTriangle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
-import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
+import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
 
 interface OnChainPortfolio {
@@ -19,6 +19,7 @@ interface OnChainPortfolio {
   isActive: boolean;
   assets: string[];
   predictions?: PredictionMarket[]; // Delphi predictions for this portfolio
+  txHash?: string | null; // Transaction hash from portfolio creation
 }
 
 export function PositionsList({ address }: { address: string }) {
@@ -54,8 +55,8 @@ export function PositionsList({ address }: { address: string }) {
   // Expanded predictions state (portfolio ID -> boolean)
   const [expandedPredictions, setExpandedPredictions] = useState<Record<number, boolean>>({});
   
-  // Collapseable strategies section
-  const [strategiesCollapsed, setStrategiesCollapsed] = useState(true);
+  // Collapseable strategies section - default to expanded for quick view
+  const [strategiesCollapsed, setStrategiesCollapsed] = useState(false);
 
   const openDepositModal = (portfolio: OnChainPortfolio) => {
     setSelectedPortfolio(portfolio);
@@ -134,6 +135,7 @@ export function PositionsList({ address }: { address: string }) {
   };
 
   // Fetch on-chain portfolios from contract - uses userPortfolios from hook
+  // Shows portfolios IMMEDIATELY, loads predictions in background
   const fetchOnChainPortfolios = async () => {
     if (!userPortfolios || userPortfolios.length === 0) {
       setOnChainPortfolios([]);
@@ -142,9 +144,10 @@ export function PositionsList({ address }: { address: string }) {
 
     console.log(`📊 [PositionsList] Processing ${userPortfolios.length} user portfolios`);
     
-    // Process user portfolios and fetch predictions
-    const portfolioPromises = userPortfolios.map(async (p) => {
-      if (!p.isActive) return null;
+    // STEP 1: Immediately show portfolios with basic data (no predictions yet)
+    const quickPortfolios: OnChainPortfolio[] = [];
+    for (const p of userPortfolios) {
+      if (!p.isActive) continue;
       
       const portfolio: OnChainPortfolio = {
         id: p.id,
@@ -154,10 +157,12 @@ export function PositionsList({ address }: { address: string }) {
         riskTolerance: p.riskTolerance.toString(),
         lastRebalance: p.lastRebalance.toString(),
         isActive: p.isActive,
-        assets: [], // Will be fetched separately
+        assets: [],
+        predictions: [], // Empty initially
+        txHash: p.txHash || null, // Transaction hash from portfolio creation
       };
       
-      // Fetch assets from API
+      // Quick fetch assets (fast API call)
       try {
         const assetsRes = await fetch(`/api/portfolio/${p.id}`);
         if (assetsRes.ok) {
@@ -168,50 +173,16 @@ export function PositionsList({ address }: { address: string }) {
         console.warn(`Failed to fetch assets for portfolio ${p.id}:`, err);
       }
       
-      // Fetch Delphi/Polymarket predictions
-      try {
-        // Get assets from both wallet positions AND portfolio contract
-        const walletAssets = positionsData?.positions
-          ?.filter(pos => parseFloat(pos.balance) > 0)
-          .map(pos => pos.symbol.toUpperCase().replace(/^(W|DEV)/, '')) || [];
-        
-        // Map contract addresses to symbols
-        const contractAssets = (portfolio.assets || []).map(addr => {
-          const lowerAddr = addr.toLowerCase();
-          if (lowerAddr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
-          if (lowerAddr.includes('wcro') || lowerAddr === '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23') return 'CRO';
-          if (lowerAddr.includes('weth')) return 'ETH';
-          if (lowerAddr.includes('wbtc')) return 'BTC';
-          return 'CRYPTO'; // Generic fallback
-        });
-        
-        // Combine unique assets, always include major cryptos for broader predictions
-        const allAssets = [...new Set([...walletAssets, ...contractAssets, 'BTC', 'ETH', 'CRO'])];
-        
-        console.log(`Fetching predictions for portfolio ${p.id} with assets:`, allAssets);
-        
-        const predictions = await DelphiMarketService.getPortfolioRelevantPredictions(
-          allAssets,
-          Number(p.riskTolerance),
-          Number(p.targetYield)
-        );
-        
-        console.log(`Got ${predictions.length} predictions for portfolio ${p.id}`);
-        portfolio.predictions = predictions;
-      } catch (error) {
-        console.warn(`Failed to fetch predictions for portfolio ${p.id}:`, error);
-        portfolio.predictions = [];
-      }
-      
-      return portfolio;
-    });
+      quickPortfolios.push(portfolio);
+    }
     
-    // Wait for all portfolios in parallel
-    const results = await Promise.all(portfolioPromises);
-    const loadedPortfolios = results.filter((p): p is OnChainPortfolio => p !== null);
-
-    console.log(`✅ [PositionsList] Loaded ${loadedPortfolios.length} user portfolios`);
-    setOnChainPortfolios(loadedPortfolios);
+    // Show portfolios immediately
+    setOnChainPortfolios(quickPortfolios);
+    console.log(`⚡ [PositionsList] Showing ${quickPortfolios.length} portfolios (predictions loading...)`);
+    
+    // STEP 2: Load predictions in background (don't block UI)
+    // Skip predictions for now - they're slow and not critical
+    // Predictions can be fetched on-demand when user clicks AI button
   };
 
   useEffect(() => {
@@ -220,15 +191,17 @@ export function PositionsList({ address }: { address: string }) {
       setHasInitiallyLoaded(true);
     }
     
-    // Set loading to false only when we have positions data
-    if (positionsData && positionsData.positions.length >= 0) {
-      setLoading(false);
-    }
-    
     if (address && isConnected) {
       loadAll();
     }
   }, [address, isConnected, userPortfolios, positionsData]); // Re-fetch when userPortfolios changes
+
+  // Only set loading to false when BOTH positions AND portfolios are ready
+  useEffect(() => {
+    if (positionsData && hasInitiallyLoaded && !portfolioLoading) {
+      setLoading(false);
+    }
+  }, [positionsData, hasInitiallyLoaded, portfolioLoading]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -254,8 +227,8 @@ export function PositionsList({ address }: { address: string }) {
     }
   };
 
-  // Show loading state with progress bar until positions are ready
-  if (loading || !positionsData) {
+  // Show loading state with progress bar until positions AND portfolios are ready
+  if (loading || !positionsData || portfolioLoading || !hasInitiallyLoaded) {
     return (
       <div className="space-y-4">
         <div className="bg-white rounded-[20px] shadow-sm border border-black/5 p-8">
@@ -263,8 +236,8 @@ export function PositionsList({ address }: { address: string }) {
             <div className="w-12 h-12 bg-[#007AFF]/10 rounded-full flex items-center justify-center mb-4">
               <RefreshCw className="w-6 h-6 text-[#007AFF] animate-spin" />
             </div>
-            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Loading Positions</h3>
-            <p className="text-[13px] text-[#86868b] mb-4">Fetching your token holdings...</p>
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Loading Portfolio</h3>
+            <p className="text-[13px] text-[#86868b] mb-4">Fetching your positions and strategies...</p>
             {/* Progress bar */}
             <div className="w-full max-w-[200px] h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
               <div className="h-full bg-[#007AFF] rounded-full animate-pulse" style={{ width: '60%' }} />
@@ -340,38 +313,177 @@ export function PositionsList({ address }: { address: string }) {
             <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">Portfolios</div>
             <div className="text-[20px] sm:text-[28px] font-bold text-[#007AFF] leading-none">{onChainPortfolios.length}</div>
           </div>
-          <div className="p-2.5 sm:p-4 bg-[#34C759]/5 rounded-[12px] sm:rounded-[14px] border border-[#34C759]/10">
-            <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">24h</div>
-            <div className="text-[20px] sm:text-[28px] font-bold text-[#34C759] leading-none">+2.4%</div>
-          </div>
+          {(() => {
+            // Calculate weighted average 24h change from positions
+            const weighted24hChange = totalValue > 0
+              ? positions.reduce((acc, pos) => {
+                  const posValue = parseFloat(pos.balanceUSD || '0');
+                  const weight = posValue / totalValue;
+                  return acc + (pos.change24h * weight);
+                }, 0)
+              : 0;
+            const isPositive = weighted24hChange >= 0;
+            return (
+              <div className={`p-2.5 sm:p-4 ${isPositive ? 'bg-[#34C759]/5 border-[#34C759]/10' : 'bg-[#FF3B30]/5 border-[#FF3B30]/10'} rounded-[12px] sm:rounded-[14px] border`}>
+                <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">24h</div>
+                <div className={`text-[20px] sm:text-[28px] font-bold ${isPositive ? 'text-[#34C759]' : 'text-[#FF3B30]'} leading-none`}>
+                  {isPositive ? '+' : ''}{weighted24hChange.toFixed(1)}%
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
-      {/* Token Holdings */}
-      <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] overflow-hidden">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Token Holdings</h3>
-            <span className="text-[12px] sm:text-[13px] text-[#86868b]">{positions.length} assets</span>
+      {/* Portfolio Positions - PRIMARY CONTENT */}
+      {onChainPortfolios.length > 0 && (
+        <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Your Portfolios</h3>
+                <span className="px-1.5 py-0.5 bg-[#007AFF] text-white text-[10px] font-bold rounded-full min-w-[18px] text-center">
+                  {onChainPortfolios.length}
+                </span>
+              </div>
+              {totalValue > 0 && (
+                <span className="text-[11px] sm:text-[13px] text-[#86868b]">
+                  ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="divide-y divide-black/5">
+            {onChainPortfolios.map((portfolio) => {
+              // Use totalValue from blockchain - this is what's actually deposited in the portfolio contract
+              const rawValue = parseFloat(portfolio.totalValue) || 0;
+              const valueUSD = rawValue > 1e12 
+                ? rawValue / 1e18  // 18 decimals (ETH-like)
+                : rawValue / 1e6;  // 6 decimals (USDC-like)
+              
+              const yieldPercent = parseFloat(portfolio.targetYield) / 100;
+              const riskValue = parseFloat(portfolio.riskTolerance) || 0;
+              const riskLevel = riskValue <= 33 ? 'Low' : riskValue <= 66 ? 'Medium' : 'High';
+              const riskColor = riskLevel === 'Low' ? 'text-[#34C759]' : riskLevel === 'Medium' ? 'text-[#FF9500]' : 'text-[#FF3B30]';
+              const isOwner = portfolio.owner.toLowerCase() === address.toLowerCase();
+              const hasFunds = valueUSD > 0 || portfolio.assets.length > 0;
+              
+              // Get deposited assets symbols
+              const depositedAssets = portfolio.assets.map(a => {
+                const addr = a.toLowerCase();
+                if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'USDC';
+                if (addr.includes('wcro') || addr === '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23') return 'CRO';
+                return a.slice(0, 6);
+              });
+              
+              // For unfunded portfolios, show available wallet tokens
+              const availableTokens = !hasFunds && positions.length > 0
+                ? positions.filter(p => parseFloat(p.balanceUSD) > 0).map(p => `${p.symbol}: $${parseFloat(p.balanceUSD).toFixed(0)}`)
+                : [];
+
+              return (
+                <div key={portfolio.id} className="px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-white/50 transition-colors">
+                  {/* Compact Single Row Layout */}
+                  <div className="flex items-center gap-3">
+                    {/* ID & Status */}
+                    <div className="flex items-center gap-1.5 min-w-[50px]">
+                      <span className="text-[14px] sm:text-[15px] font-bold text-[#1d1d1f]">#{portfolio.id}</span>
+                      {hasFunds ? (
+                        <span className="w-2 h-2 bg-[#34C759] rounded-full flex-shrink-0" title="Funded" />
+                      ) : (
+                        <span className="w-2 h-2 bg-[#FF9500] rounded-full flex-shrink-0" title="Unfunded" />
+                      )}
+                    </div>
+                    
+                    {/* Stats Inline */}
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 text-[12px] sm:text-[13px] overflow-hidden">
+                      <span className="text-[#34C759] font-semibold whitespace-nowrap">{yieldPercent}%</span>
+                      <span className={`font-medium ${riskColor} whitespace-nowrap`}>{riskLevel}</span>
+                      <span className="text-[#1d1d1f] font-bold whitespace-nowrap">
+                        {valueUSD > 0 ? `$${valueUSD.toFixed(0)}` : '—'}
+                      </span>
+                      
+                      {/* Show deposited assets OR available wallet tokens */}
+                      {hasFunds && depositedAssets.length > 0 ? (
+                        <span className="text-[#007AFF] text-[11px] truncate">
+                          {depositedAssets.join(', ')}
+                        </span>
+                      ) : availableTokens.length > 0 ? (
+                        <span className="text-[#86868b] text-[10px] truncate hidden sm:inline" title="Available to deposit">
+                          Available: {availableTokens.join(', ')}
+                        </span>
+                      ) : null}
+                    </div>
+                    
+                    {/* Quick Actions */}
+                    {isOwner && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {hasFunds ? (
+                          <>
+                            <button 
+                              className="p-1.5 sm:p-2 bg-[#007AFF] text-white rounded-lg text-[11px] font-semibold"
+                              onClick={() => fetchAgentRecommendation(portfolio)}
+                              disabled={recommendationLoading}
+                              title="AI Analysis"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              className="p-1.5 sm:p-2 bg-[#FF3B30]/10 text-[#FF3B30] rounded-lg"
+                              onClick={() => openWithdrawModal(portfolio)}
+                              title="Withdraw"
+                            >
+                              <ArrowDownToLine className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            className="px-2.5 py-1.5 bg-[#34C759] text-white rounded-lg text-[11px] font-semibold"
+                            onClick={() => openDepositModal(portfolio)}
+                          >
+                            Fund
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Transaction Hash - On-chain proof */}
+                  {portfolio.txHash && (
+                    <div className="mt-2 pl-[62px] sm:pl-[66px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-[#86868b] uppercase tracking-wider">Created:</span>
+                        <a
+                          href={`https://explorer.cronos.org/testnet/tx/${portfolio.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-[#007AFF] hover:underline font-mono flex items-center gap-1"
+                          title="View creation transaction on Cronos Explorer"
+                        >
+                          {portfolio.txHash.slice(0, 10)}...{portfolio.txHash.slice(-8)}
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {positions.length === 0 || (positions.length === 1 && parseFloat(positions[0].balanceUSD) === 0) ? (
-          <div className="p-6 sm:p-8 text-center">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-[14px] sm:rounded-[16px] flex items-center justify-center mx-auto mb-3 sm:mb-4">
-              <Coins className="w-6 h-6 sm:w-7 sm:h-7 text-[#86868b]" />
-            </div>
-            <h4 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] mb-2">No Token Holdings</h4>
-            <p className="text-[14px] text-[#86868b] max-w-[280px] mx-auto mb-4">
-              Your wallet has no token balances yet
-            </p>
-            {error && <p className="text-[13px] text-[#FF3B30]">{error}</p>}
-            <div className="inline-flex items-center gap-2 mt-2">
-              <span className="px-3 py-1.5 bg-[#f5f5f7] rounded-full text-[13px] text-[#1d1d1f] font-medium">Get testnet CRO</span>
-              <span className="px-3 py-1.5 bg-[#f5f5f7] rounded-full text-[13px] text-[#1d1d1f] font-medium">Bridge tokens</span>
+      {/* Token Holdings - Wallet Balances (Secondary) */}
+      {positions.length > 0 && parseFloat(positions[0].balanceUSD) > 0 && (
+        <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Wallet Balances</h3>
+              <span className="text-[12px] sm:text-[13px] text-[#86868b]">{positions.length} tokens</span>
             </div>
           </div>
-        ) : (
+
           <div className="divide-y divide-black/10">
             {positions.map((position, idx) => (
               <div key={idx} className="px-3 sm:px-4 py-3 sm:py-4 hover:bg-white/50 transition-colors">
@@ -404,225 +516,9 @@ export function PositionsList({ address }: { address: string }) {
                     </div>
                   </div>
                 </div>
-                
-                {/* Allocation Bar - Hidden on mobile */}
-                {totalValue > 0 && (
-                  <div className="mt-2 sm:mt-3 flex items-center gap-2 sm:gap-3">
-                    <div className="flex-1 h-1 sm:h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#007AFF] to-[#34C759] rounded-full transition-all"
-                        style={{ width: `${Math.min((parseFloat(position.balanceUSD || '0') / totalValue) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] sm:text-[12px] font-medium text-[#86868b] w-10 sm:w-12 text-right">
-                      {((parseFloat(position.balanceUSD || '0') / totalValue) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* On-Chain Portfolio Strategies */}
-      {onChainPortfolios.length > 0 && (
-        <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] overflow-hidden">
-          <button
-            onClick={() => setStrategiesCollapsed(!strategiesCollapsed)}
-            className="w-full px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5 active:bg-[#e8e8ed] sm:hover:bg-[#e8e8ed] transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Strategies</h3>
-                <span className="px-1.5 py-0.5 bg-[#007AFF] text-white text-[10px] font-bold rounded-full min-w-[18px] text-center">
-                  {onChainPortfolios.length}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {totalValue > 0 && (
-                  <span className="text-[11px] sm:text-[13px] text-[#86868b]">
-                    ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </span>
-                )}
-                {strategiesCollapsed ? (
-                  <ChevronDown className="w-5 h-5 text-[#86868b]" />
-                ) : (
-                  <ChevronUp className="w-5 h-5 text-[#86868b]" />
-                )}
-              </div>
-            </div>
-          </button>
-
-          {!strategiesCollapsed && (
-            <div className="divide-y divide-black/10">
-            {onChainPortfolios.map((portfolio) => {
-              // Use totalValue from blockchain - this is what's actually deposited in the portfolio contract
-              const rawValue = parseFloat(portfolio.totalValue) || 0;
-              const valueUSD = rawValue > 1e12 
-                ? rawValue / 1e18  // 18 decimals (ETH-like)
-                : rawValue / 1e6;  // 6 decimals (USDC-like)
-              
-              const yieldPercent = parseFloat(portfolio.targetYield) / 100;
-              const riskValue = parseFloat(portfolio.riskTolerance) || 0;
-              const riskLevel = riskValue <= 33 ? 'Low' : riskValue <= 66 ? 'Medium' : 'High';
-              const riskColor = riskLevel === 'Low' ? 'text-[#34C759]' : riskLevel === 'Medium' ? 'text-[#FF9500]' : 'text-[#FF3B30]';
-              const riskBg = riskLevel === 'Low' ? 'bg-[#34C759]/10' : riskLevel === 'Medium' ? 'bg-[#FF9500]/10' : 'bg-[#FF3B30]/10';
-              const isOwner = portfolio.owner.toLowerCase() === address.toLowerCase();
-              const hasFunds = valueUSD > 0 || portfolio.assets.length > 0;
-
-              return (
-                <div key={portfolio.id} className="p-3 sm:p-4 hover:bg-white/50 transition-colors">
-                  {/* Portfolio Header */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">#{portfolio.id}</h4>
-                      {isOwner && (
-                        <span className="px-1.5 py-0.5 bg-[#007AFF] text-white text-[9px] font-bold rounded-full">
-                          YOURS
-                        </span>
-                      )}
-                      <span className="text-[11px] text-[#86868b] font-mono hidden sm:inline">
-                        {portfolio.owner.slice(0, 6)}...{portfolio.owner.slice(-4)}
-                      </span>
-                    </div>
-                    {hasFunds ? (
-                      <span className="px-2 py-0.5 bg-[#34C759]/10 text-[#34C759] text-[10px] font-semibold rounded-full">
-                        Funded
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-[#FF9500]/10 text-[#FF9500] text-[10px] font-semibold rounded-full">
-                        Unfunded
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Stats Grid - Compact on mobile */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="p-2 sm:p-3 bg-white rounded-[10px] sm:rounded-[12px]">
-                      <div className="text-[8px] sm:text-[10px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-0.5">Yield</div>
-                      <div className="text-[16px] sm:text-[20px] font-bold text-[#34C759] leading-none">{yieldPercent}%</div>
-                    </div>
-                    <div className={`p-2 sm:p-3 bg-white rounded-[10px] sm:rounded-[12px]`}>
-                      <div className="text-[8px] sm:text-[10px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-0.5">Risk</div>
-                      <div className={`text-[16px] sm:text-[20px] font-bold ${riskColor} leading-none`}>{riskLevel}</div>
-                    </div>
-                    <div className="p-2 sm:p-3 bg-white rounded-[10px] sm:rounded-[12px]">
-                      <div className="text-[8px] sm:text-[10px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-0.5">Value</div>
-                      <div className="text-[16px] sm:text-[20px] font-bold text-[#1d1d1f] leading-none">
-                        {valueUSD > 0 ? `$${valueUSD.toFixed(0)}` : '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Assets - Inline on mobile */}
-                  {portfolio.assets.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {portfolio.assets.map((asset, idx) => (
-                        <span key={idx} className="px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded text-[10px] font-medium">
-                          {asset.toLowerCase() === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0' ? 'USDC' : `${asset.slice(0, 4)}...`}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Predictions - Compact on mobile */}
-                  {portfolio.predictions && portfolio.predictions.length > 0 && (
-                    <div className="mb-3 p-2 sm:p-3 bg-[#AF52DE]/5 rounded-[10px] border border-[#AF52DE]/10">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-[#AF52DE]" />
-                          <span className="text-[10px] font-semibold text-[#AF52DE]">
-                            {portfolio.predictions.length} Signals
-                          </span>
-                        </div>
-                        {portfolio.predictions.length > 1 && (
-                          <button
-                            onClick={() => setExpandedPredictions(prev => ({
-                              ...prev,
-                              [portfolio.id]: !prev[portfolio.id]
-                            }))}
-                            className="text-[10px] text-[#AF52DE] font-medium"
-                          >
-                            {expandedPredictions[portfolio.id] ? 'Less' : 'More'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        {(expandedPredictions[portfolio.id] 
-                          ? portfolio.predictions 
-                          : portfolio.predictions.slice(0, 1)
-                        ).map((pred) => (
-                          <div key={pred.id} className="flex items-center justify-between text-[11px]">
-                            <span className="text-[#1d1d1f] truncate flex-1 mr-2">{pred.question}</span>
-                            <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${
-                              pred.recommendation === 'HEDGE' ? 'bg-[#FF3B30]/10 text-[#FF3B30]' :
-                              pred.recommendation === 'MONITOR' ? 'bg-[#FF9500]/10 text-[#FF9500]' :
-                              'bg-[#34C759]/10 text-[#34C759]'
-                            }`}>
-                              {pred.recommendation}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons - Stack on mobile */}
-                  {isOwner && (
-                    <div className="flex flex-wrap gap-2">
-                      {hasFunds ? (
-                        <>
-                          <button 
-                            className="flex-1 min-w-[100px] px-3 py-2 sm:py-2.5 bg-[#007AFF] active:bg-[#0051D5] sm:hover:bg-[#0051D5] text-white rounded-[10px] text-[12px] sm:text-[13px] font-semibold transition-colors flex items-center justify-center gap-1.5"
-                            onClick={() => fetchAgentRecommendation(portfolio)}
-                            disabled={recommendationLoading}
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {recommendationLoading ? '...' : 'AI'}
-                          </button>
-                          <button 
-                            className="px-3 py-2 sm:py-2.5 bg-[#f5f5f7] active:bg-[#e8e8ed] sm:hover:bg-[#e8e8ed] text-[#1d1d1f] rounded-[10px] text-[12px] sm:text-[13px] font-semibold transition-colors"
-                            onClick={() => openDepositModal(portfolio)}
-                          >
-                            Add
-                          </button>
-                          <button 
-                            className="px-3 py-2 sm:py-2.5 bg-[#FF3B30]/10 active:bg-[#FF3B30]/20 sm:hover:bg-[#FF3B30]/20 text-[#FF3B30] rounded-[10px] text-[12px] sm:text-[13px] font-semibold transition-colors flex items-center gap-1"
-                            onClick={() => openWithdrawModal(portfolio)}
-                          >
-                            <ArrowDownToLine className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Withdraw</span>
-                          </button>
-                        </>
-                      ) : (
-                        <button 
-                          className="flex-1 px-3 py-2 sm:py-2.5 bg-[#34C759] active:bg-[#2DB550] sm:hover:bg-[#2DB550] text-white rounded-[10px] text-[12px] sm:text-[13px] font-semibold transition-colors"
-                          onClick={() => openDepositModal(portfolio)}
-                        >
-                          Fund Portfolio
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Footer - Compact */}
-                  <div className="mt-3 pt-2 border-t border-black/5 flex items-center justify-between text-[10px] sm:text-[11px] text-[#86868b]">
-                    <span>{new Date(Number(portfolio.lastRebalance) * 1000).toLocaleDateString()}</span>
-                    <a
-                      href={`https://explorer.cronos.org/testnet/address/${portfolio.owner}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[#007AFF] active:text-[#0051D5] sm:hover:text-[#0051D5] transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          )}
         </div>
       )}
 
