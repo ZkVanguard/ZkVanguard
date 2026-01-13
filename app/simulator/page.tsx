@@ -730,43 +730,63 @@ export default function SimulatorPage() {
   const pnlValue = portfolio.totalValue - initialPortfolio.totalValue;
 
   return (
-    <div className="min-h-screen" style={{ background: '#0f0f1a' }}>
-      <div className="container mx-auto px-6 py-12">
+    <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              Portfolio Stress Simulator
-            </span>
-          </h1>
-          <p className="text-gray-400">
-            Virtualize market scenarios and watch AI agents respond in real-time with ZK-verified decisions
-          </p>
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-[#AF52DE] to-[#5856D6] rounded-[16px] flex items-center justify-center shadow-lg">
+              <Activity className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-[28px] sm:text-[34px] lg:text-[40px] font-bold text-[#1d1d1f] tracking-[-0.02em]">
+                Portfolio Stress Simulator
+              </h1>
+              <p className="text-[14px] sm:text-[15px] text-[#86868b]">
+                Virtualize market scenarios and watch AI agents respond in real-time
+              </p>
+            </div>
+          </div>
         </div>
+        
         {/* Risk Policy Panel */}
-        <div className="glass rounded-xl p-4 mb-6 border border-purple-500/30 bg-purple-900/10">
-          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-purple-400" />
+        <div className="bg-white rounded-[16px] sm:rounded-[20px] border border-black/5 p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm">
+          <h2 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#AF52DE]/10 rounded-[8px] flex items-center justify-center">
+              <Shield className="w-4 h-4 text-[#AF52DE]" />
+            </div>
             Risk Policy (Institutional)
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-gray-400">Max Drawdown:</span> <span className="font-bold">{(RISK_POLICY.maxDrawdown*100).toFixed(1)}%</span></div>
-            <div><span className="text-gray-400">Hedge Ratio:</span> <span className="font-bold">{(RISK_POLICY.hedgeRatio*100).toFixed(0)}%</span></div>
-            <div><span className="text-gray-400">VaR Threshold:</span> <span className="font-bold">{(RISK_POLICY.varThreshold*100).toFixed(1)}%</span></div>
-            <div><span className="text-gray-400">Allowed Instruments:</span> <span className="font-bold">{RISK_POLICY.allowedInstruments.join(', ')}</span></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-[#f5f5f7] rounded-[10px] p-3">
+              <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-0.5">Max Drawdown</div>
+              <div className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">{(RISK_POLICY.maxDrawdown*100).toFixed(1)}%</div>
+            </div>
+            <div className="bg-[#f5f5f7] rounded-[10px] p-3">
+              <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-0.5">Hedge Ratio</div>
+              <div className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">{(RISK_POLICY.hedgeRatio*100).toFixed(0)}%</div>
+            </div>
+            <div className="bg-[#f5f5f7] rounded-[10px] p-3">
+              <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-0.5">VaR Threshold</div>
+              <div className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f]">{(RISK_POLICY.varThreshold*100).toFixed(1)}%</div>
+            </div>
+            <div className="bg-[#f5f5f7] rounded-[10px] p-3 col-span-2 sm:col-span-1">
+              <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-0.5">Allowed Instruments</div>
+              <div className="text-[13px] sm:text-[14px] font-semibold text-[#1d1d1f]">{RISK_POLICY.allowedInstruments.join(', ')}</div>
+            </div>
           </div>
         </div>
 
         {/* Scenario Selector */}
-        <div className="glass rounded-xl p-4 sm:p-6 mb-6 border border-white/10">
+        <div className="bg-white rounded-[16px] sm:rounded-[20px] border border-black/5 p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm">
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch gap-4">
             <div className="flex-1 min-w-[150px]">
-              <label className="text-sm text-gray-400 mb-2 block">Select Scenario</label>
+              <label className="text-[12px] sm:text-[13px] font-medium text-[#86868b] mb-2 block">Select Scenario</label>
               <select
                 value={selectedScenario.id}
                 onChange={(e) => setSelectedScenario(scenarios.find(s => s.id === e.target.value)!)}
                 disabled={isRunning}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-purple-500 focus:outline-none text-sm"
+                className="w-full bg-[#f5f5f7] border border-black/5 rounded-[10px] px-3 py-2.5 text-[#1d1d1f] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none text-[14px] sm:text-[15px] transition-all"
               >
                 {scenarios.map((scenario) => (
                   <option key={scenario.id} value={scenario.id}>
@@ -774,14 +794,14 @@ export default function SimulatorPage() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">{selectedScenario.description}</p>
+              <p className="text-[11px] sm:text-[12px] text-[#86868b] mt-1.5">{selectedScenario.description}</p>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 w-full sm:w-auto">
               {!isRunning ? (
                 <button
                   onClick={runSimulation}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-lg font-semibold hover:opacity-90 transition-opacity w-full sm:w-auto"
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-[#34C759] text-white rounded-[12px] font-semibold text-[15px] hover:bg-[#2DB84D] active:scale-[0.98] transition-all shadow-sm w-full sm:w-auto"
                 >
                   <Play className="w-5 h-5" />
                   Execute Strategy
@@ -791,7 +811,7 @@ export default function SimulatorPage() {
                   {isPaused ? (
                     <button
                       onClick={resumeSimulation}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-500 rounded-lg font-semibold hover:bg-emerald-600 w-full sm:w-auto"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#34C759] text-white rounded-[10px] font-semibold text-[14px] hover:bg-[#2DB84D] active:scale-[0.98] transition-all w-full sm:w-auto"
                     >
                       <Play className="w-4 h-4" />
                       Resume
@@ -799,7 +819,7 @@ export default function SimulatorPage() {
                   ) : (
                     <button
                       onClick={pauseSimulation}
-                      className="flex items-center gap-2 px-4 py-2 bg-yellow-500 rounded-lg font-semibold hover:bg-yellow-600 text-black w-full sm:w-auto"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FF9500] text-white rounded-[10px] font-semibold text-[14px] hover:bg-[#E68A00] active:scale-[0.98] transition-all w-full sm:w-auto"
                     >
                       <Pause className="w-4 h-4" />
                       Pause
@@ -809,7 +829,7 @@ export default function SimulatorPage() {
               )}
               <button
                 onClick={resetSimulation}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors w-full sm:w-auto"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#f5f5f7] text-[#1d1d1f] rounded-[10px] font-medium text-[14px] hover:bg-[#e8e8ed] active:scale-[0.98] transition-all w-full sm:w-auto"
               >
                 <RotateCcw className="w-4 h-4" />
                 Reset
@@ -820,13 +840,13 @@ export default function SimulatorPage() {
           {/* Progress Bar */}
           {isRunning && (
             <div className="mt-4">
-              <div className="flex justify-between text-sm text-gray-400 mb-1">
+              <div className="flex justify-between text-[12px] sm:text-[13px] text-[#86868b] mb-1.5">
                 <span>Progress: {progress.toFixed(0)}%</span>
                 <span>Elapsed: {elapsedTime}s / {selectedScenario.duration}s</span>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-2 bg-[#e8e8ed] rounded-full overflow-hidden">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-purple-500 to-cyan-500"
+                  className="h-full bg-gradient-to-r from-[#007AFF] to-[#5856D6]"
                   initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.3 }}
@@ -838,77 +858,77 @@ export default function SimulatorPage() {
 
         {/* Real Event Data Card - shown for tariff scenario */}
         {selectedScenario.type === 'tariff' && selectedScenario.eventData && (
-          <div className="glass rounded-xl p-6 mb-6 border border-red-500/30 bg-red-900/10">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-red-500/20 rounded-lg">
-                <AlertTriangle className="w-8 h-8 text-red-400" />
+          <div className="bg-white rounded-[16px] sm:rounded-[20px] border-2 border-[#FF3B30]/30 p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#FF3B30]/10 rounded-[14px] flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-[#FF3B30]" />
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs px-2 py-1 bg-red-500/20 text-red-400 rounded-full font-semibold border border-red-500/30">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-[11px] sm:text-[12px] px-2.5 py-1 bg-[#FF3B30]/10 text-[#FF3B30] rounded-full font-semibold border border-[#FF3B30]/30">
                     REAL EVENT REPLAY
                   </span>
-                  <span className="text-xs text-gray-400">{selectedScenario.eventData.date}</span>
+                  <span className="text-[11px] sm:text-[12px] text-[#86868b]">{selectedScenario.eventData.date}</span>
                 </div>
-                <h3 className="text-xl font-bold text-red-400 mb-2">
+                <h3 className="text-[17px] sm:text-[20px] font-bold text-[#FF3B30] mb-2">
                   {selectedScenario.eventData.headline}
                 </h3>
-                <p className="text-gray-300 text-sm mb-3">
+                <p className="text-[13px] sm:text-[14px] text-[#86868b] mb-4 leading-relaxed">
                   {selectedScenario.eventData.marketContext}
                 </p>
                 
                 {/* Prediction Market Signals */}
                 {selectedScenario.eventData.predictionData && (
-                  <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 mb-3">
-                    <div className="text-purple-400 font-semibold text-sm mb-2 flex items-center gap-2">
+                  <div className="bg-[#AF52DE]/5 border border-[#AF52DE]/20 rounded-[12px] p-3 sm:p-4 mb-4">
+                    <div className="text-[#AF52DE] font-semibold text-[13px] sm:text-[14px] mb-3 flex items-center gap-2">
                       <span>🔮</span> Prediction Market Signals (Delphi Aggregated)
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="bg-gray-800/50 rounded p-2">
-                        <div className="text-gray-400">Polymarket</div>
-                        <div className="text-white font-mono">
-                          {selectedScenario.eventData.predictionData.polymarket.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.polymarket.after}%</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                      <div className="bg-white rounded-[10px] p-2.5 sm:p-3 border border-black/5">
+                        <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Polymarket</div>
+                        <div className="text-[13px] sm:text-[14px] text-[#1d1d1f] font-mono font-medium">
+                          {selectedScenario.eventData.predictionData.polymarket.before}% → <span className="text-[#FF3B30]">{selectedScenario.eventData.predictionData.polymarket.after}%</span>
                         </div>
-                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.polymarket.volume/1000000).toFixed(1)}M vol</div>
+                        <div className="text-[10px] sm:text-[11px] text-[#86868b]">${(selectedScenario.eventData.predictionData.polymarket.volume/1000000).toFixed(1)}M vol</div>
                       </div>
-                      <div className="bg-gray-800/50 rounded p-2">
-                        <div className="text-gray-400">Kalshi</div>
-                        <div className="text-white font-mono">
-                          {selectedScenario.eventData.predictionData.kalshi.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.kalshi.after}%</span>
+                      <div className="bg-white rounded-[10px] p-2.5 sm:p-3 border border-black/5">
+                        <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Kalshi</div>
+                        <div className="text-[13px] sm:text-[14px] text-[#1d1d1f] font-mono font-medium">
+                          {selectedScenario.eventData.predictionData.kalshi.before}% → <span className="text-[#FF3B30]">{selectedScenario.eventData.predictionData.kalshi.after}%</span>
                         </div>
-                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.kalshi.volume/1000000).toFixed(1)}M vol</div>
+                        <div className="text-[10px] sm:text-[11px] text-[#86868b]">${(selectedScenario.eventData.predictionData.kalshi.volume/1000000).toFixed(1)}M vol</div>
                       </div>
-                      <div className="bg-gray-800/50 rounded p-2">
-                        <div className="text-gray-400">PredictIt</div>
-                        <div className="text-white font-mono">
-                          {selectedScenario.eventData.predictionData.predictit.before}% → <span className="text-red-400">{selectedScenario.eventData.predictionData.predictit.after}%</span>
+                      <div className="bg-white rounded-[10px] p-2.5 sm:p-3 border border-black/5">
+                        <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">PredictIt</div>
+                        <div className="text-[13px] sm:text-[14px] text-[#1d1d1f] font-mono font-medium">
+                          {selectedScenario.eventData.predictionData.predictit.before}% → <span className="text-[#FF3B30]">{selectedScenario.eventData.predictionData.predictit.after}%</span>
                         </div>
-                        <div className="text-gray-500">${(selectedScenario.eventData.predictionData.predictit.volume/1000000).toFixed(1)}M vol</div>
+                        <div className="text-[10px] sm:text-[11px] text-[#86868b]">${(selectedScenario.eventData.predictionData.predictit.volume/1000000).toFixed(1)}M vol</div>
                       </div>
                     </div>
-                    <div className="mt-2 text-center text-emerald-400 font-semibold">
+                    <div className="mt-3 text-center text-[#34C759] font-semibold text-[13px] sm:text-[14px]">
                       Consensus: {(selectedScenario.eventData.predictionData.consensus * 100).toFixed(0)}% confidence
                     </div>
                   </div>
                 )}
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <div className="text-gray-400 mb-1">Market Impact</div>
-                    <div className="text-red-400 font-semibold">{selectedScenario.eventData.liquidations}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="bg-[#f5f5f7] rounded-[10px] p-3">
+                    <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Market Impact</div>
+                    <div className="text-[13px] sm:text-[14px] text-[#FF3B30] font-semibold">{selectedScenario.eventData.liquidations}</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <div className="text-gray-400 mb-1">Pre-Crash Prices</div>
-                    <div className="flex gap-4">
+                  <div className="bg-[#f5f5f7] rounded-[10px] p-3">
+                    <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Pre-Crash Prices</div>
+                    <div className="flex flex-wrap gap-3">
                       {selectedScenario.eventData.priceAtEvent.map(p => (
-                        <span key={p.symbol} className="text-white font-mono">
+                        <span key={p.symbol} className="text-[13px] sm:text-[14px] text-[#1d1d1f] font-mono">
                           {p.symbol}: ${p.price.toLocaleString()}
                         </span>
                       ))}
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-gray-500">
+                <div className="mt-3 text-[10px] sm:text-[11px] text-[#86868b]">
                   Data Sources: {selectedScenario.eventData.source}
                 </div>
               </div>
@@ -917,49 +937,51 @@ export default function SimulatorPage() {
         )}
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Portfolio State */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* Portfolio Overview */}
-            <div className="glass rounded-xl p-6 border border-white/10">
+            <div className="bg-white rounded-[16px] sm:rounded-[20px] border border-black/5 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-purple-400" />
+                <h2 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] flex items-center gap-2">
+                  <div className="w-8 h-8 bg-[#007AFF]/10 rounded-[8px] flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-[#007AFF]" />
+                  </div>
                   Live Portfolio State
                 </h2>
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
-                  pnlPercent >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] sm:text-[14px] font-semibold ${
+                  pnlPercent >= 0 ? 'bg-[#34C759]/10 text-[#34C759]' : 'bg-[#FF3B30]/10 text-[#FF3B30]'
                 }`}>
                   {pnlPercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                   {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total Value</div>
-                  <div className="text-2xl font-bold text-white">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="bg-[#f5f5f7] rounded-[12px] p-3 sm:p-4">
+                  <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Total Value</div>
+                  <div className="text-[20px] sm:text-[24px] font-bold text-[#1d1d1f]">
                     ${(portfolio.totalValue / 1000000).toFixed(2)}M
                   </div>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">P&L</div>
-                  <div className={`text-2xl font-bold ${pnlValue >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="bg-[#f5f5f7] rounded-[12px] p-3 sm:p-4">
+                  <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">P&L</div>
+                  <div className={`text-[20px] sm:text-[24px] font-bold ${pnlValue >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
                     {pnlValue >= 0 ? '+' : ''}${(pnlValue / 1000).toFixed(0)}K
                   </div>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Risk Score</div>
-                  <div className={`text-2xl font-bold ${
-                    portfolio.riskScore < 40 ? 'text-emerald-400' : 
-                    portfolio.riskScore < 70 ? 'text-yellow-400' : 'text-red-400'
+                <div className="bg-[#f5f5f7] rounded-[12px] p-3 sm:p-4">
+                  <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Risk Score</div>
+                  <div className={`text-[20px] sm:text-[24px] font-bold ${
+                    portfolio.riskScore < 40 ? 'text-[#34C759]' : 
+                    portfolio.riskScore < 70 ? 'text-[#FF9500]' : 'text-[#FF3B30]'
                   }`}>
                     {portfolio.riskScore.toFixed(0)}/100
                   </div>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Volatility</div>
-                  <div className="text-2xl font-bold text-cyan-400">
+                <div className="bg-[#f5f5f7] rounded-[12px] p-3 sm:p-4">
+                  <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-1">Volatility</div>
+                  <div className="text-[20px] sm:text-[24px] font-bold text-[#007AFF]">
                     {(portfolio.volatility * 100).toFixed(1)}%
                   </div>
                 </div>
@@ -970,20 +992,20 @@ export default function SimulatorPage() {
                 {portfolio.positions.map((pos) => (
                   <div
                     key={pos.symbol}
-                    className="flex items-center justify-between bg-gray-800/30 rounded-lg px-4 py-3"
+                    className="flex items-center justify-between bg-[#f5f5f7] rounded-[12px] px-4 py-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xs">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center font-bold text-[11px] sm:text-[12px] text-white">
                         {pos.symbol.slice(0, 2)}
                       </div>
                       <div>
-                        <div className="font-semibold">{pos.symbol}</div>
-                        <div className="text-xs text-gray-400">{pos.amount.toLocaleString()} units</div>
+                        <div className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f]">{pos.symbol}</div>
+                        <div className="text-[11px] sm:text-[12px] text-[#86868b]">{pos.amount.toLocaleString()} units</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold">${(pos.value / 1000000).toFixed(2)}M</div>
-                      <div className={`text-xs ${pos.pnlPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <div className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f]">${(pos.value / 1000000).toFixed(2)}M</div>
+                      <div className={`text-[11px] sm:text-[12px] font-medium ${pos.pnlPercent >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
                         {pos.pnlPercent >= 0 ? '+' : ''}{pos.pnlPercent.toFixed(2)}%
                       </div>
                     </div>
@@ -998,43 +1020,45 @@ export default function SimulatorPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="glass rounded-xl p-6 border border-emerald-500/30 bg-emerald-500/5 space-y-6"
+                  className="bg-white rounded-[16px] sm:rounded-[20px] border-2 border-[#34C759]/30 p-4 sm:p-5 shadow-sm space-y-5"
                 >
-                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] flex items-center gap-2">
+                    <div className="w-8 h-8 bg-[#34C759]/10 rounded-[8px] flex items-center justify-center">
+                      <CheckCircle className="w-4 h-4 text-[#34C759]" />
+                    </div>
                     Simulation Results: Before vs After
                   </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                      <div className="text-sm text-gray-400 mb-2">Without Hedging</div>
-                      <div className="text-2xl font-bold text-red-400">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-[#f5f5f7] rounded-[12px] p-4 border-2 border-[#FF3B30]/20">
+                      <div className="text-[12px] sm:text-[13px] text-[#86868b] mb-2">Without Hedging</div>
+                      <div className="text-[22px] sm:text-[26px] font-bold text-[#FF3B30]">
                         {/* Calculate total unhedged loss across all assets */}
                         -${(selectedScenario.priceChanges.reduce((total, pc) => {
                           const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
                           return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
                         }, 0) / 1000000).toFixed(2)}M
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-[11px] sm:text-[12px] text-[#86868b]">
                         {(selectedScenario.priceChanges.reduce((total, pc) => {
                           const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
                           return total + (pos ? Math.abs(pc.change * pos.value / 100) : 0);
                         }, 0) / initialPortfolio.totalValue * 100).toFixed(1)}% total portfolio loss
                       </div>
                     </div>
-                    <div className="bg-gray-800/50 rounded-lg p-4 border border-emerald-500/30">
-                      <div className="text-sm text-gray-400 mb-2">With zkVanguard Hedging</div>
-                      <div className="text-2xl font-bold text-emerald-400">
+                    <div className="bg-[#f5f5f7] rounded-[12px] p-4 border-2 border-[#34C759]/30">
+                      <div className="text-[12px] sm:text-[13px] text-[#86868b] mb-2">With zkVanguard Hedging</div>
+                      <div className="text-[22px] sm:text-[26px] font-bold text-[#34C759]">
                         {pnlValue >= 0 ? '+' : '-'}${Math.abs(pnlValue / 1000000).toFixed(2)}M
                       </div>
-                      <div className="text-xs text-emerald-400">
+                      <div className="text-[11px] sm:text-[12px] text-[#34C759]">
                         {Math.abs(pnlPercent).toFixed(1)}% {pnlPercent >= 0 ? 'gain' : 'loss'} (hedged)
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 p-3 bg-purple-500/10 rounded-lg border border-purple-500/30">
-                    <div className="flex items-center gap-2 text-purple-400">
+                  <div className="p-3 sm:p-4 bg-[#AF52DE]/5 rounded-[12px] border border-[#AF52DE]/20">
+                    <div className="flex items-center gap-2 text-[#AF52DE]">
                       <Shield className="w-4 h-4" />
-                      <span className="font-semibold">
+                      <span className="font-semibold text-[14px] sm:text-[15px]">
                         {/* Calculate saved as: unhedged loss - actual loss */}
                         AI Protection Saved: ${(selectedScenario.priceChanges.reduce((total, pc) => {
                           const pos = initialPortfolio.positions.find(p => p.symbol === pc.symbol);
@@ -1046,28 +1070,28 @@ export default function SimulatorPage() {
 
                   {/* On-chain tx hash and explorer link */}
                   {onChainTx && (
-                    <div className="mt-6 p-4 bg-cyan-900/10 rounded-lg border border-cyan-500/30">
-                      <div className="flex items-center gap-2 text-cyan-400">
+                    <div className="p-3 sm:p-4 bg-[#007AFF]/5 rounded-[12px] border border-[#007AFF]/20">
+                      <div className="flex items-center gap-2 text-[#007AFF]">
                         <Zap className="w-4 h-4" />
-                        <span className="font-semibold">On-Chain Hedge Executed</span>
-                        <a href={`https://cronos.org/explorer/testnet3/tx/${onChainTx}`} target="_blank" rel="noopener noreferrer" className="underline text-cyan-300 ml-2">View on Cronos Explorer</a>
+                        <span className="font-semibold text-[14px] sm:text-[15px]">On-Chain Hedge Executed</span>
+                        <a href={`https://cronos.org/explorer/testnet3/tx/${onChainTx}`} target="_blank" rel="noopener noreferrer" className="underline text-[#5856D6] ml-2 text-[13px]">View on Cronos Explorer</a>
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">Tx Hash: <span className="font-mono text-cyan-200">{onChainTx}</span></div>
+                      <div className="text-[11px] sm:text-[12px] text-[#86868b] mt-1">Tx Hash: <span className="font-mono text-[#007AFF]">{onChainTx}</span></div>
                     </div>
                   )}
 
                   {/* ZK Proof and explanation */}
                   {zkProofData && (
-                    <div className="mt-6 p-4 bg-purple-900/10 rounded-lg border border-purple-500/30">
-                      <div className="flex items-center gap-2 text-purple-400 mb-2">
+                    <div className="p-3 sm:p-4 bg-[#AF52DE]/5 rounded-[12px] border border-[#AF52DE]/20">
+                      <div className="flex items-center gap-2 text-[#AF52DE] mb-2">
                         <Shield className="w-4 h-4" />
-                        <span className="font-semibold">ZK Proof of Policy Compliance</span>
+                        <span className="font-semibold text-[14px] sm:text-[15px]">ZK Proof of Policy Compliance</span>
                       </div>
-                      <div className="text-xs text-gray-400 mb-2">
-                        <span className="font-mono text-purple-200">Proof Hash: {zkProofData.proofHash}</span><br/>
-                        <span className="font-mono text-purple-200">Merkle Root: {zkProofData.merkleRoot}</span><br/>
-                        <span>Protocol: {zkProofData.protocol} ({zkProofData.securityLevel}-bit)</span><br/>
-                        <span>Generated in {zkProofData.generationTime} ms</span>
+                      <div className="text-[11px] sm:text-[12px] text-[#86868b] mb-2 space-y-0.5">
+                        <div className="font-mono text-[#AF52DE]">Proof Hash: {zkProofData.proofHash}</div>
+                        <div className="font-mono text-[#AF52DE]">Merkle Root: {zkProofData.merkleRoot}</div>
+                        <div>Protocol: {zkProofData.protocol} ({zkProofData.securityLevel}-bit)</div>
+                        <div>Generated in {zkProofData.generationTime} ms</div>
                       </div>
                       <div className="text-sm text-white mb-2">
                         <b>What this proves:</b><br/>
@@ -1082,32 +1106,32 @@ export default function SimulatorPage() {
                   )}
 
                   {/* Comparison Table */}
-                  <div className="mt-8">
-                    <h4 className="text-md font-semibold mb-2 text-white">Traditional vs zkVanguard</h4>
+                  <div>
+                    <h4 className="text-[14px] sm:text-[15px] font-semibold mb-3 text-[#1d1d1f]">Traditional vs zkVanguard</h4>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm border border-gray-700 rounded-lg">
+                      <table className="min-w-full text-[13px] sm:text-[14px] border border-black/5 rounded-[12px] overflow-hidden">
                         <thead>
-                          <tr className="bg-gray-800 text-gray-300">
-                            <th className="px-4 py-2">Traditional</th>
-                            <th className="px-4 py-2">zkVanguard</th>
+                          <tr className="bg-[#f5f5f7] text-[#86868b]">
+                            <th className="px-4 py-2.5 text-left font-medium">Traditional</th>
+                            <th className="px-4 py-2.5 text-left font-medium">zkVanguard</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          <tr className="border-t border-gray-700">
-                            <td className="px-4 py-2">Manual checks</td>
-                            <td className="px-4 py-2">Automatic</td>
+                        <tbody className="text-[#1d1d1f]">
+                          <tr className="border-t border-black/5">
+                            <td className="px-4 py-2.5">Manual checks</td>
+                            <td className="px-4 py-2.5">Automatic</td>
                           </tr>
-                          <tr className="border-t border-gray-700">
-                            <td className="px-4 py-2">Trust required</td>
-                            <td className="px-4 py-2">Verifiable</td>
+                          <tr className="border-t border-black/5">
+                            <td className="px-4 py-2.5">Trust required</td>
+                            <td className="px-4 py-2.5">Verifiable</td>
                           </tr>
-                          <tr className="border-t border-gray-700">
-                            <td className="px-4 py-2">Slow</td>
-                            <td className="px-4 py-2">Deterministic</td>
+                          <tr className="border-t border-black/5">
+                            <td className="px-4 py-2.5">Slow</td>
+                            <td className="px-4 py-2.5">Deterministic</td>
                           </tr>
-                          <tr className="border-t border-gray-700">
-                            <td className="px-4 py-2">Opaque</td>
-                            <td className="px-4 py-2">Auditable</td>
+                          <tr className="border-t border-black/5">
+                            <td className="px-4 py-2.5">Opaque</td>
+                            <td className="px-4 py-2.5">Auditable</td>
                           </tr>
                         </tbody>
                       </table>
@@ -1115,7 +1139,7 @@ export default function SimulatorPage() {
                   </div>
 
                   {/* Compliance Message */}
-                  <div className="mt-6 p-4 bg-emerald-900/10 rounded-lg border border-emerald-500/30 text-emerald-300 text-center">
+                  <div className="p-3 sm:p-4 bg-[#34C759]/5 rounded-[12px] border border-[#34C759]/20 text-[#1d1d1f] text-center text-[13px] sm:text-[14px]">
                     This same proof can be shared with compliance, governance, or regulators — <b>without revealing positions</b>.
                   </div>
                 </motion.div>
@@ -1124,18 +1148,22 @@ export default function SimulatorPage() {
           </div>
 
           {/* Agent Activity & Logs */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Agent Activity */}
-            <div className="glass rounded-xl p-6 border border-white/10 max-h-[400px] overflow-y-auto">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Brain className="w-5 h-5 text-cyan-400" />
+            <div className="bg-white rounded-[16px] sm:rounded-[20px] border border-black/5 p-4 sm:p-5 shadow-sm max-h-[400px] overflow-y-auto">
+              <h2 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] mb-4 flex items-center gap-2">
+                <div className="w-8 h-8 bg-[#5856D6]/10 rounded-[8px] flex items-center justify-center">
+                  <Brain className="w-4 h-4 text-[#5856D6]" />
+                </div>
                 Agent Swarm Activity
               </h2>
               
               {agentActions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Brain className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Start simulation to see agent activity</p>
+                <div className="text-center py-8">
+                  <div className="w-14 h-14 mx-auto mb-3 bg-[#f5f5f7] rounded-full flex items-center justify-center">
+                    <Brain className="w-7 h-7 text-[#86868b]" />
+                  </div>
+                  <p className="text-[14px] text-[#86868b]">Start simulation to see agent activity</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1144,28 +1172,28 @@ export default function SimulatorPage() {
                       key={action.id}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className={`p-3 rounded-lg border ${
-                        action.status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/30' :
-                        action.status === 'executing' ? 'bg-cyan-500/10 border-cyan-500/30' :
-                        action.status === 'failed' ? 'bg-red-500/10 border-red-500/30' :
-                        'bg-gray-800/50 border-gray-700'
+                      className={`p-3 rounded-[10px] border ${
+                        action.status === 'completed' ? 'bg-[#34C759]/5 border-[#34C759]/20' :
+                        action.status === 'executing' ? 'bg-[#007AFF]/5 border-[#007AFF]/20' :
+                        action.status === 'failed' ? 'bg-[#FF3B30]/5 border-[#FF3B30]/20' :
+                        'bg-[#f5f5f7] border-black/5'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-sm">{action.agent} Agent</span>
+                        <span className="font-semibold text-[13px] sm:text-[14px] text-[#1d1d1f]">{action.agent} Agent</span>
                         <div className="flex items-center gap-2">
                           {action.status === 'completed' && action.zkProof && (
                             <ZKBadgeInline verified={true} />
                           )}
                           {action.status === 'executing' && (
-                            <span className="text-xs text-cyan-400 animate-pulse">Executing...</span>
+                            <span className="text-[11px] sm:text-[12px] text-[#007AFF] animate-pulse">Executing...</span>
                           )}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400">{action.action}</div>
-                      <div className="text-xs text-gray-500 mt-1">{action.description}</div>
+                      <div className="text-[11px] sm:text-[12px] text-[#86868b]">{action.action}</div>
+                      <div className="text-[11px] sm:text-[12px] text-[#86868b] mt-1">{action.description}</div>
                       {action.impact && action.status === 'completed' && (
-                        <div className="text-xs mt-2 flex items-center gap-2 text-emerald-400">
+                        <div className="text-[11px] sm:text-[12px] mt-2 flex items-center gap-2 text-[#34C759]">
                           <Zap className="w-3 h-3" />
                           {action.impact.metric}: {action.impact.before} → {action.impact.after}
                         </div>
@@ -1177,15 +1205,15 @@ export default function SimulatorPage() {
             </div>
 
             {/* Debug Logs */}
-            <div className="glass rounded-xl border border-white/10 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-green-400" />
+            <div className="bg-white rounded-[16px] sm:rounded-[20px] border border-black/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-black/5">
+                <h3 className="text-[13px] sm:text-[14px] font-semibold text-[#1d1d1f] flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-[#34C759]" />
                   Debug Logs
                 </h3>
                 <button
                   onClick={() => setShowLogs(!showLogs)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
                 >
                   {showLogs ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -1199,12 +1227,12 @@ export default function SimulatorPage() {
                     exit={{ height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="p-4 bg-black/50 max-h-[200px] overflow-y-auto font-mono text-xs">
+                    <div className="p-4 bg-[#1d1d1f] max-h-[200px] overflow-y-auto font-mono text-[11px] sm:text-[12px]">
                       {logs.length === 0 ? (
-                        <span className="text-gray-500">Logs will appear here...</span>
+                        <span className="text-[#86868b]">Logs will appear here...</span>
                       ) : (
                         logs.map((log, i) => (
-                          <div key={i} className="text-gray-300 mb-1">{log}</div>
+                          <div key={i} className="text-[#f5f5f7] mb-1">{log}</div>
                         ))
                       )}
                       <div ref={logsEndRef} />
