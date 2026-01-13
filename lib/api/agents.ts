@@ -106,7 +106,8 @@ export async function executeSettlementBatch(transactions: unknown[]) {
       gasSaved: 0.67,
       estimatedCost: `${(transactions.length * 0.0001).toFixed(4)} CRO`,
       status: 'completed' as const,
-      zkProofGenerated: true
+      zkProofGenerated: true,
+      txHash: `0x${Date.now().toString(16)}${'0'.repeat(48)}`.slice(0, 66), // Demo tx hash
     }));
   }
   
@@ -161,51 +162,91 @@ export async function sendAgentCommand(command: string) {
 }
 
 /**
- * Get agent activity
+ * Get agent activity - combines real activity from localStorage with API
  */
 export async function getAgentActivity(_address: string) {
-  if (DEMO_MODE) {
-    return simulateAgentCall(() => [
-      {
-        id: '1',
-        agentName: 'Risk Agent',
-        agentType: 'risk',
-        action: 'Portfolio Analysis',
-        description: 'Assessed risk metrics for portfolio',
-        status: 'completed' as const,
-        timestamp: new Date(Date.now() - 120000),
-        type: 'risk_assessment',
-        priority: 1,
-        createdAt: new Date(Date.now() - 120000)
-      },
-      {
-        id: '2',
-        agentName: 'Hedging Agent',
-        agentType: 'hedging',
-        action: 'Generate Hedges',
-        description: 'Created 3 hedge recommendations',
-        status: 'completed' as const,
-        timestamp: new Date(Date.now() - 60000),
-        type: 'hedging',
-        priority: 2,
-        createdAt: new Date(Date.now() - 60000)
-      },
-      {
-        id: '3',
-        agentName: 'Settlement Agent',
-        agentType: 'settlement',
-        action: 'Batch Settlement',
-        description: 'Processing 5 transactions',
-        status: 'in-progress' as const,
-        timestamp: new Date(),
-        type: 'settlement',
-        priority: 1,
-        createdAt: new Date()
+  // Get real activity from localStorage (hedge settlements, etc.)
+  const activities: Array<{
+    id: string;
+    agentName: string;
+    agentType: string;
+    action: string;
+    description: string;
+    status: 'completed' | 'in-progress' | 'pending';
+    timestamp: Date;
+    type: string;
+    priority: number;
+    createdAt: Date;
+  }> = [];
+  
+  // Check localStorage for settlement history (real hedge operations)
+  if (typeof window !== 'undefined') {
+    try {
+      const settlements = localStorage.getItem('settlement_history');
+      if (settlements) {
+        const settlementData = JSON.parse(settlements);
+        Object.values(settlementData).forEach((batch: any, index: number) => {
+          if (batch.type === 'hedge' && batch.managerSignature) {
+            const timestamp = new Date(batch.timestamp);
+            const isClosed = batch.status === 'closed';
+            
+            // Add hedge creation activity
+            activities.push({
+              id: `hedge-${batch.batchId}`,
+              agentName: 'Hedging Agent',
+              agentType: 'hedging',
+              action: 'Execute Hedge',
+              description: `${batch.hedgeDetails?.type || 'SHORT'} ${batch.hedgeDetails?.asset || 'BTC-PERP'} position ${isClosed ? 'closed' : 'opened'}`,
+              status: isClosed ? 'completed' : 'in-progress',
+              timestamp,
+              type: 'hedging',
+              priority: 1,
+              createdAt: timestamp,
+            });
+            
+            // Add settlement activity if closed
+            if (isClosed && batch.closedAt) {
+              activities.push({
+                id: `settle-${batch.batchId}`,
+                agentName: 'Settlement Agent',
+                agentType: 'settlement',
+                action: 'Close Position',
+                description: `Settled ${batch.hedgeDetails?.asset || 'BTC-PERP'} with P/L: ${batch.finalPnL?.toFixed(2) || '0'} USDC`,
+                status: 'completed',
+                timestamp: new Date(batch.closedAt),
+                type: 'settlement',
+                priority: 1,
+                createdAt: new Date(batch.closedAt),
+              });
+            }
+          }
+        });
       }
-    ]);
+    } catch (e) {
+      console.error('Error reading settlement history:', e);
+    }
   }
   
-  return [];
+  // Sort by timestamp descending (most recent first)
+  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  
+  // If no real activities, show idle state
+  if (activities.length === 0) {
+    return [{
+      id: 'idle',
+      agentName: 'System',
+      agentType: 'system',
+      action: 'Monitoring',
+      description: 'AI agents standing by - use chat to analyze portfolio or create hedges',
+      status: 'completed' as const,
+      timestamp: new Date(),
+      type: 'system',
+      priority: 0,
+      createdAt: new Date(),
+    }];
+  }
+  
+  return activities;
 }
 
 /**
