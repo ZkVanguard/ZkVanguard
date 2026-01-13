@@ -25,14 +25,14 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
       {/* Current Chain Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 transition-all duration-200"
+        className="flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl hover:bg-[#E5E5EA] transition-all duration-200"
       >
-        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#007AFF] to-[#5856D6] flex items-center justify-center text-white text-xs font-bold">
           {currentChain?.name.charAt(0)}
         </div>
-        <span className="text-white font-medium text-sm">{currentChain?.name}</span>
+        <span className="text-[#1D1D1F] font-medium text-sm">{currentChain?.name}</span>
         <svg
-          className={`w-4 h-4 text-white/70 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-[#86868B] transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -43,9 +43,9 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full mt-2 right-0 w-64 bg-[#1d1d1f]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
-          <div className="p-3 border-b border-white/10">
-            <h4 className="text-white/60 text-xs font-medium uppercase tracking-wider">Select Network</h4>
+        <div className="absolute top-full mt-2 right-0 w-64 bg-white border border-[#E5E5EA] rounded-2xl shadow-xl overflow-hidden z-50">
+          <div className="p-3 border-b border-[#E5E5EA]">
+            <h4 className="text-[#86868B] text-xs font-medium uppercase tracking-wider">Select Network</h4>
           </div>
           
           <div className="p-2">
@@ -55,15 +55,15 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 onClick={() => handleChainSelect(chain.type, chain.name)}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
                   selectedChain === chain.type
-                    ? 'bg-[#007AFF]/20 border border-[#007AFF]/50'
-                    : 'hover:bg-white/5'
+                    ? 'bg-[#007AFF]/10 border border-[#007AFF]/50'
+                    : 'hover:bg-[#F5F5F7]'
                 }`}
               >
                 {/* Chain Icon */}
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                   chain.type === 'evm' 
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-400' 
-                    : 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                    ? 'bg-gradient-to-r from-[#007AFF] to-[#5856D6]' 
+                    : 'bg-gradient-to-r from-[#32ADE6] to-[#007AFF]'
                 }`}>
                   {chain.type === 'evm' ? (
                     <span className="text-white font-bold text-sm">CRO</span>
@@ -76,8 +76,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
 
                 {/* Chain Info */}
                 <div className="flex-1 text-left">
-                  <div className="text-white font-semibold">{chain.name}</div>
-                  <div className="text-white/50 text-xs">
+                  <div className="text-[#1D1D1F] font-semibold">{chain.name}</div>
+                  <div className="text-[#86868B] text-xs">
                     {chain.type === 'evm' ? 'EVM Compatible • x402 Gasless' : 'Move-based • Sponsored Tx'}
                   </div>
                 </div>
@@ -85,8 +85,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 {/* Status Badge */}
                 <div className={`px-2 py-1 rounded-full text-xs font-medium ${
                   chain.type === 'evm'
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-cyan-500/20 text-cyan-400'
+                    ? 'bg-[#34C759]/10 text-[#34C759]'
+                    : 'bg-[#32ADE6]/10 text-[#32ADE6]'
                 }`}>
                   {chain.type === 'evm' ? 'Live' : 'Ready'}
                 </div>
@@ -102,8 +102,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
           </div>
 
           {/* Multi-Chain Info */}
-          <div className="p-3 border-t border-white/10 bg-white/5">
-            <div className="flex items-center gap-2 text-white/50 text-xs">
+          <div className="p-3 border-t border-[#E5E5EA] bg-[#F5F5F7]">
+            <div className="flex items-center gap-2 text-[#86868B] text-xs">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
