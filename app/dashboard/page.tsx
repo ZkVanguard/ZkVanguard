@@ -6,7 +6,7 @@ import { useAccount, useBalance } from 'wagmi';
 import { 
   Bot, Shield, Briefcase, TrendingUp, History, 
   BarChart3, Zap, MessageSquare, ChevronRight, 
-  Menu, X, Settings, ArrowUpRight
+  Menu, X, Settings, ArrowUpRight, ArrowLeftRight
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
@@ -54,6 +54,10 @@ const SwapModal = dynamic(() => import('@/components/dashboard/SwapModal').then(
   ssr: false
 });
 
+const ManualHedgeModal = dynamic(() => import('@/components/dashboard/ManualHedgeModal').then(mod => ({ default: mod.ManualHedgeModal })), {
+  ssr: false
+});
+
 const RecentTransactions = dynamic(() => import('@/components/dashboard/RecentTransactions').then(mod => ({ default: mod.RecentTransactions })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
@@ -88,6 +92,7 @@ const navItems: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'positions', label: 'Positions', icon: Briefcase },
   { id: 'hedges', label: 'Hedges', icon: Shield },
+  { id: 'swap', label: 'Swap', icon: ArrowLeftRight },
   { id: 'agents', label: 'AI Agents', icon: Bot, badge: 'Live' },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
   { id: 'history', label: 'History', icon: History },
@@ -107,6 +112,7 @@ export default function DashboardPage() {
   const [activeNav, setActiveNav] = useState<NavId>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [hedgeModalOpen, setHedgeModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
@@ -428,6 +434,13 @@ export default function DashboardPage() {
         onClose={() => setSwapModalOpen(false)}
         onSuccess={() => setTimeout(() => window.location.reload(), 2000)}
       />
+
+      {/* Manual Hedge Modal */}
+      <ManualHedgeModal
+        isOpen={hedgeModalOpen}
+        onClose={() => setHedgeModalOpen(false)}
+        availableAssets={portfolioAssets}
+      />
     </div>
   );
 
@@ -468,7 +481,7 @@ export default function DashboardPage() {
                   }
                 />
                 <div className="flex-1">
-                  <ActiveHedges address={displayAddress} compact />
+                  <ActiveHedges address={displayAddress} compact onCreateHedge={() => setHedgeModalOpen(true)} />
                 </div>
               </Card>
             </div>
@@ -508,7 +521,27 @@ export default function DashboardPage() {
               title="Active Hedges" 
               subtitle="Your protective positions and options"
             />
-            <ActiveHedges address={displayAddress} />
+            <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} />
+          </Card>
+        );
+        
+      case 'swap':
+        return (
+          <Card>
+            <CardHeader 
+              title="Token Swap" 
+              subtitle="Swap tokens on VVS Finance"
+            />
+            <div className="p-6">
+              <SwapModal
+                isOpen={true}
+                onClose={() => setActiveNav('overview')}
+                onSuccess={() => {
+                  setNotification('Swap successful!');
+                  setTimeout(() => window.location.reload(), 2000);
+                }}
+              />
+            </div>
           </Card>
         );
         

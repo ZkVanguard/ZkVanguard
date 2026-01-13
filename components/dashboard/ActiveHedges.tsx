@@ -40,9 +40,10 @@ interface PerformanceStats {
 interface ActiveHedgesProps {
   address?: string;
   compact?: boolean;
+  onCreateHedge?: () => void;
 }
 
-export const ActiveHedges = memo(function ActiveHedges({ address, compact = false }: ActiveHedgesProps) {
+export const ActiveHedges = memo(function ActiveHedges({ address, compact = false, onCreateHedge }: ActiveHedgesProps) {
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -270,8 +271,15 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             No Active Hedges
           </h3>
           <p className="text-[13px] sm:text-[14px] text-[#86868b] leading-[1.4] max-w-[240px] mb-3 sm:mb-4">
-            Execute hedge recommendations from AI agents to protect your portfolio
+            Create manual hedges or wait for AI recommendations to protect your portfolio
           </p>
+          <button
+            onClick={() => onCreateHedge?.()}
+            className="mb-3 px-4 py-2 bg-[#007AFF] text-white rounded-[12px] text-[13px] sm:text-[14px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
+          >
+            <Shield className="w-4 h-4" />
+            Create Manual Hedge
+          </button>
           <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-[#86868b]">
             <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#f5f5f7] rounded-full">
               <span>💬</span>
@@ -464,9 +472,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               {!showClosedPositions ? (
                 /* Compact Preview - Horizontal Scroll (Apple Music style) */
                 <div>
-                  <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] mb-2 sm:mb-3 tracking-[-0.01em]">
-                    Active Positions
-                  </h3>
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
+                      Active Positions
+                    </h3>
+                    <button
+                      onClick={() => onCreateHedge?.()}
+                      className="px-3 py-1.5 bg-[#007AFF] text-white rounded-[10px] text-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-1.5"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Create Hedge</span>
+                    </button>
+                  </div>
                   <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-3 sm:-mx-5 px-3 sm:px-5">
                     {activeHedges.slice(0, 5).map((hedge) => (
                       <div
@@ -671,10 +688,19 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             /* Show closed positions when no active hedges */
             <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/5 p-3 sm:p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
-                  Closed Positions
-                </h3>
-                <span className="text-[11px] text-[#86868b]">{closedHedges.length} total</span>
+                <div className="flex-1">
+                  <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
+                    Closed Positions
+                  </h3>
+                  <span className="text-[11px] text-[#86868b]">{closedHedges.length} total</span>
+                </div>
+                <button
+                  onClick={() => onCreateHedge?.()}
+                  className="px-3 py-1.5 bg-[#007AFF] text-white rounded-[10px] text-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-1.5"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Create Hedge</span>
+                </button>
               </div>
               <div className="space-y-2">
                 {closedHedges.map((hedge) => (
