@@ -103,12 +103,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
   }
 }
 
-// Mock prices for fallback when VVS API fails
+// Mock prices for fallback when VVS API fails or returns unrealistic values
+// Note: These are approximate prices for demo purposes on testnet
 const MOCK_PRICES: Record<string, number> = {
-  CRO: 0.14,
-  WCRO: 0.14,
+  CRO: 0.10,  // CRO ~$0.10 as of 2024
+  WCRO: 0.10,
   USDC: 1.0,
   DEVUSDC: 1.0,
+  VVS: 0.000002, // VVS token price
 };
 
 /**
@@ -155,6 +157,39 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
       // Try VVS SDK first
       const quote = await vvsService.getQuote(resolvedTokenIn, resolvedTokenOut, humanAmount);
+      
+      // Sanity check: VVS testnet SDK often returns unrealistic values
+      // Check if the output amount is reasonable (not more than 10000x input value)
+      const inputNum = parseFloat(humanAmount);
+      const outputNum = parseFloat(quote.amountOut);
+      const inSymbol = getTokenSymbol(tokenIn);
+      const outSymbol = getTokenSymbol(tokenOut);
+      const inPrice = MOCK_PRICES[inSymbol] || 1;
+      const outPrice = MOCK_PRICES[outSymbol] || 1;
+      
+      // Calculate expected output based on reasonable prices
+      const expectedOutput = (inputNum * inPrice) / outPrice;
+      const ratio = outputNum / expectedOutput;
+      
+      // If the VVS quote is more than 100x different from expected, use mock instead
+      if (ratio > 100 || ratio < 0.01) {
+        console.warn('[x402/swap] VVS SDK returned unrealistic quote, using mock:', {
+          vvsOutput: quote.amountOut,
+          expectedOutput,
+          ratio,
+        });
+        
+        const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
+        return NextResponse.json({
+          success: true,
+          data: {
+            ...mockQuote,
+            x402Fee: 0.01,
+            source: 'mock-validated',
+            warning: 'VVS testnet returned unrealistic quote, using estimated prices',
+          },
+        });
+      }
       
       return NextResponse.json({
         success: true,

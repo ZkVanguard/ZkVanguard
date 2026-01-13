@@ -183,15 +183,22 @@ export class VVSFinanceService {
 
       const path = this.buildSwapPath(tokenInAddress, tokenOutAddress);
 
+      // Get decimals for tokens
+      const tokenInDecimals = this.getTokenDecimals(params.tokenIn);
+      const tokenOutDecimals = this.getTokenDecimals(params.tokenOut);
+
       logger.info('Getting swap quote via VVS SDK', { 
         tokenIn: params.tokenIn, 
         tokenOut: params.tokenOut, 
         amountIn: params.amountIn.toString(),
+        tokenInDecimals,
+        tokenOutDecimals,
         path 
       });
 
-      // Convert wei to human-readable for the API
-      const amountInHuman = (Number(params.amountIn) / 1e18).toString();
+      // Convert wei to human-readable for the API using correct decimals
+      const amountInNum = Number(params.amountIn) / Math.pow(10, tokenInDecimals);
+      const amountInHuman = amountInNum.toString();
       
       // Call x402/swap API which uses the real VVS SDK
       const response = await fetch(`/api/x402/swap?tokenIn=${params.tokenIn}&tokenOut=${params.tokenOut}&amountIn=${amountInHuman}`);
@@ -206,9 +213,9 @@ export class VVSFinanceService {
         throw new Error(result.error || 'Failed to get quote from VVS SDK');
       }
       
-      // Convert output back to wei
+      // Convert output back to token units using correct decimals
       const amountOutNum = parseFloat(result.data.amountOut);
-      const amountOut = BigInt(Math.floor(amountOutNum * 1e18));
+      const amountOut = BigInt(Math.floor(amountOutNum * Math.pow(10, tokenOutDecimals)));
       
       const slippageBps = BigInt(Math.floor(slippage * 100));
       const amountOutMin = amountOut * (10000n - slippageBps) / 10000n;
@@ -221,6 +228,7 @@ export class VVSFinanceService {
 
       logger.info('VVS SDK quote received', {
         amountOut: amountOut.toString(),
+        amountOutHuman: amountOutNum,
         source: result.data.source,
         route: routeDisplay,
       });
@@ -236,6 +244,19 @@ export class VVSFinanceService {
       logger.error('Failed to get swap quote', { error });
       throw error;
     }
+  }
+
+  /**
+   * Get token decimals
+   */
+  private getTokenDecimals(token: string): number {
+    const normalized = token.toUpperCase();
+    // USDC, USDT typically have 6 decimals
+    if (normalized === 'USDC' || normalized === 'DEVUSDC' || normalized === 'USDT') {
+      return 6;
+    }
+    // Most other tokens have 18 decimals
+    return 18;
   }
 
   /**
