@@ -80,6 +80,7 @@ module.exports = {
       animation: {
         'fade-in': 'fadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         'shimmer': 'shimmer 2s infinite linear',
+        'loading': 'loading 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -89,6 +90,11 @@ module.exports = {
         shimmer: {
           '0%': { backgroundPosition: '-1000px 0' },
           '100%': { backgroundPosition: '1000px 0' },
+        },
+        loading: {
+          '0%': { width: '30%' },
+          '50%': { width: '70%' },
+          '100%': { width: '30%' },
         },
       },
     },
