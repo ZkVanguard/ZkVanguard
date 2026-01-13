@@ -79,6 +79,7 @@ export function useUserPortfolios(userAddress?: string) {
     riskTolerance: bigint;
     lastRebalance: bigint;
     isActive: boolean;
+    txHash: string | null;
   }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
