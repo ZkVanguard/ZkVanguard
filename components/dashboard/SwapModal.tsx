@@ -32,6 +32,19 @@ export function SwapModal({
   const dexService = getVVSFinanceService(338);
   const supportedTokens = dexService.getSupportedTokens();
   
+  // Actual token addresses for balance fetching (different from swap quote addresses)
+  // Swap quotes use mainnet addresses, but balances need testnet addresses
+  const BALANCE_TOKEN_ADDRESSES: Record<string, string> = {
+    WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
+    CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
+    // Actual devUSDC on Cronos Testnet
+    USDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',
+    devUSDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',
+    DEVUSDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',
+    // VVS token on testnet
+    VVS: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
+  };
+  
   const [tokenIn, setTokenIn] = useState<string>(defaultTokenIn);
   const [tokenOut, setTokenOut] = useState<string>(defaultTokenOut);
   const [amountIn, setAmountIn] = useState<string>(defaultAmountIn);
@@ -76,9 +89,11 @@ export function SwapModal({
 
     try {
       setBalanceLoading(true);
-      const tokenAddress = supportedTokens[tokenSymbol];
+      // Use balance-specific token addresses (actual testnet contracts)
+      const tokenAddress = BALANCE_TOKEN_ADDRESSES[tokenSymbol] || BALANCE_TOKEN_ADDRESSES[tokenSymbol.toUpperCase()];
       
       if (!tokenAddress) {
+        console.warn('No balance address for token:', tokenSymbol);
         setTokenInBalance('0');
         return;
       }
@@ -89,7 +104,8 @@ export function SwapModal({
         const decimals = getTokenDecimals(tokenSymbol);
         setTokenInBalance(formatUnits(balance, decimals));
       } else {
-        // For ERC20 tokens
+        // For ERC20 tokens (devUSDC, VVS, etc.)
+        console.log('Fetching balance for', tokenSymbol, 'at', tokenAddress);
         const balance = await publicClient.readContract({
           address: tokenAddress as `0x${string}`,
           abi: ERC20_BALANCE_ABI,
@@ -97,6 +113,7 @@ export function SwapModal({
           args: [address],
         });
         const decimals = getTokenDecimals(tokenSymbol);
+        console.log('Balance result:', balance, 'decimals:', decimals);
         setTokenInBalance(formatUnits(balance as bigint, decimals));
       }
     } catch (error) {
@@ -453,8 +470,9 @@ export function SwapModal({
                     onChange={(e) => setTokenIn(e.target.value)}
                     className="bg-gray-700 rounded-lg px-3 py-2 font-semibold text-sm flex-shrink-0"
                   >
-                    {Object.keys(supportedTokens).map(symbol => (
-                      <option key={symbol} value={symbol}>{symbol}</option>
+                    {/* Use balance token list - these are actual testnet tokens */}
+                    {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
+                      <option key={symbol} value={symbol}>{symbol === 'USDC' ? 'devUSDC' : symbol}</option>
                     ))}
                   </select>
                 </div>
@@ -489,8 +507,9 @@ export function SwapModal({
                     onChange={(e) => setTokenOut(e.target.value)}
                     className="bg-gray-700 rounded-lg px-3 py-2 font-semibold text-sm flex-shrink-0"
                   >
-                    {Object.keys(supportedTokens).map(symbol => (
-                      <option key={symbol} value={symbol}>{symbol}</option>
+                    {/* Use balance token list - these are actual testnet tokens */}
+                    {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
+                      <option key={symbol} value={symbol}>{symbol === 'USDC' ? 'devUSDC' : symbol}</option>
                     ))}
                   </select>
                 </div>
