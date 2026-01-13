@@ -42,7 +42,7 @@ export interface PortfolioData {
 class RealMarketDataService {
   private provider: ethers.JsonRpcProvider;
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 60000; // 1 minute
+  private readonly CACHE_TTL = 45000; // 45 seconds (reduced from 60s for faster updates)
   private testSequence: number = 0;
   private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
   private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
@@ -165,7 +165,7 @@ class RealMarketDataService {
     try {
       console.log(`📊 [RealMarketData] Fetching ${symbol} from Crypto.com Exchange API`);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Exchange API timeout')), 5000)
+        setTimeout(() => reject(new Error('Exchange API timeout')), 2000)
       );
       const exchangeData = await Promise.race([
         cryptocomExchangeService.getMarketData(symbol),
@@ -191,7 +191,7 @@ class RealMarketDataService {
     try {
       console.log(`📊 [RealMarketData] Trying MCP Server for ${symbol}`);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('MCP timeout')), 3000)
+        setTimeout(() => reject(new Error('MCP timeout')), 2000)
       );
       const mcpData = await Promise.race([
         this.getMCPServerPrice(symbol),
@@ -219,7 +219,7 @@ class RealMarketDataService {
     try {
       console.log(`📊 [RealMarketData] Trying VVS Finance for ${symbol}`);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('VVS timeout')), 3000)
+        setTimeout(() => reject(new Error('VVS timeout')), 2000)
       );
       const vvsPrice = await Promise.race([
         this.getVVSPrice(symbol),
@@ -326,63 +326,72 @@ class RealMarketDataService {
     let totalValue = 0;
 
     try {
-      // Get native CRO balance
-      try {
-        const croBalance = await this.provider.getBalance(address);
-        const croPrice = await this.getTokenPrice('CRO');
-        const formattedBalance = ethers.formatEther(croBalance);
-        const balanceNumber = parseFloat(formattedBalance);
-        const croValue = balanceNumber * croPrice.price;
-
-        console.log(`🔍 [RealMarketData] CRO Balance Debug:`);
-        console.log(`  Raw Wei: ${croBalance.toString()}`);
-        console.log(`  Formatted: ${formattedBalance} CRO`);
-        console.log(`  Parsed Number: ${balanceNumber}`);
-        console.log(`  CRO Price: $${croPrice.price}`);
-        console.log(`  USD Value: $${croValue.toFixed(2)}`);
-
-        tokens.push({
-          token: 'native',
-          symbol: 'CRO',
-          balance: formattedBalance,
-          decimals: 18,
-          usdValue: croValue,
-        });
-
-        totalValue += croValue;
-      } catch (croError) {
-        console.error('Failed to fetch CRO balance:', croError);
-        // Continue with other tokens even if CRO fails
-      }
-
-      // Get ERC20 token balances (Cronos Testnet tokens ONLY)
+      const portfolioStart = Date.now();
+      
+      // Define all tokens upfront
       const testnetTokens = [
-        { address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', symbol: 'devUSDC', decimals: 6 }, // DevUSDCe on Testnet
-        { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 }, // Wrapped CRO Testnet
+        { address: 'native', symbol: 'CRO', decimals: 18 },
+        { address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', symbol: 'devUSDC', decimals: 6 },
+        { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 },
       ];
 
-      for (const token of testnetTokens) {
+      // PARALLEL: Fetch all balances simultaneously
+      const balanceStart = Date.now();
+      const balancePromises = testnetTokens.map(async (token) => {
         try {
-          const balance = await this.getTokenBalance(address, token.address, token.decimals);
-          if (parseFloat(balance) > 0) {
-            const price = await this.getTokenPrice(token.symbol);
-            const value = parseFloat(balance) * price.price;
-
-            tokens.push({
+          if (token.address === 'native') {
+            const croBalance = await this.provider.getBalance(address);
+            return {
+              token: token.address,
+              symbol: token.symbol,
+              balance: ethers.formatEther(croBalance),
+              decimals: token.decimals,
+            };
+          } else {
+            const balance = await this.getTokenBalance(address, token.address, token.decimals);
+            return {
               token: token.address,
               symbol: token.symbol,
               balance,
               decimals: token.decimals,
-              usdValue: value,
-            });
-
-            totalValue += value;
+            };
           }
         } catch (error) {
-          // Silently skip tokens that don't exist on this network
-          console.debug(`Token ${token.symbol} not available:`, error);
+          console.debug(`Failed to fetch ${token.symbol} balance:`, error);
+          return null;
         }
-      }
+      });
+
+      const balances = (await Promise.all(balancePromises)).filter((b): b is NonNullable<typeof b> => b !== null && parseFloat(b.balance) > 0);
+      console.log(`⏱️ [RealMarketData] Fetched ${balances.length} balances in ${Date.now() - balanceStart}ms`);
+
+      // PARALLEL: Fetch all prices simultaneously
+      const priceStart = Date.now();
+      const pricePromises = balances.map(async (tokenBalance) => {
+        try {
+          const price = await this.getTokenPrice(tokenBalance.symbol);
+          const value = parseFloat(tokenBalance.balance) * price.price;
+
+          return {
+            token: tokenBalance.token,
+            symbol: tokenBalance.symbol,
+            balance: tokenBalance.balance,
+            decimals: tokenBalance.decimals,
+            usdValue: value,
+          };
+        } catch (error) {
+          console.debug(`Failed to fetch ${tokenBalance.symbol} price:`, error);
+          return null;
+        }
+      });
+
+      const tokenResults = (await Promise.all(pricePromises)).filter((t): t is TokenBalance => t !== null);
+      console.log(`⏱️ [RealMarketData] Fetched ${tokenResults.length} prices in ${Date.now() - priceStart}ms`);
+
+      tokens.push(...tokenResults);
+      totalValue = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+
+      console.log(`⏱️ [RealMarketData] Total portfolio data fetch: ${Date.now() - portfolioStart}ms`);
 
       return {
         address,
@@ -407,7 +416,7 @@ class RealMarketDataService {
   }
 
   /**
-   * Get token balance for an address
+   * Get token balance for an address with timeout
    */
   private async getTokenBalance(
     ownerAddress: string,
@@ -416,7 +425,17 @@ class RealMarketDataService {
   ): Promise<string> {
     const abi = ['function balanceOf(address) view returns (uint256)'];
     const contract = new ethers.Contract(tokenAddress, abi, this.provider);
-    const balance = await contract.balanceOf(ownerAddress);
+    
+    // Add 3s timeout for balance calls
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Balance fetch timeout')), 3000)
+    );
+    
+    const balance = await Promise.race([
+      contract.balanceOf(ownerAddress),
+      timeoutPromise
+    ]);
+    
     return ethers.formatUnits(balance, decimals);
   }
 

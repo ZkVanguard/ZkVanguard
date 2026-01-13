@@ -70,7 +70,7 @@ class CryptocomExchangeService {
   constructor() {
     this.client = axios.create({
       baseURL: this.BASE_URL,
-      timeout: 10000,
+      timeout: 3000, // Reduced from 10s to 3s for faster failures
       headers: {
         'Content-Type': 'application/json',
       },
