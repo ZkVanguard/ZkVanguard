@@ -331,51 +331,51 @@ function ZKProofPage() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{background: '#0f0f1a'}}>
+    <div className="min-h-screen transition-colors duration-300 bg-[#F5F5F7]">
       <div className="container mx-auto px-6 py-16">
         <div className="max-w-4xl mx-auto text-center mb-16 space-y-6">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl shadow-lg shadow-emerald-500/20">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#34C759] to-[#007AFF] rounded-2xl shadow-lg shadow-[#34C759]/20">
             <Shield className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-5xl md:text-6xl font-black">
-            <span className="gradient-text">Zero-Knowledge</span>
+            <span className="bg-gradient-to-r from-[#34C759] to-[#007AFF] bg-clip-text text-transparent">Zero-Knowledge</span>
             <br />
-            <span className="text-white">Proof System</span>
+            <span className="text-[#1D1D1F]">Proof System</span>
           </h1>
           
           {/* How It Works - Proof Lifecycle */}
-          <div className="glass border border-emerald-500/30 rounded-xl p-6 mt-8 text-left">
-            <h3 className="text-xl font-bold text-emerald-400 mb-4 text-center">🔄 Complete Proof Lifecycle</h3>
+          <div className="bg-white border border-[#34C759]/30 rounded-xl p-6 mt-8 text-left shadow-sm">
+            <h3 className="text-xl font-bold text-[#34C759] mb-4 text-center">🔄 Complete Proof Lifecycle</h3>
             <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-cyan-400 font-semibold">
-                  <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center text-sm">1</div>
+                <div className="flex items-center gap-2 text-[#007AFF] font-semibold">
+                  <div className="w-8 h-8 bg-[#007AFF]/10 rounded-lg flex items-center justify-center text-sm">1</div>
                   Generate
                 </div>
-                <p className="text-sm text-gray-400">Select scenario and generate ZK-STARK proof with private witness data</p>
+                <p className="text-sm text-[#6E6E73]">Select scenario and generate ZK-STARK proof with private witness data</p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-purple-400 font-semibold">
-                  <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center text-sm">2</div>
+                <div className="flex items-center gap-2 text-[#5856D6] font-semibold">
+                  <div className="w-8 h-8 bg-[#5856D6]/10 rounded-lg flex items-center justify-center text-sm">2</div>
                   Share
                 </div>
-                <p className="text-sm text-gray-400">Copy JSON, create shareable link, or download file to send to anyone</p>
+                <p className="text-sm text-[#6E6E73]">Copy JSON, create shareable link, or download file to send to anyone</p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center text-sm">3</div>
+                <div className="flex items-center gap-2 text-[#34C759] font-semibold">
+                  <div className="w-8 h-8 bg-[#34C759]/10 rounded-lg flex items-center justify-center text-sm">3</div>
                   Verify
                 </div>
-                <p className="text-sm text-gray-400">Recipient verifies proof cryptographically without learning secrets</p>
+                <p className="text-sm text-[#6E6E73]">Recipient verifies proof cryptographically without learning secrets</p>
               </div>
             </div>
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm text-blue-300">
+            <div className="mt-4 p-3 bg-[#007AFF]/10 border border-[#007AFF]/30 rounded text-sm text-[#007AFF]">
               <strong>🔒 Privacy Guarantee:</strong> The verifier learns NOTHING about your private data - only that your claim is valid!
             </div>
           </div>
-          <p className="text-xl text-gray-300 leading-relaxed">
-            Generate real <span className="text-emerald-400 font-bold">ZK-STARK</span> proofs.
-            Prove statements are true <span className="text-cyan-400 font-bold">WITHOUT</span> revealing sensitive data.
+          <p className="text-xl text-[#424245] leading-relaxed">
+            Generate real <span className="text-[#34C759] font-bold">ZK-STARK</span> proofs.
+            Prove statements are true <span className="text-[#007AFF] font-bold">WITHOUT</span> revealing sensitive data.
           </p>
         </div>
 
@@ -387,33 +387,33 @@ function ZKProofPage() {
               onClick={() => handleScenarioChange(scenario)}
               className={`group relative p-8 rounded-2xl transition-all duration-300 text-left ${
                 selectedScenario.id === scenario.id
-                  ? 'glass-strong border-2 border-emerald-500 shadow-lg shadow-emerald-500/20'
-                  : 'glass border border-white/10 hover:border-white/20'
+                  ? 'bg-white border-2 border-[#34C759] shadow-lg shadow-[#34C759]/20'
+                  : 'bg-white border border-[#E5E5EA] hover:border-[#007AFF]/50'
               }`}
             >
-              <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-emerald-400 transition-colors">
+              <h3 className="text-2xl font-bold text-[#1D1D1F] mb-3 group-hover:text-[#34C759] transition-colors">
                 {scenario.name}
               </h3>
-              <p className="text-gray-400 leading-relaxed">{scenario.description}</p>
+              <p className="text-[#6E6E73] leading-relaxed">{scenario.description}</p>
             </button>
           ))}
         </div>
 
         {/* Scenario Details */}
-        <div className="glass rounded-2xl p-8 mb-8 border border-white/10">
+        <div className="bg-white rounded-2xl p-8 mb-8 border border-[#E5E5EA] shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Public Statement */}
             <div>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                  <Eye className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-2xl font-bold text-[#1D1D1F] mb-4 flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#34C759]/10 rounded-xl flex items-center justify-center">
+                  <Eye className="w-5 h-5 text-[#34C759]" />
                 </div>
                 Public Statement
               </h2>
-              <div className="bg-gray-900/50 rounded-xl p-6 border border-emerald-500/30 space-y-3">
+              <div className="bg-[#F5F5F7] rounded-xl p-6 border border-[#34C759]/30 space-y-3">
                 {Object.entries(editableStatement).map(([key, value]) => (
                   <div key={key}>
-                    <label className="text-xs text-emerald-400 font-mono block mb-1">{key}:</label>
+                    <label className="text-xs text-[#34C759] font-mono block mb-1">{key}:</label>
                     <input
                       type="text"
                       value={String(value)}
@@ -421,13 +421,13 @@ function ZKProofPage() {
                         ...prev,
                         [key]: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value)
                       }))}
-                      className="w-full bg-gray-800/50 border border-emerald-500/30 rounded px-3 py-2 text-emerald-400 text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-white border border-[#34C759]/30 rounded px-3 py-2 text-[#34C759] text-sm font-mono focus:outline-none focus:border-[#34C759] transition-colors"
                     />
                   </div>
                 ))}
               </div>
-              <p className="text-gray-400 text-sm mt-3 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400" />
+              <p className="text-[#6E6E73] text-sm mt-3 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-[#34C759]" />
                 Everyone can see this claim
               </p>
             </div>
@@ -435,25 +435,25 @@ function ZKProofPage() {
             {/* Private Witness */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center">
-                    <Lock className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-2xl font-bold text-[#1D1D1F] flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
+                    <Lock className="w-5 h-5 text-[#007AFF]" />
                   </div>
                   Private Witness
                 </h2>
                 <button
                   onClick={() => setShowSecrets(!showSecrets)}
-                  className="px-4 py-2 glass border border-white/20 rounded-lg text-sm text-cyan-400 hover:border-cyan-500 transition-all flex items-center gap-2"
+                  className="px-4 py-2 bg-white border border-[#E5E5EA] rounded-lg text-sm text-[#007AFF] hover:border-[#007AFF] transition-all flex items-center gap-2"
                 >
                   {showSecrets ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   {showSecrets ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <div className="bg-gray-900/50 rounded-xl p-6 border border-cyan-500/30 space-y-3">
+              <div className="bg-[#F5F5F7] rounded-xl p-6 border border-[#007AFF]/30 space-y-3">
                 {showSecrets ? (
                   Object.entries(editableWitness).map(([key, value]) => (
                     <div key={key}>
-                      <label className="text-xs text-cyan-400 font-mono block mb-1">{key}:</label>
+                      <label className="text-xs text-[#007AFF] font-mono block mb-1">{key}:</label>
                       <input
                         type="text"
                         value={String(value)}
@@ -461,22 +461,22 @@ function ZKProofPage() {
                           ...prev,
                           [key]: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value)
                         }))}
-                        className="w-full bg-gray-800/50 border border-cyan-500/30 rounded px-3 py-2 text-cyan-400 text-sm font-mono focus:outline-none focus:border-cyan-500 transition-colors"
+                        className="w-full bg-white border border-[#007AFF]/30 rounded px-3 py-2 text-[#007AFF] text-sm font-mono focus:outline-none focus:border-[#007AFF] transition-colors"
                       />
                     </div>
                   ))
                 ) : (
-                  <div className="text-cyan-400 text-sm space-y-2 font-mono">
+                  <div className="text-[#007AFF] text-sm space-y-2 font-mono">
                     {Object.keys(editableWitness).map((key) => (
                       <div key={key}>
-                        {key}: <span className="text-gray-500">████████</span>
+                        {key}: <span className="text-[#86868B]">████████</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-              <p className="text-gray-400 text-sm mt-3 flex items-center gap-2">
-                <Lock className="w-4 h-4 text-cyan-400" />
+              <p className="text-[#6E6E73] text-sm mt-3 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-[#007AFF]" />
                 These secrets will NOT appear in the proof
               </p>
             </div>
@@ -487,7 +487,7 @@ function ZKProofPage() {
             <button
               onClick={generateProof}
               disabled={isGenerating}
-              className="group px-8 py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex items-center gap-3 mx-auto"
+              className="group px-8 py-4 bg-gradient-to-r from-[#34C759] to-[#007AFF] text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-[#34C759]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex items-center gap-3 mx-auto"
             >
               {isGenerating ? (
                 <>
@@ -508,10 +508,10 @@ function ZKProofPage() {
         {proofResult && (
           <div className="space-y-8">
             {/* Privacy Verification */}
-            <div className="glass rounded-2xl p-8 border border-white/10">
-              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-emerald-400" />
+            <div className="bg-white rounded-2xl p-8 border border-[#E5E5EA] shadow-sm">
+              <h2 className="text-2xl font-bold text-[#1D1D1F] mb-6 flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#34C759]/10 rounded-xl flex items-center justify-center">
+                  <Lock className="w-5 h-5 text-[#34C759]" />
                 </div>
                 Privacy Verification
               </h2>
@@ -552,29 +552,29 @@ function ZKProofPage() {
                       key={secretKey}
                       className={`flex items-center gap-4 p-6 rounded-xl transition-all ${
                         isLeaked 
-                          ? 'bg-red-500/10 border-2 border-red-500' 
-                          : 'bg-emerald-500/10 border-2 border-emerald-500'
+                          ? 'bg-[#FF3B30]/10 border-2 border-[#FF3B30]' 
+                          : 'bg-[#34C759]/10 border-2 border-[#34C759]'
                       }`}
                     >
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        isLeaked ? 'bg-red-500/20' : 'bg-emerald-500/20'
+                        isLeaked ? 'bg-[#FF3B30]/20' : 'bg-[#34C759]/20'
                       }`}>
                         {isLeaked ? (
-                          <XCircle className="w-6 h-6 text-red-400" />
+                          <XCircle className="w-6 h-6 text-[#FF3B30]" />
                         ) : (
-                          <CheckCircle className="w-6 h-6 text-emerald-400" />
+                          <CheckCircle className="w-6 h-6 text-[#34C759]" />
                         )}
                       </div>
                       <div className="flex-1">
-                        <div className="text-white font-bold text-lg">{secretKey}</div>
-                        <div className="text-gray-400 text-sm font-mono">
+                        <div className="text-[#1D1D1F] font-bold text-lg">{secretKey}</div>
+                        <div className="text-[#6E6E73] text-sm font-mono">
                           {typeof secretValue === 'number' ? secretValue.toLocaleString() : String(secretValue)}
                         </div>
                       </div>
                       <div className={`px-4 py-2 rounded-lg font-bold ${
                         isLeaked 
-                          ? 'bg-red-500/20 text-red-400' 
-                          : 'bg-emerald-500/20 text-emerald-400'
+                          ? 'bg-[#FF3B30]/20 text-[#FF3B30]' 
+                          : 'bg-[#34C759]/20 text-[#34C759]'
                       }`}>
                         {isLeaked ? 'LEAKED' : 'HIDDEN'}
                       </div>
@@ -586,25 +586,25 @@ function ZKProofPage() {
 
             {/* On-Chain Storage Status */}
             {isConnected && (
-              <div className="glass rounded-2xl p-6 border border-purple-500/30 bg-purple-900/20">
+              <div className="bg-[#5856D6]/5 rounded-2xl p-6 border border-[#5856D6]/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      isStoringOnChain ? 'bg-yellow-500/20' : onChainTxHash ? 'bg-emerald-500/20' : 'bg-purple-500/20'
+                      isStoringOnChain ? 'bg-[#FF9500]/20' : onChainTxHash ? 'bg-[#34C759]/20' : 'bg-[#5856D6]/20'
                     }`}>
                       {isStoringOnChain ? (
-                        <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />
+                        <Loader2 className="w-6 h-6 text-[#FF9500] animate-spin" />
                       ) : onChainTxHash ? (
-                        <CheckCircle className="w-6 h-6 text-emerald-400" />
+                        <CheckCircle className="w-6 h-6 text-[#34C759]" />
                       ) : (
-                        <Shield className="w-6 h-6 text-purple-400" />
+                        <Shield className="w-6 h-6 text-[#5856D6]" />
                       )}
                     </div>
                     <div>
-                      <div className="text-white font-bold text-lg">
+                      <div className="text-[#1D1D1F] font-bold text-lg">
                         {isStoringOnChain ? 'Storing On-Chain...' : onChainTxHash ? 'Stored On-Chain ✓' : 'On-Chain Storage'}
                       </div>
-                      <div className="text-gray-400 text-sm">
+                      <div className="text-[#6E6E73] text-sm">
                         {isStoringOnChain ? 'Submitting gasless transaction...' : onChainTxHash ? 'Permanent proof commitment on Cronos testnet' : 'Wallet connected - storing automatically'}
                       </div>
                     </div>
@@ -614,7 +614,7 @@ function ZKProofPage() {
                       href={`https://explorer.cronos.org/testnet/tx/${onChainTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all flex items-center gap-2"
+                      className="px-4 py-2 bg-[#34C759] hover:bg-[#2FB04E] text-white rounded-lg transition-all flex items-center gap-2"
                     >
                       View TX
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -624,68 +624,68 @@ function ZKProofPage() {
                   )}
                 </div>
                 {onChainTxHash && (
-                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg">
-                    <div className="text-xs text-gray-400 mb-1">Transaction Hash:</div>
-                    <div className="text-sm text-cyan-400 font-mono break-all">{onChainTxHash}</div>
+                  <div className="mt-4 p-4 bg-[#F5F5F7] rounded-lg">
+                    <div className="text-xs text-[#6E6E73] mb-1">Transaction Hash:</div>
+                    <div className="text-sm text-[#007AFF] font-mono break-all">{onChainTxHash}</div>
                   </div>
                 )}
               </div>
             )}
 
             {!isConnected && (
-              <div className="glass rounded-2xl p-6 border border-yellow-500/30 bg-yellow-900/10">
+              <div className="bg-[#FF9500]/10 rounded-2xl p-6 border border-[#FF9500]/30">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-yellow-400" />
+                  <div className="w-12 h-12 bg-[#FF9500]/20 rounded-xl flex items-center justify-center">
+                    <Shield className="w-6 h-6 text-[#FF9500]" />
                   </div>
                   <div>
-                    <div className="text-white font-bold">Connect Wallet to Store On-Chain</div>
-                    <div className="text-gray-400 text-sm">Proof generated successfully, but not stored on blockchain yet</div>
+                    <div className="text-[#1D1D1F] font-bold">Connect Wallet to Store On-Chain</div>
+                    <div className="text-[#6E6E73] text-sm">Proof generated successfully, but not stored on blockchain yet</div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Proof Details */}
-            <div className="glass rounded-2xl p-8 border border-white/10">
+            <div className="bg-white rounded-2xl p-8 border border-[#E5E5EA] shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                  <div className="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-2xl font-bold text-[#1D1D1F] flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-[#007AFF]" />
                   </div>
                   Cryptographic Proof
                 </h2>
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={copyProofToClipboard}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-gradient-to-r from-[#007AFF] to-[#5856D6] text-white rounded-lg hover:shadow-lg hover:shadow-[#007AFF]/30 transition-all flex items-center gap-2"
                   >
                     {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     {copied ? 'Copied!' : 'Copy JSON'}
                   </button>
                   <button
                     onClick={generateShareableLink}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-gradient-to-r from-[#5856D6] to-[#AF52DE] text-white rounded-lg hover:shadow-lg hover:shadow-[#5856D6]/30 transition-all flex items-center gap-2"
                   >
                     <Share2 className="w-4 h-4" />
                     Share Link
                   </button>
                   <button
                     onClick={openVerificationPage}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-gradient-to-r from-[#34C759] to-[#00C7BE] text-white rounded-lg hover:shadow-lg hover:shadow-[#34C759]/30 transition-all flex items-center gap-2"
                   >
                     <ExternalLink className="w-4 h-4" />
                     Verify Now
                   </button>
                   <button
                     onClick={() => setShowProofDetails(!showProofDetails)}
-                    className="px-4 py-2 glass border border-white/20 text-white rounded-lg hover:border-cyan-500 transition-all"
+                    className="px-4 py-2 bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] rounded-lg hover:border-[#007AFF] transition-all"
                   >
                     {showProofDetails ? 'Hide' : 'Show'} Details
                   </button>
                   <button
                     onClick={downloadProof}
-                    className="px-4 py-2 glass border border-white/20 text-white rounded-lg hover:border-cyan-500 transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] rounded-lg hover:border-[#007AFF] transition-all flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Download
@@ -694,21 +694,21 @@ function ZKProofPage() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="glass border border-white/10 p-6 rounded-xl">
-                  <div className="text-gray-400 text-sm mb-2">Security Level</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.security_level || 0}-bit</div>
+                <div className="bg-[#F5F5F7] border border-[#E5E5EA] p-6 rounded-xl">
+                  <div className="text-[#6E6E73] text-sm mb-2">Security Level</div>
+                  <div className="text-[#1D1D1F] font-bold text-2xl">{proofResult.proof.security_level || 0}-bit</div>
                 </div>
-                <div className="glass border border-white/10 p-6 rounded-xl">
-                  <div className="text-gray-400 text-sm mb-2">Query Count</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.query_responses?.length || 0}</div>
+                <div className="bg-[#F5F5F7] border border-[#E5E5EA] p-6 rounded-xl">
+                  <div className="text-[#6E6E73] text-sm mb-2">Query Count</div>
+                  <div className="text-[#1D1D1F] font-bold text-2xl">{proofResult.proof.query_responses?.length || 0}</div>
                 </div>
-                <div className="glass border border-white/10 p-6 rounded-xl">
-                  <div className="text-gray-400 text-sm mb-2">Trace Length</div>
-                  <div className="text-white font-bold text-2xl">{proofResult.proof.execution_trace_length || 0}</div>
+                <div className="bg-[#F5F5F7] border border-[#E5E5EA] p-6 rounded-xl">
+                  <div className="text-[#6E6E73] text-sm mb-2">Trace Length</div>
+                  <div className="text-[#1D1D1F] font-bold text-2xl">{proofResult.proof.execution_trace_length || 0}</div>
                 </div>
-                <div className="glass border border-white/10 p-6 rounded-xl">
-                  <div className="text-gray-400 text-sm mb-2">Proof Size</div>
-                  <div className="text-white font-bold text-2xl">
+                <div className="bg-[#F5F5F7] border border-[#E5E5EA] p-6 rounded-xl">
+                  <div className="text-[#6E6E73] text-sm mb-2">Proof Size</div>
+                  <div className="text-[#1D1D1F] font-bold text-2xl">
                     {(JSON.stringify(proofResult.proof).length / 1024).toFixed(1)} KB
                   </div>
                 </div>
@@ -717,31 +717,31 @@ function ZKProofPage() {
               {showProofDetails && (
                 <div className="space-y-6">
                   <div>
-                    <div className="text-gray-400 text-sm mb-3 font-semibold">Statement Hash</div>
-                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-cyan-400 break-all border border-cyan-500/30">
+                    <div className="text-[#6E6E73] text-sm mb-3 font-semibold">Statement Hash</div>
+                    <div className="bg-[#F5F5F7] p-4 rounded-xl font-mono text-sm text-[#007AFF] break-all border border-[#007AFF]/30">
                       {proofResult.proof.statement_hash || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400 text-sm mb-3 font-semibold">Merkle Root</div>
-                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-emerald-400 break-all border border-emerald-500/30">
+                    <div className="text-[#6E6E73] text-sm mb-3 font-semibold">Merkle Root</div>
+                    <div className="bg-[#F5F5F7] p-4 rounded-xl font-mono text-sm text-[#34C759] break-all border border-[#34C759]/30">
                       {proofResult.proof.merkle_root || 'N/A'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400 text-sm mb-3 font-semibold">Fiat-Shamir Challenge</div>
-                    <div className="bg-gray-900/50 p-4 rounded-xl font-mono text-sm text-amber-400 break-all border border-amber-500/30">
+                    <div className="text-[#6E6E73] text-sm mb-3 font-semibold">Fiat-Shamir Challenge</div>
+                    <div className="bg-[#F5F5F7] p-4 rounded-xl font-mono text-sm text-[#FF9500] break-all border border-[#FF9500]/30">
                       {proofResult.proof.challenge || 0}
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400 text-sm mb-3 font-semibold flex items-center gap-2">
+                    <div className="text-[#6E6E73] text-sm mb-3 font-semibold flex items-center gap-2">
                       Query Responses (First 3 of {proofResult.proof.query_responses?.length || 0})
                     </div>
                     <div className="grid gap-3">
                       {(proofResult.proof.query_responses || []).slice(0, 3).map((query, idx) => (
-                        <div key={idx} className="glass border border-white/10 p-4 rounded-xl">
-                          <div className="text-cyan-400 text-sm font-mono">
+                        <div key={idx} className="bg-[#F5F5F7] border border-[#E5E5EA] p-4 rounded-xl">
+                          <div className="text-[#007AFF] text-sm font-mono">
                             Query #{query.index}: {query.proof?.length || 0} Merkle path steps
                           </div>
                         </div>
@@ -753,15 +753,15 @@ function ZKProofPage() {
 
               {/* Verify Buttons */}
               <div className="mt-8">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-bold text-[#1D1D1F] mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-[#34C759]" />
                   Verification Options
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <button
                     onClick={verifyProof}
                     disabled={isVerifying}
-                    className="px-6 py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2"
+                    className="px-6 py-4 bg-gradient-to-r from-[#34C759] to-[#007AFF] text-white rounded-xl font-bold hover:shadow-lg hover:shadow-[#34C759]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2"
                   >
                     {isVerifying ? (
                       <>
@@ -783,7 +783,7 @@ function ZKProofPage() {
                       document.getElementById('on-chain-verification')?.scrollIntoView({ behavior: 'smooth' });
                     }}
                     disabled={!onChainTxHash}
-                    className="px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2 text-center"
+                    className="px-6 py-4 bg-gradient-to-r from-[#5856D6] to-[#AF52DE] text-white rounded-xl font-bold hover:shadow-lg hover:shadow-[#5856D6]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex flex-col items-center justify-center gap-2 text-center"
                   >
                     <Shield className="w-5 h-5" />
                     <span>Verify On-Chain</span>
@@ -792,10 +792,10 @@ function ZKProofPage() {
                     </span>
                   </button>
 
-                  <div className="px-6 py-4 glass border border-emerald-500/30 rounded-xl flex flex-col items-center justify-center gap-2">
-                    <Lock className="w-5 h-5 text-cyan-400" />
-                    <span className="font-bold text-white">Secrets Hidden</span>
-                    <span className="text-xs text-gray-400">Not revealed in proof</span>
+                  <div className="px-6 py-4 bg-[#34C759]/10 border border-[#34C759]/30 rounded-xl flex flex-col items-center justify-center gap-2">
+                    <Lock className="w-5 h-5 text-[#34C759]" />
+                    <span className="font-bold text-[#1D1D1F]">Secrets Hidden</span>
+                    <span className="text-xs text-[#6E6E73]">Not revealed in proof</span>
                   </div>
                 </div>
 
@@ -803,8 +803,8 @@ function ZKProofPage() {
                   <div
                     className={`px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-3 border-2 transition-all ${
                       verificationResult
-                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                        : 'bg-red-500/10 border-red-500 text-red-400'
+                        ? 'bg-[#34C759]/10 border-[#34C759] text-[#34C759]'
+                        : 'bg-[#FF3B30]/10 border-[#FF3B30] text-[#FF3B30]'
                     }`}
                   >
                     {verificationResult ? (
@@ -829,9 +829,9 @@ function ZKProofPage() {
         )}
 
         {/* Info Banner */}
-        <div className="mt-12 bg-purple-900/30 border border-purple-500 rounded-xl p-6">
-          <h3 className="text-xl font-bold text-white mb-3">🎯 What Just Happened?</h3>
-          <div className="text-gray-300 space-y-2">
+        <div className="mt-12 bg-[#5856D6]/10 border border-[#5856D6] rounded-xl p-6">
+          <h3 className="text-xl font-bold text-[#1D1D1F] mb-3">🎯 What Just Happened?</h3>
+          <div className="text-[#424245] space-y-2">
             <p>
               ✅ A real ZK-STARK proof was generated using AIR (Algebraic Intermediate Representation) and FRI (Fast Reed-Solomon IOP)
             </p>

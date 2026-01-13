@@ -377,8 +377,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Create Portfolio CTA - show only if user has no portfolios */}
-      {userPortfolioCount === 0 && isConnected && (
+      {/* Create Portfolio CTA - always show for connected users */}
+      {isConnected && (
         <div className="fixed bottom-20 lg:bottom-6 left-4 lg:left-[280px] z-40">
           <AdvancedPortfolioCreator />
         </div>

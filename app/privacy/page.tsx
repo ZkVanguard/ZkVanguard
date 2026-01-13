@@ -1,12 +1,12 @@
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
-      <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-        <h1 className="text-4xl font-bold mb-8 text-gray-900 dark:text-white">Privacy Policy</h1>
+    <div className="min-h-screen bg-[#F5F5F7] py-12 px-4">
+      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-[#E5E5EA] p-8">
+        <h1 className="text-4xl font-bold mb-8 text-[#1D1D1F]">Privacy Policy</h1>
         
-        <div className="space-y-6 text-gray-700 dark:text-gray-300">
+        <div className="space-y-6 text-[#424245]">
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">1. Introduction</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">1. Introduction</h2>
             <p>
               ZkVanguard is committed to protecting your privacy. This policy explains how we handle your data
               when you use our decentralized portfolio management platform. We comply with GDPR, CCPA, and other
@@ -15,7 +15,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">2. Data We Collect</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">2. Data We Collect</h2>
             <p className="mb-3"><strong>With Your Consent (Optional Analytics):</strong></p>
             <ul className="list-disc pl-6 space-y-2">
               <li><strong>Page Views:</strong> Which pages you visit (no IP addresses stored)</li>
@@ -28,14 +28,14 @@ export default function PrivacyPage() {
               <li><strong>Wallet Address:</strong> Your public blockchain address when you connect your wallet</li>
               <li><strong>Transaction Data:</strong> On-chain transaction history for portfolio analysis</li>
             </ul>
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-4 text-sm text-[#6E6E73]">
               <strong>We do NOT collect:</strong> Names, emails, phone numbers, IP addresses, precise location, 
               or any personally identifiable information (PII).
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">3. Zero-Knowledge Privacy</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">3. Zero-Knowledge Privacy</h2>
             <p>
               ZkVanguard uses ZK-STARK technology to ensure:
             </p>
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">4. Data Storage & Retention</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">4. Data Storage & Retention</h2>
             <p>
               <strong>On-Chain Data:</strong> Stored permanently on the blockchain (publicly accessible by design).
             </p>
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">5. Cookies & Tracking</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">5. Cookies & Tracking</h2>
             <p>We use the following types of cookies:</p>
             <ul className="list-disc pl-6 space-y-2 mt-2">
               <li><strong>Necessary:</strong> Required for wallet connection and session management</li>
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">6. Third-Party Services</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">6. Third-Party Services</h2>
             <p>We integrate with:</p>
             <ul className="list-disc pl-6 space-y-2 mt-2">
               <li><strong>WalletConnect/Reown:</strong> For secure wallet connections</li>
@@ -84,13 +84,13 @@ export default function PrivacyPage() {
               <li><strong>Crypto.com AI SDK:</strong> For portfolio analysis (optional)</li>
               <li><strong>Neon Database:</strong> For anonymized analytics storage</li>
             </ul>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-sm text-[#6E6E73]">
               Each third-party service has its own privacy policy. We only share the minimum data necessary for functionality.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">7. Your Rights (GDPR/CCPA)</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">7. Your Rights (GDPR/CCPA)</h2>
             <p>You have the right to:</p>
             <ul className="list-disc pl-6 space-y-2 mt-2">
               <li><strong>Access:</strong> Request a copy of data we have about you</li>
@@ -103,7 +103,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">8. Data Security</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">8. Data Security</h2>
             <p>
               We implement industry-standard security measures including:
             </p>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">9. International Transfers</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">9. International Transfers</h2>
             <p>
               Our services are hosted in the United States and European Union. If you are located outside these regions,
               your data may be transferred internationally. We ensure appropriate safeguards are in place for such transfers.
@@ -124,10 +124,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">10. Contact & Data Protection Officer</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">10. Contact & Data Protection Officer</h2>
             <p>
               For privacy concerns or data requests, contact us at:{' '}
-              <a href="mailto:privacy@zkvanguard.io" className="text-blue-600 dark:text-blue-400 hover:underline">
+              <a href="mailto:privacy@zkvanguard.io" className="text-[#007AFF] hover:underline">
                 privacy@zkvanguard.io
               </a>
             </p>
@@ -137,14 +137,14 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">11. Changes to This Policy</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-[#1D1D1F]">11. Changes to This Policy</h2>
             <p>
               We may update this policy periodically. Significant changes will be notified via the platform.
               Continued use after changes constitutes acceptance.
             </p>
           </section>
 
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-[#6E6E73] mt-8 pt-8 border-t border-[#E5E5EA]">
             Last Updated: January 13, 2026
           </p>
         </div>
