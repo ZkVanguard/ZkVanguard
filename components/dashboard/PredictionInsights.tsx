@@ -153,7 +153,7 @@ export const PredictionInsights = memo(function PredictionInsights({
                 </span>
               )}
             </div>
-            <p className="text-[11px] sm:text-[12px] text-[#86868b]">Delphi prediction markets</p>
+            <p className="text-[11px] sm:text-[12px] text-[#86868b]">Delphi & Polymarket predictions</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -316,14 +316,24 @@ export const PredictionInsights = memo(function PredictionInsights({
               <span className="text-[11px] text-[#86868b]">
                 {hedgeCount > 0 ? `${hedgeCount} require action` : 'No immediate actions needed'}
               </span>
-              <a
-                href="https://delphi.markets"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[11px] text-[#AF52DE] font-medium"
-              >
-                Delphi <ExternalLink className="w-3 h-3" />
-              </a>
+              <div className="flex items-center gap-3">
+                <a
+                  href="https://polymarket.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-[#007AFF] font-medium"
+                >
+                  Polymarket <ExternalLink className="w-3 h-3" />
+                </a>
+                <a
+                  href="https://delphi.markets"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-[#AF52DE] font-medium"
+                >
+                  Delphi <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
           )}
         </>

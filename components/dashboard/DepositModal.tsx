@@ -6,6 +6,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicCl
 import { parseUnits, formatUnits } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { X402GaslessService } from '../../lib/services/X402GaslessService';
 import { ethers } from 'ethers';
 
@@ -145,18 +146,39 @@ export function DepositModal({
 
   // Handle approve success - proceed to deposit
   useEffect(() => {
-    if (isApproveSuccess && step === 'approve') {
+    if (isApproveSuccess && step === 'approve' && approveHash && address) {
+      // Track the approval transaction
+      trackSuccessfulTransaction({
+        hash: approveHash,
+        type: 'approve',
+        from: address,
+        to: selectedToken.address,
+        value: amount,
+        tokenSymbol: selectedToken.symbol,
+        description: `Approve ${selectedToken.symbol} for Portfolio #${portfolioId}`,
+      });
       handleDeposit();
     }
-  }, [isApproveSuccess]);
+  }, [isApproveSuccess, approveHash, address, step]);
 
   // Handle deposit success
   useEffect(() => {
-    if (isDepositSuccess) {
+    if (isDepositSuccess && depositHash && address) {
+      // Track the successful deposit transaction
+      trackSuccessfulTransaction({
+        hash: depositHash,
+        type: 'deposit',
+        from: address,
+        to: rwaManagerAddress,
+        value: amount,
+        tokenSymbol: selectedToken.symbol,
+        description: `Deposit ${amount} ${selectedToken.symbol} to Portfolio #${portfolioId}`,
+      });
+      
       setStep('success');
       onSuccess?.();
     }
-  }, [isDepositSuccess]);
+  }, [isDepositSuccess, depositHash, address, amount, selectedToken.symbol, portfolioId, rwaManagerAddress]);
 
   // Handle errors
   useEffect(() => {

@@ -6,6 +6,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicCl
 import { parseUnits, formatUnits } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
 // Token info map
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
@@ -87,11 +88,22 @@ export function WithdrawModal({
 
   // Handle withdraw success
   useEffect(() => {
-    if (isWithdrawSuccess) {
+    if (isWithdrawSuccess && withdrawHash && address) {
+      // Track the successful withdraw transaction
+      trackSuccessfulTransaction({
+        hash: withdrawHash,
+        type: 'withdraw',
+        from: rwaManagerAddress,
+        to: address,
+        value: amount,
+        tokenSymbol: tokenInfo.symbol,
+        description: `Withdraw ${amount} ${tokenInfo.symbol} from Portfolio #${portfolioId}`,
+      });
+      
       setStep('success');
       onSuccess?.();
     }
-  }, [isWithdrawSuccess, onSuccess]);
+  }, [isWithdrawSuccess, withdrawHash, address, amount, tokenInfo.symbol, portfolioId, rwaManagerAddress]);
 
   // Handle errors
   useEffect(() => {

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, Loader2, ExternalLink, Wallet, Plus, Trash2, Zap, Shield } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useProcessSettlement, useContractAddresses } from '../../lib/contracts/hooks';
 import { parseEther, parseUnits } from 'viem';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
 interface Payment {
   recipient: string;
@@ -29,6 +30,22 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
   const [payments, setPayments] = useState<Payment[]>([
     { recipient: '', amount: '', token: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' } // DevUSDC default
   ]);
+
+  // Track standard settlement when confirmed
+  useEffect(() => {
+    if (isConfirmed && hash && address) {
+      const totalAmount = payments.reduce((sum, p) => sum + parseFloat(p.amount || '0'), 0);
+      trackSuccessfulTransaction({
+        hash,
+        type: 'transfer',
+        from: address,
+        to: contractAddresses.paymentRouter,
+        value: totalAmount.toString(),
+        tokenSymbol: 'CRO',
+        description: `Standard Settlement (${payments.length} payments)`,
+      });
+    }
+  }, [isConfirmed, hash, address, payments, contractAddresses.paymentRouter]);
 
   const addPayment = () => {
     setPayments([...payments, { recipient: '', amount: '', token: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' }]);
@@ -144,6 +161,17 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
       const settleResult = await settleResponse.json();
 
       if (settleResult.ok && settleResult.txHash) {
+        // Track the successful X402 settlement transaction
+        trackSuccessfulTransaction({
+          hash: settleResult.txHash,
+          type: 'transfer',
+          from: address,
+          to: '0x44098d0dE36e157b4C1700B48d615285C76fdE47', // X402 Gasless contract
+          value: totalAmount.toString(),
+          tokenSymbol: 'USDC',
+          description: `X402 Gasless Settlement (${payments.length} payments)`,
+        });
+        
         setX402TxHash(settleResult.txHash);
         setX402Status('success');
       } else {

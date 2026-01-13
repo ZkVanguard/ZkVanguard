@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useEffect } from 'react';
 import { usePublicClient, useChainId } from 'wagmi';
 import { formatUnits, formatEther } from 'viem';
 import { 
@@ -74,6 +74,34 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
     : 'https://explorer.cronos.org';
   
   const network = chainId === 338 ? 'testnet' : 'mainnet';
+
+  // Listen for storage events to update transactions in real-time
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'recent-transactions' && e.newValue) {
+        try {
+          const newTxs = JSON.parse(e.newValue);
+          if (Array.isArray(newTxs)) {
+            setTransactions(prev => {
+              // Merge new transactions with existing ones
+              const merged = [...newTxs];
+              prev.forEach(tx => {
+                if (!merged.find(t => t.hash === tx.hash)) {
+                  merged.push(tx);
+                }
+              });
+              return merged.sort((a, b) => b.timestamp - a.timestamp);
+            });
+          }
+        } catch (err) {
+          console.error('Error parsing storage event:', err);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const fetchTransactions = useCallback(async (showRefreshIndicator = false) => {
     if (!publicClient || !address || address === '0x0000...0000') {
