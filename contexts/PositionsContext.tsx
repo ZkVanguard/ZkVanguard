@@ -94,6 +94,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
     try {
       console.log(`🔄 [PositionsContext] Fetching positions for ${address} (deduped)`);
+      console.log(`📊 [PositionsContext] Loading: CRO, devUSDC, WCRO balances...`);
       lastFetchRef.current = now;
       
       // Use deduped fetch to prevent duplicate requests
@@ -110,6 +111,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log(`✅ [PositionsContext] Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`);
+      console.log(`📊 [PositionsContext] Positions:`, data.positions?.map((p: any) => `${p.symbol}: $${p.balanceUSD}`).join(', '));
       setPositionsData(data);
       
       // Cache for 30 seconds

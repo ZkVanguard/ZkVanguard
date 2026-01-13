@@ -263,20 +263,80 @@ export function PositionsList({ address }: { address: string }) {
     }
   };
 
-  // Show loading state with progress bar until positions AND portfolios are ready
+  // Show loading state with detailed skeleton for expected tokens
   if (loading || !positionsData || portfolioLoading || !hasInitiallyLoaded) {
+    const expectedTokens = ['CRO', 'devUSDC', 'WCRO'];
+    
     return (
-      <div className="space-y-4">
-        <div className="bg-white rounded-[20px] shadow-sm border border-black/5 p-8">
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-12 h-12 bg-[#007AFF]/10 rounded-full flex items-center justify-center mb-4">
-              <RefreshCw className="w-6 h-6 text-[#007AFF] animate-spin" />
+      <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4">
+        {/* Header skeleton */}
+        <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-6 w-32 bg-[#e8e8ed] rounded animate-pulse" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#007AFF]/10 rounded-full">
+                  <RefreshCw className="w-3 h-3 text-[#007AFF] animate-spin" />
+                  <span className="text-[9px] font-bold text-[#007AFF]">LOADING</span>
+                </span>
+              </div>
+              <div className="h-3 w-48 bg-[#e8e8ed] rounded animate-pulse" />
             </div>
-            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Loading Portfolio</h3>
-            <p className="text-[13px] text-[#86868b] mb-4">Fetching your positions and strategies...</p>
-            {/* Progress bar */}
-            <div className="w-full max-w-[200px] h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
-              <div className="h-full bg-[#007AFF] rounded-full animate-pulse" style={{ width: '60%' }} />
+            <div className="text-right">
+              <div className="h-8 w-32 bg-[#e8e8ed] rounded animate-pulse mb-1" />
+              <div className="h-3 w-24 bg-[#e8e8ed] rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Token skeletons with loading indicators */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Loading Positions</h3>
+            <span className="text-[11px] text-[#86868b]">Fetching balances...</span>
+          </div>
+          
+          {expectedTokens.map((token, index) => (
+            <div
+              key={token}
+              className="bg-white rounded-[14px] p-4 border border-[#e8e8ed] shadow-sm"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Token icon skeleton */}
+                  <div className="w-10 h-10 bg-[#f5f5f7] rounded-full animate-pulse" />
+                  
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[15px] font-semibold text-[#1d1d1f]">{token}</span>
+                      <span className="text-[11px] text-[#86868b] bg-[#f5f5f7] px-2 py-0.5 rounded flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-[#007AFF] rounded-full animate-pulse" />
+                        Loading
+                      </span>
+                    </div>
+                    <div className="h-3 w-24 bg-[#f5f5f7] rounded animate-pulse" />
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="h-5 w-20 bg-[#f5f5f7] rounded animate-pulse mb-1" />
+                  <div className="h-3 w-16 bg-[#f5f5f7] rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Progress indicator */}
+        <div className="bg-white rounded-[14px] p-4 border border-[#e8e8ed]">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 text-[#007AFF] animate-spin flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-[13px] text-[#1d1d1f] font-medium mb-1">Fetching market data</p>
+              <div className="w-full h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
+                <div className="h-full bg-[#007AFF] rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{ width: '60%' }} />
+              </div>
             </div>
           </div>
         </div>
