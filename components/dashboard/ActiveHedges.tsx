@@ -24,6 +24,7 @@ interface HedgePosition {
   openedAt: Date;
   closedAt?: Date;
   reason: string;
+  txHash?: string;
 }
 
 interface PerformanceStats {
@@ -99,48 +100,63 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         if (batch.type === 'hedge' && batch.managerSignature) {
           const hedgeData = batch.hedgeDetails || {};
           const isClosed = batch.status === 'closed';
+          const assetSymbol = hedgeData.asset?.replace('-PERP', '') || 'BTC';
+          
+          // Get real-time price for the asset
+          let realTimePrice: number;
+          try {
+            const marketData = getMarketDataService();
+            const priceData = await marketData.getTokenPrice(assetSymbol);
+            realTimePrice = priceData.price;
+          } catch {
+            realTimePrice = hedgeData.entryPrice || 0;
+          }
           
           let currentPrice: number;
           let pnl: number;
           let pnlPercent: number;
           
+          // Use stored entry price, or current market price if not available
+          const entryPrice = hedgeData.entryPrice || realTimePrice;
+          
           if (isClosed) {
-            currentPrice = hedgeData.entryPrice || 43500;
+            currentPrice = entryPrice; // Show entry price for closed positions
             pnl = batch.finalPnL || 0;
             pnlPercent = batch.finalPnLPercent || 0;
           } else {
-            try {
-              const marketData = getMarketDataService();
-              const assetSymbol = hedgeData.asset?.replace('-PERP', '') || 'BTC';
-              const priceData = await marketData.getTokenPrice(assetSymbol);
-              currentPrice = priceData.price;
-            } catch {
-              currentPrice = hedgeData.entryPrice;
-            }
+            currentPrice = realTimePrice;
+            const size = hedgeData.size || 0;
+            const leverage = hedgeData.leverage || 1;
+            const capitalUsed = hedgeData.capitalUsed || 0;
+            
             pnl = hedgeData.type === 'SHORT' 
-              ? (hedgeData.entryPrice - currentPrice) * hedgeData.size * hedgeData.leverage
-              : (currentPrice - hedgeData.entryPrice) * hedgeData.size * hedgeData.leverage;
-            pnlPercent = (pnl / hedgeData.capitalUsed) * 100;
+              ? (entryPrice - currentPrice) * size * leverage
+              : (currentPrice - entryPrice) * size * leverage;
+            pnlPercent = capitalUsed > 0 ? (pnl / capitalUsed) * 100 : 0;
           }
 
-          hedgePositions.push({
-            id: batch.batchId,
-            type: hedgeData.type || 'SHORT',
-            asset: hedgeData.asset || 'BTC-PERP',
-            size: hedgeData.size || 0.007,
-            leverage: hedgeData.leverage || 10,
-            entryPrice: hedgeData.entryPrice || 43500,
-            currentPrice,
-            targetPrice: hedgeData.targetPrice || 42800,
-            stopLoss: hedgeData.stopLoss || 45200,
-            capitalUsed: hedgeData.capitalUsed || 15,
-            pnl,
-            pnlPercent,
-            status: isClosed ? 'closed' : 'active',
-            openedAt: new Date(batch.timestamp),
-            closedAt: isClosed ? new Date(batch.closedAt) : undefined,
-            reason: hedgeData.reason || 'Portfolio protection',
-          });
+          // Only add positions that have valid data
+          if (entryPrice > 0) {
+            hedgePositions.push({
+              id: batch.batchId,
+              type: hedgeData.type || 'SHORT',
+              asset: hedgeData.asset || `${assetSymbol}-PERP`,
+              size: hedgeData.size || 0,
+              leverage: hedgeData.leverage || 1,
+              entryPrice,
+              currentPrice,
+              targetPrice: hedgeData.targetPrice || entryPrice * 0.98, // 2% below entry for shorts
+              stopLoss: hedgeData.stopLoss || entryPrice * 1.04, // 4% above entry for shorts
+              capitalUsed: hedgeData.capitalUsed || 0,
+              pnl,
+              pnlPercent,
+              status: isClosed ? 'closed' : 'active',
+              openedAt: new Date(batch.timestamp),
+              closedAt: isClosed ? new Date(batch.closedAt) : undefined,
+              reason: hedgeData.reason || 'Portfolio protection',
+              txHash: batch.txHash,
+            });
+          }
         }
       }
 
@@ -154,13 +170,28 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       const bestTrade = Math.max(...hedgePositions.map(h => h.pnl), 0);
       const worstTrade = Math.min(...hedgePositions.map(h => h.pnl), 0);
 
+      // Calculate real average hold time from closed positions
+      let avgHoldTime = '--';
+      if (closedHedgesList.length > 0) {
+        const totalHoldMs = closedHedgesList.reduce((sum, h) => {
+          if (h.closedAt && h.openedAt) {
+            return sum + (new Date(h.closedAt).getTime() - new Date(h.openedAt).getTime());
+          }
+          return sum;
+        }, 0);
+        const avgMs = totalHoldMs / closedHedgesList.length;
+        const hours = Math.floor(avgMs / (1000 * 60 * 60));
+        const mins = Math.floor((avgMs % (1000 * 60 * 60)) / (1000 * 60));
+        avgHoldTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      }
+
       setHedges(hedgePositions.reverse());
       setStats({
         totalHedges: hedgePositions.length,
         activeHedges: activeCount,
         winRate,
         totalPnL,
-        avgHoldTime: '2h 15m',
+        avgHoldTime,
         bestTrade,
         worstTrade,
       });
@@ -253,13 +284,19 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           </div>
         </div>
       ) : compact ? (
-        /* Compact view for Overview - just show summary */
+        /* Compact view for Overview - show summary with clear status */
         <div>
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#34C759] uppercase tracking-[0.04em] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[#34C759]/10 rounded-full">
-                {stats.activeHedges} Active
-              </span>
+              {stats.activeHedges > 0 ? (
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#34C759] uppercase tracking-[0.04em] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[#34C759]/10 rounded-full">
+                  {stats.activeHedges} Active
+                </span>
+              ) : (
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#86868b] uppercase tracking-[0.04em] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[#f5f5f7] rounded-full">
+                  {stats.totalHedges} Closed
+                </span>
+              )}
             </div>
             <div className={`text-[17px] sm:text-[20px] font-bold ${stats.totalPnL >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
               {stats.totalPnL >= 0 ? '+' : ''}{stats.totalPnL.toFixed(2)} USDC
@@ -280,33 +317,85 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             </div>
           </div>
 
-          {/* Active positions preview */}
+          {/* Show active or recent closed positions */}
           <div className="space-y-2">
-            {activeHedges.slice(0, 2).map((hedge) => (
-              <div key={hedge.id} className="flex items-center justify-between p-2 sm:p-3 bg-[#f5f5f7] rounded-[10px] sm:rounded-[12px]">
-                <div className="flex items-center gap-2">
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] sm:rounded-[10px] flex items-center justify-center ${
-                    hedge.type === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
-                  }`}>
-                    {hedge.type === 'SHORT' ? (
-                      <TrendingDown className="w-4 h-4 text-[#FF3B30]" strokeWidth={2.5} />
-                    ) : (
-                      <TrendingUp className="w-4 h-4 text-[#34C759]" strokeWidth={2.5} />
-                    )}
+            {activeHedges.length > 0 ? (
+              /* Active positions */
+              activeHedges.slice(0, 2).map((hedge) => (
+                <div key={hedge.id} className="flex items-center justify-between p-2 sm:p-3 bg-[#34C759]/5 rounded-[10px] sm:rounded-[12px] border border-[#34C759]/20">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] sm:rounded-[10px] flex items-center justify-center ${
+                      hedge.type === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
+                    }`}>
+                      {hedge.type === 'SHORT' ? (
+                        <TrendingDown className="w-4 h-4 text-[#FF3B30]" strokeWidth={2.5} />
+                      ) : (
+                        <TrendingUp className="w-4 h-4 text-[#34C759]" strokeWidth={2.5} />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
+                        <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded">ACTIVE</span>
+                      </div>
+                      <div className="text-[11px] text-[#86868b]">{hedge.reason}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</div>
-                    <div className="text-[11px] text-[#86868b]">{hedge.reason}</div>
+                  <div className={`text-[15px] font-bold ${hedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                    {hedge.pnl >= 0 ? '+' : ''}{hedge.pnl.toFixed(2)}
                   </div>
                 </div>
-                <div className={`text-[15px] font-bold ${hedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                  {hedge.pnl >= 0 ? '+' : ''}{hedge.pnl.toFixed(2)}
+              ))
+            ) : closedHedges.length > 0 ? (
+              /* Show recent closed positions when no active */
+              closedHedges.slice(0, 2).map((hedge) => (
+                <div key={hedge.id} className="flex items-center justify-between p-2 sm:p-3 bg-[#f5f5f7] rounded-[10px] sm:rounded-[12px] opacity-80">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] sm:rounded-[10px] flex items-center justify-center ${
+                      hedge.type === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
+                    }`}>
+                      {hedge.type === 'SHORT' ? (
+                        <TrendingDown className="w-4 h-4 text-[#FF3B30]" strokeWidth={2.5} />
+                      ) : (
+                        <TrendingUp className="w-4 h-4 text-[#34C759]" strokeWidth={2.5} />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
+                        <span className="px-1.5 py-0.5 bg-[#86868b] text-white text-[9px] font-bold rounded">CLOSED</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
+                        <span>{hedge.closedAt ? `Closed ${new Date(hedge.closedAt).toLocaleDateString()}` : hedge.reason}</span>
+                        {hedge.txHash && (
+                          <a
+                            href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="font-mono">{hedge.txHash.slice(0, 6)}...{hedge.txHash.slice(-4)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`text-[15px] font-bold ${hedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                    {hedge.pnl >= 0 ? '+' : ''}{hedge.pnl.toFixed(2)}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : null}
             {activeHedges.length > 2 && (
               <div className="text-center text-[13px] text-[#86868b] pt-1">
-                +{activeHedges.length - 2} more positions
+                +{activeHedges.length - 2} more active
+              </div>
+            )}
+            {activeHedges.length === 0 && closedHedges.length > 2 && (
+              <div className="text-center text-[13px] text-[#86868b] pt-1">
+                +{closedHedges.length - 2} more closed
               </div>
             )}
           </div>
@@ -353,7 +442,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           )}
 
           {/* Active Positions - Preview or Full View */}
-          {activeHedges.length > 0 && (
+          {activeHedges.length > 0 ? (
             <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/5 p-3 sm:p-5">
               {!showClosedPositions ? (
                 /* Compact Preview - Horizontal Scroll (Apple Music style) */
@@ -527,10 +616,69 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                 </div>
               )}
             </div>
-          )}
+          ) : closedHedges.length > 0 ? (
+            /* Show closed positions when no active hedges */
+            <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/5 p-3 sm:p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
+                  Closed Positions
+                </h3>
+                <span className="text-[11px] text-[#86868b]">{closedHedges.length} total</span>
+              </div>
+              <div className="space-y-2">
+                {closedHedges.map((hedge) => (
+                  <div
+                    key={hedge.id}
+                    className="flex items-center justify-between p-3 bg-[#f5f5f7] rounded-[12px]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center ${
+                        hedge.type === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
+                      }`}>
+                        {hedge.type === 'SHORT' ? (
+                          <TrendingDown className="w-4 h-4 text-[#FF3B30]" strokeWidth={2} />
+                        ) : (
+                          <TrendingUp className="w-4 h-4 text-[#34C759]" strokeWidth={2} />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
+                          <span className="px-1.5 py-0.5 bg-[#86868b]/20 text-[#86868b] text-[9px] font-bold rounded">CLOSED</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
+                          <span>{hedge.closedAt ? `Closed ${new Date(hedge.closedAt).toLocaleDateString()}` : hedge.reason}</span>
+                          {hedge.txHash && (
+                            <a
+                              href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="font-mono">{hedge.txHash.slice(0, 6)}...{hedge.txHash.slice(-4)}</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-[15px] font-bold ${hedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                        {hedge.pnl >= 0 ? '+' : ''}{hedge.pnl.toFixed(2)}
+                      </div>
+                      <div className={`text-[11px] ${hedge.pnlPercent >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                        {hedge.pnlPercent >= 0 ? '+' : ''}{hedge.pnlPercent.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
-          {/* Closed Positions - Only in expanded view */}
-          {closedHedges.length > 0 && showClosedPositions && (
+          {/* Closed Positions - Only in expanded view when there ARE active hedges */}
+          {closedHedges.length > 0 && activeHedges.length > 0 && showClosedPositions && (
             <div className="bg-white rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/5 p-5 mt-4">
               <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3 tracking-[-0.01em]">
                 Closed Positions ({closedHedges.length})
@@ -560,8 +708,20 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               Closed
                             </span>
                           </div>
-                          <div className="text-[11px] text-[#86868b] mt-0.5">
-                            {hedge.closedAt && `Closed ${new Date(hedge.closedAt).toLocaleString()}`}
+                          <div className="flex items-center gap-2 text-[11px] text-[#86868b] mt-0.5">
+                            <span>{hedge.closedAt && `Closed ${new Date(hedge.closedAt).toLocaleString()}`}</span>
+                            {hedge.txHash && (
+                              <a
+                                href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="font-mono">{hedge.txHash.slice(0, 6)}...{hedge.txHash.slice(-4)}</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
                           </div>
                         </div>
                       </div>

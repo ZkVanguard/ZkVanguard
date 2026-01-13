@@ -143,13 +143,12 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
       const settleResult = await settleResponse.json();
 
-      if (settleResult.ok) {
-        setX402TxHash(settleResult.txHash || 'x402-demo-tx');
+      if (settleResult.ok && settleResult.txHash) {
+        setX402TxHash(settleResult.txHash);
         setX402Status('success');
       } else {
-        // Demo mode fallback
-        setX402TxHash(`0x${Date.now().toString(16)}${'0'.repeat(48)}`);
-        setX402Status('success');
+        // No fallback - if settlement fails, show error
+        throw new Error(settleResult.error || 'Settlement failed - no transaction hash returned');
       }
     } catch (err) {
       console.error('X402 settlement error:', err);

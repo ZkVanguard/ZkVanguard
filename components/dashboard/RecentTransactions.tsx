@@ -337,57 +337,8 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
         txList = results.filter((tx): tx is Transaction => tx !== null);
       }
 
-      // Always add known transactions from recent activity and localStorage
-      console.log(`Transactions from RPC: ${txList.length}, adding known transactions...`);
-      
-      // Known platform transactions (deployed contracts & user interactions)
-      const knownPlatformTxs: Transaction[] = [
-        // X402 Gasless ZK Verifier deployment
-        {
-          hash: '0x5e4247c3eb7ae5f533ec124be721b8af72d44674761bd11300774b013a1d49cf',
-          type: 'gasless',
-          status: 'success',
-          timestamp: Date.now() - 300000, // Recent API test
-          from: address,
-          to: '0x44098d0dE36e157b4C1700B48d615285C76fdE47',
-          value: '0.01',
-          tokenSymbol: 'USDC',
-          gasUsed: '0',
-          blockNumber: 0,
-        },
-        // Payment Router deployment/interaction
-        {
-          hash: '0x0c66e9c06c7f14d1b37e0c7a7a9b5e5b5b5b5b5b5b5b5b5b5b5b5b5b550eee4',
-          type: 'unknown',
-          status: 'success',
-          timestamp: new Date('2026-01-09').getTime(),
-          from: address,
-          to: '0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b',
-          value: '0',
-          gasUsed: '0.001',
-          blockNumber: 0,
-        },
-        // Recent x402 gasless transaction
-        {
-          hash: '0x779f89d47c5c2161a439d1799f885f85d5159660f571f020d41320c70aab5989',
-          type: 'gasless',
-          status: 'success',
-          timestamp: Date.now() - 600000,
-          from: address,
-          to: '0x44098d0dE36e157b4C1700B48d615285C76fdE47',
-          value: '0.01',
-          tokenSymbol: 'USDC',
-          gasUsed: '0',
-          blockNumber: 0,
-        },
-      ];
-      
-      // Add known transactions if not already present
-      knownPlatformTxs.forEach(knownTx => {
-        if (!txList.find(tx => tx.hash === knownTx.hash)) {
-          txList.push(knownTx);
-        }
-      });
+      // Add hedge settlements from localStorage (real user transactions only)
+      console.log(`Transactions from RPC: ${txList.length}, checking for hedge settlements...`);
       
       // Add hedge settlements from localStorage
       try {

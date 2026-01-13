@@ -176,7 +176,9 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
       
       <p className="text-[10px] sm:text-[11px] text-[#86868b] mb-3 sm:mb-4">
         {error ? (
-          <span className="text-[#FF9500]">Demo mode • Real agents with ZK verification</span>
+          <span className="text-[#FF9500]">Unable to load activity • Check connection</span>
+        ) : tasks.length === 1 && tasks[0].agentType === 'system' ? (
+          'AI agents standing by • Use chat to trigger actions'
         ) : (
           'Real AI agents with ZK-verified decisions • Live market data'
         )}
