@@ -1,7 +1,7 @@
 /**
  * Real Market Data Service
- * Aggregates real-time market data from multiple sources
- * Priority: Crypto.com Exchange API → MCP Server → VVS Finance → Cache → Mock
+ * Aggregates real-time market data from Crypto.com sources only
+ * Priority: Crypto.com Exchange API → MCP Server → Stale Cache (NO MOCKS)
  */
 
 import axios from 'axios';
@@ -49,9 +49,24 @@ class RealMarketDataService {
   private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
 
   constructor() {
-    // Initialize Cronos Testnet provider (tCRO)
+    // OPTIMIZATION 1: Use StaticJsonRpcProvider for better caching (no network detection)
+    // OPTIMIZATION 2: Configure connection pooling and lower polling interval
+    const connectionInfo = {
+      url: process.env.CRONOS_RPC_URL || 'https://evm-t3.cronos.org',
+      timeout: 5000, // 5s timeout for RPC calls
+    };
+    
     this.provider = new ethers.JsonRpcProvider(
-      process.env.CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
+      connectionInfo.url,
+      {
+        chainId: 338, // Cronos Testnet
+        name: 'cronos-testnet',
+      },
+      {
+        staticNetwork: true, // Don't detect network on every call
+        batchMaxCount: 10, // Batch up to 10 calls together
+        polling: false, // Don't poll for new blocks
+      }
     );
   }
 
@@ -77,9 +92,8 @@ class RealMarketDataService {
    * Get real-time price for a token with multi-source fallback
    * 1. Crypto.com Exchange API (100 req/s)
    * 2. Crypto.com MCP Server (free, no rate limits)
-   * 3. VVS Finance (for CRC20 tokens on Cronos)
-   * 4. Stale cache (if available)
-   * 5. Mock prices (last resort)
+   * 3. Stale cache (if available)
+   * NO MOCK PRICES - Real data only from Crypto.com
    */
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
@@ -121,7 +135,7 @@ class RealMarketDataService {
       };
     }
 
-    // Return cached if fresh
+    // OPTIMIZATION: Return cached if fresh (< 45s)
     if (cached && now - cached.timestamp < this.CACHE_TTL) {
       return {
         symbol,
@@ -131,6 +145,26 @@ class RealMarketDataService {
         timestamp: cached.timestamp,
         source: 'cache',
       };
+    }
+
+    // OPTIMIZATION: If we have stale cache, return it immediately and refresh in background
+    if (cached && now - cached.timestamp < 300000) { // 5 minutes stale cache
+      console.log(`⚡ [RealMarketData] Using stale cache for ${symbol}, refreshing in background`);
+      
+      // Return stale data immediately
+      const staleResult = {
+        symbol,
+        price: cached.price,
+        change24h: 0,
+        volume24h: 0,
+        timestamp: cached.timestamp,
+        source: 'stale_cache',
+      };
+      
+      // Refresh in background (don't await)
+      this._refreshPriceInBackground(symbol, cacheKey).catch(() => {});
+      
+      return staleResult;
     }
 
     // Fast deterministic fallback for tests/CI
@@ -215,34 +249,8 @@ class RealMarketDataService {
       console.warn(`⚠️ [RealMarketData] MCP Server failed for ${symbol}:`, error.message);
     }
 
-    // SOURCE 3: VVS Finance (FALLBACK 2 - for CRC20 tokens on Cronos) with timeout
-    try {
-      console.log(`📊 [RealMarketData] Trying VVS Finance for ${symbol}`);
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('VVS timeout')), 2000)
-      );
-      const vvsPrice = await Promise.race([
-        this.getVVSPrice(symbol),
-        timeoutPromise
-      ]);
-      if (vvsPrice) {
-        this.priceCache.set(cacheKey, { price: vvsPrice, timestamp: Date.now() });
-        console.log(`✅ [RealMarketData] Got ${symbol} from VVS: $${vvsPrice}`);
-        return {
-          symbol,
-          price: vvsPrice,
-          change24h: 0,
-          volume24h: 0,
-          timestamp: Date.now(),
-          source: 'vvs',
-        };
-      }
-    } catch (error) {
-      console.warn(`⚠️ [RealMarketData] VVS price fetch failed for ${symbol}:`, error);
-    }
-
-    // FALLBACK 3: Stale cache if available
-    if (cached) {
+    // FALLBACK 3: Stale cache if available (up to 1 hour old)
+    if (cached && now - cached.timestamp < 3600000) {
       console.warn(`⚠️ [RealMarketData] Using stale cache for ${symbol} (${Math.round((now - cached.timestamp) / 1000)}s old)`);
       return {
         symbol,
@@ -254,16 +262,36 @@ class RealMarketDataService {
       };
     }
 
-    // FALLBACK 4: Mock price (last resort)
-    const mockPrice = this.getMockPrice(symbol);
-    console.warn(`⚠️ [RealMarketData] All sources failed for ${symbol}, using mock price: $${mockPrice}`);
-    return {
-      symbol,
-      price: mockPrice,
-      change24h: 0,
-      volume24h: 0,
-      timestamp: now,
-      source: 'mock',
+    // FINAL: Throw error - NO MOCK PRICES
+    console.error(`❌ [RealMarketData] All Crypto.com sources failed for ${symbol}`);
+    throw new Error(`Unable to fetch real price for ${symbol} from Crypto.com sources. Please try again.`);
+  }
+
+  /**
+   * Refresh price in background (for stale-while-revalidate pattern)
+   */
+  private async _refreshPriceInBackground(symbol: string, cacheKey: string): Promise<void> {
+    try {
+      // Try Exchange API first
+      const exchangeData = await Promise.race([
+        cryptocomExchangeService.getMarketData(symbol),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+      ]);
+      
+      this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
+      console.log(`🔄 [RealMarketData] Background refresh: ${symbol} = $${exchangeData.price}`);
+    } catch (error) {
+      // Try MCP as fallback
+      try {
+        const mcpData = await this.getMCPServerPrice(symbol);
+        if (mcpData) {
+          this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
+          console.log(`🔄 [RealMarketData] Background refresh (MCP): ${symbol} = $${mcpData.price}`);
+        }
+      } catch {
+        console.warn(`⚠️ [RealMarketData] Background refresh failed for ${symbol}`);
+      }
+    }
     };
   }
 
@@ -365,31 +393,58 @@ class RealMarketDataService {
       const balances = (await Promise.all(balancePromises)).filter((b): b is NonNullable<typeof b> => b !== null && parseFloat(b.balance) > 0);
       console.log(`⏱️ [RealMarketData] Fetched ${balances.length} balances in ${Date.now() - balanceStart}ms`);
 
-      // PARALLEL: Fetch all prices simultaneously
+      // OPTIMIZATION: Use Crypto.com Exchange batch API for all prices at once
       const priceStart = Date.now();
-      const pricePromises = balances.map(async (tokenBalance) => {
-        try {
-          const price = await this.getTokenPrice(tokenBalance.symbol);
-          const value = parseFloat(tokenBalance.balance) * price.price;
-
-          return {
-            token: tokenBalance.token,
-            symbol: tokenBalance.symbol,
-            balance: tokenBalance.balance,
-            decimals: tokenBalance.decimals,
-            usdValue: value,
-          };
-        } catch (error) {
-          console.debug(`Failed to fetch ${tokenBalance.symbol} price:`, error);
-          return null;
+      const symbols = balances.map(b => b.symbol);
+      
+      try {
+        // Fetch all prices in one batch call
+        const batchPrices = await cryptocomExchangeService.getBatchPrices(symbols);
+        console.log(`⏱️ [RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
+        
+        // Map balances to final token data
+        for (const tokenBalance of balances) {
+          const price = batchPrices[tokenBalance.symbol];
+          if (price) {
+            const value = parseFloat(tokenBalance.balance) * price;
+            tokens.push({
+              token: tokenBalance.token,
+              symbol: tokenBalance.symbol,
+              balance: tokenBalance.balance,
+              decimals: tokenBalance.decimals,
+              usdValue: value,
+            });
+            totalValue += value;
+          } else {
+            console.warn(`⚠️ [RealMarketData] No price found for ${tokenBalance.symbol}`);
+          }
         }
-      });
+      } catch (error) {
+        console.error(`❌ [RealMarketData] Batch price fetch failed, falling back to individual:`, error);
+        
+        // Fallback: fetch prices individually if batch fails
+        const pricePromises = balances.map(async (tokenBalance) => {
+          try {
+            const price = await this.getTokenPrice(tokenBalance.symbol);
+            const value = parseFloat(tokenBalance.balance) * price.price;
 
-      const tokenResults = (await Promise.all(pricePromises)).filter((t): t is TokenBalance => t !== null);
-      console.log(`⏱️ [RealMarketData] Fetched ${tokenResults.length} prices in ${Date.now() - priceStart}ms`);
+            return {
+              token: tokenBalance.token,
+              symbol: tokenBalance.symbol,
+              balance: tokenBalance.balance,
+              decimals: tokenBalance.decimals,
+              usdValue: value,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch ${tokenBalance.symbol} price:`, error);
+            return null;
+          }
+        });
 
-      tokens.push(...tokenResults);
-      totalValue = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+        const tokenResults = (await Promise.all(pricePromises)).filter((t): t is TokenBalance => t !== null);
+        tokens.push(...tokenResults);
+        totalValue = tokens.reduce((sum, t) => sum + t.usdValue, 0);
+      }
 
       console.log(`⏱️ [RealMarketData] Total portfolio data fetch: ${Date.now() - portfolioStart}ms`);
 
