@@ -58,25 +58,36 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Debounce: prevent fetching more than once per 2 seconds (reduced from 5s)
+    // Check cache first (30s TTL) - show immediately, refresh in background
+    const cacheKey = `positions-${address}`;
+    const cached = cache.get<PositionsData>(cacheKey);
+    
+    // OPTIMIZATION: Show cached data immediately if available (stale-while-revalidate)
+    if (cached) {
+      console.log('⚡ [PositionsContext] Using cached positions (will refresh in background)');
+      setPositionsData(cached);
+      setLoading(false);
+      
+      // Check if cache is fresh enough (< 30s), skip refresh if so
+      const now = Date.now();
+      if (now - lastFetchRef.current < 30000 && !isBackgroundRefresh) {
+        console.log('⏭️ [PositionsContext] Cache is fresh, skipping background refresh');
+        return;
+      }
+      
+      // Continue to fetch fresh data in background
+      isBackgroundRefresh = true;
+    }
+
+    // Debounce: prevent fetching more than once per 1 second (reduced from 2s)
     const now = Date.now();
-    if (now - lastFetchRef.current < 2000 && !isBackgroundRefresh) {
+    if (now - lastFetchRef.current < 1000 && !isBackgroundRefresh) {
       console.log('⏭️ [PositionsContext] Skipping fetch - too soon after last request');
       return;
     }
 
-    // Check cache first (30s TTL)
-    const cacheKey = `positions-${address}`;
-    const cached = cache.get<PositionsData>(cacheKey);
-    if (cached && !isBackgroundRefresh) {
-      console.log('⚡ [PositionsContext] Using cached positions');
-      setPositionsData(cached);
-      setLoading(false); // Immediately stop loading if we have cached data
-      return;
-    }
-
-    // Only show loading state for initial fetch, not background refreshes
-    if (!isBackgroundRefresh) {
+    // Only show loading state for initial fetch without cache
+    if (!isBackgroundRefresh && !cached) {
       setLoading(true);
     }
     setError(null);
