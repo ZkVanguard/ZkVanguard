@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, ArrowDown, RefreshCw, ArrowDownUp, Shield } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
 import { getVVSFinanceService } from '../../lib/services/VVSFinanceService';
 
@@ -208,14 +209,29 @@ export function SwapModal({
 
   // Handle swap success
   useEffect(() => {
-    if (isSwapSuccess && step === 'swap') {
+    if (isSwapSuccess && step === 'swap' && swapHash && address) {
+      // Track the successful swap transaction
+      trackSuccessfulTransaction({
+        hash: swapHash,
+        type: 'swap',
+        from: address,
+        to: '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae', // VVS Router
+        tokenIn,
+        tokenOut,
+        amountIn,
+        amountOut,
+        value: amountIn,
+        tokenSymbol: tokenIn,
+        description: `Swap ${amountIn} ${tokenIn} for ${amountOut} ${tokenOut}`,
+      });
+      
       setStep('success');
       setTimeout(() => {
         onSuccess?.();
         handleClose();
       }, 2000);
     }
-  }, [isSwapSuccess]);
+  }, [isSwapSuccess, swapHash, address, tokenIn, tokenOut, amountIn, amountOut]);
 
   // Handle errors
   useEffect(() => {

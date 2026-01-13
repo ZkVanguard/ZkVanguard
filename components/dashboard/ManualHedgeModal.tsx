@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
 interface ManualHedgeModalProps {
   isOpen: boolean;
@@ -93,6 +94,17 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
       const settlementData = settlements ? JSON.parse(settlements) : {};
       settlementData[batchId] = hedgeData;
       localStorage.setItem('settlement_history', JSON.stringify(settlementData));
+
+      // Track the hedge creation as a transaction
+      trackSuccessfulTransaction({
+        hash: batchId,
+        type: 'hedge',
+        from: 'manual',
+        to: asset,
+        value: capitalUsed.toFixed(2),
+        tokenSymbol: 'USDC',
+        description: `${hedgeType} ${asset} hedge at $${entryNum.toFixed(2)}`,
+      });
 
       // Trigger event to refresh UI
       window.dispatchEvent(new Event('hedgeAdded'));
