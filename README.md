@@ -1,13 +1,25 @@
 # ZkVanguard
 
-**AI-Powered Multi-Agent RWA Risk Management Platform**
+**AI-Powered Multi-Chain RWA Risk Management Platform**
 
 [![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://zkvanguard.vercel.app)
 [![Tests](https://img.shields.io/badge/Tests-10%2F10-brightgreen)](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)
-[![Cronos](https://img.shields.io/badge/Network-Cronos%20Testnet-blue)](https://cronos.org)
+[![Cronos](https://img.shields.io/badge/Cronos-Testnet-blue)](https://cronos.org)
+[![SUI](https://img.shields.io/badge/SUI-Testnet-cyan)](https://sui.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 
 **Live Demo:** [zkvanguard.vercel.app](https://zkvanguard.vercel.app)
+
+---
+
+## 🌐 Multi-Chain Architecture
+
+ZkVanguard is a **multi-chain platform** supporting both **Cronos** and **SUI** networks:
+
+| Chain | Type | Status | Features |
+|-------|------|--------|----------|
+| **Cronos** | EVM | ✅ Live | x402 Gasless, VVS DEX, zkEVM |
+| **SUI** | Move | ✅ Ready | Sponsored Tx, Native Move, High TPS |
 
 ---
 
@@ -19,10 +31,11 @@ ZkVanguard automates institutional crypto portfolio management with **predictive
 
 | Feature | What It Does |
 |---------|--------------|
+| **Multi-Chain** | Cronos + SUI with unified portfolio view |
 | **Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
 | **5 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting - autonomous coordination |
 | **Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
-| **Gasless (x402)** | $0.00 CRO gas, $0.01 USDC flat fee per transaction |
+| **Gasless Transactions** | x402 on Cronos, Sponsored Tx on SUI |
 | **VVS Finance DEX** | Native Cronos swaps with best-price routing (V2/V3 pools) |
 
 ---
@@ -97,8 +110,9 @@ GaslessZKVerifier: 0x44098d0dE36e157b4C1700B48d615285C76fdE47
 
 - **Frontend:** Next.js 14, TypeScript, TailwindCSS
 - **Backend:** Node.js, Python FastAPI, CUDA
-- **Blockchain:** Cronos zkEVM, Solidity 0.8.20
+- **Blockchain:** Cronos zkEVM (EVM), SUI (Move)
 - **AI:** Crypto.com AI SDK, Multi-agent orchestration
+- **Wallets:** RainbowKit (EVM), @mysten/dapp-kit (SUI)
 
 ---
 

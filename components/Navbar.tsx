@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from './ConnectButton';
+import { ChainSelector } from './ChainSelector';
 import { Menu, X } from 'lucide-react';
 import Logo from './Logo';
 
@@ -54,8 +55,9 @@ export function Navbar() {
             ))}
           </div>
 
-          {/* Desktop - Connect Button (Right side) */}
-          <div className="hidden lg:flex items-center">
+          {/* Desktop - Chain Selector + Connect Button (Right side) */}
+          <div className="hidden lg:flex items-center gap-3">
+            <ChainSelector />
             <ConnectButton />
           </div>
 
@@ -88,7 +90,8 @@ export function Navbar() {
                 </Link>
               ))}
             </div>
-            <div className="mt-3 pt-3 px-3 border-t border-black/10">
+            <div className="mt-3 pt-3 px-3 border-t border-black/10 space-y-3">
+              <ChainSelector />
               <ConnectButton />
             </div>
           </div>
