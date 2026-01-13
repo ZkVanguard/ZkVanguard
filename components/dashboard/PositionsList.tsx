@@ -633,7 +633,7 @@ export function PositionsList({ address }: { address: string }) {
                   {agentRecommendation.reasoning.map((reason: string, idx: number) => (
                     <div key={idx} className="flex items-start gap-2 text-sm text-[#1d1d1f]">
                       <span className="text-[#AF52DE] mt-1">•</span>
-                      <span>{reason}</span>
+                      <span className="text-[#86868b]">{reason}</span>
                     </div>
                   ))}
                 </div>
