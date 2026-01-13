@@ -46,6 +46,7 @@ class RealMarketDataService {
   private testSequence: number = 0;
   private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
   private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
+  private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
 
   constructor() {
     // Initialize Cronos Testnet provider (tCRO)
@@ -81,6 +82,29 @@ class RealMarketDataService {
    * 5. Mock prices (last resort)
    */
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
+    const cacheKey = symbol.toUpperCase();
+    
+    // Deduplicate concurrent requests for the same symbol
+    const pending = this.pendingRequests.get(cacheKey);
+    if (pending) {
+      console.log(`⚡ [RealMarketData] Reusing pending request for ${symbol}`);
+      return pending;
+    }
+
+    // Create promise for this request
+    const promise = this._fetchTokenPrice(symbol);
+    this.pendingRequests.set(cacheKey, promise);
+    
+    try {
+      const result = await promise;
+      return result;
+    } finally {
+      // Clean up after request completes
+      this.pendingRequests.delete(cacheKey);
+    }
+  }
+
+  private async _fetchTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
     const cached = this.priceCache.get(cacheKey);
     const now = Date.now();
@@ -137,10 +161,16 @@ class RealMarketDataService {
       };
     }
 
-    // SOURCE 1: Crypto.com Exchange API (PRIMARY - 100 req/s)
+    // SOURCE 1: Crypto.com Exchange API (PRIMARY - 100 req/s) with timeout
     try {
       console.log(`📊 [RealMarketData] Fetching ${symbol} from Crypto.com Exchange API`);
-      const exchangeData = await cryptocomExchangeService.getMarketData(symbol);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Exchange API timeout')), 5000)
+      );
+      const exchangeData = await Promise.race([
+        cryptocomExchangeService.getMarketData(symbol),
+        timeoutPromise
+      ]);
       
       this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
       console.log(`✅ [RealMarketData] Got ${symbol} price from Exchange API: $${exchangeData.price}`);
@@ -157,10 +187,16 @@ class RealMarketDataService {
       console.warn(`⚠️ [RealMarketData] Exchange API failed for ${symbol}:`, error.message);
     }
 
-    // SOURCE 2: Crypto.com MCP Server (FALLBACK 1 - Free, no limits)
+    // SOURCE 2: Crypto.com MCP Server (FALLBACK 1 - Free, no limits) with timeout
     try {
       console.log(`📊 [RealMarketData] Trying MCP Server for ${symbol}`);
-      const mcpData = await this.getMCPServerPrice(symbol);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('MCP timeout')), 3000)
+      );
+      const mcpData = await Promise.race([
+        this.getMCPServerPrice(symbol),
+        timeoutPromise
+      ]);
       
       if (mcpData) {
         this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
@@ -179,10 +215,16 @@ class RealMarketDataService {
       console.warn(`⚠️ [RealMarketData] MCP Server failed for ${symbol}:`, error.message);
     }
 
-    // SOURCE 3: VVS Finance (FALLBACK 2 - for CRC20 tokens on Cronos)
+    // SOURCE 3: VVS Finance (FALLBACK 2 - for CRC20 tokens on Cronos) with timeout
     try {
       console.log(`📊 [RealMarketData] Trying VVS Finance for ${symbol}`);
-      const vvsPrice = await this.getVVSPrice(symbol);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('VVS timeout')), 3000)
+      );
+      const vvsPrice = await Promise.race([
+        this.getVVSPrice(symbol),
+        timeoutPromise
+      ]);
       if (vvsPrice) {
         this.priceCache.set(cacheKey, { price: vvsPrice, timestamp: Date.now() });
         console.log(`✅ [RealMarketData] Got ${symbol} from VVS: $${vvsPrice}`);

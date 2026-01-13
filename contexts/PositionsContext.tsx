@@ -58,9 +58,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Debounce: prevent fetching more than once per 5 seconds
+    // Debounce: prevent fetching more than once per 2 seconds (reduced from 5s)
     const now = Date.now();
-    if (now - lastFetchRef.current < 5000 && !isBackgroundRefresh) {
+    if (now - lastFetchRef.current < 2000 && !isBackgroundRefresh) {
       console.log('⏭️ [PositionsContext] Skipping fetch - too soon after last request');
       return;
     }
@@ -71,6 +71,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     if (cached && !isBackgroundRefresh) {
       console.log('⚡ [PositionsContext] Using cached positions');
       setPositionsData(cached);
+      setLoading(false); // Immediately stop loading if we have cached data
       return;
     }
 

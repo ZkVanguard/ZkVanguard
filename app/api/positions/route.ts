@@ -5,6 +5,10 @@ import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeServic
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
+// In-memory cache for positions (30s TTL)
+const positionsCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -17,19 +21,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`[Positions API] Fetching positions for ${address}`);
+    // Check cache first
+    const cached = positionsCache.get(address);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`⚡ [Positions API] Cache HIT for ${address}`);
+      return NextResponse.json(cached.data);
+    }
+
+    console.log(`🔄 [Positions API] Cache MISS - fetching positions for ${address}`);
+    const startTime = Date.now();
     
     const marketData = getMarketDataService();
+    const portfolioDataStart = Date.now();
     const portfolioData = await marketData.getPortfolioData(address);
+    console.log(`⏱️ [Positions API] Portfolio data fetched in ${Date.now() - portfolioDataStart}ms`);
     
     console.log(`[Positions API] Found ${portfolioData.tokens.length} tokens, total value: $${portfolioData.totalValue}`);
     
     // Get prices with 24h change for each token - PARALLEL for speed
     // Using multi-source fallback: Crypto.com Exchange API → MCP → VVS → Cache → Mock
+    const pricesStart = Date.now();
     const pricePromises = portfolioData.tokens.map(async (token) => {
+      const tokenStart = Date.now();
       try {
         const priceData = await marketData.getTokenPrice(token.symbol);
-        console.log(`📊 [Positions API] ${token.symbol}: $${priceData.price} from [${priceData.source}]`);
+        console.log(`📊 [Positions API] ${token.symbol}: $${priceData.price} from [${priceData.source}] (${Date.now() - tokenStart}ms)`);
         return {
           symbol: token.symbol,
           balance: token.balance,
@@ -40,6 +56,7 @@ export async function GET(request: NextRequest) {
           source: priceData.source,
         };
       } catch {
+        console.log(`📊 [Positions API] ${token.symbol}: fallback (${Date.now() - tokenStart}ms)`);
         return {
           symbol: token.symbol,
           balance: token.balance,
@@ -53,24 +70,31 @@ export async function GET(request: NextRequest) {
     });
     
     const positionsWithPrices = await Promise.all(pricePromises);
+    console.log(`⏱️ [Positions API] All prices fetched in ${Date.now() - pricesStart}ms`);
     
     // Sort by USD value descending
     positionsWithPrices.sort((a, b) => parseFloat(b.balanceUSD) - parseFloat(a.balanceUSD));
     
-    // Check Exchange API health
-    const exchangeHealthy = await cryptocomExchangeService.healthCheck();
-    console.log(`🏥 [Positions API] Crypto.com Exchange API: ${exchangeHealthy ? '🟢 HEALTHY' : '🔴 DOWN'}`);
+    // Check Exchange API health (don't await - run in parallel)
+    const exchangeHealthPromise = cryptocomExchangeService.healthCheck();
     
-    return NextResponse.json({
+    const response = {
       address: portfolioData.address,
       totalValue: portfolioData.totalValue,
       positions: positionsWithPrices,
       lastUpdated: portfolioData.lastUpdated,
       health: {
-        exchangeAPI: exchangeHealthy,
+        exchangeAPI: await exchangeHealthPromise,
         timestamp: Date.now(),
       },
-    });
+    };
+
+    // Cache the response
+    positionsCache.set(address, { data: response, timestamp: Date.now() });
+    console.log(`✅ [Positions API] Cached positions for ${address}`);
+    console.log(`⏱️ [Positions API] Total request time: ${Date.now() - startTime}ms`);
+    
+    return NextResponse.json(response);
   } catch (error: any) {
     console.error('[Positions API] Error:', error?.message || error);
     return NextResponse.json(
