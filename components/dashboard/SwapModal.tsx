@@ -420,55 +420,58 @@ export function SwapModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#f5f5f7] rounded-2xl max-w-md w-full border border-[#e8e8ed] shadow-2xl">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-[20px] sm:rounded-[24px] max-w-[420px] w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] border border-black/5">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#e8e8ed]">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold">Swap Tokens</h3>
-            <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-[#007AFF] rounded-full border border-cyan-500/30">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-black/5">
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Swap Tokens</h3>
+            <span className="px-2 py-0.5 text-[10px] sm:text-[11px] bg-[#007AFF]/10 text-[#007AFF] rounded-full font-semibold">
               VVS Finance
             </span>
             {zkProofHash && (
-              <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-[#AF52DE] rounded-full border border-purple-500/30">
+              <span className="px-2 py-0.5 text-[10px] sm:text-[11px] bg-[#AF52DE]/10 text-[#AF52DE] rounded-full font-semibold">
                 🔐 ZK
               </span>
             )}
           </div>
-          <button onClick={handleClose} className="text-[#86868b] hover:text-[#1d1d1f] transition-colors">
-            <X className="w-6 h-6" />
+          <button 
+            onClick={handleClose} 
+            className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-full transition-all"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 space-y-3 sm:space-y-4">
           {step === 'input' && (
             <>
               {/* Token In */}
-              <div className="bg-white rounded-xl p-4">
+              <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[16px] p-3.5 sm:p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm text-[#86868b]">From</label>
+                  <label className="text-[11px] sm:text-[12px] text-[#86868b] font-medium">From</label>
                   <button 
                     onClick={() => setAmountIn(tokenInBalance)}
-                    className="text-xs text-gray-500 hover:text-[#007AFF] transition-colors"
+                    className="text-[11px] sm:text-[12px] text-[#86868b] hover:text-[#007AFF] transition-colors"
                   >
                     Balance: {balanceLoading ? '...' : parseFloat(tokenInBalance).toFixed(4)}
-                    {parseFloat(tokenInBalance) > 0 && <span className="text-[#007AFF] ml-1">(MAX)</span>}
+                    {parseFloat(tokenInBalance) > 0 && <span className="text-[#007AFF] ml-1 font-medium">(MAX)</span>}
                   </button>
                 </div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-3">
                   <input
                     type="number"
                     value={amountIn}
                     onChange={(e) => setAmountIn(e.target.value)}
                     placeholder="0.0"
-                    className="flex-1 min-w-0 bg-transparent text-2xl font-bold outline-none"
+                    className="flex-1 min-w-0 bg-transparent text-[22px] sm:text-[26px] font-bold text-[#1d1d1f] outline-none placeholder:text-[#86868b]"
                     step="0.01"
                   />
                   <select
                     value={tokenIn}
                     onChange={(e) => setTokenIn(e.target.value)}
-                    className="bg-gray-700 rounded-lg px-3 py-2 font-semibold text-sm flex-shrink-0"
+                    className="bg-white border border-black/10 rounded-[10px] px-3 py-2 font-semibold text-[13px] sm:text-[14px] text-[#1d1d1f] flex-shrink-0 cursor-pointer hover:border-[#007AFF] transition-colors"
                   >
                     {/* Use balance token list - these are actual testnet tokens */}
                     {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
@@ -479,33 +482,33 @@ export function SwapModal({
               </div>
 
               {/* Switch Button */}
-              <div className="flex justify-center -my-2 relative z-10">
+              <div className="flex justify-center -my-1 relative z-10">
                 <button
                   onClick={switchTokens}
-                  className="bg-white border-4 border-gray-900 rounded-xl p-2 hover:bg-gray-700 transition-colors"
+                  className="bg-white border border-black/10 rounded-[12px] p-2.5 hover:bg-[#f5f5f7] hover:border-[#007AFF] active:scale-95 transition-all shadow-sm"
                 >
-                  <ArrowDownUp className="w-5 h-5" />
+                  <ArrowDownUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#007AFF]" />
                 </button>
               </div>
 
               {/* Token Out */}
-              <div className="bg-white rounded-xl p-4">
+              <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[16px] p-3.5 sm:p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm text-[#86868b]">To (estimated)</label>
-                  {quoteLoading && <RefreshCw className="w-4 h-4 animate-spin text-[#007AFF]" />}
+                  <label className="text-[11px] sm:text-[12px] text-[#86868b] font-medium">To (estimated)</label>
+                  {quoteLoading && <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-[#007AFF]" />}
                 </div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-3">
                   <input
                     type="text"
                     value={amountOut}
                     readOnly
                     placeholder="0.0"
-                    className="flex-1 min-w-0 bg-transparent text-2xl font-bold outline-none text-[#86868b]"
+                    className="flex-1 min-w-0 bg-transparent text-[22px] sm:text-[26px] font-bold text-[#86868b] outline-none"
                   />
                   <select
                     value={tokenOut}
                     onChange={(e) => setTokenOut(e.target.value)}
-                    className="bg-gray-700 rounded-lg px-3 py-2 font-semibold text-sm flex-shrink-0"
+                    className="bg-white border border-black/10 rounded-[10px] px-3 py-2 font-semibold text-[13px] sm:text-[14px] text-[#1d1d1f] flex-shrink-0 cursor-pointer hover:border-[#007AFF] transition-colors"
                   >
                     {/* Use balance token list - these are actual testnet tokens */}
                     {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
@@ -517,10 +520,10 @@ export function SwapModal({
 
               {/* Swap Details */}
               {parseFloat(amountOut) > 0 && (
-                <div className="bg-white rounded-lg p-3 space-y-2 text-sm">
+                <div className="bg-[#f5f5f7] rounded-[12px] p-3 sm:p-3.5 space-y-2 text-[12px] sm:text-[13px]">
                   <div className="flex justify-between">
                     <span className="text-[#86868b]">Rate</span>
-                    <span className="font-semibold">
+                    <span className="font-semibold text-[#1d1d1f]">
                       1 {tokenIn} ≈ {(parseFloat(amountOut) / parseFloat(amountIn)).toFixed(6)} {tokenOut}
                     </span>
                   </div>
@@ -532,26 +535,26 @@ export function SwapModal({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#86868b]">Route</span>
-                    <span className="font-mono text-xs">{route}</span>
+                    <span className="font-mono text-[11px] text-[#1d1d1f]">{route}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#86868b]">Slippage</span>
-                    <span className="font-semibold">{slippage}%</span>
+                    <span className="font-semibold text-[#1d1d1f]">{slippage}%</span>
                   </div>
                 </div>
               )}
 
               {/* Slippage Settings */}
               <div className="flex items-center gap-2">
-                <span className="text-sm text-[#86868b]">Slippage:</span>
+                <span className="text-[12px] sm:text-[13px] text-[#86868b]">Slippage:</span>
                 {[0.1, 0.5, 1.0].map(val => (
                   <button
                     key={val}
                     onClick={() => setSlippage(val)}
-                    className={`px-3 py-1 rounded-lg text-sm ${
+                    className={`px-3 py-1.5 rounded-[8px] text-[12px] sm:text-[13px] font-medium transition-all ${
                       slippage === val 
-                        ? 'bg-cyan-600 text-[#1d1d1f]' 
-                        : 'bg-white text-[#86868b] hover:bg-gray-700'
+                        ? 'bg-[#007AFF] text-white' 
+                        : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
                     }`}
                   >
                     {val}%
@@ -563,31 +566,33 @@ export function SwapModal({
               <button
                 onClick={handleSwap}
                 disabled={!amountIn || parseFloat(amountIn) === 0 || quoteLoading}
-                className="w-full py-4 bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-lg transition-all"
+                className="w-full py-3.5 sm:py-4 bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.98] disabled:bg-[#86868b] disabled:cursor-not-allowed rounded-[12px] font-semibold text-[15px] sm:text-[17px] text-white transition-all"
               >
                 {quoteLoading ? 'Getting Quote...' : 'Swap'}
               </button>
 
-              <p className="text-xs text-center text-gray-500">
-                � VVS Finance DEX • 🔐 ZK-STARK verified • ⚡ x402 gasless
+              <p className="text-[10px] sm:text-[11px] text-center text-[#86868b]">
+                🔄 VVS Finance DEX • 🔐 ZK-STARK verified • ⚡ x402 gasless
               </p>
             </>
           )}
 
           {/* ZK Proof Generation Step */}
           {step === 'zk-proof' && (
-            <div className="text-center py-8">
-              <Shield className="w-12 h-12 mx-auto mb-4 text-[#AF52DE] animate-pulse" />
-              <h4 className="text-lg font-semibold mb-2">Generating ZK-STARK Proof</h4>
-              <p className="text-[#86868b] text-sm mb-4">
+            <div className="text-center py-6 sm:py-8">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-[#AF52DE]/10 rounded-full flex items-center justify-center">
+                <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-[#AF52DE] animate-pulse" />
+              </div>
+              <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Generating ZK-STARK Proof</h4>
+              <p className="text-[#86868b] text-[13px] sm:text-[14px] mb-4">
                 {zkProofGenerating ? 'Creating cryptographic proof for VVS Finance swap...' : 'ZK proof generated!'}
               </p>
               {zkProofHash && (
-                <div className="bg-white rounded-lg p-3 text-xs font-mono text-[#AF52DE] break-all">
+                <div className="bg-[#f5f5f7] rounded-[10px] p-3 text-[11px] font-mono text-[#AF52DE] break-all">
                   Proof: {zkProofHash.substring(0, 32)}...
                 </div>
               )}
-              <p className="text-xs text-gray-500 mt-3">
+              <p className="text-[10px] sm:text-[11px] text-[#86868b] mt-3">
                 521-bit security • CUDA accelerated • VVS Finance routing
               </p>
             </div>
@@ -595,14 +600,16 @@ export function SwapModal({
 
           {/* Approval Step */}
           {step === 'approve' && (
-            <div className="text-center py-8">
-              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-[#007AFF]" />
-              <h4 className="text-lg font-semibold mb-2">Approve VVS Finance Router</h4>
-              <p className="text-[#86868b] text-sm">
+            <div className="text-center py-6 sm:py-8">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-[#007AFF]/10 rounded-full flex items-center justify-center">
+                <Loader2 className="w-7 h-7 sm:w-8 sm:h-8 animate-spin text-[#007AFF]" />
+              </div>
+              <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Approve VVS Finance Router</h4>
+              <p className="text-[#86868b] text-[13px] sm:text-[14px]">
                 {isApprovePending && 'Waiting for approval confirmation...'}
                 {isApproveConfirming && 'Approval transaction confirming...'}
               </p>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-[10px] sm:text-[11px] text-[#86868b] mt-2">
                 Approving token spend for VVS Finance DEX
               </p>
             </div>
@@ -610,19 +617,21 @@ export function SwapModal({
 
           {/* Swap Step */}
           {step === 'swap' && (
-            <div className="text-center py-8">
-              <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-[#007AFF]" />
-              <h4 className="text-lg font-semibold mb-2">Executing VVS Finance Swap</h4>
-              <p className="text-[#86868b] text-sm">
+            <div className="text-center py-6 sm:py-8">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-[#007AFF]/10 rounded-full flex items-center justify-center">
+                <Loader2 className="w-7 h-7 sm:w-8 sm:h-8 animate-spin text-[#007AFF]" />
+              </div>
+              <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Executing VVS Finance Swap</h4>
+              <p className="text-[#86868b] text-[13px] sm:text-[14px]">
                 {isSwapPending && 'Intelligent routing via VVS Finance...'}
                 {isSwapConfirming && 'Swap confirming on Cronos...'}
               </p>
               {zkProofHash && (
-                <p className="text-xs text-[#AF52DE] mt-2">
+                <p className="text-[11px] sm:text-[12px] text-[#AF52DE] mt-2 font-medium">
                   🔐 ZK Proof: {zkProofHash.substring(0, 16)}...
                 </p>
               )}
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-[10px] sm:text-[11px] text-[#86868b] mt-2">
                 ⚡ x402 protocol • Automated liquidity routing
               </p>
             </div>
@@ -630,18 +639,20 @@ export function SwapModal({
 
           {/* Success Step */}
           {step === 'success' && (
-            <div className="text-center py-8">
-              <CheckCircle className="w-12 h-12 mx-auto mb-4 text-[#34C759]" />
-              <h4 className="text-lg font-semibold mb-2">VVS Finance Swap Complete!</h4>
-              <p className="text-[#86868b] text-sm">
+            <div className="text-center py-6 sm:py-8">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-[#34C759]/10 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-[#34C759]" />
+              </div>
+              <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Swap Complete!</h4>
+              <p className="text-[#86868b] text-[13px] sm:text-[14px]">
                 Swapped {amountIn} {tokenIn} for ~{parseFloat(amountOut || '0').toFixed(6)} {tokenOut}
               </p>
               {zkProofHash && (
-                <div className="mt-3 bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
-                  <p className="text-xs text-[#AF52DE]">
+                <div className="mt-3 bg-[#AF52DE]/10 rounded-[10px] p-3">
+                  <p className="text-[12px] sm:text-[13px] text-[#AF52DE] font-medium">
                     ✅ ZK-STARK Proof Verified
                   </p>
-                  <p className="text-xs text-gray-500 font-mono mt-1">
+                  <p className="text-[10px] sm:text-[11px] text-[#86868b] font-mono mt-1">
                     {zkProofHash.substring(0, 32)}...
                   </p>
                 </div>
@@ -651,13 +662,15 @@ export function SwapModal({
 
           {/* Error Step */}
           {step === 'error' && (
-            <div className="text-center py-8">
-              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-[#FF3B30]" />
-              <h4 className="text-lg font-semibold mb-2">Swap Failed</h4>
-              <p className="text-[#86868b] text-sm mb-4">{errorMessage}</p>
+            <div className="text-center py-6 sm:py-8">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 bg-[#FF3B30]/10 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8 text-[#FF3B30]" />
+              </div>
+              <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Swap Failed</h4>
+              <p className="text-[#86868b] text-[13px] sm:text-[14px] mb-4">{errorMessage}</p>
               <button
                 onClick={() => setStep('input')}
-                className="px-6 py-2 bg-white hover:bg-gray-700 rounded-lg transition-colors"
+                className="px-6 py-2.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] active:scale-[0.97] rounded-[10px] text-[14px] font-medium text-[#1d1d1f] transition-all"
               >
                 Try Again
               </button>
