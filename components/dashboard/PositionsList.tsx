@@ -26,7 +26,7 @@ export function PositionsList({ address }: { address: string }) {
   const { isConnected } = useAccount();
   // Get only portfolios owned by the connected wallet
   const { data: userPortfolios, count: userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
-  const { positionsData, error: positionsError, refetch: refetchPositions } = usePositions();
+  const { positionsData, derived, error: positionsError, refetch: refetchPositions } = usePositions();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
