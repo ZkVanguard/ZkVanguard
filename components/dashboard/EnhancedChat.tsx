@@ -156,7 +156,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
             key={idx}
             onClick={() => handleQuickPrompt(prompt.prompt)}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-700/50 hover:bg-gray-700 text-[#1d1d1f] hover:text-[#1d1d1f] rounded-full border border-gray-600/50 hover:border-gray-500 whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1d1d1f] rounded-full border border-[#E5E5EA] hover:border-[#007AFF] whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <prompt.icon className="w-3.5 h-3.5" />
             {prompt.label}
@@ -194,8 +194,8 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                 <div
                   className={`rounded-2xl px-4 py-3 ${
                     message.role === 'user'
-                      ? 'bg-blue-600 text-[#1d1d1f] rounded-tr-sm'
-                      : 'bg-gray-700 text-gray-100 rounded-tl-sm border border-gray-600'
+                      ? 'bg-[#007AFF] text-white rounded-tr-sm'
+                      : 'bg-[#F5F5F7] text-[#1D1D1F] rounded-tl-sm border border-[#E5E5EA]'
                   }`}
                 >
                   <div className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -225,11 +225,11 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
                 <Bot className="w-5 h-5 text-[#1d1d1f]" />
               </div>
-              <div className="bg-gray-700 rounded-2xl rounded-tl-sm px-4 py-3 border border-gray-600">
+              <div className="bg-[#F5F5F7] rounded-2xl rounded-tl-sm px-4 py-3 border border-[#E5E5EA]">
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-2 h-2 bg-[#86868B] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-[#86868B] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-[#86868B] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
@@ -250,17 +250,17 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
             onKeyPress={handleKeyPress}
             placeholder="Ask me anything about your portfolio or DeFi..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-[#1d1d1f] placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex-1 px-4 py-3 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent text-sm text-[#1d1d1f] placeholder-[#86868B] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="px-4 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-xl transition-all transform hover:scale-105 active:scale-95"
+            className="px-4 py-3 bg-gradient-to-r from-[#5856D6] to-[#007AFF] hover:opacity-90 disabled:from-[#E5E5EA] disabled:to-[#E5E5EA] disabled:cursor-not-allowed rounded-xl transition-all transform hover:scale-105 active:scale-95"
           >
-            <Send className="w-5 h-5 text-[#1d1d1f]" />
+            <Send className="w-5 h-5 text-white" />
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2 text-center">
+        <p className="text-xs text-[#86868B] mt-2 text-center">
           Powered by advanced LLM • Context-aware responses
         </p>
       </div>

@@ -251,7 +251,7 @@ export function DepositModal({
           </div>
           <button 
             onClick={onClose}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -381,7 +381,7 @@ export function DepositModal({
               )}
               <button
                 onClick={onClose}
-                className="w-full mt-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="w-full mt-6 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
               >
                 Close
               </button>
@@ -400,7 +400,7 @@ export function DepositModal({
                   setStep('input');
                   setErrorMessage('');
                 }}
-                className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="w-full py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
               >
                 Try Again
               </button>

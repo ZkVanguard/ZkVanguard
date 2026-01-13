@@ -567,7 +567,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           <button
             onClick={verifyProof}
             disabled={verifying || comprehensiveVerifying}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 rounded-lg font-semibold transition-colors"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-[#5856D6] hover:bg-[#5856D6]/90 disabled:bg-[#E5E5EA] disabled:text-[#86868B] text-white rounded-lg font-semibold transition-colors"
           >
             {verifying ? (
               <>
@@ -585,7 +585,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           <button
             onClick={comprehensiveVerify}
             disabled={verifying || comprehensiveVerifying}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-700 hover:to-purple-700 disabled:bg-gray-700 rounded-lg font-semibold transition-colors"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#34C759] to-[#5856D6] hover:opacity-90 disabled:from-[#E5E5EA] disabled:to-[#E5E5EA] disabled:text-[#86868B] text-white rounded-lg font-semibold transition-colors"
           >
             {comprehensiveVerifying ? (
               <>
