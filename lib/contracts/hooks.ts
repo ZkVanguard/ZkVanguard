@@ -105,11 +105,51 @@ export function useUserPortfolios(userAddress?: string) {
         const count = Number(totalCount);
         const portfolios = [];
         
+        // Fetch PortfolioCreated events to get transaction hashes
+        // Cronos RPC has a 2000 block limit, so we need to query in chunks
+        let events: any[] = [];
+        try {
+          const currentBlock = await provider.getBlockNumber();
+          const portfolioCreatedFilter = contract.filters.PortfolioCreated();
+          
+          // Query last 50,000 blocks in 2000-block chunks (covers ~1 week on Cronos)
+          const CHUNK_SIZE = 1900; // Slightly under 2000 to be safe
+          const TOTAL_BLOCKS = 50000;
+          const fromBlockStart = Math.max(0, currentBlock - TOTAL_BLOCKS);
+          
+          console.log(`📜 [hooks] Querying events from block ${fromBlockStart} to ${currentBlock} in chunks...`);
+          
+          for (let fromBlock = fromBlockStart; fromBlock < currentBlock; fromBlock += CHUNK_SIZE) {
+            const toBlock = Math.min(fromBlock + CHUNK_SIZE - 1, currentBlock);
+            try {
+              const chunkEvents = await contract.queryFilter(portfolioCreatedFilter, fromBlock, toBlock);
+              events.push(...chunkEvents);
+            } catch (chunkErr) {
+              console.warn(`Failed to query blocks ${fromBlock}-${toBlock}:`, chunkErr);
+            }
+          }
+          
+          console.log(`📜 [hooks] Found ${events.length} PortfolioCreated events`);
+        } catch (eventErr) {
+          console.error('Event query failed:', eventErr);
+        }
+        
+        // Create a map of portfolioId -> txHash
+        const txHashMap: Record<number, string> = {};
+        for (const event of events) {
+          const portfolioId = Number(event.args?.[0] || event.args?.portfolioId);
+          const txHash = event.transactionHash;
+          txHashMap[portfolioId] = txHash;
+          console.log(`📜 [hooks] Portfolio #${portfolioId} txHash: ${txHash?.slice(0, 10)}...`);
+        }
+        
         // Check each portfolio to see if it belongs to the user
         for (let i = 0; i < count; i++) {
           try {
             const portfolio = await contract.portfolios(i);
             if (portfolio.owner.toLowerCase() === userAddress.toLowerCase()) {
+              const txHash = txHashMap[i] || null;
+              console.log(`📊 [hooks] Adding user portfolio #${i}, txHash: ${txHash ? txHash.slice(0, 15) + '...' : 'null'}`);
               portfolios.push({
                 id: i,
                 owner: portfolio.owner,
@@ -118,6 +158,7 @@ export function useUserPortfolios(userAddress?: string) {
                 riskTolerance: portfolio.riskTolerance,
                 lastRebalance: portfolio.lastRebalance,
                 isActive: portfolio.isActive,
+                txHash: txHash,
               });
             }
           } catch (err) {
