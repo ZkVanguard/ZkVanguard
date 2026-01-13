@@ -338,7 +338,24 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
                         <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded">ACTIVE</span>
                       </div>
-                      <div className="text-[11px] text-[#86868b]">{hedge.reason}</div>
+                      <div className="text-[11px] text-[#86868b] space-y-0.5\">
+                        <div>{hedge.reason}</div>
+                        {hedge.txHash && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] uppercase tracking-wider">TX:</span>
+                            <a
+                              href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                              title="View on Cronos Explorer"
+                            >
+                              <span className="font-mono">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className={`text-[15px] font-bold ${hedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
@@ -470,7 +487,24 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             <div className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em] truncate">
                               {hedge.type} {hedge.asset}
                             </div>
-                            <div className="text-[9px] sm:text-[11px] text-[#86868b] truncate">{hedge.reason}</div>
+                            <div className="text-[9px] sm:text-[11px] text-[#86868b] space-y-0.5">
+                              <div className="truncate">{hedge.reason}</div>
+                              {hedge.txHash && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] sm:text-[10px] uppercase tracking-wider">TX:</span>
+                                  <a
+                                    href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                    title="View on Cronos Explorer"
+                                  >
+                                    <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
+                                    <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         
@@ -552,7 +586,24 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               Active
                             </span>
                           </div>
-                          <div className="text-[13px] text-[#86868b] mt-0.5">{hedge.reason}</div>
+                          <div className="text-[11px] text-[#86868b] mt-0.5 space-y-0.5">
+                            <div className="text-[13px]">{hedge.reason}</div>
+                            {hedge.txHash && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wider">TRANSACTION:</span>
+                                <a
+                                  href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                  title="View on Cronos Explorer"
+                                >
+                                  <span className="font-mono">{hedge.txHash.slice(0, 10)}...{hedge.txHash.slice(-8)}</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">
@@ -646,19 +697,22 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
                           <span className="px-1.5 py-0.5 bg-[#86868b]/20 text-[#86868b] text-[9px] font-bold rounded">CLOSED</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
-                          <span>{hedge.closedAt ? `Closed ${new Date(hedge.closedAt).toLocaleDateString()}` : hedge.reason}</span>
+                        <div className="text-[11px] text-[#86868b] space-y-0.5">
+                          <div>{hedge.closedAt ? `Closed ${new Date(hedge.closedAt).toLocaleDateString()}` : hedge.reason}</div>
                           {hedge.txHash && (
-                            <a
-                              href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <span className="font-mono">{hedge.txHash.slice(0, 6)}...{hedge.txHash.slice(-4)}</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] uppercase tracking-wider">TX:</span>
+                              <a
+                                href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="font-mono">{hedge.txHash.slice(0, 10)}...{hedge.txHash.slice(-8)}</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -708,19 +762,23 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               Closed
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] text-[#86868b] mt-0.5">
-                            <span>{hedge.closedAt && `Closed ${new Date(hedge.closedAt).toLocaleString()}`}</span>
+                          <div className="text-[11px] text-[#86868b] mt-0.5 space-y-0.5">
+                            <div>{hedge.closedAt && `Closed ${new Date(hedge.closedAt).toLocaleDateString()}`}</div>
                             {hedge.txHash && (
-                              <a
-                                href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span className="font-mono">{hedge.txHash.slice(0, 6)}...{hedge.txHash.slice(-4)}</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wider">TRANSACTION:</span>
+                                <a
+                                  href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="View on Cronos Explorer"
+                                >
+                                  <span className="font-mono">{hedge.txHash.slice(0, 10)}...{hedge.txHash.slice(-8)}</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
                             )}
                           </div>
                         </div>
