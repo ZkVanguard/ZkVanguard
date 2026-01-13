@@ -2,24 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { DollarSign, RefreshCw, ChevronRight, TrendingUp, Shield } from 'lucide-react';
-import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { usePositions } from '@/contexts/PositionsContext';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
-
-interface PortfolioData {
-  totalValue: number;
-  dailyChange: number;
-  dailyChangePercent: number;
-  positions: number;
-  activeHedges: number;
-  healthScore?: number;
-  topAssets?: Array<{
-    symbol: string;
-    value: number;
-    percentage: number;
-  }>;
-}
 
 interface PortfolioOverviewProps {
   address?: string;
@@ -28,146 +13,40 @@ interface PortfolioOverviewProps {
 }
 
 export function PortfolioOverview({ address, onNavigateToPositions, onNavigateToHedges }: PortfolioOverviewProps) {
-  // Get positions data from context - no redundant fetching!
-  const { positionsData, derived, loading: positionsLoading } = usePositions();
+  // Get ALL data from centralized context - zero redundant fetching!
+  const { positionsData, derived, loading, refetch } = usePositions();
   
-  // Get only portfolios owned by the connected wallet
-  const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(address);
-  const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
-  const [recentHedgeCount, setRecentHedgeCount] = useState(0);
-  
-  // Real on-chain portfolio data only - no demo fallbacks
-  const [data, setData] = useState<PortfolioData>({
-    totalValue: 0, // Will be populated from real contract data
-    dailyChange: 0,
-    dailyChangePercent: 0,
-    positions: 0, // Read from contract
-    activeHedges: 0,
-  });
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     async function fetchAIAnalysis() {
-      if (!address || !positionsData || !derived) {
-        setLoading(false);
-        return;
-      }
+      if (!address || !derived) return;
       
+      setAiLoading(true);
       try {
-        // Count active hedges from settlement history
-        const settlements = localStorage.getItem('settlement_history');
-        let activeHedgesCount = 0;
-        if (settlements) {
-          const settlementData = JSON.parse(settlements);
-          activeHedgesCount = Object.values(settlementData).filter(
-            (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
-          ).length;
-        }
-        
-        // Use data from context - already fetched!
-        const { totalValue, totalChange24h } = positionsData;
-        const { topAssets } = derived;
-        
-        console.log('📊 [PortfolioOverview] Using context data - totalValue:', totalValue);
-        
-        // Try AI service for health score and recommendations only
-        try {
-          const aiService = getCryptocomAIService();
-          const analysis = await aiService.analyzePortfolio(address, { userPortfolioCount });
-          setAiAnalysis(analysis);
-          
-          // Calculate health score based on real data if AI doesn't provide one
-          let healthScore = analysis.healthScore;
-          if (!healthScore && totalValue > 0) {
-            // Base score from diversification
-            healthScore = 70;
-            if (topAssets.length >= 5) healthScore += 15;
-            else if (topAssets.length >= 3) healthScore += 10;
-            else if (topAssets.length >= 2) healthScore += 5;
-            
-            // Adjust for concentration risk
-            if (topAssets[0] && topAssets[0].percentage < 40) healthScore += 10;
-            else if (topAssets[0] && topAssets[0].percentage < 60) healthScore += 5;
-            
-            // Adjust for hedges
-            if (activeHedgesCount > 0) healthScore += 5;
-          }
-          
-          setData(prev => ({
-            ...prev,
-            totalValue,
-            dailyChange: totalChange24h,
-            dailyChangePercent: totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0,
-            positions: userPortfolioCount,
-            healthScore: healthScore || 0,
-            topAssets,
-            activeHedges: activeHedgesCount,
-          }));
-          setRecentHedgeCount(activeHedgesCount);
-        } catch (aiError) {
-          console.warn('AI analysis failed, using context data only:', aiError);
-          
-          // Calculate basic health score based on portfolio metrics
-          let calculatedHealth = 80; // Base healthy score
-          
-          // Adjust based on diversification (more assets = healthier)
-          if (topAssets.length >= 5) calculatedHealth += 10;
-          else if (topAssets.length >= 3) calculatedHealth += 5;
-          
-          // Adjust based on concentration (less concentration = healthier)
-          if (topAssets[0] && topAssets[0].percentage < 50) calculatedHealth += 5;
-          
-          // Adjust based on active hedges
-          if (activeHedgesCount > 0) calculatedHealth += 5;
-          
-          setData(prev => ({
-            ...prev,
-            totalValue,
-            dailyChange: totalChange24h,
-            dailyChangePercent: totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0,
-            positions: userPortfolioCount,
-            activeHedges: activeHedgesCount,
-            healthScore: Math.min(calculatedHealth, 100),
-            topAssets,
-          }));
-          setRecentHedgeCount(activeHedgesCount);
-        }
-      } catch (error) {
-        console.error('Portfolio data processing failed:', error);
-        // Still show the UI with portfolio count even if processing fails
-        setData(prev => ({
-          ...prev,
-          totalValue: 0,
-          positions: userPortfolioCount,
-          activeHedges: 0,
-          topAssets: [],
-        }));
+        // Optional: Try AI service for recommendations only
+        const aiService = getCryptocomAIService();
+        const analysis = await aiService.analyzePortfolio(address, { 
+          userPortfolioCount: derived.portfolioCount 
+        });
+        setAiAnalysis(analysis);
+      } catch (aiError) {
+        console.warn('[PortfolioOverview] AI recommendations unavailable:', aiError);
+        // No problem - we have all the data we need from context
       } finally {
-        setLoading(false);
+        setAiLoading(false);
       }
     }
 
-    setLoading(countLoading || positionsLoading);
-    
-    // Always update positions from user's portfolio count
-    setData(prev => ({
-      ...prev,
-      positions: userPortfolioCount,
-    }));
-    
-    // Only fetch additional data if address is available and positions loaded
-    if (address && !positionsLoading && positionsData) {
+    if (address && derived) {
       fetchAIAnalysis();
-    } else if (!address || positionsLoading) {
-      setLoading(true);
-    } else {
-      setLoading(false);
     }
 
-    // Listen for hedge updates to refresh count
+    // Listen for hedge updates to refresh
     const handleHedgeUpdate = () => {
       console.log('📊 [PortfolioOverview] Hedge updated, refreshing...');
-      fetchAIAnalysis();
+      refetch();
     };
 
     window.addEventListener('hedgeAdded', handleHedgeUpdate);
@@ -175,7 +54,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
     return () => {
       window.removeEventListener('hedgeAdded', handleHedgeUpdate);
     };
-  }, [userPortfolioCount, countLoading, address, positionsData, derived, positionsLoading]);
+  }, [address, derived, refetch]);
 
   if (loading) {
     return (
@@ -223,7 +102,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.06em]">Portfolio</span>
-                  {userPortfolioCount > 0 && (
+                  {derived && derived.portfolioCount > 0 && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#34C759]/10 rounded-full">
                       <span className="w-1.5 h-1.5 bg-[#34C759] rounded-full animate-pulse" />
                       <span className="text-[9px] font-bold text-[#34C759]">LIVE</span>
@@ -231,11 +110,11 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
                   )}
                 </div>
                 <div className="text-[28px] sm:text-[32px] md:text-[40px] font-bold text-[#1d1d1f] leading-tight tracking-[-0.02em]">
-                  {data.totalValue >= 1000000 
-                    ? `$${(data.totalValue / 1000000).toFixed(2)}M`
-                    : data.totalValue >= 1000 
-                      ? `$${(data.totalValue / 1000).toFixed(2)}K`
-                      : `$${data.totalValue.toFixed(2)}`
+                  {positionsData && positionsData.totalValue >= 1000000 
+                    ? `$${(positionsData.totalValue / 1000000).toFixed(2)}M`
+                    : positionsData && positionsData.totalValue >= 1000 
+                      ? `$${(positionsData.totalValue / 1000).toFixed(2)}K`
+                      : `$${positionsData?.totalValue.toFixed(2) || '0.00'}`
                   }
                 </div>
               </div>
@@ -266,7 +145,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
           >
             <div>
               <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">Portfolios</div>
-              <div className="text-[22px] sm:text-[28px] font-bold text-[#1d1d1f] leading-none">{data.positions}</div>
+              <div className="text-[22px] sm:text-[28px] font-bold text-[#1d1d1f] leading-none">{derived?.portfolioCount || 0}</div>
             </div>
             <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#c7c7cc] group-hover:text-[#007AFF] transition-colors" strokeWidth={2} />
           </button>
@@ -276,25 +155,25 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
             onClick={onNavigateToHedges}
             className="flex-1 group flex items-center justify-between p-3 sm:p-4 bg-[#f5f5f7] active:bg-[#e8e8ed] sm:hover:bg-[#e8e8ed] rounded-[14px] sm:rounded-[16px] transition-all active:scale-[0.98] relative"
           >
-            {recentHedgeCount > 0 && (
+            {derived && derived.activeHedgesCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-[#34C759] rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shadow-sm">
-                {recentHedgeCount}
+                {derived.activeHedgesCount}
               </span>
             )}
             <div>
               <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">Hedges</div>
-              <div className="text-[22px] sm:text-[28px] font-bold text-[#34C759] leading-none">{data.activeHedges}</div>
+              <div className="text-[22px] sm:text-[28px] font-bold text-[#34C759] leading-none">{derived?.activeHedgesCount || 0}</div>
             </div>
             <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#c7c7cc] group-hover:text-[#34C759] transition-colors" strokeWidth={2} />
           </button>
 
           {/* Health */}
-          {data.healthScore && (
+          {derived && derived.healthScore && (
             <div className="col-span-2 sm:col-span-1 flex-1 p-3 sm:p-4 bg-gradient-to-br from-[#34C759]/10 to-[#34C759]/5 rounded-[14px] sm:rounded-[16px] border border-[#34C759]/10">
               <div className="text-[9px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-1">Health</div>
               <div className="flex items-baseline gap-2">
-                <span className="text-[22px] sm:text-[28px] font-bold text-[#34C759] leading-none">{data.healthScore.toFixed(0)}%</span>
-                <span className="text-[12px] sm:text-[13px] font-medium text-[#34C759]/70">{getHealthLabel(data.healthScore)}</span>
+                <span className="text-[22px] sm:text-[28px] font-bold text-[#34C759] leading-none">{derived.healthScore.toFixed(0)}%</span>
+                <span className="text-[12px] sm:text-[13px] font-medium text-[#34C759]/70">{getHealthLabel(derived.healthScore)}</span>
               </div>
             </div>
           )}
@@ -302,14 +181,14 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
       </div>
 
       {/* Holdings Section - Inline within same card */}
-      {data.topAssets && data.topAssets.length > 0 && (
+      {derived && derived.topAssets && derived.topAssets.length > 0 && (
         <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[12px] sm:text-[13px] font-semibold text-[#86868b]">Holdings</span>
-            <span className="text-[12px] sm:text-[13px] font-medium text-[#86868b]">{data.topAssets.length} assets</span>
+            <span className="text-[12px] sm:text-[13px] font-medium text-[#86868b]">{derived.topAssets.length} assets</span>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {data.topAssets.map((asset, idx) => {
+            {derived.topAssets.map((asset, idx) => {
               const displayValue = asset.value >= 1000 
                 ? `$${(asset.value / 1000).toFixed(1)}K` 
                 : `$${asset.value.toFixed(2)}`;

@@ -9,7 +9,8 @@ import {
   Menu, X, Settings, ArrowUpRight
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
-import { useContractAddresses, useUserPortfolios } from '@/lib/contracts/hooks';
+import { useContractAddresses } from '@/lib/contracts/hooks';
+import { usePositions } from '@/contexts/PositionsContext';
 import { logger } from '@/lib/utils/logger';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 
@@ -99,8 +100,9 @@ export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
   const contractAddresses = useContractAddresses();
-  // Get only portfolios owned by the connected wallet
-  const { count: userPortfolioCount } = useUserPortfolios(address);
+  // Get portfolio count and other data from centralized context - no redundant fetches!
+  const { derived } = usePositions();
+  const userPortfolioCount = derived?.portfolioCount || 0;
   
   const [activeNav, setActiveNav] = useState<NavId>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAccount } from 'wagmi';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
+import { useUserPortfolios } from '@/lib/contracts/hooks';
 
 interface Position {
   symbol: string;
@@ -26,6 +27,10 @@ interface DerivedData {
   totalChange24h: number;
   weightedVolatility: number;
   sharpeRatio: number;
+  healthScore: number;
+  riskScore: number;
+  portfolioCount: number;
+  activeHedgesCount: number;
 }
 
 interface PositionsContextType {
@@ -40,6 +45,7 @@ const PositionsContext = createContext<PositionsContextType | undefined>(undefin
 
 export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const { address } = useAccount();
+  const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(address);
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -193,18 +199,66 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       ? (dailyReturn - riskFreeRate) / (weightedVolatility / Math.sqrt(365))
       : 0;
 
+    // Count active hedges from localStorage
+    let activeHedgesCount = 0;
+    try {
+      const settlements = localStorage.getItem('settlement_history');
+      if (settlements) {
+        const settlementData = JSON.parse(settlements);
+        activeHedgesCount = Object.values(settlementData).filter(
+          (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
+        ).length;
+      }
+    } catch (err) {
+      console.error('[PositionsContext] Error counting hedges:', err);
+    }
+
+    // Calculate concentration (top asset percentage)
+    const concentration = topAssets[0]?.percentage || 0;
+
+    // Risk Score: (volatility × 50) + (concentration × 50)
+    const riskScore = Math.round((weightedVolatility * 50) + (concentration / 2));
+
+    // Health Score calculation
+    let healthScore = 80; // Base healthy score
+    
+    // Adjust based on diversification (more assets = healthier)
+    if (topAssets.length >= 5) healthScore += 10;
+    else if (topAssets.length >= 3) healthScore += 5;
+    
+    // Adjust based on concentration (less concentration = healthier)
+    if (concentration < 40) healthScore += 5;
+    else if (concentration > 70) healthScore -= 10;
+    
+    // Adjust based on volatility (lower = healthier)
+    if (weightedVolatility < 0.2) healthScore += 5;
+    else if (weightedVolatility > 0.5) healthScore -= 5;
+    
+    // Adjust based on active hedges (protection = healthier)
+    if (activeHedgesCount > 0) healthScore += 5;
+    
+    // Adjust based on Sharpe ratio (better risk-adjusted returns = healthier)
+    if (sharpeRatio > 1.5) healthScore += 5;
+    else if (sharpeRatio < 0) healthScore -= 5;
+    
+    healthScore = Math.max(0, Math.min(100, healthScore));
+
     return {
       topAssets,
       totalChange24h,
       weightedVolatility,
       sharpeRatio,
+      healthScore,
+      riskScore,
+      portfolioCount: userPortfolioCount,
+      activeHedgesCount,
     };
-  }, [positionsData]);
+  }, [positionsData, userPortfolioCount]);
 
   const value: PositionsContextType = {
     positionsData,
     derived,
-    loading,
+    loading: loading || countLoading,
     error,
     refetch: fetchPositions,
   };
