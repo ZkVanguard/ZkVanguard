@@ -195,7 +195,7 @@ export function PositionsList({ address }: { address: string }) {
         isActive: p.isActive,
         assets: [],
         predictions: [], // Empty initially
-        txHash: p.txHash || null, // Transaction hash from portfolio creation
+        txHash: p.txHash, // Transaction hash from portfolio creation event
       };
       
       // Quick fetch assets (fast API call)
