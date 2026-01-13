@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
@@ -20,8 +20,17 @@ interface PositionsData {
   lastUpdated: number;
 }
 
+// Derived/computed data to avoid recalculation
+interface DerivedData {
+  topAssets: Array<{ symbol: string; value: number; percentage: number }>;
+  totalChange24h: number;
+  weightedVolatility: number;
+  sharpeRatio: number;
+}
+
 interface PositionsContextType {
   positionsData: PositionsData | null;
+  derived: DerivedData | null;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -135,8 +144,66 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [address, fetchPositions]);
 
+  // Memoized derived data - calculated once when positions change
+  const derived = useMemo<DerivedData | null>(() => {
+    if (!positionsData || positionsData.positions.length === 0) return null;
+
+    const { positions, totalValue } = positionsData;
+
+    // Top 5 assets by value
+    const topAssets = positions
+      .map(p => ({
+        symbol: p.symbol,
+        value: parseFloat(p.balanceUSD || '0'),
+        percentage: totalValue > 0 ? (parseFloat(p.balanceUSD || '0') / totalValue) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
+    // Weighted 24h change
+    const totalChange24h = totalValue > 0
+      ? positions.reduce((acc, pos) => {
+          const posValue = parseFloat(pos.balanceUSD || '0');
+          const weight = posValue / totalValue;
+          return acc + (pos.change24h * weight);
+        }, 0)
+      : 0;
+
+    // Volatility estimates per asset type
+    const volatilityMap: Record<string, number> = {
+      'BTC': 0.45, 'WBTC': 0.45,
+      'ETH': 0.50, 'WETH': 0.50,
+      'CRO': 0.55, 'WCRO': 0.55,
+      'USDC': 0.01, 'USDT': 0.01, 'DAI': 0.01,
+    };
+
+    // Weighted portfolio volatility
+    const weightedVolatility = totalValue > 0
+      ? positions.reduce((acc, pos) => {
+          const weight = parseFloat(pos.balanceUSD || '0') / totalValue;
+          const vol = volatilityMap[pos.symbol] || 0.30;
+          return acc + (vol * weight);
+        }, 0)
+      : 0;
+
+    // Sharpe ratio approximation (using 24h return and volatility)
+    const riskFreeRate = 0.05 / 365; // ~5% annual / 365 days
+    const dailyReturn = totalChange24h / 100;
+    const sharpeRatio = weightedVolatility > 0
+      ? (dailyReturn - riskFreeRate) / (weightedVolatility / Math.sqrt(365))
+      : 0;
+
+    return {
+      topAssets,
+      totalChange24h,
+      weightedVolatility,
+      sharpeRatio,
+    };
+  }, [positionsData]);
+
   const value: PositionsContextType = {
     positionsData,
+    derived,
     loading,
     error,
     refetch: fetchPositions,

@@ -83,10 +83,26 @@ const deduplicator = new RequestDeduplicator();
 
 /**
  * Wrapper for fetch with automatic deduplication
+ * Each consumer gets a cloned Response to avoid body stream conflicts
  */
 export async function dedupedFetch(url: string, options?: RequestInit): Promise<Response> {
   const key = `${options?.method || 'GET'}:${url}`;
-  return deduplicator.dedupe(key, () => fetch(url, options));
+  
+  // Get the shared response from deduplication
+  const response = await deduplicator.dedupe(key, async () => {
+    const res = await fetch(url, options);
+    // Store the response body as ArrayBuffer so we can recreate it multiple times
+    const body = await res.arrayBuffer();
+    // Create a new Response with the stored body that can be cloned
+    return new Response(body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    });
+  });
+  
+  // Clone the response for this consumer
+  return response.clone();
 }
 
 /**
