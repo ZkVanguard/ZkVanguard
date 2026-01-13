@@ -36,7 +36,7 @@ const milestones = [
 
 export function Roadmap() {
   return (
-    <section className="py-24 bg-gray-900">
+    <section className="py-24 bg-white">
       <div className="container mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -45,11 +45,11 @@ export function Roadmap() {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
-            <span className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#007AFF] to-[#5856D6] bg-clip-text text-transparent">
               Product Roadmap
             </span>
           </h2>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+          <p className="text-xl text-[#6E6E73] max-w-2xl mx-auto">
             Our path to revolutionizing institutional RWA risk management
           </p>
         </motion.div>
@@ -64,14 +64,14 @@ export function Roadmap() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
-                className="p-6 bg-gray-800 border border-gray-700 rounded-xl hover:border-gray-600 transition-all"
+                className="p-6 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl hover:border-[#C6C6C8] transition-all"
               >
                 <div className={`inline-flex p-3 ${milestone.color.replace('text-', 'bg-')}/10 rounded-lg mb-4`}>
                   <Icon className={`w-6 h-6 ${milestone.color}`} />
                 </div>
-                <h3 className="text-lg font-semibold mb-2 text-white">{milestone.title}</h3>
-                <p className="text-gray-400 text-sm mb-4">{milestone.description}</p>
-                <div className="text-xs px-3 py-1 bg-gray-700 rounded-full inline-block text-gray-300">
+                <h3 className="text-lg font-semibold mb-2 text-[#1D1D1F]">{milestone.title}</h3>
+                <p className="text-[#6E6E73] text-sm mb-4">{milestone.description}</p>
+                <div className="text-xs px-3 py-1 bg-[#E5E5EA] rounded-full inline-block text-[#424245]">
                   {milestone.status}
                 </div>
               </motion.div>

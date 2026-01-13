@@ -8,7 +8,7 @@ function StaticMetrics() {
   return (
     <div>
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
           Real-Time Platform Metrics
         </h2>
         <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
@@ -16,19 +16,19 @@ function StaticMetrics() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">$2.8M</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">$2.8M</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">1,247</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">1,247</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">67%</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">67%</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">AI Agents Online</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">5</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">5</div>
         </div>
       </div>
     </div>
@@ -53,7 +53,7 @@ const MetricCard = memo(function MetricCard({
       className="p-6 lg:p-8"
     >
       <div className="text-[15px] text-[#86868b] mb-2">{label}</div>
-      <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter">
+      <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">
         {value}
       </div>
     </motion.div>
@@ -109,7 +109,7 @@ export const LiveMetrics = memo(function LiveMetrics() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-12 lg:mb-16"
       >
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-white tracking-[-0.015em] mb-3">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
           Real-Time Platform Metrics
         </h2>
         <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
@@ -126,7 +126,7 @@ export const LiveMetrics = memo(function LiveMetrics() {
           className="p-6 lg:p-8"
         >
           <div className="text-[15px] text-[#86868b] mb-2">AI Agents</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-white tracking-tighter flex items-center gap-2">
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter flex items-center gap-2">
             {formattedMetrics.agents}
             <div className="w-2 h-2 bg-[#34C759] rounded-full" />
           </div>

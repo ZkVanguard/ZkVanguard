@@ -168,11 +168,11 @@ export function DebugLogPanel({
   const panelContent = (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E5EA] bg-[#F5F5F7]">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-green-400" />
-          <span className="text-sm font-semibold">{title}</span>
-          <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded">
+          <Terminal className="w-4 h-4 text-[#34C759]" />
+          <span className="text-sm font-semibold text-[#1D1D1F]">{title}</span>
+          <span className="text-xs text-[#6E6E73] bg-[#E5E5EA] px-2 py-0.5 rounded">
             {filteredLogs.length}
           </span>
         </div>
@@ -181,7 +181,7 @@ export function DebugLogPanel({
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as LogEntry['level'] | 'all')}
-              className="text-xs bg-gray-700 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-purple-500"
+              className="text-xs bg-white border border-[#E5E5EA] rounded px-2 py-1 focus:outline-none focus:border-[#007AFF] text-[#1D1D1F]"
             >
               <option value="all">All</option>
               <option value="info">Info</option>
@@ -193,14 +193,14 @@ export function DebugLogPanel({
           )}
           <button
             onClick={handleDownload}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
+            className="p-1 text-[#86868B] hover:text-[#1D1D1F] transition-colors"
             title="Download logs"
           >
             <Download className="w-4 h-4" />
           </button>
           <button
             onClick={handleClear}
-            className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+            className="p-1 text-[#86868B] hover:text-[#FF3B30] transition-colors"
             title="Clear logs"
           >
             <Trash2 className="w-4 h-4" />
@@ -208,7 +208,7 @@ export function DebugLogPanel({
           {floatingMode && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 text-gray-400 hover:text-white transition-colors"
+              className="p-1 text-[#86868B] hover:text-[#1D1D1F] transition-colors"
             >
               {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
@@ -216,7 +216,7 @@ export function DebugLogPanel({
           {collapsible && (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 text-gray-400 hover:text-white transition-colors"
+              className="p-1 text-[#86868B] hover:text-[#1D1D1F] transition-colors"
             >
               {isCollapsed ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             </button>
@@ -235,11 +235,11 @@ export function DebugLogPanel({
             className="overflow-hidden"
           >
             <div 
-              className="p-3 bg-black/50 overflow-y-auto font-mono text-xs"
+              className="p-3 bg-[#1D1D1F] overflow-y-auto font-mono text-xs"
               style={{ maxHeight: isExpanded ? '80vh' : maxHeight }}
             >
               {filteredLogs.length === 0 ? (
-                <div className="text-gray-500 text-center py-4">
+                <div className="text-[#86868B] text-center py-4">
                   No logs yet. Activity will appear here...
                 </div>
               ) : (
@@ -250,14 +250,14 @@ export function DebugLogPanel({
                   >
                     <div className="flex items-start gap-2">
                       <span className="flex-shrink-0">{levelIcons[log.level]}</span>
-                      <span className="text-gray-500 flex-shrink-0">
+                      <span className="text-[#86868B] flex-shrink-0">
                         [{log.timestamp.toLocaleTimeString()}]
                       </span>
-                      <span className="text-purple-400 flex-shrink-0">[{log.source}]</span>
-                      <span className="text-gray-300">{log.message}</span>
+                      <span className="text-[#5856D6] flex-shrink-0">[{log.source}]</span>
+                      <span className="text-white/90">{log.message}</span>
                     </div>
                     {log.data && (
-                      <div className="ml-6 mt-1 text-gray-500 text-[10px] bg-gray-800/50 rounded px-2 py-1">
+                      <div className="ml-6 mt-1 text-[#86868B] text-[10px] bg-white/5 rounded px-2 py-1">
                         {JSON.stringify(log.data, null, 2)}
                       </div>
                     )}
@@ -278,7 +278,7 @@ export function DebugLogPanel({
         ref={containerRef}
         drag
         dragMomentum={false}
-        className={`fixed bottom-4 right-4 z-50 glass rounded-xl border border-white/10 shadow-xl ${
+        className={`fixed bottom-4 right-4 z-50 bg-white rounded-xl border border-[#E5E5EA] shadow-xl ${
           isExpanded ? 'w-[600px]' : 'w-[400px]'
         } ${className}`}
         initial={{ opacity: 0, y: 20 }}
@@ -290,7 +290,7 @@ export function DebugLogPanel({
   }
 
   return (
-    <div className={`glass rounded-xl border border-white/10 overflow-hidden ${className}`}>
+    <div className={`bg-white rounded-xl border border-[#E5E5EA] overflow-hidden ${className}`}>
       {panelContent}
     </div>
   );
@@ -316,12 +316,12 @@ export function DebugLogToggle() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800 rounded-full border border-gray-700 shadow-lg hover:bg-gray-700 transition-colors"
+        className="fixed bottom-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-[#E5E5EA] shadow-lg hover:bg-[#F5F5F7] transition-colors"
       >
-        <Terminal className="w-4 h-4 text-green-400" />
-        <span className="text-sm font-semibold">Logs</span>
+        <Terminal className="w-4 h-4 text-[#34C759]" />
+        <span className="text-sm font-semibold text-[#1D1D1F]">Logs</span>
         {logCount > 0 && (
-          <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">
+          <span className="text-xs bg-[#5856D6] text-white px-2 py-0.5 rounded-full">
             {logCount}
           </span>
         )}
@@ -335,7 +335,7 @@ export function DebugLogToggle() {
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             className="fixed bottom-16 left-4 z-50 w-[500px]"
           >
-            <div className="glass rounded-xl border border-white/10 shadow-xl">
+            <div className="bg-white rounded-xl border border-[#E5E5EA] shadow-xl">
               <DebugLogPanel
                 logs={logStore.getLogs()}
                 onClear={() => logStore.clear()}
