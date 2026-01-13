@@ -143,9 +143,7 @@ export async function POST(request: NextRequest) {
         reasoning.push(`${highRiskPredictions.length} hedge signal${highRiskPredictions.length > 1 ? 's' : ''} from prediction markets`);
       }
       
-      if (hedgeDetails && hedgeDetails.recommendation) {
-        reasoning.push(`Hedging Agent: ${hedgeDetails.recommendation.action} ${hedgeDetails.recommendation.side} position (${hedgeDetails.recommendation.size})`);
-      } else if (hedgeSignals > 0) {
+      if (hedgeSignals > 0) {
         reasoning.push(`${hedgeSignals} active hedge position${hedgeSignals > 1 ? 's' : ''} currently open`);
       }
       
