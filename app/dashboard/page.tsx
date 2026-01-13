@@ -379,7 +379,7 @@ export default function DashboardPage() {
 
       {/* Create Portfolio CTA - always show for connected users */}
       {isConnected && (
-        <div className="fixed bottom-20 lg:bottom-6 left-4 lg:left-[280px] z-40">
+        <div className="fixed bottom-6 lg:bottom-6 left-4 lg:left-[280px] z-40 text-[#86868B]">
           <AdvancedPortfolioCreator />
         </div>
       )}

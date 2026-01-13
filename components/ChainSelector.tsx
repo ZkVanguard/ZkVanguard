@@ -107,7 +107,7 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span>Multi-chain portfolio aggregation enabled</span>
+              <span class="text-[#86868B]">Multi-chain portfolio aggregation enabled</span>
             </div>
           </div>
         </div>
