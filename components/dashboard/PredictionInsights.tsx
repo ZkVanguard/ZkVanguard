@@ -32,7 +32,7 @@ export const PredictionInsights = memo(function PredictionInsights({
   onTriggerAgentAnalysis 
 }: PredictionInsightsProps) {
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
-  const { isLoading: loading, error, setError } = useLoading(true);
+  const { isLoading: loading, error, setError, startLoading, stopLoading } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'HIGH' | 'MODERATE' | 'LOW'>('all');
   const [selectedPrediction, setSelectedPrediction] = useState<PredictionMarket | null>(null);
@@ -42,7 +42,6 @@ export const PredictionInsights = memo(function PredictionInsights({
 
   const fetchPredictions = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setRefreshing(true);
-    setError(null);
 
     try {
       const markets = showAll 
@@ -50,13 +49,14 @@ export const PredictionInsights = memo(function PredictionInsights({
         : await DelphiMarketService.getRelevantMarkets(assets);
       
       setPredictions(markets);
+      stopLoading();
     } catch (err) {
       console.error('Error fetching Delphi predictions:', err);
       setError('Failed to fetch predictions');
     } finally {
       setRefreshing(false);
     }
-  }, [showAll, assets, setError]);
+  }, [showAll, assets, setError, stopLoading]);
 
   usePolling(fetchPredictions, 60000);
 

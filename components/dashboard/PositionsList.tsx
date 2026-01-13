@@ -644,17 +644,17 @@ export function PositionsList({ address }: { address: string }) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-[#86868b]">Portfolio Risk Score</span>
                   <span className={`text-lg font-bold ${
-                    agentRecommendation.riskScore > 70 ? 'text-red-400' :
-                    agentRecommendation.riskScore > 40 ? 'text-yellow-400' :
-                    'text-green-400'
+                    agentRecommendation.riskScore > 70 ? 'text-[#FF3B30]' :
+                    agentRecommendation.riskScore > 40 ? 'text-[#FF9500]' :
+                    'text-[#34C759]'
                   }`}>{agentRecommendation.riskScore}/100</span>
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
+                <div className="w-full bg-[#e8e8ed] rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all ${
-                      agentRecommendation.riskScore > 70 ? 'bg-red-500' :
-                      agentRecommendation.riskScore > 40 ? 'bg-yellow-500' :
-                      'bg-green-500'
+                      agentRecommendation.riskScore > 70 ? 'bg-[#FF3B30]' :
+                      agentRecommendation.riskScore > 40 ? 'bg-[#FF9500]' :
+                      'bg-[#34C759]'
                     }`}
                     style={{ width: `${agentRecommendation.riskScore}%` }}
                   />
@@ -693,10 +693,10 @@ export function PositionsList({ address }: { address: string }) {
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-800 flex gap-3">
+            <div className="p-6 border-t border-black/5 flex gap-3">
               <button
                 onClick={() => setShowRecommendationModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] rounded-[12px] text-sm font-semibold transition-colors"
               >
                 Close
               </button>
@@ -711,14 +711,14 @@ export function PositionsList({ address }: { address: string }) {
                   }
                   // HOLD and HEDGE just close (user is informed)
                 }}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                className={`flex-1 px-4 py-2 rounded-[12px] text-sm font-semibold text-white transition-colors ${
                   agentRecommendation.action === 'WITHDRAW' 
-                    ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
+                    ? 'bg-[#FF3B30] hover:bg-[#FF3B30]/90'
                     : agentRecommendation.action === 'ADD_FUNDS'
-                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                    ? 'bg-[#34C759] hover:bg-[#34C759]/90'
                     : agentRecommendation.action === 'HEDGE'
-                    ? 'bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'
-                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
+                    ? 'bg-[#FF9500] hover:bg-[#FF9500]/90'
+                    : 'bg-[#007AFF] hover:bg-[#007AFF]/90'
                 }`}
               >
                 {agentRecommendation.action === 'WITHDRAW' && '🚨 Withdraw Funds'}
