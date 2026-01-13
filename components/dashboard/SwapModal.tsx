@@ -34,6 +34,7 @@ export function SwapModal({
   
   // Actual token addresses for balance fetching (different from swap quote addresses)
   // Swap quotes use mainnet addresses, but balances need testnet addresses
+  // Note: On testnet, most tokens won't have balances - mainnet addresses used for UI
   const BALANCE_TOKEN_ADDRESSES: Record<string, string> = {
     WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
     CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
@@ -43,6 +44,17 @@ export function SwapModal({
     DEVUSDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',
     // VVS token on testnet
     VVS: '0x904Bd5a5AAC0B9d88A0D47864724218986Ad4a3a',
+    // Major tokens (mainnet addresses for production)
+    WBTC: '0x062E66477Faf219F25D27dCED647BF57C3107d52',
+    BTC: '0x062E66477Faf219F25D27dCED647BF57C3107d52',
+    WETH: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+    ETH: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+    USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    DAI: '0xF2001B145b43032AAF5Ee2884e456CCd805F677D',
+    ATOM: '0xB888d8Dd1733d72681b30c00ee76BDE93ae7aa93',
+    LINK: '0xBc6f24649CCd67eC42342AccdCECCB2eFA27c9d9',
+    SHIB: '0xbED48612BC69fA1CaB67052b42a95FB30C1bcFee',
+    DOGE: '0x1a8E39ae59e5556B56b76fCBA98d22c9ae557396',
   };
   
   const [tokenIn, setTokenIn] = useState<string>(defaultTokenIn);
@@ -473,8 +485,8 @@ export function SwapModal({
                     onChange={(e) => setTokenIn(e.target.value)}
                     className="bg-white border border-black/10 rounded-[10px] px-3 py-2 font-semibold text-[13px] sm:text-[14px] text-[#1d1d1f] flex-shrink-0 cursor-pointer hover:border-[#007AFF] transition-colors"
                   >
-                    {/* Use balance token list - these are actual testnet tokens */}
-                    {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
+                    {/* All supported tokens including BTC, ETH, and major cryptos */}
+                    {['CRO', 'WCRO', 'USDC', 'USDT', 'VVS', 'BTC', 'ETH', 'ATOM', 'LINK', 'SHIB', 'DOGE', 'DAI', 'BUSD'].map(symbol => (
                       <option key={symbol} value={symbol}>{symbol === 'USDC' ? 'devUSDC' : symbol}</option>
                     ))}
                   </select>
@@ -510,8 +522,8 @@ export function SwapModal({
                     onChange={(e) => setTokenOut(e.target.value)}
                     className="bg-white border border-black/10 rounded-[10px] px-3 py-2 font-semibold text-[13px] sm:text-[14px] text-[#1d1d1f] flex-shrink-0 cursor-pointer hover:border-[#007AFF] transition-colors"
                   >
-                    {/* Use balance token list - these are actual testnet tokens */}
-                    {['CRO', 'WCRO', 'USDC', 'VVS'].map(symbol => (
+                    {/* All supported tokens including BTC, ETH, and major cryptos */}
+                    {['CRO', 'WCRO', 'USDC', 'USDT', 'VVS', 'BTC', 'ETH', 'ATOM', 'LINK', 'SHIB', 'DOGE', 'DAI', 'BUSD'].map(symbol => (
                       <option key={symbol} value={symbol}>{symbol === 'USDC' ? 'devUSDC' : symbol}</option>
                     ))}
                   </select>
