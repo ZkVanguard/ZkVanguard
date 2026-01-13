@@ -59,14 +59,15 @@ class RealMarketDataService {
    */
   private getMockPrice(symbol: string): number {
     const mockPrices: Record<string, number> = {
-      CRO: 0.09,
+      CRO: 0.10,      // Updated to current CRO price ~$0.10
       BTC: 50000,
       WBTC: 50000,
       ETH: 3000,
       WETH: 3000,
       USDC: 1,
       USDT: 1,
-      VVS: 0.5,
+      VVS: 0.000005,  // VVS typical price
+      WCRO: 0.10,     // Same as CRO
     };
     return mockPrices[symbol.toUpperCase()] || 1;
   }
@@ -287,12 +288,21 @@ class RealMarketDataService {
       try {
         const croBalance = await this.provider.getBalance(address);
         const croPrice = await this.getTokenPrice('CRO');
-        const croValue = parseFloat(ethers.formatEther(croBalance)) * croPrice.price;
+        const formattedBalance = ethers.formatEther(croBalance);
+        const balanceNumber = parseFloat(formattedBalance);
+        const croValue = balanceNumber * croPrice.price;
+
+        console.log(`🔍 [RealMarketData] CRO Balance Debug:`);
+        console.log(`  Raw Wei: ${croBalance.toString()}`);
+        console.log(`  Formatted: ${formattedBalance} CRO`);
+        console.log(`  Parsed Number: ${balanceNumber}`);
+        console.log(`  CRO Price: $${croPrice.price}`);
+        console.log(`  USD Value: $${croValue.toFixed(2)}`);
 
         tokens.push({
           token: 'native',
           symbol: 'CRO',
-          balance: ethers.formatEther(croBalance),
+          balance: formattedBalance,
           decimals: 18,
           usdValue: croValue,
         });

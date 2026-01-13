@@ -539,9 +539,9 @@ export function PositionsList({ address }: { address: string }) {
                     <div className="text-[15px] sm:text-[17px] font-bold text-[#1d1d1f]">
                       ${parseFloat(position.balanceUSD || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="flex items-center gap-1 justify-end">
-                      <span className="text-[11px] sm:text-[13px] text-[#86868b] hidden sm:inline">
-                        ${parseFloat(position.price || '0').toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <span className="text-[11px] sm:text-[12px] text-[#86868b]">
+                        @${parseFloat(position.price || '0').toFixed(4)}
                       </span>
                       {position.change24h !== 0 && (
                         <span className={`text-[11px] sm:text-[12px] font-medium flex items-center ${position.change24h >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
