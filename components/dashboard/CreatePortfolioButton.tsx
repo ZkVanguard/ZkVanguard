@@ -27,7 +27,7 @@ export function CreatePortfolioButton() {
 
   if (!isConnected) {
     return (
-      <div className="glass p-6 rounded-xl border border-white/10">
+      <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] shadow-sm">
         <p className="text-[#86868b] text-center">Connect wallet to create portfolio</p>
       </div>
     );
@@ -35,7 +35,7 @@ export function CreatePortfolioButton() {
 
   if (isConfirmed) {
     return (
-      <div className="glass p-6 rounded-xl border border-green-500/30 bg-green-500/5">
+      <div className="bg-white p-6 rounded-xl border border-[#34C759]/30 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <CheckCircle className="w-6 h-6 text-[#34C759]" />
           <h3 className="text-xl font-bold text-[#34C759]">Portfolio Created!</h3>
@@ -48,7 +48,7 @@ export function CreatePortfolioButton() {
             setShowForm(false);
             window.location.reload(); // Refresh to see new portfolio
           }}
-          className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
+          className="w-full px-4 py-2 bg-[#34C759] hover:bg-[#34C759]/90 text-white rounded-lg font-semibold transition-colors"
         >
           View Dashboard
         </button>
@@ -58,7 +58,7 @@ export function CreatePortfolioButton() {
 
   if (error) {
     return (
-      <div className="glass p-6 rounded-xl border border-red-500/30 bg-red-500/5">
+      <div className="bg-white p-6 rounded-xl border border-[#FF3B30]/30 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <XCircle className="w-6 h-6 text-[#FF3B30]" />
           <h3 className="text-xl font-bold text-[#FF3B30]">Transaction Failed</h3>
@@ -68,7 +68,7 @@ export function CreatePortfolioButton() {
         </p>
         <button
           onClick={() => setShowForm(true)}
-          className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+          className="w-full px-4 py-2 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-lg font-semibold transition-colors"
         >
           Try Again
         </button>
@@ -77,11 +77,11 @@ export function CreatePortfolioButton() {
   }
 
   return (
-    <div className="glass p-6 rounded-xl border border-white/10">
+    <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] shadow-sm">
       {!showForm ? (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full px-6 py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 rounded-lg font-bold text-[#1d1d1f] transition-all duration-300 flex items-center justify-center gap-2"
+          className="w-full px-6 py-4 bg-gradient-to-r from-[#34C759] to-[#007AFF] hover:opacity-90 rounded-lg font-bold text-white transition-all duration-300 flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" />
           Create New Portfolio
@@ -146,13 +146,13 @@ export function CreatePortfolioButton() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowForm(false)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 rounded-lg font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#34C759] to-[#007AFF] hover:opacity-90 text-white rounded-lg font-semibold transition-colors"
               >
                 Create Portfolio
               </button>

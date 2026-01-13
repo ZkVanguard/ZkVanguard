@@ -203,15 +203,15 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
   if (!isConnected) {
     return (
-      <div className="glass p-6 rounded-xl border border-white/10">
+      <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] shadow-sm">
         <div className="flex items-center space-x-2 mb-4">
-          <Clock className="w-6 h-6 text-cyan-500" />
-          <h2 className="text-2xl font-semibold">Payment Settlement</h2>
+          <Clock className="w-6 h-6 text-[#007AFF]" />
+          <h2 className="text-2xl font-semibold text-[#1D1D1F]">Payment Settlement</h2>
         </div>
         <div className="text-center py-12">
-          <Wallet className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Connect Your Wallet</h3>
-          <p className="text-gray-400">
+          <Wallet className="w-16 h-16 text-[#86868B] mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2 text-[#1D1D1F]">Connect Your Wallet</h3>
+          <p className="text-[#6E6E73]">
             Connect your wallet to process batch settlements on-chain
           </p>
         </div>
@@ -222,18 +222,18 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
   // X402 Success State
   if (x402Status === 'success' && x402TxHash) {
     return (
-      <div className="glass p-6 rounded-xl border border-purple-500/30 bg-purple-500/5">
+      <div className="bg-[#5856D6]/5 p-6 rounded-xl border border-[#5856D6]/30">
         <div className="flex items-center gap-3 mb-4">
-          <Zap className="w-6 h-6 text-purple-400" />
-          <h3 className="text-xl font-bold text-purple-400">X402 Settlement Complete!</h3>
+          <Zap className="w-6 h-6 text-[#5856D6]" />
+          <h3 className="text-xl font-bold text-[#5856D6]">X402 Settlement Complete!</h3>
         </div>
-        <p className="text-gray-300 mb-4">
+        <p className="text-[#424245] mb-4">
           Your batch settlement was processed via the <strong>x402 protocol</strong> with gasless USDC payments.
         </p>
-        <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
+        <div className="bg-[#5856D6]/10 border border-[#5856D6]/30 rounded-lg p-3 mb-4">
           <div className="flex items-center gap-2 text-sm">
-            <Shield className="w-4 h-4 text-purple-400" />
-            <span className="text-purple-300">Powered by @crypto.com/facilitator-client</span>
+            <Shield className="w-4 h-4 text-[#5856D6]" />
+            <span className="text-[#5856D6]">Powered by @crypto.com/facilitator-client</span>
           </div>
         </div>
         <div className="flex gap-3">
@@ -241,14 +241,14 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
             href={`https://explorer.cronos.org/testnet/tx/${x402TxHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#5856D6] hover:bg-[#4240B3] text-white rounded-lg font-semibold transition-colors"
           >
             View Transaction
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
             onClick={resetForm}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+            className="px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors border border-[#E5E5EA]"
           >
             New Settlement
           </button>
@@ -260,12 +260,12 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
   // Standard success state
   if (isConfirmed) {
     return (
-      <div className="glass p-6 rounded-xl border border-green-500/30 bg-green-500/5">
+      <div className="bg-[#34C759]/5 p-6 rounded-xl border border-[#34C759]/30">
         <div className="flex items-center gap-3 mb-4">
-          <CheckCircle className="w-6 h-6 text-green-400" />
-          <h3 className="text-xl font-bold text-green-400">Settlement Processed!</h3>
+          <CheckCircle className="w-6 h-6 text-[#34C759]" />
+          <h3 className="text-xl font-bold text-[#34C759]">Settlement Processed!</h3>
         </div>
-        <p className="text-gray-300 mb-4">
+        <p className="text-[#424245] mb-4">
           Your batch settlement has been successfully processed by the PaymentRouter contract.
         </p>
         <div className="flex gap-3">
@@ -273,14 +273,14 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
             href={`https://explorer.cronos.org/testnet/tx/${hash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#34C759] hover:bg-[#2FB04E] text-white rounded-lg font-semibold transition-colors"
           >
             View Transaction
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
             onClick={resetForm}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+            className="px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors border border-[#E5E5EA]"
           >
             New Settlement
           </button>
@@ -292,17 +292,17 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
   // X402 error state
   if (x402Status === 'error') {
     return (
-      <div className="glass p-6 rounded-xl border border-red-500/30 bg-red-500/5">
+      <div className="bg-[#FF3B30]/5 p-6 rounded-xl border border-[#FF3B30]/30">
         <div className="flex items-center gap-3 mb-4">
-          <XCircle className="w-6 h-6 text-red-400" />
-          <h3 className="text-xl font-bold text-red-400">X402 Settlement Failed</h3>
+          <XCircle className="w-6 h-6 text-[#FF3B30]" />
+          <h3 className="text-xl font-bold text-[#FF3B30]">X402 Settlement Failed</h3>
         </div>
-        <p className="text-gray-300 mb-4 text-sm">
+        <p className="text-[#424245] mb-4 text-sm">
           {x402Error || 'Failed to process x402 settlement'}
         </p>
         <button
           onClick={resetForm}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+          className="px-4 py-2 bg-[#FF3B30] hover:bg-[#E62E24] text-white rounded-lg font-semibold transition-colors"
         >
           Try Again
         </button>
@@ -312,17 +312,17 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
   if (error) {
     return (
-      <div className="glass p-6 rounded-xl border border-red-500/30 bg-red-500/5">
+      <div className="bg-[#FF3B30]/5 p-6 rounded-xl border border-[#FF3B30]/30">
         <div className="flex items-center gap-3 mb-4">
-          <XCircle className="w-6 h-6 text-red-400" />
-          <h3 className="text-xl font-bold text-red-400">Settlement Failed</h3>
+          <XCircle className="w-6 h-6 text-[#FF3B30]" />
+          <h3 className="text-xl font-bold text-[#FF3B30]">Settlement Failed</h3>
         </div>
-        <p className="text-gray-300 mb-4 text-sm">
+        <p className="text-[#424245] mb-4 text-sm">
           {error.message || 'Failed to process settlement'}
         </p>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+          className="px-4 py-2 bg-[#FF3B30] hover:bg-[#E62E24] text-white rounded-lg font-semibold transition-colors"
         >
           Try Again
         </button>
@@ -331,21 +331,21 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
   }
 
   return (
-    <div className="glass p-6 rounded-xl border border-white/10">
+    <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center space-x-2">
-            <Clock className="w-6 h-6 text-cyan-500" />
-            <h2 className="text-2xl font-semibold">Batch Settlement</h2>
+            <Clock className="w-6 h-6 text-[#007AFF]" />
+            <h2 className="text-2xl font-semibold text-[#1D1D1F]">Batch Settlement</h2>
             <span className={`text-xs px-2 py-1 rounded-full border ${
               settlementMode === 'x402' 
-                ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-                : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
+                ? 'bg-[#5856D6]/10 text-[#5856D6] border-[#5856D6]/30'
+                : 'bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/30'
             }`}>
               {settlementMode === 'x402' ? '⚡ x402 Powered' : 'On-Chain'}
             </span>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-[#6E6E73] mt-2">
             {settlementMode === 'x402' 
               ? 'Gasless settlements via x402 protocol with USDC fees'
               : 'Process multiple payments in a single transaction via PaymentRouter'
@@ -355,13 +355,13 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
       </div>
 
       {/* Settlement Mode Toggle */}
-      <div className="flex gap-2 mb-6 p-1 bg-gray-800 rounded-lg">
+      <div className="flex gap-2 mb-6 p-1 bg-[#F5F5F7] rounded-lg">
         <button
           onClick={() => setSettlementMode('x402')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
             settlementMode === 'x402'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-400 hover:text-white'
+              ? 'bg-[#5856D6] text-white'
+              : 'text-[#6E6E73] hover:text-[#1D1D1F]'
           }`}
         >
           <Zap className="w-4 h-4" />
@@ -371,8 +371,8 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
           onClick={() => setSettlementMode('standard')}
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
             settlementMode === 'standard'
-              ? 'bg-cyan-600 text-white'
-              : 'text-gray-400 hover:text-white'
+              ? 'bg-[#007AFF] text-white'
+              : 'text-[#6E6E73] hover:text-[#1D1D1F]'
           }`}
         >
           <Shield className="w-4 h-4" />
@@ -383,20 +383,20 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
       {!showForm ? (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-900 p-4 rounded-lg border border-cyan-500/20">
-              <h3 className="font-semibold text-cyan-400 mb-2">
+            <div className="bg-[#F5F5F7] p-4 rounded-lg border border-[#007AFF]/20">
+              <h3 className="font-semibold text-[#007AFF] mb-2">
                 {settlementMode === 'x402' ? 'X402 Facilitator' : 'Contract Address'}
               </h3>
-              <p className="text-xs font-mono text-gray-400 break-all">
+              <p className="text-xs font-mono text-[#6E6E73] break-all">
                 {settlementMode === 'x402' 
                   ? '@crypto.com/facilitator-client'
                   : contractAddresses.paymentRouter
                 }
               </p>
             </div>
-            <div className="bg-gray-900 p-4 rounded-lg border border-cyan-500/20">
-              <h3 className="font-semibold text-cyan-400 mb-2">Settlement Type</h3>
-              <p className="text-sm text-gray-300">
+            <div className="bg-[#F5F5F7] p-4 rounded-lg border border-[#007AFF]/20">
+              <h3 className="font-semibold text-[#007AFF] mb-2">Settlement Type</h3>
+              <p className="text-sm text-[#424245]">
                 {settlementMode === 'x402' 
                   ? 'EIP-3009 USDC Transfer'
                   : 'Batch Payment Processing'
@@ -417,15 +417,15 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
           </button>
 
           {settlementMode === 'x402' && (
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-              <p className="text-xs text-purple-400">
+            <div className="bg-[#5856D6]/10 border border-[#5856D6]/30 rounded-lg p-3">
+              <p className="text-xs text-[#5856D6]">
                 ⚡ <strong>X402 Protocol:</strong> Pay only 0.01 USDC fee per settlement. No CRO gas required!
               </p>
             </div>
           )}
           
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-            <p className="text-xs text-amber-400">
+          <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-lg p-3">
+            <p className="text-xs text-[#FF9500]">
               ℹ️ {settlementMode === 'x402' 
                 ? 'X402 uses the official @crypto.com/facilitator-client SDK for secure settlements.'
                 : 'Batch settlements allow you to process multiple payments in a single transaction, saving gas fees.'
@@ -436,7 +436,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[#424245] mb-2">
               Portfolio ID
             </label>
             <input
@@ -444,19 +444,19 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
               value={portfolioId}
               onChange={(e) => setPortfolioId(e.target.value)}
               placeholder="0"
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+              className="w-full px-4 py-2 bg-[#F5F5F7] border border-[#E5E5EA] rounded-lg text-[#1D1D1F] focus:border-[#007AFF] focus:outline-none"
               disabled={isPending || isConfirming}
             />
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-300">
+              <label className="text-sm font-medium text-[#424245]">
                 Payments ({payments.length})
               </label>
               <button
                 onClick={addPayment}
-                className="flex items-center gap-1 px-3 py-1 bg-cyan-600 hover:bg-cyan-700 rounded text-sm font-semibold transition-colors"
+                className="flex items-center gap-1 px-3 py-1 bg-[#007AFF] hover:bg-[#0066D6] text-white rounded text-sm font-semibold transition-colors"
                 disabled={isPending || isConfirming}
               >
                 <Plus className="w-4 h-4" />
@@ -465,13 +465,13 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
             </div>
 
             {payments.map((payment, index) => (
-              <div key={index} className="bg-gray-900 p-4 rounded-lg border border-gray-700 space-y-3">
+              <div key={index} className="bg-[#F5F5F7] p-4 rounded-lg border border-[#E5E5EA] space-y-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-cyan-400">Payment #{index + 1}</span>
+                  <span className="text-sm font-semibold text-[#007AFF]">Payment #{index + 1}</span>
                   {payments.length > 1 && (
                     <button
                       onClick={() => removePayment(index)}
-                      className="text-red-400 hover:text-red-300"
+                      className="text-[#FF3B30] hover:text-[#E62E24]"
                       disabled={isPending || isConfirming}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -484,7 +484,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
                   value={payment.recipient}
                   onChange={(e) => updatePayment(index, 'recipient', e.target.value)}
                   placeholder="Recipient Address (0x...)"
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-white border border-[#E5E5EA] rounded text-sm text-[#1D1D1F] focus:border-[#007AFF] focus:outline-none"
                   disabled={isPending || isConfirming}
                 />
                 
@@ -494,7 +494,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
                     value={payment.amount}
                     onChange={(e) => updatePayment(index, 'amount', e.target.value)}
                     placeholder="Amount (CRO)"
-                    className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+                    className="px-3 py-2 bg-white border border-[#E5E5EA] rounded text-sm text-[#1D1D1F] focus:border-[#007AFF] focus:outline-none"
                     disabled={isPending || isConfirming}
                   />
                   <input
@@ -502,7 +502,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
                     value={payment.token}
                     onChange={(e) => updatePayment(index, 'token', e.target.value)}
                     placeholder="Token Address"
-                    className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
+                    className="px-3 py-2 bg-white border border-[#E5E5EA] rounded text-sm text-[#1D1D1F] focus:border-[#007AFF] focus:outline-none"
                     disabled={isPending || isConfirming}
                   />
                 </div>
@@ -513,16 +513,16 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
           {isPending || isConfirming || ['challenging', 'signing', 'settling'].includes(x402Status) ? (
             <div className={`border rounded-lg p-4 ${
               settlementMode === 'x402' 
-                ? 'bg-purple-500/10 border-purple-500/30'
-                : 'bg-cyan-500/10 border-cyan-500/30'
+                ? 'bg-[#5856D6]/10 border-[#5856D6]/30'
+                : 'bg-[#007AFF]/10 border-[#007AFF]/30'
             }`}>
               <div className="flex items-center gap-3">
                 <Loader2 className={`w-5 h-5 animate-spin ${
-                  settlementMode === 'x402' ? 'text-purple-400' : 'text-cyan-400'
+                  settlementMode === 'x402' ? 'text-[#5856D6]' : 'text-[#007AFF]'
                 }`} />
                 <div>
                   <p className={`font-semibold ${
-                    settlementMode === 'x402' ? 'text-purple-400' : 'text-cyan-400'
+                    settlementMode === 'x402' ? 'text-[#5856D6]' : 'text-[#007AFF]'
                   }`}>
                     {settlementMode === 'x402' 
                       ? x402Status === 'challenging' ? 'Creating payment challenge...'
@@ -532,7 +532,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
                         : 'Processing settlement...'
                     }
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-[#6E6E73] mt-1">
                     {settlementMode === 'x402'
                       ? x402Status === 'challenging' ? 'Fetching x402 payment requirements'
                         : x402Status === 'signing' ? 'Please sign the EIP-3009 authorization'
@@ -548,7 +548,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowForm(false)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="flex-1 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors border border-[#E5E5EA]"
               >
                 Cancel
               </button>
@@ -567,11 +567,11 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
           <div className={`border rounded-lg p-3 ${
             settlementMode === 'x402'
-              ? 'bg-purple-500/10 border-purple-500/30'
-              : 'bg-amber-500/10 border-amber-500/30'
+              ? 'bg-[#5856D6]/10 border-[#5856D6]/30'
+              : 'bg-[#FF9500]/10 border-[#FF9500]/30'
           }`}>
             <p className={`text-xs ${
-              settlementMode === 'x402' ? 'text-purple-400' : 'text-amber-400'
+              settlementMode === 'x402' ? 'text-[#5856D6]' : 'text-[#FF9500]'
             }`}>
               {settlementMode === 'x402'
                 ? '⚡ x402 settlement: ~0.01 USDC fee, no CRO gas required. Powered by @crypto.com/facilitator-client.'
