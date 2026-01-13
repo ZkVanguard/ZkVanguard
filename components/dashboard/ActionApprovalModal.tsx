@@ -215,7 +215,7 @@ export function ActionApprovalModal({
               <button
                 onClick={onReject}
                 disabled={isSigning || isExecuting}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-white disabled:opacity-50 rounded-lg font-semibold text-[#1d1d1f] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] disabled:opacity-50 rounded-lg font-semibold text-[#1d1d1f] transition-colors flex items-center justify-center gap-2"
               >
                 <XCircle className="w-5 h-5" />
                 Reject
@@ -223,7 +223,7 @@ export function ActionApprovalModal({
               <button
                 onClick={handleApprove}
                 disabled={isSigning || isExecuting}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-[#1d1d1f] transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#5856D6] to-[#007AFF] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-all shadow-lg shadow-[#5856D6]/20 flex items-center justify-center gap-2"
               >
                 {isSigning ? (
                   <>

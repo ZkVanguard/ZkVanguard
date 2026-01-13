@@ -146,7 +146,7 @@ export function WithdrawModal({
           </div>
           <button 
             onClick={onClose}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -240,14 +240,14 @@ export function WithdrawModal({
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                  className="flex-1 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleWithdraw}
                   disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > parseFloat(assetBalance)}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-all"
+                  className="flex-1 py-3 bg-gradient-to-r from-[#FF3B30] to-[#FF9500] hover:opacity-90 disabled:from-[#E5E5EA] disabled:to-[#E5E5EA] disabled:text-[#86868B] disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all"
                 >
                   Withdraw {tokenInfo.symbol}
                 </button>
@@ -289,7 +289,7 @@ export function WithdrawModal({
               )}
               <button
                 onClick={onClose}
-                className="w-full mt-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="w-full mt-6 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
               >
                 Close
               </button>
@@ -308,7 +308,7 @@ export function WithdrawModal({
                   setStep('input');
                   setErrorMessage('');
                 }}
-                className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+                className="w-full py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] text-[#1D1D1F] rounded-lg font-semibold transition-colors"
               >
                 Try Again
               </button>
