@@ -4,6 +4,9 @@ node_modules/
 /.pnp
 .pnp.js
 
+# Demo scripts (local only)
+QUICK_DEMO_SCRIPT.md
+
 # Next.js
 .next/
 out/
@@ -144,3 +147,4 @@ INVESTOR_PITCH_DECK_UPDATED.md
 zkvanguard_pitch_deck.md.pdf
 DEMO_WALKTHROUGH_GUIDE.md
 DEMO_WALKTHROUGH_GUIDE.md
+QUICK_DEMO_SCRIPT.md
