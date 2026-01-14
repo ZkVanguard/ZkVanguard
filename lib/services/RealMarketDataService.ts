@@ -292,7 +292,6 @@ class RealMarketDataService {
         console.warn(`⚠️ [RealMarketData] Background refresh failed for ${symbol}`);
       }
     }
-    };
   }
 
   /**
