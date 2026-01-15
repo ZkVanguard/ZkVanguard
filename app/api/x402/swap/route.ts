@@ -154,6 +154,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // Use MAINNET service for accurate quotes (testnet has no stablecoin pools)
+    // Explicitly pass the API key from env - Next.js should have loaded .env.local
+    const vvsApiKey = process.env.SWAP_SDK_QUOTE_API_CLIENT_ID_25 || process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID;
+    console.log('[x402/swap] ENV Check:', {
+      SWAP_SDK_25: process.env.SWAP_SDK_QUOTE_API_CLIENT_ID_25 ? 'present' : 'missing',
+      NEXT_PUBLIC_VVS: process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID ? 'present' : 'missing',
+      vvsApiKey: vvsApiKey ? `${vvsApiKey.slice(0,8)}...` : 'missing',
+    });
     const vvsService = getVVSSwapSDKService(QUOTE_CHAIN_ID);
     
     // Resolve tokens to MAINNET addresses for accurate pricing

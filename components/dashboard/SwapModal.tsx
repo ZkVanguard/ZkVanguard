@@ -78,6 +78,10 @@ export function SwapModal({
   useEffect(() => {
     publicClient?.getChainId().then(chainId => {
       setIsTestnet(chainId === 338);
+      if (chainId === 338) {
+        console.warn('⚠️ VVS Finance contracts only exist on Cronos MAINNET (chain 25)');
+        console.warn('💡 Switch to mainnet in MetaMask to execute real swaps');
+      }
     });
   }, [publicClient]);
 
@@ -362,11 +366,23 @@ export function SwapModal({
         }
       }
 
-      // Step 4: Execute VVS Finance DEX Swap (PRIORITY)
+      // Step 4: Execute VVS Finance swap using SDK trade object
       setStep('swap');
-      console.log('🔄 Executing VVS Finance swap...');
+      console.log('🔄 Executing VVS Finance swap with SDK...');
       
-      // Always try VVS Finance DEX first - intelligent routing
+      // Get the full trade object from VVS SDK via API
+      const tradeResponse = await fetch(`/api/x402/swap?tokenIn=${tokenIn}&tokenOut=${tokenOut}&amountIn=${amountIn}`);
+      if (!tradeResponse.ok) {
+        throw new Error('Failed to get trade from VVS SDK');
+      }
+      
+      const tradeData = await tradeResponse.json();
+      if (!tradeData.success) {
+        throw new Error(tradeData.error || 'Failed to get swap quote');
+      }
+
+      // Use VVS SDK approach: get quote then execute with wagmi
+      // For testnet (338), VVS SDK will route through available pools
       const swapCall = dexService.getSwapContractCall(
         {
           tokenIn,
@@ -454,6 +470,25 @@ export function SwapModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Testnet Warning Banner */}
+        {isTestnet && (
+          <div className="mx-5 sm:mx-6 mt-4 p-3 bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-[12px] flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-[#FF9500] flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] sm:text-[13px] text-[#1d1d1f] font-semibold mb-1">
+                ⚠️ Testnet Limitation
+              </p>
+              <p className="text-[11px] sm:text-[12px] text-[#86868b] leading-relaxed">
+                VVS Finance DEX contracts only exist on <strong>Cronos Mainnet</strong>. 
+                Quotes are real, but swaps cannot execute on testnet.
+              </p>
+              <p className="text-[11px] sm:text-[12px] text-[#007AFF] font-medium mt-1.5">
+                💡 Switch to Cronos Mainnet (Chain 25) in MetaMask for real swaps
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="px-5 sm:px-6 py-4 sm:py-5 space-y-3 sm:space-y-4">

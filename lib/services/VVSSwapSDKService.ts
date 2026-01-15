@@ -32,11 +32,20 @@ export class VVSSwapSDKService {
 
   constructor(chainId: number = BuiltInChainId.CRONOS_TESTNET) {
     this.chainId = chainId;
-    // Quote API Client ID - use environment variable matching VVS SDK convention
-    this.quoteApiClientId = process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID || 
-                            process.env[`SWAP_SDK_QUOTE_API_CLIENT_ID_${chainId}`];
+    // Quote API Client ID - check multiple environment variable patterns
+    // VVS SDK looks for SWAP_SDK_QUOTE_API_CLIENT_ID_{chainId}
+    const envKey = `SWAP_SDK_QUOTE_API_CLIENT_ID_${chainId}`;
+    this.quoteApiClientId = 
+      process.env[envKey] || // Server-side env variable
+      process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID || // Public fallback
+      (typeof window !== 'undefined' ? (window as any)[envKey] : undefined); // Client-side fallback
     
-    console.log(`🔧 VVS SDK initialized for chain ${chainId} with API key: ${this.quoteApiClientId ? 'present' : 'missing'}`);
+    console.log(`🔧 VVS SDK initialized for chain ${chainId}`, {
+      envKey,
+      hasApiKey: !!this.quoteApiClientId,
+      apiKeyPreview: this.quoteApiClientId ? `${this.quoteApiClientId.slice(0, 8)}...` : 'none',
+      processEnvKeys: Object.keys(process.env).filter(k => k.includes('VVS') || k.includes('SWAP_SDK')),
+    });
   }
 
   /**
