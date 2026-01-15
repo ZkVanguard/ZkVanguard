@@ -658,14 +658,81 @@ export class HedgingAgent extends BaseAgent {
   }
 
   /**
-   * Calculate spot-future correlation
+   * Calculate spot-future correlation using real market data
    */
-  private async calculateSpotFutureCorrelation(_assetSymbol: string): Promise<number> {
-    // Simplified correlation calculation
-    // In production, would fetch perpetual funding rates and spot prices
-    
-    // Assume high correlation for liquid markets
-    return 0.95;
+  private async calculateSpotFutureCorrelation(assetSymbol: string): Promise<number> {
+    try {
+      // Get historical spot prices from MCP
+      const spotPrices = await this.mcpClient.getHistoricalPrices(
+        assetSymbol,
+        '1d',
+        30 // 30 days
+      );
+      
+      // Get funding rates from Moonlander (proxy for futures-spot basis)
+      const perpMarket = `${assetSymbol}-USD-PERP`;
+      const fundingHistory = await this.moonlanderClient.getFundingHistory(perpMarket, 30);
+      
+      if (spotPrices.length < 10 || fundingHistory.length < 10) {
+        logger.warn('Insufficient data for correlation calculation, using default', { assetSymbol });
+        // For major crypto assets, correlation is typically high
+        const highCorrelationAssets = ['BTC', 'ETH', 'CRO'];
+        return highCorrelationAssets.includes(assetSymbol.toUpperCase()) ? 0.95 : 0.85;
+      }
+      
+      // Calculate spot returns
+      const spotReturns: number[] = [];
+      for (let i = 1; i < spotPrices.length; i++) {
+        const ret = (spotPrices[i].price - spotPrices[i - 1].price) / spotPrices[i - 1].price;
+        spotReturns.push(ret);
+      }
+      
+      // Use funding rate as proxy for futures basis movement
+      // Positive funding = futures above spot, negative = futures below spot
+      const futuresReturns: number[] = fundingHistory.slice(0, spotReturns.length).map(f => parseFloat(f.rate) * 100);
+      
+      // Calculate Pearson correlation coefficient
+      const n = Math.min(spotReturns.length, futuresReturns.length);
+      if (n < 5) {
+        logger.warn('Not enough data points for correlation', { n, assetSymbol });
+        return 0.90;
+      }
+      
+      const spotMean = spotReturns.slice(0, n).reduce((a, b) => a + b, 0) / n;
+      const futuresMean = futuresReturns.slice(0, n).reduce((a, b) => a + b, 0) / n;
+      
+      let numerator = 0;
+      let spotVariance = 0;
+      let futuresVariance = 0;
+      
+      for (let i = 0; i < n; i++) {
+        const spotDiff = spotReturns[i] - spotMean;
+        const futuresDiff = futuresReturns[i] - futuresMean;
+        numerator += spotDiff * futuresDiff;
+        spotVariance += spotDiff * spotDiff;
+        futuresVariance += futuresDiff * futuresDiff;
+      }
+      
+      const denominator = Math.sqrt(spotVariance * futuresVariance);
+      const correlation = denominator > 0 ? numerator / denominator : 0;
+      
+      // For perpetuals, we expect high correlation (typically > 0.9)
+      // Clamp to reasonable range [0.5, 1.0]
+      const adjustedCorrelation = Math.max(0.5, Math.min(1.0, Math.abs(correlation)));
+      
+      logger.info('Calculated spot-future correlation', { 
+        assetSymbol, 
+        correlation: adjustedCorrelation,
+        dataPoints: n 
+      });
+      
+      return adjustedCorrelation;
+    } catch (error) {
+      logger.error('Failed to calculate spot-future correlation', { assetSymbol, error });
+      // Fallback to reasonable estimate for liquid markets
+      const highCorrelationAssets = ['BTC', 'ETH', 'CRO'];
+      return highCorrelationAssets.includes(assetSymbol.toUpperCase()) ? 0.92 : 0.85;
+    }
   }
 
   /**

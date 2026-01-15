@@ -163,9 +163,10 @@ export class PriceMonitorAgent {
   }
 
   /**
-   * Fetch single price from Crypto.com API
+   * Fetch single price from Crypto.com API with fallback to RealMarketDataService
    */
   private async fetchPrice(symbol: string, url: string): Promise<PriceData | null> {
+    // Try primary Crypto.com API first
     try {
       const response = await fetch(url, {
         headers: { 'Accept': 'application/json' },
@@ -191,23 +192,28 @@ export class PriceMonitorAgent {
         };
       }
 
-      return null;
-    } catch (error) {
-      // Return mock data for demo if API fails
-      const mockPrices: Record<string, number> = {
-        BTC: 91750 + (Math.random() - 0.5) * 1000,
-        ETH: 3420 + (Math.random() - 0.5) * 100,
-        CRO: 0.142 + (Math.random() - 0.5) * 0.01,
-      };
-
-      return {
-        symbol,
-        price: mockPrices[symbol] || 0,
-        change24h: (Math.random() - 0.5) * 5,
-        volume24h: Math.random() * 1000000000,
-        timestamp: Date.now(),
-        source: 'mock',
-      };
+      throw new Error('Invalid API response format');
+    } catch (primaryError) {
+      logger.warn(`Primary Crypto.com API failed for ${symbol}, trying RealMarketDataService`, { error: primaryError });
+      
+      // Fallback to RealMarketDataService which uses Crypto.com Exchange API
+      try {
+        const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+        const marketData = await realMarketDataService.getTokenPrice(symbol);
+        
+        return {
+          symbol,
+          price: marketData.price,
+          change24h: marketData.change24h || 0,
+          volume24h: marketData.volume24h || 0,
+          timestamp: Date.now(),
+          source: marketData.source || 'cryptocom-exchange',
+        };
+      } catch (fallbackError) {
+        logger.error(`All price sources failed for ${symbol}`, { primaryError, fallbackError });
+        // Return null instead of mock data - let caller handle missing price
+        return null;
+      }
     }
   }
 
