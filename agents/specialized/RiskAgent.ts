@@ -166,7 +166,7 @@ export class RiskAgent extends BaseAgent {
       totalRisk,
       volatility,
       exposures,
-      recommendations: this.generateRecommendations(totalRisk, volatility, sentiment),
+      recommendations: this.generateRecommendations(totalRisk, volatility, sentiment, exposures),
       marketSentiment: sentiment,
     };
 
@@ -266,8 +266,14 @@ export class RiskAgent extends BaseAgent {
       const portfolioData = await getPortfolioData();
       
       if (!portfolioData?.portfolio?.positions || portfolioData.portfolio.positions.length === 0) {
-        logger.warn('No portfolio positions found, returning empty exposures');
-        return [];
+        logger.info('No portfolio positions - will prompt user to add positions');
+        // Return a meaningful default that indicates no positions
+        // This helps the RiskAgent give actionable advice
+        return [{
+          asset: 'CASH',
+          exposure: 100,
+          contribution: 0, // Cash has no risk contribution
+        }];
       }
       
       const positions = portfolioData.portfolio.positions;
@@ -402,28 +408,39 @@ export class RiskAgent extends BaseAgent {
   private generateRecommendations(
     totalRisk: number,
     volatility: number,
-    sentiment: string
+    sentiment: string,
+    exposures?: RiskAnalysis['exposures']
   ): string[] {
     const recommendations: string[] = [];
 
+    // Check if portfolio is just cash (no crypto positions)
+    const isCashOnly = exposures && exposures.length === 1 && exposures[0].asset === 'CASH';
+    
+    if (isCashOnly) {
+      recommendations.push('📊 Your portfolio is 100% in cash - consider diversifying');
+      recommendations.push('💡 Try: "Buy 100 CRO" or "Buy 50 ETH" to start investing');
+      recommendations.push('🎯 A balanced portfolio might include: 40% CRO, 30% ETH, 20% BTC, 10% stablecoins');
+      return recommendations;
+    }
+
     if (totalRisk > 70) {
-      recommendations.push('High risk detected: Consider reducing overall exposure');
-      recommendations.push('Implement hedging strategies using derivatives');
+      recommendations.push('⚠️ High risk detected: Consider reducing overall exposure');
+      recommendations.push('🛡️ Implement hedging strategies using derivatives');
     } else if (totalRisk > 50) {
-      recommendations.push('Moderate risk: Monitor positions closely');
-      recommendations.push('Consider partial hedging');
+      recommendations.push('📈 Moderate risk: Monitor positions closely');
+      recommendations.push('Consider partial hedging for protection');
     } else {
-      recommendations.push('Risk levels acceptable within target range');
+      recommendations.push('✅ Risk levels acceptable within target range');
     }
 
     if (volatility > 0.3) {
-      recommendations.push('High volatility detected: Consider volatility-targeting strategies');
+      recommendations.push('📉 High volatility detected: Consider volatility-targeting strategies');
     }
 
     if (sentiment === 'bearish') {
-      recommendations.push('Bearish sentiment: Consider defensive positioning');
+      recommendations.push('🐻 Bearish sentiment: Consider defensive positioning');
     } else if (sentiment === 'bullish') {
-      recommendations.push('Bullish sentiment: Evaluate growth opportunities');
+      recommendations.push('🐂 Bullish sentiment: Evaluate growth opportunities');
     }
 
     return recommendations;

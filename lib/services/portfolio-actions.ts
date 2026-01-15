@@ -100,17 +100,44 @@ async function generateActionProof(action: PortfolioAction, result: any): Promis
 
 /**
  * Execute a portfolio action with automatic ZK proof generation
+ * Uses REAL on-chain data - no simulations
  */
 export async function executePortfolioAction(action: PortfolioAction): Promise<ActionResult> {
   try {
-    logger.info('Executing portfolio action', { type: action.type, params: action.params });
+    logger.info('Executing portfolio action (REAL ON-CHAIN)', { type: action.type, params: action.params });
 
-    // Ensure we're in a browser environment or use absolute URL
     const baseUrl = typeof window !== 'undefined' 
       ? '' 
       : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
 
-    const response = await fetch(`${baseUrl}/api/portfolio/simulated`, {
+    // For analysis actions, use on-chain data directly
+    if (['analyze', 'assess-risk', 'get-hedges'].includes(action.type)) {
+      const portfolioData = await getPortfolioData();
+      
+      if (!portfolioData?.portfolio) {
+        return {
+          success: false,
+          message: 'No on-chain portfolio data available',
+          error: 'Connect wallet or ensure SERVER_WALLET_PRIVATE_KEY is set',
+        };
+      }
+
+      // Generate analysis result from real on-chain data
+      const result = await generateAnalysisFromOnChainData(action.type, portfolioData);
+      
+      // Generate ZK proof for the analysis
+      const zkProof = await generateActionProof(action, result);
+      
+      return {
+        success: true,
+        message: `${action.type} completed with real on-chain data`,
+        data: { result, portfolio: portfolioData.portfolio },
+        zkProof,
+      };
+    }
+
+    // For trade actions (buy/sell), use the on-chain trading endpoint
+    const response = await fetch(`${baseUrl}/api/portfolio/onchain/trade`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -124,7 +151,7 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
       return {
         success: false,
         message: `Failed to execute ${action.type}`,
-        error: error.details || error.error,
+        error: error.details || error.error || 'On-chain transaction failed',
       };
     }
 
@@ -133,7 +160,7 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
     // 🔐 AUTOMATIC ZK PROOF GENERATION for all actions
     const zkProof = await generateActionProof(action, result);
     
-    logger.info('Action executed with ZK proof', { 
+    logger.info('Action executed with ZK proof (ON-CHAIN)', { 
       action: action.type, 
       proofHash: zkProof.proofHash.slice(0, 16) 
     });
@@ -142,39 +169,132 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
       success: true,
       message: `Successfully executed ${action.type}`,
       data: result,
-      zkProof, // Always include ZK proof
+      zkProof,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('Portfolio action error:', { 
       error: errorMsg, 
       action: action.type,
-      baseUrl: typeof window !== 'undefined' ? 'browser' : process.env.NEXT_PUBLIC_SITE_URL 
     });
     return {
       success: false,
-      message: `Unable to connect to portfolio service. Please check your connection and try again.`,
+      message: `Unable to execute on-chain action. Please check your connection.`,
       error: errorMsg,
     };
   }
 }
 
 /**
- * Get current portfolio data
+ * Generate analysis results from real on-chain portfolio data
+ */
+async function generateAnalysisFromOnChainData(actionType: string, portfolioData: any): Promise<any> {
+  const portfolio = portfolioData.portfolio;
+  const positions = portfolio.positions || [];
+  const totalValue = portfolio.totalValue || 0;
+
+  switch (actionType) {
+    case 'analyze':
+      // Calculate real metrics from on-chain positions
+      const topPositions = positions
+        .sort((a: any, b: any) => b.value - a.value)
+        .slice(0, 3);
+      
+      return {
+        summary: `Portfolio Value: $${totalValue.toFixed(2)} across ${positions.length} assets`,
+        totalValue,
+        positions,
+        healthScore: positions.length > 1 ? 70 : 40, // Diversification bonus
+        riskScore: positions.some((p: any) => p.symbol !== 'USDC' && p.symbol !== 'devUSDC') ? 55 : 15,
+        strengths: positions.length > 0 
+          ? topPositions.map((p: any) => `${p.symbol}: $${p.value.toFixed(2)} (${((p.value/totalValue)*100).toFixed(1)}%)`)
+          : ['No positions yet'],
+        risks: positions.length < 3 
+          ? ['Low diversification - consider adding more assets']
+          : [],
+        recommendations: positions.length === 0
+          ? ['Start by buying some CRO or ETH']
+          : positions.length < 3
+            ? ['Consider diversifying into more assets']
+            : ['Portfolio is well diversified'],
+      };
+
+    case 'assess-risk':
+      // Calculate risk metrics from real positions
+      const hasVolatileAssets = positions.some((p: any) => 
+        !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol)
+      );
+      const volatileWeight = positions
+        .filter((p: any) => !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol))
+        .reduce((sum: number, p: any) => sum + (p.value / totalValue), 0);
+      
+      const volatility = hasVolatileAssets ? 0.25 + (volatileWeight * 0.15) : 0.02;
+      const var95 = volatility * 1.65; // 95% VaR approximation
+      const riskScore = Math.min(100, volatileWeight * 80 + 10);
+      
+      return {
+        riskScore,
+        volatility,
+        var95,
+        sharpeRatio: volatility > 0.1 ? 0.8 : 1.5,
+        overallRisk: riskScore > 70 ? 'High' : riskScore > 40 ? 'Moderate' : 'Low',
+        exposures: positions.map((p: any) => ({
+          asset: p.symbol,
+          exposure: ((p.value / totalValue) * 100).toFixed(1),
+          contribution: ['USDC', 'USDT', 'devUSDC'].includes(p.symbol) ? 0 : ((p.value / totalValue) * 50).toFixed(1),
+        })),
+      };
+
+    case 'get-hedges':
+      // Generate hedge recommendations based on real positions
+      const cryptoPositions = positions.filter((p: any) => 
+        !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol)
+      );
+      
+      if (cryptoPositions.length === 0) {
+        return [];
+      }
+      
+      return cryptoPositions.map((p: any) => ({
+        type: 'protective-put',
+        asset: p.symbol,
+        market: `${p.symbol}-USD`,
+        action: 'Buy put options',
+        reason: `Protect $${p.value.toFixed(2)} ${p.symbol} position`,
+        effectiveness: 0.85,
+        cost: p.value * 0.02, // ~2% premium
+      }));
+
+    default:
+      return { message: 'Unknown action type' };
+  }
+}
+
+/**
+ * Get current portfolio data from on-chain sources ONLY
+ * No simulated or mock data - real blockchain data only
  */
 export async function getPortfolioData(): Promise<any> {
-  try {
-    const baseUrl = typeof window !== 'undefined' 
-      ? '' 
-      : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
+  const baseUrl = typeof window !== 'undefined' 
+    ? '' 
+    : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
 
-    const response = await fetch(`${baseUrl}/api/portfolio/simulated`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch portfolio');
+  try {
+    const onchainResponse = await fetch(`${baseUrl}/api/portfolio/onchain`);
+    if (onchainResponse.ok) {
+      const data = await onchainResponse.json();
+      if (data.success) {
+        logger.info('Using REAL on-chain portfolio data', { 
+          address: data.portfolio?.address?.slice(0, 10),
+          positions: data.portfolio?.positions?.length || 0,
+          totalValue: data.portfolio?.totalValue
+        });
+        return data;
+      }
     }
-    return await response.json();
+    throw new Error('On-chain portfolio fetch failed');
   } catch (error) {
-    logger.error('Failed to get portfolio data:', error);
+    logger.error('Failed to get on-chain portfolio data:', error);
     return null;
   }
 }

@@ -78,13 +78,64 @@ export class SimulatedPortfolioManager {
   }
 
   /**
-   * Initialize the portfolio manager
+   * Initialize the portfolio manager with a demo portfolio
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
     
-    logger.info('Simulated Portfolio Manager initialized');
+    logger.info('Simulated Portfolio Manager initializing...');
+    
+    // Create a demo portfolio if empty (so users can see meaningful data)
+    if (this.positions.size === 0 && this.cash === this.initialCapital) {
+      await this.createDemoPortfolio();
+    }
+    
     this.isInitialized = true;
+    logger.info('Simulated Portfolio Manager initialized with demo portfolio');
+  }
+
+  /**
+   * Create a diversified demo portfolio for demonstration
+   */
+  private async createDemoPortfolio(): Promise<void> {
+    logger.info('Creating demo portfolio with real market prices...');
+    
+    // Demo allocation: 40% CRO, 25% ETH, 20% BTC, 15% USDC
+    const allocations = [
+      { symbol: 'CRO', percentage: 0.40 },
+      { symbol: 'ETH', percentage: 0.25 },
+      { symbol: 'BTC', percentage: 0.20 },
+      { symbol: 'USDC', percentage: 0.15 },
+    ];
+    
+    for (const { symbol, percentage } of allocations) {
+      const usdAmount = this.initialCapital * percentage;
+      try {
+        const price = await this.getPrice(symbol);
+        if (price > 0) {
+          const amount = usdAmount / price;
+          this.positions.set(symbol, {
+            symbol,
+            amount,
+            averageCost: price,
+            currentPrice: price,
+            value: usdAmount,
+            pnl: 0,
+            pnlPercentage: 0,
+            lastUpdated: Date.now(),
+          });
+          this.cash -= usdAmount;
+          logger.info(`Demo: Bought ${amount.toFixed(4)} ${symbol} at $${price.toFixed(2)}`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to add ${symbol} to demo portfolio:`, error);
+      }
+    }
+    
+    logger.info('Demo portfolio created', { 
+      positions: this.positions.size, 
+      cash: this.cash.toFixed(2) 
+    });
   }
 
   /**
