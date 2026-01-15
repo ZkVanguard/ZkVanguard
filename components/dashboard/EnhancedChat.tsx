@@ -195,13 +195,13 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                   className={`rounded-2xl px-4 py-3 ${
                     message.role === 'user'
                       ? 'bg-[#007AFF] text-white rounded-tr-sm'
-                      : 'bg-[#F5F5F7] text-[#1D1D1F] rounded-tl-sm border border-[#E5E5EA]'
+                      : 'bg-[#F5F5F7] text-[#1d1d1f] rounded-tl-sm border border-[#E5E5EA]'
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                  <div className={`text-sm whitespace-pre-wrap leading-relaxed ${message.role === 'user' ? 'text-white' : 'text-[#1d1d1f]'}`}>
                     {message.content}
                   </div>
-                  <div className="text-xs opacity-60 mt-1">
+                  <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-white/70' : 'text-[#86868b]'}`}>
                     {new Date(message.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
