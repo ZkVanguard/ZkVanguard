@@ -62,44 +62,140 @@ Be conversational, helpful, and technically accurate. When discussing financial 
 
 class LLMProvider {
   private aiClient: any = null;
+  private openAIClient: any = null;
+  private anthropicClient: any = null;
+  private ollamaAvailable: boolean = false;
+  private ollamaBaseUrl: string = 'http://localhost:11434';
+  private activeProvider: string = 'none';
   private conversationHistory: Map<string, ChatMessage[]> = new Map();
   private maxHistoryLength = 20;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    this.initializeClient();
+    this.initPromise = this.initializeClient();
   }
 
   private async initializeClient() {
     try {
-      // Try to load Crypto.com AI SDK
-      const apiKey = process.env.CRYPTOCOM_DEVELOPER_API_KEY || 
-                     process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY ||
-                     process.env.CRYPTOCOM_AI_API_KEY;
-
-      if (!apiKey) {
-        logger.warn('No Crypto.com AI API key found, using fallback LLM');
-        return;
-      }
-
-      // Dynamic import for Crypto.com AI Agent SDK
-      const module = await import('@crypto.com/ai-agent-client').catch(() => null);
+      // Configuration
+      const cryptocomKey = process.env.CRYPTOCOM_DEVELOPER_API_KEY || 
+                           process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY ||
+                           process.env.CRYPTOCOM_AI_API_KEY;
       
-      if (module && module.createClient) {
-        this.aiClient = module.createClient({
-          apiKey: apiKey,
-        } as any);
-        logger.info('Crypto.com AI Agent SDK initialized for LLM');
+      const openaiKey = process.env.OPENAI_API_KEY ||
+                        process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+      
+      const anthropicKey = process.env.ANTHROPIC_API_KEY ||
+                           process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
+      
+      this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+      // Priority 1: Crypto.com AI Agent SDK (native to ecosystem)
+      if (cryptocomKey) {
+        try {
+          const module = await import('@crypto.com/ai-agent-client').catch(() => null);
+          
+          if (module && module.createClient) {
+            this.aiClient = module.createClient({
+              apiKey: cryptocomKey,
+            } as any);
+            this.activeProvider = 'cryptocom';
+            logger.info('✅ Crypto.com AI Agent SDK initialized - REAL AI ENABLED');
+            return;
+          }
+        } catch (sdkError) {
+          logger.warn('Crypto.com AI SDK load failed, trying alternatives', { error: String(sdkError) });
+        }
       }
+
+      // Priority 2: OpenAI (enterprise-grade, scalable)
+      if (openaiKey) {
+        try {
+          const openaiModule = await import('openai').catch(() => null);
+          if (openaiModule && openaiModule.default) {
+            this.openAIClient = new openaiModule.default({ apiKey: openaiKey });
+            this.activeProvider = 'openai';
+            logger.info('✅ OpenAI client initialized - REAL AI ENABLED');
+            return;
+          }
+        } catch (openaiError) {
+          logger.warn('OpenAI module load failed', { error: String(openaiError) });
+        }
+      }
+
+      // Priority 3: Anthropic Claude (safety-focused, enterprise-grade)
+      if (anthropicKey) {
+        try {
+          const anthropicModule = await import('@anthropic-ai/sdk').catch(() => null);
+          if (anthropicModule && anthropicModule.default) {
+            this.anthropicClient = new anthropicModule.default({ apiKey: anthropicKey });
+            this.activeProvider = 'anthropic';
+            logger.info('✅ Anthropic Claude initialized - REAL AI ENABLED');
+            return;
+          }
+        } catch (anthropicError) {
+          logger.warn('Anthropic module load failed', { error: String(anthropicError) });
+        }
+      }
+
+      // Priority 4: Ollama (FREE, LOCAL, SECURE - no data leaves your server)
+      try {
+        const ollamaCheck = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000),
+        }).catch(() => null);
+        
+        if (ollamaCheck && ollamaCheck.ok) {
+          const models = await ollamaCheck.json();
+          if (models.models && models.models.length > 0) {
+            this.ollamaAvailable = true;
+            this.activeProvider = 'ollama';
+            logger.info('✅ Ollama detected with models:', models.models.map((m: any) => m.name).join(', '));
+            logger.info('✅ Using Ollama for FREE, LOCAL, SECURE AI - no data leaves your server');
+            return;
+          } else {
+            logger.warn('Ollama running but no models installed. Run: ollama pull llama3.2');
+          }
+        }
+      } catch (ollamaError) {
+        logger.warn('Ollama not available (install from ollama.ai for free local AI)');
+      }
+
+      // No AI provider available
+      logger.error('❌ NO AI PROVIDER AVAILABLE');
+      logger.error('Options to enable AI:');
+      logger.error('  1. FREE & SECURE: Install Ollama (ollama.ai) and run: ollama pull llama3.2');
+      logger.error('  2. PAID: Set OPENAI_API_KEY or ANTHROPIC_API_KEY');
+      logger.error('  3. NATIVE: Set CRYPTOCOM_DEVELOPER_API_KEY for Crypto.com AI');
+      this.activeProvider = 'fallback';
     } catch (error) {
-      logger.warn('Failed to initialize Crypto.com AI SDK, using fallback', { error: String(error) });
+      logger.error('Failed to initialize any AI provider', { error: String(error) });
+      this.activeProvider = 'fallback';
     }
   }
 
   /**
-   * Check if real AI is available
+   * Get the active AI provider name
+   */
+  getActiveProvider(): string {
+    return this.activeProvider;
+  }
+
+  /**
+   * Check if real AI is available (not just rule-based fallback)
    */
   isAvailable(): boolean {
-    return this.aiClient !== null;
+    return this.aiClient !== null || this.openAIClient !== null || 
+           this.anthropicClient !== null || this.ollamaAvailable;
+  }
+
+  /**
+   * Wait for initialization to complete
+   */
+  async waitForInit(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
   }
 
   /**
@@ -211,11 +307,28 @@ class LLMProvider {
 
       let response: LLMResponse;
 
+      // Ensure initialization is complete
+      await this.waitForInit();
+
       if (this.aiClient) {
-        // Use real Crypto.com AI
+        // Priority 1: Use real Crypto.com AI
+        logger.info('Using Crypto.com AI for response generation');
         response = await this.generateWithCryptocomAI(history, context);
+      } else if (this.openAIClient) {
+        // Priority 2: Use direct OpenAI
+        logger.info('Using OpenAI for response generation');
+        response = await this.generateWithOpenAI(history, context);
+      } else if (this.anthropicClient) {
+        // Priority 3: Use Anthropic Claude
+        logger.info('Using Anthropic Claude for response generation');
+        response = await this.generateWithAnthropic(history, context);
+      } else if (this.ollamaAvailable) {
+        // Priority 4: Use Ollama (FREE, LOCAL, SECURE)
+        logger.info('Using Ollama (FREE LOCAL AI) for response generation');
+        response = await this.generateWithOllama(history, context);
       } else {
-        // Use intelligent fallback
+        // Last resort: Use rule-based fallback (clearly marked)
+        logger.warn('NO REAL AI AVAILABLE - Using rule-based fallback');
         response = await this.generateFallbackResponse(userMessage, context, portfolioContext);
       }
 
@@ -270,15 +383,32 @@ class LLMProvider {
         max_tokens: 800,
       });
 
+      logger.info('Crypto.com AI response generated successfully');
       return {
         content: result.choices[0].message.content,
         tokensUsed: result.usage?.total_tokens,
         model: 'gpt-4-via-cryptocom',
-        confidence: 0.9,
+        confidence: 0.95,
       };
     } catch (error) {
-      logger.error('Crypto.com AI call failed:', error);
-      // Fall back to intelligent response
+      logger.error('Crypto.com AI call failed, trying OpenAI fallback:', error);
+      
+      // Try OpenAI as fallback if available
+      if (this.openAIClient) {
+        return this.generateWithOpenAI(history, context);
+      }
+      
+      // Try Anthropic as fallback
+      if (this.anthropicClient) {
+        return this.generateWithAnthropic(history, context);
+      }
+      
+      // Try Ollama as fallback
+      if (this.ollamaAvailable) {
+        return this.generateWithOllama(history, context);
+      }
+      
+      // Last resort: rule-based fallback
       return this.generateFallbackResponse(
         history[history.length - 1].content,
         context
@@ -287,7 +417,183 @@ class LLMProvider {
   }
 
   /**
-   * Generate intelligent fallback response using pattern matching and templates
+   * Generate response using direct OpenAI API
+   */
+  private async generateWithOpenAI(
+    history: ChatMessage[],
+    context?: Record<string, any>
+  ): Promise<LLMResponse> {
+    try {
+      // Format messages for OpenAI
+      const messages = history.map(msg => ({
+        role: msg.role as 'system' | 'user' | 'assistant',
+        content: msg.content,
+      }));
+
+      // Add context if provided
+      if (context) {
+        const contextStr = Object.entries(context)
+          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+          .join('\n');
+        messages[messages.length - 1].content += `\n\nContext:\n${contextStr}`;
+      }
+
+      // Call OpenAI directly
+      const result = await this.openAIClient.chat.completions.create({
+        model: 'gpt-4o-mini', // Cost-effective model
+        messages,
+        temperature: 0.7,
+        max_tokens: 800,
+      });
+
+      logger.info('OpenAI response generated successfully');
+      return {
+        content: result.choices[0].message.content || '',
+        tokensUsed: result.usage?.total_tokens,
+        model: 'gpt-4o-mini-direct',
+        confidence: 0.90,
+      };
+    } catch (error) {
+      logger.error('OpenAI call failed:', error);
+      // Try Anthropic as fallback
+      if (this.anthropicClient) {
+        return this.generateWithAnthropic(history, context);
+      }
+      // Try Ollama as fallback
+      if (this.ollamaAvailable) {
+        return this.generateWithOllama(history, context);
+      }
+      // Last resort: rule-based fallback
+      return this.generateFallbackResponse(
+        history[history.length - 1].content,
+        context
+      );
+    }
+  }
+
+  /**
+   * Generate response using Anthropic Claude API (enterprise-grade, safety-focused)
+   */
+  private async generateWithAnthropic(
+    history: ChatMessage[],
+    context?: Record<string, any>
+  ): Promise<LLMResponse> {
+    try {
+      // Extract system message and format for Anthropic
+      const systemMessage = history.find(m => m.role === 'system')?.content || SYSTEM_CONTEXT;
+      const messages = history
+        .filter(m => m.role !== 'system')
+        .map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        }));
+
+      // Add context if provided
+      if (context && messages.length > 0) {
+        const contextStr = Object.entries(context)
+          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+          .join('\n');
+        messages[messages.length - 1].content += `\n\nContext:\n${contextStr}`;
+      }
+
+      // Call Anthropic Claude
+      const result = await this.anthropicClient.messages.create({
+        model: 'claude-3-haiku-20240307', // Cost-effective model
+        max_tokens: 800,
+        system: systemMessage,
+        messages,
+      });
+
+      const content = result.content[0]?.type === 'text' ? result.content[0].text : '';
+      
+      logger.info('Anthropic Claude response generated successfully');
+      return {
+        content,
+        tokensUsed: result.usage?.input_tokens + result.usage?.output_tokens,
+        model: 'claude-3-haiku',
+        confidence: 0.92,
+      };
+    } catch (error) {
+      logger.error('Anthropic Claude call failed:', error);
+      // Try Ollama as fallback
+      if (this.ollamaAvailable) {
+        return this.generateWithOllama(history, context);
+      }
+      // Last resort: rule-based fallback
+      return this.generateFallbackResponse(
+        history[history.length - 1].content,
+        context
+      );
+    }
+  }
+
+  /**
+   * Generate response using Ollama (FREE, LOCAL, SECURE - no data leaves your server)
+   * Install from https://ollama.ai and run: ollama pull llama3.2
+   */
+  private async generateWithOllama(
+    history: ChatMessage[],
+    context?: Record<string, any>
+  ): Promise<LLMResponse> {
+    try {
+      const model = process.env.OLLAMA_MODEL || 'llama3.2';
+      
+      // Format messages for Ollama
+      const messages = history.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      // Add context if provided
+      if (context && messages.length > 0) {
+        const contextStr = Object.entries(context)
+          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+          .join('\n');
+        messages[messages.length - 1].content += `\n\nContext:\n${contextStr}`;
+      }
+
+      // Call Ollama local API
+      const response = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            num_predict: 800,
+          },
+        }),
+        signal: AbortSignal.timeout(60000), // 60s timeout for local inference
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama returned ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const content = result.message?.content || '';
+
+      logger.info(`Ollama (${model}) response generated successfully - FREE LOCAL AI`);
+      return {
+        content,
+        tokensUsed: result.eval_count || 0,
+        model: `ollama-${model}`,
+        confidence: 0.88,
+      };
+    } catch (error) {
+      logger.error('Ollama call failed:', error);
+      // Last resort: rule-based fallback
+      return this.generateFallbackResponse(
+        history[history.length - 1].content,
+        context
+      );
+    }
+  }
+
+  /**
+   * Generate rule-based fallback response (clearly marked as non-AI)
    */
   private async generateFallbackResponse(
     userMessage: string,
