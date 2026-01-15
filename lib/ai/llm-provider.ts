@@ -254,10 +254,23 @@ class LLMProvider {
       }
 
       // SMART FEATURE: Detect if user wants to execute an action
-      const actionIntent = parseActionIntent(userMessage);
+      let actionIntent = parseActionIntent(userMessage);
       let actionResult = null;
       let actionExecuted = false;
 
+      // For analysis actions without portfolio data, let the LLM respond intelligently
+      if (actionIntent) {
+        const isAnalysisAction = ['analyze', 'assess-risk', 'get-hedges'].includes(actionIntent.type);
+        const hasPortfolioData = portfolioContext.length > 50 && portfolioContext.includes('Total Value');
+        
+        if (isAnalysisAction && !hasPortfolioData) {
+          // No portfolio data - Qwen can give a much better response than empty metrics!
+          logger.info('📝 No portfolio data - letting LLM handle this intelligently');
+          actionIntent = null; // Clear to fall through to LLM
+        }
+      }
+
+      // Only execute action if we still have a valid intent (not cleared above)
       if (actionIntent) {
         // Execute the action
         actionResult = await executePortfolioAction(actionIntent);
@@ -285,7 +298,7 @@ class LLMProvider {
           metadata: { 
             actionExecuted: true, 
             action: actionIntent.type,
-            zkProof: actionResult.zkProof, // Include ZK proof in metadata
+            zkProof: actionResult.zkProof,
           },
         });
 
@@ -297,7 +310,7 @@ class LLMProvider {
           confidence: 1.0,
           actionExecuted: true,
           actionResult: actionResult.data,
-          zkProof: actionResult.zkProof, // Return ZK proof in response
+          zkProof: actionResult.zkProof,
         };
       }
 
@@ -322,22 +335,24 @@ class LLMProvider {
       // Ensure initialization is complete
       await this.waitForInit();
 
-      if (this.aiClient) {
-        // Priority 1: Use real Crypto.com AI
+      // Use the active provider that was determined during initialization
+      // Priority order: Ollama (free, local) > Crypto.com AI > OpenAI > Anthropic
+      if (this.ollamaAvailable) {
+        // Priority 1: Use Ollama (FREE, LOCAL, SECURE)
+        logger.info('Using Ollama (FREE LOCAL AI) for response generation');
+        response = await this.generateWithOllama(history, context);
+      } else if (this.aiClient) {
+        // Priority 2: Use Crypto.com AI
         logger.info('Using Crypto.com AI for response generation');
         response = await this.generateWithCryptocomAI(history, context);
       } else if (this.openAIClient) {
-        // Priority 2: Use direct OpenAI
+        // Priority 3: Use direct OpenAI
         logger.info('Using OpenAI for response generation');
         response = await this.generateWithOpenAI(history, context);
       } else if (this.anthropicClient) {
-        // Priority 3: Use Anthropic Claude
+        // Priority 4: Use Anthropic Claude
         logger.info('Using Anthropic Claude for response generation');
         response = await this.generateWithAnthropic(history, context);
-      } else if (this.ollamaAvailable) {
-        // Priority 4: Use Ollama (FREE, LOCAL, SECURE)
-        logger.info('Using Ollama (FREE LOCAL AI) for response generation');
-        response = await this.generateWithOllama(history, context);
       } else {
         // Last resort: Use rule-based fallback (clearly marked)
         logger.warn('NO REAL AI AVAILABLE - Using rule-based fallback');
@@ -541,14 +556,15 @@ class LLMProvider {
 
   /**
    * Generate response using Ollama (FREE, LOCAL, SECURE - no data leaves your server)
-   * Install from https://ollama.ai and run: ollama pull llama3.2
+   * Install from https://ollama.ai and run: ollama pull qwen2.5:7b
    */
   private async generateWithOllama(
     history: ChatMessage[],
     context?: Record<string, any>
   ): Promise<LLMResponse> {
     try {
-      const model = process.env.OLLAMA_MODEL || 'llama3.2';
+      // Use qwen2.5:7b which is already installed and optimized for CUDA
+      const model = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
       
       // Format messages for Ollama
       const messages = history.map(msg => ({
