@@ -127,6 +127,12 @@ const MOCK_PRICES: Record<string, number> = {
   USDC: 1.0,
   DEVUSDC: 1.0,
   VVS: 0.000002, // VVS token price
+  BTC: 95000,    // Bitcoin ~$95k
+  WBTC: 95000,
+  ETH: 3300,     // Ethereum ~$3.3k
+  WETH: 3300,
+  USDT: 1.0,
+  DAI: 1.0,
 };
 
 /**
@@ -231,11 +237,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         });
       } catch (fallbackError) {
-        console.error('[x402/swap] All price sources failed:', fallbackError);
-        return NextResponse.json(
-          { success: false, error: 'Unable to fetch swap quote - all price sources unavailable' },
-          { status: 503 }
-        );
+        console.error('[x402/swap] RealMarketDataService fallback failed, using mock prices:', fallbackError);
+        
+        // Final fallback: Use mock prices for demo
+        const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            ...mockQuote,
+            x402Fee: 0.01,
+            source: 'mock-prices-testnet',
+            warning: 'Using approximate prices - VVS API and Crypto.com Exchange unavailable',
+          },
+        });
       }
     }
   } catch (error) {
