@@ -131,9 +131,9 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 to-gray-800 rounded-xl border border-[#e8e8ed] overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-xl border border-[#e8e8ed] overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-[#e8e8ed] bg-white/50 backdrop-blur-sm">
+      <div className="flex items-center justify-between p-4 border-b border-[#e8e8ed] bg-[#F5F5F7]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 via-cyan-500 to-emerald-500 flex items-center justify-center">
             <Bot className="w-6 h-6 text-[#1d1d1f]" />
@@ -150,7 +150,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Quick Prompts */}
-      <div className="flex gap-2 p-3 overflow-x-auto border-b border-[#e8e8ed]/50 bg-white/30">
+      <div className="flex gap-2 p-3 overflow-x-auto border-b border-[#e8e8ed] bg-white">
         {QUICK_PROMPTS.map((prompt, idx) => (
           <button
             key={idx}
@@ -165,7 +165,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
         <AnimatePresence mode="popLayout">
           {messages.map((message) => (
             <motion.div
@@ -180,13 +180,13 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                 {/* Avatar */}
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                   message.role === 'user'
-                    ? 'bg-blue-600'
+                    ? 'bg-[#007AFF]'
                     : 'bg-gradient-to-br from-purple-500 to-cyan-500'
                 }`}>
                   {message.role === 'user' ? (
-                    <User className="w-5 h-5 text-[#1d1d1f]" />
+                    <User className="w-5 h-5 text-white" />
                   ) : (
-                    <Bot className="w-5 h-5 text-[#1d1d1f]" />
+                    <Bot className="w-5 h-5 text-white" />
                   )}
                 </div>
 
@@ -223,7 +223,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
           >
             <div className="flex gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-[#1d1d1f]" />
+                <Bot className="w-5 h-5 text-white" />
               </div>
               <div className="bg-[#F5F5F7] rounded-2xl rounded-tl-sm px-4 py-3 border border-[#E5E5EA]">
                 <div className="flex gap-1">
@@ -240,7 +240,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-[#e8e8ed] bg-white/50">
+      <div className="p-4 border-t border-[#e8e8ed] bg-[#F5F5F7]">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -250,7 +250,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
             onKeyPress={handleKeyPress}
             placeholder="Ask me anything about your portfolio or DeFi..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent text-sm text-[#1d1d1f] placeholder-[#86868B] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="flex-1 px-4 py-3 bg-white border border-[#E5E5EA] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent text-sm text-[#1d1d1f] placeholder-[#86868B] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           />
           <button
             onClick={() => sendMessage(input)}
