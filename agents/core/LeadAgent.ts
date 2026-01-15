@@ -157,43 +157,86 @@ export class LeadAgent extends BaseAgent {
   }
 
   /**
-   * Parse natural language strategy into structured intent
+   * Parse natural language strategy into structured intent using LLM
    */
   private async parseNaturalLanguage(input: StrategyInput): Promise<StrategyIntent> {
-    logger.info('Parsing natural language strategy', { agentId: this.id });
+    logger.info('Parsing natural language strategy with LLM', { agentId: this.id });
 
-    // In production, this would use Crypto.com AI SDK
-    // For now, implement basic parsing logic
-    
     const text = input.naturalLanguage.toLowerCase();
     let action: StrategyIntent['action'] = 'analyze';
     const requiredAgents: AgentType[] = ['risk'];
+    let yieldTarget: number | undefined;
+    let riskLimit: number | undefined;
 
-    // Determine action from keywords
-    if (text.includes('hedge')) {
+    try {
+      // Use LLM for intelligent intent parsing
+      const { llmProvider } = await import('../../lib/ai/llm-provider');
+      
+      const llmResponse = await llmProvider.generateResponse(
+        `Parse this portfolio strategy request and extract the intent. Return a JSON object with: action (analyze/hedge/rebalance/optimize), yieldTarget (number or null), riskLimit (number or null), assets (array of asset symbols mentioned).
+
+Request: "${input.naturalLanguage}"
+
+Respond ONLY with valid JSON, no explanation.`,
+        `strategy-parse-${Date.now()}`
+      );
+
+      // Try to parse LLM response as JSON
+      try {
+        const cleanContent = llmResponse.content.replace(/```json?\n?|```\n?/g, '').trim();
+        const parsed = JSON.parse(cleanContent);
+        
+        if (parsed.action && ['analyze', 'hedge', 'rebalance', 'optimize'].includes(parsed.action)) {
+          action = parsed.action;
+        }
+        if (typeof parsed.yieldTarget === 'number') {
+          yieldTarget = parsed.yieldTarget;
+        }
+        if (typeof parsed.riskLimit === 'number') {
+          riskLimit = parsed.riskLimit;
+        }
+        
+        logger.info('LLM parsed strategy intent', { action, yieldTarget, riskLimit });
+      } catch (parseError) {
+        logger.warn('Could not parse LLM JSON response, using keyword fallback', { parseError });
+        // Fall through to keyword-based parsing below
+      }
+    } catch (llmError) {
+      logger.warn('LLM parsing failed, using keyword fallback', { llmError });
+    }
+
+    // Fallback/supplement with keyword detection for required agents
+    if (text.includes('hedge') || action === 'hedge') {
       action = 'hedge';
-      requiredAgents.push('hedging', 'settlement');
-    } else if (text.includes('rebalance')) {
+      if (!requiredAgents.includes('hedging')) requiredAgents.push('hedging');
+      if (!requiredAgents.includes('settlement')) requiredAgents.push('settlement');
+    } else if (text.includes('rebalance') || action === 'rebalance') {
       action = 'rebalance';
-      requiredAgents.push('settlement');
-    } else if (text.includes('optimize')) {
+      if (!requiredAgents.includes('settlement')) requiredAgents.push('settlement');
+    } else if (text.includes('optimize') || action === 'optimize') {
       action = 'optimize';
-      requiredAgents.push('hedging');
+      if (!requiredAgents.includes('hedging')) requiredAgents.push('hedging');
     }
 
     // Always include reporting agent
-    requiredAgents.push('reporting');
+    if (!requiredAgents.includes('reporting')) requiredAgents.push('reporting');
 
-    // Extract numerical values
-    const yieldMatch = text.match(/(\d+\.?\d*)%?\s*yield/i);
-    const riskMatch = text.match(/risk.*?(\d+)/i);
+    // Extract numerical values if not parsed by LLM
+    if (yieldTarget === undefined) {
+      const yieldMatch = text.match(/(\d+\.?\d*)%?\s*yield/i);
+      yieldTarget = yieldMatch ? parseFloat(yieldMatch[1]) : undefined;
+    }
+    if (riskLimit === undefined) {
+      const riskMatch = text.match(/risk.*?(\d+)/i);
+      riskLimit = riskMatch ? parseInt(riskMatch[1]) : undefined;
+    }
 
     const intent: StrategyIntent = {
       action,
       targetPortfolio: input.portfolioId || 0,
       objectives: {
-        yieldTarget: yieldMatch ? parseFloat(yieldMatch[1]) : undefined,
-        riskLimit: riskMatch ? parseInt(riskMatch[1]) : undefined,
+        yieldTarget,
+        riskLimit,
       },
       constraints: {
         maxSlippage: input.constraints?.maxRisk || 0.5,
@@ -207,6 +250,7 @@ export class LeadAgent extends BaseAgent {
       agentId: this.id,
       action: intent.action,
       requiredAgents: intent.requiredAgents,
+      usedLLM: true,
     });
 
     return intent;
@@ -380,21 +424,56 @@ export class LeadAgent extends BaseAgent {
   }
 
   /**
-   * Generate ZK proof for verification
+   * Generate ZK proof for verification using real STARK system
    */
-  private async generateZKProof(proofType: string, data: unknown): Promise<{ proofType: string; proofHash: string; verified: boolean; }> {
-    // In production, this would call the actual ZK proof generator
-    // For now, return a mock proof structure
-    logger.info('Generating ZK proof', {
+  private async generateZKProof(proofType: string, data: unknown): Promise<{ proofType: string; proofHash: string; verified: boolean; protocol: string; generationTime: number }> {
+    logger.info('Generating ZK-STARK proof', {
       agentId: this.id,
       proofType,
     });
 
-    return {
-      proofType,
-      proofHash: `0x${Buffer.from(JSON.stringify(data)).toString('hex').substring(0, 64)}`,
-      verified: true,
-    };
+    try {
+      // Use the real ZK proof generator
+      const { proofGenerator } = await import('../../zk/prover/ProofGenerator');
+      
+      const statement = {
+        claim: `${proofType} verification`,
+        timestamp: new Date().toISOString(),
+        proofType,
+      };
+      
+      const witness = {
+        data: typeof data === 'object' ? JSON.stringify(data) : String(data),
+        agentId: this.id,
+      };
+      
+      const proof = await proofGenerator.generateProof(proofType, statement, witness);
+      
+      logger.info('ZK-STARK proof generated successfully', {
+        agentId: this.id,
+        proofType,
+        proofHash: proof.proofHash.substring(0, 16) + '...',
+        protocol: proof.protocol,
+        generationTime: proof.generationTime,
+      });
+      
+      return {
+        proofType,
+        proofHash: proof.proofHash,
+        verified: proof.verified,
+        protocol: proof.protocol,
+        generationTime: proof.generationTime,
+      };
+    } catch (error) {
+      logger.error('Failed to generate ZK-STARK proof', {
+        error,
+        agentId: this.id,
+        proofType,
+      });
+      
+      // Throw error instead of returning mock proof
+      throw new Error(`ZK proof generation failed for ${proofType}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
