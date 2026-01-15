@@ -110,10 +110,10 @@ secrets/
 *.key
 private-keys/
 
-# Package manager lock files (keep package-lock.json for consistency)
-# Uncomment if using yarn/pnpm
-# yarn.lock
-# pnpm-lock.yaml
+# Package manager lock files (using bun.lock)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Python cache
 __pycache__/
@@ -121,33 +121,17 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Temporary planning documents (internal use only)
-HACKATHON.md
-7_DAY_DEMO_BLITZ.md
-DEMO_EXECUTION_CHECKLIST.md
-DEMO_READINESS_CHECKLIST.md
-INVESTOR_DEMO_REQUIREMENTS.md
-INVESTOR_PITCH_DECK.md
-MILLION_DOLLAR_DEMO.md
-REALISTIC_DEMO_STRATEGY.md
-SIGNATURE_FLOW_ANALYSIS.md
-TESTNET_DEMO_GUIDE.md
-TESTNET_TOKEN_REQUIREMENTS.md
-VIDEO_DEMO_SCRIPT.md
-ZERO_BUDGET_DEMO_GUIDE.md
-AUDIT_READY_REPORT.md
-
-# Temporary assets
+# Temporary/Generated files
+*.tmp
+*.temp
+*.docx
+*.pdf
 Logo.jpg
-INVESTOR_ANALYSIS_HONEST.md
-~$vanguard_pitch_deck.md.docx
-.gitignore
-zkvanguard_pitch_deck.md.docx
-INVESTOR_PITCH_DECK_UPDATED.md
-zkvanguard_pitch_deck.md.pdf
-DEMO_WALKTHROUGH_GUIDE.md
-DEMO_WALKTHROUGH_GUIDE.md
-QUICK_DEMO_SCRIPT.md
-Investors/Recording 2026-01-13 134238.mp4
-Investors/2.mp4
-Investors/3-Final.mp4
+
+# Large video files (keep locally, don't commit)
+Investors/*.mp4
+*.mp4
+
+# Bun cache
+~/
+.bun/
