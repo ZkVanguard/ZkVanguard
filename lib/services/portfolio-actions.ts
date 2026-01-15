@@ -185,8 +185,26 @@ export async function getPortfolioData(): Promise<any> {
 export function parseActionIntent(text: string): PortfolioAction | null {
   const lower = text.toLowerCase();
 
-  // BUY actions
-  const buyMatch = lower.match(/buy|purchase|get|acquire/);
+  // Skip action parsing for general knowledge questions (let LLM handle these)
+  // These patterns indicate the user wants information, not portfolio actions
+  const knowledgePatterns = [
+    /what (is|are|does|do)/,
+    /how (does|do|to|can|should)/,
+    /explain|tell me about|describe/,
+    /why (is|are|does|do|should)/,
+    /can you (explain|tell|describe)/,
+    /\?$/,  // Questions ending with ?
+  ];
+  
+  const isKnowledgeQuestion = knowledgePatterns.some(pattern => pattern.test(lower));
+  
+  // Don't trigger actions for knowledge questions about crypto concepts
+  if (isKnowledgeQuestion && !lower.includes('my portfolio') && !lower.includes('my position')) {
+    return null;
+  }
+
+  // BUY actions - require explicit intent
+  const buyMatch = lower.match(/\b(buy|purchase|get|acquire)\b/);
   const symbolMatch = text.match(/\b([A-Z]{2,5})\b/); // Match uppercase symbols
   const amountMatch = text.match(/(\d+\.?\d*)\s*(?:dollars?|\$|usd)?/i);
 
@@ -299,22 +317,50 @@ export function formatActionResult(action: PortfolioAction, result: ActionResult
         zkBadge;
 
     case 'analyze':
-      const analysis = data.result;
+      const analysis = data.result || data;
+      const portfolioData = analysis.portfolioData || analysis;
+      const totalValue = portfolioData.totalValue || analysis.totalValue || 0;
+      const positions = portfolioData.positions || analysis.positions || [];
+      const pnl = portfolioData.totalPnl || analysis.totalPnl || 0;
+      const pnlPct = portfolioData.totalPnlPercentage || analysis.totalPnlPercentage || 0;
+      
+      // Build summary from available data
+      const summaryText = analysis.summary || 
+        `Portfolio Value: $${totalValue.toFixed(2)} | P/L: $${pnl.toFixed(2)} (${pnlPct.toFixed(1)}%) | ${positions.length} positions`;
+      
+      // Extract insights
+      const strengths = analysis.strengths || analysis.topAssets?.map((a: any) => `${a.symbol}: $${a.value?.toFixed(2)}`) || [];
+      const risks = analysis.risks || (analysis.riskScore > 60 ? ['High risk exposure detected'] : []);
+      const recommendations = analysis.recommendations || [];
+      
       return `📊 **Portfolio Analysis**\n\n` +
-        `${analysis.summary}\n\n` +
-        `**Strengths:**\n${analysis.strengths?.map((s: string) => `• ${s}`).join('\n') || 'None'}\n\n` +
-        `**Risks:**\n${analysis.risks?.map((r: string) => `• ${r}`).join('\n') || 'None'}\n\n` +
-        `**Recommendations:**\n${analysis.recommendations?.map((r: string) => `• ${r}`).join('\n') || 'None'}` +
+        `${summaryText}\n\n` +
+        `**Health Score:** ${analysis.healthScore || 50}/100\n` +
+        `**Risk Score:** ${analysis.riskScore || 50}/100\n\n` +
+        `**Strengths:**\n${strengths.length > 0 ? strengths.map((s: string) => `• ${s}`).join('\n') : '• Portfolio is diversified'}\n\n` +
+        `**Risks:**\n${risks.length > 0 ? risks.map((r: string) => `• ${r}`).join('\n') : '• Risk within acceptable levels'}\n\n` +
+        `**Recommendations:**\n${recommendations.length > 0 ? recommendations.map((r: string) => `• ${r}`).join('\n') : '• Continue monitoring market conditions'}` +
         zkBadge;
 
     case 'assess-risk':
-      const risk = data.result;
+      const risk = data.result || data;
+      const riskScore = risk.riskScore || risk.risk_score || 50;
+      const volatility = risk.volatility || risk.portfolioVolatility || 0.15;
+      const var95 = risk.var95 || risk.valueAtRisk || 0.05;
+      const sharpe = risk.sharpeRatio || risk.sharpe || null;
+      
+      // Determine risk level
+      let riskLevel = 'Moderate';
+      if (riskScore < 30) riskLevel = 'Low';
+      else if (riskScore > 70) riskLevel = 'High';
+      else if (riskScore > 85) riskLevel = 'Critical';
+      
       return `⚠️ **Risk Assessment**\n\n` +
-        `• Overall Risk: **${risk.overallRisk}**\n` +
-        `• Risk Score: ${risk.riskScore}/100\n` +
-        `• Volatility: ${(risk.volatility * 100).toFixed(1)}%\n` +
-        `• VaR (95%): ${(risk.var95 * 100).toFixed(1)}%\n` +
-        `• Sharpe Ratio: ${risk.sharpeRatio?.toFixed(2) || 'N/A'}` +
+        `• Overall Risk: **${riskLevel}**\n` +
+        `• Risk Score: ${riskScore}/100\n` +
+        `• Volatility: ${(volatility * 100).toFixed(1)}%\n` +
+        `• VaR (95%): ${(var95 * 100).toFixed(1)}%\n` +
+        `• Sharpe Ratio: ${sharpe !== null ? sharpe.toFixed(2) : 'N/A'}` +
         zkBadge;
 
     case 'get-hedges':

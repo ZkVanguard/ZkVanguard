@@ -8,24 +8,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { llmProvider } from '@/lib/ai/llm-provider';
 import { logger } from '@/lib/utils/logger';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
+import { getPortfolioData } from '@/lib/services/portfolio-actions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Keywords that indicate the user wants agent orchestration
 const AGENT_KEYWORDS = [
-  'hedge', 'hedging', 'risk', 'analyze', 'portfolio', 'rebalance',
-  'optimize', 'swap', 'trade', 'buy', 'sell', 'position', 'exposure',
-  'volatility', 'var', 'sharpe', 'settlement', 'gasless', 'prediction',
-  'polymarket', 'delphi', 'market', 'btc', 'eth', 'cro', 'usdc'
+  'hedge', 'hedging', 'rebalance', 'optimize', 'swap', 'trade', 
+  'buy', 'sell', 'position', 'exposure', 'settlement', 'gasless'
+];
+
+// Keywords that are analysis-related but should use LLM when no portfolio exists
+const ANALYSIS_KEYWORDS = [
+  'risk', 'analyze', 'portfolio', 'volatility', 'var', 'sharpe'
 ];
 
 /**
  * Check if message should be routed through agents
+ * Only routes to agents if there's actual portfolio data to analyze
  */
-function shouldUseAgents(message: string): boolean {
+async function shouldUseAgents(message: string): Promise<boolean> {
   const lowerMessage = message.toLowerCase();
-  return AGENT_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  
+  // Check for direct action keywords (always route to agents)
+  const hasActionKeyword = AGENT_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  if (hasActionKeyword) {
+    return true;
+  }
+  
+  // Check for analysis keywords
+  const hasAnalysisKeyword = ANALYSIS_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  if (hasAnalysisKeyword) {
+    // Only use agents if we have actual portfolio data
+    try {
+      const portfolioData = await getPortfolioData();
+      const hasPortfolio = portfolioData?.portfolio?.totalValue > 0 || 
+                          (portfolioData?.portfolio?.positions?.length || 0) > 0;
+      if (!hasPortfolio) {
+        logger.info('Analysis requested but no portfolio data - using LLM for intelligent response');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      logger.info('Cannot fetch portfolio - using LLM for intelligent response');
+      return false;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -45,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if this should go through agent orchestration
-    const useAgents = shouldUseAgents(message);
+    const useAgents = await shouldUseAgents(message);
     
     if (useAgents) {
       logger.info('Routing message through LeadAgent', { message: message.substring(0, 50) });
