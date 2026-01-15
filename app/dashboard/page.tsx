@@ -68,7 +68,7 @@ const PredictionInsights = dynamic(() => import('@/components/dashboard/Predicti
   ssr: false
 });
 
-const ChatInterface = dynamic(() => import('@/components/dashboard/ChatInterface').then(mod => ({ default: mod.ChatInterface })), {
+const EnhancedChat = dynamic(() => import('@/components/dashboard/EnhancedChat').then(mod => ({ default: mod.EnhancedChat })), {
   loading: () => null,
   ssr: false
 });
@@ -411,7 +411,7 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="h-[70vh] lg:h-[520px]">
-                <ChatInterface address={displayAddress} />
+                <EnhancedChat address={displayAddress} />
               </div>
             </div>
           </div>
