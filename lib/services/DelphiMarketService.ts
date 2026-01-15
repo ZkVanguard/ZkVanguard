@@ -124,39 +124,42 @@ export class DelphiMarketService {
       const markets = await response.json();
       console.log(`Fetched ${markets.length} Polymarket markets`);
 
-      // Filter crypto-related markets (relaxed filtering)
+      // Filter crypto-related markets (VERY relaxed filtering to get ANY crypto data)
       const cryptoMarkets = markets
         .filter((m: any) => {
-          const q = m.question?.toLowerCase() || '';
-          const cat = m.category?.toLowerCase() || '';
-          const tags = m.tags?.join(' ').toLowerCase() || '';
+          const q = (m.question || m.title || '').toLowerCase();
+          const cat = (m.category || '').toLowerCase();
+          const tags = (m.tags || []).join(' ').toLowerCase();
+          const desc = (m.description || '').toLowerCase();
           
-          // More relaxed crypto filtering
-          return cat.includes('crypto') || 
-                 tags.includes('crypto') ||
-                 q.includes('bitcoin') || 
-                 q.includes('btc') || 
-                 q.includes('ethereum') || 
-                 q.includes('eth') ||
-                 q.includes('crypto') ||
-                 q.includes('defi') ||
-                 q.includes('stablecoin') ||
-                 q.includes('usdc') ||
-                 q.includes('usdt') ||
-                 q.includes('dai') ||
-                 q.includes('price') ||
-                 q.includes('$');
+          // Very broad crypto keywords
+          const cryptoKeywords = [
+            'crypto', 'bitcoin', 'btc', 'ethereum', 'eth', 'defi', 'blockchain',
+            'stablecoin', 'usdc', 'usdt', 'dai', 'solana', 'cardano', 'polkadot',
+            'price', 'market', 'token', 'coin', 'trading', 'cro', 'cronos'
+          ];
+          
+          const text = `${q} ${cat} ${tags} ${desc}`;
+          return cryptoKeywords.some(keyword => text.includes(keyword));
         })
         .filter((m: any) => {
-          // More flexible active check - accept unless explicitly closed/resolved
-          const isActive = m.closed !== true && m.resolved !== true && m.archived !== true;
-          return isActive;
+          // Accept market unless explicitly closed (be permissive)
+          // Check multiple possible status fields
+          const isClosed = m.closed === true || m.resolved === true || 
+                          m.archived === true || m.active === false ||
+                          m.status === 'closed' || m.status === 'resolved';
+          return !isClosed;
         })
         .slice(0, 20); // Limit to 20 markets
 
       console.log(`Filtered to ${cryptoMarkets.length} active crypto markets`);
       if (cryptoMarkets.length > 0) {
-        console.log('Sample market:', cryptoMarkets[0]);
+        console.log('Sample markets:', cryptoMarkets.slice(0, 3).map((m: any) => ({
+          question: m.question || m.title,
+          category: m.category,
+          active: m.active,
+          closed: m.closed
+        })));
       }
 
       // Convert Polymarket format to our format

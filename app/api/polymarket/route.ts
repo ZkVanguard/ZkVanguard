@@ -5,7 +5,15 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(req: NextRequest) {
   try {
-    const response = await fetch('https://gamma-api.polymarket.com/markets', {
+    // Forward query parameters
+    const { searchParams } = new URL(req.url);
+    const limit = searchParams.get('limit') || '50';
+    const active = searchParams.get('active') || 'true';
+    
+    const url = `https://gamma-api.polymarket.com/markets?limit=${limit}&active=${active}`;
+    console.log('[Polymarket Proxy] Fetching:', url);
+    
+    const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
       },
@@ -16,6 +24,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await response.json();
+    console.log(`[Polymarket Proxy] Fetched ${data.length} markets`);
     
     return NextResponse.json(data, {
       headers: {
