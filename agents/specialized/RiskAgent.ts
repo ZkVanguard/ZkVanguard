@@ -192,15 +192,58 @@ export class RiskAgent extends BaseAgent {
   }
 
   /**
-   * Internal volatility calculation
+   * Internal volatility calculation using real market data
    */
-  private async calculateVolatilityInternal(_portfolioId: number): Promise<number> {
-    // Simulate volatility calculation
-    // In production: fetch historical prices, calculate std deviation
-    const baseVolatility = 0.2; // 20% annualized
-    const randomFactor = Math.random() * 0.1; // +/- 5%
-    
-    return baseVolatility + randomFactor - 0.05;
+  private async calculateVolatilityInternal(portfolioId: number): Promise<number> {
+    try {
+      // Import RealMarketDataService for historical price data
+      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      
+      // Get portfolio exposures to determine which assets to analyze
+      const exposures = await this.calculateExposures(portfolioId);
+      
+      // Calculate weighted volatility based on portfolio composition
+      let weightedVolatility = 0;
+      let totalWeight = 0;
+      
+      for (const exposure of exposures) {
+        try {
+          // Get historical prices and calculate volatility for each asset
+          const historicalPrices = await realMarketDataService.getHistoricalPrices(exposure.asset, 30);
+          
+          if (historicalPrices.length >= 2) {
+            // Calculate daily returns
+            const returns: number[] = [];
+            for (let i = 1; i < historicalPrices.length; i++) {
+              const dailyReturn = (historicalPrices[i].price - historicalPrices[i - 1].price) / historicalPrices[i - 1].price;
+              returns.push(dailyReturn);
+            }
+            
+            // Calculate standard deviation of returns
+            const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+            const assetVolatility = Math.sqrt(variance) * Math.sqrt(365); // Annualized
+            
+            weightedVolatility += assetVolatility * (exposure.exposure / 100);
+            totalWeight += exposure.exposure / 100;
+          }
+        } catch (error) {
+          logger.warn(`Failed to get volatility for ${exposure.asset}, using market estimate`, { error });
+          // Use market-based estimate for crypto assets
+          const marketVolatility = exposure.asset === 'USDC' || exposure.asset === 'USDT' ? 0.01 : 0.35;
+          weightedVolatility += marketVolatility * (exposure.exposure / 100);
+          totalWeight += exposure.exposure / 100;
+        }
+      }
+      
+      const portfolioVolatility = totalWeight > 0 ? weightedVolatility / totalWeight : 0.25;
+      logger.info('Calculated real portfolio volatility', { portfolioId, volatility: portfolioVolatility });
+      return portfolioVolatility;
+    } catch (error) {
+      logger.error('Failed to calculate real volatility, using market estimate', { error });
+      // Fallback to reasonable crypto market estimate
+      return 0.30; // 30% annualized - typical crypto volatility
+    }
   }
 
   /**
@@ -211,33 +254,72 @@ export class RiskAgent extends BaseAgent {
   }
 
   /**
-   * Calculate asset exposures
+   * Calculate asset exposures from real portfolio data
    */
-  private async calculateExposures(_portfolioId: number): Promise<RiskAnalysis['exposures']> {
-    // Simulate exposure analysis
-    // In production: fetch from blockchain, categorize assets
-    return [
-      {
-        asset: 'BTC',
-        exposure: 40,
-        contribution: 15,
-      },
-      {
-        asset: 'ETH',
-        exposure: 30,
-        contribution: 12,
-      },
-      {
-        asset: 'CRO',
-        exposure: 20,
-        contribution: 8,
-      },
-      {
-        asset: 'USDC',
-        exposure: 10,
-        contribution: 2,
-      },
-    ];
+  private async calculateExposures(portfolioId: number): Promise<RiskAnalysis['exposures']> {
+    try {
+      // Import services for real portfolio data
+      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
+      
+      // Get real portfolio data
+      const portfolioData = await getPortfolioData();
+      
+      if (!portfolioData?.portfolio?.positions || portfolioData.portfolio.positions.length === 0) {
+        logger.warn('No portfolio positions found, returning empty exposures');
+        return [];
+      }
+      
+      const positions = portfolioData.portfolio.positions;
+      const totalValue = portfolioData.portfolio.totalValue || 0;
+      
+      if (totalValue === 0) {
+        logger.warn('Portfolio has zero value');
+        return [];
+      }
+      
+      // Calculate real exposures based on position values
+      const exposures: RiskAnalysis['exposures'] = [];
+      
+      for (const position of positions) {
+        const exposure = (position.value / totalValue) * 100;
+        
+        // Calculate risk contribution based on asset volatility
+        // Stablecoins contribute less to risk, crypto contributes more
+        let riskMultiplier = 1.0;
+        const symbol = position.symbol?.toUpperCase() || '';
+        if (['USDC', 'USDT', 'DAI', 'DEVUSDC'].includes(symbol)) {
+          riskMultiplier = 0.05; // Stablecoins have very low risk contribution
+        } else if (['BTC', 'WBTC'].includes(symbol)) {
+          riskMultiplier = 1.2; // BTC slightly higher due to market dominance
+        } else if (['ETH', 'WETH'].includes(symbol)) {
+          riskMultiplier = 1.0;
+        } else {
+          riskMultiplier = 1.5; // Altcoins have higher risk contribution
+        }
+        
+        exposures.push({
+          asset: position.symbol || 'UNKNOWN',
+          exposure: Math.round(exposure * 100) / 100,
+          contribution: Math.round(exposure * riskMultiplier * 100) / 100,
+        });
+      }
+      
+      // Sort by exposure descending
+      exposures.sort((a, b) => b.exposure - a.exposure);
+      
+      logger.info('Calculated real portfolio exposures', { 
+        portfolioId, 
+        totalValue, 
+        assetCount: exposures.length 
+      });
+      
+      return exposures;
+    } catch (error) {
+      logger.error('Failed to calculate real exposures', { error });
+      // Return empty array instead of mock data
+      return [];
+    }
   }
 
   /**
