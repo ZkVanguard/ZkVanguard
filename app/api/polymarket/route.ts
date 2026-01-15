@@ -7,10 +7,11 @@ export async function GET(req: NextRequest) {
   try {
     // Forward query parameters
     const { searchParams } = new URL(req.url);
-    const limit = searchParams.get('limit') || '50';
-    const active = searchParams.get('active') || 'true';
+    const limit = searchParams.get('limit') || '100';
+    const closed = searchParams.get('closed') || 'false';  // Default to open markets only
     
-    const url = `https://gamma-api.polymarket.com/markets?limit=${limit}&active=${active}`;
+    // Use closed=false to get active markets (active=true doesn't work properly)
+    const url = `https://gamma-api.polymarket.com/markets?limit=${limit}&closed=${closed}`;
     console.log('[Polymarket Proxy] Fetching:', url);
     
     const response = await fetch(url, {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await response.json();
-    console.log(`[Polymarket Proxy] Fetched ${data.length} markets`);
+    console.log(`[Polymarket Proxy] Fetched ${data.length} markets (closed=${closed})`);
     
     return NextResponse.json(data, {
       headers: {

@@ -111,7 +111,8 @@ export class DelphiMarketService {
         ? '/api/polymarket'  // Browser: use API route to avoid CORS
         : 'https://gamma-api.polymarket.com/markets';  // Node.js: direct access
       
-      const response = await fetch(baseUrl + '?limit=50&active=true', {
+      // Use closed=false to get ONLY active/open markets (not active=true which doesn't work)
+      const response = await fetch(baseUrl + '?limit=100&closed=false', {
         headers: {
           'Accept': 'application/json',
         },
@@ -122,7 +123,7 @@ export class DelphiMarketService {
       }
 
       const markets = await response.json();
-      console.log(`Fetched ${markets.length} Polymarket markets`);
+      console.log(`Fetched ${markets.length} Polymarket markets (open/not closed)`);
 
       // Filter crypto-related markets (VERY relaxed filtering to get ANY crypto data)
       const cryptoMarkets = markets
@@ -132,27 +133,20 @@ export class DelphiMarketService {
           const tags = (m.tags || []).join(' ').toLowerCase();
           const desc = (m.description || '').toLowerCase();
           
-          // Very broad crypto keywords
+          // Very broad crypto keywords - include finance/trading terms too
           const cryptoKeywords = [
             'crypto', 'bitcoin', 'btc', 'ethereum', 'eth', 'defi', 'blockchain',
             'stablecoin', 'usdc', 'usdt', 'dai', 'solana', 'cardano', 'polkadot',
-            'price', 'market', 'token', 'coin', 'trading', 'cro', 'cronos'
+            'price', 'market', 'token', 'coin', 'trading', 'cro', 'cronos',
+            'coinbase', 'binance', 'sec', 'etf', 'spot', 'reserve', 'treasury'
           ];
           
           const text = `${q} ${cat} ${tags} ${desc}`;
           return cryptoKeywords.some(keyword => text.includes(keyword));
         })
-        .filter((m: any) => {
-          // Accept market unless explicitly closed (be permissive)
-          // Check multiple possible status fields
-          const isClosed = m.closed === true || m.resolved === true || 
-                          m.archived === true || m.active === false ||
-                          m.status === 'closed' || m.status === 'resolved';
-          return !isClosed;
-        })
-        .slice(0, 20); // Limit to 20 markets
+        .slice(0, 20); // Limit to 20 markets (already filtered by closed=false in API)
 
-      console.log(`Filtered to ${cryptoMarkets.length} active crypto markets`);
+      console.log(`Filtered to ${cryptoMarkets.length} crypto-related markets`);
       if (cryptoMarkets.length > 0) {
         console.log('Sample markets:', cryptoMarkets.slice(0, 3).map((m: any) => ({
           question: m.question || m.title,
