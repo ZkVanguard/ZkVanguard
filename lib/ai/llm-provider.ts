@@ -90,7 +90,31 @@ class LLMProvider {
       
       this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
-      // Priority 1: Crypto.com AI Agent SDK (native to ecosystem)
+      // PRIORITY 1: Ollama (FREE, LOCAL, SECURE - no data leaves your server)
+      // Check Ollama first since it's free and already running with CUDA
+      try {
+        const ollamaCheck = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000),
+        }).catch(() => null);
+        
+        if (ollamaCheck && ollamaCheck.ok) {
+          const models = await ollamaCheck.json();
+          if (models.models && models.models.length > 0) {
+            this.ollamaAvailable = true;
+            this.activeProvider = 'ollama';
+            logger.info('✅ Ollama detected with models:', models.models.map((m: any) => m.name).join(', '));
+            logger.info('✅ Using Ollama for FREE, LOCAL, SECURE AI - no data leaves your server');
+            return;
+          } else {
+            logger.warn('Ollama running but no models installed. Run: ollama pull qwen2.5:7b');
+          }
+        }
+      } catch (ollamaError) {
+        logger.warn('Ollama not available (install from ollama.ai for free local AI)');
+      }
+
+      // Priority 2: Crypto.com AI Agent SDK (native to ecosystem)
       if (cryptocomKey) {
         try {
           // Use Function constructor to avoid Next.js static analysis
@@ -98,19 +122,23 @@ class LLMProvider {
           const module = await dynamicImport('@crypto.com/ai-agent-client').catch(() => null);
           
           if (module && module.createClient) {
-            this.aiClient = module.createClient({
+            const client = module.createClient({
               apiKey: cryptocomKey,
             } as any);
-            this.activeProvider = 'cryptocom';
-            logger.info('✅ Crypto.com AI Agent SDK initialized - REAL AI ENABLED');
-            return;
+            // Verify the client has the expected interface
+            if (client && client.chat && client.chat.completions) {
+              this.aiClient = client;
+              this.activeProvider = 'cryptocom';
+              logger.info('✅ Crypto.com AI Agent SDK initialized - REAL AI ENABLED');
+              return;
+            }
           }
         } catch (sdkError) {
           logger.warn('Crypto.com AI SDK not installed (optional) - trying alternatives');
         }
       }
 
-      // Priority 2: OpenAI (enterprise-grade, scalable)
+      // Priority 3: OpenAI (enterprise-grade, scalable)
       if (openaiKey) {
         try {
           // Use Function constructor to avoid Next.js static analysis
@@ -127,7 +155,7 @@ class LLMProvider {
         }
       }
 
-      // Priority 3: Anthropic Claude (safety-focused, enterprise-grade)
+      // Priority 4: Anthropic Claude (safety-focused, enterprise-grade)
       // Note: Only enabled if @anthropic-ai/sdk is installed
       if (anthropicKey) {
         try {
@@ -143,29 +171,6 @@ class LLMProvider {
         } catch (anthropicError) {
           logger.warn('Anthropic SDK not installed (optional) - skipping');
         }
-      }
-
-      // Priority 4: Ollama (FREE, LOCAL, SECURE - no data leaves your server)
-      try {
-        const ollamaCheck = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(3000),
-        }).catch(() => null);
-        
-        if (ollamaCheck && ollamaCheck.ok) {
-          const models = await ollamaCheck.json();
-          if (models.models && models.models.length > 0) {
-            this.ollamaAvailable = true;
-            this.activeProvider = 'ollama';
-            logger.info('✅ Ollama detected with models:', models.models.map((m: any) => m.name).join(', '));
-            logger.info('✅ Using Ollama for FREE, LOCAL, SECURE AI - no data leaves your server');
-            return;
-          } else {
-            logger.warn('Ollama running but no models installed. Run: ollama pull llama3.2');
-          }
-        }
-      } catch (ollamaError) {
-        logger.warn('Ollama not available (install from ollama.ai for free local AI)');
       }
 
       // No AI provider available
