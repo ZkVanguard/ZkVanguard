@@ -111,8 +111,8 @@ export class DelphiMarketService {
         ? '/api/polymarket'  // Browser: use API route to avoid CORS
         : 'https://gamma-api.polymarket.com/markets';  // Node.js: direct access
       
-      // Use closed=false to get ONLY active/open markets (not active=true which doesn't work)
-      const response = await fetch(baseUrl + '?limit=100&closed=false', {
+      // Use closed=false to get ONLY active/open markets
+      const response = await fetch(baseUrl + '?limit=200&closed=false', {
         headers: {
           'Accept': 'application/json',
         },
@@ -125,19 +125,46 @@ export class DelphiMarketService {
       const markets = await response.json();
       console.log(`Fetched ${markets.length} Polymarket markets (open/not closed)`);
 
-      // Convert Polymarket format to our format - include ALL markets as market sentiment indicators
-      // Since Polymarket doesn't have many crypto-specific markets, we use general markets
-      // as macro indicators that could affect crypto portfolios
-      const predictions: PredictionMarket[] = markets
-        .slice(0, 30) // Take top 30 markets
+      // Finance/crypto related keywords - only show markets relevant to trading/finance
+      const financeKeywords = [
+        'bitcoin', 'btc', 'crypto', 'ethereum', 'eth', 'coinbase', 'binance',
+        'sec', 'etf', 'federal', 'reserve', 'interest rate', 'inflation',
+        'recession', 'gdp', 'stock', 'market', 'treasury', 'economy',
+        'doge', 'elon', 'spending', 'tariff', 'trade'
+      ];
+
+      // Filter to only finance/crypto related markets
+      const relevantMarkets = markets.filter((m: any) => {
+        const q = (m.question || '').toLowerCase();
+        const cat = (m.category || '').toLowerCase();
+        return financeKeywords.some(kw => q.includes(kw)) || cat === 'crypto' || cat === 'economics';
+      });
+
+      console.log(`Filtered to ${relevantMarkets.length} finance/crypto related markets`);
+
+      // Convert Polymarket format to our format
+      const predictions: PredictionMarket[] = relevantMarkets
+        .slice(0, 20)
         .map((market: any) => {
           const question = market.question || 'Unknown prediction';
-          const prices = market.outcomePrices || ['0.5', '0.5'];
-          const probability = parseFloat(prices[0]) * 100; // Convert to percentage
           const volume = parseFloat(market.volume || market.volumeNum || 0);
           const q = question.toLowerCase();
           
-          // Categorize markets by their likely impact on crypto
+          // Parse outcomePrices - it's a JSON string like "[\"0.89\", \"0.11\"]"
+          let probability = 50;
+          try {
+            const pricesStr = market.outcomePrices;
+            if (pricesStr) {
+              const prices = typeof pricesStr === 'string' ? JSON.parse(pricesStr) : pricesStr;
+              if (Array.isArray(prices) && prices.length > 0) {
+                probability = parseFloat(prices[0]) * 100;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse outcomePrices:', market.outcomePrices);
+          }
+          
+          // Categorize markets
           let category: 'price' | 'regulation' | 'adoption' | 'market' | 'defi' = 'market';
           let relatedAssets: string[] = [];
           
@@ -146,7 +173,7 @@ export class DelphiMarketService {
             relatedAssets.push('BTC');
             category = 'price';
           }
-          if (q.includes('ethereum') || q.includes('eth') && !q.includes('meth')) {
+          if (q.includes('ethereum') || (q.includes('eth') && !q.includes('meth') && !q.includes('whether'))) {
             relatedAssets.push('ETH');
             category = 'price';
           }
@@ -158,23 +185,21 @@ export class DelphiMarketService {
             category = 'regulation';
             if (relatedAssets.length === 0) relatedAssets.push('BTC', 'ETH');
           }
-          if (q.includes('federal reserve') || q.includes('interest rate') || q.includes('inflation')) {
+          if (q.includes('federal') || q.includes('interest rate') || q.includes('inflation') || 
+              q.includes('recession') || q.includes('treasury') || q.includes('spending')) {
             category = 'market';
-            relatedAssets = ['BTC', 'ETH', 'USDC']; // Macro affects all crypto
+            relatedAssets = ['BTC', 'ETH', 'USDC']; // Macro events affect all crypto
           }
           
-          // For non-crypto markets, still include them as macro sentiment indicators
-          // They affect market sentiment which correlates with crypto
+          // Default to major crypto assets for general finance markets
           if (relatedAssets.length === 0) {
-            // Associate with user's portfolio assets as general market sentiment
-            relatedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
-            if (relatedAssets.length === 0) relatedAssets = ['BTC', 'ETH', 'CRO'];
+            relatedAssets = ['BTC', 'ETH'];
           }
 
           // Determine impact based on volume
           let impact: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
           if (volume > 500000) impact = 'HIGH';
-          else if (volume > 50000) impact = 'MODERATE';
+          else if (volume > 100000) impact = 'MODERATE';
 
           // Determine recommendation
           let recommendation: 'HEDGE' | 'MONITOR' | 'IGNORE' = 'MONITOR';
@@ -186,11 +211,11 @@ export class DelphiMarketService {
             question,
             category,
             probability: Math.round(probability * 10) / 10, // Round to 1 decimal
-            volume: volume > 1000000 ? `$${(volume / 1000000).toFixed(1)}M` : `$${(volume / 1000).toFixed(0)}K`,
+            volume: volume > 1000000 ? `$${(volume / 1000000).toFixed(1)}M` : `$${Math.round(volume / 1000)}K`,
             impact,
             relatedAssets,
             lastUpdate: Date.now(),
-            confidence: Math.min(100, Math.floor(Math.sqrt(volume) / 10)), // Confidence based on sqrt of volume
+            confidence: Math.min(100, Math.floor(Math.sqrt(volume) / 10)),
             recommendation,
           };
         });
@@ -205,7 +230,7 @@ export class DelphiMarketService {
 
     } catch (error) {
       console.error('Polymarket API error:', error);
-      throw error; // Re-throw to fall back to hardcoded data
+      throw error;
     }
   }
 
