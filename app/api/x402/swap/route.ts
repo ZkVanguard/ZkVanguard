@@ -196,20 +196,47 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
       });
     } catch (vvsError) {
-      // VVS API failed - use mock fallback for demo
-      console.warn('[x402/swap] VVS SDK failed, using mock fallback:', vvsError);
+      // VVS API failed - try RealMarketDataService as fallback
+      console.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', vvsError);
       
-      const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          ...mockQuote,
-          x402Fee: 0.01,
-          source: 'mock-fallback',
-          warning: 'VVS API unavailable, using estimated prices',
-        },
-      });
+      try {
+        const { realMarketDataService } = await import('../../../../lib/services/RealMarketDataService');
+        
+        // Get real prices from Crypto.com Exchange
+        const inSymbol = getTokenSymbol(tokenIn);
+        const outSymbol = getTokenSymbol(tokenOut);
+        
+        const [inPriceData, outPriceData] = await Promise.all([
+          realMarketDataService.getTokenPrice(inSymbol),
+          realMarketDataService.getTokenPrice(outSymbol)
+        ]);
+        
+        const amountNum = parseFloat(humanAmount);
+        const inValue = amountNum * inPriceData.price;
+        // Apply 0.3% swap fee
+        const outAmount = (inValue / outPriceData.price) * 0.997;
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            tokenIn: resolvedTokenIn,
+            tokenOut: resolvedTokenOut,
+            amountIn: humanAmount,
+            amountOut: outAmount.toString(),
+            priceImpact: '0.05',
+            route: [inSymbol, outSymbol],
+            x402Fee: 0.01,
+            source: 'cryptocom-exchange-fallback',
+            warning: 'VVS API unavailable, using Crypto.com Exchange prices',
+          },
+        });
+      } catch (fallbackError) {
+        console.error('[x402/swap] All price sources failed:', fallbackError);
+        return NextResponse.json(
+          { success: false, error: 'Unable to fetch swap quote - all price sources unavailable' },
+          { status: 503 }
+        );
+      }
     }
   } catch (error) {
     console.error('[x402/swap] Quote error:', error);
