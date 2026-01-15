@@ -275,24 +275,60 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
  * No simulated or mock data - real blockchain data only
  */
 export async function getPortfolioData(): Promise<any> {
-  const baseUrl = typeof window !== 'undefined' 
-    ? '' 
-    : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000');
-
   try {
-    const onchainResponse = await fetch(`${baseUrl}/api/portfolio/onchain`);
-    if (onchainResponse.ok) {
-      const data = await onchainResponse.json();
-      if (data.success) {
-        logger.info('Using REAL on-chain portfolio data', { 
-          address: data.portfolio?.address?.slice(0, 10),
-          positions: data.portfolio?.positions?.length || 0,
-          totalValue: data.portfolio?.totalValue
-        });
-        return data;
-      }
+    // Import directly to avoid circular fetch issues
+    const { getMarketDataService } = await import('./RealMarketDataService');
+    const { ethers } = await import('ethers');
+    
+    // Get wallet address from environment
+    const pk = process.env.PRIVATE_KEY || 
+               process.env.AGENT_PRIVATE_KEY || 
+               process.env.SERVER_WALLET_PRIVATE_KEY;
+    
+    if (!pk) {
+      logger.warn('No wallet private key configured for on-chain portfolio');
+      return null;
     }
-    throw new Error('On-chain portfolio fetch failed');
+
+    const wallet = new ethers.Wallet(pk);
+    const address = wallet.address;
+    
+    // Fetch real on-chain data directly
+    const marketData = getMarketDataService();
+    const portfolioData = await marketData.getPortfolioData(address);
+
+    // Transform to standard portfolio format
+    const positions = portfolioData.tokens.map((token: any) => ({
+      symbol: token.symbol,
+      amount: parseFloat(token.balance),
+      currentPrice: token.usdValue / parseFloat(token.balance),
+      value: token.usdValue,
+      averageCost: token.usdValue / parseFloat(token.balance),
+      pnl: 0,
+      pnlPercentage: 0,
+      lastUpdated: portfolioData.lastUpdated,
+    }));
+
+    logger.info('Using REAL on-chain portfolio data', { 
+      address: address.slice(0, 10),
+      positions: positions.length,
+      totalValue: portfolioData.totalValue
+    });
+
+    return {
+      success: true,
+      portfolio: {
+        address,
+        totalValue: portfolioData.totalValue,
+        cash: 0,
+        positions,
+        totalPnl: 0,
+        totalPnlPercentage: 0,
+      },
+      source: 'onchain',
+      network: 'cronos-testnet',
+      lastUpdated: portfolioData.lastUpdated,
+    };
   } catch (error) {
     logger.error('Failed to get on-chain portfolio data:', error);
     return null;
