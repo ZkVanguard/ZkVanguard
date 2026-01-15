@@ -125,88 +125,83 @@ export class DelphiMarketService {
       const markets = await response.json();
       console.log(`Fetched ${markets.length} Polymarket markets (open/not closed)`);
 
-      // Filter crypto-related markets (VERY relaxed filtering to get ANY crypto data)
-      const cryptoMarkets = markets
-        .filter((m: any) => {
-          const q = (m.question || m.title || '').toLowerCase();
-          const cat = (m.category || '').toLowerCase();
-          const tags = (m.tags || []).join(' ').toLowerCase();
-          const desc = (m.description || '').toLowerCase();
+      // Convert Polymarket format to our format - include ALL markets as market sentiment indicators
+      // Since Polymarket doesn't have many crypto-specific markets, we use general markets
+      // as macro indicators that could affect crypto portfolios
+      const predictions: PredictionMarket[] = markets
+        .slice(0, 30) // Take top 30 markets
+        .map((market: any) => {
+          const question = market.question || 'Unknown prediction';
+          const prices = market.outcomePrices || ['0.5', '0.5'];
+          const probability = parseFloat(prices[0]) * 100; // Convert to percentage
+          const volume = parseFloat(market.volume || market.volumeNum || 0);
+          const q = question.toLowerCase();
           
-          // Very broad crypto keywords - include finance/trading terms too
-          const cryptoKeywords = [
-            'crypto', 'bitcoin', 'btc', 'ethereum', 'eth', 'defi', 'blockchain',
-            'stablecoin', 'usdc', 'usdt', 'dai', 'solana', 'cardano', 'polkadot',
-            'price', 'market', 'token', 'coin', 'trading', 'cro', 'cronos',
-            'coinbase', 'binance', 'sec', 'etf', 'spot', 'reserve', 'treasury'
-          ];
+          // Categorize markets by their likely impact on crypto
+          let category: 'price' | 'regulation' | 'adoption' | 'market' | 'defi' = 'market';
+          let relatedAssets: string[] = [];
           
-          const text = `${q} ${cat} ${tags} ${desc}`;
-          return cryptoKeywords.some(keyword => text.includes(keyword));
-        })
-        .slice(0, 20); // Limit to 20 markets (already filtered by closed=false in API)
+          // Check for crypto-specific keywords
+          if (q.includes('bitcoin') || q.includes('btc')) {
+            relatedAssets.push('BTC');
+            category = 'price';
+          }
+          if (q.includes('ethereum') || q.includes('eth') && !q.includes('meth')) {
+            relatedAssets.push('ETH');
+            category = 'price';
+          }
+          if (q.includes('crypto') || q.includes('coinbase') || q.includes('binance')) {
+            category = 'market';
+            if (relatedAssets.length === 0) relatedAssets.push('BTC', 'ETH');
+          }
+          if (q.includes('sec') || q.includes('regulation') || q.includes('etf')) {
+            category = 'regulation';
+            if (relatedAssets.length === 0) relatedAssets.push('BTC', 'ETH');
+          }
+          if (q.includes('federal reserve') || q.includes('interest rate') || q.includes('inflation')) {
+            category = 'market';
+            relatedAssets = ['BTC', 'ETH', 'USDC']; // Macro affects all crypto
+          }
+          
+          // For non-crypto markets, still include them as macro sentiment indicators
+          // They affect market sentiment which correlates with crypto
+          if (relatedAssets.length === 0) {
+            // Associate with user's portfolio assets as general market sentiment
+            relatedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
+            if (relatedAssets.length === 0) relatedAssets = ['BTC', 'ETH', 'CRO'];
+          }
 
-      console.log(`Filtered to ${cryptoMarkets.length} crypto-related markets`);
-      if (cryptoMarkets.length > 0) {
-        console.log('Sample markets:', cryptoMarkets.slice(0, 3).map((m: any) => ({
-          question: m.question || m.title,
-          category: m.category,
-          active: m.active,
-          closed: m.closed
-        })));
-      }
+          // Determine impact based on volume
+          let impact: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
+          if (volume > 500000) impact = 'HIGH';
+          else if (volume > 50000) impact = 'MODERATE';
 
-      // Convert Polymarket format to our format
-      return cryptoMarkets.map((market: any) => {
-        const question = market.question || 'Unknown prediction';
-        const prices = market.outcomePrices || ['0.5', '0.5'];
-        const probability = parseFloat(prices[0]) * 100; // Convert to percentage
-        const volume = parseFloat(market.volume || 0);
-        
-        // Determine related assets from question text
-        const relatedAssets: string[] = [];
-        const q = question.toLowerCase();
-        if (q.includes('bitcoin') || q.includes('btc')) relatedAssets.push('BTC');
-        if (q.includes('ethereum') || q.includes('eth')) relatedAssets.push('ETH');
-        if (q.includes('stablecoin') || q.includes('usdc') || q.includes('usdt')) {
-          relatedAssets.push('USDC', 'USDT', 'DAI');
-        }
-        if (q.includes('cronos') || q.includes('cro')) relatedAssets.push('CRO');
-        if (q.includes('crypto') && relatedAssets.length === 0) {
-          // General crypto prediction
-          relatedAssets.push('BTC', 'ETH', 'CRO');
-        }
+          // Determine recommendation
+          let recommendation: 'HEDGE' | 'MONITOR' | 'IGNORE' = 'MONITOR';
+          if (probability > 70 && impact !== 'LOW') recommendation = 'HEDGE';
+          else if (probability < 30 && impact === 'LOW') recommendation = 'IGNORE';
 
-        // Determine impact based on volume
-        let impact: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
-        if (volume > 500000) impact = 'HIGH';
-        else if (volume > 100000) impact = 'MODERATE';
+          return {
+            id: `polymarket-${market.id || Math.random()}`,
+            question,
+            category,
+            probability: Math.round(probability * 10) / 10, // Round to 1 decimal
+            volume: volume > 1000000 ? `$${(volume / 1000000).toFixed(1)}M` : `$${(volume / 1000).toFixed(0)}K`,
+            impact,
+            relatedAssets,
+            lastUpdate: Date.now(),
+            confidence: Math.min(100, Math.floor(Math.sqrt(volume) / 10)), // Confidence based on sqrt of volume
+            recommendation,
+          };
+        });
 
-        // Determine recommendation
-        let recommendation: 'HEDGE' | 'MONITOR' | 'IGNORE' = 'MONITOR';
-        if (probability > 70 && impact === 'HIGH') recommendation = 'HEDGE';
-        else if (probability < 30 || impact === 'LOW') recommendation = 'IGNORE';
-
-        return {
-          id: `polymarket-${market.id || Math.random()}`,
-          question,
-          category: 'price' as const,
-          probability,
-          volume: `$${(volume / 1000).toFixed(0)}K`,
-          impact,
-          relatedAssets,
-          lastUpdate: Date.now(),
-          confidence: Math.min(100, Math.floor(volume / 10000)), // Confidence based on volume
-          recommendation,
-        };
-      }).filter((pred: PredictionMarket) => pred.relatedAssets.length > 0); // Only include markets with identified assets
-
+      console.log(`Converted to ${predictions.length} prediction market entries`);
+      
       // Cache the result for 60 seconds
-      const predictionResults = cryptoMarkets;
-      cache.set(cacheKey, predictionResults);
+      cache.set(cacheKey, predictions);
       console.log(`[Cache SET] Polymarket data for ${assets.join(', ')}`);
 
-      return predictionResults;
+      return predictions;
 
     } catch (error) {
       console.error('Polymarket API error:', error);
@@ -262,29 +257,31 @@ export class DelphiMarketService {
   }
 
   /**
-   * Filter predictions by portfolio assets
+   * Filter predictions by portfolio assets - ALWAYS return at least some results
    */
   static filterByAssets(predictions: PredictionMarket[], portfolioAssets: string[]): PredictionMarket[] {
-    if (portfolioAssets.length === 0) return predictions;
+    if (predictions.length === 0) return predictions;
+    if (portfolioAssets.length === 0) return predictions.slice(0, 10);
 
     const normalizedAssets = portfolioAssets.map(a => 
       a.toUpperCase().replace(/^(W|DEV)/, '') // Strip WBTC → BTC, devUSDC → USDC
     );
 
-    return predictions.filter(market => {
-      const matchingAssets = market.relatedAssets.filter(asset => 
-        normalizedAssets.includes(asset)
-      );
-
-      // For specific predictions (1-2 assets): show if any asset matches
-      if (market.relatedAssets.length <= 2) {
-        return matchingAssets.length > 0;
-      }
-
-      // For broad predictions (3+ assets): require 50% match
-      const matchPercentage = matchingAssets.length / market.relatedAssets.length;
-      return matchPercentage >= 0.5;
+    // First try to find direct matches
+    const directMatches = predictions.filter(market => {
+      return market.relatedAssets.some(asset => normalizedAssets.includes(asset));
     });
+
+    // If we have enough direct matches, return those
+    if (directMatches.length >= 3) {
+      console.log(`filterByAssets: Found ${directMatches.length} direct matches`);
+      return directMatches.slice(0, 10);
+    }
+
+    // Otherwise return a mix of direct matches + general market predictions
+    console.log(`filterByAssets: Only ${directMatches.length} direct matches, including general markets`);
+    const remaining = predictions.filter(p => !directMatches.includes(p)).slice(0, 10 - directMatches.length);
+    return [...directMatches, ...remaining].slice(0, 10);
   }
 
   /**
