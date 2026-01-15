@@ -93,7 +93,9 @@ class LLMProvider {
       // Priority 1: Crypto.com AI Agent SDK (native to ecosystem)
       if (cryptocomKey) {
         try {
-          const module = await import('@crypto.com/ai-agent-client').catch(() => null);
+          // Use Function constructor to avoid Next.js static analysis
+          const dynamicImport = new Function('modulePath', 'return import(modulePath)');
+          const module = await dynamicImport('@crypto.com/ai-agent-client').catch(() => null);
           
           if (module && module.createClient) {
             this.aiClient = module.createClient({
@@ -104,14 +106,16 @@ class LLMProvider {
             return;
           }
         } catch (sdkError) {
-          logger.warn('Crypto.com AI SDK load failed, trying alternatives', { error: String(sdkError) });
+          logger.warn('Crypto.com AI SDK not installed (optional) - trying alternatives');
         }
       }
 
       // Priority 2: OpenAI (enterprise-grade, scalable)
       if (openaiKey) {
         try {
-          const openaiModule = await import('openai').catch(() => null);
+          // Use Function constructor to avoid Next.js static analysis
+          const dynamicImport = new Function('modulePath', 'return import(modulePath)');
+          const openaiModule = await dynamicImport('openai').catch(() => null);
           if (openaiModule && openaiModule.default) {
             this.openAIClient = new openaiModule.default({ apiKey: openaiKey });
             this.activeProvider = 'openai';
@@ -119,14 +123,17 @@ class LLMProvider {
             return;
           }
         } catch (openaiError) {
-          logger.warn('OpenAI module load failed', { error: String(openaiError) });
+          logger.warn('OpenAI module not installed (optional) - trying alternatives');
         }
       }
 
       // Priority 3: Anthropic Claude (safety-focused, enterprise-grade)
+      // Note: Only enabled if @anthropic-ai/sdk is installed
       if (anthropicKey) {
         try {
-          const anthropicModule = await import('@anthropic-ai/sdk').catch(() => null);
+          // Use Function constructor to avoid Next.js static analysis
+          const dynamicImport = new Function('modulePath', 'return import(modulePath)');
+          const anthropicModule = await dynamicImport('@anthropic-ai/sdk').catch(() => null);
           if (anthropicModule && anthropicModule.default) {
             this.anthropicClient = new anthropicModule.default({ apiKey: anthropicKey });
             this.activeProvider = 'anthropic';
@@ -134,7 +141,7 @@ class LLMProvider {
             return;
           }
         } catch (anthropicError) {
-          logger.warn('Anthropic module load failed', { error: String(anthropicError) });
+          logger.warn('Anthropic SDK not installed (optional) - skipping');
         }
       }
 
