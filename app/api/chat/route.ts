@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if this should go through agent orchestration
-    const useAgents = await shouldUseAgents(message);
+    // DISABLED: LeadAgent orchestration - using direct LLM + executePortfolioAction for real on-chain data
+    const useAgents = false; // await shouldUseAgents(message);
     
     if (useAgents) {
       logger.info('Routing message through LeadAgent', { message: message.substring(0, 50) });
