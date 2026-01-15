@@ -42,7 +42,7 @@ class CryptocomAIAgentService {
   }
 
   /**
-   * Initialize the AI Agent
+   * Initialize the AI Agent with real SDK
    */
   async initialize(config?: AgentConfig): Promise<void> {
     try {
@@ -56,23 +56,47 @@ class CryptocomAIAgentService {
 
       this.config = finalConfig;
 
-      // Initialize the agent (commented out until SDK is properly configured)
-      // this.agent = Agent.init({
-      //   llm_config: {
-      //     provider: 'OpenAI',
-      //     model: 'gpt-4o-mini',
-      //     'provider-api-key': finalConfig.openaiApiKey!,
-      //   },
-      //   blockchain_config: {
-      //     chainId: finalConfig.chainId!,
-      //     'api-key': finalConfig.dashboardApiKey!,
-      //     'private-key': finalConfig.privateKey,
-      //     timeout: 120,
-      //   },
-      // });
+      // Check if we have required API keys for real SDK initialization
+      const hasOpenAIKey = !!finalConfig.openaiApiKey;
+      const hasDashboardKey = !!finalConfig.dashboardApiKey;
 
-      this.isInitialized = false; // Set to false until SDK is ready
-      console.log('[AIAgent] Configuration prepared (SDK not fully initialized)', finalConfig.chainId);
+      if (hasOpenAIKey && hasDashboardKey) {
+        try {
+          // Try to dynamically import the Crypto.com AI Agent SDK
+          const agentModule = await import('@crypto.com/ai-agent-client').catch(() => null);
+          
+          if (agentModule?.Agent) {
+            this.agent = agentModule.Agent.init({
+              llm_config: {
+                provider: 'OpenAI',
+                model: 'gpt-4o-mini',
+                'provider-api-key': finalConfig.openaiApiKey!,
+              },
+              blockchain_config: {
+                chainId: finalConfig.chainId!,
+                'api-key': finalConfig.dashboardApiKey!,
+                'private-key': finalConfig.privateKey,
+                timeout: 120,
+              },
+            });
+            
+            this.isInitialized = true;
+            console.log('[AIAgent] Crypto.com AI Agent SDK initialized successfully', finalConfig.chainId);
+            return;
+          }
+        } catch (sdkError) {
+          console.warn('[AIAgent] Crypto.com AI Agent SDK not available, using LLM fallback:', sdkError);
+        }
+      }
+
+      // If SDK not available, mark as initialized with LLM fallback mode
+      if (hasOpenAIKey || hasDashboardKey) {
+        this.isInitialized = true;
+        console.log('[AIAgent] Initialized with LLM fallback mode (API keys available but SDK not loaded)');
+      } else {
+        this.isInitialized = false;
+        console.warn('[AIAgent] No API keys configured - AI features will be limited');
+      }
     } catch (error: any) {
       console.error('[AIAgent] Initialization failed:', error.message);
       throw new Error(`Failed to initialize AI Agent: ${error.message}`);

@@ -143,9 +143,20 @@ class CryptocomExchangeService {
   async getBatchPrices(symbols: string[]): Promise<Record<string, number>> {
     const prices: Record<string, number> = {};
     
+    // Handle stablecoins directly (always $1)
+    const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
+    
     // Crypto.com Exchange doesn't have a true batch endpoint,
     // but with 100 req/s we can make parallel requests
     const promises = symbols.map(async (symbol) => {
+      const upperSymbol = symbol.toUpperCase();
+      
+      // Stablecoins are always $1
+      if (STABLECOINS.includes(upperSymbol)) {
+        prices[symbol] = 1.0;
+        return;
+      }
+      
       try {
         const price = await this.getPrice(symbol);
         prices[symbol] = price;

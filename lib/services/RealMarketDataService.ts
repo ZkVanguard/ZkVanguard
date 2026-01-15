@@ -402,8 +402,16 @@ class RealMarketDataService {
         console.log(`⏱️ [RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
         
         // Map balances to final token data
+        const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
         for (const tokenBalance of balances) {
-          const price = batchPrices[tokenBalance.symbol];
+          let price = batchPrices[tokenBalance.symbol];
+          
+          // Fallback: stablecoins are always $1
+          if (!price && STABLECOINS.includes(tokenBalance.symbol.toUpperCase())) {
+            price = 1.0;
+            console.log(`💵 [RealMarketData] Using stablecoin price $1 for ${tokenBalance.symbol}`);
+          }
+          
           if (price) {
             const value = parseFloat(tokenBalance.balance) * price;
             tokens.push({
