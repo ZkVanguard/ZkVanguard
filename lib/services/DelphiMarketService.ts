@@ -105,8 +105,13 @@ export class DelphiMarketService {
 
     try {
       console.log('Fetching live Polymarket data for assets:', assets);
-      // Use Next.js API route to avoid CORS issues
-      const response = await fetch('/api/polymarket', {
+      
+      // Use direct Polymarket API (works in both browser and Node.js)
+      const baseUrl = typeof window !== 'undefined' 
+        ? '/api/polymarket'  // Browser: use API route to avoid CORS
+        : 'https://gamma-api.polymarket.com/markets';  // Node.js: direct access
+      
+      const response = await fetch(baseUrl + '?limit=50&active=true', {
         headers: {
           'Accept': 'application/json',
         },
@@ -214,48 +219,49 @@ export class DelphiMarketService {
 
   /**
    * Get relevant prediction markets for portfolio assets
-   * Combines real Polymarket data with curated mock predictions for comprehensive coverage
+   * Uses real Delphi/Polymarket data - NO MOCK DATA
    */
   static async getRelevantMarkets(assets: string[]): Promise<PredictionMarket[]> {
     let realPredictions: PredictionMarket[] = [];
+    let usedSource = 'none';
     
     // Try Delphi API first
     try {
-      const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`);
+      const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`, {
+        signal: AbortSignal.timeout(5000),
+      });
       if (!response.ok) throw new Error('Delphi API unavailable');
       
       const data = await response.json();
-      console.log('Using Delphi API data');
+      console.log('✅ Using Delphi API data');
       realPredictions = this.parseMarkets(data, assets);
+      usedSource = 'delphi';
     } catch (delphiError) {
       console.log('Delphi API unavailable, trying Polymarket API...');
       
       // Try Polymarket API as backup
       try {
         const polymarketData = await this.fetchPolymarketData(assets);
-        console.log(`Using live Polymarket data: ${polymarketData.length} predictions`);
+        console.log(`✅ Using live Polymarket data: ${polymarketData.length} predictions`);
         
         // Filter to relevant assets
         realPredictions = this.filterByAssets(polymarketData, assets);
+        usedSource = 'polymarket';
       } catch (polymarketError) {
-        console.log('Polymarket API also unavailable');
+        console.error('❌ Polymarket API also unavailable:', polymarketError);
+        usedSource = 'error';
       }
     }
     
-    // Always include mock predictions for demo reliability
-    // This ensures predictions show up even when APIs fail
-    const mockPredictions = this.getMockMarkets(assets);
+    // If we have real predictions, return them (NO MOCK MIXING)
+    if (realPredictions.length > 0) {
+      console.log(`Returning ${realPredictions.length} REAL predictions from ${usedSource}`);
+      return realPredictions;
+    }
     
-    // Merge: real predictions first, then mock ones that don't duplicate
-    const realIds = new Set(realPredictions.map(p => p.question.toLowerCase()));
-    const uniqueMocks = mockPredictions.filter(mock => 
-      !realIds.has(mock.question.toLowerCase())
-    );
-    
-    const combined = [...realPredictions, ...uniqueMocks];
-    console.log(`Returning ${combined.length} predictions (${realPredictions.length} real, ${uniqueMocks.length} mock)`);
-    
-    return combined;
+    // ONLY if all APIs fail, throw error to make it clear
+    console.error('❌ NO REAL PREDICTION DATA AVAILABLE - All APIs failed');
+    throw new Error('Unable to fetch prediction market data from Delphi or Polymarket. Please check network connectivity.');
   }
 
   /**
