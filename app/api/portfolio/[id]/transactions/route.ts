@@ -4,6 +4,10 @@ import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 
+// Disable caching for this API route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Token symbols mapping
 const TOKEN_SYMBOLS: Record<string, string> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'devUSDC',
@@ -22,7 +26,7 @@ interface Transaction {
   token?: string;
   changes?: { from: number; to: number; asset: string }[];
   txHash: string;
-  blockNumber: bigint;
+  blockNumber: number;
 }
 
 export async function GET(
@@ -30,7 +34,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    console.log('[Transactions API] Starting...');
     const { id } = await context.params;
+    console.log('[Transactions API] Portfolio ID:', id);
     const portfolioId = BigInt(id);
     
     console.log(`[Transactions API] Fetching transactions for portfolio ${portfolioId}...`);
@@ -41,67 +47,92 @@ export async function GET(
     });
 
     const addresses = getContractAddresses(338);
+    console.log('[Transactions API] RWA Manager:', addresses.rwaManager);
     
     // Get current block number
     const currentBlock = await client.getBlockNumber();
-    const fromBlock = currentBlock - 10000n; // Look back ~10000 blocks (adjust based on chain)
+    console.log('[Transactions API] Current block:', currentBlock);
+    
+    // Cronos testnet has a max range of 2000 blocks, scan in chunks
+    const CHUNK_SIZE = 1999n;
+    const lookback = 10000n;
+    const fromBlock = currentBlock > lookback ? currentBlock - lookback : 0n;
     
     console.log(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}`);
 
-    // Fetch deposit events
-    const depositLogs = await client.getLogs({
-      address: addresses.rwaManager as `0x${string}`,
-      event: {
-        type: 'event',
-        name: 'Deposited',
-        inputs: [
-          { type: 'uint256', indexed: true, name: 'portfolioId' },
-          { type: 'address', indexed: true, name: 'token' },
-          { type: 'uint256', indexed: false, name: 'amount' },
-        ],
-      },
-      args: {
-        portfolioId,
-      },
-      fromBlock,
-      toBlock: 'latest',
-    });
+    const depositLogs = [];
+    const withdrawLogs = [];
+    const rebalanceLogs = [];
 
-    // Fetch withdrawal events
-    const withdrawLogs = await client.getLogs({
-      address: addresses.rwaManager as `0x${string}`,
-      event: {
-        type: 'event',
-        name: 'Withdrawn',
-        inputs: [
-          { type: 'uint256', indexed: true, name: 'portfolioId' },
-          { type: 'address', indexed: true, name: 'token' },
-          { type: 'uint256', indexed: false, name: 'amount' },
-        ],
-      },
-      args: {
-        portfolioId,
-      },
-      fromBlock,
-      toBlock: 'latest',
-    });
+    // Scan in chunks to avoid RPC limits
+    let start = fromBlock;
+    while (start <= currentBlock) {
+      const end = start + CHUNK_SIZE > currentBlock ? currentBlock : start + CHUNK_SIZE;
+      
+      console.log(`[Transactions API] Chunk: ${start} to ${end}`);
 
-    // Fetch rebalance events
-    const rebalanceLogs = await client.getLogs({
-      address: addresses.rwaManager as `0x${string}`,
-      event: {
-        type: 'event',
-        name: 'Rebalanced',
-        inputs: [
-          { type: 'uint256', indexed: true, name: 'portfolioId' },
-        ],
-      },
-      args: {
-        portfolioId,
-      },
-      fromBlock,
-      toBlock: 'latest',
-    });
+      // Fetch deposit events for this chunk
+      const chunkDeposits = await client.getLogs({
+        address: addresses.rwaManager as `0x${string}`,
+        event: {
+          type: 'event',
+          name: 'Deposited',
+          inputs: [
+            { type: 'uint256', indexed: true, name: 'portfolioId' },
+            { type: 'address', indexed: true, name: 'token' },
+            { type: 'uint256', indexed: false, name: 'amount' },
+            { type: 'address', indexed: true, name: 'depositor' },
+          ],
+        },
+        args: {
+          portfolioId,
+        },
+        fromBlock: start,
+        toBlock: end,
+      });
+      depositLogs.push(...chunkDeposits);
+
+      // Fetch withdrawal events for this chunk
+      const chunkWithdraws = await client.getLogs({
+        address: addresses.rwaManager as `0x${string}`,
+        event: {
+          type: 'event',
+          name: 'Withdrawn',
+          inputs: [
+            { type: 'uint256', indexed: true, name: 'portfolioId' },
+            { type: 'address', indexed: true, name: 'token' },
+            { type: 'uint256', indexed: false, name: 'amount' },
+            { type: 'address', indexed: true, name: 'recipient' },
+          ],
+        },
+        args: {
+          portfolioId,
+        },
+        fromBlock: start,
+        toBlock: end,
+      });
+      withdrawLogs.push(...chunkWithdraws);
+
+      // Fetch rebalance events for this chunk
+      const chunkRebalances = await client.getLogs({
+        address: addresses.rwaManager as `0x${string}`,
+        event: {
+          type: 'event',
+          name: 'Rebalanced',
+          inputs: [
+            { type: 'uint256', indexed: true, name: 'portfolioId' },
+          ],
+        },
+        args: {
+          portfolioId,
+        },
+        fromBlock: start,
+        toBlock: end,
+      });
+      rebalanceLogs.push(...chunkRebalances);
+      
+      start = end + 1n;
+    }
 
     console.log(`[Transactions API] Found ${depositLogs.length} deposits, ${withdrawLogs.length} withdrawals, ${rebalanceLogs.length} rebalances`);
 
@@ -109,60 +140,82 @@ export async function GET(
 
     // Process deposits
     for (const log of depositLogs) {
-      const block = await client.getBlock({ blockNumber: log.blockNumber });
-      const token = log.args.token?.toLowerCase() || '';
-      const amount = log.args.amount || 0n;
-      const decimals = TOKEN_DECIMALS[token] || 18;
-      const symbol = TOKEN_SYMBOLS[token] || 'Unknown';
-      
-      transactions.push({
-        type: 'deposit',
-        timestamp: Number(block.timestamp) * 1000,
-        amount: Number(amount) / Math.pow(10, decimals),
-        token: symbol,
-        txHash: log.transactionHash || '',
-        blockNumber: log.blockNumber,
-      });
+      try {
+        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        const token = log.args.token?.toLowerCase() || '';
+        const amount = log.args.amount || 0n;
+        const decimals = TOKEN_DECIMALS[token] || 18;
+        const symbol = TOKEN_SYMBOLS[token] || 'Unknown';
+        
+        console.log(`Processing deposit: ${symbol} ${amount} at block ${log.blockNumber}`);
+        
+        transactions.push({
+          type: 'deposit',
+          timestamp: Number(block.timestamp) * 1000,
+          amount: Number(amount) / Math.pow(10, decimals),
+          token: symbol,
+          txHash: log.transactionHash || '',
+          blockNumber: Number(log.blockNumber),
+        });
+      } catch (err: any) {
+        console.error(`Error processing deposit log:`, err.message);
+      }
     }
 
     // Process withdrawals
     for (const log of withdrawLogs) {
-      const block = await client.getBlock({ blockNumber: log.blockNumber });
-      const token = log.args.token?.toLowerCase() || '';
-      const amount = log.args.amount || 0n;
-      const decimals = TOKEN_DECIMALS[token] || 18;
-      const symbol = TOKEN_SYMBOLS[token] || 'Unknown';
-      
-      transactions.push({
-        type: 'withdraw',
-        timestamp: Number(block.timestamp) * 1000,
-        amount: Number(amount) / Math.pow(10, decimals),
-        token: symbol,
-        txHash: log.transactionHash || '',
-        blockNumber: log.blockNumber,
-      });
+      try {
+        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        const token = log.args.token?.toLowerCase() || '';
+        const amount = log.args.amount || 0n;
+        const decimals = TOKEN_DECIMALS[token] || 18;
+        const symbol = TOKEN_SYMBOLS[token] || 'Unknown';
+        
+        transactions.push({
+          type: 'withdraw',
+          timestamp: Number(block.timestamp) * 1000,
+          amount: Number(amount) / Math.pow(10, decimals),
+          token: symbol,
+          txHash: log.transactionHash || '',
+          blockNumber: Number(log.blockNumber),
+        });
+      } catch (err: any) {
+        console.error(`Error processing withdrawal log:`, err.message);
+      }
     }
 
     // Process rebalances
     for (const log of rebalanceLogs) {
-      const block = await client.getBlock({ blockNumber: log.blockNumber });
-      
-      transactions.push({
-        type: 'rebalance',
-        timestamp: Number(block.timestamp) * 1000,
-        txHash: log.transactionHash || '',
-        blockNumber: log.blockNumber,
-      });
+      try {
+        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        
+        transactions.push({
+          type: 'rebalance',
+          timestamp: Number(block.timestamp) * 1000,
+          txHash: log.transactionHash || '',
+          blockNumber: Number(log.blockNumber),
+        });
+      } catch (err: any) {
+        console.error(`Error processing rebalance log:`, err.message);
+      }
     }
 
     // Sort by timestamp descending (most recent first)
     transactions.sort((a, b) => b.timestamp - a.timestamp);
 
     console.log(`✅ [Transactions API] Returning ${transactions.length} transactions`);
+    if (transactions.length > 0) {
+      console.log('Sample transaction:', transactions[0]);
+    }
 
-    return NextResponse.json({ transactions });
+    return NextResponse.json({ transactions }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
   } catch (error: any) {
     console.error('[Transactions API] Error:', error?.message || error);
+    console.error('[Transactions API] Stack:', error?.stack);
     return NextResponse.json(
       { error: 'Failed to fetch transactions', details: error?.message },
       { status: 500 }
