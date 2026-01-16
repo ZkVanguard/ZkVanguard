@@ -2,31 +2,55 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, Coins, ExternalLink, Zap } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance } from 'wagmi';
+import { parseUnits, formatUnits, parseEther } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { X402GaslessService } from '../../lib/services/X402GaslessService';
 import { ethers } from 'ethers';
 
+// WCRO contract address for wrapping native CRO
+const WCRO_ADDRESS = '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`;
+
 // Cronos Testnet tokens ONLY (verified contract addresses)
 const TESTNET_TOKENS = [
+  {
+    symbol: 'tCRO',
+    name: 'Native CRO (Testnet)',
+    address: 'native' as `0x${string}`, // Special marker for native token
+    decimals: 18,
+    description: 'Native testnet CRO - will be wrapped to WCRO',
+    isNative: true,
+  },
   { 
     symbol: 'devUSDC', 
     name: 'DevUSDCe (Testnet)',
     address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`,
     decimals: 6,
-    description: 'Testnet USDC for development'
+    description: 'Testnet USDC for development',
+    isNative: false,
   },
   { 
     symbol: 'WCRO', 
     name: 'Wrapped CRO (Testnet)',
     address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`,
     decimals: 18,
-    description: 'Wrapped version of tCRO'
+    description: 'Wrapped version of tCRO',
+    isNative: false,
   },
 ];
+
+// WCRO ABI for wrapping
+const WCRO_ABI = [
+  {
+    type: 'function',
+    name: 'deposit',
+    stateMutability: 'payable',
+    inputs: [],
+    outputs: [],
+  },
+] as const;
 
 // ERC20 ABI for approve and balanceOf
 const ERC20_ABI = [
@@ -81,12 +105,30 @@ export function DepositModal({
   const [selectedToken, setSelectedToken] = useState(TESTNET_TOKENS[0]);
   const [amount, setAmount] = useState('');
   const [tokenBalance, setTokenBalance] = useState<string>('0');
+  const [nativeBalance, setNativeBalance] = useState<string>('0');
   const [allowance, setAllowance] = useState<bigint>(0n);
-  const [step, setStep] = useState<'input' | 'approve' | 'deposit' | 'success' | 'error'>('input');
+  const [step, setStep] = useState<'input' | 'wrapping' | 'approve' | 'deposit' | 'success' | 'error'>('input');
   const [errorMessage, setErrorMessage] = useState('');
 
   const addresses = getContractAddresses(338);
   const rwaManagerAddress = addresses.rwaManager as `0x${string}`;
+
+  // Get native balance using wagmi hook
+  const { data: nativeBalanceData } = useBalance({
+    address: address,
+  });
+
+  // Wrap CRO transaction
+  const { 
+    writeContract: writeWrap, 
+    data: wrapHash,
+    isPending: isWrapPending,
+    error: wrapError 
+  } = useWriteContract();
+
+  // Wait for wrap confirmation
+  const { isLoading: isWrapConfirming, isSuccess: isWrapSuccess } = 
+    useWaitForTransactionReceipt({ hash: wrapHash });
 
   // Approve transaction
   const { 
@@ -112,10 +154,37 @@ export function DepositModal({
   const { isLoading: isDepositConfirming, isSuccess: isDepositSuccess } = 
     useWaitForTransactionReceipt({ hash: depositHash });
 
+  // Update native balance when data changes
+  useEffect(() => {
+    if (nativeBalanceData) {
+      setNativeBalance(formatUnits(nativeBalanceData.value, 18));
+    }
+  }, [nativeBalanceData]);
+
   // Fetch token balance and allowance
   useEffect(() => {
     async function fetchBalanceAndAllowance() {
       if (!address || !publicClient) return;
+
+      // For native token, use the native balance
+      if (selectedToken.isNative) {
+        // Native balance is already set via useBalance hook
+        // For native CRO deposits, we'll wrap to WCRO, so check WCRO allowance
+        try {
+          const currentAllowance = await publicClient.readContract({
+            address: WCRO_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: 'allowance',
+            args: [address, rwaManagerAddress],
+          });
+          setAllowance(currentAllowance);
+          setTokenBalance(nativeBalance);
+        } catch (error) {
+          console.error('Failed to fetch WCRO allowance:', error);
+          setAllowance(0n);
+        }
+        return;
+      }
 
       try {
         const balance = await publicClient.readContract({
@@ -142,7 +211,7 @@ export function DepositModal({
     if (isOpen) {
       fetchBalanceAndAllowance();
     }
-  }, [address, selectedToken, isOpen, publicClient, rwaManagerAddress]);
+  }, [address, selectedToken, isOpen, publicClient, rwaManagerAddress, nativeBalance]);
 
   // Handle approve success - proceed to deposit
   useEffect(() => {
@@ -190,7 +259,56 @@ export function DepositModal({
       setErrorMessage(depositError.message || 'Deposit failed');
       setStep('error');
     }
-  }, [approveError, depositError]);
+    if (wrapError) {
+      setErrorMessage(wrapError.message || 'Wrapping CRO failed');
+      setStep('error');
+    }
+  }, [approveError, depositError, wrapError]);
+
+  // Handle wrap success - proceed to approve WCRO
+  useEffect(() => {
+    if (isWrapSuccess && step === 'wrapping' && wrapHash && address) {
+      trackSuccessfulTransaction({
+        hash: wrapHash,
+        type: 'wrap',
+        from: address,
+        to: WCRO_ADDRESS,
+        value: amount,
+        tokenSymbol: 'tCRO → WCRO',
+        description: `Wrap ${amount} tCRO to WCRO`,
+      });
+      // After wrapping, proceed to approve WCRO
+      handleApproveWCRO();
+    }
+  }, [isWrapSuccess, wrapHash, address, step]);
+
+  const handleWrap = () => {
+    if (!amount) return;
+    
+    const amountInWei = parseEther(amount);
+    setStep('wrapping');
+
+    writeWrap({
+      address: WCRO_ADDRESS,
+      abi: WCRO_ABI,
+      functionName: 'deposit',
+      value: amountInWei,
+    });
+  };
+
+  const handleApproveWCRO = () => {
+    if (!amount) return;
+    
+    const amountInWei = parseEther(amount);
+    setStep('approve');
+
+    writeApprove({
+      address: WCRO_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [rwaManagerAddress, amountInWei],
+    });
+  };
 
   const handleApprove = () => {
     if (!amount) return;
@@ -198,8 +316,11 @@ export function DepositModal({
     const amountInWei = parseUnits(amount, selectedToken.decimals);
     setStep('approve');
 
+    // For native token, we already wrapped, so approve WCRO
+    const tokenAddress = selectedToken.isNative ? WCRO_ADDRESS : selectedToken.address;
+
     writeApprove({
-      address: selectedToken.address,
+      address: tokenAddress,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [rwaManagerAddress, amountInWei],
@@ -209,19 +330,29 @@ export function DepositModal({
   const handleDeposit = () => {
     if (!amount) return;
     
-    const amountInWei = parseUnits(amount, selectedToken.decimals);
+    // For native token, deposit WCRO
+    const depositAddress = selectedToken.isNative ? WCRO_ADDRESS : selectedToken.address;
+    const decimals = selectedToken.isNative ? 18 : selectedToken.decimals;
+    const amountInWei = parseUnits(amount, decimals);
+    
     setStep('deposit');
 
     writeDeposit({
       address: rwaManagerAddress,
       abi: RWA_MANAGER_ABI,
       functionName: 'depositAsset',
-      args: [BigInt(portfolioId), selectedToken.address, amountInWei],
+      args: [BigInt(portfolioId), depositAddress, amountInWei],
     });
   };
 
   const handleSubmit = () => {
     if (!amount || parseFloat(amount) <= 0) return;
+
+    // For native token, need to wrap first, then approve, then deposit
+    if (selectedToken.isNative) {
+      handleWrap();
+      return;
+    }
 
     const amountInWei = parseUnits(amount, selectedToken.decimals);
     
@@ -244,7 +375,7 @@ export function DepositModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-[#e8e8ed]">
           <div>
-            <h2 className="text-xl font-bold">Fund Portfolio #{portfolioId}</h2>
+            <h2 className="text-xl font-bold text-[#1d1d1f]">Fund Portfolio #{portfolioId}</h2>
             <p className="text-sm text-[#86868b] mt-1">
               {targetYield}% yield target • {riskTolerance}/100 risk
             </p>
@@ -253,7 +384,7 @@ export function DepositModal({
             onClick={onClose}
             className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-[#86868b]" />
           </button>
         </div>
 
@@ -266,18 +397,18 @@ export function DepositModal({
                 <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
                   Select Token
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {TESTNET_TOKENS.slice(0, 6).map((token) => (
                     <button
                       key={token.symbol}
                       onClick={() => setSelectedToken(token)}
-                      className={`p-3 rounded-lg border transition-all ${
+                      className={`p-3 rounded-xl border transition-all ${
                         selectedToken.symbol === token.symbol
-                          ? 'border-cyan-500 bg-cyan-500/10'
-                          : 'border-gray-600 hover:border-gray-500 bg-[#f5f5f7]'
+                          ? 'border-[#007AFF] bg-[#007AFF]/10'
+                          : 'border-[#e8e8ed] hover:border-[#86868b] bg-[#f5f5f7]'
                       }`}
                     >
-                      <div className="text-sm font-semibold">{token.symbol}</div>
+                      <div className="text-sm font-semibold text-[#1d1d1f]">{token.symbol}</div>
                     </button>
                   ))}
                 </div>
@@ -294,11 +425,11 @@ export function DepositModal({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-[#f5f5f7] border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full bg-[#f5f5f7] border border-[#e8e8ed] rounded-xl px-4 py-3 text-lg text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#007AFF] transition-colors"
                   />
                   <button
                     onClick={() => setAmount(tokenBalance)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#007AFF] hover:text-cyan-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#007AFF] hover:text-[#0066CC]"
                   >
                     MAX
                   </button>
@@ -317,10 +448,14 @@ export function DepositModal({
                   <Coins className="w-5 h-5 text-[#007AFF] mt-0.5" />
                   <div className="text-sm">
                     <p className="text-[#1d1d1f] mb-1">
-                      Depositing to smart contract portfolio
+                      {selectedToken.isNative 
+                        ? 'tCRO will be wrapped to WCRO then deposited'
+                        : 'Depositing to smart contract portfolio'}
                     </p>
-                    <p className="text-gray-500 text-xs">
-                      Tokens will be transferred to the RWAManager contract for automated strategy execution.
+                    <p className="text-[#86868b] text-xs">
+                      {selectedToken.isNative
+                        ? 'Native CRO will be wrapped to WCRO (ERC20) and then transferred to the RWAManager.'
+                        : 'Tokens will be transferred to the RWAManager contract for automated strategy execution.'}
                     </p>
                   </div>
                 </div>
@@ -330,9 +465,13 @@ export function DepositModal({
               <button
                 onClick={handleSubmit}
                 disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > parseFloat(tokenBalance)}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-all"
+                className="w-full py-3 bg-[#007AFF] hover:bg-[#0066CC] disabled:bg-[#86868b] disabled:cursor-not-allowed rounded-xl font-semibold text-white transition-all"
               >
-                {needsApproval ? `Approve & Deposit ${selectedToken.symbol}` : `Deposit ${selectedToken.symbol}`}
+                {selectedToken.isNative 
+                  ? `Wrap & Deposit ${selectedToken.symbol}`
+                  : needsApproval 
+                    ? `Approve & Deposit ${selectedToken.symbol}` 
+                    : `Deposit ${selectedToken.symbol}`}
               </button>
 
               {parseFloat(tokenBalance) === 0 && (
@@ -343,10 +482,25 @@ export function DepositModal({
             </>
           )}
 
+          {step === 'wrapping' && (
+            <div className="text-center py-8">
+              <Loader2 className="w-16 h-16 text-[#007AFF] animate-spin mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-[#1d1d1f] mb-2">Wrapping tCRO...</h3>
+              <p className="text-[#86868b] mb-4">
+                Please confirm the wrap transaction in your wallet
+              </p>
+              {isWrapConfirming && (
+                <p className="text-sm text-[#007AFF]">
+                  Waiting for confirmation...
+                </p>
+              )}
+            </div>
+          )}
+
           {(step === 'approve' || step === 'deposit') && (
             <div className="text-center py-8">
               <Loader2 className="w-16 h-16 text-[#007AFF] animate-spin mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">
+              <h3 className="text-xl font-semibold text-[#1d1d1f] mb-2">
                 {step === 'approve' ? 'Approving Token...' : 'Depositing...'}
               </h3>
               <p className="text-[#86868b] mb-4">
@@ -374,7 +528,7 @@ export function DepositModal({
                   href={`https://explorer.cronos.org/testnet/tx/${depositHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-cyan-300"
+                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-[#0066CC]"
                 >
                   View Transaction <ExternalLink className="w-4 h-4" />
                 </a>

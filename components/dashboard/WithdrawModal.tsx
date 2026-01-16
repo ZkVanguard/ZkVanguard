@@ -139,7 +139,7 @@ export function WithdrawModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-[#e8e8ed]">
           <div>
-            <h2 className="text-xl font-bold">Withdraw from Portfolio #{portfolioId}</h2>
+            <h2 className="text-xl font-bold text-[#1d1d1f]">Withdraw from Portfolio #{portfolioId}</h2>
             <p className="text-sm text-[#86868b] mt-1">
               Current balance: ${totalValue.toFixed(2)}
             </p>
@@ -148,7 +148,7 @@ export function WithdrawModal({
             onClick={onClose}
             className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-[#86868b]" />
           </button>
         </div>
 
@@ -169,13 +169,13 @@ export function WithdrawModal({
                         <button
                           key={asset}
                           onClick={() => setSelectedAsset(asset)}
-                          className={`px-4 py-2 rounded-lg border transition-all ${
+                          className={`px-4 py-2 rounded-xl border transition-all ${
                             selectedAsset === asset
-                              ? 'border-cyan-500 bg-cyan-500/10'
-                              : 'border-gray-600 hover:border-gray-500 bg-[#f5f5f7]'
+                              ? 'border-[#007AFF] bg-[#007AFF]/10'
+                              : 'border-[#e8e8ed] hover:border-[#86868b] bg-[#f5f5f7]'
                           }`}
                         >
-                          {info.symbol}
+                          <span className="text-[#1d1d1f] font-medium">{info.symbol}</span>
                         </button>
                       );
                     })}
@@ -210,11 +210,11 @@ export function WithdrawModal({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-[#f5f5f7] border border-gray-600 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full bg-[#f5f5f7] border border-[#e8e8ed] rounded-xl px-4 py-3 text-lg text-[#1d1d1f] placeholder-[#86868b] focus:outline-none focus:border-[#007AFF] transition-colors"
                   />
                   <button
                     onClick={handleWithdrawAll}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#007AFF] hover:text-cyan-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#007AFF] hover:text-[#0066CC]"
                   >
                     MAX
                   </button>
@@ -229,7 +229,7 @@ export function WithdrawModal({
                     <p className="text-[#1d1d1f] mb-1">
                       Withdraw to your wallet
                     </p>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-[#86868b] text-xs">
                       Tokens will be transferred from the RWAManager contract back to your wallet.
                     </p>
                   </div>
@@ -247,7 +247,7 @@ export function WithdrawModal({
                 <button
                   onClick={handleWithdraw}
                   disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > parseFloat(assetBalance)}
-                  className="flex-1 py-3 bg-gradient-to-r from-[#FF3B30] to-[#FF9500] hover:opacity-90 disabled:from-[#E5E5EA] disabled:to-[#E5E5EA] disabled:text-[#86868B] disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all"
+                  className="flex-1 py-3 bg-[#FF3B30] hover:bg-[#E6352B] disabled:bg-[#E5E5EA] disabled:text-[#86868B] disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all"
                 >
                   Withdraw {tokenInfo.symbol}
                 </button>
@@ -282,7 +282,7 @@ export function WithdrawModal({
                   href={`https://explorer.cronos.org/testnet/tx/${withdrawHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-cyan-300"
+                  className="inline-flex items-center gap-2 text-[#007AFF] hover:text-[#0066CC]"
                 >
                   View Transaction <ExternalLink className="w-4 h-4" />
                 </a>
