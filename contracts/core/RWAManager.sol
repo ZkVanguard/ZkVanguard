@@ -79,6 +79,20 @@ contract RWAManager is
         uint256 targetYield
     );
     
+    event Deposited(
+        uint256 indexed portfolioId,
+        address indexed token,
+        uint256 amount,
+        address indexed depositor
+    );
+    
+    event Withdrawn(
+        uint256 indexed portfolioId,
+        address indexed token,
+        uint256 amount,
+        address indexed recipient
+    );
+    
     event StrategyExecuted(
         uint256 indexed portfolioId,
         string strategy,
@@ -92,6 +106,10 @@ contract RWAManager is
         uint256 oldValue,
         uint256 newValue,
         uint256 timestamp
+    );
+    
+    event Rebalanced(
+        uint256 indexed portfolioId
     );
     
     event AllocationUpdated(
@@ -219,6 +237,8 @@ contract RWAManager is
             previousAmount,
             portfolio.assetAllocations[_asset]
         );
+        
+        emit Deposited(_portfolioId, _asset, _amount, msg.sender);
     }
 
     /**
@@ -298,6 +318,7 @@ contract RWAManager is
         portfolio.lastRebalance = block.timestamp;
 
         emit PortfolioRebalanced(_portfolioId, oldValue, newValue, block.timestamp);
+        emit Rebalanced(_portfolioId);
         emit ZKProofVerified(_portfolioId, _zkProofHash, true);
     }
 
@@ -327,6 +348,8 @@ contract RWAManager is
             portfolio.assetAllocations[_asset] + _amount,
             portfolio.assetAllocations[_asset]
         );
+        
+        emit Withdrawn(_portfolioId, _asset, _amount, msg.sender);
     }
 
     /**
