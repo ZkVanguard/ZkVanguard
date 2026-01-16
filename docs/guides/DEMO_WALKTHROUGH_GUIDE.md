@@ -785,7 +785,7 @@ Return to landing page or show a summary slide
 
 **Smart Contract Architecture:**
 ```
-RWAManager (0x170E8232E9e18eeB1839dB1d939501994f1e272F)
+RWAManager (0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189)
 ├── createPortfolio() - Mints portfolio NFT
 ├── rebalancePortfolio() - Requires AGENT_ROLE + ZK proof
 ├── executeStrategy() - Requires STRATEGY_EXECUTOR_ROLE

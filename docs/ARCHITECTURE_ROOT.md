@@ -462,7 +462,7 @@ User: "Should I hedge my ETH?"
 |----------|---------|----------|
 | **X402GaslessZKCommitmentVerifier** | `0x44098d0dE36e157b4C1700B48d615285C76fdE47` | ✅ |
 | ZKVerifier | `0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8` | ✅ |
-| RWAManager | `0x170E8232E9e18eeB1839dB1d939501994f1e272F` | ✅ |
+| RWAManager | `0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189` | ✅ | Updated Jan 16, 2026 with Deposited/Withdrawn/Rebalanced events |
 | PaymentRouter | `0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b` | ✅ |
 | GaslessZKVerifier | `0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F` | ✅ |
 | zkPaymaster | `0x81E2d8d860847Ca1b3ADd950dBeED6191be23D87` | ✅ |

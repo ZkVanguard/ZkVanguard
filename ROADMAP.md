@@ -16,7 +16,7 @@
 - ✅ Crypto.com AI SDK integration
 - ✅ Multi-chain foundation (Cronos + SUI support)
 - ✅ Real-time portfolio monitoring with CoinGecko API
-- ✅ Delphi prediction market data integration
+- ✅ Delphi/ Polymarket prediction market data integration
 - ✅ Natural language command interface
 
 ### Documentation
@@ -69,6 +69,13 @@
 ## Version 0.3.0 - SUI Mainnet Launch 🚀
 **Target**: March 2026  
 **Status**: Ready for Deployment
+
+### Multi-Chain Strategy Phase 1: Cronos → SUI
+After validating our platform on Cronos, SUI is our **second blockchain** before expanding to Ethereum L2s. This sequential approach allows us to:
+- Perfect cross-chain architecture with 2 chains first
+- Validate Move language integration (different from EVM)
+- Test non-EVM chain compatibility
+- Prove scalability before broader expansion
 
 ### SUI Integration Features
 - [ ] SUI mainnet smart contract deployment
@@ -165,22 +172,27 @@
 **Target**: August 2026  
 **Status**: Concept
 
-### Multi-Chain Expansion
-- [ ] Arbitrum integration
+### Multi-Chain Strategy Phase 2: EVM L2 Expansion
+**Prerequisites**: Cronos + SUI successfully deployed and validated
+
+With proven cross-chain architecture from Cronos→SUI expansion, we now expand to Ethereum Layer 2 networks. This phase targets EVM-compatible chains to leverage existing smart contracts.
+
+### Ethereum L2 Integrations
+- [ ] **Arbitrum** (First L2)
   - Deploy smart contracts on Arbitrum One
   - Uniswap V3 integration for swaps
   - GMX perpetuals integration
-- [ ] Optimism integration
+- [ ] **Optimism** (Second L2)
   - Optimistic rollup support
   - Velodrome DEX integration
   - Synthetix perpetuals
-- [ ] Base integration
+- [ ] **Base** (Third L2)
   - Coinbase L2 support
   - Aerodrome DEX integration
 - [ ] Unified multi-chain dashboard
-  - Cross-chain portfolio aggregation
+  - Portfolio aggregation across all 5 chains (Cronos, SUI, Arbitrum, Optimism, Base)
   - Unified risk metrics across all chains
-  - Gas optimization across networks
+  - Gas optimization per network
   - Cross-chain rebalancing strategies
 
 ### Technical Infrastructure
@@ -409,7 +421,8 @@ Interested in shaping the future of ZkVanguard? Here's how you can help:
 ### Priority Roadmap Items (Community Vote)
 Vote on what we should build next:
 - [ ] Mobile app
-- [ ] More chains (Polygon, Avalanche)
+- [ ] Additional chains beyond roadmap (Polygon, Avalanche, Solana)
+  - Note: Primary expansion path is Cronos → SUI → Arbitrum → Optimism → Base
 - [ ] Social trading features
 - [ ] Advanced charting tools
 - [ ] Voice/chat support with AI agents
