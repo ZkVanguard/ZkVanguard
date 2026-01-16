@@ -45,7 +45,7 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-xl font-bold text-[#1D1D1F]">Portfolio #{portfolioId.toString()}</h3>
             {isOwner && (
-              <span className="px-2 py-1 bg-cyan-500/20 text-[#007AFF] text-xs rounded-full border border-cyan-500/30">
+              <span className="px-2 py-1 bg-[#007AFF]/10 text-[#007AFF] text-xs rounded-full border border-[#007AFF]/30">
                 Owned
               </span>
             )}

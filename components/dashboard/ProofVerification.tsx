@@ -531,14 +531,14 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         {/* Proof Hash Input (Alternative) */}
         <div>
           <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
-            Or Enter Proof Hash Directly <span className="text-xs text-gray-500">(optional)</span>
+            Or Enter Proof Hash Directly <span className="text-xs text-[#86868b]">(optional)</span>
           </label>
           <input
             type="text"
             value={proofHash}
             onChange={(e) => setProofHash(e.target.value)}
             placeholder="0x0000000000000000000000000000000000000000000000000000000675e9ab3"
-            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-purple-500 focus:outline-none font-mono text-sm"
+            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-[#5856D6] focus:outline-none font-mono text-sm"
           />
           <p className="text-xs text-[#86868b] mt-2">
             💡 Find this in Dashboard console logs after generating a proof (look for "Proof Hash:")
@@ -555,7 +555,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             onChange={(e) => setClaimedStatement(e.target.value)}
             placeholder='{"claim": "Portfolio risk is below threshold", "threshold": 100, "portfolio_id": "DEMO_001"}'
             rows={3}
-            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] placeholder-gray-500 focus:border-purple-500 focus:outline-none font-mono text-sm"
+            className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] placeholder-[#86868b] focus:border-[#5856D6] focus:outline-none font-mono text-sm"
           />
           <p className="text-xs text-[#86868b] mt-1">
             💡 Provide the statement JSON to prove you know what was proven (verified against on-chain commitment)
@@ -793,7 +793,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                       {JSON.stringify(result.statement, null, 2)}
                     </div>
                     {result.statement_hash && (
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className="mt-2 text-xs text-[#86868b]">
                         Statement Hash: {result.statement_hash}
                       </div>
                     )}
@@ -806,7 +806,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                     <div className="text-[#86868b] font-mono text-xs break-all">
                       {result.statement_hash}
                     </div>
-                    <div className="text-xs text-gray-500 mt-2">
+                    <div className="text-xs text-[#86868b] mt-2">
                       💡 Provide the statement above to prove you know what was proven
                     </div>
                   </div>

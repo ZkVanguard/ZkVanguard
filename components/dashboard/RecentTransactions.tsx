@@ -123,7 +123,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
       const PLATFORM_CONTRACTS = [
         '0x44098d0dE36e157b4C1700B48d615285C76fdE47', // X402 Gasless
         '0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b', // Payment Router
-        '0x170E8232E9e18eeB1839dB1d939501994f1e272F', // RWA Manager
+        '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189', // RWA Manager (Updated Jan 16, 2026)
         '0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8', // ZK Verifier
         '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae', // VVS Router
       ].join(',');
@@ -185,7 +185,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
         console.log(`Scanning blocks ${fromBlock} to ${currentBlock} (2000 block limit)`);
 
         // Key contract addresses
-        const RWA_MANAGER = '0x170E8232E9e18eeB1839dB1d939501994f1e272F'; // Portfolio contract
+        const RWA_MANAGER = '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189'; // Portfolio contract (Updated Jan 16, 2026)
         const X402_CONTRACT = '0x44098d0dE36e157b4C1700B48d615285C76fdE47'; // Gasless transactions
         const PAYMENT_ROUTER = '0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b';
         const VVS_ROUTER = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';

@@ -100,10 +100,10 @@ export function CreatePortfolioButton() {
                 value={targetYield}
                 onChange={(e) => setTargetYield(e.target.value)}
                 placeholder="1000 = 10%"
-                className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-cyan-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-[#007AFF] focus:outline-none"
                 disabled={isPending || isConfirming}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-[#86868b] mt-1">
                 Example: 1000 = 10%, 500 = 5%
               </p>
             </div>
@@ -119,17 +119,17 @@ export function CreatePortfolioButton() {
                 placeholder="50 = Medium Risk"
                 min="0"
                 max="100"
-                className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-cyan-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-[#007AFF] focus:outline-none"
                 disabled={isPending || isConfirming}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-[#86868b] mt-1">
                 0 = Low Risk, 50 = Medium, 100 = High Risk
               </p>
             </div>
           </div>
 
           {isPending || isConfirming ? (
-            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4">
+            <div className="bg-[#007AFF]/10 border border-[#007AFF]/30 rounded-lg p-4">
               <div className="flex items-center gap-3">
                 <Loader2 className="w-5 h-5 text-[#007AFF] animate-spin" />
                 <div>
