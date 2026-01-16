@@ -77,6 +77,33 @@ export const RWA_MANAGER_ABI = [
   },
   {
     type: 'event',
+    name: 'Deposited',
+    inputs: [
+      { name: 'portfolioId', type: 'uint256', indexed: true },
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'depositor', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'Withdrawn',
+    inputs: [
+      { name: 'portfolioId', type: 'uint256', indexed: true },
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'recipient', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'Rebalanced',
+    inputs: [
+      { name: 'portfolioId', type: 'uint256', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
     name: 'PortfolioCreated',
     inputs: [
       { name: 'portfolioId', type: 'uint256', indexed: true },
