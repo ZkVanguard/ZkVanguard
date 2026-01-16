@@ -180,7 +180,8 @@ With proven cross-chain architecture from Cronos→SUI expansion, we now expand 
 ### Ethereum L2 Integrations
 - [ ] **Arbitrum** (First L2)
   - Deploy smart contracts on Arbitrum One
-  - Uniswap V3 integration for swaps
+  - VVS Finance V3 integration for concentrated liquidity
+  - VVS Finance V2 integration for swaps
   - GMX perpetuals integration
 - [ ] **Optimism** (Second L2)
   - Optimistic rollup support

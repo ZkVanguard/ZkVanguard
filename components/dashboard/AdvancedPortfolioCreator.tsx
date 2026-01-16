@@ -677,7 +677,7 @@ function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
             <InfoTooltip content={[
               "Select which types of crypto assets AI can include in your portfolio",
               "",
-              "🏛️ DeFi: Decentralized finance protocols (Uniswap, Aave, etc.)",
+              "🏛️ DeFi: Decentralized finance protocols (VVS Finance, Tectonic, etc.)",
               "🔗 Layer1: Base blockchains (BTC, ETH, CRO, SOL)",
               "⚡ Layer2: Scaling solutions (Polygon, Arbitrum, Optimism)",
               "🎮 Gaming: Play-to-earn and gaming tokens",
