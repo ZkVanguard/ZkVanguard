@@ -815,7 +815,7 @@ function ZKProtectionStep({
           </div>
           <div>
             <h4 className="font-semibold text-[15px] sm:text-[16px] text-[#1d1d1f] mb-2">Zero-Knowledge Strategy Protection</h4>
-            <p className="text-[12px] sm:text-[13px] text-[#86868b] leading-relaxed">
+            <p className="text-[12px] sm:text-[13px] text-[#4a4a4a] leading-relaxed">
               Your AI fund management strategy can be cryptographically protected using ZK-STARK proofs. 
               This ensures your entry points, exit rules, and risk parameters remain private while still 
               being verifiable on-chain.
@@ -836,7 +836,7 @@ function ZKProtectionStep({
                   <div className="font-semibold text-[14px] sm:text-[15px] text-[#1d1d1f]">
                     {strategyPrivate ? 'Private Strategy (Recommended)' : 'Public Strategy'}
                   </div>
-                  <div className="text-[11px] sm:text-[12px] text-[#86868b] mt-1">
+                  <div className="text-[11px] sm:text-[12px] text-[#666666] mt-1">
                     {strategyPrivate 
                       ? 'Strategy details hidden with ZK-STARK proofs + signature' 
                       : 'Strategy parameters visible on-chain (still requires signature)'}
@@ -913,7 +913,7 @@ function ZKProtectionStep({
                 </div>
               )}
 
-              <div className="mt-3 text-[10px] sm:text-[11px] text-[#86868b] space-y-1">
+              <div className="mt-3 text-[10px] sm:text-[11px] text-[#666666] space-y-1">
                 <div>• Entry/exit points encrypted</div>
                 <div>• Risk parameters hidden</div>
                 <div>• Verifiable without revealing strategy</div>
