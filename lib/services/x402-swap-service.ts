@@ -9,9 +9,49 @@
  */
 
 import { X402FacilitatorService, PaymentChallenge, PaymentResult } from './x402-facilitator';
-import { VVS_ROUTER_ABI, ERC20_ABI } from './VVSFinanceService';
 import { logger } from '../utils/logger';
 import { CronosNetwork, Contract, Scheme } from '@crypto.com/facilitator-client';
+
+// VVS Router ABI - minimal for swaps
+export const VVS_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'swapExactTokensForTokens',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+  },
+] as const;
+
+// ERC20 ABI - minimal for approvals
+export const ERC20_ABI = [
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 // Token addresses on Cronos zkEVM Testnet (from SDK)
 export const TESTNET_TOKENS = {

@@ -5,7 +5,8 @@ import { X, Loader2, CheckCircle, AlertCircle, ArrowDown, RefreshCw, ArrowDownUp
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
-import { getVVSFinanceService } from '../../lib/services/VVSFinanceService';
+
+// Using VVS Finance SDK via API route
 
 interface SwapModalProps {
   isOpen: boolean;
@@ -29,12 +30,22 @@ export function SwapModal({
 }: SwapModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
-  const dexService = getVVSFinanceService(338);
-  const supportedTokens = dexService.getSupportedTokens();
   
-  // Actual token addresses for balance fetching (different from swap quote addresses)
-  // Swap quotes use mainnet addresses, but balances need testnet addresses
-  // Note: On testnet, most tokens won't have balances - mainnet addresses used for UI
+  // Supported tokens for testnet
+  const supportedTokens = {
+    WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
+    CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
+    USDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0',
+    devUSDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0',
+    USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    WBTC: '0x062E66477Faf219F25D27dCED647BF57C3107d52',
+    WETH: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+  };
+
+  // VVS Router address
+  const VVS_ROUTER = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae' as const;
+  
+  // Actual token addresses for balance fetching
   const BALANCE_TOKEN_ADDRESSES: Record<string, string> = {
     WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
     CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',

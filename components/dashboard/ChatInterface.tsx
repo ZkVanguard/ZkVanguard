@@ -7,8 +7,9 @@ import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, execu
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
-import { getVVSFinanceService } from '../../lib/services/VVSFinanceService';
 import { SwapModal } from './SwapModal';
+
+// Using VVS Finance SDK via API routes
 
 interface Message {
   id: string;
@@ -249,14 +250,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
           const buyAsset = params.asset as string;
           const buyAmount = params.amount as number;
           
-          // Use VVS Finance DEX for on-chain swaps
-          const dexService = getVVSFinanceService(338);
+          // VVS Finance supported tokens
+          const supportedTokens = ['WCRO', 'CRO', 'USDC', 'devUSDC', 'USDT', 'WBTC', 'WETH', 'VVS'];
           
-          if (!dexService.isTokenSupported(buyAsset)) {
+          if (!supportedTokens.includes(buyAsset.toUpperCase())) {
             response = {
               content: `❌ **Token Not Supported**\n\n` +
                 `**Asset:** ${buyAsset}\n\n` +
-                `**Supported tokens:**\n${Object.keys(dexService.getSupportedTokens()).join(', ')}\n\n` +
+                `**Supported tokens:** ${supportedTokens.join(', ')}\n\n` +
                 `💡 **Tip:** Try \`buy 100 USDC\` or \`buy 10 WCRO\``,
               agent: 'DEX Agent',
             };
@@ -288,14 +289,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
           const sellAsset = params.asset as string;
           const sellAmount = params.amount as number;
           
-          // Use VVS Finance DEX for on-chain swaps
-          const sellDexService = getVVSFinanceService(338);
+          // VVS Finance supported tokens  
+          const sellSupportedTokens = ['WCRO', 'CRO', 'USDC', 'devUSDC', 'USDT', 'WBTC', 'WETH', 'VVS'];
           
-          if (!sellDexService.isTokenSupported(sellAsset)) {
+          if (!sellSupportedTokens.includes(sellAsset.toUpperCase())) {
             response = {
               content: `❌ **Token Not Supported**\n\n` +
                 `**Asset:** ${sellAsset}\n\n` +
-                `**Supported tokens:**\n${Object.keys(sellDexService.getSupportedTokens()).join(', ')}\n\n` +
+                `**Supported tokens:** ${sellSupportedTokens.join(', ')}\n\n` +
                 `💡 **Tip:** Try \`sell 50 USDC\` or \`sell 5 WCRO\``,
               agent: 'DEX Agent',
             };
