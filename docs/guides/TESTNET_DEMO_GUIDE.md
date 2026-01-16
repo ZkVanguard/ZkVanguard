@@ -544,7 +544,7 @@ Transactions Shown:
 
 Smart Contracts:
 - GaslessZKVerifier: 0x44098d0dE36e157b4C1700B48d615285C76fdE47
-- RWAManager: 0x170E8232E9e18eeB1839dB1d939501994f1e272F
+- RWAManager: 0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189 (Updated Jan 16, 2026)
 
 ZK Backend Health: https://your-backend.com/health
 

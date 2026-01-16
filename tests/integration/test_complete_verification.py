@@ -26,7 +26,7 @@ def test_complete_flow():
         'claim': json.dumps({
             'payments': [
                 {'recipient': '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', 'amount': 1000, 'token': '0x0000000000000000000000000000000000000000'},
-                {'recipient': '0x170E8232E9e18eeB1839dB1d939501994f1e272F', 'amount': 2000, 'token': '0x0000000000000000000000000000000000000000'}
+                {'recipient': '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189', 'amount': 2000, 'token': '0x0000000000000000000000000000000000000000'}
             ]
         }, sort_keys=True)
     }

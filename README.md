@@ -98,7 +98,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 ## Deployed Contracts (Cronos Testnet)
 
 ```
-RWAManager:        0x170E8232E9e18eeB1839dB1d939501994f1e272F
+RWAManager:        0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189 (Updated Jan 16, 2026)
 ZKVerifier:        0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8
 PaymentRouter:     0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b
 GaslessZKVerifier: 0x44098d0dE36e157b4C1700B48d615285C76fdE47
