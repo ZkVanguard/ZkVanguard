@@ -70,10 +70,13 @@ class CryptocomExchangeService {
   constructor() {
     this.client = axios.create({
       baseURL: this.BASE_URL,
-      timeout: 3000, // Reduced from 10s to 3s for faster failures
+      timeout: 2000, // Reduced from 3s to 2s for faster failures
       headers: {
         'Content-Type': 'application/json',
+        'Connection': 'keep-alive', // Reuse TCP connections
       },
+      maxRedirects: 0, // Don't follow redirects
+      validateStatus: (status) => status === 200, // Only accept 200
     });
 
     // Add response interceptor for error handling
@@ -138,7 +141,7 @@ class CryptocomExchangeService {
   }
 
   /**
-   * Get prices for multiple symbols (batch request)
+   * Get prices for multiple symbols (batch request) - OPTIMIZED
    */
   async getBatchPrices(symbols: string[]): Promise<Record<string, number>> {
     const prices: Record<string, number> = {};
@@ -146,26 +149,37 @@ class CryptocomExchangeService {
     // Handle stablecoins directly (always $1)
     const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
     
-    // Crypto.com Exchange doesn't have a true batch endpoint,
-    // but with 100 req/s we can make parallel requests
-    const promises = symbols.map(async (symbol) => {
-      const upperSymbol = symbol.toUpperCase();
-      
-      // Stablecoins are always $1
-      if (STABLECOINS.includes(upperSymbol)) {
-        prices[symbol] = 1.0;
-        return;
-      }
-      
-      try {
-        const price = await this.getPrice(symbol);
-        prices[symbol] = price;
-      } catch (error) {
-        console.warn(`[CryptocomExchange] Failed to fetch ${symbol}, skipping`);
-      }
+    // Separate stablecoins from market tokens
+    const stablecoins = symbols.filter(s => STABLECOINS.includes(s.toUpperCase()));
+    const marketTokens = symbols.filter(s => !STABLECOINS.includes(s.toUpperCase()));
+    
+    // Immediately set stablecoin prices
+    stablecoins.forEach(symbol => {
+      prices[symbol] = 1.0;
     });
-
-    await Promise.all(promises);
+    
+    // OPTIMIZATION: Batch market tokens in chunks of 5 to avoid overwhelming the API
+    // with 100 req/s limit, we can safely do 5 parallel requests
+    const CHUNK_SIZE = 5;
+    const chunks: string[][] = [];
+    for (let i = 0; i < marketTokens.length; i += CHUNK_SIZE) {
+      chunks.push(marketTokens.slice(i, i + CHUNK_SIZE));
+    }
+    
+    // Process chunks sequentially to respect rate limits
+    for (const chunk of chunks) {
+      const promises = chunk.map(async (symbol) => {
+        try {
+          const price = await this.getPrice(symbol);
+          prices[symbol] = price;
+        } catch (error) {
+          console.warn(`[CryptocomExchange] Failed to fetch ${symbol}, skipping`);
+        }
+      });
+      
+      await Promise.all(promises);
+    }
+    
     return prices;
   }
 

@@ -66,7 +66,7 @@ export function ZKVerificationBadge({
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={`inline-flex items-center gap-1.5 ${sizeClasses[size]} bg-cyan-500/20 text-cyan-400 rounded-full border border-cyan-500/30 ${className}`}
+        className={`inline-flex items-center gap-1.5 ${sizeClasses[size]} bg-[#007AFF]/10 text-[#007AFF] rounded-full border border-[#007AFF]/30 ${className}`}
       >
         <Loader2 className={`${iconSizes[size]} animate-spin`} />
         <span>Verifying On-Chain...</span>

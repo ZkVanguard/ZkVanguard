@@ -51,9 +51,13 @@ class RealMarketDataService {
   constructor() {
     // OPTIMIZATION 1: Use StaticJsonRpcProvider for better caching (no network detection)
     // OPTIMIZATION 2: Configure connection pooling and lower polling interval
+    // OPTIMIZATION 3: Use persistent connection with keep-alive
     const connectionInfo = {
       url: process.env.CRONOS_RPC_URL || 'https://evm-t3.cronos.org',
-      timeout: 5000, // 5s timeout for RPC calls
+      timeout: 3000, // Reduced to 3s timeout for faster failures
+      headers: {
+        'Connection': 'keep-alive', // Reuse TCP connections
+      },
     };
     
     this.provider = new ethers.JsonRpcProvider(
@@ -64,7 +68,8 @@ class RealMarketDataService {
       },
       {
         staticNetwork: true, // Don't detect network on every call
-        batchMaxCount: 10, // Batch up to 10 calls together
+        batchMaxCount: 20, // Increased batch size from 10 to 20
+        batchMaxSize: 1024 * 1024, // 1MB max batch size
         polling: false, // Don't poll for new blocks
       }
     );
@@ -199,7 +204,7 @@ class RealMarketDataService {
     try {
       console.log(`📊 [RealMarketData] Fetching ${symbol} from Crypto.com Exchange API`);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Exchange API timeout')), 2000)
+        setTimeout(() => reject(new Error('Exchange API timeout')), 1500) // Reduced from 2s to 1.5s
       );
       const exchangeData = await Promise.race([
         cryptocomExchangeService.getMarketData(symbol),
@@ -225,7 +230,7 @@ class RealMarketDataService {
     try {
       console.log(`📊 [RealMarketData] Trying MCP Server for ${symbol}`);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('MCP timeout')), 2000)
+        setTimeout(() => reject(new Error('MCP timeout')), 1500) // Reduced from 2s to 1.5s
       );
       const mcpData = await Promise.race([
         this.getMCPServerPrice(symbol),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { useAccount } from 'wagmi';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
@@ -58,7 +58,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Check cache first (30s TTL) - show immediately, refresh in background
+    // Check cache first (45s TTL for more aggressive caching) - show immediately, refresh in background
     const cacheKey = `positions-${address}`;
     const cached = cache.get<PositionsData>(cacheKey);
     
@@ -68,9 +68,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       setPositionsData(cached);
       setLoading(false);
       
-      // Check if cache is fresh enough (< 30s), skip refresh if so
+      // Check if cache is fresh enough (< 45s), skip refresh if so
       const now = Date.now();
-      if (now - lastFetchRef.current < 30000 && !isBackgroundRefresh) {
+      if (now - lastFetchRef.current < 45000 && !isBackgroundRefresh) {
         console.log('⏭️ [PositionsContext] Cache is fresh, skipping background refresh');
         return;
       }
@@ -79,9 +79,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       isBackgroundRefresh = true;
     }
 
-    // Debounce: prevent fetching more than once per 1 second (reduced from 2s)
+    // Debounce: prevent fetching more than once per 2 seconds
     const now = Date.now();
-    if (now - lastFetchRef.current < 1000 && !isBackgroundRefresh) {
+    if (now - lastFetchRef.current < 2000 && !isBackgroundRefresh) {
       console.log('⏭️ [PositionsContext] Skipping fetch - too soon after last request');
       return;
     }
@@ -114,8 +114,8 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       console.log(`📊 [PositionsContext] Positions:`, data.positions?.map((p: any) => `${p.symbol}: $${p.balanceUSD}`).join(', '));
       setPositionsData(data);
       
-      // Cache for 30 seconds
-      cache.set(cacheKey, data);
+      // Cache for 45 seconds (increased from 30s)
+      cache.set(cacheKey, data, 45000);
     } catch (err) {
       console.error('❌ [PositionsContext] Error fetching positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch positions');

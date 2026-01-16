@@ -2,11 +2,15 @@
  * React hooks for interacting with deployed smart contracts
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useChainId } from 'wagmi';
 import { getContractAddresses } from './addresses';
 import { RWA_MANAGER_ABI, ZK_VERIFIER_ABI, PAYMENT_ROUTER_ABI } from './abis';
+
+// In-memory cache for user portfolios (60s TTL)
+const portfolioCache = new Map<string, { data: any[]; timestamp: number }>();
+const PORTFOLIO_CACHE_TTL = 60000; // 60 seconds
 
 /**
  * Hook to read portfolio data from RWAManager
@@ -91,6 +95,20 @@ export function useUserPortfolios(userAddress?: string) {
         return;
       }
 
+      // Check cache first
+      const cacheKey = `portfolios-${userAddress}-${totalCount}`;
+      const cached = portfolioCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < PORTFOLIO_CACHE_TTL) {
+        console.log(`⚡ [hooks] Using cached portfolios for ${userAddress}`);
+        setUserPortfolios(cached.data);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      console.log(`🔄 [hooks] Fetching portfolios for ${userAddress}...`);
+      const startTime = Date.now();
+
       try {
         const { ethers } = await import('ethers');
         const provider = new ethers.JsonRpcProvider(
@@ -113,21 +131,32 @@ export function useUserPortfolios(userAddress?: string) {
           const currentBlock = await provider.getBlockNumber();
           const portfolioCreatedFilter = contract.filters.PortfolioCreated();
           
-          // Query last 50,000 blocks in 2000-block chunks (covers ~1 week on Cronos)
+          // OPTIMIZATION: Reduced from 50k to 20k blocks (covers ~2-3 days on Cronos)
           const CHUNK_SIZE = 1900; // Slightly under 2000 to be safe
-          const TOTAL_BLOCKS = 50000;
+          const TOTAL_BLOCKS = 20000; // Reduced from 50000
           const fromBlockStart = Math.max(0, currentBlock - TOTAL_BLOCKS);
           
           console.log(`📜 [hooks] Querying events from block ${fromBlockStart} to ${currentBlock} in chunks...`);
           
+          // OPTIMIZATION: Query chunks in parallel (3 at a time)
+          const chunks: Array<{ fromBlock: number; toBlock: number }> = [];
           for (let fromBlock = fromBlockStart; fromBlock < currentBlock; fromBlock += CHUNK_SIZE) {
             const toBlock = Math.min(fromBlock + CHUNK_SIZE - 1, currentBlock);
-            try {
-              const chunkEvents = await contract.queryFilter(portfolioCreatedFilter, fromBlock, toBlock);
-              events.push(...chunkEvents);
-            } catch (chunkErr) {
-              console.warn(`Failed to query blocks ${fromBlock}-${toBlock}:`, chunkErr);
-            }
+            chunks.push({ fromBlock, toBlock });
+          }
+          
+          // Process chunks in batches of 3
+          for (let i = 0; i < chunks.length; i += 3) {
+            const batch = chunks.slice(i, i + 3);
+            const batchPromises = batch.map(({ fromBlock, toBlock }) => 
+              contract.queryFilter(portfolioCreatedFilter, fromBlock, toBlock)
+                .catch((err: any) => {
+                  console.warn(`Failed to query blocks ${fromBlock}-${toBlock}:`, err);
+                  return [];
+                })
+            );
+            const batchResults = await Promise.all(batchPromises);
+            events.push(...batchResults.flat());
           }
           
           console.log(`📜 [hooks] Found ${events.length} PortfolioCreated events`);
@@ -141,31 +170,46 @@ export function useUserPortfolios(userAddress?: string) {
           const portfolioId = Number(event.args?.[0] || event.args?.portfolioId);
           const txHash = event.transactionHash;
           txHashMap[portfolioId] = txHash;
-          console.log(`📜 [hooks] Portfolio #${portfolioId} txHash: ${txHash?.slice(0, 10)}...`);
         }
         
-        // Check each portfolio to see if it belongs to the user
+        // OPTIMIZATION: Check portfolios in parallel batches of 5
+        const portfolioPromises = [];
         for (let i = 0; i < count; i++) {
-          try {
-            const portfolio = await contract.portfolios(i);
-            if (portfolio.owner.toLowerCase() === userAddress.toLowerCase()) {
-              const txHash = txHashMap[i] || null;
-              console.log(`📊 [hooks] Adding user portfolio #${i}, txHash: ${txHash ? txHash.slice(0, 15) + '...' : 'null'}`);
+          portfolioPromises.push(
+            contract.portfolios(i)
+              .then((portfolio: any) => ({ i, portfolio }))
+              .catch((err: any) => {
+                console.warn(`Error fetching portfolio ${i}:`, err);
+                return null;
+              })
+          );
+        }
+        
+        // Process in batches of 5
+        for (let i = 0; i < portfolioPromises.length; i += 5) {
+          const batch = portfolioPromises.slice(i, i + 5);
+          const results = await Promise.all(batch);
+          
+          for (const result of results) {
+            if (result && result.portfolio.owner.toLowerCase() === userAddress.toLowerCase()) {
+              const txHash = txHashMap[result.i] || null;
               portfolios.push({
-                id: i,
-                owner: portfolio.owner,
-                totalValue: portfolio.totalValue,
-                targetYield: portfolio.targetYield,
-                riskTolerance: portfolio.riskTolerance,
-                lastRebalance: portfolio.lastRebalance,
-                isActive: portfolio.isActive,
+                id: result.i,
+                owner: result.portfolio.owner,
+                totalValue: result.portfolio.totalValue,
+                targetYield: result.portfolio.targetYield,
+                riskTolerance: result.portfolio.riskTolerance,
+                lastRebalance: result.portfolio.lastRebalance,
+                isActive: result.portfolio.isActive,
                 txHash: txHash,
               });
             }
-          } catch (err) {
-            console.warn(`Error fetching portfolio ${i}:`, err);
           }
         }
+        
+        // Cache the results
+        portfolioCache.set(cacheKey, { data: portfolios, timestamp: Date.now() });
+        console.log(`✅ [hooks] Fetched ${portfolios.length} portfolios in ${Date.now() - startTime}ms`);
         
         setUserPortfolios(portfolios);
       } catch (error) {

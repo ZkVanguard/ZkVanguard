@@ -37,14 +37,15 @@ class CacheManager {
   }
 
   /**
-   * Set data in cache with timestamp
+   * Set data in cache with timestamp and optional custom TTL
    */
-  set<T>(key: string, data: T): void {
+  set<T>(key: string, data: T, customTTL?: number): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
+      ...(customTTL ? { ttl: customTTL } : {}),
     });
-    console.log(`[Cache SET] ${key}`);
+    console.log(`[Cache SET] ${key}${customTTL ? ` (TTL: ${customTTL}ms)` : ''}`);
   }
 
   /**
