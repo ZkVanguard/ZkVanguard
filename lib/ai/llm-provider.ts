@@ -90,8 +90,14 @@ class LLMProvider {
       
       this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
-      // PRIORITY 1: Ollama (FREE, LOCAL, SECURE - no data leaves your server)
-      // Check Ollama first since it's free and already running with CUDA
+      // PRIORITY 1: Crypto.com AI Agent SDK + Ollama (HACKATHON + LOCAL AI)
+      // The Crypto.com SDK uses OpenAI-compatible API, and Ollama provides one at /v1
+      // This gives us: Crypto.com ecosystem tools + Ollama/Qwen AI (FREE, LOCAL, CUDA)
+      const ollamaOpenAIUrl = `${this.ollamaBaseUrl}/v1`;
+      const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+      
+      // First check if Ollama is running
+      let ollamaRunning = false;
       try {
         const ollamaCheck = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
           method: 'GET',
@@ -101,40 +107,100 @@ class LLMProvider {
         if (ollamaCheck && ollamaCheck.ok) {
           const models = await ollamaCheck.json();
           if (models.models && models.models.length > 0) {
-            this.ollamaAvailable = true;
-            this.activeProvider = 'ollama';
+            ollamaRunning = true;
             logger.info('✅ Ollama detected with models:', models.models.map((m: any) => m.name).join(', '));
-            logger.info('✅ Using Ollama for FREE, LOCAL, SECURE AI - no data leaves your server');
-            return;
-          } else {
-            logger.warn('Ollama running but no models installed. Run: ollama pull qwen2.5:7b');
           }
         }
-      } catch (ollamaError) {
-        logger.warn('Ollama not available (install from ollama.ai for free local AI)');
+      } catch (e) {
+        logger.warn('Ollama check failed');
       }
 
-      // Priority 2: Crypto.com AI Agent SDK (native to ecosystem)
-      if (cryptocomKey) {
+      // Try Crypto.com SDK with Ollama as backend
+      if (cryptocomKey && ollamaRunning) {
         try {
           // Use Function constructor to avoid Next.js static analysis
           const dynamicImport = new Function('modulePath', 'return import(modulePath)');
           const module = await dynamicImport('@crypto.com/ai-agent-client').catch(() => null);
           
           if (module && module.createClient) {
+            // Configure Crypto.com SDK to use Ollama's OpenAI-compatible endpoint
             const client = module.createClient({
-              apiKey: cryptocomKey,
+              openAI: {
+                apiKey: 'ollama-local', // Ollama doesn't need real key
+                model: ollamaModel,
+                baseURL: ollamaOpenAIUrl, // Point to Ollama's OpenAI-compatible API
+              },
+              chainId: 240, // Cronos zkEVM Testnet
             } as any);
-            // Verify the client has the expected interface
-            if (client && client.chat && client.chat.completions) {
+            
+            if (client) {
               this.aiClient = client;
-              this.activeProvider = 'cryptocom';
-              logger.info('✅ Crypto.com AI Agent SDK initialized - REAL AI ENABLED');
+              this.ollamaAvailable = true; // Mark Ollama as available too
+              this.activeProvider = 'cryptocom-ollama';
+              logger.info('✅ Crypto.com AI SDK + Ollama/Qwen initialized - HACKATHON + LOCAL AI');
+              logger.info(`   Using model: ${ollamaModel} via Ollama OpenAI-compatible API`);
               return;
             }
           }
         } catch (sdkError) {
-          logger.warn('Crypto.com AI SDK not installed (optional) - trying alternatives');
+          logger.warn('Crypto.com AI SDK + Ollama integration failed - trying alternatives');
+        }
+      }
+
+      // PRIORITY 1B: Crypto.com AI SDK with OpenAI (if Ollama not available)
+      if (cryptocomKey && openaiKey) {
+        try {
+          const dynamicImport = new Function('modulePath', 'return import(modulePath)');
+          const module = await dynamicImport('@crypto.com/ai-agent-client').catch(() => null);
+          
+          if (module && module.createClient) {
+            const client = module.createClient({
+              openAI: {
+                apiKey: openaiKey,
+                model: 'gpt-4o',
+              },
+              chainId: 240, // Cronos zkEVM Testnet
+            } as any);
+            
+            if (client) {
+              this.aiClient = client;
+              this.activeProvider = 'cryptocom-openai';
+              logger.info('✅ Crypto.com AI SDK + OpenAI initialized - HACKATHON MODE');
+              return;
+            }
+          }
+        } catch (sdkError) {
+          logger.warn('Crypto.com AI SDK + OpenAI failed - trying alternatives');
+        }
+      }
+
+      // PRIORITY 2: Ollama standalone (if Crypto.com SDK not available)
+      if (ollamaRunning) {
+        this.ollamaAvailable = true;
+        this.activeProvider = 'ollama';
+        logger.info('✅ Using Ollama/Qwen standalone as AI provider');
+        return;
+      }
+      
+      // Check Ollama again if we didn't check before
+      if (!ollamaRunning) {
+        try {
+          const ollamaCheck = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(3000),
+          }).catch(() => null);
+          
+          if (ollamaCheck && ollamaCheck.ok) {
+            const models = await ollamaCheck.json();
+            if (models.models && models.models.length > 0) {
+              this.ollamaAvailable = true;
+              this.activeProvider = 'ollama';
+              logger.info('✅ Ollama detected:', models.models.map((m: any) => m.name).join(', '));
+              return;
+            }
+          }
+        } catch (ollamaError) {
+          logger.warn('Ollama not available');
         }
       }
 
@@ -790,6 +856,99 @@ class LLMProvider {
    */
   getHistory(conversationId: string = 'default'): ChatMessage[] {
     return this.conversationHistory.get(conversationId) || [];
+  }
+
+  /**
+   * Direct AI call for agents - bypasses portfolio context and action parsing
+   * Use this for agent-based analysis that needs clean, focused responses
+   */
+  async generateDirectResponse(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
+    await this.waitForInit();
+    
+    if (!this.ollamaAvailable && !this.openAIClient && !this.anthropicClient) {
+      throw new Error('No AI provider available');
+    }
+
+    const model = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+    
+    const messages = [
+      {
+        role: 'system',
+        content: systemPrompt || 'You are an expert AI assistant. Be concise and direct in your responses.',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      }
+    ];
+
+    // Use Ollama if available (preferred - free and local)
+    if (this.ollamaAvailable) {
+      try {
+        const response = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: false,
+            options: {
+              temperature: 0.5, // Lower temperature for more focused responses
+              num_predict: 500,
+            },
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama returned ${response.status}`);
+        }
+
+        const result = await response.json();
+        return {
+          content: result.message?.content || '',
+          tokensUsed: result.eval_count || 0,
+          model: `ollama-${model}`,
+          confidence: 0.88,
+        };
+      } catch (error) {
+        logger.error('Direct Ollama call failed:', error);
+        throw error;
+      }
+    }
+
+    // Fallback to OpenAI or Anthropic
+    if (this.openAIClient) {
+      const result = await this.openAIClient.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: messages.map(m => ({ role: m.role as any, content: m.content })),
+        temperature: 0.5,
+        max_tokens: 500,
+      });
+      return {
+        content: result.choices[0].message.content || '',
+        tokensUsed: result.usage?.total_tokens,
+        model: 'gpt-4o-mini-direct',
+        confidence: 0.90,
+      };
+    }
+
+    if (this.anthropicClient) {
+      const result = await this.anthropicClient.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 500,
+        system: messages[0].content,
+        messages: [{ role: 'user', content: messages[1].content }],
+      });
+      return {
+        content: result.content[0]?.type === 'text' ? result.content[0].text : '',
+        tokensUsed: result.usage?.input_tokens + result.usage?.output_tokens,
+        model: 'claude-3-haiku-direct',
+        confidence: 0.92,
+      };
+    }
+
+    throw new Error('No AI provider available for direct call');
   }
 }
 
