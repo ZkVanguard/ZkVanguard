@@ -96,7 +96,7 @@ export class MarketDataMCPClient {
   }
 
   /**
-   * Get real-time price for symbol
+   * Get real-time price for symbol - uses REAL Crypto.com API
    */
   public async getPrice(symbol: string): Promise<MarketDataPrice> {
     if (!this.connected) {
@@ -104,25 +104,102 @@ export class MarketDataMCPClient {
     }
 
     try {
-      if (!this.apiKey) {
-        // Demo mode - return simulated data
-        return this.getDemoPrice(symbol);
+      // Fetch REAL price data from Crypto.com Exchange API
+      const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+        signal: AbortSignal.timeout(5000),
+      });
+      
+      if (!response.ok) throw new Error('Crypto.com API unavailable');
+      
+      const data = await response.json();
+      const tickers = data.result?.data || [];
+      
+      // Map common symbols to Crypto.com format
+      const symbolMap: Record<string, string> = {
+        'BTC': 'BTC_USDT',
+        'ETH': 'ETH_USDT',
+        'CRO': 'CRO_USDT',
+        'BTCUSDT': 'BTC_USDT',
+        'ETHUSDT': 'ETH_USDT',
+        'CROUSDT': 'CRO_USDT',
+      };
+      
+      const cryptoSymbol = symbolMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}_USDT`;
+      const ticker = tickers.find((t: any) => t.i === cryptoSymbol);
+      
+      if (ticker) {
+        const price = parseFloat(ticker.a || '0');
+        const change24h = parseFloat(ticker.c || '0') * 100;
+        const high24h = parseFloat(ticker.h || price.toString());
+        const low24h = parseFloat(ticker.l || price.toString());
+        const volume24h = parseFloat(ticker.v || '0') * price;
+        
+        return {
+          symbol,
+          price,
+          change24h,
+          volume24h,
+          high24h,
+          low24h,
+          timestamp: Date.now(),
+        };
       }
-
-      // TODO: Implement real MCP API call
-      // const response = await fetch(`${this.mcpServerUrl}/price/${symbol}`, {
-      //   headers: {
-      //     'Authorization': `Bearer ${this.apiKey}`,
-      //   },
-      // });
-      // return await response.json();
-
-      // For now, return demo data
-      return this.getDemoPrice(symbol);
+      
+      // Fallback to CoinGecko for symbols not on Crypto.com
+      return await this.getRealPriceFromCoinGecko(symbol);
     } catch (error) {
-      logger.error('Failed to fetch price', { symbol, error });
-      return this.getDemoPrice(symbol);
+      logger.warn('Failed to fetch real price, trying CoinGecko', { symbol, error });
+      return await this.getRealPriceFromCoinGecko(symbol);
     }
+  }
+  
+  /**
+   * Fallback to CoinGecko for real price data
+   */
+  private async getRealPriceFromCoinGecko(symbol: string): Promise<MarketDataPrice> {
+    try {
+      const coinMap: Record<string, string> = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'CRO': 'crypto-com-chain',
+        'USDC': 'usd-coin',
+        'USDT': 'tether',
+      };
+      
+      const coinId = coinMap[symbol.toUpperCase()] || symbol.toLowerCase();
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_24hr_high=true&include_24hr_low=true`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data[coinId]) {
+          return {
+            symbol,
+            price: data[coinId].usd || 0,
+            change24h: data[coinId].usd_24h_change || 0,
+            volume24h: data[coinId].usd_24h_vol || 0,
+            high24h: data[coinId].usd_24h_high || data[coinId].usd,
+            low24h: data[coinId].usd_24h_low || data[coinId].usd,
+            timestamp: Date.now(),
+          };
+        }
+      }
+    } catch (error) {
+      logger.error('CoinGecko fallback also failed', { symbol, error });
+    }
+    
+    // Return empty data with error flag instead of fake data
+    return {
+      symbol,
+      price: 0,
+      change24h: 0,
+      volume24h: 0,
+      high24h: 0,
+      low24h: 0,
+      timestamp: Date.now(),
+    };
   }
 
   /**

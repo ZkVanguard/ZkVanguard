@@ -143,24 +143,83 @@ export function calculateTotalPnL(positions: Position[]): number {
 }
 
 /**
- * Get market data for asset
+ * Get market data for asset from Crypto.com API
  */
 export async function getMarketData(asset: string) {
-  // In production, fetch from Moonlander API
-  const mockPrices: Record<string, number> = {
-    'BTC-PERP': 41500,
-    'ETH-PERP': 2250,
-    'CRO-PERP': 0.082,
-    'MATIC-PERP': 0.98,
-  };
-
-  return {
-    asset,
-    price: mockPrices[asset] || 0,
-    change24h: Math.random() * 10 - 5, // -5% to +5%
-    volume24h: Math.random() * 1000000,
-    openInterest: Math.random() * 10000000,
-  };
+  try {
+    // Fetch REAL market data from Crypto.com Exchange API
+    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+      signal: AbortSignal.timeout(5000),
+    });
+    
+    if (!response.ok) throw new Error('Crypto.com API unavailable');
+    
+    const data = await response.json();
+    const tickers = data.result?.data || [];
+    
+    // Map asset to Crypto.com ticker symbol
+    const tickerMap: Record<string, string> = {
+      'BTC-PERP': 'BTC_USDT',
+      'ETH-PERP': 'ETH_USDT',
+      'CRO-PERP': 'CRO_USDT',
+      'MATIC-PERP': 'MATIC_USDT',
+    };
+    
+    const cryptoAsset = tickerMap[asset] || asset.replace('-PERP', '_USDT');
+    const ticker = tickers.find((t: any) => t.i === cryptoAsset);
+    
+    if (ticker) {
+      const price = parseFloat(ticker.a || '0');
+      const change24h = parseFloat(ticker.c || '0') * 100;
+      const volume24h = parseFloat(ticker.v || '0') * price;
+      
+      return {
+        asset,
+        price,
+        change24h,
+        volume24h,
+        openInterest: volume24h * 0.1, // Estimated OI
+      };
+    }
+    
+    throw new Error(`Ticker not found for ${asset}`);
+  } catch (error) {
+    logger.warn('Failed to fetch real market data, using fallback', { asset, error });
+    // Fallback to CoinGecko data
+    try {
+      const cgResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,crypto-com-chain&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true', {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (cgResponse.ok) {
+        const cgData = await cgResponse.json();
+        const coinMap: Record<string, string> = {
+          'BTC-PERP': 'bitcoin',
+          'ETH-PERP': 'ethereum',
+          'CRO-PERP': 'crypto-com-chain',
+        };
+        const coin = coinMap[asset];
+        if (coin && cgData[coin]) {
+          return {
+            asset,
+            price: cgData[coin].usd,
+            change24h: cgData[coin].usd_24h_change || 0,
+            volume24h: cgData[coin].usd_24h_vol || 0,
+            openInterest: (cgData[coin].usd_24h_vol || 0) * 0.1,
+          };
+        }
+      }
+    } catch {}
+    
+    // Return error indicator instead of fake data
+    return {
+      asset,
+      price: 0,
+      change24h: 0,
+      volume24h: 0,
+      openInterest: 0,
+      error: 'Unable to fetch real market data',
+    };
+  }
 }
 
 /**
