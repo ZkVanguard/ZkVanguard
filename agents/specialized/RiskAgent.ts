@@ -131,34 +131,96 @@ export class RiskAgent extends BaseAgent {
   }
 
   /**
-   * Analyze portfolio risk
+   * Analyze portfolio risk with AI-powered reasoning
    */
   private async analyzeRisk(payload: unknown): Promise<RiskAnalysis> {
-    const params = payload as { portfolioId: number };
-    const { portfolioId } = params;
+    const params = payload as { 
+      portfolioId?: number;
+      address?: string;
+      portfolioData?: {
+        totalValue: number;
+        tokens: Array<{ symbol: string; balance: number; usdValue: number }>;
+      };
+    };
+    
+    const portfolioId = params.portfolioId || parseInt(params.address?.split('-')[1] || '0');
+    const portfolioData = params.portfolioData;
 
-    logger.info('Analyzing portfolio risk', {
+    logger.info('Analyzing portfolio risk with AI', {
       agentId: this.id,
       portfolioId,
+      hasData: !!portfolioData,
     });
 
-    // Simulate risk analysis
-    // In production, this would:
-    // 1. Fetch portfolio composition from RWAManager contract
-    // 2. Get real-time prices from MCP Server
-    // 3. Calculate VaR (Value at Risk)
-    // 4. Analyze correlations
-    // 5. Get market sentiment from Delphi
-
+    // 1. Calculate mathematical metrics
     const volatility = await this.calculateVolatilityInternal(portfolioId);
     const exposures = await this.calculateExposures(portfolioId);
     const sentiment = await this.assessMarketSentimentInternal();
 
-    // Calculate total risk score (0-100)
-    const totalRisk = Math.min(
+    // Calculate base risk score (0-100)
+    const baseRiskScore = Math.min(
       100,
       volatility * 50 + exposures.reduce((sum, exp) => sum + exp.contribution, 0)
     );
+
+    // 2. Use AI to analyze risk and generate intelligent recommendations
+    let totalRisk = baseRiskScore;
+    let aiRecommendations: string[] = [];
+    
+    try {
+      const { llmProvider } = await import('@/lib/ai/llm-provider');
+      
+      const portfolioSummary = portfolioData?.tokens
+        ? portfolioData.tokens
+            .map(t => `${t.symbol}: $${t.usdValue.toFixed(2)} (${((t.usdValue / portfolioData.totalValue) * 100).toFixed(1)}%)`)
+            .join(', ')
+        : 'Portfolio data unavailable';
+
+      const portfolioValue = portfolioData?.totalValue || 0;
+
+      const systemPrompt = `You are a DeFi risk analyst. Provide concise, actionable risk analysis.`;
+      
+      const aiPrompt = `Analyze portfolio risk:
+Value: $${portfolioValue.toFixed(2)}
+Assets: ${portfolioSummary}
+Volatility: ${(volatility * 100).toFixed(1)}%
+Sentiment: ${sentiment}
+Base Risk: ${baseRiskScore.toFixed(1)}/100
+
+Respond EXACTLY like this:
+RISK_SCORE: [0-100]
+REC1: [first recommendation]
+REC2: [second recommendation]
+REC3: [third recommendation]`;
+
+      const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, systemPrompt);
+      
+      // Extract AI recommendations
+      const lines = aiResponse.content.split('\n').filter(l => l.trim());
+      
+      // Parse recommendations
+      for (const line of lines) {
+        const recMatch = line.match(/^REC\d*:?\s*(.+)/i);
+        if (recMatch && recMatch[1].length > 5) {
+          aiRecommendations.push(`🤖 ${recMatch[1].trim()}`);
+        }
+      }
+      
+      // Try to extract adjusted risk score
+      const scoreMatch = aiResponse.content.match(/RISK_SCORE:?\s*(\d+)/i);
+      if (scoreMatch) {
+        const aiRiskScore = parseInt(scoreMatch[1]);
+        if (aiRiskScore >= 0 && aiRiskScore <= 100) {
+          totalRisk = Math.round((baseRiskScore + aiRiskScore) / 2);
+          logger.info('🤖 AI adjusted risk score', { base: baseRiskScore, ai: aiRiskScore, final: totalRisk });
+        }
+      }
+      
+      logger.info('🤖 AI risk analysis completed', { model: aiResponse.model, recommendations: aiRecommendations.length });
+    } catch (error) {
+      logger.warn('AI risk analysis failed, using rule-based fallback', { error });
+      aiRecommendations = this.generateRecommendations(totalRisk, volatility, sentiment, exposures);
+    }
 
     const analysis: RiskAnalysis = {
       portfolioId,
@@ -166,7 +228,7 @@ export class RiskAgent extends BaseAgent {
       totalRisk,
       volatility,
       exposures,
-      recommendations: this.generateRecommendations(totalRisk, volatility, sentiment, exposures),
+      recommendations: aiRecommendations.length > 0 ? aiRecommendations : this.generateRecommendations(totalRisk, volatility, sentiment, exposures),
       marketSentiment: sentiment,
     };
 
@@ -175,6 +237,7 @@ export class RiskAgent extends BaseAgent {
       portfolioId,
       totalRisk,
       volatility,
+      aiEnhanced: aiRecommendations.length > 0,
     });
 
     // Generate ZK proof for risk calculation
