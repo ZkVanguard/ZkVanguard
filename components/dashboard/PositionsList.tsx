@@ -7,7 +7,7 @@ import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import PortfolioDetailModal from './PortfolioDetailModal';
-import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
 
 interface AssetBalance {
@@ -156,6 +156,19 @@ export function PositionsList({ address }: { address: string }) {
         return asset.slice(0, 6);
       });
 
+      // FETCH REAL PREDICTIONS from Polymarket/Delphi
+      console.log('🔮 Fetching real prediction market data for assets:', portfolioAssets);
+      let predictions: PredictionMarket[] = [];
+      try {
+        predictions = await DelphiMarketService.getRelevantMarkets(portfolioAssets);
+        console.log(`✅ Got ${predictions.length} predictions from Polymarket/Delphi:`, 
+          predictions.slice(0, 3).map(p => ({ q: p.question.slice(0, 50), prob: p.probability, rec: p.recommendation }))
+        );
+      } catch (predError) {
+        console.warn('⚠️ Failed to fetch predictions:', predError);
+        predictions = [];
+      }
+
       // Calculate REAL metrics from positions context
       const realMetrics = derived ? {
         volatility: derived.weightedVolatility,
@@ -184,6 +197,14 @@ export function PositionsList({ address }: { address: string }) {
         }
       }
 
+      // Filter predictions that recommend HEDGE or have HIGH impact
+      const highRiskPredictions = predictions.filter(
+        p => p.recommendation === 'HEDGE' || (p.impact === 'HIGH' && p.probability > 60)
+      );
+      console.log(`🚨 High risk predictions: ${highRiskPredictions.length}`, 
+        highRiskPredictions.map(p => ({ q: p.question.slice(0, 40), prob: p.probability }))
+      );
+
       const response = await fetch('/api/agents/portfolio-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,14 +219,16 @@ export function PositionsList({ address }: { address: string }) {
             riskScore,
             volatility: realMetrics?.volatility || 0.3,
             sharpeRatio: realMetrics?.sharpeRatio || 0,
-            hedgeSignals,
+            hedgeSignals: hedgeSignals + highRiskPredictions.length, // Include prediction signals
             totalValue: positionsData?.totalValue || 0,
           },
-          predictions: (portfolio.predictions || []).map(p => ({
+          // Pass REAL predictions from Polymarket/Delphi
+          predictions: predictions.map(p => ({
             question: p.question,
             probability: p.probability,
             impact: p.impact,
             recommendation: p.recommendation,
+            source: p.source || 'polymarket',
           })),
         }),
       });
