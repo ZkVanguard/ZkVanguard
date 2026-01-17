@@ -208,14 +208,35 @@ export class HedgingAgent extends BaseAgent {
       const delphiRecommendHedge = delphiInsights.overallRisk === 'HIGH' || highRiskPredictions.length >= 2;
       const shouldHedge = (volatility > 0.3 || delphiRecommendHedge) && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
       
-      // Build reason with Delphi insights
+      // Build reason with Delphi insights and AI analysis
       let reason = shouldHedge
         ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
         : 'Volatility acceptable, no immediate hedge needed';
       
-      if (delphiRecommendHedge) {
+      // 🤖 NEW: Use AI to enhance hedge reasoning
+      try {
+        const { llmProvider } = await import('@/lib/ai/llm-provider');
+        
+        const predictionsSummary = highRiskPredictions.length > 0
+          ? highRiskPredictions.map(p => `${p.question} (${p.probability}%)`).join('; ')
+          : 'No high-risk signals';
+
+        const aiPrompt = `You are a DeFi hedging strategist. Analyze this hedge opportunity:\n\nAsset: ${assetSymbol}\nNotional Value: $${notionalValue.toFixed(2)}\nCurrent Price: $${priceData.price}\nVolatility: ${(volatility * 100).toFixed(1)}%\nHedge Ratio: ${(hedgeRatio * 100).toFixed(1)}%\nFunding Rate: ${(avgFundingRate * 100).toFixed(4)}%\nHedge Effectiveness: ${hedgeEffectiveness.toFixed(1)}%\nDelphi Signals: ${predictionsSummary}\n\nShould hedge: ${shouldHedge ? 'YES' : 'NO'}\n\nProvide:\n1. One-sentence hedge recommendation\n2. Key risk factor to monitor\n\nBe concise and actionable.`;
+
+        const aiResponse = await llmProvider.generateResponse(aiPrompt, `hedge-${portfolioId}-${assetSymbol}`);
+        const aiLines = aiResponse.content.split('\\n').filter(l => l.trim());
+        if (aiLines.length > 0) {
+          reason = `🤖 ${aiLines[0]} | ${reason}`;
+        }
+        
+        logger.info('🤖 AI hedge analysis completed', { model: aiResponse.model });
+      } catch (error) {
+        logger.warn('AI hedge analysis failed, using rule-based reasoning', { error });
+      }
+      
+      if (delphiRecommendHedge && highRiskPredictions.length > 0) {
         const topPrediction = highRiskPredictions[0];
-        reason = `🔮 Delphi predicts ${topPrediction.probability}% chance: "${topPrediction.question}". ${reason}`;
+        reason = `🔮 Delphi: ${topPrediction.probability}% risk - "${topPrediction.question}". ${reason}`;
       }
       
       const analysis: HedgeAnalysis = {
