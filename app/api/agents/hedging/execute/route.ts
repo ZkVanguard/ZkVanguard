@@ -1,0 +1,256 @@
+/**
+ * Execute Hedge Position on Moonlander
+ * API endpoint for opening SHORT positions on Moonlander perpetuals
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { ethers } from 'ethers';
+import { MoonlanderClient } from '@/integrations/moonlander/MoonlanderClient';
+import { logger } from '@/lib/utils/logger';
+import { createHedge } from '@/lib/db/hedges';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export interface HedgeExecutionRequest {
+  portfolioId: number;
+  asset: string; // e.g., "BTC", "ETH", "CRO"
+  side: 'LONG' | 'SHORT';
+  notionalValue: number; // USD value to hedge
+  leverage?: number; // 1-100x
+  stopLoss?: number; // Price level
+  takeProfit?: number; // Price level
+  reason?: string;
+}
+
+export interface HedgeExecutionResponse {
+  success: boolean;
+  orderId?: string;
+  market: string;
+  side: 'LONG' | 'SHORT';
+  size: string;
+  entryPrice?: string;
+  stopLoss?: string;
+  takeProfit?: string;
+  leverage: number;
+  estimatedLiquidationPrice?: string;
+  txHash?: string;
+  error?: string;
+  simulationMode: boolean;
+}
+
+/**
+ * POST /api/agents/hedging/execute
+ * Execute a hedge position on Moonlander perpetuals (Cronos testnet)
+ */
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+
+  try {
+    const body: HedgeExecutionRequest = await request.json();
+    const { asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason } = body;
+
+    logger.info('🛡️ Executing hedge on Moonlander', {
+      asset,
+      side,
+      notionalValue,
+      leverage,
+      reason,
+    });
+
+    // Validate inputs
+    if (!asset || !side || !notionalValue) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: asset, side, notionalValue' },
+        { status: 400 }
+      );
+    }
+
+    if (leverage < 1 || leverage > 100) {
+      return NextResponse.json(
+        { success: false, error: 'Leverage must be between 1 and 100' },
+        { status: 400 }
+      );
+    }
+
+    // Initialize Moonlander client for Cronos Testnet
+    const provider = new ethers.JsonRpcProvider(
+      process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
+    );
+
+    // Use wallet for signing (in production, use secure key management)
+    const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
+    
+    if (!privateKey) {
+      logger.warn('⚠️ No private key configured - running in simulation mode');
+      
+      // Get REAL current price from Crypto.com Exchange API
+      let baseAsset = asset.toUpperCase().replace('-PERP', '');
+      
+      // Map wrapped tokens to their base equivalents
+      if (baseAsset === 'WBTC') baseAsset = 'BTC';  // WBTC = Wrapped BTC (1:1)
+      if (baseAsset === 'WETH') baseAsset = 'ETH';  // WETH = Wrapped ETH (1:1)
+      
+      let mockPrice = 1000; // Fallback
+      
+      try {
+        const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
+        const tickerData = await tickerResponse.json();
+        const ticker = tickerData.result.data.find((t: any) => t.i === `${baseAsset}_USDT`);
+        
+        if (ticker) {
+          mockPrice = parseFloat(ticker.a); // Ask price (current price)
+          logger.info(`📊 Using real ${baseAsset} price: $${mockPrice}`);
+        } else {
+          logger.warn(`⚠️ Ticker not found for ${baseAsset}, using fallback price`);
+        }
+      } catch (priceError) {
+        logger.error('❌ Failed to fetch real price, using fallback', { error: priceError });
+      }
+      
+      // Return simulated hedge execution with REAL price
+      const market = `${asset.toUpperCase()}-USD-PERP`;
+      const size = ((notionalValue * leverage) / mockPrice).toFixed(4);
+      const liquidationPrice = side === 'SHORT' 
+        ? mockPrice * (1 + 0.8 / leverage) 
+        : mockPrice * (1 - 0.8 / leverage);
+
+      const orderId = `sim-hedge-${Date.now()}`;
+      
+      // Save to PostgreSQL (even in simulation mode)
+      try {
+        console.log('💾 Attempting to save hedge to database:', {
+          orderId,
+          portfolioId: body.portfolioId,
+          asset: asset.toUpperCase(),
+          market,
+          size,
+          notionalValue,
+        });
+        
+        await createHedge({
+          orderId,
+          portfolioId: body.portfolioId,
+          asset: asset.toUpperCase(),
+          market,
+          side,
+          size: parseFloat(size),
+          notionalValue,
+          leverage,
+          entryPrice: mockPrice,
+          liquidationPrice,
+          stopLoss,
+          takeProfit,
+          simulationMode: true,
+          reason,
+          predictionMarket: reason,
+        });
+        
+        logger.info('💾 Simulated hedge saved to database', { orderId });
+        console.log('✅ Hedge saved successfully to database');
+      } catch (dbError) {
+        console.error('❌ Failed to save hedge to database:', dbError);
+        logger.error('❌ Failed to save hedge to database', { error: dbError });
+        // Continue anyway - don't fail the request if DB is down
+      }
+
+      return NextResponse.json({
+        success: true,
+        orderId,
+        market,
+        side,
+        size,
+        entryPrice: mockPrice.toString(),
+        stopLoss: stopLoss?.toString(),
+        takeProfit: takeProfit?.toString(),
+        leverage,
+        estimatedLiquidationPrice: liquidationPrice.toFixed(2),
+        simulationMode: true,
+        message: '✅ SIMULATION: Hedge executed successfully (add MOONLANDER_PRIVATE_KEY for live trading)',
+      } satisfies HedgeExecutionResponse);
+    }
+
+    //=================================================================================
+    // REAL MOONLANDER EXECUTION PATH (only runs if MOONLANDER_PRIVATE_KEY is set)
+    //=================================================================================
+    
+    const signer = new ethers.Wallet(privateKey, provider);
+    const moonlander = new MoonlanderClient(provider, signer);
+    await moonlander.initialize();
+
+    // Map asset to Moonlander market format
+    const market = `${asset.toUpperCase()}-USD-PERP`;
+
+    // Execute the hedge position on Moonlander
+    const order = await moonlander.openHedge({
+      market,
+      side,
+      notionalValue: notionalValue.toString(),
+      leverage,
+      stopLoss: stopLoss?.toString(),
+      takeProfit: takeProfit?.toString(),
+    });
+
+    // Get position details
+    const position = await moonlander.getPosition(market);
+
+    // Save to PostgreSQL
+    try {
+      await createHedge({
+        orderId: order.orderId,
+        portfolioId: body.portfolioId,
+        asset: asset.toUpperCase(),
+        market,
+        side,
+        size: parseFloat(order.size),
+        notionalValue,
+        leverage,
+        entryPrice: parseFloat(order.avgFillPrice || '0'),
+        liquidationPrice: position?.liquidationPrice ? parseFloat(position.liquidationPrice) : undefined,
+        stopLoss,
+        takeProfit,
+        simulationMode: false,
+        reason,
+        predictionMarket: reason,
+      });
+      logger.info('💾 Real hedge saved to database', { orderId: order.orderId });
+    } catch (dbError) {
+      logger.error('❌ Failed to save hedge to database', { error: dbError });
+      // Continue anyway - hedge is already executed
+    }
+
+    logger.info('✅ Hedge executed successfully', {
+      orderId: order.orderId,
+      market,
+      size: order.size,
+      avgPrice: order.avgFillPrice,
+      executionTime: Date.now() - startTime,
+    });
+
+    return NextResponse.json({
+      success: true,
+      orderId: order.orderId,
+      market,
+      side,
+      size: order.size,
+      entryPrice: order.avgFillPrice,
+      stopLoss: stopLoss?.toString(),
+      takeProfit: takeProfit?.toString(),
+      leverage,
+      estimatedLiquidationPrice: position?.liquidationPrice,
+      simulationMode: false,
+    } satisfies HedgeExecutionResponse);
+
+  } catch (error) {
+    logger.error('❌ Hedge execution failed', { error });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during hedge execution',
+        simulationMode: true,
+      } satisfies Partial<HedgeExecutionResponse>,
+      { status: 500 }
+    );
+  }
+}
