@@ -5,6 +5,7 @@ import { X, Loader2, CheckCircle, AlertCircle, ArrowDown, RefreshCw, ArrowDownUp
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
+import { getVVSFinanceService } from '@/lib/services/VVSFinanceService';
 
 // Using VVS Finance SDK via API route
 
@@ -30,6 +31,9 @@ export function SwapModal({
 }: SwapModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  
+  // Initialize VVS Finance service
+  const dexService = getVVSFinanceService(25); // Use mainnet (25) for quotes
   
   // Supported tokens for testnet
   const supportedTokens = {
@@ -177,8 +181,10 @@ export function SwapModal({
 
   // Get token decimals
   const getTokenDecimals = (symbol: string): number => {
-    if (symbol === 'devUSDC' || symbol === 'USDC' || symbol === 'USDT') return 6;
-    return 18; // Default for WCRO, CRO, etc.
+    const normalized = symbol.toUpperCase();
+    if (normalized === 'DEVUSDC' || normalized === 'USDC' || normalized === 'USDT') return 6;
+    if (normalized === 'BTC' || normalized === 'WBTC') return 8;
+    return 18; // Default for WCRO, CRO, ETH, etc.
   };
 
   // Approval transaction
@@ -220,6 +226,8 @@ export function SwapModal({
         const decimals = getTokenDecimals(tokenIn);
         const amountInWei = parseUnits(amountIn, decimals);
 
+        console.log('🔄 Fetching quote:', { tokenIn, tokenOut, amountIn, decimals, amountInWei: amountInWei.toString() });
+
         const quote = await dexService.getSwapQuote({
           tokenIn,
           tokenOut,
@@ -228,7 +236,17 @@ export function SwapModal({
         });
 
         const outDecimals = getTokenDecimals(tokenOut);
-        setAmountOut(formatUnits(quote.amountOut, outDecimals));
+        const formattedOut = formatUnits(quote.amountOut, outDecimals);
+        
+        console.log('✅ Quote received:', { 
+          amountOut: quote.amountOut.toString(), 
+          outDecimals, 
+          formattedOut,
+          priceImpact: quote.priceImpact,
+          route: quote.route 
+        });
+        
+        setAmountOut(formattedOut);
         setPriceImpact(quote.priceImpact);
         setRoute(quote.route);
       } catch (error) {
