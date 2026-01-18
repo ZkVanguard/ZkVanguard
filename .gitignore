@@ -1,35 +1,73 @@
+# ===========================================
+# CHRONOS-VANGUARD PROJECT .GITIGNORE
+# Next.js + Hardhat + Python ZK + Bun Stack
+# ===========================================
+
+# -------------------------------------------
 # Dependencies
+# -------------------------------------------
 node_modules/
 **/node_modules/
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
-# Demo scripts (local only)
-QUICK_DEMO_SCRIPT.md
+# -------------------------------------------
+# Package Manager Lock Files (using bun.lock)
+# -------------------------------------------
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
+# -------------------------------------------
+# Bun
+# -------------------------------------------
+.bun/
+*.bunx
+
+# -------------------------------------------
 # Next.js
+# -------------------------------------------
 .next/
 out/
 next-env.d.ts
+.swc/
 
-# Build outputs
+# -------------------------------------------
+# Build Outputs
+# -------------------------------------------
 dist/
 build/
+*.tsbuildinfo
+build-error.txt
+build-output.txt
+
+# -------------------------------------------
+# Hardhat / Solidity
+# -------------------------------------------
 artifacts/
 cache/
 typechain-types/
-build-error.txt
-build-output.txt
-*.tsbuildinfo
-
-# Hardhat
 .hardhat/
 coverage/
 coverage.json
+*.sol.js
 
-# Environment files (CRITICAL - Contains private keys and API keys)
+# -------------------------------------------
+# OpenZeppelin
+# -------------------------------------------
+.openzeppelin/
+
+# -------------------------------------------
+# Deployment Records (sensitive - regenerate per deploy)
+# -------------------------------------------
+deployments/
+
+# -------------------------------------------
+# Environment Files (CRITICAL - Contains private keys & API keys)
+# -------------------------------------------
 .env
-.env*.local
+.env.*
 .env.local
 .env.development
 .env.development.local
@@ -38,10 +76,11 @@ coverage.json
 .env.production
 .env.production.local
 .env.prod.full
-*.env
-*.env.*
+!.env.example
 
+# -------------------------------------------
 # Logs
+# -------------------------------------------
 logs/
 *.log
 npm-debug.log*
@@ -49,90 +88,180 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+bun-debug.log*
+
+# -------------------------------------------
+# Testing
+# -------------------------------------------
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+jest-cache/
+.jest/
 
 # Temporary test scripts
 test-*.js
+!test-utils.js
 test-chat-*.js
 test-zk-*.js
 test-auto-*.js
 
-# Session documentation (temporary)
-AI_CHAT_TEST_REPORT.md
-PROJECT_FIX_SUMMARY.md
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-*.pem
-Thumbs.db
-
-# Testing
-.nyc_output/
-test-results/
-playwright-report/
-coverage/
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-
-# ZK artifacts
+# -------------------------------------------
+# ZK Proof Artifacts
+# -------------------------------------------
 zk/build/
 zk/proving-key/
 zk/verification-key/
+zkp/__pycache__/
+zkp/**/__pycache__/
+zkp/proofs/*.json
+!zkp/proofs/.gitkeep
 *.zkey
 *.wasm
+*.ptau
+*.r1cs
+*.sym
+*.wtns
 
+# -------------------------------------------
+# Python
+# -------------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# -------------------------------------------
+# IDE / Editors
+# -------------------------------------------
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+*.sublime-workspace
+*.sublime-project
+
+# -------------------------------------------
+# OS Generated
+# -------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# -------------------------------------------
+# Secrets / Keys
+# -------------------------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private-keys/
+.secret
+mnemonic.txt
+
+# -------------------------------------------
+# Vercel
+# -------------------------------------------
+.vercel/
+
+# -------------------------------------------
+# Temporary Files
+# -------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.backup
+.cache/
+tmp/
+temp/
+
+# -------------------------------------------
 # Database
+# -------------------------------------------
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
-# Deployment
-deployments/
-.openzeppelin/
+# -------------------------------------------
+# Documentation (temporary/generated - now in docs/)
+# -------------------------------------------
+docs/AI_CHAT_TEST_REPORT.md
+docs/PROJECT_FIX_SUMMARY.md
+docs/QUICK_DEMO_SCRIPT.md
+docs/MOONLANDER_TEST_REPORT.md
 
-# Vercel
-.vercel
-
-# TypeScript
-*.tsbuildinfo
-
-# Secrets
-secrets/
-*.key
-private-keys/
-
-# Package manager lock files (using bun.lock)
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Temporary/Generated files
-*.tmp
-*.temp
-*.docx
-*.pdf
-Logo.jpg
-
-# Large video files (keep locally, don't commit)
+# -------------------------------------------
+# Large Media Files (keep locally, don't commit)
+# -------------------------------------------
 Investors/*.mp4
 *.mp4
+*.mov
+*.avi
+*.mkv
+Logo.jpg
+*.docx
+*.pdf
+!docs/*.pdf
 
-# Bun cache
-~/
-.bun/
-docs/MOONLANDER_TEST_REPORT.md
+# -------------------------------------------
+# Linting / Formatting Cache
+# -------------------------------------------
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# -------------------------------------------
+# Husky
+# -------------------------------------------
+# Note: .husky/ folder should be tracked, but not internal cache
+.husky/_/
+
+# -------------------------------------------
+# Turbo
+# -------------------------------------------
+.turbo/
+
+# -------------------------------------------
+# Storybook
+# -------------------------------------------
+storybook-static/
+
+# -------------------------------------------
+# Sentry
+# -------------------------------------------
+.sentryclirc
+
+# -------------------------------------------
+# Local Scripts
+# -------------------------------------------
+*.local.js
+*.local.ts
+*.local.sh
+*.local.ps1
+
+
