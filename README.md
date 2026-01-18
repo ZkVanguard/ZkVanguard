@@ -87,6 +87,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 
 | Service | Purpose |
 |---------|---------|
+| Crypto.com AI SDK | AI-powered portfolio analysis & natural language |
 | Crypto.com Exchange API | Real-time prices (100 req/s) |
 | Polymarket + Delphi | Prediction market intelligence |
 | VVS Finance SDK | DEX swaps on Cronos |
