@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
@@ -30,6 +31,10 @@ export interface HedgeExecutionRequest {
   reason?: string;
   privateMode?: boolean; // Enable privacy-preserving execution
   privacyLevel?: 'standard' | 'high' | 'maximum'; // Privacy level
+  // Auto-Approval Settings
+  autoApprovalEnabled?: boolean;
+  autoApprovalThreshold?: number;
+  signature?: string; // Manager signature (optional if auto-approved)
 }
 
 export interface HedgeExecutionResponse {
@@ -52,6 +57,8 @@ export interface HedgeExecutionResponse {
   commitmentHash?: string;
   stealthAddress?: string;
   zkProofGenerated?: boolean;
+  // Auto-Approval fields
+  autoApproved?: boolean;
 }
 
 /**
@@ -63,7 +70,25 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: HedgeExecutionRequest = await request.json();
-    const { asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, privateMode = false, privacyLevel = 'standard' } = body;
+    const { 
+      asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, 
+      privateMode = false, privacyLevel = 'standard',
+      autoApprovalEnabled = false, autoApprovalThreshold = 10000, signature 
+    } = body;
+
+    // Check if signature is required
+    const requiresSignature = !autoApprovalEnabled || notionalValue > autoApprovalThreshold;
+    
+    if (requiresSignature && !signature) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Signature required for hedge execution',
+          message: `Hedge value ($${notionalValue.toLocaleString()}) requires manager approval${autoApprovalEnabled ? ` (threshold: $${autoApprovalThreshold.toLocaleString()})` : ''}`
+        },
+        { status: 403 }
+      );
+    }
 
     logger.info('🛡️ Executing hedge on Moonlander', {
       asset: privateMode ? '[PRIVATE]' : asset,
@@ -73,6 +98,7 @@ export async function POST(request: NextRequest) {
       reason,
       privateMode,
       privacyLevel,
+      autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
     });
 
     // Validate inputs
@@ -219,9 +245,10 @@ export async function POST(request: NextRequest) {
         commitmentHash,
         stealthAddress,
         zkProofGenerated,
+        autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
         message: privateMode 
           ? '✅ PRIVATE HEDGE: Commitment stored, details encrypted (unlinkable on-chain)'
-          : '✅ SIMULATION: Hedge executed successfully (add MOONLANDER_PRIVATE_KEY for live trading)',
+          : `✅ SIMULATION: Hedge executed successfully${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''} (add MOONLANDER_PRIVATE_KEY for live trading)`,
       } satisfies HedgeExecutionResponse);
     }
 
@@ -354,6 +381,15 @@ export async function POST(request: NextRequest) {
       leverage,
       txHash: tradeResult.txHash,
       simulationMode: false,
+      privateMode,
+      commitmentHash,
+      stealthAddress,
+      zkProofGenerated,
+      autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
+      message: privateMode 
+        ? '✅ PRIVATE ON-CHAIN: Trade executed with privacy protection'
+        : `✅ ON-CHAIN: Hedge executed successfully${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`,
+    } satisfies HedgeExecutionResponse);
       privateMode,
       commitmentHash,
       stealthAddress,

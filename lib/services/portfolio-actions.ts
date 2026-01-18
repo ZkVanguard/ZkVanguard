@@ -10,6 +10,10 @@ export interface PortfolioAction {
   params: Record<string, any>;
   requiresSignature?: boolean;  // Manager approval required
   signatureMessage?: string;     // Message to sign for approval
+  portfolioSettings?: {         // Portfolio configuration for auto-approval
+    autoApprovalEnabled?: boolean;
+    autoApprovalThreshold?: number;
+  };
 }
 
 export interface ZKProofData {
@@ -29,6 +33,30 @@ export interface ActionResult {
   zkProof?: ZKProofData;
   requiresApproval?: boolean;    // Action needs manager signature
   approvalMessage?: string;       // Message for manager to sign
+}
+
+/**
+ * Check if an action can be auto-approved based on portfolio settings
+ */
+export function checkAutoApproval(
+  action: PortfolioAction,
+  portfolioSettings?: { autoApprovalEnabled?: boolean; autoApprovalThreshold?: number }
+): boolean {
+  // Only hedge and rebalance actions support auto-approval
+  if (!['execute-hedge', 'rebalance'].includes(action.type)) {
+    return false;
+  }
+
+  // Check if auto-approval is enabled
+  if (!portfolioSettings?.autoApprovalEnabled) {
+    return false;
+  }
+
+  // Check if hedge value is within threshold
+  const hedgeValue = action.params?.hedgeValue || action.params?.notionalValue || 0;
+  const threshold = portfolioSettings.autoApprovalThreshold || 10000;
+
+  return hedgeValue > 0 && hedgeValue <= threshold;
 }
 
 /**
@@ -415,12 +443,16 @@ export function parseActionIntent(text: string): PortfolioAction | null {
     };
   }
 
-  // EXECUTE HEDGE (Requires Manager Approval)
+  // EXECUTE HEDGE (Requires Manager Approval unless auto-approved)
   if (lower.match(/execute.*hedge|apply.*hedge|implement.*hedge/)) {
+    // Check if hedge value is provided in the query for auto-approval logic
+    const hedgeValueMatch = lower.match(/\$(\d+[,\d]*)|value[:\s]+(\d+)/i);
+    const hedgeValue = hedgeValueMatch ? parseFloat((hedgeValueMatch[1] || hedgeValueMatch[2]).replace(/,/g, '')) : 0;
+    
     return {
       type: 'execute-hedge',
-      params: {},
-      requiresSignature: true, // CRITICAL: Manager must sign
+      params: { hedgeValue },
+      requiresSignature: true, // Will be checked against auto-approval in execution
       signatureMessage: `Approve hedge execution on portfolio`,
     };
   }
