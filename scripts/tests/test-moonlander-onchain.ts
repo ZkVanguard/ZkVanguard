@@ -276,9 +276,9 @@ async function main() {
       ]
     );
     
-    const calldata = '0x16d48137' + testParams.slice(2);
+    const calldata = '0x85420cc3' + testParams.slice(2);
     log(`   ✅ Encoded calldata length: ${calldata.length} chars`, colors.green);
-    log(`   ✅ Function selector: 0x16d48137`, colors.green);
+    log(`   ✅ Function selector: 0x85420cc3`, colors.green);
     log(`   ✅ Params encoded: ${testParams.length} chars`, colors.green);
     
     results.push({ test: 'Raw Encoding', status: 'pass', message: `${calldata.length} chars` });

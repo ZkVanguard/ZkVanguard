@@ -16,14 +16,14 @@ Moonlander uses a **Diamond proxy pattern** (EIP-2535), which means:
 
 ### Function Selectors
 
-We've analyzed on-chain transactions to identify the actual function selectors:
+Verified function selectors matching the contract ABI:
 
 | Function | Selector | Notes |
 |----------|----------|-------|
-| `openMarketTradeWithPythAndExtraFee` | `0x16d48137` | Opens new position |
+| `openMarketTradeWithPythAndExtraFee` | `0x85420cc3` | Opens new position |
 | `closeTrade` | `0x73b1caa3` | Closes existing position |
 | `updateTradeTpAndSl` | `0x67d22d9b` | Updates TP/SL |
-| `addMargin` | `0x05a24c0f` | Adds margin to position |
+| `addMargin` | `0xfc05c34d` | Adds margin to position |
 
 ### Oracle Fee
 
