@@ -1,484 +1,639 @@
 # 🏗️ ZkVanguard C4 Architecture
 
-A clear, layered view of the system using the C4 model (Context → Containers → Components → Code).
+A comprehensive, C4-compliant architecture document following the [C4 Model](https://c4model.com/) by Simon Brown.
+
+> **C4 Model Levels:**
+> 1. **Context** - System and its external actors
+> 2. **Container** - High-level technical building blocks  
+> 3. **Component** - Logical components within containers
+> 4. **Code** - Implementation details (key classes/files)
 
 ---
 
-## TL;DR – What's Happening
-
-```
-User → Dashboard → AI Agents → Smart Decisions → Blockchain
-```
-
-**In plain English:**
-
-1. **User opens dashboard** → Connects wallet, views portfolio
-2. **Asks AI for help** → "Hedge my BTC exposure" or "What's the risk?"
-3. **5 AI agents collaborate** → Lead routes to Risk/Hedging/Settlement/Reporting
-4. **Agents fetch real data** → Crypto.com prices, Polymarket predictions
-5. **Execute actions** → Swap via VVS, open hedge on Moonlander
-6. **Privacy preserved** → ZK-STARK proofs (521-bit quantum-resistant)
-7. **Gasless transactions** → User pays $0.01 USDC, contract pays CRO gas
-
-**Key innovation:** AI agents + ZK privacy + gasless UX = institutional-grade DeFi for everyone.
-
----
-
-## Level 1: System Context
-
-**What it shows:** ZkVanguard and its external dependencies
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              EXTERNAL WORLD                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                 │
-│   │    User      │    │   Wallet     │    │  Investor    │                 │
-│   │  (Trader)    │    │ (MetaMask)   │    │  (Viewer)    │                 │
-│   └──────┬───────┘    └──────┬───────┘    └──────┬───────┘                 │
-│          │                   │                   │                          │
-│          └───────────────────┼───────────────────┘                          │
-│                              ▼                                              │
-│                    ┌─────────────────────┐                                  │
-│                    │                     │                                  │
-│                    │     ZkVanguard      │                                  │
-│                    │    ═══════════      │                                  │
-│                    │  AI-Powered RWA     │                                  │
-│                    │  Risk Management    │                                  │
-│                    │                     │                                  │
-│                    └──────────┬──────────┘                                  │
-│                               │                                             │
-│          ┌────────────────────┼────────────────────┐                        │
-│          ▼                    ▼                    ▼                        │
-│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐                  │
-│   │ Crypto.com  │     │  Polymarket │     │   Cronos    │                  │
-│   │  Exchange   │     │   + Delphi  │     │ Blockchain  │                  │
-│   │   (Prices)  │     │(Predictions)│     │  (Testnet)  │                  │
-│   └─────────────┘     └─────────────┘     └─────────────┘                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **Top layer (Users):** Three actors - User, Wallet, Investor - all funnel into one entry point
-2. **Center (ZkVanguard):** The platform receives all user requests via a single entry arrow (▼)
-3. **Bottom layer (External Services):** ZkVanguard fans out to 3 external systems via branching arrows:
-   - **Left arrow → Crypto.com:** Fetches real-time prices (read-only, no user auth needed)
-   - **Center arrow → Polymarket/Delphi:** Pulls prediction market data (read-only)
-   - **Right arrow → Cronos:** Reads/writes blockchain state (requires wallet signature)
-
-**Data flow direction:** Top-down for requests, bottom-up for responses. Users never touch external APIs directly - ZkVanguard handles all integrations.
-
-**Key relationships:**
-| Actor | Interaction |
-|-------|-------------|
-| User | Manages portfolios, executes swaps, chats with AI agents |
-| Wallet | Signs transactions, approves USDC for gasless ops |
-| ZkVanguard | Orchestrates risk management with AI + ZK privacy |
-| Crypto.com | Provides real-time prices for 400+ assets |
-| Polymarket/Delphi | Supplies prediction market insights |
-| Cronos | Hosts smart contracts, VVS swaps, hedging positions |
-
----
-
-## Level 2: Container Diagram
-
-**What it shows:** The major deployable units
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                            ZkVanguard System                                │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                        FRONTEND (Next.js)                            │  │
-│  │                        Vercel Deployment                             │  │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐        │  │
-│  │  │ Dashboard │  │  AI Chat  │  │  Swap UI  │  │  ZK Demo  │        │  │
-│  │  │   Page    │  │ Interface │  │   Modal   │  │   Page    │        │  │
-│  │  └───────────┘  └───────────┘  └───────────┘  └───────────┘        │  │
-│  └─────────────────────────────┬───────────────────────────────────────┘  │
-│                                │                                           │
-│                                ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                        API LAYER (Next.js API Routes)                │  │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐        │  │
-│  │  │ /api/chat │  │/api/prices│  │/api/proof │  │ /api/swap │        │  │
-│  │  │  (Agents) │  │(Crypto.com)│ │ (ZK-STARK)│  │   (VVS)   │        │  │
-│  │  └───────────┘  └───────────┘  └───────────┘  └───────────┘        │  │
-│  └─────────────────────────────┬───────────────────────────────────────┘  │
-│                                │                                           │
-│         ┌──────────────────────┼──────────────────────┐                   │
-│         ▼                      ▼                      ▼                   │
-│  ┌─────────────┐      ┌─────────────────┐     ┌─────────────────┐        │
-│  │  AI Agent   │      │   ZK Backend    │     │ Smart Contracts │        │
-│  │   System    │      │  (Python/CUDA)  │     │ (Solidity/EVM)  │        │
-│  │  (5 agents) │      │  localhost:8001 │     │  Cronos Testnet │        │
-│  └─────────────┘      └─────────────────┘     └─────────────────┘        │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **Frontend → API Layer:** Vertical arrow (▼) shows all UI components call the same API layer. The dashboard, chat, swap UI, and ZK demo all make HTTP requests to `/api/*` routes.
-
-2. **API Layer → Three Backends:** The API layer branches into 3 separate systems:
-   - **Left: AI Agents** - TypeScript classes called directly (same process)
-   - **Center: ZK Backend** - HTTP call to Python server on `localhost:8001`
-   - **Right: Smart Contracts** - RPC calls to Cronos testnet via ethers.js
-
-3. **Why 3 backends?**
-   - AI Agents need fast in-memory state (TypeScript)
-   - ZK proofs need CUDA/GPU (Python)
-   - Blockchain needs EVM (Solidity)
-
-**Deployment:** Frontend + API on Vercel (serverless). ZK Backend runs locally or on GPU cloud. Contracts live on Cronos testnet.
-
-**Container descriptions:**
-
-| Container | Technology | Purpose |
-|-----------|------------|---------|
-| **Frontend** | Next.js 14 + React | User interface, dashboard, interactive components |
-| **API Layer** | Next.js API Routes | Backend logic, external API integration |
-| **AI Agents** | TypeScript classes | 5 specialized agents for decision-making |
-| **ZK Backend** | Python + CUDA | ZK-STARK proof generation (521-bit security) |
-| **Smart Contracts** | Solidity 0.8.22 | On-chain portfolio, hedging, gasless payments |
-
----
-
-## Level 3: Component Diagram
-
-**What it shows:** Internal structure of key containers
-
-### 3A. AI Agent System
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                         AI AGENT SYSTEM                                 │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│                    ┌─────────────────────┐                             │
-│                    │    LEAD AGENT       │                             │
-│                    │  ───────────────    │                             │
-│                    │  Orchestrates all   │                             │
-│                    │  decisions, routes  │                             │
-│                    │  to specialists     │                             │
-│                    └──────────┬──────────┘                             │
-│                               │                                        │
-│           ┌───────────────────┼───────────────────┐                    │
-│           ▼                   ▼                   ▼                    │
-│    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │
-│    │    RISK     │    │   HEDGING   │    │ SETTLEMENT  │              │
-│    │   AGENT     │    │    AGENT    │    │   AGENT     │              │
-│    │  ─────────  │    │  ─────────  │    │  ─────────  │              │
-│    │ VaR, Sharpe │    │ Moonlander  │    │   x402      │              │
-│    │ volatility  │    │ perpetuals  │    │  gasless    │              │
-│    └─────────────┘    └─────────────┘    └─────────────┘              │
-│                                                                        │
-│                       ┌─────────────┐                                  │
-│                       │  REPORTING  │                                  │
-│                       │    AGENT    │                                  │
-│                       │  ─────────  │                                  │
-│                       │ Summaries,  │                                  │
-│                       │ analytics   │                                  │
-│                       └─────────────┘                                  │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **Lead Agent (top center):** Single entry point. ALL user requests go here first. It's the "manager."
-
-2. **Lead → Specialists (branching arrows):** Lead Agent analyzes the request and routes to 1-3 specialists:
-   - **Risk Agent:** Called when user asks about exposure, VaR, volatility
-   - **Hedging Agent:** Called when user wants to open/close hedge positions
-   - **Settlement Agent:** Called when executing transactions (handles x402 gasless)
-
-3. **Reporting Agent (bottom):** Called at the end to summarize what happened. Gets data from all other agents.
-
-4. **Communication pattern:**
-   - Lead → Specialist: "Analyze this portfolio's risk"
-   - Specialist → Lead: Returns structured JSON response
-   - Lead → Reporting: "Summarize these results"
-   - Lead → User: Final formatted response
-
-**Example flow:** "Hedge my BTC" → Lead → Risk (get exposure) → Hedging (calculate position) → Settlement (execute) → Reporting (summarize) → User sees result.
-
-### 3A-2. How Agents Use Prediction Data
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                 PREDICTION DATA → AGENT DECISIONS                       │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  ┌─────────────────┐         ┌─────────────────┐                      │
-│  │   POLYMARKET    │         │     DELPHI      │                      │
-│  │  ─────────────  │         │  ─────────────  │                      │
-│  │ "BTC > $100k?"  │         │ "ETH ETF approved│                     │
-│  │  Yes: 72%       │         │  by March?"     │                      │
-│  │  No:  28%       │         │  Yes: 85%       │                      │
-│  └────────┬────────┘         └────────┬────────┘                      │
-│           │                           │                                │
-│           └───────────┬───────────────┘                                │
-│                       ▼                                                │
-│           ┌───────────────────────┐                                    │
-│           │   /api/polymarket     │                                    │
-│           │   DelphiMarketService │                                    │
-│           │   ─────────────────── │                                    │
-│           │   Aggregates events,  │                                    │
-│           │   normalizes format   │                                    │
-│           └───────────┬───────────┘                                    │
-│                       │                                                │
-│     ┌─────────────────┼─────────────────┐                              │
-│     ▼                 ▼                 ▼                              │
-│ ┌─────────┐     ┌───────────┐    ┌───────────┐                        │
-│ │  RISK   │     │  HEDGING  │    │ REPORTING │                        │
-│ │  AGENT  │     │   AGENT   │    │   AGENT   │                        │
-│ └────┬────┘     └─────┬─────┘    └─────┬─────┘                        │
-│      │                │                │                               │
-│      ▼                ▼                ▼                               │
-│ ┌─────────────────────────────────────────────────────────────────┐   │
-│ │                        AGENT DECISIONS                          │   │
-│ │  ───────────────────────────────────────────────────────────    │   │
-│ │  • Risk: "BTC 72% bullish → reduce hedge ratio from 50% to 30%" │   │
-│ │  • Hedging: "ETH 85% approval → go long ETH perp on Moonlander" │   │
-│ │  • Reporting: "Predictions suggest bullish Q1, recommend..."    │   │
-│ └─────────────────────────────────────────────────────────────────┘   │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **Data Sources (top):** Polymarket and Delphi provide prediction market probabilities
-   - Polymarket: General crypto/macro events (BTC price, ETF approvals, etc.)
-   - Delphi: Cronos-specific predictions (DeFi events, protocol launches)
-
-2. **Aggregation Layer (middle):** 
-   - `/api/polymarket` route fetches and caches Polymarket data
-   - `DelphiMarketService` handles Delphi integration
-   - Both normalize to common format: `{ event, probability, volume, endDate }`
-
-3. **Agent Consumption (bottom):** Each agent uses predictions differently:
-
-   | Agent | How It Uses Predictions | Example |
-   |-------|------------------------|---------|
-   | **Risk Agent** | Adjusts risk scores based on market sentiment | 72% bullish → lower risk weight |
-   | **Hedging Agent** | Sizes positions based on probability | 85% ETH approval → larger long |
-   | **Reporting Agent** | Includes predictions in summaries | "Market expects X with Y% confidence" |
-
-4. **Decision Output:** Agents combine predictions with:
-   - Current portfolio state
-   - Real-time prices from Crypto.com
-   - User risk preferences
-   
-   → Produce actionable recommendations
-
-**Real example flow:**
-```
-User: "Should I hedge my ETH?"
-
-1. Lead Agent receives request
-2. Risk Agent fetches predictions:
-   - Polymarket: "ETH > $4k by Feb" = 68%
-   - Delphi: "Cronos DEX volume up" = 74%
-3. Risk Agent calculates: Bullish sentiment → lower hedge need
-4. Hedging Agent recommends: "Hedge 20% instead of 50%"
-5. Response: "Based on 68% bullish prediction, reduce hedge to 20%"
-```
-
-### 3B. Smart Contract Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                    SMART CONTRACTS (Cronos Testnet)                     │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │                    X402GaslessZKCommitmentVerifier                │ │
-│  │                    ─────────────────────────────                  │ │
-│  │  • Stores ZK proof commitments                                    │ │
-│  │  • Collects $0.01 USDC per tx                                    │ │
-│  │  • Sponsors all CRO gas from contract balance                    │ │
-│  │  • Address: 0x44098d0dE36e157b4C1700B48d615285C76fdE47           │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-│                                                                        │
-│  ┌─────────────────────┐    ┌─────────────────────┐                   │
-│  │     RWAManager      │    │    PaymentRouter    │                   │
-│  │  ─────────────────  │    │  ─────────────────  │                   │
-│  │  RWA token mgmt     │    │  Payment routing    │                   │
-│  │  Asset allocation   │    │  Multi-path swaps   │                   │
-│  └─────────────────────┘    └─────────────────────┘                   │
-│                                                                        │
-│  ┌─────────────────────┐    ┌─────────────────────┐                   │
-│  │GaslessZKCommitment  │    │    ZKVerifier       │                   │
-│  │     Verifier        │    │  ─────────────────  │                   │
-│  │  ─────────────────  │    │  On-chain proof     │                   │
-│  │  Alt gasless impl   │    │  verification       │                   │
-│  └─────────────────────┘    └─────────────────────┘                   │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **X402GaslessZKCommitmentVerifier (main box):** The primary contract users interact with.
-   - User calls `storeCommitmentWithUSDC()` 
-   - Contract pulls $0.01 USDC from user via `transferFrom`
-   - Contract pays CRO gas from its own balance
-   - Stores ZK proof commitment on-chain
-
-2. **Supporting contracts (2x2 grid below):**
-   - **RWAManager ↔ PaymentRouter:** RWAManager tracks assets, PaymentRouter handles multi-path token swaps
-   - **GaslessZKVerifier ↔ ZKVerifier:** Alternative implementations for different verification needs
-
-3. **Contract interactions:**
-   ```
-   User → X402Verifier → stores commitment
-                       → emits events
-                       → tracks gas sponsored
-   
-   User → PaymentRouter → swaps tokens via VVS
-                        → routes to best path
-   ```
-
-4. **All contracts share:** Same USDC token address, same Cronos testnet (chain 338), same deployer/owner.
-
-### 3C. Data Flow Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          DATA FLOW                                      │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  EXTERNAL DATA                PROCESSING                   OUTPUT      │
-│  ─────────────               ───────────                  ─────────    │
-│                                                                        │
-│  ┌─────────────┐            ┌─────────────┐           ┌─────────────┐ │
-│  │ Crypto.com  │───prices──▶│   Price     │──────────▶│  Portfolio  │ │
-│  │    API      │            │  Aggregator │           │   Values    │ │
-│  └─────────────┘            └─────────────┘           └─────────────┘ │
-│                                    │                                   │
-│  ┌─────────────┐                   │                  ┌─────────────┐ │
-│  │ Polymarket  │───events──▶┌─────────────┐──────────▶│ Prediction  │ │
-│  │   + Delphi  │            │  AI Agents  │           │  Insights   │ │
-│  └─────────────┘            │  (Analysis) │           └─────────────┘ │
-│                             └──────┬──────┘                            │
-│  ┌─────────────┐                   │                  ┌─────────────┐ │
-│  │   Wallet    │───sign────▶┌─────────────┐──────────▶│ On-chain    │ │
-│  │  (MetaMask) │            │  X402 Svc   │           │   State     │ │
-│  └─────────────┘            │  (Gasless)  │           └─────────────┘ │
-│                             └─────────────┘                            │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-**How it's connected:**
-
-1. **Three parallel streams (left to right):**
-
-   | Stream | Source | Processor | Output |
-   |--------|--------|-----------|--------|
-   | **Prices** | Crypto.com API | Price Aggregator | Portfolio Values |
-   | **Predictions** | Polymarket + Delphi | AI Agents | Prediction Insights |
-   | **Transactions** | Wallet (MetaMask) | X402 Service | On-chain State |
-
-2. **How streams connect:**
-   - Price stream feeds into AI Agents (they need prices for risk calculations)
-   - AI Agents output goes to both Insights AND can trigger X402 ("execute this hedge")
-   - X402 updates on-chain state, which reflects back in Portfolio Values
-
-3. **Arrows meaning:**
-   - `───prices──▶` = HTTP GET, cached 30 seconds
-   - `───events──▶` = HTTP GET, real-time polling
-   - `───sign────▶` = User signature via MetaMask popup
-
-4. **Feedback loop:** On-chain State changes → triggers price re-fetch → updates Portfolio Values → user sees updated dashboard.
-
----
-
-## Level 4: Code (Key Files)
-
-| Layer | File | Purpose |
-|-------|------|---------|
-| **Frontend** | `app/dashboard/page.tsx` | Main dashboard UI |
-| **Frontend** | `components/dashboard/ChatInterface.tsx` | Chat with agents |
-| **API** | `app/api/chat/route.ts` | Agent orchestration endpoint |
-| **API** | `app/api/prices/route.ts` | Crypto.com price fetcher |
-| **Agents** | `agents/core/LeadAgent.ts` | Decision orchestrator |
-| **Agents** | `agents/specialized/RiskAgent.ts` | Risk calculations |
-| **Agents** | `agents/specialized/HedgingAgent.ts` | Perp recommendations |
-| **Services** | `lib/services/X402GaslessService.ts` | Gasless txs |
-| **Services** | `lib/services/VVSSwapSDKService.ts` | DEX integration |
-| **ZK** | `zk/python/zk_system.py` | CUDA-accelerated proofs |
-| **Contracts** | `contracts/core/X402GaslessZKCommitmentVerifier.sol` | Gasless verifier |
-
----
-
-## Quick Summary (Elevator Pitch)
+## Executive Summary
+
+**ZkVanguard** is an AI-powered multi-chain RWA (Real World Asset) risk management platform that combines:
+
+- **5 Specialized AI Agents** for autonomous portfolio management
+- **ZK-STARK Proofs** (521-bit quantum-resistant) for privacy-preserving analytics
+- **Gasless Transactions** via x402 protocol ($0.01 USDC per tx)
+- **Multi-Chain Support** (Cronos EVM + SUI)
+- **DeFi Integrations** (VVS Finance, Moonlander perpetuals)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│   USER  ──▶  NEXT.JS APP  ──▶  5 AI AGENTS  ──▶  DECISIONS     │
-│                  │                                              │
-│                  ├──▶  Crypto.com API  (prices)                │
-│                  ├──▶  Polymarket/Delphi  (predictions)        │
-│                  ├──▶  VVS Finance  (swaps)                    │
-│                  ├──▶  Moonlander  (hedging)                   │
-│                  ├──▶  ZK-STARK Backend  (privacy)             │
-│                  └──▶  X402 Gasless  ($0.01 USDC, no CRO)      │
-│                                                                 │
-│   All on Cronos Testnet  •  521-bit quantum-resistant proofs   │
-│                                                                 │
+│  USER → DASHBOARD → AI AGENTS → SMART DECISIONS → BLOCKCHAIN   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Technology Stack Summary
+## Level 1: System Context Diagram
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Next.js 14, React 18, TypeScript, TailwindCSS |
-| **Backend** | Next.js API Routes, Node.js |
-| **AI Agents** | Custom TypeScript classes, multi-agent orchestration |
-| **ZK Proofs** | Python 3.11, CUDA 12.x, ZK-STARK (521-bit NIST P-521) |
-| **Blockchain** | Cronos Testnet, Solidity 0.8.22, Hardhat |
-| **DEX** | VVS Finance SmartRouter SDK |
-| **Derivatives** | Moonlander perpetuals integration |
-| **Gasless** | x402 protocol + USDC micropayments |
-| **Hosting** | Vercel (frontend), Local/Cloud (ZK backend) |
+**Purpose:** Shows ZkVanguard and ALL external systems/actors it interacts with.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              SYSTEM CONTEXT                                      │
+│                                                                                  │
+│     ┌─────────────┐       ┌─────────────┐       ┌─────────────┐                │
+│     │   Trader    │       │  Investor   │       │  Developer  │                │
+│     │   (User)    │       │  (Viewer)   │       │ (API User)  │                │
+│     └──────┬──────┘       └──────┬──────┘       └──────┬──────┘                │
+│            │                     │                     │                        │
+│            │    Views portfolio  │  Integrates via    │                        │
+│            │    Executes trades  │  API               │                        │
+│            │    Chats with AI    │                    │                        │
+│            └─────────────────────┼────────────────────┘                        │
+│                                  │                                              │
+│                                  ▼                                              │
+│     ┌────────────────────────────────────────────────────────────────┐         │
+│     │                                                                │         │
+│     │                       ZkVanguard                               │         │
+│     │                       ══════════                               │         │
+│     │                                                                │         │
+│     │    AI-Powered Multi-Chain RWA Risk Management Platform         │         │
+│     │                                                                │         │
+│     │    • 5 Specialized AI Agents                                   │         │
+│     │    • ZK-STARK Privacy (521-bit)                                │         │
+│     │    • Gasless x402 Transactions                                 │         │
+│     │    • Prediction Market Intelligence                            │         │
+│     │                                                                │         │
+│     └────────────────────────────┬───────────────────────────────────┘         │
+│                                  │                                              │
+│    ┌────────────┬────────────────┼────────────────┬────────────────┐           │
+│    ▼            ▼                ▼                ▼                ▼           │
+│ ┌────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────────┐    │
+│ │Crypto. │ │ Polymarket │ │   Cronos   │ │    VVS     │ │   Moonlander   │    │
+│ │com API │ │  + Delphi  │ │ Blockchain │ │  Finance   │ │   Perpetuals   │    │
+│ │        │ │            │ │            │ │            │ │                │    │
+│ │ Prices │ │Predictions │ │  Testnet   │ │ DEX Swaps  │ │    Hedging     │    │
+│ │  100/s │ │  Markets   │ │  Chain 338 │ │  V2/V3     │ │   Futures      │    │
+│ └────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────────┘    │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Context Relationships
+
+| Actor/System | Type | Relationship | Protocol |
+|--------------|------|--------------|----------|
+| **Trader** | Person | Manages portfolios, executes swaps, chats with AI | HTTPS/WebSocket |
+| **Investor** | Person | Views portfolio analytics, monitors risk | HTTPS |
+| **Developer** | Person | Integrates via API, builds extensions | REST API |
+| **Crypto.com API** | External System | Real-time prices (100 req/s), 400+ assets | REST |
+| **Crypto.com AI SDK** | External System | Natural language processing, intent parsing | SDK |
+| **Polymarket + Delphi** | External System | Prediction market data, probability feeds | REST |
+| **Cronos Blockchain** | External System | Smart contract execution, on-chain state | JSON-RPC |
+| **VVS Finance** | External System | DEX swaps (V2/V3 pools), best-price routing | SDK |
+| **Moonlander** | External System | Perpetual futures, hedging positions | REST/Contract |
+| **x402 Facilitator** | External System | Gasless transaction sponsorship | REST |
 
 ---
 
-## Deployed Contract Addresses (Cronos Testnet)
+## Level 2: Container Diagram
 
-| Contract | Address | Verified |
-|----------|---------|----------|
-| **X402GaslessZKCommitmentVerifier** | `0x44098d0dE36e157b4C1700B48d615285C76fdE47` | ✅ |
-| ZKVerifier | `0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8` | ✅ |
-| RWAManager | `0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189` | ✅ | Updated Jan 16, 2026 with Deposited/Withdrawn/Rebalanced events |
-| PaymentRouter | `0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b` | ✅ |
-| GaslessZKVerifier | `0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F` | ✅ |
-| zkPaymaster | `0x81E2d8d860847Ca1b3ADd950dBeED6191be23D87` | ✅ |
-| USDC (DevUSDCe) | `0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0` | ✅ |
+**Purpose:** Shows the high-level technical building blocks and how they communicate.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                            ZkVanguard System                                │
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           CONTAINER DIAGRAM                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │                      📱 FRONTEND (Next.js 14.2.35)                         ││
+│  │                          Vercel Edge Deployment                             ││
+│  │                                                                             ││
+│  │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐   ││
+│  │  │ Dashboard │ │  AI Chat  │ │ SwapModal │ │  ZK Demo  │ │ Settings  │   ││
+│  │  │   Page    │ │ Interface │ │  (VVS)    │ │   Page    │ │   Modal   │   ││
+│  │  └───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘   ││
+│  └────────────────────────────────┬───────────────────────────────────────────┘│
+│                                   │ HTTP/JSON                                   │
+│                                   ▼                                             │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │                     🔌 API LAYER (Next.js API Routes)                       ││
+│  │                                                                             ││
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          ││
+│  │  │  /api/chat  │ │ /api/prices │ │ /api/proof  │ │/api/x402/   │          ││
+│  │  │  (AI SDK)   │ │ (Crypto.com)│ │  (ZK-STARK) │ │ swap,hedge  │          ││
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          ││
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          ││
+│  │  │/api/predict │ │/api/agents/ │ │/api/health  │ │/api/zk/     │          ││
+│  │  │(Polymarket) │ │(all agents) │ │  (status)   │ │  generate   │          ││
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          ││
+│  └────────────────────────────────┬───────────────────────────────────────────┘│
+│                                   │                                             │
+│         ┌─────────────────────────┼─────────────────────────┐                  │
+│         │                         │                         │                  │
+│         ▼                         ▼                         ▼                  │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────────┐    │
+│  │ 🤖 AI AGENTS    │    │ 🔐 ZK BACKEND   │    │ ⛓️  SMART CONTRACTS     │    │
+│  │ (TypeScript)    │    │ (Python/CUDA)   │    │    (Solidity 0.8.22)   │    │
+│  │                 │    │                 │    │                         │    │
+│  │ • LeadAgent     │    │ localhost:8001  │    │ Cronos Testnet (338)    │    │
+│  │ • RiskAgent     │    │                 │    │                         │    │
+│  │ • HedgingAgent  │    │ 521-bit STARK   │    │ • PortfolioManager      │    │
+│  │ • SettleAgent   │    │ Quantum-safe    │    │ • GaslessPaymaster      │    │
+│  │ • ReportAgent   │    │ GPU-accelerated │    │ • VVSSwapRouter         │    │
+│  │                 │    │                 │    │ • HedgingVault          │    │
+│  └─────────────────┘    └─────────────────┘    └─────────────────────────┘    │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Container Details
+
+| Container | Technology | Deployment | Purpose |
+|-----------|------------|------------|---------|
+| **Frontend** | Next.js 14 + React + TailwindCSS | Vercel Edge | Interactive UI, real-time dashboard |
+| **API Layer** | Next.js API Routes (32 endpoints) | Vercel Serverless | Request handling, orchestration |
+| **AI Agents** | TypeScript + Crypto.com AI SDK | Same process | Autonomous decision-making |
+| **ZK Backend** | Python 3.11 + starkware-crypto | GPU Server | ZK-STARK proof generation |
+| **Smart Contracts** | Solidity + Hardhat | Cronos Testnet | On-chain state, DeFi operations |
+
+### Container Communication
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                      COMMUNICATION PROTOCOLS                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Frontend ──HTTP/JSON──► API Layer                                           │
+│     │                        │                                               │
+│     │ WebSocket              │                                               │
+│     │ (prices)               ├────In-Process Call────► AI Agents            │
+│     │                        │                                               │
+│     ▼                        ├────HTTP POST────────► ZK Backend (:8001)     │
+│  Crypto.com                  │                                               │
+│  Exchange                    └────JSON-RPC (ethers)───► Cronos Testnet      │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## API Routes Summary
+## Level 3: Component Diagrams
 
-| Category | Routes | Count |
-|----------|--------|-------|
-| **Chat/AI** | `/api/chat`, `/api/chat/health` | 2 |
-| **Prices** | `/api/prices`, `/api/market-data` | 2 |
-| **Portfolio** | `/api/portfolio/*` | 5 |
-| **ZK Proofs** | `/api/zk-proof/*` | 6 |
-| **Agents** | `/api/agents/*` | 9 |
-| **Demo** | `/api/demo/*` | 2 |
-| **Other** | `/api/health`, `/api/polymarket`, `/api/cronos-explorer` | 3 |
-| **Total** | | **29** |
+**Purpose:** Internal structure of each container showing logical components.
+
+### 3A. AI Agent System Components
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           AI AGENT SYSTEM                                     │
+│                     (agents/core + agents/specialized)                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                      ┌──────────────────────────┐                            │
+│                      │      🎯 LEAD AGENT       │                            │
+│                      │   ────────────────────   │                            │
+│                      │  • Intent Classification │                            │
+│                      │  • Agent Orchestration   │                            │
+│                      │  • Response Aggregation  │                            │
+│                      │                          │                            │
+│                      │  Uses: Crypto.com AI SDK │                            │
+│                      └────────────┬─────────────┘                            │
+│                                   │                                          │
+│         ┌────────────────┬────────┴────────┬────────────────┐               │
+│         ▼                ▼                 ▼                ▼               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │ 📊 RISK     │  │ 🛡️ HEDGING  │  │ 💰 SETTLE   │  │ 📈 REPORT   │        │
+│  │   AGENT     │  │   AGENT     │  │   AGENT     │  │   AGENT     │        │
+│  │ ─────────── │  │ ─────────── │  │ ─────────── │  │ ─────────── │        │
+│  │ • VaR calc  │  │ • Position  │  │ • x402 gas  │  │ • Summary   │        │
+│  │ • Sharpe    │  │   sizing    │  │ • Contract  │  │ • Analytics │        │
+│  │ • Exposure  │  │ • Moonlander│  │   execution │  │ • Markdown  │        │
+│  │ • Drawdown  │  │ • Delta     │  │ • Approval  │  │   format    │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘        │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                     📡 SHARED SERVICES                                │  │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐               │  │
+│  │  │ PriceService  │ │ PredictService│ │ VVSFinance   │               │  │
+│  │  │ (Crypto.com)  │ │ (Polymarket)  │ │ (DEX quotes) │               │  │
+│  │  └───────────────┘ └───────────────┘ └───────────────┘               │  │
+│  │  ┌───────────────┐ ┌───────────────┐                                 │  │
+│  │  │PrivateHedge   │ │ Moonlander    │                                 │  │
+│  │  │(stealth addr) │ │ (perpetuals)  │                                 │  │
+│  │  └───────────────┘ └───────────────┘                                 │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Agent Responsibilities:**
+
+| Agent | Primary Function | Key Methods | Data Sources |
+|-------|-----------------|-------------|--------------|
+| **Lead** | Intent routing, orchestration | `processMessage()`, `routeToAgent()` | User input, AI SDK |
+| **Risk** | Portfolio risk analysis | `calculateVaR()`, `getExposure()` | Prices, positions |
+| **Hedging** | Hedge position management | `calculateHedge()`, `openPosition()` | Moonlander, PrivateHedge |
+| **Settlement** | Transaction execution | `executeGasless()`, `approveToken()` | x402, contracts |
+| **Reporting** | Report generation | `summarize()`, `formatMarkdown()` | All agent outputs |
+
+### 3B. Private Hedge Architecture
+
+**Purpose:** Privacy-preserving on-chain hedging using ZK proofs and stealth addresses.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                      PRIVATE HEDGE FLOW                                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│    PUBLIC (On-Chain)                    PRIVATE (ZK-Protected)              │
+│    ────────────────────                 ────────────────────────            │
+│    • Commitment hash                    • Portfolio composition             │
+│    • Stealth address                    • Exact hedge sizes                 │
+│    • Aggregate settlements              • Asset being hedged                │
+│    • Nullifier (anti-replay)            • Entry/exit prices                 │
+│                                         • PnL calculations                  │
+│                                                                              │
+│    ┌─────────────────────────────────────────────────────────────────────┐ │
+│    │                    HEDGE PRIVACY FLOW                                │ │
+│    │                                                                      │ │
+│    │   User Wallet ──────────────────────────────────────────────────┐   │ │
+│    │        │                                                        │   │ │
+│    │        ▼                                                        │   │ │
+│    │   ┌─────────────────┐                                           │   │ │
+│    │   │ Generate Stealth│  ← ECDH key exchange                      │   │ │
+│    │   │   Address       │  ← Unlinkable to main wallet              │   │ │
+│    │   └────────┬────────┘                                           │   │ │
+│    │            │                                                    │   │ │
+│    │            ▼                                                    │   │ │
+│    │   ┌─────────────────┐                                           │   │ │
+│    │   │ Create Hedge    │  ← Asset, size, leverage, entry price     │   │ │
+│    │   │ Commitment      │  ← SHA-256(details + salt) = hash         │   │ │
+│    │   └────────┬────────┘                                           │   │ │
+│    │            │                                                    │   │ │
+│    │            ▼                                                    │   │ │
+│    │   ┌─────────────────┐                                           │   │ │
+│    │   │ Generate        │  ← Nullifier prevents double-spend        │   │ │
+│    │   │ Nullifier       │  ← H(commitment + stealthKey)             │   │ │
+│    │   └────────┬────────┘                                           │   │ │
+│    │            │                                                    │   │ │
+│    │            ▼                                                    │   │ │
+│    │   ┌─────────────────┐     ┌─────────────────┐                   │   │ │
+│    │   │ Store On-Chain  │────▶│ Moonlander      │                   │   │ │
+│    │   │ (Commitment)    │     │ Perpetuals      │                   │   │ │
+│    │   └─────────────────┘     └─────────────────┘                   │   │ │
+│    │                                                                      │ │
+│    └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Privacy Guarantees:**
+
+| Component | Privacy Level | What It Hides |
+|-----------|--------------|---------------|
+| **Stealth Address** | Unlinkable | Breaks link between user wallet and hedge |
+| **Commitment Hash** | Hidden | Hedge details (asset, size, leverage) |
+| **Nullifier** | Anti-replay | Prevents double-spending of same hedge |
+| **ZK Proof** | Verifiable | Proves hedge exists without revealing details |
+
+**Key File:** [lib/services/PrivateHedgeService.ts](../lib/services/PrivateHedgeService.ts)
+
+### 3C. Prediction Intelligence Components
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                      PREDICTION DATA FLOW                                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────┐              ┌─────────────────────┐               │
+│  │     POLYMARKET      │              │       DELPHI        │               │
+│  │  ───────────────────│              │  ─────────────────  │               │
+│  │  "BTC > $100k?"     │              │  "ETH ETF approved  │               │
+│  │   Yes: 72%          │              │   by March?"        │               │
+│  │   No:  28%          │              │   Yes: 85%          │               │
+│  │                     │              │                     │               │
+│  │  Volume: $2.5M      │              │  Volume: $800K      │               │
+│  └──────────┬──────────┘              └──────────┬──────────┘               │
+│             │                                    │                          │
+│             └──────────────┬─────────────────────┘                          │
+│                            ▼                                                │
+│            ┌───────────────────────────────┐                                │
+│            │   lib/services/DelphiMarket   │                                │
+│            │   lib/services/PredictService │                                │
+│            │  ───────────────────────────  │                                │
+│            │  • Aggregate events           │                                │
+│            │  • Normalize to unified format│                                │
+│            │  • Cache (5min TTL)           │                                │
+│            └───────────────┬───────────────┘                                │
+│                            │                                                │
+│      ┌─────────────────────┼─────────────────────┐                         │
+│      ▼                     ▼                     ▼                         │
+│  ┌────────┐          ┌───────────┐         ┌───────────┐                   │
+│  │  RISK  │          │  HEDGING  │         │ REPORTING │                   │
+│  │ AGENT  │          │   AGENT   │         │   AGENT   │                   │
+│  └───┬────┘          └─────┬─────┘         └─────┬─────┘                   │
+│      │                     │                     │                         │
+│      ▼                     ▼                     ▼                         │
+│  ┌────────────────────────────────────────────────────────────────────┐   │
+│  │                      AGENT DECISIONS                                │   │
+│  │  ─────────────────────────────────────────────────────────────────  │   │
+│  │  • Risk: 72% bullish → reduce hedge ratio 50% → 30%                 │   │
+│  │  • Hedging: 85% ETH approval → open 2x long ETH perp               │   │
+│  │  • Reporting: "Market consensus: bullish Q1, 3 key events"         │   │
+│  └────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3C. Smart Contract Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    SMART CONTRACTS (Cronos Testnet - Chain 338)              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐│
+│  │                  🔐 X402GaslessZKCommitmentVerifier                      ││
+│  │  ──────────────────────────────────────────────────────────────────    ││
+│  │                                                                         ││
+│  │  Address: 0x44098d0dE36e157b4C1700B48d615285C76fdE47                    ││
+│  │                                                                         ││
+│  │  Purpose: Gasless transaction hub with ZK proof storage                 ││
+│  │  • Collects $0.01 USDC per transaction                                  ││
+│  │  • Sponsors all CRO gas from contract balance                          ││
+│  │  • Stores ZK proof commitments on-chain                                 ││
+│  │  • Emits events for proof verification                                  ││
+│  │                                                                         ││
+│  │  Methods:                                                               ││
+│  │    storeCommitmentWithUSDC(commitment, proof) → pays gas               ││
+│  │    getCommitment(address) → returns stored commitment                   ││
+│  │    getTotalGasSponsored() → cumulative CRO spent                        ││
+│  │                                                                         ││
+│  └────────────────────────────────────────────────────────────────────────┘│
+│                                                                              │
+│  ┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────┐ │
+│  │   📊 RWAManager       │ │  💱 PaymentRouter     │ │  ✅ ZKVerifier    │ │
+│  │  ─────────────────    │ │  ─────────────────    │ │  ───────────────  │ │
+│  │  RWA tokenization     │ │  Multi-path swaps     │ │  On-chain proof   │ │
+│  │  Asset allocation     │ │  Best-price routing   │ │  verification     │ │
+│  │  Portfolio tracking   │ │  VVS integration      │ │  521-bit STARK    │ │
+│  └───────────────────────┘ └───────────────────────┘ └───────────────────┘ │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Contract Interaction Flows:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      GASLESS TRANSACTION FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User                    Frontend                   Contract                │
+│   │                         │                          │                    │
+│   │──1. "Store my proof"───▶│                          │                    │
+│   │                         │                          │                    │
+│   │                         │──2. Request approval────▶│                    │
+│   │◀──3. Sign USDC approve──│                          │                    │
+│   │                         │                          │                    │
+│   │                         │──4. Call storeCommitment─▶│                    │
+│   │                         │                          │──5. transferFrom   │
+│   │                         │                          │     $0.01 USDC     │
+│   │                         │                          │                    │
+│   │                         │                          │──6. Pay CRO gas    │
+│   │                         │                          │     from balance   │
+│   │                         │                          │                    │
+│   │                         │◀──7. Emit ProofStored───│                    │
+│   │◀──8. Show success──────│                          │                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3D. Data Flow Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            DATA FLOW DIAGRAM                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│    EXTERNAL SOURCES            PROCESSING LAYER              OUTPUT          │
+│    ────────────────           ─────────────────            ────────          │
+│                                                                              │
+│  ┌─────────────────┐        ┌─────────────────┐       ┌─────────────────┐  │
+│  │   Crypto.com    │        │                 │       │                 │  │
+│  │   Exchange API  │───────▶│  PriceService   │──────▶│  Portfolio      │  │
+│  │   (100 req/s)   │ prices │  (5s cache)     │       │  Valuations     │  │
+│  └─────────────────┘        └────────┬────────┘       └─────────────────┘  │
+│                                      │                                      │
+│  ┌─────────────────┐                 │                ┌─────────────────┐  │
+│  │   Polymarket    │                 ▼                │                 │  │
+│  │   + Delphi      │───────▶┌─────────────────┐──────▶│  AI-Powered     │  │
+│  │   (events)      │ events │   AI Agents     │       │  Insights       │  │
+│  └─────────────────┘        │   (5 agents)    │       └─────────────────┘  │
+│                             └────────┬────────┘                             │
+│  ┌─────────────────┐                 │                ┌─────────────────┐  │
+│  │    MetaMask     │                 ▼                │                 │  │
+│  │    (Wallet)     │───────▶┌─────────────────┐──────▶│  On-Chain       │  │
+│  │                 │  sign  │   x402 Service  │       │  State          │  │
+│  └─────────────────┘        │   (gasless)     │       └─────────────────┘  │
+│                             └─────────────────┘                             │
+│                                                                              │
+│  ┌─────────────────┐        ┌─────────────────┐       ┌─────────────────┐  │
+│  │   VVS Finance   │        │  VVSFinance     │       │                 │  │
+│  │   DEX (V2/V3)   │───────▶│  Service        │──────▶│  Swap Quotes    │  │
+│  │   (mainnet 25)  │ quotes │  (mainnet)      │       │  & Execution    │  │
+│  └─────────────────┘        └─────────────────┘       └─────────────────┘  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Data Flow Summary:**
+
+| Source | Protocol | Processing | Cache | Output |
+|--------|----------|------------|-------|--------|
+| Crypto.com | REST/WS | PriceService | 5s | Portfolio values, 24h changes |
+| Polymarket | REST | DelphiMarketService | 5min | Prediction probabilities |
+| MetaMask | JSON-RPC | x402Service | N/A | Transaction receipts |
+| VVS Finance | SDK | VVSFinanceService | 30s | Swap quotes, best routes |
+
+---
+
+## Level 4: Code Level Details
+
+**Purpose:** Maps high-level components to actual implementation files.
+
+### 4A. Key File Mapping
+
+| Layer | Component | File Path | Purpose |
+|-------|-----------|-----------|---------|
+| **Frontend** | Dashboard | [app/dashboard/page.tsx](../app/dashboard/page.tsx) | Main dashboard UI |
+| **Frontend** | AI Chat | [components/dashboard/ChatInterface.tsx](../components/dashboard/ChatInterface.tsx) | Agent interaction |
+| **Frontend** | Swap Modal | [components/dashboard/SwapModal.tsx](../components/dashboard/SwapModal.tsx) | VVS swap interface |
+| **Frontend** | Settings | [components/dashboard/SettingsModal.tsx](../components/dashboard/SettingsModal.tsx) | User preferences |
+| **API** | Chat Route | [app/api/chat/route.ts](../app/api/chat/route.ts) | Agent orchestration |
+| **API** | Prices Route | [app/api/prices/route.ts](../app/api/prices/route.ts) | Crypto.com prices |
+| **API** | Swap Route | [app/api/x402/swap/route.ts](../app/api/x402/swap/route.ts) | VVS execution |
+| **Agents** | Lead | [agents/core/LeadAgent.ts](../agents/core/LeadAgent.ts) | Orchestrator |
+| **Agents** | Risk | [agents/specialized/RiskAgent.ts](../agents/specialized/RiskAgent.ts) | VaR, Sharpe |
+| **Agents** | Hedging | [agents/specialized/HedgingAgent.ts](../agents/specialized/HedgingAgent.ts) | Moonlander |
+| **Agents** | Settlement | [agents/specialized/SettlementAgent.ts](../agents/specialized/SettlementAgent.ts) | x402 gasless |
+| **Services** | x402 | [lib/services/X402GaslessService.ts](../lib/services/X402GaslessService.ts) | Gasless txs |
+| **Services** | VVS | [lib/services/VVSFinanceService.ts](../lib/services/VVSFinanceService.ts) | DEX quotes |
+| **Services** | PrivateHedge | [lib/services/PrivateHedgeService.ts](../lib/services/PrivateHedgeService.ts) | Stealth addresses, ZK commitments |
+| **Services** | Moonlander | [lib/services/MoonlanderService.ts](../lib/services/MoonlanderService.ts) | Perpetual futures |
+| **ZK** | Backend | [zk/python/zk_system.py](../zk/python/zk_system.py) | CUDA proofs |
+| **Contracts** | x402 | [contracts/core/X402GaslessZKCommitmentVerifier.sol](../contracts/core/X402GaslessZKCommitmentVerifier.sol) | Main contract |
+
+### 4B. Class Relationships
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLASS DIAGRAM                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────┐                                                      │
+│  │     LeadAgent     │──uses──▶ Crypto.com AI SDK                          │
+│  │  ─────────────────│──has───▶ [RiskAgent, HedgingAgent, ...]             │
+│  │ + processMessage()│                                                      │
+│  │ + routeToAgent()  │                                                      │
+│  └─────────┬─────────┘                                                      │
+│            │ delegates to                                                   │
+│            ▼                                                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
+│  │ RiskAgent   │  │HedgingAgent │  │SettleAgent  │  │ReportAgent  │       │
+│  │ ──────────  │  │ ──────────  │  │ ──────────  │  │ ──────────  │       │
+│  │calculateVaR │  │ openHedge   │  │executeGasless│ │ summarize   │       │
+│  │getExposure  │  │ closeHedge  │  │approveToken │  │formatReport │       │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────────────┘       │
+│         │                │                │                                 │
+│         │                │ uses           │                                 │
+│         │                ▼                │                                 │
+│         │       ┌─────────────────┐       │                                │
+│         │       │PrivateHedge     │       │                                │
+│         │       │Service          │       │                                │
+│         │       │ ─────────────── │       │                                │
+│         │       │generateStealth  │       │                                │
+│         │       │createCommitment │       │                                │
+│         │       └────────┬────────┘       │                                │
+│         │                │                │                                 │
+│         └────────────────┴────────────────┘                                │
+│                          │                                                  │
+│                          ▼                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                       SHARED SERVICES                                │  │
+│  │  PriceService | VVSFinanceService | X402GaslessService | Moonlander │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Deployment View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DEPLOYMENT DIAGRAM                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                       VERCEL EDGE NETWORK                              │ │
+│  │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │ │
+│  │   │ Edge Function│  │Serverless API│  │Static Assets │               │ │
+│  │   │  (Next.js)   │  │ (API Routes) │  │ (CSS, JS)    │               │ │
+│  │   └──────────────┘  └──────────────┘  └──────────────┘               │ │
+│  └─────────────────────────────┬─────────────────────────────────────────┘ │
+│                                │ HTTPS                                      │
+│         ┌──────────────────────┼──────────────────────┐                    │
+│         ▼                      ▼                      ▼                    │
+│  ┌─────────────┐       ┌─────────────┐       ┌─────────────┐              │
+│  │  GPU Server │       │Cronos Testnet│      │ External APIs│              │
+│  │  (ZK STARK) │       │  Chain 338   │      │  Crypto.com  │              │
+│  │  :8001      │       │  JSON-RPC    │      │  Polymarket  │              │
+│  └─────────────┘       └─────────────┘       └─────────────┘              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Architecture Decision Records (ADRs)
+
+| ADR | Decision | Rationale |
+|-----|----------|-----------|
+| **001** | Multi-Agent Architecture | Separation of concerns, independent updates |
+| **002** | ZK-STARK over SNARK | Quantum-resistant, no trusted setup |
+| **003** | x402 Gasless Protocol | $0.01 USDC UX, no CRO required |
+| **004** | VVS Finance for DEX | Best liquidity on Cronos, V2/V3 support |
+| **005** | Crypto.com AI SDK | NLP intent classification, ecosystem alignment |
+
+---
+
+## Technology Stack
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| **Runtime** | Bun | 1.x |
+| **Frontend** | Next.js | 14.2.35 |
+| **UI** | React + TailwindCSS | 18.x / 3.x |
+| **Language** | TypeScript | 5.x |
+| **AI SDK** | @crypto.com/ai-agent-client | 1.0.2 |
+| **DEX** | @vvs-finance/swap-sdk | Latest |
+| **Blockchain** | Solidity | 0.8.22 |
+| **ZK Proofs** | Python + CUDA | 3.11 / 12.x |
+| **Deployment** | Vercel Edge | - |
+
+---
+
+## Deployed Contracts (Cronos Testnet - Chain 338)
+
+| Contract | Address | Status |
+|----------|---------|--------|
+| **X402GaslessZKCommitmentVerifier** | `0x44098d0dE36e157b4C1700B48d615285C76fdE47` | ✅ Active |
+| ZKVerifier | `0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8` | ✅ Verified |
+| RWAManager | `0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189` | ✅ Updated |
+| PaymentRouter | `0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b` | ✅ Verified |
+| DevUSDCe (Test USDC) | `0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0` | ✅ Active |
+
+---
+
+## API Routes Summary (32 Total)
+
+| Category | Key Endpoints |
+|----------|---------------|
+| **AI/Chat** | `/api/chat`, `/api/chat/health` |
+| **Prices** | `/api/prices`, `/api/market-data` |
+| **x402** | `/api/x402/swap`, `/api/x402/hedge`, `/api/x402/positions` |
+| **ZK Proofs** | `/api/zk-proof/generate`, `/api/zk-proof/verify` |
+| **Portfolio** | `/api/portfolio/summary`, `/api/portfolio/risk` |
+| **Predictions** | `/api/polymarket` |
+
+---
+
+## Quick Reference
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ZKVANGUARD AT A GLANCE                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   👤 USER  ──▶  🖥️ NEXT.JS  ──▶  🤖 5 AI AGENTS  ──▶  📊 DECISIONS         │
+│                     │                                                       │
+│                     ├──▶ 📈 Crypto.com API (prices)                        │
+│                     ├──▶ 🔮 Polymarket + Delphi (predictions)              │
+│                     ├──▶ 💱 VVS Finance (swaps)                            │
+│                     ├──▶ 🛡️ Moonlander (hedging)                           │
+│                     ├──▶ 🔐 ZK-STARK (521-bit proofs)                      │
+│                     └──▶ ⚡ x402 Gasless ($0.01 USDC)                       │
+│                                                                             │
+│   Cronos Testnet (338) • Quantum-resistant • AI-powered risk management    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Document Metadata
+
+| Property | Value |
+|----------|-------|
+| **Version** | 2.0 |
+| **C4 Compliance** | Full (Levels 1-4 + Deployment + ADRs) |
+| **Last Updated** | January 2025 |
+| **Standard** | [C4 Model](https://c4model.com/) by Simon Brown |

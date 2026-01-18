@@ -35,6 +35,7 @@ ZkVanguard automates institutional crypto portfolio management with **predictive
 | **Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
 | **5 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting - autonomous coordination |
 | **Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
+| **Private Hedges** | Stealth addresses + ZK commitments hide hedge details on-chain |
 | **Gasless Transactions** | x402 on Cronos, Sponsored Tx on SUI |
 | **VVS Finance DEX** | Native Cronos swaps with best-price routing (V2/V3 pools) |
 
@@ -66,6 +67,31 @@ ZkVanguard:  Polymarket signals → AI correlates → Auto-hedge BEFORE crash
 
 ---
 
+## Private Hedge Architecture
+
+Institutional traders need **privacy** - competitors shouldn't see your hedge positions.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    PRIVACY-PRESERVING HEDGING                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   PUBLIC (On-Chain)           PRIVATE (ZK-Protected)                │
+│   ─────────────────           ──────────────────────                │
+│   • Commitment hash           • Portfolio composition               │
+│   • Stealth address           • Exact hedge sizes                   │
+│   • Aggregate settlements     • Asset being hedged                  │
+│   • Nullifier (anti-replay)   • Entry/exit prices                   │
+│                               • PnL calculations                    │
+│                                                                     │
+│   FLOW: User → Stealth Address → Commitment Hash → ZK Proof         │
+│         (unlinkable)  (hides details)   (verifiable)                │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Quick Start
 
 ```bash
@@ -92,6 +118,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 | Polymarket + Delphi | Prediction market intelligence |
 | VVS Finance SDK | DEX swaps on Cronos |
 | Moonlander | Perpetual futures hedging |
+| Private Hedge Service | Stealth addresses + ZK commitment privacy |
 | x402 Facilitator | Gasless transactions |
 
 ---
