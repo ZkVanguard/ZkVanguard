@@ -198,8 +198,9 @@ export class PriceMonitorAgent {
       
       // Fallback to RealMarketDataService which uses Crypto.com Exchange API
       try {
-        const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
-        const marketData = await realMarketDataService.getTokenPrice(symbol);
+        const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+        const marketDataService = getMarketDataService();
+        const marketData = await marketDataService.getTokenPrice(symbol);
         
         return {
           symbol,
