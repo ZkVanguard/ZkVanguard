@@ -210,15 +210,20 @@ class CryptocomExchangeService {
    */
   private parseTickerData(ticker: ExchangeTicker, symbol: string): MarketPrice {
     const price = parseFloat(ticker.a || '0');
-    const change = parseFloat(ticker.c || '0');
+    const priceChange = parseFloat(ticker.c || '0'); // Raw price change in USD
     const high = parseFloat(ticker.h || '0');
     const low = parseFloat(ticker.l || '0');
     const volume = parseFloat(ticker.v || '0');
 
+    // Calculate 24h percentage change: (current price change / previous price) * 100
+    // Previous price = current price - price change
+    const previousPrice = price - priceChange;
+    const change24hPercent = previousPrice > 0 ? (priceChange / previousPrice) * 100 : 0;
+
     return {
       symbol,
       price,
-      change24h: change,
+      change24h: change24hPercent,
       volume24h: volume,
       high24h: high,
       low24h: low,

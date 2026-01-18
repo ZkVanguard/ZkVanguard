@@ -49,6 +49,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeHedgesCount, setActiveHedgesCount] = useState<number>(0);
   const lastFetchRef = useRef<number>(0);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -164,6 +165,35 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [address, fetchPositions]);
 
+  // Fetch active hedge count from database API (single source of truth)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchHedgeCount = async () => {
+      try {
+        const response = await fetch('/api/agents/hedging/pnl?summary=true');
+        if (response.ok && isMounted) {
+          const data = await response.json();
+          if (data.success && data.summary && data.summary.details) {
+            setActiveHedgesCount(data.summary.details.length);
+          }
+        }
+      } catch (err) {
+        console.error('[PositionsContext] Error counting hedges from API:', err);
+      }
+    };
+
+    fetchHedgeCount();
+    
+    // Refresh hedge count every 30 seconds
+    const interval = setInterval(fetchHedgeCount, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Memoized derived data - calculated once when positions change
   const derived = useMemo<DerivedData | null>(() => {
     if (!positionsData || positionsData.positions.length === 0) return null;
@@ -213,20 +243,6 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       ? (dailyReturn - riskFreeRate) / (weightedVolatility / Math.sqrt(365))
       : 0;
 
-    // Count active hedges from localStorage
-    let activeHedgesCount = 0;
-    try {
-      const settlements = localStorage.getItem('settlement_history');
-      if (settlements) {
-        const settlementData = JSON.parse(settlements);
-        activeHedgesCount = Object.values(settlementData).filter(
-          (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
-        ).length;
-      }
-    } catch (err) {
-      console.error('[PositionsContext] Error counting hedges:', err);
-    }
-
     // Calculate concentration (top asset percentage)
     const concentration = topAssets[0]?.percentage || 0;
 
@@ -267,7 +283,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       portfolioCount: userPortfolioCount,
       activeHedgesCount,
     };
-  }, [positionsData, userPortfolioCount]);
+  }, [positionsData, userPortfolioCount, activeHedgesCount]);
 
   const value: PositionsContextType = {
     positionsData,
