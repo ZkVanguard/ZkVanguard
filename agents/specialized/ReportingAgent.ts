@@ -8,6 +8,19 @@ import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/ty
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 
+// Position type for portfolio data
+interface PortfolioPosition {
+  symbol?: string;
+  amount?: number;
+  entryPrice?: number;
+  currentPrice?: number;
+  avgPrice?: number;
+  value: number;
+  pnl?: number;
+  pnlPercentage?: number;
+  lastUpdated?: number;
+}
+
 export interface ReportRequest {
   reportId: string;
   type: 'RISK' | 'PERFORMANCE' | 'SETTLEMENT' | 'PORTFOLIO' | 'AUDIT' | 'COMPREHENSIVE';
@@ -297,7 +310,7 @@ export class ReportingAgent extends BaseAgent {
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
-      const positions = portfolioData?.portfolio?.positions || [];
+      const positions: PortfolioPosition[] = portfolioData?.portfolio?.positions || [];
       const totalValue = portfolioData?.portfolio?.totalValue || 0;
       
       // Calculate real asset risks from portfolio positions
@@ -426,7 +439,7 @@ export class ReportingAgent extends BaseAgent {
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
-      const positions = portfolioData?.portfolio?.positions || [];
+      const positions: PortfolioPosition[] = portfolioData?.portfolio?.positions || [];
       const totalValue = portfolioData?.portfolio?.totalValue || 0;
       const totalPnl = portfolioData?.portfolio?.totalPnl || 0;
       const totalPnlPercentage = portfolioData?.portfolio?.totalPnlPercentage || 0;
