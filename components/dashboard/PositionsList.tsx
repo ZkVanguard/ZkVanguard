@@ -10,6 +10,11 @@ import PortfolioDetailModal from './PortfolioDetailModal';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
 
+interface PositionsListProps {
+  address: string;
+  onOpenHedge?: (market: PredictionMarket) => void;
+}
+
 interface AssetBalance {
   token: string;
   symbol: string;
@@ -89,7 +94,7 @@ const PositionRow = memo(({ position, idx }: { position: any; idx: number }) => 
 ));
 PositionRow.displayName = 'PositionRow';
 
-export function PositionsList({ address }: { address: string }) {
+export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   const { isConnected } = useAccount();
   // Get only portfolios owned by the connected wallet
   const { data: userPortfolios, count: userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
@@ -1132,8 +1137,11 @@ export function PositionsList({ address }: { address: string }) {
                     openDepositModal(analyzedPortfolio);
                   } else if (agentRecommendation.action === 'WITHDRAW' && analyzedPortfolio) {
                     openWithdrawModal(analyzedPortfolio);
+                  } else if (agentRecommendation.action === 'HEDGE' && onOpenHedge && analyzedPortfolio?.predictions?.[0]) {
+                    // Call the hedge handler with the portfolio's prediction
+                    onOpenHedge(analyzedPortfolio.predictions[0]);
                   }
-                  // HOLD and HEDGE just close (user is informed)
+                  // HOLD just closes (user is informed)
                 }}
                 className={`flex-1 px-4 py-2 rounded-[12px] text-sm font-semibold text-white transition-colors ${
                   agentRecommendation.action === 'WITHDRAW' 

@@ -66,63 +66,99 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
     setCreating(true);
 
     try {
-      // Create hedge data matching existing format
-      const batchId = `manual-hedge-${Date.now()}`;
-      const capitalUsed = sizeNum * entryNum / leverage;
-      
-      const hedgeData = {
-        batchId,
-        type: 'hedge',
-        timestamp: Date.now(),
-        status: 'active',
-        managerSignature: 'manual-user-created',
-        hedgeDetails: {
-          type: hedgeType,
-          asset: `${asset}-PERP`,
-          size: sizeNum,
-          leverage,
-          entryPrice: entryNum,
-          targetPrice: targetNum,
-          stopLoss: stopNum,
-          capitalUsed,
-          reason: reason || `Manual ${hedgeType} hedge on ${asset}`,
-        },
-      };
-
-      // Save to localStorage
-      const settlements = localStorage.getItem('settlement_history');
-      const settlementData = settlements ? JSON.parse(settlements) : {};
-      settlementData[batchId] = hedgeData;
-      localStorage.setItem('settlement_history', JSON.stringify(settlementData));
-
-      // Track the hedge creation as a transaction
-      trackSuccessfulTransaction({
-        hash: batchId,
-        type: 'hedge',
-        from: 'manual',
-        to: asset,
-        value: capitalUsed.toFixed(2),
-        tokenSymbol: 'USDC',
-        description: `${hedgeType} ${asset} hedge at $${entryNum.toFixed(2)}`,
+      // Call the API endpoint to execute hedge on Moonlander
+      console.log('🛡️ MANUAL HEDGE REQUEST', {
+        asset,
+        side: hedgeType,
+        notionalValue: Math.round(sizeNum * entryNum),
+        leverage,
+        stopLoss: stopNum,
+        takeProfit: targetNum,
+        reason: reason || `Manual ${hedgeType} hedge on ${asset}`
       });
 
-      // Trigger event to refresh UI
-      window.dispatchEvent(new Event('hedgeAdded'));
+      const response = await fetch('/api/agents/hedging/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolioId: 1,
+          asset,
+          side: hedgeType,
+          notionalValue: Math.round(sizeNum * entryNum),
+          leverage,
+          stopLoss: stopNum,
+          takeProfit: targetNum,
+          reason: reason || `Manual ${hedgeType} hedge on ${asset}`
+        })
+      });
 
-      // Success!
-      setTimeout(() => {
-        setCreating(false);
-        onClose();
-        // Reset form
-        setSize('0.01');
-        setEntryPrice('');
-        setTargetPrice('');
-        setStopLoss('');
-        setReason('');
-      }, 500);
+      console.log('🛡️ MANUAL HEDGE API RESPONSE', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `API error: ${response.status}` }));
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('🛡️ MANUAL HEDGE SUCCESS', data);
+
+      if (data.success) {
+        // Store hedge in localStorage with FULL details for backwards compatibility
+        const batchId = data.orderId || `manual-hedge-${Date.now()}`;
+        
+        // Save to settlement history with complete hedge data
+        const settlements = JSON.parse(localStorage.getItem('settlement_history') || '{}');
+        settlements[batchId] = {
+          batchId,
+          type: 'hedge',
+          timestamp: Date.now(),
+          status: 'active',
+          hedgeDetails: {
+            asset,
+            type: hedgeType,
+            size: sizeNum,
+            leverage,
+            entryPrice: entryNum,
+            stopLoss: stopNum,
+            targetPrice: targetNum,
+            capitalUsed: (sizeNum * entryNum) / leverage,
+            reason: reason || `Manual ${hedgeType} hedge on ${asset}`
+          },
+          managerSignature: true // Mark as hedge position
+        };
+        localStorage.setItem('settlement_history', JSON.stringify(settlements));
+
+        // Also track as transaction
+        trackSuccessfulTransaction({
+          hash: batchId,
+          type: 'hedge',
+          from: 'manual',
+          to: asset,
+          value: (sizeNum * entryNum / leverage).toFixed(2),
+          tokenSymbol: 'USDC',
+          description: `${hedgeType} ${asset} hedge at $${entryNum.toFixed(2)}`,
+        });
+
+        // Trigger event to refresh UI
+        window.dispatchEvent(new Event('hedgeAdded'));
+
+        // Success!
+        setTimeout(() => {
+          setCreating(false);
+          onClose();
+          // Reset form
+          setSize('0.01');
+          setEntryPrice('');
+          setTargetPrice('');
+          setStopLoss('');
+          setReason('');
+        }, 500);
+      } else {
+        throw new Error(data.error || 'Failed to create hedge');
+      }
     } catch (err) {
-      console.error('Failed to create hedge:', err);
-      setError('Failed to create hedge. Please try again.');
+      console.error('🛡️ MANUAL HEDGE ERROR', err);
+      setError(err instanceof Error ? err.message : 'Failed to create hedge. Please try again.');
       setCreating(false);
     }
   };
@@ -256,8 +292,11 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       value={size}
                       onChange={(e) => setSize(e.target.value)}
                       placeholder="0.01"
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
+                      className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#1d1d1f]"
                     />
+                    <div className="mt-1 text-[10px] text-[#86868b]">
+                      Typical: 0.01-1.0 for BTC/ETH
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[13px] font-semibold text-[#1d1d1f] mb-2">
@@ -333,12 +372,17 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
 
                 {/* Potential P&L Preview */}
                 {potentialPnL && (
-                  <div className="p-4 bg-[#f5f5f7] rounded-[12px]">
+                  <div className="p-4 bg-[#f5f5f7] rounded-[12px] space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] font-semibold text-[#86868b]">Potential P&L at Target:</span>
                       <span className={`text-[17px] font-bold ${parseFloat(potentialPnL) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                        {parseFloat(potentialPnL) >= 0 ? '+' : ''}{potentialPnL} USDC
+                        {parseFloat(potentialPnL) >= 0 ? '+' : ''}{parseFloat(potentialPnL).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
                       </span>
+                    </div>
+                    <div className="text-[10px] text-[#86868b] space-y-0.5">
+                      <div>Position Value: ${(parseFloat(size) * parseFloat(entryPrice || '0')).toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                      <div>Notional (with {leverage}x leverage): ${(parseFloat(size) * parseFloat(entryPrice || '0') * leverage).toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                      <div>Price Move: ${Math.abs(parseFloat(entryPrice || '0') - parseFloat(targetPrice || '0')).toLocaleString('en-US', { maximumFractionDigits: 0 })} ({((Math.abs(parseFloat(entryPrice || '0') - parseFloat(targetPrice || '0')) / parseFloat(entryPrice || '1')) * 100).toFixed(1)}%)</div>
                     </div>
                   </div>
                 )}
