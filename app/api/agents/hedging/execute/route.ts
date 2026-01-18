@@ -390,14 +390,6 @@ export async function POST(request: NextRequest) {
         ? '✅ PRIVATE ON-CHAIN: Trade executed with privacy protection'
         : `✅ ON-CHAIN: Hedge executed successfully${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`,
     } satisfies HedgeExecutionResponse);
-      privateMode,
-      commitmentHash,
-      stealthAddress,
-      zkProofGenerated,
-      message: privateMode
-        ? '✅ PRIVATE ON-CHAIN HEDGE: Executed via Moonlander with ZK privacy layer'
-        : '✅ ON-CHAIN HEDGE: Executed successfully via Moonlander smart contracts',
-    } satisfies HedgeExecutionResponse);
 
   } catch (error) {
     logger.error('❌ Hedge execution failed', { error });
