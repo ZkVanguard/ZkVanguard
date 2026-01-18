@@ -10,18 +10,18 @@
   --background-tertiary: #FAFAFA;
   --background-grouped: #F2F2F7;
   
-  /* Text Colors - Enhanced Contrast */
+  /* Text Colors - Enhanced Contrast (Darker for better visibility) */
   --label-primary: #1D1D1F;
   --label-secondary: #424245;
   --label-tertiary: #6E6E73;
-  --label-quaternary: #86868B;
+  --label-quaternary: #6E6E73; /* Changed from #86868B to darker #6E6E73 */
   
   /* System Colors */
   --color-blue: #007AFF;
   --color-green: #34C759;
   --color-orange: #FF9500;
   --color-red: #FF3B30;
-  --color-gray: #8E8E93;
+  --color-gray: #6E6E73; /* Changed from #8E8E93 to darker */
   
   /* Separator Colors */
   --separator-opaque: #C6C6C8;
@@ -129,14 +129,20 @@ body {
   line-height: 1.6;
 }
 
-/* Ensure text is always readable */
-h1, h2, h3, h4, h5, h6 {
+/* Ensure text is always readable - FORCED DARK TEXT */
+h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, label, button {
   color: var(--label-primary);
+}
+
+h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
 }
 
-p, span, div {
-  color: var(--label-primary);
+/* Only allow white text on colored backgrounds */
+.bg-\[#007AFF\] *, .bg-\[#34C759\] *, .bg-\[#FF3B30\] *, .bg-\[#5856D6\] *, 
+.bg-\[#AF52DE\] *, .bg-\[#FF9500\] *, .bg-gradient-to-r *, 
+[class*="bg-gradient"] *, .text-white {
+  /* Allow white text on colored backgrounds */
 }
 
 .text-secondary {

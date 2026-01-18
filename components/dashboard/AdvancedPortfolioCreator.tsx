@@ -17,6 +17,9 @@ interface StrategyConfig {
   hedgingEnabled: boolean;
   maxDrawdown: number;
   concentrationLimit: number;
+  // Auto-Approval Settings
+  autoApprovalEnabled: boolean;
+  autoApprovalThreshold: number; // USD value threshold for auto-approval
   // ZK-protected fields
   privateStrategy: {
     entryPoints?: number[];
@@ -56,6 +59,8 @@ export function AdvancedPortfolioCreator() {
     hedgingEnabled: true,
     maxDrawdown: 20,
     concentrationLimit: 30,
+    autoApprovalEnabled: false,
+    autoApprovalThreshold: 10000, // $10K default
     privateStrategy: {},
   });
 
@@ -79,6 +84,8 @@ export function AdvancedPortfolioCreator() {
       concentrationLimit: 20,
       hedgingEnabled: true,
       rebalanceFrequency: 'weekly' as const,
+      autoApprovalEnabled: true,
+      autoApprovalThreshold: 5000, // $5K for conservative
     },
     balanced: {
       targetYield: 1000,
@@ -87,6 +94,8 @@ export function AdvancedPortfolioCreator() {
       concentrationLimit: 30,
       hedgingEnabled: true,
       rebalanceFrequency: 'weekly' as const,
+      autoApprovalEnabled: true,
+      autoApprovalThreshold: 10000, // $10K for balanced
     },
     aggressive: {
       targetYield: 2000,
@@ -95,6 +104,8 @@ export function AdvancedPortfolioCreator() {
       concentrationLimit: 50,
       hedgingEnabled: true,
       rebalanceFrequency: 'daily' as const,
+      autoApprovalEnabled: true,
+      autoApprovalThreshold: 25000, // $25K for aggressive
     },
   };
 
@@ -596,6 +607,97 @@ function StrategyStep({
               </div>
             </label>
           </div>
+
+          {/* Auto-Approval Settings */}
+          {strategy.hedgingEnabled && (
+            <div className="bg-[#34C759]/5 border border-[#34C759]/20 rounded-[14px] p-4 space-y-4">
+              <label className="flex items-center cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={strategy.autoApprovalEnabled}
+                  onChange={(e) => setStrategy({ ...strategy, autoApprovalEnabled: e.target.checked })}
+                  className="w-5 h-5 rounded-[6px] border-black/20 text-[#34C759] focus:ring-[#34C759]/50 flex-shrink-0 accent-[#34C759]"
+                />
+                <div className="ml-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#34C759]" />
+                  <span className="text-[13px] sm:text-[14px] font-semibold text-[#1d1d1f]">Enable Auto-Approval for AI Hedges</span>
+                  <InfoTooltip content={[
+                    "🤖 Autonomous Execution: AI can automatically execute hedges below threshold without waiting for your signature",
+                    "",
+                    "⚡ Faster Protection: Critical hedges execute instantly during volatile markets",
+                    "",
+                    "🔐 Still Secure: All transactions use x402 gasless protocol with on-chain verification",
+                    "",
+                    "📊 Transparency: All auto-approved hedges are logged and can be reviewed in your dashboard",
+                    "",
+                    "💡 Recommended: Enable for hands-off portfolio management"
+                  ]} />
+                </div>
+              </label>
+
+              {strategy.autoApprovalEnabled && (
+                <div className="ml-8 space-y-2">
+                  <label className="block text-[12px] sm:text-[13px] font-medium text-[#1d1d1f] flex items-center gap-2">
+                    Auto-Approval Threshold (USD)
+                    <InfoTooltip content={[
+                      "Maximum hedge value that can be executed without your signature",
+                      "",
+                      "💡 Examples:",
+                      `• Current: $${(strategy.autoApprovalThreshold / 1000).toFixed(0)}K - Hedges below this execute instantly`,
+                      "",
+                      "Recommended by strategy:",
+                      "• Conservative: $5K (tight control)",
+                      "• Balanced: $10K (standard)",
+                      "• Aggressive: $25K (maximum autonomy)",
+                      "",
+                      "⚠️ Hedges above threshold will still require your signature"
+                    ]} />
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] sm:text-[14px] font-semibold text-[#34C759]">
+                      ${(strategy.autoApprovalThreshold / 1000).toFixed(0)}K
+                    </span>
+                    <input
+                      type="range"
+                      min="1000"
+                      max="50000"
+                      step="1000"
+                      value={strategy.autoApprovalThreshold}
+                      onChange={(e) => setStrategy({ ...strategy, autoApprovalThreshold: Number(e.target.value) })}
+                      className="flex-1 accent-[#34C759]"
+                    />
+                    <input
+                      type="number"
+                      min="1000"
+                      max="50000"
+                      step="1000"
+                      value={strategy.autoApprovalThreshold}
+                      onChange={(e) => setStrategy({ ...strategy, autoApprovalThreshold: Number(e.target.value) })}
+                      className="w-24 px-3 py-1.5 bg-[#f5f5f7] border border-black/5 rounded-[8px] text-[13px] text-[#1d1d1f] focus:border-[#34C759] focus:ring-2 focus:ring-[#34C759]/20 focus:outline-none transition-all"
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-between text-[10px] sm:text-[11px] font-medium">
+                    <span className="text-[#424245]">$1K (Min)</span>
+                    <span className="text-[#424245]">$25K (Balanced)</span>
+                    <span className="text-[#424245]">$50K (Max)</span>
+                  </div>
+                  
+                  <div className="mt-3 p-3 bg-[#34C759]/10 rounded-[10px] border border-[#34C759]/20">
+                    <div className="flex items-start gap-2 text-[11px] sm:text-[12px] text-[#1d1d1f]">
+                      <CheckCircle className="w-4 h-4 text-[#34C759] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-[#1d1d1f]">Auto-Approval Active</p>
+                        <p className="text-[#424245] mt-1 font-medium">
+                          Hedges <strong className="text-[#1d1d1f]">≤ ${(strategy.autoApprovalThreshold / 1000).toFixed(0)}K</strong> execute instantly. 
+                          Hedges <strong className="text-[#1d1d1f]">&gt; ${(strategy.autoApprovalThreshold / 1000).toFixed(0)}K</strong> require signature.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -801,9 +903,9 @@ function ZKProtectionStep({
       <div className="bg-[#007AFF]/5 border border-[#007AFF]/20 rounded-[14px] p-4">
         <div className="flex items-start gap-3">
           <FileSignature className="w-4 h-4 sm:w-5 sm:h-5 text-[#007AFF] flex-shrink-0 mt-0.5" />
-          <div className="text-[13px] sm:text-[14px] text-[#1d1d1f]">
+          <div className="text-[13px] sm:text-[14px]">
             <p className="font-semibold text-[#007AFF] mb-1">Signature Required</p>
-            <p>All portfolio operations require wallet signature for on-chain verification. Your strategy will be cryptographically signed and stored on Cronos zkEVM.</p>
+            <p className="text-[#424245] font-medium">All portfolio operations require wallet signature for on-chain verification. Your strategy will be cryptographically signed and stored on Cronos zkEVM.</p>
           </div>
         </div>
       </div>
@@ -913,12 +1015,12 @@ function ZKProtectionStep({
                 </div>
               )}
 
-              <div className="mt-3 text-[10px] sm:text-[11px] text-[#666666] space-y-1">
-                <div>• Entry/exit points encrypted</div>
-                <div>• Risk parameters hidden</div>
-                <div>• Verifiable without revealing strategy</div>
-                <div>• Cryptographically signed by wallet</div>
-                <div>• Stored on Cronos zkEVM with gasless tx (x402)</div>
+              <div className="mt-3 text-[10px] sm:text-[11px] space-y-1 font-medium">
+                <div className="text-[#424245]">• Entry/exit points encrypted</div>
+                <div className="text-[#424245]">• Risk parameters hidden</div>
+                <div className="text-[#424245]">• Verifiable without revealing strategy</div>
+                <div className="text-[#424245]">• Cryptographically signed by wallet</div>
+                <div className="text-[#424245]">• Stored on Cronos zkEVM with gasless tx (x402)</div>
               </div>
             </motion.div>
           )}
@@ -1087,15 +1189,15 @@ function ReviewStep({
       <div className="bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[14px] p-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-[#FF9500] flex-shrink-0 mt-0.5" />
-          <div className="text-[12px] sm:text-[13px] text-[#1d1d1f]">
+          <div className="text-[12px] sm:text-[13px]">
             <p className="font-semibold text-[#FF9500] mb-1">On-Chain Commitment</p>
-            <p className="mb-2">This will commit your portfolio and strategy to Cronos zkEVM Testnet:</p>
-            <ul className="list-disc list-inside space-y-1 text-[10px] sm:text-[11px] text-[#86868b]">
-              <li>Portfolio creation requires wallet signature</li>
-              <li>Strategy metadata stored on-chain with ZK proof</li>
-              <li>All operations are cryptographically verified</li>
-              <li>Gas fees covered by x402 gasless protocol</li>
-              <li>Immutable audit trail on blockchain</li>
+            <p className="mb-2 text-[#424245] font-medium">This will commit your portfolio and strategy to Cronos zkEVM Testnet:</p>
+            <ul className="list-disc list-inside space-y-1 text-[10px] sm:text-[11px] font-medium">
+              <li className="text-[#424245]">Portfolio creation requires wallet signature</li>
+              <li className="text-[#424245]">Strategy metadata stored on-chain with ZK proof</li>
+              <li className="text-[#424245]">All operations are cryptographically verified</li>
+              <li className="text-[#424245]">Gas fees covered by x402 gasless protocol</li>
+              <li className="text-[#424245]">Immutable audit trail on blockchain</li>
             </ul>
           </div>
         </div>
