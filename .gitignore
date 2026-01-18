@@ -265,3 +265,5 @@ storybook-static/
 *.local.ps1
 
 
+docs/guides/QUICK_DEMO_SCRIPT.md
+docs/reports/AI_CHAT_TEST_REPORT.md
