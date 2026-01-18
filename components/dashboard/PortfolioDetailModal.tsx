@@ -45,6 +45,10 @@ interface PortfolioDetailModalProps {
 
 export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'analysis' | 'settings'>('overview');
+  const [riskLevel, setRiskLevel] = useState<'Low' | 'Medium' | 'High'>(portfolio.riskLevel);
+  const [targetAPY, setTargetAPY] = useState(portfolio.targetAPY);
+  const [autoRebalance, setAutoRebalance] = useState(true);
+  const [rebalanceThreshold, setRebalanceThreshold] = useState(5);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: PieChart },
@@ -303,10 +307,114 @@ export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDe
                 <Settings className="w-5 h-5 text-[#007AFF]" />
                 Portfolio Settings
               </h3>
-              <div className="bg-[#f5f5f7] rounded-xl p-8 text-center">
-                <Settings className="w-12 h-12 text-[#86868b] mx-auto mb-3" />
-                <p className="text-[#86868b]">Settings panel coming soon</p>
-                <p className="text-sm text-[#86868b] mt-1">Edit strategy, risk level, and rebalancing frequency</p>
+
+              {/* Risk Level */}
+              <div className="bg-[#f5f5f7] rounded-xl p-6">
+                <label className="block text-sm font-medium text-[#1d1d1f] mb-3">Risk Level</label>
+                <div className="flex gap-3">
+                  {(['Low', 'Medium', 'High'] as const).map((level) => (
+                    <button
+                      key={level}
+                      onClick={() => setRiskLevel(level)}
+                      className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+                        riskLevel === level
+                          ? 'bg-[#007AFF] text-white'
+                          : 'bg-white text-[#424245] hover:bg-gray-50'
+                      }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-[#86868b] mt-3">
+                  {riskLevel === 'Low' && 'Conservative approach with stable assets'}
+                  {riskLevel === 'Medium' && 'Balanced mix of stable and growth assets'}
+                  {riskLevel === 'High' && 'Aggressive strategy for maximum returns'}
+                </p>
+              </div>
+
+              {/* Target APY */}
+              <div className="bg-[#f5f5f7] rounded-xl p-6">
+                <label className="block text-sm font-medium text-[#1d1d1f] mb-3">
+                  Target APY: {targetAPY}%
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={targetAPY}
+                  onChange={(e) => setTargetAPY(Number(e.target.value))}
+                  className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+                />
+                <div className="flex justify-between text-sm text-[#86868b] mt-2">
+                  <span>1%</span>
+                  <span>50%</span>
+                </div>
+              </div>
+
+              {/* Auto-Rebalance */}
+              <div className="bg-[#f5f5f7] rounded-xl p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[#1d1d1f]">Auto-Rebalance</label>
+                    <p className="text-sm text-[#86868b] mt-1">Automatically maintain target allocations</p>
+                  </div>
+                  <button
+                    onClick={() => setAutoRebalance(!autoRebalance)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      autoRebalance ? 'bg-[#34C759]' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoRebalance ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {autoRebalance && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <label className="block text-sm font-medium text-[#1d1d1f] mb-3">
+                      Rebalance Threshold: {rebalanceThreshold}%
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={rebalanceThreshold}
+                      onChange={(e) => setRebalanceThreshold(Number(e.target.value))}
+                      className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+                    />
+                    <p className="text-sm text-[#86868b] mt-2">
+                      Rebalance when allocation drifts by {rebalanceThreshold}%
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Save Button */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    // TODO: Implement save functionality
+                    alert('Settings saved successfully!');
+                  }}
+                  className="flex-1 bg-[#007AFF] text-white py-3 px-6 rounded-xl font-medium hover:bg-[#0051D5] transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => {
+                    setRiskLevel(portfolio.riskLevel);
+                    setTargetAPY(portfolio.targetAPY);
+                    setAutoRebalance(true);
+                    setRebalanceThreshold(5);
+                  }}
+                  className="px-6 py-3 bg-white text-[#424245] rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Reset
+                </button>
               </div>
             </div>
           )}
