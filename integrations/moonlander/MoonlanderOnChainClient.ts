@@ -5,13 +5,13 @@
  * Uses actual contract addresses from: https://docs.moonlander.trade/others/smart-contracts
  * 
  * NOTE: Moonlander uses a Diamond proxy (EIP-2535) so we use raw transaction encoding
- * with observed function selectors from the mainnet contract.
+ * with verified function selectors.
  * 
- * Function selectors (from on-chain analysis):
- * - openMarketTradeWithPythAndExtraFee: 0x16d48137
+ * Function selectors (verified from contract ABI):
+ * - openMarketTradeWithPythAndExtraFee: 0x85420cc3
  * - closeTrade: 0x73b1caa3
  * - updateTradeTpAndSl: 0x67d22d9b
- * - addMargin: 0x________
+ * - addMargin: 0xfc05c34d
  */
 
 import { ethers, Contract, Wallet, Provider, Signer, parseUnits, formatUnits, AbiCoder, keccak256 } from 'ethers';
@@ -21,13 +21,13 @@ import { ERC20_ABI } from './abis';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MOONLANDER FUNCTION SELECTORS (Diamond proxy)
-// These are the actual on-chain selectors observed from mainnet transactions
+// These are verified function selectors matching the contract ABI
 // ═══════════════════════════════════════════════════════════════════════════
 const MOONLANDER_SELECTORS = {
-  openMarketTradeWithPythAndExtraFee: '0x16d48137',
+  openMarketTradeWithPythAndExtraFee: '0x85420cc3',
   closeTrade: '0x73b1caa3',
   updateTradeTpAndSl: '0x67d22d9b',
-  addMargin: '0x05a24c0f',
+  addMargin: '0xfc05c34d',
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -211,10 +211,10 @@ export class MoonlanderOnChainClient {
         logger.info('Collateral approved');
       }
 
-      // Build raw calldata based on observed transaction structure
-      // Function: openMarketTradeWithPythAndExtraFee (0x16d48137)
+      // Build raw calldata based on verified function signature
+      // Function: openMarketTradeWithPythAndExtraFee (0x85420cc3)
       // 
-      // Based on tx analysis, the parameters appear to be:
+      // Parameters:
       // - referrer (address)
       // - pairIndex (uint256)  
       // - collateralToken (address)
@@ -223,11 +223,9 @@ export class MoonlanderOnChainClient {
       // - leveragedAmount (uint256)
       // - tp (uint256)
       // - sl (uint256)
-      // - direction (uint256) - 2 = long?
+      // - direction (uint256) - 2 = long, 1 = short
       // - fee (uint256)
-      // - pythUpdateData offset
-      // - pythUpdateData length
-      // - pythUpdateData bytes[]
+      // - pythUpdateData (bytes[])
 
       const referrer = '0x0000000000000000000000000000000000000000';
       const collateralToken = this.contracts.USDC;
