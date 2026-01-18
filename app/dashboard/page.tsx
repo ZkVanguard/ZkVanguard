@@ -120,24 +120,147 @@ export default function DashboardPage() {
   const displayAddress = address?.toString() || '';
   const portfolioAssets = ['CRO', 'USDC', 'WBTC', 'ETH'];
   
+  // Debug notification state changes
+  useEffect(() => {
+    console.log('🔔 NOTIFICATION STATE CHANGED:', notification);
+  }, [notification]);
+  
   // Close mobile menu on nav change
   const handleNavChange = (id: NavId) => {
     setActiveNav(id);
     setMobileMenuOpen(false);
   };
 
-  const handleOpenHedge = (market: PredictionMarket) => {
-    logger.info('Opening hedge', { market: market.question });
-    setNotification(`Creating hedge for ${market.relatedAssets.join(', ')}...`);
-    setTimeout(() => setNotification(null), 3000);
+  const handleOpenHedge = async (market: PredictionMarket) => {
+    console.log('🛡️ HEDGE BUTTON CLICKED', market);
+    logger.info('🛡️ Opening hedge on Moonlander', { market: market.question });
+    
+    // Show initial loading notification (no setTimeout yet)
+    const loadingMsg = `🛡️ Processing hedge request...`;
+    console.log('🔔 SETTING NOTIFICATION:', loadingMsg);
+    setNotification(loadingMsg);
+    console.log('🔔 NOTIFICATION STATE SHOULD BE:', loadingMsg);
+    
+    try {
+      // Determine primary asset to hedge
+      const primaryAsset = market.relatedAssets[0] || 'BTC';
+      
+      // Calculate notional value based on probability (higher probability = larger hedge)
+      const baseNotional = 1000; // $1000 base hedge
+      const notionalValue = baseNotional * (market.probability / 100);
+      
+      console.log('🔧 Hedge parameters:', {
+        asset: primaryAsset,
+        notionalValue,
+        leverage: 5
+      });
+      
+      const response = await fetch('/api/agents/hedging/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolioId: 1,
+          asset: primaryAsset,
+          side: 'SHORT',
+          notionalValue: Math.round(notionalValue),
+          leverage: 5,
+          reason: market.question,
+        })
+      });
+
+      console.log('📡 API Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('📦 API Response data:', data);
+      
+      if (data.success) {
+        const simulationBadge = data.simulationMode ? '\n\n⚠️ SIMULATION MODE' : '\n\n🔴 LIVE TRADING';
+        const msg = `✅ Hedge Opened Successfully\n\nMarket: ${data.market}\nSide: ${data.side}\nSize: ${data.size}\nEntry: $${data.entryPrice || 'Pending'}\nLeverage: ${data.leverage}x${simulationBadge}`;
+        console.log('✅ Setting success notification:', msg);
+        setNotification(msg);
+        logger.info('✅ Moonlander hedge successful', data);
+        
+        // Auto-clear after 10 seconds
+        setTimeout(() => {
+          console.log('⏰ Clearing notification');
+          setNotification(null);
+        }, 10000);
+      } else {
+        throw new Error(data.error || 'Hedge execution failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Hedge error:', error);
+      logger.error('❌ Moonlander hedge failed', { error });
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      setNotification(`❌ Hedge Failed\n\n${errorMsg}\n\nCheck browser console for details.`);
+      
+      // Auto-clear error after 10 seconds
+      setTimeout(() => setNotification(null), 10000);
+    }
   };
   
-  const handleAgentAnalysis = (market: PredictionMarket) => {
-    const msg = market.recommendation === 'HEDGE'
-      ? `🚨 Alert for ${market.relatedAssets.join(', ')}\n\nRecommending immediate hedge activation.`
-      : `✅ Analysis Complete\n\nNo immediate action required.`;
-    setAgentMessage(msg);
-    setTimeout(() => setAgentMessage(null), 10000);
+  const handleAgentAnalysis = async (market: PredictionMarket) => {
+    logger.info('🤖 Triggering AI Agent Analysis', { market: market.question });
+    
+    // Show loading message
+    setAgentMessage('🤖 AI Agents Analyzing...\n\nRisk Agent, Hedging Agent, and Settlement Agent are evaluating your portfolio...');
+    
+    try {
+      // Call the portfolio action API
+      const response = await fetch('/api/agents/portfolio-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolioId: 1,
+          currentValue: 50000,
+          targetYield: 12,
+          riskTolerance: 50,
+          assets: market.relatedAssets,
+          predictions: [{
+            question: market.question,
+            probability: market.probability,
+            impact: market.impact,
+            recommendation: market.recommendation,
+            source: market.source
+          }],
+          realMetrics: {
+            riskScore: market.probability,
+            volatility: 0.35,
+            sharpeRatio: 1.2,
+            hedgeSignals: market.recommendation === 'HEDGE' ? 1 : 0,
+            totalValue: 50000
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Format the AI response
+      const agentName = data.agentAnalysis?.leadAgent || 'AI Agent';
+      const reasoning = data.reasoning?.slice(0, 3).join('\n• ') || 'Analysis complete';
+      const recommendations = data.recommendations?.slice(0, 2).join('\n• ') || '';
+      
+      const msg = `🤖 ${agentName}\n\nAction: ${data.action}\nConfidence: ${Math.round(data.confidence * 100)}%\nRisk Score: ${data.riskScore}/100\n\n• ${reasoning}${recommendations ? '\n\n• ' + recommendations : ''}`;
+      
+      setAgentMessage(msg);
+      logger.info('✅ AI Analysis Complete', { action: data.action, confidence: data.confidence });
+      
+    } catch (error) {
+      logger.error('❌ AI Analysis Failed', { error });
+      setAgentMessage('❌ AI Analysis Error\n\nPlease check console for details.');
+    }
+    
+    // Auto-dismiss after 15 seconds
+    setTimeout(() => setAgentMessage(null), 15000);
   };
 
   useEffect(() => {
@@ -369,13 +492,14 @@ export default function DashboardPage() {
       
       {/* Notification Toast */}
       {notification && (
-        <div className="fixed top-20 lg:top-[68px] left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <p className="text-sm font-medium">{notification}</p>
+        <div className="fixed top-20 lg:top-[68px] left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300 max-w-md">
+          <div className="flex items-start gap-3 px-5 py-4 bg-gray-900 text-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+            <div className="w-2 h-2 mt-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0" />
+            <p className="text-sm font-medium whitespace-pre-line leading-relaxed">{notification}</p>
           </div>
         </div>
       )}
+      {notification && console.log('🔔 RENDERING NOTIFICATION IN DOM:', notification)}
 
       {/* Create Portfolio CTA - always show for connected users */}
       {isConnected && (
@@ -510,7 +634,7 @@ export default function DashboardPage() {
               title="Positions" 
               subtitle="Manage your portfolio holdings"
             />
-            <PositionsList address={displayAddress} />
+            <PositionsList address={displayAddress} onOpenHedge={handleOpenHedge} />
           </Card>
         );
         
