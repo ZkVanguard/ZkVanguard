@@ -49,8 +49,10 @@ class CryptocomExchangeService {
   private readonly SYMBOL_MAP: Record<string, string> = {
     'BTC': 'BTC_USD',
     'BITCOIN': 'BTC_USD',
+    'WBTC': 'BTC_USD',  // Wrapped BTC (1:1 with BTC)
     'ETH': 'ETH_USD',
     'ETHEREUM': 'ETH_USD',
+    'WETH': 'ETH_USD',  // Wrapped ETH (1:1 with ETH)
     'CRO': 'CRO_USD',
     'CRONOS': 'CRO_USD',
     'USDT': 'USDT_USD',
