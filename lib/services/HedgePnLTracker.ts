@@ -19,6 +19,7 @@ export interface HedgePnLUpdate {
   pnlPercentage: number;
   liquidationPrice: number | null;
   isNearLiquidation: boolean;
+  reason: string | null;
 }
 
 export class HedgePnLTracker {
@@ -66,6 +67,7 @@ export class HedgePnLTracker {
       pnlPercentage,
       liquidationPrice: hedge.liquidation_price ? Number(hedge.liquidation_price) : null,
       isNearLiquidation,
+      reason: hedge.reason,
     };
   }
 

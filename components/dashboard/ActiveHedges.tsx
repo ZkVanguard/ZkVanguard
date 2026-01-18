@@ -94,10 +94,28 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               pnlPercent: pnl.pnlPercentage,
               status: 'active' as const,
               openedAt: new Date(),
-              reason: 'Real hedge from database',
+              reason: pnl.reason || `${pnl.leverage}x leveraged hedge @ $${pnl.entryPrice.toFixed(2)}`,
             })) || [];
 
             console.log('🔍 ActiveHedges: Mapped hedges:', dbHedges);
+
+            // Calculate stats from the hedges
+            const totalPnL = dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
+            const profitable = dbHedges.filter(h => h.pnl > 0).length;
+            const winRate = dbHedges.length > 0 ? (profitable / dbHedges.length) * 100 : 0;
+            const pnlValues = dbHedges.map(h => h.pnl || 0);
+            const bestTrade = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
+            const worstTrade = pnlValues.length > 0 ? Math.min(...pnlValues) : 0;
+
+            setStats({
+              totalHedges: dbHedges.length,
+              activeHedges: dbHedges.length,
+              winRate: Math.round(winRate),
+              totalPnL,
+              avgHoldTime: '24h', // Could calculate from timestamps if available
+              bestTrade,
+              worstTrade,
+            });
 
             // Always use database data, even if empty - no localStorage fallback for active positions
             setHedges(dbHedges);
