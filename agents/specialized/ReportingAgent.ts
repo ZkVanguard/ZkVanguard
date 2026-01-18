@@ -292,7 +292,8 @@ export class ReportingAgent extends BaseAgent {
 
       // Import real services
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
-      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const realMarketDataService = getMarketDataService();
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
@@ -420,7 +421,8 @@ export class ReportingAgent extends BaseAgent {
 
       // Import real services
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
-      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const realMarketDataService = getMarketDataService();
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
