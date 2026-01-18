@@ -73,6 +73,9 @@ const EnhancedChat = dynamic(() => import('@/components/dashboard/EnhancedChat')
   ssr: false
 });
 
+const SettingsModal = dynamic(() => import('@/components/dashboard/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
+  ssr: false
+});
 // Reusable loading skeleton
 function LoadingSkeleton({ height = "h-40" }: { height?: string }) {
   return (
@@ -113,6 +116,7 @@ export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [hedgeModalOpen, setHedgeModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
@@ -383,7 +387,13 @@ export default function DashboardPage() {
           
           {/* Mobile Menu Footer */}
           <div className="p-4 border-t border-black/5">
-            <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f5f5f7] rounded-[18px] transition-colors">
+            <button 
+              onClick={() => {
+                setSettingsOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f5f5f7] rounded-[18px] transition-colors"
+            >
               <Settings className="w-5 h-5 text-[#86868b]" />
               <span className="font-medium text-[#1d1d1f]">Settings</span>
             </button>
@@ -454,7 +464,10 @@ export default function DashboardPage() {
             
             <div className="my-4 mx-4 border-t border-black/5" />
             
-            <button className="w-[calc(100%-16px)] mx-2 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-colors duration-200">
+            <button 
+              onClick={() => setSettingsOpen(true)}
+              className="w-[calc(100%-16px)] mx-2 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-colors duration-200"
+            >
               <Settings className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
               <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Settings</span>
             </button>
@@ -565,6 +578,14 @@ export default function DashboardPage() {
         onClose={() => setHedgeModalOpen(false)}
         availableAssets={portfolioAssets}
       />
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <SettingsModal 
+          isOpen={settingsOpen} 
+          onClose={() => setSettingsOpen(false)} 
+        />
+      )}
     </div>
   );
 
