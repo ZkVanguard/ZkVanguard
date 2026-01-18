@@ -14,7 +14,7 @@ A comprehensive, C4-compliant architecture document following the [C4 Model](htt
 
 **ZkVanguard** is an AI-powered multi-chain RWA (Real World Asset) risk management platform that combines:
 
-- **5 Specialized AI Agents** for autonomous portfolio management
+- **6 Specialized AI Agents** for autonomous portfolio management
 - **ZK-STARK Proofs** (521-bit quantum-resistant) for privacy-preserving analytics
 - **Gasless Transactions** via x402 protocol ($0.01 USDC per tx)
 - **Multi-Chain Support** (Cronos EVM + SUI)
@@ -210,15 +210,27 @@ A comprehensive, C4-compliant architecture document following the [C4 Model](htt
 │  │ • Drawdown  │  │ • Delta     │  │ • Approval  │  │   format    │        │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘        │
 │                                                                              │
+│                      ┌──────────────────────────┐                            │
+│                      │  📡 PRICE MONITOR AGENT  │                            │
+│                      │   ────────────────────   │                            │
+│                      │  • Autonomous monitoring │                            │
+│                      │  • Threshold alerts      │                            │
+│                      │  • Auto-hedge triggers   │                            │
+│                      └──────────────────────────┘                            │
+│                                                                              │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                     📡 SHARED SERVICES                                │  │
 │  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐               │  │
 │  │  │ PriceService  │ │ PredictService│ │ VVSFinance   │               │  │
 │  │  │ (Crypto.com)  │ │ (Polymarket)  │ │ (DEX quotes) │               │  │
 │  │  └───────────────┘ └───────────────┘ └───────────────┘               │  │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐               │  │
+│  │  │PrivateHedge   │ │ Moonlander    │ │ HedgePnL     │               │  │
+│  │  │(stealth addr) │ │ (perpetuals)  │ │ Tracker      │               │  │
+│  │  └───────────────┘ └───────────────┘ └───────────────┘               │  │
 │  │  ┌───────────────┐ ┌───────────────┐                                 │  │
-│  │  │PrivateHedge   │ │ Moonlander    │                                 │  │
-│  │  │(stealth addr) │ │ (perpetuals)  │                                 │  │
+│  │  │ SuiService    │ │ CoinGecko     │                                 │  │
+│  │  │ (multi-chain) │ │ (fallback)    │                                 │  │
 │  │  └───────────────┘ └───────────────┘                                 │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
@@ -234,6 +246,7 @@ A comprehensive, C4-compliant architecture document following the [C4 Model](htt
 | **Hedging** | Hedge position management | `calculateHedge()`, `openPosition()` | Moonlander, PrivateHedge |
 | **Settlement** | Transaction execution | `executeGasless()`, `approveToken()` | x402, contracts |
 | **Reporting** | Report generation | `summarize()`, `formatMarkdown()` | All agent outputs |
+| **PriceMonitor** | Autonomous price monitoring | `start()`, `addAlert()`, `checkThresholds()` | Crypto.com, CoinGecko |
 
 ### 3B. Private Hedge Architecture
 
@@ -472,16 +485,22 @@ A comprehensive, C4-compliant architecture document following the [C4 Model](htt
 | **API** | Chat Route | [app/api/chat/route.ts](../app/api/chat/route.ts) | Agent orchestration |
 | **API** | Prices Route | [app/api/prices/route.ts](../app/api/prices/route.ts) | Crypto.com prices |
 | **API** | Swap Route | [app/api/x402/swap/route.ts](../app/api/x402/swap/route.ts) | VVS execution |
+| **API** | Monitor Route | [app/api/agents/monitor/route.ts](../app/api/agents/monitor/route.ts) | Price monitor control |
 | **Agents** | Lead | [agents/core/LeadAgent.ts](../agents/core/LeadAgent.ts) | Orchestrator |
 | **Agents** | Risk | [agents/specialized/RiskAgent.ts](../agents/specialized/RiskAgent.ts) | VaR, Sharpe |
 | **Agents** | Hedging | [agents/specialized/HedgingAgent.ts](../agents/specialized/HedgingAgent.ts) | Moonlander |
 | **Agents** | Settlement | [agents/specialized/SettlementAgent.ts](../agents/specialized/SettlementAgent.ts) | x402 gasless |
+| **Agents** | Reporting | [agents/specialized/ReportingAgent.ts](../agents/specialized/ReportingAgent.ts) | Summaries |
+| **Agents** | PriceMonitor | [agents/specialized/PriceMonitorAgent.ts](../agents/specialized/PriceMonitorAgent.ts) | Autonomous alerts |
 | **Services** | x402 | [lib/services/X402GaslessService.ts](../lib/services/X402GaslessService.ts) | Gasless txs |
 | **Services** | VVS | [lib/services/VVSFinanceService.ts](../lib/services/VVSFinanceService.ts) | DEX quotes |
 | **Services** | PrivateHedge | [lib/services/PrivateHedgeService.ts](../lib/services/PrivateHedgeService.ts) | Stealth addresses, ZK commitments |
 | **Services** | Moonlander | [lib/services/MoonlanderService.ts](../lib/services/MoonlanderService.ts) | Perpetual futures |
+| **Services** | HedgePnL | [lib/services/HedgePnLTracker.ts](../lib/services/HedgePnLTracker.ts) | Real-time P&L tracking |
+| **Services** | SUI | [lib/services/SuiService.ts](../lib/services/SuiService.ts) | Multi-chain SUI support |
 | **ZK** | Backend | [zk/python/zk_system.py](../zk/python/zk_system.py) | CUDA proofs |
 | **Contracts** | x402 | [contracts/core/X402GaslessZKCommitmentVerifier.sol](../contracts/core/X402GaslessZKCommitmentVerifier.sol) | Main contract |
+| **Contracts** | ZKHedge | [contracts/core/ZKHedgeCommitment.sol](../contracts/core/ZKHedgeCommitment.sol) | On-chain hedge commitments |
 
 ### 4B. Class Relationships
 
