@@ -36,6 +36,30 @@ const TOKENS_TESTNET: Record<string, string> = {
   DOGE: '0x1a8E39ae59e5556B56b76fCBA98d22c9ae557396',
 };
 
+// Token addresses on Cronos Mainnet (chain 25)
+const TOKENS_MAINNET: Record<string, string> = {
+  // Wrapped CRO
+  WCRO: '0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23',
+  CRO: '0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23',
+  // Stablecoins
+  USDC: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59',
+  DEVUSDC: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59', // Map testnet token to mainnet USDC
+  USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+  DAI: '0xF2001B145b43032AAF5Ee2884e456CCd805F677D',
+  BUSD: '0x6aB6d61428fde76768D7b45D8BFeec19c6eF91A8',
+  // Major cryptocurrencies
+  WBTC: '0x062E66477Faf219F25D27dCED647BF57C3107d52',
+  BTC: '0x062E66477Faf219F25D27dCED647BF57C3107d52',
+  WETH: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+  ETH: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+  ATOM: '0xB888d8Dd1733d72681b30c00ee76BDE93ae7aa93',
+  LINK: '0xBc6f24649CCd67eC42342AccdCECCB2eFA27c9d9',
+  SHIB: '0xbED48612BC69fA1CaB67052b42a95FB30C1bcFee',
+  DOGE: '0x1a8E39ae59e5556B56b76fCBA98d22c9ae557396',
+  // VVS token
+  VVS: '0x2D03bECE6747ADC00E1a131BBA1469C15fD11e03',
+};
+
 // VVS Router ABI (minimal for swaps)
 export const VVS_ROUTER_ABI = [
   {
@@ -143,7 +167,7 @@ export class VVSFinanceService {
   constructor(chainId: number = 338) {
     this.chainId = chainId;
     this.routerAddress = chainId === 338 ? VVS_ROUTER_TESTNET : VVS_ROUTER_MAINNET;
-    this.tokens = chainId === 338 ? TOKENS_TESTNET : {}; // Add mainnet tokens later
+    this.tokens = chainId === 338 ? TOKENS_TESTNET : TOKENS_MAINNET;
     logger.info('VVSFinanceService initialized', { chainId, router: this.routerAddress });
   }
 
@@ -265,6 +289,10 @@ export class VVSFinanceService {
     // USDC, USDT typically have 6 decimals
     if (normalized === 'USDC' || normalized === 'DEVUSDC' || normalized === 'USDT') {
       return 6;
+    }
+    // WBTC/BTC has 8 decimals
+    if (normalized === 'BTC' || normalized === 'WBTC') {
+      return 8;
     }
     // Most other tokens have 18 decimals
     return 18;
