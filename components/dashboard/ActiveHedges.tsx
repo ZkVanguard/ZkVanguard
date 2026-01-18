@@ -70,135 +70,54 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
     try {
       processingRef.current = true;
-      const settlements = localStorage.getItem('settlement_history');
       
-      if (!settlements) {
-        setHedges([]);
-        setLoading(false);
-        return;
-      }
+      // Database is the single source of truth now
+      try {
+        const response = await fetch('/api/agents/hedging/pnl?summary=true');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('🔍 ActiveHedges: Raw API response:', data);
+          if (data.success && data.summary) {
+            console.log('🔍 ActiveHedges: PnL details:', data.summary.details);
+            const dbHedges: HedgePosition[] = data.summary.details?.map((pnl: any) => ({
+              id: pnl.orderId,
+              type: pnl.side,
+              asset: pnl.asset,
+              size: pnl.size,
+              leverage: pnl.leverage,
+              entryPrice: pnl.entryPrice,
+              currentPrice: pnl.currentPrice,
+              targetPrice: 0, // Not tracked in DB yet
+              stopLoss: 0,
+              capitalUsed: pnl.entryPrice * pnl.size / pnl.leverage,
+              pnl: pnl.unrealizedPnL,
+              pnlPercent: pnl.pnlPercentage,
+              status: 'active' as const,
+              openedAt: new Date(),
+              reason: 'Real hedge from database',
+            })) || [];
 
-      const dataHash = settlements.substring(0, 100);
-      if (dataHash === lastProcessedRef.current) {
-        setLoading(false);
-        return;
-      }
-      lastProcessedRef.current = dataHash;
+            console.log('🔍 ActiveHedges: Mapped hedges:', dbHedges);
 
-      const cacheKey = `active-hedges-${dataHash}`;
-      const cached = cache.get<HedgePosition[]>(cacheKey);
-      if (cached) {
-        setHedges(cached);
-        setLoading(false);
-        return;
-      }
-
-      const settlementData = JSON.parse(settlements);
-      const hedgePositions: HedgePosition[] = [];
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const batch of Object.values(settlementData) as any[]) {
-        if (batch.type === 'hedge' && batch.managerSignature) {
-          const hedgeData = batch.hedgeDetails || {};
-          const isClosed = batch.status === 'closed';
-          const assetSymbol = hedgeData.asset?.replace('-PERP', '') || 'BTC';
-          
-          // Get real-time price for the asset
-          let realTimePrice: number;
-          try {
-            const marketData = getMarketDataService();
-            const priceData = await marketData.getTokenPrice(assetSymbol);
-            realTimePrice = priceData.price;
-          } catch {
-            realTimePrice = hedgeData.entryPrice || 0;
-          }
-          
-          let currentPrice: number;
-          let pnl: number;
-          let pnlPercent: number;
-          
-          // Use stored entry price, or current market price if not available
-          const entryPrice = hedgeData.entryPrice || realTimePrice;
-          
-          if (isClosed) {
-            currentPrice = entryPrice; // Show entry price for closed positions
-            pnl = batch.finalPnL || 0;
-            pnlPercent = batch.finalPnLPercent || 0;
-          } else {
-            currentPrice = realTimePrice;
-            const size = hedgeData.size || 0;
-            const leverage = hedgeData.leverage || 1;
-            const capitalUsed = hedgeData.capitalUsed || 0;
-            
-            pnl = hedgeData.type === 'SHORT' 
-              ? (entryPrice - currentPrice) * size * leverage
-              : (currentPrice - entryPrice) * size * leverage;
-            pnlPercent = capitalUsed > 0 ? (pnl / capitalUsed) * 100 : 0;
-          }
-
-          // Only add positions that have valid data
-          if (entryPrice > 0) {
-            hedgePositions.push({
-              id: batch.batchId,
-              type: hedgeData.type || 'SHORT',
-              asset: hedgeData.asset || `${assetSymbol}-PERP`,
-              size: hedgeData.size || 0,
-              leverage: hedgeData.leverage || 1,
-              entryPrice,
-              currentPrice,
-              targetPrice: hedgeData.targetPrice || entryPrice * 0.98, // 2% below entry for shorts
-              stopLoss: hedgeData.stopLoss || entryPrice * 1.04, // 4% above entry for shorts
-              capitalUsed: hedgeData.capitalUsed || 0,
-              pnl,
-              pnlPercent,
-              status: isClosed ? 'closed' : 'active',
-              openedAt: new Date(batch.timestamp),
-              closedAt: isClosed ? new Date(batch.closedAt) : undefined,
-              reason: hedgeData.reason || 'Portfolio protection',
-              txHash: batch.txHash,
-            });
+            // Always use database data, even if empty - no localStorage fallback for active positions
+            setHedges(dbHedges);
+            setLoading(false);
+            processingRef.current = false;
+            return;
           }
         }
+      } catch (dbErr) {
+        console.error('❌ Database not available:', dbErr);
+        // No localStorage fallback - database is source of truth
+        setHedges([]);
+        setLoading(false);
+        processingRef.current = false;
+        return;
       }
 
-      cache.set(cacheKey, hedgePositions);
-
-      const activeCount = hedgePositions.filter(h => h.status === 'active').length;
-      const closedHedgesList = hedgePositions.filter(h => h.status === 'closed');
-      const winners = closedHedgesList.filter(h => h.pnl > 0).length;
-      const winRate = closedHedgesList.length > 0 ? (winners / closedHedgesList.length) * 100 : 0;
-      const totalPnL = hedgePositions.reduce((sum, h) => sum + h.pnl, 0);
-      const bestTrade = Math.max(...hedgePositions.map(h => h.pnl), 0);
-      const worstTrade = Math.min(...hedgePositions.map(h => h.pnl), 0);
-
-      // Calculate real average hold time from closed positions
-      let avgHoldTime = '--';
-      if (closedHedgesList.length > 0) {
-        const totalHoldMs = closedHedgesList.reduce((sum, h) => {
-          if (h.closedAt && h.openedAt) {
-            return sum + (new Date(h.closedAt).getTime() - new Date(h.openedAt).getTime());
-          }
-          return sum;
-        }, 0);
-        const avgMs = totalHoldMs / closedHedgesList.length;
-        const hours = Math.floor(avgMs / (1000 * 60 * 60));
-        const mins = Math.floor((avgMs % (1000 * 60 * 60)) / (1000 * 60));
-        avgHoldTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-      }
-
-      setHedges(hedgePositions.reverse());
-      setStats({
-        totalHedges: hedgePositions.length,
-        activeHedges: activeCount,
-        winRate,
-        totalPnL,
-        avgHoldTime,
-        bestTrade,
-        worstTrade,
-      });
-      setLoading(false);
     } catch (error) {
       console.error('❌ [ActiveHedges] Error loading hedges:', error);
+      setHedges([]);
       setLoading(false);
     } finally {
       processingRef.current = false;
@@ -219,6 +138,45 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     closeCloseConfirm();
     
     try {
+      // Try to close in database first
+      try {
+        const response = await fetch('/api/agents/hedging/close', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: selectedHedge.id,
+            realizedPnl: selectedHedge.pnl,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Hedge closed in database:', data);
+          
+          // Remove from local state
+          setHedges(prev => prev.filter(h => h.id !== selectedHedge.id));
+          
+          // Also update localStorage for fallback
+          const settlements = localStorage.getItem('settlement_history');
+          if (settlements) {
+            const settlementData = JSON.parse(settlements);
+            if (settlementData[selectedHedge.id]) {
+              settlementData[selectedHedge.id].status = 'closed';
+              settlementData[selectedHedge.id].closedAt = Date.now();
+              settlementData[selectedHedge.id].finalPnL = selectedHedge.pnl;
+              settlementData[selectedHedge.id].finalPnLPercent = selectedHedge.pnlPercent;
+              localStorage.setItem('settlement_history', JSON.stringify(settlementData));
+            }
+          }
+          
+          window.dispatchEvent(new Event('hedgeAdded'));
+          return;
+        }
+      } catch (apiErr) {
+        console.error('Failed to close in database, falling back to localStorage:', apiErr);
+      }
+
+      // Fallback to localStorage only
       const settlements = localStorage.getItem('settlement_history');
       if (settlements) {
         const settlementData = JSON.parse(settlements);
@@ -346,8 +304,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
                         <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded">ACTIVE</span>
                       </div>
-                      <div className="text-[11px] text-[#86868b] space-y-0.5\">
-                        <div>{hedge.reason}</div>
+                      <div className="text-[11px] space-y-0.5\">
+                        <div className="text-[#1d1d1f] font-medium">{hedge.reason}</div>
                         {hedge.txHash && (
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] uppercase tracking-wider">TX:</span>
@@ -501,27 +459,32 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em] truncate">
-                              {hedge.type} {hedge.asset}
+                            <div className="flex items-center gap-1.5">
+                              <div className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em] truncate">
+                                {hedge.type} {hedge.asset}
+                              </div>
+                              <span className="inline-flex items-center px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-[4px] text-[9px] sm:text-[10px] font-bold">
+                                {hedge.leverage}x
+                              </span>
                             </div>
-                            <div className="text-[9px] sm:text-[11px] text-[#86868b] space-y-0.5">
-                              <div className="truncate">{hedge.reason}</div>
-                              {hedge.txHash && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[9px] sm:text-[10px] uppercase tracking-wider">TX:</span>
-                                  <a
-                                    href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                                    title="View on Cronos Explorer"
-                                  >
-                                    <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
-                                    <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
-                                  </a>
-                                </div>
-                              )}
+                            {/* Reason text hidden - not needed for display */}
+                            {hedge.txHash && (
+                              <div className="text-[9px] sm:text-[11px] space-y-0.5">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider">TX:</span>
+                                <a
+                                  href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                  title="View on Cronos Explorer"
+                                >
+                                  <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
+                                  <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                                </a>
+                              </div>
                             </div>
+                            )}
                           </div>
                         </div>
                         
@@ -540,12 +503,12 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
                         <div className="pt-2 sm:pt-3 border-t border-[#e8e8ed] space-y-1.5 sm:space-y-2">
                           <div className="flex justify-between text-[10px] sm:text-[11px]">
-                            <span className="text-[#86868b]">Entry</span>
-                            <span className="text-[#1d1d1f] font-medium">${hedge.entryPrice.toLocaleString()}</span>
+                            <span className="text-[#86868b] font-medium">Entry</span>
+                            <span className="text-[#1d1d1f] font-semibold">${hedge.entryPrice.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between text-[10px] sm:text-[11px]">
-                            <span className="text-[#86868b]">Current</span>
-                            <span className="text-[#1d1d1f] font-medium">${hedge.currentPrice.toFixed(0)}</span>
+                            <span className="text-[#86868b] font-medium">Current</span>
+                            <span className="text-[#1d1d1f] font-semibold">${hedge.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
                           </div>
                         </div>
 
@@ -599,12 +562,15 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-[15px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
+                            <span className="inline-flex items-center px-2 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-[6px] text-[10px] font-bold">
+                              {hedge.leverage}x
+                            </span>
                             <span className="text-[11px] px-2 py-0.5 bg-[#34C759]/20 text-[#34C759] rounded-full font-medium">
                               Active
                             </span>
                           </div>
                           <div className="text-[11px] text-[#86868b] mt-0.5 space-y-0.5">
-                            <div className="text-[13px]">{hedge.reason}</div>
+                            <div className="text-[13px] font-medium text-[#1d1d1f]">{hedge.reason}</div>
                             {hedge.txHash && (
                               <div className="flex items-center gap-1">
                                 <span className="text-[10px] uppercase tracking-wider">TRANSACTION:</span>
@@ -636,25 +602,25 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     {/* Position Details */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-[#e8e8ed]">
                       <div>
-                        <div className="text-[11px] font-medium text-[#86868b] uppercase">Size</div>
-                        <div className="text-[15px] font-semibold text-[#1d1d1f]">{hedge.size} BTC</div>
-                        <div className="text-[11px] text-[#86868b]">{hedge.leverage}x leverage</div>
+                        <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Size</div>
+                        <div className="text-[15px] font-bold text-[#1d1d1f]">{hedge.size} {hedge.asset.replace('-PERP', '')}</div>
+                        <div className="text-[11px] font-medium text-[#007AFF]">{hedge.leverage}x leverage</div>
                       </div>
                       <div>
-                        <div className="text-[11px] font-medium text-[#86868b] uppercase">Entry</div>
-                        <div className="text-[15px] font-semibold text-[#1d1d1f]">${hedge.entryPrice.toLocaleString()}</div>
-                        <div className="text-[11px] text-[#86868b]">Now: ${hedge.currentPrice.toFixed(0)}</div>
+                        <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Entry</div>
+                        <div className="text-[15px] font-bold text-[#1d1d1f]">${hedge.entryPrice.toLocaleString()}</div>
+                        <div className="text-[11px] font-medium text-[#1d1d1f]">Now: ${hedge.currentPrice.toFixed(0)}</div>
                       </div>
                       <div>
-                        <div className="text-[11px] font-medium text-[#86868b] uppercase">Target</div>
-                        <div className="text-[15px] font-semibold text-[#34C759]">${hedge.targetPrice.toLocaleString()}</div>
-                        <div className="text-[11px] text-[#86868b]">
+                        <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Target</div>
+                        <div className="text-[15px] font-bold text-[#34C759]">${hedge.targetPrice.toLocaleString()}</div>
+                        <div className="text-[11px] font-medium text-[#1d1d1f]">
                           {((hedge.currentPrice - hedge.targetPrice) / hedge.targetPrice * 100).toFixed(1)}% away
                         </div>
                       </div>
                       <div>
-                        <div className="text-[11px] font-medium text-[#86868b] uppercase">Stop Loss</div>
-                        <div className="text-[15px] font-semibold text-[#FF3B30]">${hedge.stopLoss.toLocaleString()}</div>
+                        <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Stop Loss</div>
+                        <div className="text-[15px] font-bold text-[#FF3B30]">${hedge.stopLoss.toLocaleString()}</div>
                         <div className="text-[11px] text-[#86868b]">
                           {((hedge.stopLoss - hedge.currentPrice) / hedge.currentPrice * 100).toFixed(1)}% away
                         </div>
