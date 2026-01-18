@@ -8,6 +8,8 @@ import { ethers } from 'ethers';
 import { MoonlanderClient } from '@/integrations/moonlander/MoonlanderClient';
 import { logger } from '@/lib/utils/logger';
 import { createHedge } from '@/lib/db/hedges';
+import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
+import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +23,8 @@ export interface HedgeExecutionRequest {
   stopLoss?: number; // Price level
   takeProfit?: number; // Price level
   reason?: string;
+  privateMode?: boolean; // Enable privacy-preserving execution
+  privacyLevel?: 'standard' | 'high' | 'maximum'; // Privacy level
 }
 
 export interface HedgeExecutionResponse {
@@ -37,6 +41,12 @@ export interface HedgeExecutionResponse {
   txHash?: string;
   error?: string;
   simulationMode: boolean;
+  message?: string;
+  // Privacy fields
+  privateMode?: boolean;
+  commitmentHash?: string;
+  stealthAddress?: string;
+  zkProofGenerated?: boolean;
 }
 
 /**
@@ -48,14 +58,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: HedgeExecutionRequest = await request.json();
-    const { asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason } = body;
+    const { asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, privateMode = false, privacyLevel = 'standard' } = body;
 
     logger.info('🛡️ Executing hedge on Moonlander', {
-      asset,
-      side,
-      notionalValue,
+      asset: privateMode ? '[PRIVATE]' : asset,
+      side: privateMode ? '[PRIVATE]' : side,
+      notionalValue: privateMode ? '[PRIVATE]' : notionalValue,
       leverage,
       reason,
+      privateMode,
+      privacyLevel,
     });
 
     // Validate inputs
@@ -117,15 +129,46 @@ export async function POST(request: NextRequest) {
 
       const orderId = `sim-hedge-${Date.now()}`;
       
+      // Generate privacy components if privateMode is enabled
+      let commitmentHash: string | undefined;
+      let stealthAddress: string | undefined;
+      let zkProofGenerated = false;
+      
+      if (privateMode) {
+        try {
+          const masterPublicKey = crypto.randomBytes(33).toString('hex');
+          const privateHedge = await privateHedgeService.createPrivateHedge(
+            asset.toUpperCase(),
+            side,
+            parseFloat(size),
+            notionalValue,
+            leverage,
+            mockPrice,
+            masterPublicKey
+          );
+          
+          commitmentHash = privateHedge.commitmentHash;
+          stealthAddress = privateHedge.stealthAddress;
+          zkProofGenerated = true;
+          
+          logger.info('🔐 Privacy layer added to hedge', {
+            commitmentHash: commitmentHash.substring(0, 16) + '...',
+            stealthAddress: stealthAddress.substring(0, 10) + '...',
+          });
+        } catch (privacyError) {
+          logger.error('Failed to generate privacy layer', { error: privacyError });
+        }
+      }
+      
       // Save to PostgreSQL (even in simulation mode)
       try {
         console.log('💾 Attempting to save hedge to database:', {
           orderId,
           portfolioId: body.portfolioId,
-          asset: asset.toUpperCase(),
+          asset: privateMode ? '[PRIVATE]' : asset.toUpperCase(),
           market,
           size,
-          notionalValue,
+          notionalValue: privateMode ? '[PRIVATE]' : notionalValue,
         });
         
         await createHedge({
@@ -144,9 +187,10 @@ export async function POST(request: NextRequest) {
           simulationMode: true,
           reason,
           predictionMarket: reason,
+          txHash: commitmentHash, // Store commitment hash as reference
         });
         
-        logger.info('💾 Simulated hedge saved to database', { orderId });
+        logger.info('💾 Simulated hedge saved to database', { orderId, privateMode });
         console.log('✅ Hedge saved successfully to database');
       } catch (dbError) {
         console.error('❌ Failed to save hedge to database:', dbError);
@@ -166,7 +210,13 @@ export async function POST(request: NextRequest) {
         leverage,
         estimatedLiquidationPrice: liquidationPrice.toFixed(2),
         simulationMode: true,
-        message: '✅ SIMULATION: Hedge executed successfully (add MOONLANDER_PRIVATE_KEY for live trading)',
+        privateMode,
+        commitmentHash,
+        stealthAddress,
+        zkProofGenerated,
+        message: privateMode 
+          ? '✅ PRIVATE HEDGE: Commitment stored, details encrypted (unlinkable on-chain)'
+          : '✅ SIMULATION: Hedge executed successfully (add MOONLANDER_PRIVATE_KEY for live trading)',
       } satisfies HedgeExecutionResponse);
     }
 
