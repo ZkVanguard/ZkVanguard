@@ -33,7 +33,7 @@ ZkVanguard automates institutional crypto portfolio management with **predictive
 |---------|--------------|
 | **Multi-Chain** | Cronos + SUI with unified portfolio view |
 | **Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
-| **5 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting - autonomous coordination |
+| **6 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor - autonomous coordination |
 | **Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
 | **Private Hedges** | Stealth addresses + ZK commitments hide hedge details on-chain |
 | **Gasless Transactions** | x402 on Cronos, Sponsored Tx on SUI |
@@ -55,7 +55,7 @@ ZkVanguard:  Polymarket signals → AI correlates → Auto-hedge BEFORE crash
 
 ---
 
-## 5 Specialized Agents
+## 6 Specialized Agents
 
 | Agent | Function |
 |-------|----------|
@@ -64,6 +64,7 @@ ZkVanguard:  Polymarket signals → AI correlates → Auto-hedge BEFORE crash
 | **Hedging** | Delphi-driven strategies via Moonlander perpetuals |
 | **Settlement** | x402 gasless execution with ZK authentication |
 | **Reporting** | Compliance reports, audit trails, analytics |
+| **PriceMonitor** | Autonomous price alerts, triggers hedges on thresholds |
 
 ---
 
@@ -115,10 +116,13 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 |---------|---------|
 | Crypto.com AI SDK | AI-powered portfolio analysis & natural language |
 | Crypto.com Exchange API | Real-time prices (100 req/s) |
+| CoinGecko API | Fallback prices (50 req/min free tier) |
 | Polymarket + Delphi | Prediction market intelligence |
 | VVS Finance SDK | DEX swaps on Cronos |
 | Moonlander | Perpetual futures hedging |
 | Private Hedge Service | Stealth addresses + ZK commitment privacy |
+| Hedge PnL Tracker | Real-time P&L on hedge positions |
+| SUI Service | Multi-chain support (@mysten/dapp-kit) |
 | x402 Facilitator | Gasless transactions |
 
 ---
