@@ -71,7 +71,7 @@ class CryptocomAIAgentService {
                 apiKey: finalConfig.openaiApiKey!,
                 model: 'gpt-4o-mini',
               },
-              chainId: finalConfig.chainId!,
+              chainId: parseInt(finalConfig.chainId!, 10),
               explorerKeys: finalConfig.explorerApiKey ? {
                 cronosMainnet: finalConfig.explorerApiKey,
                 cronosTestnet: finalConfig.explorerApiKey,
