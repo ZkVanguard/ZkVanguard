@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
-import { Footer } from '@/components/Footer';
 
 export default function ZKVerificationPage() {
   return (
@@ -502,8 +501,6 @@ python zkp/tests/formal_verification.py`}</pre>
           </Link>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
