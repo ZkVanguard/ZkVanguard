@@ -106,6 +106,30 @@
   --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* Force Apple Light Theme - Use on specific pages/sections */
+.light-theme {
+  --background-primary: #FFFFFF;
+  --background-secondary: #F5F5F7;
+  --background-tertiary: #FAFAFA;
+  --background-grouped: #F2F2F7;
+  --label-primary: #1D1D1F;
+  --label-secondary: #424245;
+  --label-tertiary: #6E6E73;
+  --label-quaternary: #6E6E73;
+  --separator-opaque: #C6C6C8;
+  --separator-non-opaque: rgba(60, 60, 67, 0.36);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-medium: rgba(0, 0, 0, 0.18);
+  --card-bg: #FFFFFF;
+  --card-bg-hover: #FAFAFA;
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.12);
+  color-scheme: light;
+  background-color: #FFFFFF;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -129,8 +153,9 @@ body {
   line-height: 1.6;
 }
 
-/* Ensure text is always readable - FORCED DARK TEXT */
-h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, label, button {
+/* Ensure text is always readable */
+/* Only apply global color when NOT inside .light-theme */
+:where(h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, label, button):not(.light-theme *) {
   color: var(--label-primary);
 }
 
@@ -138,12 +163,29 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
 }
 
-/* Only allow white text on colored backgrounds */
-.bg-\[#007AFF\] *, .bg-\[#34C759\] *, .bg-\[#FF3B30\] *, .bg-\[#5856D6\] *, 
-.bg-\[#AF52DE\] *, .bg-\[#FF9500\] *, .bg-gradient-to-r *, 
-[class*="bg-gradient"] *, .text-white {
-  /* Allow white text on colored backgrounds */
+/* Light theme text colors - explicitly set dark text */
+.light-theme h1, .light-theme h2, .light-theme h3, 
+.light-theme h4, .light-theme h5, .light-theme h6,
+.light-theme p, .light-theme span, .light-theme div,
+.light-theme a, .light-theme li, .light-theme td, 
+.light-theme th, .light-theme label, .light-theme button,
+.light-theme strong, .light-theme em {
+  color: #1D1D1F;
 }
+
+/* Allow white text on colored backgrounds within light-theme */
+.light-theme .text-white,
+.light-theme .text-white\/80,
+.light-theme [class*="bg-gradient"] *,
+.light-theme [class*="bg-[#007AFF]"] * {
+  color: white !important;
+}
+
+/* Preserve specific text colors in light-theme */
+.light-theme .text-\[\#86868b\] { color: #86868b !important; }
+.light-theme .text-\[\#424245\] { color: #424245 !important; }
+.light-theme .text-\[\#6E6E73\] { color: #6E6E73 !important; }
+.light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
 
 .text-secondary {
   color: var(--label-secondary) !important;

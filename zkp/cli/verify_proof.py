@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 CLI tool to verify ZK-STARK proofs from command line
+Uses CUDA-accelerated True STARK implementation following StarkWare protocol.
 """
 
 import sys
@@ -10,16 +11,15 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.true_stark import TrueZKStark
-from core.zk_system import AuthenticZKStark
+from core.cuda_true_stark import CUDATrueSTARK, CUDA_AVAILABLE
 
 
 def verify_proof_cli():
     """Verify ZK-STARK proof from command line arguments"""
-    parser = argparse.ArgumentParser(description='Verify ZK-STARK proof')
+    parser = argparse.ArgumentParser(description='Verify ZK-STARK proof (CUDA-accelerated)')
     parser.add_argument('--proof', required=True, help='Proof JSON')
     parser.add_argument('--statement', required=True, help='Statement JSON')
-    parser.add_argument('--use-authentic', action='store_true', help='Use AuthenticZKStark')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose output')
     
     args = parser.parse_args()
     
@@ -28,20 +28,24 @@ def verify_proof_cli():
         proof = json.loads(args.proof)
         statement = json.loads(args.statement)
         
-        # Choose ZK system
-        if args.use_authentic:
-            zk_system = AuthenticZKStark(enhanced_privacy=False)
-        else:
-            zk_system = TrueZKStark()
+        if args.verbose:
+            print(f"🚀 CUDA Available: {CUDA_AVAILABLE}", file=sys.stderr)
+        
+        # Use CUDA-accelerated True STARK
+        zk_system = CUDATrueSTARK()
         
         # Verify proof
         verified = zk_system.verify_proof(proof, statement)
+        
+        if args.verbose:
+            print(f"🔍 Verification: {'✅ PASSED' if verified else '❌ FAILED'}", file=sys.stderr)
         
         # Output result
         output = {
             'success': True,
             'verified': verified,
-            'protocol': proof.get('protocol', 'ZK-STARK')
+            'protocol': proof.get('protocol', 'ZK-STARK (AIR + FRI)'),
+            'cuda_accelerated': CUDA_AVAILABLE
         }
         
         print(json.dumps(output))
