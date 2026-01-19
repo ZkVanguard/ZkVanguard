@@ -74,7 +74,7 @@ export default function WhitepaperPage() {
         </div>
 
         {/* Content Sections */}
-        <article className="prose prose-lg max-w-none">
+        <article className="max-w-none">
           
           {/* Abstract */}
           <section id="abstract" className="mb-16 scroll-mt-24">
@@ -106,7 +106,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               According to Boston Consulting Group&apos;s 2024 report, the tokenized real-world asset market is projected to reach $16 trillion by 2030, representing one of the largest wealth migrations in financial history. Currently, $1.2 trillion in institutional capital participates in decentralized finance, yet this figure represents a fraction of total institutional assets due to three critical barriers:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Reactive Risk Management:</strong> Existing tools only respond after market crashes, resulting in 15-30% portfolio drawdowns before protection activates</li>
               <li><strong>Privacy Vulnerabilities:</strong> Public blockchain transparency exposes institutional trading strategies, enabling front-running and competitive intelligence extraction</li>
               <li><strong>Prohibitive Transaction Costs:</strong> Gas fees of $5-$50 per transaction create 60-80% operational inefficiency, particularly during high-volatility periods</li>
@@ -116,7 +116,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               The convergence of several technological and regulatory developments creates an optimal market entry window:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Prediction Market Maturation:</strong> Polymarket and similar platforms have demonstrated 85%+ accuracy on major events, providing reliable forecasting data</li>
               <li><strong>ZK Technology Advancement:</strong> ZK-STARK proofs now achieve practical performance (2-5 second generation) with post-quantum security guarantees</li>
               <li><strong>Institutional Crypto Adoption:</strong> BlackRock, Fidelity, and major banks have launched digital asset products, signaling mainstream institutional acceptance</li>
@@ -154,8 +154,8 @@ export default function WhitepaperPage() {
               Analysis of major market events from 2020-2025 reveals the true cost of reactive risk management:
             </p>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Event</th>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Total Drop</th>
@@ -196,7 +196,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               Public blockchain transparency creates significant competitive disadvantages for institutional traders:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Front-Running:</strong> MEV bots extract $500M+ annually by detecting and front-running large orders</li>
               <li><strong>Strategy Leakage:</strong> Competitors can reverse-engineer trading strategies from on-chain activity</li>
               <li><strong>Regulatory Risk:</strong> Public portfolio exposure may violate confidentiality requirements</li>
@@ -317,8 +317,8 @@ export default function WhitepaperPage() {
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.2 Technology Stack</h3>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Layer</th>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Technology</th>
@@ -459,7 +459,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               ZkVanguard implements ZK-STARK (Zero-Knowledge Scalable Transparent ARgument of Knowledge) proofs with the following properties:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Post-Quantum Security:</strong> 521-bit security level using NIST P-521 elliptic curve, resistant to quantum computer attacks</li>
               <li><strong>No Trusted Setup:</strong> Unlike zk-SNARKs, STARKs require no trusted ceremony that could compromise security</li>
               <li><strong>Transparency:</strong> All randomness derived from public sources via Fiat-Shamir transformation</li>
@@ -471,8 +471,8 @@ export default function WhitepaperPage() {
               Our ZK system has undergone rigorous cryptographic verification (6/6 tests passed):
             </p>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Property</th>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Verification</th>
@@ -543,7 +543,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             <p className="text-[#424245] leading-relaxed">
               The x402 protocol eliminates gas fees for end users by leveraging EIP-3009 authorization and protocol-sponsored transactions:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Gas Coverage:</strong> 97.4% of transaction costs refunded</li>
               <li><strong>User Cost:</strong> ~$0.01 USDC per transaction (vs. $15-$50 traditional)</li>
               <li><strong>Annual Savings:</strong> $500K-$2M per institutional customer</li>
@@ -586,7 +586,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             <p className="text-[#424245] leading-relaxed">
               ZkVanguard integrates with leading prediction markets to provide crowd-sourced forecasting:
             </p>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Polymarket:</strong> Largest prediction market with $1B+ trading volume</li>
               <li><strong>Delphi:</strong> Specialized crypto/RWA prediction data</li>
               <li><strong>Historical Accuracy:</strong> 78-85% on major events</li>
@@ -605,8 +605,8 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.3 Example Prediction Scenarios</h3>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Market Question</th>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Probability</th>
@@ -653,8 +653,8 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.1 Supported Networks</h3>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Chain</th>
                     <th className="text-left p-4 font-semibold text-[#1d1d1f]">Type</th>
@@ -718,7 +718,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             </ul>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.2 Cryptographic Security</h3>
-            <ul className="list-disc pl-6 text-[#424245] space-y-2">
+            <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>ZK-STARK:</strong> 521-bit post-quantum security</li>
               <li><strong>Key Derivation:</strong> ECDH for stealth addresses</li>
               <li><strong>Hashing:</strong> SHA-256 for commitment schemes</li>
@@ -764,8 +764,8 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.2 5-Year Projections</h3>
             <div className="overflow-x-auto my-6">
-              <table className="w-full border-collapse bg-white rounded-xl overflow-hidden text-sm">
-                <thead className="bg-[#f5f5f7]">
+              <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5] text-sm">
+                <thead className="bg-[#f0f0f2]">
                   <tr>
                     <th className="text-left p-3 font-semibold text-[#1d1d1f]">Metric</th>
                     <th className="text-center p-3 font-semibold text-[#1d1d1f]">2026</th>
