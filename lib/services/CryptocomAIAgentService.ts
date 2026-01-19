@@ -72,10 +72,12 @@ class CryptocomAIAgentService {
                 model: 'gpt-4o-mini',
               },
               chainId: parseInt(finalConfig.chainId!, 10),
-              explorerKeys: finalConfig.explorerApiKey ? {
-                cronosMainnet: finalConfig.explorerApiKey,
-                cronosTestnet: finalConfig.explorerApiKey,
-              } : undefined,
+              explorerKeys: {
+                cronosMainnetKey: finalConfig.explorerApiKey,
+                cronosTestnetKey: finalConfig.explorerApiKey,
+                cronosZkEvmKey: finalConfig.explorerApiKey,
+                cronosZkEvmTestnetKey: finalConfig.explorerApiKey,
+              },
             });
             
             this.isInitialized = true;
