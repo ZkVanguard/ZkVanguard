@@ -231,8 +231,8 @@ export default function ZKVerificationPage() {
               <p className="text-sm text-[#424245] mb-4">
                 <strong>Definition [Paper 2018/828, Theorem 1.2]:</strong> For rate ρ and q queries, soundness error ≤ ρ^q
               </p>
-              <div className="bg-[#1d1d1f] text-green-400 p-4 rounded-lg font-mono text-xs mb-4">
-                <pre>{`FORMAL SOUNDNESS CALCULATION
+              <div className="bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4">
+                <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION
 ════════════════════════════
 
 Parameters:
@@ -453,20 +453,20 @@ Security Comparison:
           </p>
           
           <div className="bg-[#1d1d1f] rounded-xl p-6 font-mono text-sm">
-            <p className="text-gray-400 mb-4"># 1. Verify Field Prime is Goldilocks</p>
-            <p className="text-green-400 mb-6">python -c &quot;assert 2**64 - 2**32 + 1 == 18446744069414584321&quot;</p>
+            <p style={{ color: '#9ca3af' }} className="mb-4"># 1. Verify Field Prime is Goldilocks</p>
+            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;assert 2**64 - 2**32 + 1 == 18446744069414584321&quot;</p>
             
-            <p className="text-gray-400 mb-4"># 2. Verify Generator is Primitive Root</p>
-            <p className="text-green-400 mb-6">python -c &quot;p=18446744069414584321; assert pow(7,(p-1)//2,p. != 1&quot;</p>
+            <p style={{ color: '#9ca3af' }} className="mb-4"># 2. Verify Generator is Primitive Root</p>
+            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;p=18446744069414584321; assert pow(7,(p-1)//2,p) != 1&quot;</p>
             
-            <p className="text-gray-400 mb-4"># 3. Verify Soundness Calculation</p>
-            <p className="text-green-400 mb-6">python -c &quot;import math; print(-math.log2(0.25**80))&quot;  # Should print 160</p>
+            <p style={{ color: '#9ca3af' }} className="mb-4"># 3. Verify Soundness Calculation</p>
+            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;import math; print(-math.log2(0.25**80))&quot;  # Should print 160</p>
             
-            <p className="text-gray-400 mb-4"># 4. Run Full Test Suite</p>
-            <p className="text-green-400 mb-6">python -m pytest zkp/tests/test_cuda_true_stark.py -v</p>
+            <p style={{ color: '#9ca3af' }} className="mb-4"># 4. Run Full Test Suite</p>
+            <p style={{ color: '#4ade80' }} className="mb-6">python -m pytest zkp/tests/test_cuda_true_stark.py -v</p>
             
-            <p className="text-gray-400 mb-4"># 5. Run Formal Verification Script</p>
-            <p className="text-green-400">python zkp/tests/formal_verification.py</p>
+            <p style={{ color: '#9ca3af' }} className="mb-4"># 5. Run Formal Verification Script</p>
+            <p style={{ color: '#4ade80' }}>python zkp/tests/formal_verification.py</p>
           </div>
         </section>
 
