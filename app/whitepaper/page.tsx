@@ -6,7 +6,36 @@ import { Footer } from '@/components/Footer';
 
 export default function WhitepaperPage() {
   return (
-    <div className="min-h-screen bg-white light-theme">
+    <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
+      {/* Force light theme styles */}
+      <style jsx global>{`
+        .light-theme, .light-theme * {
+          --label-primary: #1D1D1F !important;
+          --label-secondary: #424245 !important;
+          --label-tertiary: #6E6E73 !important;
+        }
+        .light-theme p, .light-theme span, .light-theme div,
+        .light-theme h1, .light-theme h2, .light-theme h3,
+        .light-theme h4, .light-theme h5, .light-theme h6,
+        .light-theme a, .light-theme li {
+          color: #1D1D1F !important;
+        }
+        .light-theme .text-\[\#86868b\] { color: #86868b !important; }
+        .light-theme .text-\[\#424245\] { color: #424245 !important; }
+        .light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
+        .light-theme .text-white { color: white !important; }
+        .light-theme .text-red-600 { color: #dc2626 !important; }
+        .light-theme .text-red-500 { color: #ef4444 !important; }
+        .light-theme .text-green-600 { color: #16a34a !important; }
+        .light-theme .text-green-700 { color: #15803d !important; }
+        .light-theme .text-green-800 { color: #166534 !important; }
+        .light-theme .text-blue-600 { color: #2563eb !important; }
+        .light-theme .text-orange-600 { color: #ea580c !important; }
+        .light-theme .text-yellow-600 { color: #ca8a04 !important; }
+        .light-theme .text-purple-600 { color: #9333ea !important; }
+        .light-theme .bg-\[\#007AFF\] { color: white !important; }
+        .light-theme .bg-\[\#007AFF\] * { color: white !important; }
+      `}</style>
       <Navbar />
       
       <main className="max-w-4xl mx-auto px-6 py-16">
@@ -83,7 +112,7 @@ export default function WhitepaperPage() {
               Abstract
             </h2>
             <div className="bg-gradient-to-r from-[#007AFF]/5 to-transparent p-6 rounded-xl border-l-4 border-[#007AFF] mb-6">
-              <p className="text-[#1d1d1f] leading-relaxed m-0">
+              <p className="leading-relaxed m-0" style={{ color: '#1d1d1f' }}>
                 ZkVanguard introduces a paradigm shift in institutional digital asset risk management by combining autonomous AI agents with crowd-sourced prediction market intelligence and post-quantum zero-knowledge cryptography. Unlike traditional reactive systems that respond to market crashes after they occur, ZkVanguard&apos;s predictive architecture anticipates volatility events 3-7 days in advance, enabling preemptive portfolio protection.
               </p>
             </div>
@@ -272,8 +301,8 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               ZkVanguard employs a layered architecture designed for security, scalability, and autonomous operation:
             </p>
-            <div className="bg-[#1d1d1f] text-green-400 p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre>{`┌─────────────────────────────────────────────────────────────────┐
+            <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
+              <pre style={{ color: '#4ade80' }}>{`┌─────────────────────────────────────────────────────────────────┐
 │                         USER INTERFACE                          │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
 │  │  Chat Interface  │  │  Dashboard       │  │ ZK Proof View │ │
@@ -471,8 +500,8 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed mb-4">
               Per FRI Theorem 1.2 (Ben-Sasson et al. 2018/828), soundness error ε ≤ ρ^q where ρ is the rate and q is the number of queries:
             </p>
-            <div className="bg-[#1d1d1f] text-green-400 p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre>{`FORMAL SOUNDNESS CALCULATION (per ePrint 2018/828)
+            <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
+              <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION (per ePrint 2018/828)
 ══════════════════════════════════════════════════
 
 Parameters:
@@ -579,8 +608,8 @@ Security Comparison:
             <p className="text-[#424245] leading-relaxed">
               When executing hedges on public blockchains, ZkVanguard protects user privacy through:
             </p>
-            <div className="bg-[#1d1d1f] text-green-400 p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre>{`PUBLIC (On-Chain)           PRIVATE (ZK-Protected)
+            <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
+              <pre style={{ color: '#4ade80' }}>{`PUBLIC (On-Chain)           PRIVATE (ZK-Protected)
 ─────────────────           ──────────────────────
 • Commitment hash           • Portfolio composition
 • Stealth address           • Exact hedge sizes
@@ -619,8 +648,8 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             </div>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.3 Flow Diagram</h3>
-            <div className="bg-[#1d1d1f] text-green-400 p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre>{`User Request → x402 Service → Eligibility Check → Execute Gasless
+            <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
+              <pre style={{ color: '#4ade80' }}>{`User Request → x402 Service → Eligibility Check → Execute Gasless
                                     │
                                     ▼
                             USDC Payment ($0.01)

@@ -6,7 +6,31 @@ import { Footer } from '@/components/Footer';
 
 export default function ZKVerificationPage() {
   return (
-    <div className="min-h-screen bg-white light-theme">
+    <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
+      {/* Force light theme styles */}
+      <style jsx global>{`
+        .light-theme, .light-theme * {
+          --label-primary: #1D1D1F !important;
+          --label-secondary: #424245 !important;
+          --label-tertiary: #6E6E73 !important;
+        }
+        .light-theme p, .light-theme span, .light-theme div,
+        .light-theme h1, .light-theme h2, .light-theme h3,
+        .light-theme h4, .light-theme h5, .light-theme h6,
+        .light-theme a, .light-theme li, .light-theme code, .light-theme pre {
+          color: #1D1D1F !important;
+        }
+        .light-theme .text-\[\#86868b\] { color: #86868b !important; }
+        .light-theme .text-\[\#424245\] { color: #424245 !important; }
+        .light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
+        .light-theme .text-green-600 { color: #16a34a !important; }
+        .light-theme .text-green-800 { color: #166534 !important; }
+        .light-theme .text-white { color: white !important; }
+        .light-theme .bg-\[\#007AFF\] { color: white !important; }
+        .light-theme .bg-\[\#007AFF\] * { color: white !important; }
+        .light-theme .bg-gray-900 { background-color: #111827 !important; }
+        .light-theme .bg-gray-900 * { color: #e5e7eb !important; }
+      `}</style>
       <Navbar />
       
       <main className="max-w-4xl mx-auto px-6 py-16">

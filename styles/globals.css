@@ -173,11 +173,12 @@ h1, h2, h3, h4, h5, h6 {
   color: #1D1D1F;
 }
 
-/* Allow white text on colored backgrounds within light-theme */
+/* Allow white text on solid colored backgrounds within light-theme */
 .light-theme .text-white,
 .light-theme .text-white\/80,
-.light-theme [class*="bg-gradient"] *,
-.light-theme [class*="bg-[#007AFF]"] * {
+.light-theme .bg-\[\#007AFF\] *,
+.light-theme .bg-green-500 *,
+.light-theme .bg-blue-500 * {
   color: white !important;
 }
 
