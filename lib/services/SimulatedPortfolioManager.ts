@@ -117,12 +117,11 @@ export class SimulatedPortfolioManager {
           this.positions.set(symbol, {
             symbol,
             amount,
-            averageCost: price,
+            entryPrice: price,
             currentPrice: price,
             value: usdAmount,
             pnl: 0,
             pnlPercentage: 0,
-            lastUpdated: Date.now(),
           });
           this.cash -= usdAmount;
           logger.info(`Demo: Bought ${amount.toFixed(4)} ${symbol} at $${price.toFixed(2)}`);
