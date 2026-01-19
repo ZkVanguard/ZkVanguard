@@ -24,38 +24,6 @@ export async function assessPortfolioRisk(address: string) {
  * Get hedging recommendations
  */
 export async function getHedgingRecommendations(address: string, positions: unknown[]) {
-  if (DEMO_MODE) {
-    // Real portfolio: 30 USDC @ 20x leverage = $600 exposure
-    const portfolioValue = 30;
-    const leverage = 20;
-    const exposure = portfolioValue * leverage; // $600
-    
-    return simulateAgentCall(() => [
-      {
-        action: 'SHORT',
-        asset: 'BTC-PERP',
-        size: 0.007, // ~$300 hedge (50% of exposure)
-        leverage: 10,
-        reason: `Protect $${exposure} leveraged position from >10% drawdown`,
-        expectedGasSavings: 2.50,
-        estimatedCost: 0.00, // x402 gasless
-        targetPrice: 42800,
-        stopLoss: 45200,
-        capitalRequired: portfolioValue * 0.5 // $15 USDC for hedge
-      },
-      {
-        action: 'REBALANCE',
-        asset: 'PORTFOLIO',
-        size: 0,
-        leverage: 1,
-        reason: 'Consider reducing leverage from 20x to 15x to lower liquidation risk',
-        expectedGasSavings: 0.00,
-        estimatedCost: 0.00,
-        note: `Current exposure: $${exposure} on $${portfolioValue} capital`
-      }
-    ]);
-  }
-  
   const response = await fetch(`/api/agents/hedging/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
