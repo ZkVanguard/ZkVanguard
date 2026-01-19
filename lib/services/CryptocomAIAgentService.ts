@@ -65,19 +65,19 @@ class CryptocomAIAgentService {
           // Try to dynamically import the Crypto.com AI Agent SDK
           const agentModule = await import('@crypto.com/ai-agent-client').catch(() => null);
           
-          if (agentModule?.Agent) {
-            this.agent = agentModule.Agent.init({
-              llm_config: {
-                provider: 'OpenAI',
+          if (agentModule?.createClient) {
+            this.agent = agentModule.createClient({
+              openAI: {
+                apiKey: finalConfig.openaiApiKey!,
                 model: 'gpt-4o-mini',
-                'provider-api-key': finalConfig.openaiApiKey!,
               },
-              blockchain_config: {
-                chainId: finalConfig.chainId!,
-                'api-key': finalConfig.dashboardApiKey!,
-                'private-key': finalConfig.privateKey,
-                timeout: 120,
+              chain: {
+                id: finalConfig.chainId!,
+                rpcUrl: this.getChainRpcUrl(finalConfig.chainId!),
               },
+              signer: finalConfig.privateKey ? {
+                privateKey: finalConfig.privateKey,
+              } : undefined,
             });
             
             this.isInitialized = true;
@@ -101,6 +101,18 @@ class CryptocomAIAgentService {
       console.error('[AIAgent] Initialization failed:', error.message);
       throw new Error(`Failed to initialize AI Agent: ${error.message}`);
     }
+  }
+
+  /**
+   * Get RPC URL for a given chain ID
+   */
+  private getChainRpcUrl(chainId: string): string {
+    const rpcUrls: Record<string, string> = {
+      '25': 'https://evm.cronos.org',
+      '338': 'https://evm-t3.cronos.org',
+      '388': 'https://mainnet.zkevm.cronos.org',
+    };
+    return rpcUrls[chainId] || 'https://evm-t3.cronos.org';
   }
 
   /**
