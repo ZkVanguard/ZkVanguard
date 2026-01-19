@@ -96,7 +96,7 @@ export class MoonlanderOnChainClient {
   private signer: Signer | null = null;
   private collateralContract: Contract | null = null;
   private network: NetworkType;
-  private contracts: typeof MOONLANDER_CONTRACTS.CRONOS_EVM;
+  private contracts: typeof MOONLANDER_CONTRACTS[NetworkType];
   private initialized = false;
   private abiCoder = AbiCoder.defaultAbiCoder();
 
@@ -105,7 +105,7 @@ export class MoonlanderOnChainClient {
     network: NetworkType = 'CRONOS_EVM'
   ) {
     this.network = network;
-    this.contracts = MOONLANDER_CONTRACTS[network];
+    this.contracts = MOONLANDER_CONTRACTS[network] as typeof MOONLANDER_CONTRACTS[NetworkType];
     
     if (typeof providerOrRpc === 'string') {
       this.provider = new ethers.JsonRpcProvider(providerOrRpc);
