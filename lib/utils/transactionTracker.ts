@@ -5,7 +5,7 @@
 
 export interface TrackedTransaction {
   hash: string;
-  type: 'swap' | 'deposit' | 'withdraw' | 'approve' | 'transfer' | 'hedge' | 'portfolio' | 'unknown';
+  type: 'swap' | 'deposit' | 'withdraw' | 'approve' | 'transfer' | 'hedge' | 'portfolio' | 'wrap' | 'unwrap' | 'unknown';
   status: 'success' | 'pending' | 'failed';
   timestamp: number;
   from: string;
