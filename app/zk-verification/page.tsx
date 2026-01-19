@@ -20,12 +20,12 @@ export default function ZKVerificationPage() {
         .light-theme a, .light-theme li, .light-theme code, .light-theme pre {
           color: #1D1D1F !important;
         }
-        /* Exception: Allow colored text inside dark code blocks */
+        /* Exception: Green/gray text inside dark code blocks */
         .light-theme .bg-\[\#1d1d1f\] p,
         .light-theme .bg-\[\#1d1d1f\] pre,
         .light-theme .bg-\[\#1d1d1f\] code,
         .light-theme .bg-\[\#1d1d1f\] span {
-          color: inherit !important;
+          color: #4ade80 !important;
         }
         .light-theme .text-\[\#86868b\] { color: #86868b !important; }
         .light-theme .text-\[\#424245\] { color: #424245 !important; }
