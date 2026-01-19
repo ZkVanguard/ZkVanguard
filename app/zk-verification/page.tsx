@@ -14,18 +14,17 @@ export default function ZKVerificationPage() {
           --label-secondary: #424245 !important;
           --label-tertiary: #6E6E73 !important;
         }
-        .light-theme p, .light-theme span, .light-theme div,
+        /* Dark text only for elements NOT inside dark code blocks */
+        .light-theme p:not(.dark-code-block *),
+        .light-theme span:not(.dark-code-block *),
+        .light-theme div:not(.dark-code-block):not(.dark-code-block *),
         .light-theme h1, .light-theme h2, .light-theme h3,
         .light-theme h4, .light-theme h5, .light-theme h6,
-        .light-theme a, .light-theme li, .light-theme code, .light-theme pre {
+        .light-theme a:not(.dark-code-block *),
+        .light-theme li,
+        .light-theme code:not(.dark-code-block *),
+        .light-theme pre:not(.dark-code-block *) {
           color: #1D1D1F !important;
-        }
-        /* Exception: Green/gray text inside dark code blocks */
-        .light-theme .bg-\[\#1d1d1f\] p,
-        .light-theme .bg-\[\#1d1d1f\] pre,
-        .light-theme .bg-\[\#1d1d1f\] code,
-        .light-theme .bg-\[\#1d1d1f\] span {
-          color: #4ade80 !important;
         }
         .light-theme .text-\[\#86868b\] { color: #86868b !important; }
         .light-theme .text-\[\#424245\] { color: #424245 !important; }
@@ -238,7 +237,7 @@ export default function ZKVerificationPage() {
               <p className="text-sm text-[#424245] mb-4">
                 <strong>Definition [Paper 2018/828, Theorem 1.2]:</strong> For rate ρ and q queries, soundness error ≤ ρ^q
               </p>
-              <div className="bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4">
+              <div className="dark-code-block bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4">
                 <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION
 ════════════════════════════
 
@@ -459,7 +458,7 @@ Security Comparison:
             Independent verification steps for auditors:
           </p>
           
-          <div className="bg-[#1d1d1f] rounded-xl p-6 font-mono text-sm">
+          <div className="dark-code-block bg-[#1d1d1f] rounded-xl p-6 font-mono text-sm">
             <p style={{ color: '#9ca3af' }} className="mb-4"># 1. Verify Field Prime is Goldilocks</p>
             <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;assert 2**64 - 2**32 + 1 == 18446744069414584321&quot;</p>
             
