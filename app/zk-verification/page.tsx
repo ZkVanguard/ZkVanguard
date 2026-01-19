@@ -1,34 +1,10 @@
 "use client";
 
 import Link from 'next/link';
-import { Navbar } from '@/components/Navbar';
 
 export default function ZKVerificationPage() {
   return (
-    <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
-      {/* Force light theme styles - but NOT for p/pre/code to allow inline styles */}
-      <style jsx global>{`
-        .light-theme, .light-theme * {
-          --label-primary: #1D1D1F !important;
-          --label-secondary: #424245 !important;
-          --label-tertiary: #6E6E73 !important;
-        }
-        .light-theme h1, .light-theme h2, .light-theme h3,
-        .light-theme h4, .light-theme h5, .light-theme h6,
-        .light-theme li {
-          color: #1D1D1F !important;
-        }
-        .light-theme .text-\[\#1d1d1f\] { color: #1d1d1f !important; }
-        .light-theme .text-\[\#86868b\] { color: #86868b !important; }
-        .light-theme .text-\[\#424245\] { color: #424245 !important; }
-        .light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
-        .light-theme .text-green-600 { color: #16a34a !important; }
-        .light-theme .text-green-800 { color: #166534 !important; }
-        .light-theme .text-white { color: white !important; }
-        .light-theme .bg-\[\#007AFF\] * { color: white !important; }
-      `}</style>
-      <Navbar />
-      
+    <div className="min-h-screen bg-white" style={{ colorScheme: 'light' }}>
       <main className="max-w-4xl mx-auto px-6 py-16">
         {/* Header */}
         <div className="text-center mb-16">

@@ -154,8 +154,8 @@ body {
 }
 
 /* Ensure text is always readable */
-/* Only apply global color when NOT inside .light-theme */
-:where(h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, label, button):not(.light-theme *) {
+/* Apply label-primary color globally - in light mode this is dark, in dark mode this is white */
+:where(h1, h2, h3, h4, h5, h6, p, span, div, a, li, td, th, label, button) {
   color: var(--label-primary);
 }
 
@@ -172,6 +172,8 @@ h1, h2, h3, h4, h5, h6 {
 .light-theme strong, .light-theme em {
   color: #1D1D1F;
 }
+
+/* Footer uses same theme as rest of site */
 
 /* Allow white text on solid colored backgrounds within light-theme */
 .light-theme .text-white,
