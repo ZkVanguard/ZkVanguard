@@ -111,7 +111,7 @@ export class SimulatedPortfolioManager {
     for (const { symbol, percentage } of allocations) {
       const usdAmount = this.initialCapital * percentage;
       try {
-        const price = await this.getPrice(symbol);
+        const price = await this.getCurrentPrice(symbol);
         if (price > 0) {
           const amount = usdAmount / price;
           this.positions.set(symbol, {
