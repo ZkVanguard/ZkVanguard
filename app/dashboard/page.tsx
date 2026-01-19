@@ -512,7 +512,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      {notification && console.log('🔔 RENDERING NOTIFICATION IN DOM:', notification)}
 
       {/* Create Portfolio CTA - always show for connected users */}
       {isConnected && (
