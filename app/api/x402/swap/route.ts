@@ -213,7 +213,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       console.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', vvsError);
       
       try {
-        const { realMarketDataService } = await import('../../../../lib/services/RealMarketDataService');
+        const { getMarketDataService } = await import('../../../../lib/services/RealMarketDataService');
+        const realMarketDataService = getMarketDataService();
         
         // Get real prices from Crypto.com Exchange
         const inSymbol = getTokenSymbol(tokenIn);
