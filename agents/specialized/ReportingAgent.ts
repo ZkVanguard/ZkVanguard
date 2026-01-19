@@ -459,7 +459,7 @@ export class ReportingAgent extends BaseAgent {
       // Get real trades from portfolio history if available
       const trades: PerformanceReport['trades'] = positions.map(pos => ({
         date: pos.lastUpdated || Date.now() - 7 * 24 * 60 * 60 * 1000,
-        type: pos.pnl >= 0 ? 'BUY' as const : 'SELL' as const,
+        type: (pos.pnl ?? 0) >= 0 ? 'BUY' as const : 'SELL' as const,
         asset: pos.symbol || 'UNKNOWN',
         amount: pos.amount?.toString() || '0',
         price: pos.avgPrice?.toString() || pos.currentPrice?.toString() || '0',
