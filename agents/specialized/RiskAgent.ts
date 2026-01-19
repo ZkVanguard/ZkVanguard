@@ -260,7 +260,8 @@ REC3: [third recommendation]`;
   private async calculateVolatilityInternal(portfolioId: number): Promise<number> {
     try {
       // Import RealMarketDataService for historical price data
-      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const realMarketDataService = getMarketDataService();
       
       // Get portfolio exposures to determine which assets to analyze
       const exposures = await this.calculateExposures(portfolioId);
@@ -322,7 +323,8 @@ REC3: [third recommendation]`;
   private async calculateExposures(portfolioId: number): Promise<RiskAnalysis['exposures']> {
     try {
       // Import services for real portfolio data
-      const { realMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const realMarketDataService = getMarketDataService();
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
       
       // Get real portfolio data
