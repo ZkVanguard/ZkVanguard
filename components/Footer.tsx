@@ -26,7 +26,7 @@ export function Footer() {
               <ul className="space-y-3">
                 <li><Link href="/zk-proof" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">ZK Verification</Link></li>
                 <li><Link href="/zk-authenticity" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Authenticity</Link></li>
-                <li><a href="#" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Whitepaper</a></li>
+                <li><Link href="/whitepaper" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Whitepaper</Link></li>
                 <li><a href="#" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">API</a></li>
               </ul>
             </div>
