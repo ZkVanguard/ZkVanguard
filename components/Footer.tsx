@@ -34,10 +34,10 @@ export function Footer() {
             <div>
               <h3 className="text-[12px] font-semibold text-[#1d1d1f] mb-4 tracking-wide">RESOURCES</h3>
               <ul className="space-y-3">
-                <li><a href="#" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Support</a></li>
-                <li><a href="#" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Community</a></li>
-                <li><a href="https://github.com" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">GitHub</a></li>
-                <li><a href="https://twitter.com" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Twitter</a></li>
+                <li><a href="https://calendly.com/ashishregmi2017/30min" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Contact</a></li>
+                <li><a href="https://t.me/+QoAodv90iWExZmVh" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Community</a></li>
+                <li><a href="https://github.com/mrarejimmyz/ZkVanguard" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">GitHub</a></li>
+                <li><a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">Twitter</a></li>
               </ul>
             </div>
 
