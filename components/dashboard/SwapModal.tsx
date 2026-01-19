@@ -36,7 +36,7 @@ export function SwapModal({
   const dexService = getVVSFinanceService(25); // Use mainnet (25) for quotes
   
   // Supported tokens for testnet
-  const supportedTokens = {
+  const supportedTokens: Record<string, string> = {
     WCRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
     CRO: '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4',
     USDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0',
