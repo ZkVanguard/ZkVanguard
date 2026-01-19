@@ -43,6 +43,7 @@ export interface CreateHedgeParams {
   simulationMode: boolean;
   reason?: string;
   predictionMarket?: string;
+  txHash?: string;
 }
 
 export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
@@ -50,8 +51,8 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
     INSERT INTO hedges (
       order_id, portfolio_id, asset, market, side, 
       size, notional_value, leverage, entry_price, liquidation_price,
-      stop_loss, take_profit, simulation_mode, reason, prediction_market
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      stop_loss, take_profit, simulation_mode, reason, prediction_market, tx_hash
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     RETURNING *
   `;
 
@@ -71,6 +72,7 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
     params.simulationMode,
     params.reason || null,
     params.predictionMarket || null,
+    params.txHash || null,
   ]);
 
   if (!result) {
