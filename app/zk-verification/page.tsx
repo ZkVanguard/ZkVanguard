@@ -7,35 +7,26 @@ import { Footer } from '@/components/Footer';
 export default function ZKVerificationPage() {
   return (
     <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
-      {/* Force light theme styles */}
+      {/* Force light theme styles - but NOT for p/pre/code to allow inline styles */}
       <style jsx global>{`
         .light-theme, .light-theme * {
           --label-primary: #1D1D1F !important;
           --label-secondary: #424245 !important;
           --label-tertiary: #6E6E73 !important;
         }
-        /* Dark text only for elements NOT inside dark code blocks */
-        .light-theme p:not(.dark-code-block *),
-        .light-theme span:not(.dark-code-block *),
-        .light-theme div:not(.dark-code-block):not(.dark-code-block *),
         .light-theme h1, .light-theme h2, .light-theme h3,
         .light-theme h4, .light-theme h5, .light-theme h6,
-        .light-theme a:not(.dark-code-block *),
-        .light-theme li,
-        .light-theme code:not(.dark-code-block *),
-        .light-theme pre:not(.dark-code-block *) {
+        .light-theme li {
           color: #1D1D1F !important;
         }
+        .light-theme .text-\[\#1d1d1f\] { color: #1d1d1f !important; }
         .light-theme .text-\[\#86868b\] { color: #86868b !important; }
         .light-theme .text-\[\#424245\] { color: #424245 !important; }
         .light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
         .light-theme .text-green-600 { color: #16a34a !important; }
         .light-theme .text-green-800 { color: #166534 !important; }
         .light-theme .text-white { color: white !important; }
-        .light-theme .bg-\[\#007AFF\] { color: white !important; }
         .light-theme .bg-\[\#007AFF\] * { color: white !important; }
-        .light-theme .bg-gray-900 { background-color: #111827 !important; }
-        .light-theme .bg-gray-900 * { color: #e5e7eb !important; }
       `}</style>
       <Navbar />
       
@@ -237,7 +228,7 @@ export default function ZKVerificationPage() {
               <p className="text-sm text-[#424245] mb-4">
                 <strong>Definition [Paper 2018/828, Theorem 1.2]:</strong> For rate ρ and q queries, soundness error ≤ ρ^q
               </p>
-              <div className="dark-code-block bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4">
+              <div className="bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4 overflow-x-auto">
                 <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION
 ════════════════════════════
 
@@ -458,21 +449,21 @@ Security Comparison:
             Independent verification steps for auditors:
           </p>
           
-          <div className="dark-code-block bg-[#1d1d1f] rounded-xl p-6 font-mono text-sm">
-            <p style={{ color: '#9ca3af' }} className="mb-4"># 1. Verify Field Prime is Goldilocks</p>
-            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;assert 2**64 - 2**32 + 1 == 18446744069414584321&quot;</p>
-            
-            <p style={{ color: '#9ca3af' }} className="mb-4"># 2. Verify Generator is Primitive Root</p>
-            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;p=18446744069414584321; assert pow(7,(p-1)//2,p) != 1&quot;</p>
-            
-            <p style={{ color: '#9ca3af' }} className="mb-4"># 3. Verify Soundness Calculation</p>
-            <p style={{ color: '#4ade80' }} className="mb-6">python -c &quot;import math; print(-math.log2(0.25**80))&quot;  # Should print 160</p>
-            
-            <p style={{ color: '#9ca3af' }} className="mb-4"># 4. Run Full Test Suite</p>
-            <p style={{ color: '#4ade80' }} className="mb-6">python -m pytest zkp/tests/test_cuda_true_stark.py -v</p>
-            
-            <p style={{ color: '#9ca3af' }} className="mb-4"># 5. Run Formal Verification Script</p>
-            <p style={{ color: '#4ade80' }}>python zkp/tests/formal_verification.py</p>
+          <div className="bg-[#1d1d1f] rounded-xl p-6 font-mono text-sm overflow-x-auto">
+            <pre style={{ color: '#4ade80' }}>{`# 1. Verify Field Prime is Goldilocks
+python -c "assert 2**64 - 2**32 + 1 == 18446744069414584321"
+
+# 2. Verify Generator is Primitive Root
+python -c "p=18446744069414584321; assert pow(7,(p-1)//2,p) != 1"
+
+# 3. Verify Soundness Calculation
+python -c "import math; print(-math.log2(0.25**80))"  # Should print 160
+
+# 4. Run Full Test Suite
+python -m pytest zkp/tests/test_cuda_true_stark.py -v
+
+# 5. Run Formal Verification Script
+python zkp/tests/formal_verification.py`}</pre>
           </div>
         </section>
 
