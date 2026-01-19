@@ -127,7 +127,7 @@ export class SimulatedPortfolioManager {
           logger.info(`Demo: Bought ${amount.toFixed(4)} ${symbol} at $${price.toFixed(2)}`);
         }
       } catch (error) {
-        logger.warn(`Failed to add ${symbol} to demo portfolio:`, error);
+        logger.warn(`Failed to add ${symbol} to demo portfolio: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     
