@@ -97,7 +97,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="bg-white text-label-primary">
+      <body className="bg-white text-[#1D1D1F]">
         <Providers>
           <div className="flex flex-col min-h-screen">
             <Navbar />
