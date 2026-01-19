@@ -39,6 +39,7 @@ export const MOONLANDER_CONTRACTS = {
     // Core contracts
     MOONLANDER: '0x02ae2e56bfDF1ee4667405eE7e959CD3fE717A05',
     MLP: '0xe8E4A973Bb36E1714c805F88e2eb3A89f195D04f',
+    USDC: '0xaa5b845F8C9c047779bEDf64829601d8B264076c',  // zkUSDC on Cronos zkEVM
   },
   
   // Cronos Testnet
@@ -50,6 +51,7 @@ export const MOONLANDER_CONTRACTS = {
     // Use mainnet addresses for testing (or testnet-specific if available)
     MOONLANDER: '0xE6F6351fb66f3a35313fEEFF9116698665FBEeC9',
     MLP: '0xb4c70008528227e0545Db5BA4836d1466727DF13',
+    USDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',  // devUSDC on Cronos Testnet
   },
 } as const;
 
