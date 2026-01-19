@@ -71,12 +71,10 @@ class CryptocomAIAgentService {
                 apiKey: finalConfig.openaiApiKey!,
                 model: 'gpt-4o-mini',
               },
-              chain: {
-                id: finalConfig.chainId!,
-                rpcUrl: this.getChainRpcUrl(finalConfig.chainId!),
-              },
-              signer: finalConfig.privateKey ? {
-                privateKey: finalConfig.privateKey,
+              chainId: finalConfig.chainId!,
+              explorerKeys: finalConfig.explorerApiKey ? {
+                cronosMainnet: finalConfig.explorerApiKey,
+                cronosTestnet: finalConfig.explorerApiKey,
               } : undefined,
             });
             
