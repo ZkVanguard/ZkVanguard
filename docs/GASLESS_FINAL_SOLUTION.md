@@ -109,39 +109,119 @@ npx hardhat run scripts/deploy-zk-paymaster.ts --network cronos-testnet
 
 ---
 
-## Option 2: x402 Facilitator (TRUE $0.00 for USDC)
+## Option 2: x402 Facilitator Protocol (TRUE $0.00 for USDC)
+
+### What is x402?
+
+**x402** is Crypto.com's official gasless payment protocol built on EIP-3009 (`transferWithAuthorization`). It enables TRUE gasless USDC/token transfers where the x402 Facilitator pays all gas costs.
+
+**Package**: `@crypto.com/facilitator-client`  
+**Network**: Cronos Mainnet & Testnet  
+**No API Key Required**: Public gasless infrastructure!
 
 ### How It Works
 
-x402 uses EIP-3009 `transferWithAuthorization` for truly gasless USDC transfers.
-
 ```
-User signs USDC authorization → x402 Facilitator submits tx → User pays $0.00
+┌─────────────────────────────────────────────────────────────┐
+│                  x402 GASLESS FLOW                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. User signs EIP-3009 authorization (WALLET)              │
+│     Cost: $0.00 (just signature)                            │
+│                           ↓                                  │
+│  2. Generate payment header via SDK                          │
+│     Cost: $0.00                                              │
+│                           ↓                                  │
+│  3. x402 Facilitator submits to blockchain                  │
+│     Cost: Facilitator pays gas (FREE for user!)             │
+│                           ↓                                  │
+│  4. USDC transferred on-chain                               │
+│     USER TOTAL: $0.00 ✅                                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Scope**: USDC/token transfers ONLY (not arbitrary contract calls)
-
-**Best For**: 
-- Payment processing
-- USDC settlements
-- Token transfers
-
-### Usage
+### x402 SDK Methods
 
 ```typescript
-import { x402Client } from '@/lib/services/x402';
+import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 
-// User signs authorization (FREE)
-const auth = await x402Client.createAuthorization({
-  token: USDC_ADDRESS,
-  from: userAddress,
-  to: recipientAddress,
-  amount: '10000000', // 10 USDC
+// Initialize (no API key needed!)
+const facilitator = new Facilitator({
+  network: CronosNetwork.CronosTestnet,
 });
 
-// x402 Facilitator executes (user pays $0.00)
-const result = await x402Client.executeTransfer(auth);
+// Available methods:
+facilitator.generatePaymentRequirements()  // Build payment specs
+facilitator.generatePaymentHeader()        // Create EIP-3009 signature
+facilitator.verifyPayment()                // Verify payment is valid
+facilitator.settlePayment()                // Execute gasless transfer
+facilitator.getSupported()                 // Check supported tokens
 ```
+
+### Usage Example
+
+```typescript
+import { X402Client } from '@/integrations/x402/X402Client';
+
+const x402 = new X402Client();
+x402.setSigner(walletSigner);
+
+// 1. Execute TRUE gasless USDC transfer
+const result = await x402.executeGaslessTransfer({
+  token: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', // DevUSDCe
+  from: userAddress,
+  to: recipientAddress,
+  amount: '10000000', // 10 USDC (6 decimals)
+});
+
+console.log(result);
+// { txHash: '0x...', status: 'confirmed', gasless: true }
+
+// 2. Batch transfers (also gasless!)
+const batch = await x402.executeBatchTransfer({
+  token: USDC_ADDRESS,
+  from: userAddress,
+  recipients: ['0x...', '0x...', '0x...'],
+  amounts: ['5000000', '3000000', '2000000'],
+});
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/x402/swap` | POST | Execute DEX swap with x402 settlement |
+| `/api/x402/swap` | GET | Get VVS Finance swap quote |
+| `/api/x402/settle` | POST | Settle payment via x402 |
+| `/api/x402/challenge` | POST | Create payment challenge |
+
+### Supported Tokens (Cronos Testnet)
+
+| Token | Address | Decimals |
+|-------|---------|----------|
+| DevUSDCe | `0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0` | 6 |
+| TCRO | Native | 18 |
+
+### What x402 CAN Do
+- ✅ Gasless USDC/token transfers (EIP-3009)
+- ✅ Payment verification & settlement
+- ✅ Batch transfers
+- ✅ DEX swap settlements
+
+### What x402 CANNOT Do
+- ❌ Arbitrary contract calls (use ZKPaymaster!)
+- ❌ Meta-transactions for custom functions
+- ❌ Storing data on-chain (use ZKPaymaster!)
+
+### Files
+
+- `integrations/x402/X402Client.ts` - Main x402 client using SDK
+- `integrations/x402/X402Client.server.ts` - Server-side client
+- `lib/services/X402GaslessService.ts` - Legacy service wrapper
+- `app/api/x402/swap/route.ts` - Swap API
+- `app/api/x402/settle/route.ts` - Settlement API
+- `app/api/x402/challenge/route.ts` - Payment challenges
 
 ---
 

@@ -109,15 +109,89 @@ await storeCommitmentOnChainGasless(proofHash, merkleRoot, 521);
 
 ### x402 SDK Capabilities
 
+**Package**: `@crypto.com/facilitator-client`  
+**Documentation**: https://docs.cdp.coinbase.com/x402-doc/docs/welcome
+
 **Verified Methods** (from SDK inspection):
+```typescript
+// Core x402 Facilitator SDK methods
+✅ getSupported()               // Check supported tokens/networks
+✅ verifyPayment()              // Verify EIP-3009 payment signature
+✅ settlePayment()              // Execute gasless transfer on-chain
+✅ generatePaymentHeader()      // Create signed authorization
+✅ generatePaymentRequirements() // Build payment specs
+✅ buildVerifyRequest()         // Construct verification request
 ```
-✅ getSupported
-✅ verifyPayment
-✅ settlePayment
-✅ generatePaymentHeader
-✅ generatePaymentRequirements
-✅ buildVerifyRequest
+
+**Initialization** (No API key needed!):
+```typescript
+import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
+
+const facilitator = new Facilitator({
+  network: CronosNetwork.CronosTestnet, // or CronosMainnet
+});
 ```
+
+### x402 Protocol Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  x402 GASLESS FLOW (EIP-3009)               │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Generate Payment Requirements                            │
+│     facilitator.generatePaymentRequirements({               │
+│       network: CronosTestnet,                                │
+│       payTo: recipient,                                      │
+│       asset: USDC_ADDRESS,                                   │
+│       maxAmountRequired: '10000000'                          │
+│     });                                                      │
+│                           ↓                                  │
+│  2. User Signs Authorization (FREE - just signature!)        │
+│     facilitator.generatePaymentHeader({                     │
+│       to: recipient,                                         │
+│       value: amount,                                         │
+│       asset: USDC,                                           │
+│       signer: walletSigner                                   │
+│     });                                                      │
+│                           ↓                                  │
+│  3. x402 Facilitator Settles On-Chain                       │
+│     facilitator.settlePayment({                             │
+│       x402Version: 1,                                        │
+│       paymentHeader: header,                                 │
+│       paymentRequirements: requirements                      │
+│     });                                                      │
+│     // Facilitator pays gas - USER PAYS $0.00 ✅            │
+│                           ↓                                  │
+│  4. USDC Transferred                                         │
+│     // EIP-3009 transferWithAuthorization executed          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### x402 Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `integrations/x402/X402Client.ts` | Main client using SDK |
+| `integrations/x402/X402Client.server.ts` | Server-side client |
+| `lib/services/X402GaslessService.ts` | Legacy wrapper service |
+| `app/api/x402/swap/route.ts` | DEX swap with x402 |
+| `app/api/x402/settle/route.ts` | Payment settlement |
+| `app/api/x402/challenge/route.ts` | Payment challenges |
+
+### x402 Supported Tokens
+
+**Cronos Testnet (338)**:
+| Token | Address |
+|-------|---------|
+| DevUSDCe | `0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0` |
+
+**Cronos Mainnet (25)**:
+| Token | Address |
+|-------|---------|
+| USDC | `0xc21223249CA28397B4B6541dfFaEcC539BfF0c59` |
+| USDT | `0x66e428c3f67a68878562e79A0234c1F83c208770` |
 
 **What x402 SDK CAN do**:
 - ✅ Gasless USDC/token transfers (EIP-3009)
