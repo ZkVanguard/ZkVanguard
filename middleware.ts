@@ -25,18 +25,22 @@ const PROTECTED_PATHS = [
   '/api/swap',
   '/api/hedge',
   '/api/portfolio',
-  '/api/agents',
-  '/api/zk',
+  '/api/agents/hedging/execute', // Only block actual hedge execution
+  '/api/agents/command', // Block agent commands
+  '/api/zk-proof/generate', // Block ZK proof generation
   '/api/settlement',
   '/dashboard',
   '/swap',
-  '/simulator',
+  // '/simulator', // Allow simulator page for demos
 ];
 
 // Paths that are always allowed (public info)
 const PUBLIC_PATHS = [
   '/api/health',
   '/api/prices', // Read-only price data
+  '/api/chat/health', // Health check for Ollama/LLM status
+  '/api/agents/status', // Agent status check (read-only)
+  '/api/zk-proof/health', // ZK backend health check (read-only)
   '/_next',
   '/favicon.ico',
   '/terms',

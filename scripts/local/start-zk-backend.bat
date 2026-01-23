@@ -10,4 +10,5 @@ echo Press Ctrl+C to stop the server
 echo ========================================
 echo.
 
+cd ..
 python zkp\api\server.py
