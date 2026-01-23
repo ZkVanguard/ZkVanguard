@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { closeHedge, getHedgeByOrderId } from '@/lib/db/hedges';
+import { closeHedge, getHedgeByOrderId, clearSimulationHedges, clearAllHedges } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
@@ -72,6 +72,48 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to close hedge',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/agents/hedging/close
+ * Clear all simulation hedges or all hedges
+ * 
+ * Query params:
+ * - all: If true, clears ALL hedges (use with caution)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const clearAll = searchParams.get('all') === 'true';
+
+    logger.info('🗑️ Clearing hedges', { clearAll });
+
+    let count: number;
+    if (clearAll) {
+      count = await clearAllHedges();
+      logger.info(`✅ Cleared ALL ${count} hedges`);
+    } else {
+      count = await clearSimulationHedges();
+      logger.info(`✅ Cleared ${count} simulation hedges`);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: clearAll ? `Cleared all ${count} hedges` : `Cleared ${count} simulation hedges`,
+      count,
+    });
+
+  } catch (error) {
+    logger.error('❌ Failed to clear hedges', { error });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to clear hedges',
       },
       { status: 500 }
     );
