@@ -13,11 +13,48 @@ import type { PortfolioData } from '@/shared/types/portfolio';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address } = body;
+    const { address, portfolioValue, positions } = body;
+
+    // Support simulation mode with direct portfolio data (no address required)
+    if (portfolioValue && positions && !address) {
+      const aiService = getCryptocomAIService();
+      
+      // Build portfolio data from provided positions
+      // Note: calculateRealRiskAssessment expects `usdValue` field
+      const portfolioData: PortfolioData = {
+        address: '0xSimulation',
+        tokens: positions.map((p: { symbol: string; value: number }) => ({
+          symbol: p.symbol,
+          balance: p.value / 100000, // Approximate balance
+          price: p.symbol === 'BTC' ? 84050 : p.symbol === 'ETH' ? 3037 : 0.12,
+          value: p.value,
+          usdValue: p.value, // Required for risk calculation
+        })),
+        totalValue: portfolioValue,
+      };
+
+      // Use AI SDK for risk assessment
+      const riskAssessment = await aiService.assessRisk(portfolioData);
+
+      return NextResponse.json({
+        var: riskAssessment.var95 ?? 0.068, // Default 6.8% VaR
+        volatility: riskAssessment.volatility ?? 0.45, // Default 45% volatility
+        sharpeRatio: riskAssessment.sharpeRatio ?? 0.12,
+        riskScore: riskAssessment.riskScore ?? 65, // Default moderate risk
+        overallRisk: riskAssessment.overallRisk ?? 'medium',
+        factors: riskAssessment.factors,
+        realAgent: aiService.isAvailable(),
+        simulationMode: true,
+        hackathonAPIs: {
+          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
 
     if (!address) {
       return NextResponse.json(
-        { error: 'Address is required' },
+        { error: 'Address is required (or provide portfolioValue + positions for simulation)' },
         { status: 400 }
       );
     }

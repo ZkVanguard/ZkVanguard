@@ -340,18 +340,66 @@ class CryptocomAIService {
   async assessRisk(
     portfolio: Record<string, any>
   ): Promise<RiskAssessment> {
-    if (!this.client || typeof this.client.assessRisk !== 'function') {
-      // No AI client - calculate real metrics from portfolio data
-      return this.calculateRealRiskAssessment(portfolio);
+    // First calculate base metrics from portfolio data
+    const baseAssessment = this.calculateRealRiskAssessment(portfolio);
+    
+    // Try Crypto.com AI SDK first
+    if (this.client && typeof this.client.assessRisk === 'function') {
+      try {
+        const risk = await this.client.assessRisk(portfolio);
+        return risk;
+      } catch (error) {
+        logger.warn('Crypto.com AI SDK risk assessment failed, trying Ollama', { error });
+      }
     }
+    
+    // Try Ollama for AI-enhanced analysis
     try {
-      const risk = await this.client.assessRisk(portfolio);
-      return risk;
-    } catch (error) {
-      logger.error('AI risk assessment failed', { error });
-      // Fallback to calculated metrics
-      return this.calculateRealRiskAssessment(portfolio);
+      const { llmProvider } = await import('./llm-provider');
+      await llmProvider.waitForInit();
+      
+      if (llmProvider.getActiveProvider()?.includes('ollama')) {
+        const tokens = portfolio.tokens || [];
+        const portfolioSummary = tokens
+          .map((t: any) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)}`)
+          .join(', ');
+        
+        const aiPrompt = `Analyze this DeFi portfolio risk. Portfolio: ${portfolioSummary}. Total: $${portfolio.totalValue?.toFixed(0) || 0}. Base volatility: ${(baseAssessment.volatility * 100).toFixed(1)}%, VaR: ${(baseAssessment.var95 * 100).toFixed(1)}%.
+
+Respond with ONLY this format:
+RISK_LEVEL: [low/medium/high]
+RISK_FACTOR1: [factor name] - [brief description]
+RISK_FACTOR2: [factor name] - [brief description]`;
+
+        const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, 'You are a DeFi risk analyst. Be concise.');
+        
+        // Parse AI response to enhance factors
+        const lines = aiResponse.content.split('\n');
+        const additionalFactors: Array<{ factor: string; impact: 'low' | 'medium' | 'high'; description: string }> = [];
+        
+        for (const line of lines) {
+          const factorMatch = line.match(/RISK_FACTOR\d*:?\s*(.+?)\s*[-–]\s*(.+)/i);
+          if (factorMatch) {
+            additionalFactors.push({
+              factor: `🤖 ${factorMatch[1].trim()}`,
+              impact: 'medium',
+              description: factorMatch[2].trim(),
+            });
+          }
+        }
+        
+        // Merge AI insights with base assessment
+        return {
+          ...baseAssessment,
+          factors: [...baseAssessment.factors, ...additionalFactors.slice(0, 2)],
+        };
+      }
+    } catch (ollamaError) {
+      logger.warn('Ollama AI risk enhancement failed', { error: ollamaError });
     }
+    
+    // Return base rule-based assessment
+    return baseAssessment;
   }
 
   /**
@@ -361,19 +409,79 @@ class CryptocomAIService {
     portfolio: Record<string, any>,
     riskProfile: Record<string, any>
   ): Promise<HedgeRecommendation[]> {
-    if (!this.client || typeof this.client.generateHedgeRecommendations !== 'function') {
-      return this.generateRealHedgeRecommendations(portfolio);
+    // Get base recommendations from rule-based logic
+    const baseRecommendations = this.generateRealHedgeRecommendations(portfolio);
+    
+    // Try Crypto.com AI SDK first
+    if (this.client && typeof this.client.generateHedgeRecommendations === 'function') {
+      try {
+        const recommendations = await this.client.generateHedgeRecommendations(
+          portfolio,
+          riskProfile
+        );
+        return recommendations;
+      } catch (error) {
+        logger.warn('Crypto.com AI SDK hedge recommendation failed, trying Ollama', { error });
+      }
     }
+    
+    // Try Ollama for AI-enhanced recommendations
     try {
-      const recommendations = await this.client.generateHedgeRecommendations(
-        portfolio,
-        riskProfile
-      );
-      return recommendations;
-    } catch (error) {
-      logger.error('AI hedge recommendation failed', { error });
-      return this.generateRealHedgeRecommendations(portfolio);
+      const { llmProvider } = await import('./llm-provider');
+      await llmProvider.waitForInit();
+      
+      if (llmProvider.getActiveProvider()?.includes('ollama')) {
+        const tokens = portfolio.tokens || [];
+        const portfolioSummary = tokens
+          .map((t: any) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)} (${((t.usdValue || t.value || 0) / (portfolio.totalValue || 1) * 100).toFixed(0)}%)`)
+          .join(', ');
+        
+        const aiPrompt = `Recommend hedging strategy for this DeFi portfolio: ${portfolioSummary}. Total: $${portfolio.totalValue?.toFixed(0) || 0}. Risk level: ${riskProfile?.overallRisk || 'medium'}.
+
+Respond with ONLY this format:
+STRATEGY: [strategy type: protective-put, perpetual-short, or diversify]
+ASSET: [which asset to hedge]
+REASON: [one sentence why]
+EFFECTIVENESS: [0-100]`;
+
+        const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, 'You are a DeFi hedging strategist. Be concise.');
+        
+        // Parse AI response
+        const lines = aiResponse.content.split('\n');
+        let strategy = 'diversify', asset = 'BTC', reason = 'AI recommended', effectiveness = 70;
+        
+        for (const line of lines) {
+          const stratMatch = line.match(/STRATEGY:?\s*(.+)/i);
+          const assetMatch = line.match(/ASSET:?\s*(.+)/i);
+          const reasonMatch = line.match(/REASON:?\s*(.+)/i);
+          const effMatch = line.match(/EFFECTIVENESS:?\s*(\d+)/i);
+          
+          if (stratMatch) strategy = stratMatch[1].trim();
+          if (assetMatch) asset = assetMatch[1].trim();
+          if (reasonMatch) reason = reasonMatch[1].trim();
+          if (effMatch) effectiveness = parseInt(effMatch[1]);
+        }
+        
+        // Add AI recommendation to base recommendations
+        const aiRecommendation: HedgeRecommendation = {
+          strategy: `🤖 ${strategy}`,
+          confidence: effectiveness / 100,
+          expectedReduction: 0.25,
+          description: `AI: ${reason}`,
+          actions: [{
+            action: strategy.includes('short') ? 'SHORT' : strategy.includes('put') ? 'BUY_PUT' : 'DIVERSIFY',
+            asset,
+            amount: (portfolio.totalValue || 0) * 0.1,
+          }],
+        };
+        
+        return [aiRecommendation, ...baseRecommendations];
+      }
+    } catch (ollamaError) {
+      logger.warn('Ollama AI hedge recommendation failed', { error: ollamaError });
     }
+    
+    return baseRecommendations;
   }
 
   // ==================== Fallback Logic (Rule-Based) ====================
