@@ -15,11 +15,14 @@ export interface HedgePnLUpdate {
   currentPrice: number;
   size: number;
   leverage: number;
+  notionalValue: number;
+  capitalUsed: number;
   unrealizedPnL: number;
   pnlPercentage: number;
   liquidationPrice: number | null;
   isNearLiquidation: boolean;
   reason: string | null;
+  createdAt: string | null;
 }
 
 export class HedgePnLTracker {
@@ -55,6 +58,9 @@ export class HedgePnLTracker {
       ? Math.abs(currentPrice - Number(hedge.liquidation_price)) / Number(hedge.liquidation_price) < 0.1
       : false;
 
+    // Capital used = notional value / leverage (actual margin)
+    const capitalUsed = notionalValue / leverage;
+
     return {
       orderId: hedge.order_id,
       asset: hedge.asset,
@@ -63,11 +69,14 @@ export class HedgePnLTracker {
       currentPrice,
       size,
       leverage,
+      notionalValue,
+      capitalUsed,
       unrealizedPnL,
       pnlPercentage,
       liquidationPrice: hedge.liquidation_price ? Number(hedge.liquidation_price) : null,
       isNearLiquidation,
       reason: hedge.reason,
+      createdAt: hedge.created_at ? hedge.created_at.toISOString() : null,
     };
   }
 

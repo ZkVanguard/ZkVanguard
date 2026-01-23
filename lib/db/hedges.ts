@@ -140,3 +140,26 @@ export async function getHedgeStats() {
   
   return queryOne(sql);
 }
+
+/**
+ * Delete all active simulation hedges
+ * Used to clear old test data
+ */
+export async function clearSimulationHedges(): Promise<number> {
+  const sql = `
+    DELETE FROM hedges 
+    WHERE simulation_mode = true AND status = 'active'
+    RETURNING order_id
+  `;
+  const result = await query(sql);
+  return result.length;
+}
+
+/**
+ * Delete all hedges (use with caution)
+ */
+export async function clearAllHedges(): Promise<number> {
+  const sql = 'DELETE FROM hedges RETURNING order_id';
+  const result = await query(sql);
+  return result.length;
+}

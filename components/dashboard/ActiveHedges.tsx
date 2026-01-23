@@ -89,36 +89,36 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               currentPrice: pnl.currentPrice,
               targetPrice: 0, // Not tracked in DB yet
               stopLoss: 0,
-              capitalUsed: pnl.entryPrice * pnl.size / pnl.leverage,
+              capitalUsed: pnl.capitalUsed || (pnl.notionalValue / pnl.leverage),
               pnl: pnl.unrealizedPnL,
               pnlPercent: pnl.pnlPercentage,
               status: 'active' as const,
-              openedAt: new Date(),
+              openedAt: pnl.createdAt ? new Date(pnl.createdAt) : new Date(),
               reason: pnl.reason || `${pnl.leverage}x leveraged hedge @ $${pnl.entryPrice.toFixed(2)}`,
             })) || [];
 
             console.log('🔍 ActiveHedges: Mapped hedges:', dbHedges);
 
-            // Calculate stats from the hedges
-            const totalPnL = dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
-            const profitable = dbHedges.filter(h => h.pnl > 0).length;
+            // Use pre-calculated stats from API for accuracy
+            const totalPnL = data.summary.totalUnrealizedPnL || dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
+            const profitable = data.summary.profitable ?? dbHedges.filter(h => h.pnl > 0).length;
+            const unprofitable = data.summary.unprofitable ?? dbHedges.filter(h => h.pnl <= 0).length;
             const winRate = dbHedges.length > 0 ? (profitable / dbHedges.length) * 100 : 0;
             const pnlValues = dbHedges.map(h => h.pnl || 0);
             const bestTrade = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
             const worstTrade = pnlValues.length > 0 ? Math.min(...pnlValues) : 0;
 
             setStats({
-              totalHedges: dbHedges.length,
+              totalHedges: data.summary.totalHedges || dbHedges.length,
               activeHedges: dbHedges.length,
               winRate: Math.round(winRate),
               totalPnL,
-              avgHoldTime: '24h', // Could calculate from timestamps if available
+              avgHoldTime: '24h',
               bestTrade,
               worstTrade,
             });
-
-            // Always use database data, even if empty - no localStorage fallback for active positions
             setHedges(dbHedges);
+            
             setLoading(false);
             processingRef.current = false;
             return;
@@ -126,7 +126,6 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         }
       } catch (dbErr) {
         console.error('❌ Database not available:', dbErr);
-        // No localStorage fallback - database is source of truth
         setHedges([]);
         setLoading(false);
         processingRef.current = false;
