@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "Início",
+    "dashboard": "Painel",
+    "agents": "Agentes",
+    "simulator": "Simulador",
+    "docs": "Documentação"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "À prova de quantum",
+    "headline1": "Seu portfólio.",
+    "headline2": "Protegido.",
+    "subtitle": "Agentes de IA gerenciam riscos. Provas de conhecimento zero protegem a privacidade.",
+    "ctaDashboard": "Abrir painel",
+    "ctaLearnMore": "Saiba mais",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Proteção avançada",
+    "subtitle": "Segurança de nível empresarial com inteligência autônoma",
+    "aiAgents": {
+      "title": "Agentes de IA",
+      "description": "Agentes autônomos monitoram e gerenciam riscos 24 horas por dia"
+    },
+    "zkProofs": {
+      "title": "Provas de conhecimento zero",
+      "description": "Verificação que preserva a privacidade de todas as transações"
+    },
+    "realTime": {
+      "title": "Análise em tempo real",
+      "description": "Insights instantâneos sobre o desempenho do portfólio"
+    }
+  },
+  "stats": {
+    "tvl": "Valor total bloqueado",
+    "agents": "Agentes de IA ativos",
+    "transactions": "Transações verificadas",
+    "uptime": "Tempo de atividade do sistema"
+  },
+  "cta": {
+    "title": "Pronto para proteger seu portfólio?",
+    "subtitle": "Junte-se a investidores institucionais gerenciando bilhões em ativos",
+    "button": "Começar"
+  },
+  "footer": {
+    "description": "Gestão de riscos RWA com IA e provas de conhecimento zero no Cronos zkEVM",
+    "product": "Produto",
+    "company": "Empresa",
+    "legal": "Legal",
+    "privacy": "Política de privacidade",
+    "terms": "Termos de serviço",
+    "whitepaper": "Whitepaper",
+    "rights": "Todos os direitos reservados."
+  },
+  "connect": {
+    "button": "Conectar carteira",
+    "disconnect": "Desconectar",
+    "connecting": "Conectando...",
+    "wrongNetwork": "Rede incorreta",
+    "switchNetwork": "Mudar para {network}"
+  },
+  "dashboard": {
+    "title": "Painel de riscos",
+    "overview": "Visão geral",
+    "positions": "Posições",
+    "analytics": "Análises",
+    "settings": "Configurações",
+    "totalValue": "Valor total do portfólio",
+    "riskScore": "Pontuação de risco",
+    "activePositions": "Posições ativas",
+    "monthlyReturn": "Retorno mensal"
+  },
+  "agents": {
+    "title": "Rede de agentes de IA",
+    "active": "Ativo",
+    "idle": "Inativo",
+    "monitoring": "Monitorando",
+    "leadAgent": "Agente líder de risco",
+    "marketAgent": "Agente de inteligência de mercado",
+    "complianceAgent": "Agente de conformidade",
+    "executionAgent": "Agente de execução"
+  },
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "close": "Fechar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "language": "Idioma"
+  }
+}

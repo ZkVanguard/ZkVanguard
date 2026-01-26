@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "agents": "Agenti",
+    "simulator": "Simulatore",
+    "docs": "Documentazione"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "A prova di quantum",
+    "headline1": "Il tuo portafoglio.",
+    "headline2": "Protetto.",
+    "subtitle": "Gli agenti AI gestiscono il rischio. Le prove a conoscenza zero proteggono la privacy.",
+    "ctaDashboard": "Avvia Dashboard",
+    "ctaLearnMore": "Scopri di più",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Protezione avanzata",
+    "subtitle": "Sicurezza di livello aziendale con intelligenza autonoma",
+    "aiAgents": {
+      "title": "Agenti AI",
+      "description": "Agenti autonomi monitorano e gestiscono il rischio 24/7"
+    },
+    "zkProofs": {
+      "title": "Prove a conoscenza zero",
+      "description": "Verifica che preserva la privacy di tutte le transazioni"
+    },
+    "realTime": {
+      "title": "Analisi in tempo reale",
+      "description": "Approfondimenti istantanei sulle prestazioni del portafoglio"
+    }
+  },
+  "stats": {
+    "tvl": "Valore totale bloccato",
+    "agents": "Agenti AI attivi",
+    "transactions": "Transazioni verificate",
+    "uptime": "Tempo di attività del sistema"
+  },
+  "cta": {
+    "title": "Pronto a proteggere il tuo portafoglio?",
+    "subtitle": "Unisciti agli investitori istituzionali che gestiscono miliardi di asset",
+    "button": "Inizia"
+  },
+  "footer": {
+    "description": "Gestione del rischio RWA basata su AI con prove a conoscenza zero su Cronos zkEVM",
+    "product": "Prodotto",
+    "company": "Azienda",
+    "legal": "Legale",
+    "privacy": "Informativa sulla privacy",
+    "terms": "Termini di servizio",
+    "whitepaper": "Whitepaper",
+    "rights": "Tutti i diritti riservati."
+  },
+  "connect": {
+    "button": "Connetti Wallet",
+    "disconnect": "Disconnetti",
+    "connecting": "Connessione...",
+    "wrongNetwork": "Rete errata",
+    "switchNetwork": "Passa a {network}"
+  },
+  "dashboard": {
+    "title": "Dashboard rischi",
+    "overview": "Panoramica",
+    "positions": "Posizioni",
+    "analytics": "Analisi",
+    "settings": "Impostazioni",
+    "totalValue": "Valore totale del portafoglio",
+    "riskScore": "Punteggio di rischio",
+    "activePositions": "Posizioni attive",
+    "monthlyReturn": "Rendimento mensile"
+  },
+  "agents": {
+    "title": "Rete di agenti AI",
+    "active": "Attivo",
+    "idle": "Inattivo",
+    "monitoring": "Monitoraggio",
+    "leadAgent": "Orchestratore principale del rischio",
+    "marketAgent": "Agente di intelligence di mercato",
+    "complianceAgent": "Agente di conformità",
+    "executionAgent": "Agente di esecuzione"
+  },
+  "common": {
+    "loading": "Caricamento...",
+    "error": "Errore",
+    "success": "Successo",
+    "confirm": "Conferma",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "close": "Chiudi",
+    "back": "Indietro",
+    "next": "Avanti",
+    "language": "Lingua"
+  }
+}

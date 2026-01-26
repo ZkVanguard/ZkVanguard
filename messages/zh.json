@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "首页",
+    "dashboard": "仪表板",
+    "agents": "代理",
+    "simulator": "模拟器",
+    "docs": "文档"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "量子防护",
+    "headline1": "您的投资组合。",
+    "headline2": "受保护。",
+    "subtitle": "AI代理管理风险。零知识证明保护隐私。",
+    "ctaDashboard": "启动仪表板",
+    "ctaLearnMore": "了解更多",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "高级保护",
+    "subtitle": "企业级安全与自主智能相结合",
+    "aiAgents": {
+      "title": "AI代理",
+      "description": "自主代理全天候监控和管理风险"
+    },
+    "zkProofs": {
+      "title": "零知识证明",
+      "description": "所有交易的隐私保护验证"
+    },
+    "realTime": {
+      "title": "实时分析",
+      "description": "即时了解投资组合表现"
+    }
+  },
+  "stats": {
+    "tvl": "总锁定价值",
+    "agents": "活跃AI代理",
+    "transactions": "已验证交易",
+    "uptime": "系统正常运行时间"
+  },
+  "cta": {
+    "title": "准备好保护您的投资组合了吗？",
+    "subtitle": "加入管理数十亿资产的机构投资者",
+    "button": "开始使用"
+  },
+  "footer": {
+    "description": "基于Cronos zkEVM的AI驱动RWA风险管理与零知识证明",
+    "product": "产品",
+    "company": "公司",
+    "legal": "法律",
+    "privacy": "隐私政策",
+    "terms": "服务条款",
+    "whitepaper": "白皮书",
+    "rights": "版权所有。"
+  },
+  "connect": {
+    "button": "连接钱包",
+    "disconnect": "断开连接",
+    "connecting": "连接中...",
+    "wrongNetwork": "网络错误",
+    "switchNetwork": "切换到 {network}"
+  },
+  "dashboard": {
+    "title": "风险仪表板",
+    "overview": "概览",
+    "positions": "头寸",
+    "analytics": "分析",
+    "settings": "设置",
+    "totalValue": "投资组合总价值",
+    "riskScore": "风险评分",
+    "activePositions": "活跃头寸",
+    "monthlyReturn": "月度回报"
+  },
+  "agents": {
+    "title": "AI代理网络",
+    "active": "活跃",
+    "idle": "空闲",
+    "monitoring": "监控中",
+    "leadAgent": "首席风险协调员",
+    "marketAgent": "市场情报代理",
+    "complianceAgent": "合规代理",
+    "executionAgent": "执行代理"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "language": "语言"
+  }
+}

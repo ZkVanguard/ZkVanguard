@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "dashboard": "Tableau de bord",
+    "agents": "Agents",
+    "simulator": "Simulateur",
+    "docs": "Documentation"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "À l'épreuve quantique",
+    "headline1": "Votre portefeuille.",
+    "headline2": "Protégé.",
+    "subtitle": "Les agents IA gèrent les risques. Les preuves à divulgation nulle protègent la confidentialité.",
+    "ctaDashboard": "Lancer le tableau de bord",
+    "ctaLearnMore": "En savoir plus",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Protection avancée",
+    "subtitle": "Sécurité de niveau entreprise et intelligence autonome",
+    "aiAgents": {
+      "title": "Agents IA",
+      "description": "Des agents autonomes surveillent et gèrent les risques 24h/24 et 7j/7"
+    },
+    "zkProofs": {
+      "title": "Preuves à divulgation nulle",
+      "description": "Vérification préservant la confidentialité de toutes les transactions"
+    },
+    "realTime": {
+      "title": "Analyse en temps réel",
+      "description": "Aperçu instantané des performances du portefeuille"
+    }
+  },
+  "stats": {
+    "tvl": "Valeur totale verrouillée",
+    "agents": "Agents IA actifs",
+    "transactions": "Transactions vérifiées",
+    "uptime": "Temps de disponibilité du système"
+  },
+  "cta": {
+    "title": "Prêt à sécuriser votre portefeuille ?",
+    "subtitle": "Rejoignez les investisseurs institutionnels gérant des milliards d'actifs",
+    "button": "Commencer"
+  },
+  "footer": {
+    "description": "Gestion des risques RWA avec IA et preuves à divulgation nulle sur Cronos zkEVM",
+    "product": "Produit",
+    "company": "Entreprise",
+    "legal": "Légal",
+    "privacy": "Politique de confidentialité",
+    "terms": "Conditions d'utilisation",
+    "whitepaper": "Livre blanc",
+    "rights": "Tous droits réservés."
+  },
+  "connect": {
+    "button": "Connecter le portefeuille",
+    "disconnect": "Déconnecter",
+    "connecting": "Connexion...",
+    "wrongNetwork": "Mauvais réseau",
+    "switchNetwork": "Passer à {network}"
+  },
+  "dashboard": {
+    "title": "Tableau de bord des risques",
+    "overview": "Aperçu",
+    "positions": "Positions",
+    "analytics": "Analytique",
+    "settings": "Paramètres",
+    "totalValue": "Valeur totale du portefeuille",
+    "riskScore": "Score de risque",
+    "activePositions": "Positions actives",
+    "monthlyReturn": "Rendement mensuel"
+  },
+  "agents": {
+    "title": "Réseau d'agents IA",
+    "active": "Actif",
+    "idle": "Inactif",
+    "monitoring": "Surveillance",
+    "leadAgent": "Agent principal de risque",
+    "marketAgent": "Agent de renseignement de marché",
+    "complianceAgent": "Agent de conformité",
+    "executionAgent": "Agent d'exécution"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "language": "Langue"
+  }
+}

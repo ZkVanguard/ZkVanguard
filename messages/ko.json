@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "홈",
+    "dashboard": "대시보드",
+    "agents": "에이전트",
+    "simulator": "시뮬레이터",
+    "docs": "문서"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "양자 방어",
+    "headline1": "당신의 포트폴리오.",
+    "headline2": "보호됩니다.",
+    "subtitle": "AI 에이전트가 위험을 관리합니다. 영지식 증명이 개인정보를 보호합니다.",
+    "ctaDashboard": "대시보드 실행",
+    "ctaLearnMore": "자세히 알아보기",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "고급 보호",
+    "subtitle": "엔터프라이즈급 보안과 자율 지능의 만남",
+    "aiAgents": {
+      "title": "AI 에이전트",
+      "description": "자율 에이전트가 24시간 위험을 모니터링하고 관리"
+    },
+    "zkProofs": {
+      "title": "영지식 증명",
+      "description": "모든 거래의 개인정보 보호 검증"
+    },
+    "realTime": {
+      "title": "실시간 분석",
+      "description": "포트폴리오 성과에 대한 즉각적인 통찰력"
+    }
+  },
+  "stats": {
+    "tvl": "총 잠긴 가치",
+    "agents": "활성 AI 에이전트",
+    "transactions": "검증된 거래",
+    "uptime": "시스템 가동 시간"
+  },
+  "cta": {
+    "title": "포트폴리오를 보호할 준비가 되셨나요?",
+    "subtitle": "수십억 달러의 자산을 관리하는 기관 투자자와 함께하세요",
+    "button": "시작하기"
+  },
+  "footer": {
+    "description": "Cronos zkEVM의 영지식 증명을 활용한 AI 기반 RWA 위험 관리",
+    "product": "제품",
+    "company": "회사",
+    "legal": "법률",
+    "privacy": "개인정보 보호정책",
+    "terms": "서비스 약관",
+    "whitepaper": "백서",
+    "rights": "모든 권리 보유."
+  },
+  "connect": {
+    "button": "지갑 연결",
+    "disconnect": "연결 해제",
+    "connecting": "연결 중...",
+    "wrongNetwork": "잘못된 네트워크",
+    "switchNetwork": "{network}로 전환"
+  },
+  "dashboard": {
+    "title": "위험 대시보드",
+    "overview": "개요",
+    "positions": "포지션",
+    "analytics": "분석",
+    "settings": "설정",
+    "totalValue": "총 포트폴리오 가치",
+    "riskScore": "위험 점수",
+    "activePositions": "활성 포지션",
+    "monthlyReturn": "월간 수익률"
+  },
+  "agents": {
+    "title": "AI 에이전트 네트워크",
+    "active": "활성",
+    "idle": "유휴",
+    "monitoring": "모니터링",
+    "leadAgent": "리드 위험 조정자",
+    "marketAgent": "시장 인텔리전스 에이전트",
+    "complianceAgent": "규정 준수 에이전트",
+    "executionAgent": "실행 에이전트"
+  },
+  "common": {
+    "loading": "로딩 중...",
+    "error": "오류",
+    "success": "성공",
+    "confirm": "확인",
+    "cancel": "취소",
+    "save": "저장",
+    "close": "닫기",
+    "back": "뒤로",
+    "next": "다음",
+    "language": "언어"
+  }
+}

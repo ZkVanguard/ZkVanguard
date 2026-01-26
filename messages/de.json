@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "Startseite",
+    "dashboard": "Dashboard",
+    "agents": "Agenten",
+    "simulator": "Simulator",
+    "docs": "Dokumentation"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "Quantensicher",
+    "headline1": "Ihr Portfolio.",
+    "headline2": "Geschützt.",
+    "subtitle": "KI-Agenten verwalten Risiken. Zero-Knowledge-Beweise schützen die Privatsphäre.",
+    "ctaDashboard": "Dashboard starten",
+    "ctaLearnMore": "Mehr erfahren",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Erweiterter Schutz",
+    "subtitle": "Sicherheit auf Unternehmensniveau trifft auf autonome Intelligenz",
+    "aiAgents": {
+      "title": "KI-Agenten",
+      "description": "Autonome Agenten überwachen und verwalten Risiken rund um die Uhr"
+    },
+    "zkProofs": {
+      "title": "Zero-Knowledge-Beweise",
+      "description": "Datenschutzwahrende Überprüfung aller Transaktionen"
+    },
+    "realTime": {
+      "title": "Echtzeit-Analysen",
+      "description": "Sofortige Einblicke in die Portfolio-Performance"
+    }
+  },
+  "stats": {
+    "tvl": "Gesperrter Gesamtwert",
+    "agents": "Aktive KI-Agenten",
+    "transactions": "Verifizierte Transaktionen",
+    "uptime": "Systemverfügbarkeit"
+  },
+  "cta": {
+    "title": "Bereit, Ihr Portfolio zu sichern?",
+    "subtitle": "Schließen Sie sich institutionellen Anlegern an, die Milliarden verwalten",
+    "button": "Loslegen"
+  },
+  "footer": {
+    "description": "KI-gestütztes RWA-Risikomanagement mit Zero-Knowledge-Beweisen auf Cronos zkEVM",
+    "product": "Produkt",
+    "company": "Unternehmen",
+    "legal": "Rechtliches",
+    "privacy": "Datenschutzrichtlinie",
+    "terms": "Nutzungsbedingungen",
+    "whitepaper": "Whitepaper",
+    "rights": "Alle Rechte vorbehalten."
+  },
+  "connect": {
+    "button": "Wallet verbinden",
+    "disconnect": "Trennen",
+    "connecting": "Verbinden...",
+    "wrongNetwork": "Falsches Netzwerk",
+    "switchNetwork": "Zu {network} wechseln"
+  },
+  "dashboard": {
+    "title": "Risiko-Dashboard",
+    "overview": "Übersicht",
+    "positions": "Positionen",
+    "analytics": "Analytik",
+    "settings": "Einstellungen",
+    "totalValue": "Gesamter Portfolio-Wert",
+    "riskScore": "Risikobewertung",
+    "activePositions": "Aktive Positionen",
+    "monthlyReturn": "Monatliche Rendite"
+  },
+  "agents": {
+    "title": "KI-Agenten-Netzwerk",
+    "active": "Aktiv",
+    "idle": "Inaktiv",
+    "monitoring": "Überwachung",
+    "leadAgent": "Hauptrisiko-Orchestrator",
+    "marketAgent": "Marktintelligenz-Agent",
+    "complianceAgent": "Compliance-Agent",
+    "executionAgent": "Ausführungs-Agent"
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "confirm": "Bestätigen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "language": "Sprache"
+  }
+}

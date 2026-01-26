@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "agents": "Agents",
+    "simulator": "Simulator",
+    "docs": "Docs"
+  },
+  "hero": {
+    "eyebrow": "Cronos zkEVM",
+    "quantumProof": "Quantum-Proof",
+    "headline1": "Your portfolio.",
+    "headline2": "Protected.",
+    "subtitle": "AI agents manage risk. Zero-knowledge proofs protect privacy.",
+    "ctaDashboard": "Launch Dashboard",
+    "ctaLearnMore": "Learn More",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Advanced Protection",
+    "subtitle": "Enterprise-grade security meets autonomous intelligence",
+    "aiAgents": {
+      "title": "AI Agents",
+      "description": "Autonomous agents monitor and manage risk 24/7"
+    },
+    "zkProofs": {
+      "title": "Zero-Knowledge Proofs",
+      "description": "Privacy-preserving verification of all transactions"
+    },
+    "realTime": {
+      "title": "Real-Time Analytics",
+      "description": "Instant insights into portfolio performance"
+    }
+  },
+  "stats": {
+    "tvl": "Total Value Locked",
+    "agents": "Active AI Agents",
+    "transactions": "Verified Transactions",
+    "uptime": "System Uptime"
+  },
+  "cta": {
+    "title": "Ready to Secure Your Portfolio?",
+    "subtitle": "Join institutional investors managing billions in assets",
+    "button": "Get Started"
+  },
+  "footer": {
+    "description": "AI-Powered RWA Risk Management with Zero-Knowledge Proofs on Cronos zkEVM",
+    "product": "Product",
+    "company": "Company",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "whitepaper": "Whitepaper",
+    "rights": "All rights reserved."
+  },
+  "connect": {
+    "button": "Connect Wallet",
+    "disconnect": "Disconnect",
+    "connecting": "Connecting...",
+    "wrongNetwork": "Wrong Network",
+    "switchNetwork": "Switch to {network}"
+  },
+  "dashboard": {
+    "title": "Risk Dashboard",
+    "overview": "Overview",
+    "positions": "Positions",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "totalValue": "Total Portfolio Value",
+    "riskScore": "Risk Score",
+    "activePositions": "Active Positions",
+    "monthlyReturn": "Monthly Return"
+  },
+  "agents": {
+    "title": "AI Agent Network",
+    "active": "Active",
+    "idle": "Idle",
+    "monitoring": "Monitoring",
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "Market Intelligence Agent",
+    "complianceAgent": "Compliance Agent",
+    "executionAgent": "Execution Agent"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "language": "Language"
+  }
+}
