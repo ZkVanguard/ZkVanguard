@@ -17,41 +17,58 @@
     "ctaArrow": "→"
   },
   "features": {
-    "title": "Protección Avanzada",
-    "subtitle": "Seguridad empresarial con inteligencia autónoma",
-    "aiAgents": {
-      "title": "Agentes de IA",
-      "description": "Agentes autónomos monitorean y gestionan riesgos 24/7"
-    },
     "zkProofs": {
-      "title": "Pruebas de Conocimiento Cero",
-      "description": "Verificación que preserva la privacidad de todas las transacciones"
+      "title": "Pruebas ZK",
+      "description": "Verificación de conocimiento cero para privacidad y seguridad."
     },
-    "realTime": {
-      "title": "Análisis en Tiempo Real",
-      "description": "Información instantánea sobre el rendimiento de la cartera"
+    "aiAgents": {
+      "title": "Agentes IA",
+      "description": "Optimización de cartera automatizada 24/7."
+    },
+    "liveAnalytics": {
+      "title": "Análisis en Vivo",
+      "description": "Métricas de riesgo e información en tiempo real."
+    },
+    "quantumProof": {
+      "title": "ZK-STARK Cuántico",
+      "description": "Criptografía post-cuántica para seguridad futura."
     }
   },
   "stats": {
-    "tvl": "Valor Total Bloqueado",
-    "agents": "Agentes IA Activos",
-    "transactions": "Transacciones Verificadas",
-    "uptime": "Tiempo Activo del Sistema"
+    "aiAgents": "Agentes IA",
+    "gasSavings": "Ahorro de Gas",
+    "zkProofs": "Pruebas ZK",
+    "responseTime": "Tiempo de Respuesta",
+    "batchingNote": "Procesamiento x402 en Cronos zkEVM"
   },
   "cta": {
-    "title": "¿Listo para Asegurar Tu Cartera?",
-    "subtitle": "Únete a inversores institucionales que gestionan miles de millones en activos",
-    "button": "Comenzar"
+    "title": "¿Listo para Comenzar?",
+    "subtitle": "Verificación ZK-STARK cuántica con agentes de IA autónomos",
+    "button": "Abrir Panel"
   },
   "footer": {
-    "description": "Gestión de Riesgos RWA con IA y Pruebas de Conocimiento Cero en Cronos zkEVM",
-    "product": "Producto",
-    "company": "Empresa",
-    "legal": "Legal",
+    "product": "PRODUCTO",
+    "platform": "PLATAFORMA",
+    "resources": "RECURSOS",
+    "legal": "LEGAL",
+    "dashboard": "Panel",
+    "agents": "Agentes",
+    "simulator": "Simulador",
+    "documentation": "Documentación",
+    "zkVerification": "Verificación ZK",
+    "authenticity": "Autenticidad",
+    "whitepaper": "Libro Blanco",
+    "api": "API",
+    "contact": "Contacto",
+    "community": "Comunidad",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "Política de Privacidad",
     "terms": "Términos de Servicio",
-    "whitepaper": "Libro Blanco",
-    "rights": "Todos los derechos reservados."
+    "rights": "Todos los derechos reservados.",
+    "testnet": "Cronos zkEVM Testnet",
+    "stage": "Etapa Pre-Seed",
+    "builtWith": "Construido con ZK-STARK"
   },
   "connect": {
     "button": "Conectar Billetera",
@@ -92,5 +109,24 @@
     "back": "Atrás",
     "next": "Siguiente",
     "language": "Idioma"
+  },
+  "howItWorks": {
+    "title": "Cómo Funciona",
+    "subtitle": "Comienza en tres simples pasos",
+    "step1": {
+      "title": "Conectar",
+      "description": "Vincula tu billetera y configura preferencias",
+      "detail": "Integración con billetera Web3"
+    },
+    "step2": {
+      "title": "Monitorear",
+      "description": "Los agentes IA analizan el riesgo del portafolio 24/7",
+      "detail": "Análisis de riesgo en tiempo real"
+    },
+    "step3": {
+      "title": "Ejecutar",
+      "description": "Auto-cobertura y liquidación de transacciones",
+      "detail": "Protección automatizada"
+    }
   }
 }

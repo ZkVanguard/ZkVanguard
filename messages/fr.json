@@ -19,39 +19,62 @@
   "features": {
     "title": "Protection avancée",
     "subtitle": "Sécurité de niveau entreprise et intelligence autonome",
+    "zkProofs": {
+      "title": "Preuves ZK-STARK",
+      "description": "Sécurité post-quantique avec preuves transparentes, sans installation de confiance"
+    },
     "aiAgents": {
       "title": "Agents IA",
-      "description": "Des agents autonomes surveillent et gèrent les risques 24h/24 et 7j/7"
+      "description": "Gestion autonome des risques 24h/24 et 7j/7 avec déclencheurs de couverture intelligents"
     },
-    "zkProofs": {
-      "title": "Preuves à divulgation nulle",
-      "description": "Vérification préservant la confidentialité de toutes les transactions"
+    "liveAnalytics": {
+      "title": "Analyse en direct",
+      "description": "Suivi de portefeuille en temps réel avec scoring de risque prédictif"
     },
-    "realTime": {
-      "title": "Analyse en temps réel",
-      "description": "Aperçu instantané des performances du portefeuille"
+    "quantumProof": {
+      "title": "Sécurité quantique",
+      "description": "Prêt pour la cryptographie post-quantique avec courbes BLS12-381"
     }
   },
   "stats": {
-    "tvl": "Valeur totale verrouillée",
-    "agents": "Agents IA actifs",
-    "transactions": "Transactions vérifiées",
-    "uptime": "Temps de disponibilité du système"
+    "aiAgents": "Agents IA",
+    "aiAgentsDesc": "Gestion autonome des risques",
+    "zkVerified": "Vérifié ZK",
+    "zkVerifiedDesc": "Confidentialité cryptographique",
+    "riskCoverage": "Couverture des risques",
+    "riskCoverageDesc": "De la valeur du portefeuille",
+    "uptime": "Disponibilité",
+    "uptimeDesc": "Surveillance continue"
   },
   "cta": {
-    "title": "Prêt à sécuriser votre portefeuille ?",
-    "subtitle": "Rejoignez les investisseurs institutionnels gérant des milliards d'actifs",
-    "button": "Commencer"
+    "title": "Prêt à sécuriser vos actifs ?",
+    "subtitle": "Rejoignez des milliers d'investisseurs utilisant la gestion des risques pilotée par IA avec confidentialité ZK-STARK.",
+    "button": "Lancer le tableau de bord",
+    "learnMore": "En savoir plus sur la sécurité"
   },
   "footer": {
-    "description": "Gestion des risques RWA avec IA et preuves à divulgation nulle sur Cronos zkEVM",
-    "product": "Produit",
-    "company": "Entreprise",
-    "legal": "Légal",
+    "product": "PRODUIT",
+    "platform": "PLATEFORME",
+    "resources": "RESSOURCES",
+    "legal": "LÉGAL",
+    "dashboard": "Tableau de bord",
+    "agents": "Agents",
+    "simulator": "Simulateur",
+    "documentation": "Documentation",
+    "zkVerification": "Vérification ZK",
+    "authenticity": "Authenticité",
+    "whitepaper": "Livre blanc",
+    "api": "API",
+    "contact": "Contact",
+    "community": "Communauté",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "Politique de confidentialité",
     "terms": "Conditions d'utilisation",
-    "whitepaper": "Livre blanc",
-    "rights": "Tous droits réservés."
+    "rights": "Tous droits réservés.",
+    "testnet": "Testnet Cronos zkEVM",
+    "stage": "Stade Pré-Seed",
+    "builtWith": "Construit avec ZK-STARK"
   },
   "connect": {
     "button": "Connecter le portefeuille",
@@ -92,5 +115,24 @@
     "back": "Retour",
     "next": "Suivant",
     "language": "Langue"
+  },
+  "howItWorks": {
+    "title": "Comment ça marche",
+    "subtitle": "Commencez en trois étapes simples",
+    "step1": {
+      "title": "Connecter",
+      "description": "Liez votre portefeuille et définissez vos préférences",
+      "detail": "Intégration de portefeuille Web3"
+    },
+    "step2": {
+      "title": "Surveiller",
+      "description": "Les agents IA analysent le risque du portefeuille 24h/24",
+      "detail": "Analyse des risques en temps réel"
+    },
+    "step3": {
+      "title": "Exécuter",
+      "description": "Auto-couverture et règlement des transactions",
+      "detail": "Protection automatisée"
+    }
   }
 }

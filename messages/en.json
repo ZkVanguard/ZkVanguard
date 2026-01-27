@@ -17,41 +17,58 @@
     "ctaArrow": "→"
   },
   "features": {
-    "title": "Advanced Protection",
-    "subtitle": "Enterprise-grade security meets autonomous intelligence",
+    "zkProofs": {
+      "title": "ZK Proofs",
+      "description": "Zero-knowledge verification for privacy & security."
+    },
     "aiAgents": {
       "title": "AI Agents",
-      "description": "Autonomous agents monitor and manage risk 24/7"
+      "description": "24/7 automated portfolio optimization."
     },
-    "zkProofs": {
-      "title": "Zero-Knowledge Proofs",
-      "description": "Privacy-preserving verification of all transactions"
+    "liveAnalytics": {
+      "title": "Live Analytics",
+      "description": "Real-time risk metrics & insights."
     },
-    "realTime": {
-      "title": "Real-Time Analytics",
-      "description": "Instant insights into portfolio performance"
+    "quantumProof": {
+      "title": "Quantum-Proof ZK-STARK",
+      "description": "Post-quantum cryptography for future security."
     }
   },
   "stats": {
-    "tvl": "Total Value Locked",
-    "agents": "Active AI Agents",
-    "transactions": "Verified Transactions",
-    "uptime": "System Uptime"
+    "aiAgents": "AI Agents",
+    "gasSavings": "Gas Savings",
+    "zkProofs": "ZK Proofs",
+    "responseTime": "Response Time",
+    "batchingNote": "x402 batching on Cronos zkEVM"
   },
   "cta": {
-    "title": "Ready to Secure Your Portfolio?",
-    "subtitle": "Join institutional investors managing billions in assets",
-    "button": "Get Started"
+    "title": "Ready to Start?",
+    "subtitle": "Quantum-proof ZK-STARK verification meets autonomous AI agents",
+    "button": "Launch Dashboard"
   },
   "footer": {
-    "description": "AI-Powered RWA Risk Management with Zero-Knowledge Proofs on Cronos zkEVM",
-    "product": "Product",
-    "company": "Company",
-    "legal": "Legal",
+    "product": "PRODUCT",
+    "platform": "PLATFORM",
+    "resources": "RESOURCES",
+    "legal": "LEGAL",
+    "dashboard": "Dashboard",
+    "agents": "Agents",
+    "simulator": "Simulator",
+    "documentation": "Documentation",
+    "zkVerification": "ZK Verification",
+    "authenticity": "Authenticity",
+    "whitepaper": "Whitepaper",
+    "api": "API",
+    "contact": "Contact",
+    "community": "Community",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
-    "whitepaper": "Whitepaper",
-    "rights": "All rights reserved."
+    "rights": "All rights reserved.",
+    "testnet": "Cronos zkEVM Testnet",
+    "stage": "Pre-Seed Stage",
+    "builtWith": "Built with ZK-STARK"
   },
   "connect": {
     "button": "Connect Wallet",
@@ -92,5 +109,24 @@
     "back": "Back",
     "next": "Next",
     "language": "Language"
+  },
+  "howItWorks": {
+    "title": "How It Works",
+    "subtitle": "Get started in three simple steps",
+    "step1": {
+      "title": "Connect",
+      "description": "Link your wallet & set preferences",
+      "detail": "Web3 wallet integration"
+    },
+    "step2": {
+      "title": "Monitor",
+      "description": "AI agents analyze portfolio risk 24/7",
+      "detail": "Real-time risk analysis"
+    },
+    "step3": {
+      "title": "Execute",
+      "description": "Auto-hedge & settle transactions",
+      "detail": "Automated protection"
+    }
   }
 }

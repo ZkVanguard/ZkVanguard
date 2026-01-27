@@ -19,39 +19,62 @@
   "features": {
     "title": "高级保护",
     "subtitle": "企业级安全与自主智能相结合",
+    "zkProofs": {
+      "title": "ZK-STARK证明",
+      "description": "后量子安全与透明证明，无需可信设置"
+    },
     "aiAgents": {
       "title": "AI代理",
-      "description": "自主代理全天候监控和管理风险"
+      "description": "24/7自主风险管理与智能对冲触发器"
     },
-    "zkProofs": {
-      "title": "零知识证明",
-      "description": "所有交易的隐私保护验证"
-    },
-    "realTime": {
+    "liveAnalytics": {
       "title": "实时分析",
-      "description": "即时了解投资组合表现"
+      "description": "实时投资组合跟踪与预测风险评分"
+    },
+    "quantumProof": {
+      "title": "量子安全",
+      "description": "使用BLS12-381曲线的后量子密码学就绪"
     }
   },
   "stats": {
-    "tvl": "总锁定价值",
-    "agents": "活跃AI代理",
-    "transactions": "已验证交易",
-    "uptime": "系统正常运行时间"
+    "aiAgents": "AI代理",
+    "aiAgentsDesc": "自主风险管理",
+    "zkVerified": "ZK验证",
+    "zkVerifiedDesc": "密码学隐私",
+    "riskCoverage": "风险覆盖",
+    "riskCoverageDesc": "投资组合价值的",
+    "uptime": "正常运行时间",
+    "uptimeDesc": "持续监控"
   },
   "cta": {
-    "title": "准备好保护您的投资组合了吗？",
-    "subtitle": "加入管理数十亿资产的机构投资者",
-    "button": "开始使用"
+    "title": "准备好保护您的资产了吗？",
+    "subtitle": "加入数千名使用AI驱动风险管理和ZK-STARK隐私的投资者。",
+    "button": "启动仪表板",
+    "learnMore": "了解更多安全信息"
   },
   "footer": {
-    "description": "基于Cronos zkEVM的AI驱动RWA风险管理与零知识证明",
     "product": "产品",
-    "company": "公司",
+    "platform": "平台",
+    "resources": "资源",
     "legal": "法律",
+    "dashboard": "仪表板",
+    "agents": "代理",
+    "simulator": "模拟器",
+    "documentation": "文档",
+    "zkVerification": "ZK验证",
+    "authenticity": "真实性",
+    "whitepaper": "白皮书",
+    "api": "API",
+    "contact": "联系我们",
+    "community": "社区",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "隐私政策",
     "terms": "服务条款",
-    "whitepaper": "白皮书",
-    "rights": "版权所有。"
+    "rights": "版权所有。",
+    "testnet": "Cronos zkEVM测试网",
+    "stage": "种子前阶段",
+    "builtWith": "使用ZK-STARK构建"
   },
   "connect": {
     "button": "连接钱包",
@@ -92,5 +115,24 @@
     "back": "返回",
     "next": "下一步",
     "language": "语言"
+  },
+  "howItWorks": {
+    "title": "如何运作",
+    "subtitle": "三个简单步骤开始",
+    "step1": {
+      "title": "连接",
+      "description": "链接您的钱包并设置偏好",
+      "detail": "Web3钱包集成"
+    },
+    "step2": {
+      "title": "监控",
+      "description": "AI代理全天候分析投资组合风险",
+      "detail": "实时风险分析"
+    },
+    "step3": {
+      "title": "执行",
+      "description": "自动对冲和交易结算",
+      "detail": "自动化保护"
+    }
   }
 }
