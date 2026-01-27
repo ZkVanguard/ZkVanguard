@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { useTranslations } from 'next-intl';
 
 export function Hero() {
+  const t = useTranslations('hero');
+  
   return (
     <section className="relative overflow-hidden">
       <div className="relative w-full px-5 lg:px-8 pt-28 pb-20 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32">
@@ -17,21 +20,21 @@ export function Hero() {
               {/* Eyebrow - clean badge with emphasis */}
               <div className="inline-flex items-center gap-3 mb-6">
                 <span className="text-subheadline text-label-secondary font-medium">
-                  Cronos zkEVM
+                  {t('eyebrow')}
                 </span>
                 <div className="w-px h-3 bg-separator-opaque" />
                 <span className="text-subheadline font-semibold text-transparent bg-gradient-to-r from-ios-blue to-[#0066FF] bg-clip-text">
-                  Quantum-Proof
+                  {t('quantumProof')}
                 </span>
               </div>
 
               {/* Hero headline - responsive sizing */}
               <h1 className="text-[36px] leading-[1.1] sm:text-[48px] sm:leading-[1.08] lg:text-[64px] xl:text-[80px] lg:leading-[1.05] font-bold text-label-primary tracking-[-0.02em] mb-4 sm:mb-6">
-                Your portfolio.
+                {t('headline1')}
                 <br />
                 <span className="relative inline-block">
                   <span className="bg-gradient-to-r from-ios-blue via-[#0066FF] to-[#0052CC] bg-clip-text text-transparent">
-                    Protected.
+                    {t('headline2')}
                   </span>
                   {/* Subtle glow under gradient text */}
                   <div className="absolute inset-0 bg-gradient-to-r from-ios-blue/20 to-transparent blur-2xl -z-10" />
@@ -40,7 +43,7 @@ export function Hero() {
               
               {/* Shorter subheadline - responsive */}
               <p className="text-body sm:text-title-3 lg:text-title-2 text-label-secondary font-normal leading-relaxed mb-8 sm:mb-10">
-                AI agents manage risk. Zero-knowledge proofs protect privacy.
+                {t('subtitle')}
               </p>
 
               {/* CTA - responsive button size */}
@@ -49,14 +52,14 @@ export function Hero() {
                   href="/dashboard" 
                   className="group inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 h-[52px] sm:h-[56px] bg-ios-blue text-white text-callout sm:text-headline font-semibold rounded-[14px] hover:opacity-90 active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_30px_rgba(0,122,255,0.25)] w-full sm:w-auto"
                 >
-                  <span>Get Started</span>
+                  <span>{t('ctaDashboard')}</span>
                   <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]" strokeWidth={2.5} />
                 </Link>
                 <a 
                   href="#features"
                   className="text-callout sm:text-headline font-medium text-ios-blue hover:text-[#0066FF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                 >
-                  See how it works
+                  {t('ctaLearnMore')}
                 </a>
               </div>
             </div>

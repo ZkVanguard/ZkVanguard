@@ -1,15 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { Link } from '../i18n/routing';
 import { ConnectButton } from './ConnectButton';
 import { ChainSelector } from './ChainSelector';
+import { LanguageSelector } from './LanguageSelector';
 import { Menu, X } from 'lucide-react';
 import Logo from './Logo';
+import { useTranslations } from 'next-intl';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const t = useTranslations('nav');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,10 +23,10 @@ export function Navbar() {
   }, []);
 
   const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/agents', label: 'Agents' },
-    { href: '/simulator', label: 'Simulator' },
+    { href: '/', label: t('home') },
+    { href: '/dashboard', label: t('dashboard') },
+    { href: '/agents', label: t('agents') },
+    { href: '/simulator', label: t('simulator') },
   ];
 
   return (
@@ -55,8 +58,9 @@ export function Navbar() {
             ))}
           </div>
 
-          {/* Desktop - Chain Selector + Connect Button (Right side) */}
+          {/* Desktop - Language Selector + Chain Selector + Connect Button (Right side) */}
           <div className="hidden lg:flex items-center gap-3">
+            <LanguageSelector />
             <ChainSelector />
             <ConnectButton />
           </div>
@@ -91,6 +95,7 @@ export function Navbar() {
               ))}
             </div>
             <div className="mt-3 pt-3 px-3 border-t border-black/10 space-y-3">
+              <LanguageSelector />
               <ChainSelector />
               <ConnectButton />
             </div>
