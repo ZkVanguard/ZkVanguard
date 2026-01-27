@@ -1,31 +1,35 @@
 'use client';
 
-const steps = [
-  {
-    number: '01',
-    title: 'Connect',
-    description: 'Link your wallet & set preferences',
-    detail: 'Web3 wallet integration',
-  },
-  {
-    number: '02',
-    title: 'Monitor',
-    description: 'AI agents analyze portfolio risk 24/7',
-    detail: 'Real-time risk analysis',
-  },
-  {
-    number: '03',
-    title: 'Execute',
-    description: 'Auto-hedge & settle transactions',
-    detail: 'Automated protection',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function HowItWorks() {
+  const t = useTranslations('howItWorks');
+  
+  const steps = [
+    {
+      number: '01',
+      title: t('step1.title'),
+      description: t('step1.description'),
+      detail: t('step1.detail'),
+    },
+    {
+      number: '02',
+      title: t('step2.title'),
+      description: t('step2.description'),
+      detail: t('step2.detail'),
+    },
+    {
+      number: '03',
+      title: t('step3.title'),
+      description: t('step3.description'),
+      detail: t('step3.detail'),
+    },
+  ];
+
   return (
     <div>
-      <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.03em] leading-[1.05] mb-4 text-center">How It Works</h2>
-      <p className="text-[19px] lg:text-[24px] text-[#86868b] leading-[1.45] text-center mb-20 lg:mb-28">Get started in three simple steps</p>
+      <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.03em] leading-[1.05] mb-4 text-center">{t('title')}</h2>
+      <p className="text-[19px] lg:text-[24px] text-[#86868b] leading-[1.45] text-center mb-20 lg:mb-28">{t('subtitle')}</p>
       
       {/* Mobile - vertical stack */}
       <div className="lg:hidden space-y-20">

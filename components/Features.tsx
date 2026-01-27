@@ -1,39 +1,42 @@
 'use client';
 
 import { ShieldCheckIcon, BoltIcon, ChartBarIcon, LockClosedIcon } from '@heroicons/react/24/outline';
-
-const features = [
-  {
-    icon: ShieldCheckIcon,
-    title: 'ZK Proofs',
-    description: 'Zero-knowledge verification for privacy & security.',
-    iconColor: 'text-[#007AFF]',
-    iconBg: 'bg-[#007AFF]/10',
-  },
-  {
-    icon: BoltIcon,
-    title: 'AI Agents',
-    description: '24/7 automated portfolio optimization.',
-    iconColor: 'text-[#34C759]',
-    iconBg: 'bg-[#34C759]/10',
-  },
-  {
-    icon: ChartBarIcon,
-    title: 'Live Analytics',
-    description: 'Real-time risk metrics & insights.',
-    iconColor: 'text-[#FF9500]',
-    iconBg: 'bg-[#FF9500]/10',
-  },
-  {
-    icon: LockClosedIcon,
-    title: 'Quantum-Proof ZK-STARK',
-    description: 'Post-quantum cryptography for future security.',
-    iconColor: 'text-[#AF52DE]',
-    iconBg: 'bg-[#AF52DE]/10',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function Features() {
+  const t = useTranslations('features');
+  
+  const features = [
+    {
+      icon: ShieldCheckIcon,
+      title: t('zkProofs.title'),
+      description: t('zkProofs.description'),
+      iconColor: 'text-[#007AFF]',
+      iconBg: 'bg-[#007AFF]/10',
+    },
+    {
+      icon: BoltIcon,
+      title: t('aiAgents.title'),
+      description: t('aiAgents.description'),
+      iconColor: 'text-[#34C759]',
+      iconBg: 'bg-[#34C759]/10',
+    },
+    {
+      icon: ChartBarIcon,
+      title: t('liveAnalytics.title'),
+      description: t('liveAnalytics.description'),
+      iconColor: 'text-[#FF9500]',
+      iconBg: 'bg-[#FF9500]/10',
+    },
+    {
+      icon: LockClosedIcon,
+      title: t('quantumProof.title'),
+      description: t('quantumProof.description'),
+      iconColor: 'text-[#AF52DE]',
+      iconBg: 'bg-[#AF52DE]/10',
+    },
+  ];
+
   const backgrounds = [
     'bg-white',
     'bg-[#f5f5f7]',

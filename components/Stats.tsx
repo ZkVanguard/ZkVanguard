@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-const stats = [
-  { label: 'AI Agents', value: '5', prefix: '' },
-  { label: 'Gas Savings', value: '100%', prefix: '' },
-  { label: 'ZK Proofs', value: '2K+', prefix: '' },
-  { label: 'Response Time', value: '<1s', prefix: '' },
-];
+import { useTranslations } from 'next-intl';
 
 export function Stats() {
+  const t = useTranslations('stats');
   const [isVisible, setIsVisible] = useState(false);
+
+  const stats = [
+    { label: t('aiAgents'), value: '5', prefix: '' },
+    { label: t('gasSavings'), value: '100%', prefix: '' },
+    { label: t('zkProofs'), value: '2K+', prefix: '' },
+    { label: t('responseTime'), value: '<1s', prefix: '' },
+  ];
 
   useEffect(() => {
     setIsVisible(true);
@@ -50,7 +52,7 @@ export function Stats() {
               {stats[1].value}
             </div>
             <div className="text-[32px] font-semibold text-[#1d1d1f] mb-2">{stats[1].label}</div>
-            <div className="text-[17px] text-[#86868b]">x402 batching on Cronos zkEVM</div>
+            <div className="text-[17px] text-[#86868b]">{t('batchingNote')}</div>
           </div>
         </div>
 
