@@ -1,3 +1,7 @@
+const createNextIntlPlugin = require('next-intl/plugin');
+ 
+const withNextIntl = createNextIntlPlugin();
+ 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -77,7 +81,7 @@ const nextConfig = {
   
   // ESLint configuration - warnings don't block build
   eslint: {
-    ignoreDuringBuilds: true, // Temporarily ignore to verify cleanup worked
+    ignoreDuringBuilds: true,
   },
 
   // Image optimization
@@ -126,4 +130,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withNextIntl(nextConfig);

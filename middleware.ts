@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import createIntlMiddleware from 'next-intl/middleware';
+import { routing } from './i18n/routing';
 
 /**
- * Geo-Blocking Middleware
+ * Combined Middleware: i18n + Geo-Blocking
  * 
- * Blocks access from OFAC-sanctioned countries to comply with
- * international sanctions and regulatory requirements.
+ * 1. Handles internationalization routing
+ * 2. Blocks access from OFAC-sanctioned countries to comply with
+ *    international sanctions and regulatory requirements.
  * 
  * @see docs/GEO_BLOCKING_IMPLEMENTATION.md
  */
+
+// Create i18n middleware handler using shared routing config
+const intlMiddleware = createIntlMiddleware(routing);
 
 // OFAC Sanctioned Countries - ISO 3166-1 alpha-2 codes
 const BLOCKED_COUNTRIES = [
@@ -50,15 +56,19 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
+  // First, apply i18n middleware
+  const intlResponse = intlMiddleware(request);
+  
   // Skip geo-blocking for public paths
   if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
-    return NextResponse.next();
+    return intlResponse;
   }
   
-  // Check if path requires protection
-  const isProtectedPath = PROTECTED_PATHS.some(path => pathname.startsWith(path));
+  // Check if path requires protection (strip locale from pathname)
+  const pathnameWithoutLocale = pathname.replace(/^\/[a-z]{2}(\/|$)/, '/');
+  const isProtectedPath = PROTECTED_PATHS.some(path => pathnameWithoutLocale.startsWith(path));
   if (!isProtectedPath) {
-    return NextResponse.next();
+    return intlResponse;
   }
   
   // Get country from various geo headers
@@ -70,7 +80,7 @@ export function middleware(request: NextRequest) {
     if (BLOCKED_COUNTRIES.includes(testCountry)) {
       return createBlockedResponse(testCountry, pathname);
     }
-    return NextResponse.next();
+    return intlResponse;
   }
   
   // Check if country is blocked
@@ -80,13 +90,12 @@ export function middleware(request: NextRequest) {
     return createBlockedResponse(country, pathname);
   }
   
-  // Add geo info to headers for downstream use
-  const response = NextResponse.next();
-  if (country) {
-    response.headers.set('x-user-country', country);
+  // Add geo info to headers for downstream use and return intl response
+  if (country && intlResponse) {
+    intlResponse.headers.set('x-user-country', country);
   }
   
-  return response;
+  return intlResponse;
 }
 
 /**

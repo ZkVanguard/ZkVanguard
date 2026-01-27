@@ -89,6 +89,7 @@
     "framer-motion": "^10.18.0",
     "lucide-react": "^0.303.0",
     "next": "^14.0.4",
+    "next-intl": "^4.7.0",
     "next-themes": "^0.2.1",
     "openai": "^4.77.3",
     "pg": "^8.11.3",
