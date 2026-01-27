@@ -916,8 +916,8 @@ export default function SimulatorPage() {
             const riskScore = riskResult.riskScore ?? 65; // Default risk score
             addLog(`   └─ REAL API Response: VaR ${(varValue * 100).toFixed(1)}% | Risk Score: ${riskScore.toFixed(0)}/100`, 'success');
             addLog(`   └─ Agent Status: ${riskResult.realAgent ? '✅ Real AI Agent' : '⚠️ Simulation Mode'}`, riskResult.realAgent ? 'success' : 'warning');
-            if (riskResult.hackathonAPIs) {
-              addLog(`   └─ Using: ${riskResult.hackathonAPIs.aiSDK || 'Crypto.com AI SDK'}`, 'info');
+            if ((riskResult as any).hackathonAPIs) {
+              addLog(`   └─ Using: ${(riskResult as any).hackathonAPIs.aiSDK || 'Crypto.com AI SDK'}`, 'info');
             }
           } else {
             addLog('   └─ Current VaR: 6.8% (Threshold: 4.0%) [Simulated]', 'error');
@@ -1300,7 +1300,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
                   addLog(`   └─ 💬 ${trimmed}${trimmed.match(/[.!?]$/) ? '' : '.'}`, 'success');
                 }
               });
-              addAgentAction('AI', 'ANALYSIS_COMPLETE', `Ollama/Qwen analysis: Hedge strategy ${hedgeSavings > portfolioLoss * 0.3 ? 'performing well' : 'needs adjustment'}`, {
+              addAgentAction('Lead', 'ANALYSIS_COMPLETE', `Ollama/Qwen analysis: Hedge strategy ${hedgeSavings > portfolioLoss * 0.3 ? 'performing well' : 'needs adjustment'}`, {
                 metric: 'AI Confidence',
                 before: 0,
                 after: 87,
@@ -1308,7 +1308,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
             } else {
               addLog(`   └─ ⚠️ AI unavailable (${aiResult.model}) - using rule-based analysis`, 'warning');
               addLog(`   └─ 📊 Rule-based: Hedge is offsetting ${((hedgeSavings / portfolioLoss) * 100).toFixed(0)}% of losses`, 'info');
-              addAgentAction('AI', 'FALLBACK', 'Using rule-based risk engine (Ollama unavailable)');
+              addAgentAction('Lead', 'FALLBACK', 'Using rule-based risk engine (Ollama unavailable)');
             }
           } catch (e) {
             console.error('AI analysis error:', e);
