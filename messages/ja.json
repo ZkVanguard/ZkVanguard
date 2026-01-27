@@ -19,39 +19,62 @@
   "features": {
     "title": "高度な保護",
     "subtitle": "エンタープライズグレードのセキュリティと自律的インテリジェンス",
+    "zkProofs": {
+      "title": "ZK-STARK証明",
+      "description": "信頼設定不要の透明な証明によるポスト量子セキュリティ"
+    },
     "aiAgents": {
       "title": "AIエージェント",
-      "description": "自律型エージェントが24時間365日リスクを監視・管理"
+      "description": "スマートヘッジトリガーによる24時間365日の自律的リスク管理"
     },
-    "zkProofs": {
-      "title": "ゼロ知識証明",
-      "description": "すべてのトランザクションのプライバシー保護検証"
+    "liveAnalytics": {
+      "title": "ライブ分析",
+      "description": "予測リスクスコアリングによるリアルタイムポートフォリオ追跡"
     },
-    "realTime": {
-      "title": "リアルタイム分析",
-      "description": "ポートフォリオのパフォーマンスを即座に把握"
+    "quantumProof": {
+      "title": "量子セキュリティ",
+      "description": "BLS12-381曲線によるポスト量子暗号対応"
     }
   },
   "stats": {
-    "tvl": "総ロック価値",
-    "agents": "アクティブなAIエージェント",
-    "transactions": "検証済みトランザクション",
-    "uptime": "システム稼働時間"
+    "aiAgents": "AIエージェント",
+    "aiAgentsDesc": "自律的リスク管理",
+    "zkVerified": "ZK検証済み",
+    "zkVerifiedDesc": "暗号化プライバシー",
+    "riskCoverage": "リスクカバレッジ",
+    "riskCoverageDesc": "ポートフォリオ価値の",
+    "uptime": "稼働時間",
+    "uptimeDesc": "継続的な監視"
   },
   "cta": {
-    "title": "ポートフォリオを保護する準備はできましたか？",
-    "subtitle": "数十億の資産を管理する機関投資家に参加",
-    "button": "開始する"
+    "title": "資産を保護する準備はできましたか？",
+    "subtitle": "ZK-STARKプライバシーによるAI駆動リスク管理を使用する数千の投資家に参加しましょう。",
+    "button": "ダッシュボードを起動",
+    "learnMore": "セキュリティについて詳しく"
   },
   "footer": {
-    "description": "Cronos zkEVM上のゼロ知識証明によるAI駆動RWAリスク管理",
     "product": "製品",
-    "company": "会社",
+    "platform": "プラットフォーム",
+    "resources": "リソース",
     "legal": "法的情報",
+    "dashboard": "ダッシュボード",
+    "agents": "エージェント",
+    "simulator": "シミュレーター",
+    "documentation": "ドキュメント",
+    "zkVerification": "ZK検証",
+    "authenticity": "真正性",
+    "whitepaper": "ホワイトペーパー",
+    "api": "API",
+    "contact": "お問い合わせ",
+    "community": "コミュニティ",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "プライバシーポリシー",
     "terms": "利用規約",
-    "whitepaper": "ホワイトペーパー",
-    "rights": "無断複写・転載を禁じます。"
+    "rights": "無断複写・転載を禁じます。",
+    "testnet": "Cronos zkEVM テストネット",
+    "stage": "プレシードステージ",
+    "builtWith": "ZK-STARKで構築"
   },
   "connect": {
     "button": "ウォレットを接続",
@@ -92,5 +115,24 @@
     "back": "戻る",
     "next": "次へ",
     "language": "言語"
+  },
+  "howItWorks": {
+    "title": "仕組み",
+    "subtitle": "3つの簡単なステップで開始",
+    "step1": {
+      "title": "接続",
+      "description": "ウォレットをリンクして設定を行う",
+      "detail": "Web3ウォレット統合"
+    },
+    "step2": {
+      "title": "監視",
+      "description": "AIエージェントが24時間365日ポートフォリオリスクを分析",
+      "detail": "リアルタイムリスク分析"
+    },
+    "step3": {
+      "title": "実行",
+      "description": "自動ヘッジと取引決済",
+      "detail": "自動化された保護"
+    }
   }
 }

@@ -19,39 +19,62 @@
   "features": {
     "title": "고급 보호",
     "subtitle": "엔터프라이즈급 보안과 자율 지능의 만남",
+    "zkProofs": {
+      "title": "ZK-STARK 증명",
+      "description": "신뢰 설정 없이 투명한 증명으로 포스트 양자 보안"
+    },
     "aiAgents": {
       "title": "AI 에이전트",
-      "description": "자율 에이전트가 24시간 위험을 모니터링하고 관리"
+      "description": "스마트 헤지 트리거가 있는 24/7 자율 위험 관리"
     },
-    "zkProofs": {
-      "title": "영지식 증명",
-      "description": "모든 거래의 개인정보 보호 검증"
-    },
-    "realTime": {
+    "liveAnalytics": {
       "title": "실시간 분석",
-      "description": "포트폴리오 성과에 대한 즉각적인 통찰력"
+      "description": "예측 위험 점수가 있는 실시간 포트폴리오 추적"
+    },
+    "quantumProof": {
+      "title": "양자 보안",
+      "description": "BLS12-381 곡선으로 포스트 양자 암호화 준비"
     }
   },
   "stats": {
-    "tvl": "총 잠긴 가치",
-    "agents": "활성 AI 에이전트",
-    "transactions": "검증된 거래",
-    "uptime": "시스템 가동 시간"
+    "aiAgents": "AI 에이전트",
+    "aiAgentsDesc": "자율 위험 관리",
+    "zkVerified": "ZK 검증됨",
+    "zkVerifiedDesc": "암호화 프라이버시",
+    "riskCoverage": "위험 커버리지",
+    "riskCoverageDesc": "포트폴리오 가치의",
+    "uptime": "가동 시간",
+    "uptimeDesc": "지속적인 모니터링"
   },
   "cta": {
-    "title": "포트폴리오를 보호할 준비가 되셨나요?",
-    "subtitle": "수십억 달러의 자산을 관리하는 기관 투자자와 함께하세요",
-    "button": "시작하기"
+    "title": "자산을 보호할 준비가 되셨나요?",
+    "subtitle": "ZK-STARK 프라이버시와 AI 기반 위험 관리를 사용하는 수천 명의 투자자와 함께하세요.",
+    "button": "대시보드 실행",
+    "learnMore": "보안에 대해 자세히 알아보기"
   },
   "footer": {
-    "description": "Cronos zkEVM의 영지식 증명을 활용한 AI 기반 RWA 위험 관리",
     "product": "제품",
-    "company": "회사",
+    "platform": "플랫폼",
+    "resources": "리소스",
     "legal": "법률",
+    "dashboard": "대시보드",
+    "agents": "에이전트",
+    "simulator": "시뮬레이터",
+    "documentation": "문서",
+    "zkVerification": "ZK 검증",
+    "authenticity": "진정성",
+    "whitepaper": "백서",
+    "api": "API",
+    "contact": "문의하기",
+    "community": "커뮤니티",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "개인정보 보호정책",
     "terms": "서비스 약관",
-    "whitepaper": "백서",
-    "rights": "모든 권리 보유."
+    "rights": "모든 권리 보유.",
+    "testnet": "Cronos zkEVM 테스트넷",
+    "stage": "프리시드 단계",
+    "builtWith": "ZK-STARK로 구축"
   },
   "connect": {
     "button": "지갑 연결",
@@ -92,5 +115,24 @@
     "back": "뒤로",
     "next": "다음",
     "language": "언어"
+  },
+  "howItWorks": {
+    "title": "작동 방식",
+    "subtitle": "세 가지 간단한 단계로 시작하세요",
+    "step1": {
+      "title": "연결",
+      "description": "지갑을 연결하고 기본 설정을 하세요",
+      "detail": "Web3 지갑 통합"
+    },
+    "step2": {
+      "title": "모니터링",
+      "description": "AI 에이전트가 24시간 포트폴리오 위험을 분석합니다",
+      "detail": "실시간 위험 분석"
+    },
+    "step3": {
+      "title": "실행",
+      "description": "자동 헤지 및 거래 정산",
+      "detail": "자동화된 보호"
+    }
   }
 }

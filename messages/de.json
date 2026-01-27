@@ -19,39 +19,62 @@
   "features": {
     "title": "Erweiterter Schutz",
     "subtitle": "Sicherheit auf Unternehmensniveau trifft auf autonome Intelligenz",
+    "zkProofs": {
+      "title": "ZK-STARK Beweise",
+      "description": "Post-Quanten-Sicherheit mit transparenten Beweisen, ohne Vertrauenssetup"
+    },
     "aiAgents": {
       "title": "KI-Agenten",
-      "description": "Autonome Agenten überwachen und verwalten Risiken rund um die Uhr"
+      "description": "24/7 autonomes Risikomanagement mit intelligenten Hedge-Triggern"
     },
-    "zkProofs": {
-      "title": "Zero-Knowledge-Beweise",
-      "description": "Datenschutzwahrende Überprüfung aller Transaktionen"
+    "liveAnalytics": {
+      "title": "Live-Analytik",
+      "description": "Echtzeit-Portfolio-Tracking mit prädiktivem Risiko-Scoring"
     },
-    "realTime": {
-      "title": "Echtzeit-Analysen",
-      "description": "Sofortige Einblicke in die Portfolio-Performance"
+    "quantumProof": {
+      "title": "Quantensicherheit",
+      "description": "Post-Quanten-Kryptografie bereit mit BLS12-381 Kurven"
     }
   },
   "stats": {
-    "tvl": "Gesperrter Gesamtwert",
-    "agents": "Aktive KI-Agenten",
-    "transactions": "Verifizierte Transaktionen",
-    "uptime": "Systemverfügbarkeit"
+    "aiAgents": "KI-Agenten",
+    "aiAgentsDesc": "Autonomes Risikomanagement",
+    "zkVerified": "ZK-Verifiziert",
+    "zkVerifiedDesc": "Kryptografische Privatsphäre",
+    "riskCoverage": "Risikoabdeckung",
+    "riskCoverageDesc": "Des Portfolio-Werts",
+    "uptime": "Verfügbarkeit",
+    "uptimeDesc": "Kontinuierliche Überwachung"
   },
   "cta": {
-    "title": "Bereit, Ihr Portfolio zu sichern?",
-    "subtitle": "Schließen Sie sich institutionellen Anlegern an, die Milliarden verwalten",
-    "button": "Loslegen"
+    "title": "Bereit, Ihre Vermögenswerte zu sichern?",
+    "subtitle": "Schließen Sie sich Tausenden von Investoren an, die KI-gestütztes Risikomanagement mit ZK-STARK Privatsphäre nutzen.",
+    "button": "Dashboard starten",
+    "learnMore": "Mehr über Sicherheit erfahren"
   },
   "footer": {
-    "description": "KI-gestütztes RWA-Risikomanagement mit Zero-Knowledge-Beweisen auf Cronos zkEVM",
-    "product": "Produkt",
-    "company": "Unternehmen",
-    "legal": "Rechtliches",
+    "product": "PRODUKT",
+    "platform": "PLATTFORM",
+    "resources": "RESSOURCEN",
+    "legal": "RECHTLICHES",
+    "dashboard": "Dashboard",
+    "agents": "Agenten",
+    "simulator": "Simulator",
+    "documentation": "Dokumentation",
+    "zkVerification": "ZK-Verifizierung",
+    "authenticity": "Authentizität",
+    "whitepaper": "Whitepaper",
+    "api": "API",
+    "contact": "Kontakt",
+    "community": "Community",
+    "github": "GitHub",
+    "twitter": "Twitter",
     "privacy": "Datenschutzrichtlinie",
     "terms": "Nutzungsbedingungen",
-    "whitepaper": "Whitepaper",
-    "rights": "Alle Rechte vorbehalten."
+    "rights": "Alle Rechte vorbehalten.",
+    "testnet": "Cronos zkEVM Testnet",
+    "stage": "Pre-Seed Phase",
+    "builtWith": "Gebaut mit ZK-STARK"
   },
   "connect": {
     "button": "Wallet verbinden",
@@ -92,5 +115,24 @@
     "back": "Zurück",
     "next": "Weiter",
     "language": "Sprache"
+  },
+  "howItWorks": {
+    "title": "So funktioniert es",
+    "subtitle": "Starten Sie in drei einfachen Schritten",
+    "step1": {
+      "title": "Verbinden",
+      "description": "Verknüpfen Sie Ihr Wallet und legen Sie Präferenzen fest",
+      "detail": "Web3-Wallet-Integration"
+    },
+    "step2": {
+      "title": "Überwachen",
+      "description": "KI-Agenten analysieren das Portfoliorisiko rund um die Uhr",
+      "detail": "Echtzeit-Risikoanalyse"
+    },
+    "step3": {
+      "title": "Ausführen",
+      "description": "Auto-Hedge und Transaktionsabwicklung",
+      "detail": "Automatisierter Schutz"
+    }
   }
 }
