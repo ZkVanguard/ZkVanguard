@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { useAccount, useBalance } from 'wagmi';
 import { 
   Bot, Shield, Briefcase, TrendingUp, History, 
@@ -15,65 +15,65 @@ import { logger } from '@/lib/utils/logger';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 
 // Dynamic imports for code splitting
-const AgentActivity = dynamic(() => import('@/components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {
+const AgentActivity = nextDynamic(() => import('@/components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const RiskMetrics = dynamic(() => import('@/components/dashboard/RiskMetrics').then(mod => ({ default: mod.RiskMetrics })), {
+const RiskMetrics = nextDynamic(() => import('@/components/dashboard/RiskMetrics').then(mod => ({ default: mod.RiskMetrics })), {
   loading: () => <LoadingSkeleton height="h-32" />,
   ssr: false
 });
 
-const PositionsList = dynamic(() => import('@/components/dashboard/PositionsList').then(mod => ({ default: mod.PositionsList })), {
+const PositionsList = nextDynamic(() => import('@/components/dashboard/PositionsList').then(mod => ({ default: mod.PositionsList })), {
   loading: () => <LoadingSkeleton height="h-60" />,
   ssr: false
 });
 
-const SettlementsPanel = dynamic(() => import('@/components/dashboard/SettlementsPanel').then(mod => ({ default: mod.SettlementsPanel })), {
+const SettlementsPanel = nextDynamic(() => import('@/components/dashboard/SettlementsPanel').then(mod => ({ default: mod.SettlementsPanel })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const ActiveHedges = dynamic(() => import('@/components/dashboard/ActiveHedges').then(mod => ({ default: mod.ActiveHedges })), {
+const ActiveHedges = nextDynamic(() => import('@/components/dashboard/ActiveHedges').then(mod => ({ default: mod.ActiveHedges })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const ZKProofDemo = dynamic(() => import('@/components/dashboard/ZKProofDemo').then(mod => ({ default: mod.ZKProofDemo })), {
+const ZKProofDemo = nextDynamic(() => import('@/components/dashboard/ZKProofDemo').then(mod => ({ default: mod.ZKProofDemo })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const AdvancedPortfolioCreator = dynamic(() => import('@/components/dashboard/AdvancedPortfolioCreator').then(mod => ({ default: mod.AdvancedPortfolioCreator })), {
+const AdvancedPortfolioCreator = nextDynamic(() => import('@/components/dashboard/AdvancedPortfolioCreator').then(mod => ({ default: mod.AdvancedPortfolioCreator })), {
   loading: () => null,
   ssr: false
 });
 
-const SwapModal = dynamic(() => import('@/components/dashboard/SwapModal').then(mod => ({ default: mod.SwapModal })), {
+const SwapModal = nextDynamic(() => import('@/components/dashboard/SwapModal').then(mod => ({ default: mod.SwapModal })), {
   ssr: false
 });
 
-const ManualHedgeModal = dynamic(() => import('@/components/dashboard/ManualHedgeModal').then(mod => ({ default: mod.ManualHedgeModal })), {
+const ManualHedgeModal = nextDynamic(() => import('@/components/dashboard/ManualHedgeModal').then(mod => ({ default: mod.ManualHedgeModal })), {
   ssr: false
 });
 
-const RecentTransactions = dynamic(() => import('@/components/dashboard/RecentTransactions').then(mod => ({ default: mod.RecentTransactions })), {
+const RecentTransactions = nextDynamic(() => import('@/components/dashboard/RecentTransactions').then(mod => ({ default: mod.RecentTransactions })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const PredictionInsights = dynamic(() => import('@/components/dashboard/PredictionInsights').then(mod => ({ default: mod.PredictionInsights })), {
+const PredictionInsights = nextDynamic(() => import('@/components/dashboard/PredictionInsights').then(mod => ({ default: mod.PredictionInsights })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const EnhancedChat = dynamic(() => import('@/components/dashboard/EnhancedChat').then(mod => ({ default: mod.EnhancedChat })), {
+const EnhancedChat = nextDynamic(() => import('@/components/dashboard/EnhancedChat').then(mod => ({ default: mod.EnhancedChat })), {
   loading: () => null,
   ssr: false
 });
 
-const SettingsModal = dynamic(() => import('@/components/dashboard/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
+const SettingsModal = nextDynamic(() => import('@/components/dashboard/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
   ssr: false
 });
 // Reusable loading skeleton
