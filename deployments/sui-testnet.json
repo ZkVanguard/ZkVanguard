@@ -1,0 +1,55 @@
+{
+  "network": "sui-testnet",
+  "deployedAt": "2025-01-24T12:00:00Z",
+  "transactionDigest": "GpWKsg8871F7S81hPnbYgXFHZLVc5zfZtNKS7GemHsNC",
+  "deployer": "0xb157ee4953f0f552c7aa554d614762acf6ed6d6c8407f96aee18010724712126",
+  "packageId": "0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9",
+  "modules": [
+    "rwa_manager",
+    "zk_verifier", 
+    "payment_router"
+  ],
+  "objects": {
+    "rwaManagerState": {
+      "id": "0x84925d623a658bc40a5821ef74458e7f8e8f5a2971c58ec9df6fb59277a8951d",
+      "type": "shared",
+      "description": "Core RWA portfolio management state"
+    },
+    "zkVerifierState": {
+      "id": "0x19f9c7a1ca761442180928f0efe982d414fd324948a1a092a258e8116c56213e",
+      "type": "shared",
+      "description": "ZK proof verification state"
+    },
+    "paymentRouterState": {
+      "id": "0x08c0f37564f618162edc982d714b79dd946fbf7d387731f6c5ca3946d6cbe507",
+      "type": "shared",
+      "description": "Payment routing and sponsored transaction state"
+    },
+    "rwaManagerAdminCap": {
+      "id": "0x5084205f4dedd52f9d7b6680f3ff27af1046f9e43a02b0de40b52815a91b3e37",
+      "type": "owned",
+      "description": "Admin capability for RWA Manager"
+    },
+    "zkVerifierAdminCap": {
+      "id": "0xc75d4cb2e146dca7e4e3ab5f61a35ca47089fae87c9f37c55e6ec426535ec635",
+      "type": "owned",
+      "description": "Admin capability for ZK Verifier"
+    },
+    "paymentRouterAdminCap": {
+      "id": "0x96806d2d91e38658534d1d56269c97b9e883e6a4c5f2442bbdafefaa42503cf8",
+      "type": "owned",
+      "description": "Admin capability for Payment Router"
+    },
+    "upgradeCap": {
+      "id": "0xfb1edf7256ca536619883b4e70afdf4762e3b1584f77f09913381fc9753ae745",
+      "type": "owned",
+      "description": "Upgrade capability for package"
+    }
+  },
+  "gasCost": {
+    "storageCost": "99886800 MIST",
+    "computationCost": "1000000 MIST",
+    "totalCost": "~99908680 MIST (~0.1 SUI)"
+  },
+  "explorerUrl": "https://suiscan.xyz/testnet/tx/GpWKsg8871F7S81hPnbYgXFHZLVc5zfZtNKS7GemHsNC"
+}
