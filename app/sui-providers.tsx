@@ -14,7 +14,6 @@ import {
   useWallets,
 } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
-import { Transaction } from '@mysten/sui/transactions';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getSuiContractAddresses, type NetworkType } from '../lib/contracts/addresses';
 import '@mysten/dapp-kit/dist/index.css';
@@ -67,7 +66,8 @@ interface SuiContextType {
   disconnectWallet: () => void;
   
   // Transactions
-  executeTransaction: (tx: Transaction) => Promise<{ digest: string; success: boolean }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executeTransaction: (tx: any) => Promise<{ digest: string; success: boolean }>;
   
   // Utilities
   getExplorerUrl: (type: 'tx' | 'address' | 'object', value: string) => string;
@@ -165,7 +165,8 @@ function SuiContextProvider({
     disconnect();
   }, [disconnect]);
 
-  const executeTransaction = useCallback(async (tx: Transaction): Promise<{ digest: string; success: boolean }> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const executeTransaction = useCallback(async (tx: any): Promise<{ digest: string; success: boolean }> => {
     if (!isConnected) {
       throw new Error('Wallet not connected');
     }

@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from '../i18n/routing';
 import { ConnectButton } from './ConnectButton';
-import { ChainSelector } from './ChainSelector';
 import { LanguageSelector } from './LanguageSelector';
-import { NetworkBadge } from './NetworkBadge';
 import { Menu, X } from 'lucide-react';
 import Logo from './Logo';
 import { useTranslations } from 'next-intl';
@@ -59,11 +57,9 @@ export function Navbar() {
             ))}
           </div>
 
-          {/* Desktop - Language Selector + Network Badge + Chain Selector + Connect Button (Right side) */}
+          {/* Desktop - Language Selector + Connect Button (Right side) */}
           <div className="hidden lg:flex items-center gap-3">
-            <NetworkBadge showDropdown />
             <LanguageSelector />
-            <ChainSelector />
             <ConnectButton />
           </div>
 
@@ -97,9 +93,7 @@ export function Navbar() {
               ))}
             </div>
             <div className="mt-3 pt-3 px-3 border-t border-black/10 space-y-3">
-              <NetworkBadge compact />
               <LanguageSelector />
-              <ChainSelector />
               <ConnectButton />
             </div>
           </div>
