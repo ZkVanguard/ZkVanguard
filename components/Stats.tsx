@@ -8,10 +8,10 @@ export function Stats() {
   const [isVisible, setIsVisible] = useState(false);
 
   const stats = [
-    { label: t('aiAgents'), value: '5', prefix: '' },
+    { label: t('aiAgents'), value: '6', prefix: '' },
     { label: t('gasSavings'), value: '100%', prefix: '' },
     { label: t('zkProofs'), value: '2K+', prefix: '' },
-    { label: t('responseTime'), value: '<1s', prefix: '' },
+    { label: 'Chains Supported', value: '2', prefix: '' },
   ];
 
   useEffect(() => {
