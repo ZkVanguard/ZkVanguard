@@ -52,24 +52,23 @@ class RealMarketDataService {
     // OPTIMIZATION 1: Use StaticJsonRpcProvider for better caching (no network detection)
     // OPTIMIZATION 2: Configure connection pooling and lower polling interval
     // OPTIMIZATION 3: Use persistent connection with keep-alive
-    const connectionInfo = {
-      url: process.env.CRONOS_RPC_URL || 'https://evm-t3.cronos.org',
-      timeout: 3000, // Reduced to 3s timeout for faster failures
-      headers: {
-        'Connection': 'keep-alive', // Reuse TCP connections
-      },
-    };
+    // Support both env var names for RPC URL
+    const rpcUrl = process.env.CRONOS_RPC_URL || 
+                   process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 
+                   'https://evm-t3.cronos.org';
+    
+    console.log(`[RealMarketData] Using RPC: ${rpcUrl}`);
     
     this.provider = new ethers.JsonRpcProvider(
-      connectionInfo.url,
+      rpcUrl,
       {
         chainId: 338, // Cronos Testnet
         name: 'cronos-testnet',
       },
       {
         staticNetwork: true, // Don't detect network on every call
-        batchMaxCount: 20, // Increased batch size from 10 to 20
-        batchMaxSize: 1024 * 1024, // 1MB max batch size
+        batchMaxCount: 10, // Reduced for serverless compatibility
+        batchMaxSize: 512 * 1024, // 512KB max batch size
         polling: false, // Don't poll for new blocks
       }
     );
@@ -359,6 +358,7 @@ class RealMarketDataService {
 
     try {
       const portfolioStart = Date.now();
+      console.log(`🔄 [RealMarketData] Fetching portfolio for ${address}`);
       
       // Define all tokens upfront
       const testnetTokens = [
@@ -367,35 +367,58 @@ class RealMarketDataService {
         { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 },
       ];
 
-      // PARALLEL: Fetch all balances simultaneously
+      // PARALLEL: Fetch all balances simultaneously with timeout for serverless
       const balanceStart = Date.now();
+      const BALANCE_TIMEOUT = 8000; // 8 second timeout for serverless
+      
       const balancePromises = testnetTokens.map(async (token) => {
         try {
-          if (token.address === 'native') {
-            const croBalance = await this.provider.getBalance(address);
-            return {
-              token: token.address,
-              symbol: token.symbol,
-              balance: ethers.formatEther(croBalance),
-              decimals: token.decimals,
-            };
-          } else {
-            const balance = await this.getTokenBalance(address, token.address, token.decimals);
-            return {
-              token: token.address,
-              symbol: token.symbol,
-              balance,
-              decimals: token.decimals,
-            };
-          }
-        } catch (error) {
-          console.debug(`Failed to fetch ${token.symbol} balance:`, error);
+          const timeoutPromise = new Promise<null>((_, reject) => 
+            setTimeout(() => reject(new Error(`Timeout fetching ${token.symbol}`)), BALANCE_TIMEOUT)
+          );
+          
+          const balancePromise = (async () => {
+            if (token.address === 'native') {
+              const croBalance = await this.provider.getBalance(address);
+              return {
+                token: token.address,
+                symbol: token.symbol,
+                balance: ethers.formatEther(croBalance),
+                decimals: token.decimals,
+              };
+            } else {
+              const balance = await this.getTokenBalance(address, token.address, token.decimals);
+              return {
+                token: token.address,
+                symbol: token.symbol,
+                balance,
+                decimals: token.decimals,
+              };
+            }
+          })();
+          
+          return await Promise.race([balancePromise, timeoutPromise]);
+        } catch (error: any) {
+          console.warn(`⚠️ [RealMarketData] Failed to fetch ${token.symbol} balance: ${error?.message}`);
           return null;
         }
       });
 
       const balances = (await Promise.all(balancePromises)).filter((b): b is NonNullable<typeof b> => b !== null && parseFloat(b.balance) > 0);
       console.log(`⏱️ [RealMarketData] Fetched ${balances.length} balances in ${Date.now() - balanceStart}ms`);
+
+      // If no balances found, return early with empty portfolio
+      if (balances.length === 0) {
+        console.log(`📭 [RealMarketData] No token balances found for ${address}`);
+        return {
+          address,
+          totalValue: 0,
+          tokens: [],
+          nfts: [],
+          defiPositions: {},
+          lastUpdated: Date.now(),
+        };
+      }
 
       // OPTIMIZATION: Use Crypto.com Exchange batch API for all prices at once
       const priceStart = Date.now();
