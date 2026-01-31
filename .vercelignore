@@ -1,0 +1,64 @@
+# Vercel Ignore File
+# Files and folders to exclude from deployment
+
+# Large media files
+Investors/
+docs/demo-videos/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.m4a
+*.mp3
+*.wav
+*.webm
+
+# Development files
+.git/
+.github/
+node_modules/
+.next/
+test/
+tests/
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Build artifacts
+artifacts/
+cache/
+typechain-types/
+.openzeppelin/
+coverage/
+
+# Python ZK backend (separate deployment)
+zkp/
+zk/
+
+# Hardhat
+hardhat.config.cjs
+tsconfig.hardhat.json
+
+# Logs
+logs/
+*.log
+
+# Documentation (not needed in deployment)
+docs/
+*.md
+!README.md
+
+# Local env files
+.env.local
+.env.development
+.env.prod.full
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
