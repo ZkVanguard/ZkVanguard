@@ -84,6 +84,16 @@ export async function GET() {
         'Cache (stale)',
         'Mock data',
       ],
+      contracts: {
+        rwaManager: process.env.NEXT_PUBLIC_RWAMANAGER_ADDRESS || '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189 (default)',
+        zkVerifier: process.env.NEXT_PUBLIC_ZKVERIFIER_ADDRESS || '0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8 (default)',
+        chainId: process.env.NEXT_PUBLIC_CHAIN_ID || '338 (default)',
+      },
+      serverEnv: {
+        hasAsiApiKey: !!process.env.ASI_API_KEY,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        hasServerWalletKey: !!process.env.SERVER_WALLET_PRIVATE_KEY,
+      },
     };
 
     console.log('[Health Check] Complete:', JSON.stringify(health, null, 2));
