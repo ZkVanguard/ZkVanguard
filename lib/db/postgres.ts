@@ -6,14 +6,19 @@ let pool: Pool | null = null;
 export function getPool(): Pool {
   if (!pool) {
     // Support both Neon serverless and local PostgreSQL
-    const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
+    let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
+    
+    // Remove channel_binding parameter if present (not supported by pg module)
+    connectionString = connectionString.replace(/&?channel_binding=[^&]*/g, '').replace('?&', '?');
+    
+    const isNeon = connectionString.includes('neon.tech');
     
     pool = new Pool({
       connectionString,
-      ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      ssl: isNeon ? { rejectUnauthorized: false } : undefined,
+      max: isNeon ? 10 : 20, // Neon free tier has connection limits
+      idleTimeoutMillis: isNeon ? 10000 : 30000,
+      connectionTimeoutMillis: isNeon ? 5000 : 2000,
     });
 
     pool.on('error', (err) => {
