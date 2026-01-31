@@ -218,15 +218,32 @@ docs/MOONLANDER_TEST_REPORT.md
 # -------------------------------------------
 # Large Media Files (keep locally, don't commit)
 # -------------------------------------------
-Investors/*.mp4
 *.mp4
 *.mov
 *.avi
 *.mkv
-Logo.jpg
+*.m4a
+*.mp3
+*.wav
+*.webm
+*.gif
+*.bmp
+*.tiff
+
+# -------------------------------------------
+# Documents (keep locally)
+# -------------------------------------------
 *.docx
+*.xlsx
+*.pptx
 *.pdf
-!docs/*.pdf
+!docs/public/*.pdf
+
+# -------------------------------------------
+# Investor/Demo Content (confidential)
+# -------------------------------------------
+Investors/
+docs/demo-videos/
 
 # -------------------------------------------
 # Linting / Formatting Cache
@@ -238,7 +255,6 @@ Logo.jpg
 # -------------------------------------------
 # Husky
 # -------------------------------------------
-# Note: .husky/ folder should be tracked, but not internal cache
 .husky/_/
 
 # -------------------------------------------
@@ -264,26 +280,34 @@ storybook-static/
 *.local.sh
 *.local.ps1
 
-
-docs/guides/QUICK_DEMO_SCRIPT.md
-docs/reports/AI_CHAT_TEST_REPORT.md
-docs/guides/GASLESS_REALITY.md
-Investors/1-Audio.m4a
-Investors/3-Audio.m4a
-Investors/2-Audio.m4a
-Investors/4-Audio.m4a
-Investors/5-Audio.m4a
-Investors/6-Audio.m4a
-Investors/7-Audio.m4a
-Investors/8-Audio.m4a
-Investors/9-Audio.m4a
-Investors/10-Audio.m4a
-Investors/11-Audio.m4a
 # -------------------------------------------
-# Pricing Documents (Confidential)
+# Confidential Documents
 # -------------------------------------------
 docs/PRICING_MODEL.md
 docs/PRICING_SPREADSHEET.md
 docs/PRICING_REVENUE_MODEL.md
 docs/SALES_PIPELINE.md
-docs/SUI_BUILDER_REPORT_JAN2026.md
+docs/INVESTOR_*.md
+docs/SUI_BUILDER_REPORT_*.md
+
+# -------------------------------------------
+# Empty/Orphaned Directories (cleanup artifacts)
+# -------------------------------------------
+zk-proof/
+zk-authenticity/
+zk-verification/
+dashboard/
+privacy/
+terms/
+simulator/
+whitepaper/
+~/
+
+# -------------------------------------------
+# Old/Backup Config Files
+# -------------------------------------------
+*.old.js
+*.old.ts
+*.old.json
+*.bak
+*.backup
