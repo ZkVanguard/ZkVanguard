@@ -13,6 +13,21 @@ import { getPortfolioData } from '@/lib/services/portfolio-actions';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+/**
+ * OPTIONS /api/chat
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
 // Keywords that indicate the user wants agent orchestration
 const AGENT_KEYWORDS = [
   'hedge', 'hedging', 'rebalance', 'optimize', 'swap', 'trade', 
