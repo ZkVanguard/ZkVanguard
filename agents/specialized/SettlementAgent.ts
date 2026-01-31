@@ -636,6 +636,89 @@ export class SettlementAgent extends BaseAgent {
   }
 
   /**
+   * Get AI-powered batch optimization recommendations
+   */
+  async getAIBatchOptimization(): Promise<{
+    recommendation: string;
+    optimalBatchSize: number;
+    priorityOrder: string[];
+    estimatedGasSavings: string;
+  }> {
+    const pendingList = Array.from(this.pendingSettlements.values());
+    const completedList = Array.from(this.completedSettlements.values()).slice(-50);
+    
+    const defaultResult = {
+      recommendation: 'Process settlements in priority order',
+      optimalBatchSize: Math.min(pendingList.length, 20),
+      priorityOrder: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'],
+      estimatedGasSavings: '100%', // x402 is gasless
+    };
+
+    if (pendingList.length === 0) {
+      return { ...defaultResult, recommendation: 'No pending settlements' };
+    }
+
+    try {
+      const { llmProvider } = await import('@/lib/ai/llm-provider');
+      
+      // Analyze pending settlements
+      const urgentCount = pendingList.filter(s => s.priority === 'URGENT').length;
+      const highCount = pendingList.filter(s => s.priority === 'HIGH').length;
+      const totalAmount = pendingList.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+      const tokenTypes = [...new Set(pendingList.map(s => s.token))];
+      
+      // Analyze historical performance
+      const avgProcessingTime = completedList.length > 0
+        ? completedList.reduce((sum, s) => sum + ((s.processedAt || s.createdAt) - s.createdAt), 0) / completedList.length
+        : 0;
+
+      const systemPrompt = `You are a payment optimization specialist for x402 gasless settlements on Cronos zkEVM.`;
+
+      const aiPrompt = `Optimize this settlement batch:
+
+PENDING SETTLEMENTS:
+- Total: ${pendingList.length}
+- Urgent: ${urgentCount}, High: ${highCount}
+- Total Amount: $${totalAmount.toLocaleString()}
+- Token Types: ${tokenTypes.join(', ')}
+
+HISTORICAL:
+- Avg Processing Time: ${avgProcessingTime}ms
+- Recent Completions: ${completedList.length}
+
+Provide optimization in this EXACT format:
+BATCH_SIZE: [number 1-50]
+RECOMMENDATION: [one sentence optimization strategy]
+
+Consider: x402 is 100% gasless, so optimize for speed and reliability, not gas.`;
+
+      const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, systemPrompt);
+      
+      // Parse response
+      const batchMatch = aiResponse.content.match(/BATCH_SIZE:\s*(\d+)/i);
+      const recMatch = aiResponse.content.match(/RECOMMENDATION:\s*(.+)/i);
+      
+      const optimalBatchSize = batchMatch ? Math.min(parseInt(batchMatch[1]), 50) : defaultResult.optimalBatchSize;
+      const recommendation = recMatch ? `🤖 ${recMatch[1].trim()}` : defaultResult.recommendation;
+      
+      logger.info('🤖 AI settlement optimization generated', { 
+        optimalBatchSize,
+        model: aiResponse.model,
+      });
+
+      return {
+        recommendation,
+        optimalBatchSize,
+        priorityOrder: urgentCount > 0 ? ['URGENT', 'HIGH', 'MEDIUM', 'LOW'] : ['HIGH', 'MEDIUM', 'LOW', 'URGENT'],
+        estimatedGasSavings: '100%', // x402 is gasless!
+      };
+    } catch (error) {
+      logger.warn('AI batch optimization failed, using defaults', { error });
+      return defaultResult;
+    }
+  }
+
+  /**
    * Get pending settlements count
    */
   getPendingCount(): number {

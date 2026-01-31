@@ -2,7 +2,7 @@
 
 ## 🔒 Overview
 
-The hedging strategies on Chronos Vanguard are now **fully privacy-protected** using ZK-STARK proofs. Strategy details (entry/exit prices, position sizes, specific trades) are **NEVER disclosed** to users or exposed on the frontend.
+The hedging strategies on ZkVanguard are now **fully privacy-protected** using ZK-STARK proofs. Strategy details (entry/exit prices, position sizes, specific trades) are **NEVER disclosed** to users or exposed on the frontend.
 
 ## 🎯 Why Privacy Matters
 

@@ -1,6 +1,6 @@
 
 /**
- * Advanced LLM Provider for Chronos Vanguard
+ * Advanced LLM Provider for ZkVanguard
  * Integrates Crypto.com AI SDK with streaming, context management, and RAG capabilities
  */
 
@@ -38,8 +38,8 @@ export interface StreamChunk {
   done: boolean;
 }
 
-// Context about Chronos Vanguard platform
-const SYSTEM_CONTEXT = `You are an advanced AI assistant for Chronos Vanguard, a Web3 platform for institutional RWA (Real World Assets) risk management on Cronos zkEVM.
+// Context about ZkVanguard platform
+const SYSTEM_CONTEXT = `You are an advanced AI assistant for ZkVanguard, a Web3 platform for institutional RWA (Real World Assets) risk management on Cronos zkEVM.
 
 **Platform Capabilities:**
 - Multi-agent AI swarm orchestration for portfolio management
@@ -969,7 +969,7 @@ class LLMProvider {
     // ZK Proofs
     if (lower.includes('zk') || lower.includes('zero knowledge') || lower.includes('proof') || lower.includes('privacy')) {
       return {
-        content: `Great question about ZK (Zero-Knowledge) proofs! 🔐\n\n**What are ZK Proofs?**\nThey let you prove something is true without revealing the underlying data. Think of it as proving you know a password without showing it.\n\n**On Chronos Vanguard:**\n• All AI agent responses are ZK-verified\n• Your portfolio data stays private\n• Compliance reports prove accuracy without exposing details\n• Cryptographic security (521-bit security level)\n\n**Real Benefits:**\n✓ Institutional-grade privacy\n✓ Regulatory compliance\n✓ Trustless verification\n✓ Protection from data breaches\n\nEvery major action generates a ZK-STARK proof that you can verify independently. Want to see a demo?`,
+        content: `Great question about ZK (Zero-Knowledge) proofs! 🔐\n\n**What are ZK Proofs?**\nThey let you prove something is true without revealing the underlying data. Think of it as proving you know a password without showing it.\n\n**On ZkVanguard:**\n• All AI agent responses are ZK-verified\n• Your portfolio data stays private\n• Compliance reports prove accuracy without exposing details\n• Cryptographic security (521-bit security level)\n\n**Real Benefits:**\n✓ Institutional-grade privacy\n✓ Regulatory compliance\n✓ Trustless verification\n✓ Protection from data breaches\n\nEvery major action generates a ZK-STARK proof that you can verify independently. Want to see a demo?`,
         model: 'rule-based-fallback',
         confidence: 0.9,
       };
