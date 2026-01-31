@@ -16,18 +16,36 @@ export async function GET() {
   const isAvailable = llmProvider.isAvailable();
   const provider = llmProvider.getActiveProvider();
   const isOllama = provider.includes('ollama');
+  const isASI = provider.includes('asi');
+  const isCryptocom = provider.includes('cryptocom');
+  
+  // Determine the model based on provider
+  let model = 'intelligent-fallback';
+  if (isOllama) {
+    model = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+  } else if (isASI) {
+    model = process.env.ASI_MODEL || 'asi1-mini';
+  } else if (provider.includes('openai') || isCryptocom) {
+    model = 'gpt-4o';
+  } else if (provider.includes('anthropic')) {
+    model = 'claude-3-haiku';
+  }
   
   return NextResponse.json({
     status: 'operational',
     llmAvailable: isAvailable,
     provider: isAvailable ? provider : 'intelligent-fallback',
     ollama: isOllama,
-    model: isOllama ? 'qwen2.5:7b' : 'gpt-4o',
+    asi: isASI,
+    cryptocom: isCryptocom,
+    model,
     features: {
       streaming: true,
       contextManagement: true,
       multiAgent: true,
       localInference: isOllama,
+      productionAI: isASI || provider.includes('openai') || provider.includes('anthropic'),
+      cryptocomIntegration: isCryptocom,
     },
     timestamp: Date.now(),
   });
