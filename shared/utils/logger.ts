@@ -1,16 +1,32 @@
 /**
  * @fileoverview Centralized logging utility with structured logging support
  * @module shared/utils/logger
+ * 
+ * IMPORTANT: Serverless-compatible - no file transports in production/Vercel
+ * because serverless functions have a read-only filesystem.
  */
 
 import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure logs directory exists
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+// Detect serverless environment (Vercel, AWS Lambda, etc.)
+const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Only create logs directory in non-serverless environments
+let logsDir: string | null = null;
+if (!isServerless) {
+  try {
+    logsDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+  } catch (err) {
+    // In read-only filesystem, just skip file logging
+    console.warn('Could not create logs directory, using console-only logging');
+    logsDir = null;
+  }
 }
 
 // Custom log format
@@ -34,46 +50,70 @@ const consoleFormat = winston.format.combine(
   })
 );
 
-// Create logger instance
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: customFormat,
-  defaultMeta: { service: 'zkvanguard' },
-  transports: [
-    // Write all logs to combined.log
+// Build transports array based on environment
+const transports: winston.transport[] = [];
+
+// In serverless/production, always use console (Vercel captures these logs)
+if (isServerless || isProduction) {
+  transports.push(
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'HH:mm:ss' }),
+        winston.format.printf(({ timestamp, level, message, metadata }) => {
+          let metaStr = '';
+          if (metadata && Object.keys(metadata).length > 0) {
+            metaStr = ` ${JSON.stringify(metadata)}`;
+          }
+          return `${timestamp} [${level}]: ${message}${metaStr}`;
+        })
+      ),
+    })
+  );
+} else if (logsDir) {
+  // In local development with writable filesystem, use file transports
+  transports.push(
     new winston.transports.File({
       filename: path.join(logsDir, 'combined.log'),
       maxsize: 10 * 1024 * 1024, // 10MB
       maxFiles: 5,
     }),
-    // Write error logs to error.log
     new winston.transports.File({
       filename: path.join(logsDir, 'error.log'),
       level: 'error',
       maxsize: 10 * 1024 * 1024,
       maxFiles: 5,
     }),
-    // Write agent logs separately
     new winston.transports.File({
       filename: path.join(logsDir, 'agents.log'),
       maxsize: 10 * 1024 * 1024,
       maxFiles: 5,
-    }),
-  ],
-  exceptionHandlers: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'exceptions.log'),
-    }),
-  ],
-  rejectionHandlers: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'rejections.log'),
-    }),
-  ],
+    })
+  );
+}
+
+// Create logger instance
+export const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: customFormat,
+  defaultMeta: { service: 'zkvanguard' },
+  transports,
+  // Only add exception handlers in non-serverless environments
+  ...(logsDir && !isServerless ? {
+    exceptionHandlers: [
+      new winston.transports.File({
+        filename: path.join(logsDir, 'exceptions.log'),
+      }),
+    ],
+    rejectionHandlers: [
+      new winston.transports.File({
+        filename: path.join(logsDir, 'rejections.log'),
+      }),
+    ],
+  } : {}),
 });
 
-// Add console transport in non-production
-if (process.env.NODE_ENV !== 'production') {
+// Add console transport for local development (if not already added)
+if (!isServerless && !isProduction) {
   logger.add(
     new winston.transports.Console({
       format: consoleFormat,
