@@ -53,8 +53,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const lastFetchRef = useRef<number>(0);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Debug: Log when address changes
+  useEffect(() => {
+    console.log('🔑 [PositionsContext] Address changed:', address || 'NOT CONNECTED');
+  }, [address]);
+
   const fetchPositions = useCallback(async (isBackgroundRefresh = false) => {
     if (!address) {
+      console.log('⚠️ [PositionsContext] No address, skipping fetch');
       setPositionsData(null);
       return;
     }
