@@ -44,7 +44,9 @@ const PROTECTED_PATHS = [
 const PUBLIC_PATHS = [
   '/api/health',
   '/api/prices', // Read-only price data
+  '/api/chat', // AI chat endpoint - no sensitive operations
   '/api/chat/health', // Health check for Ollama/LLM status
+  '/api/debug', // Debug endpoints
   '/api/agents/status', // Agent status check (read-only)
   '/api/zk-proof/health', // ZK backend health check (read-only)
   '/_next',

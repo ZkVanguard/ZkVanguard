@@ -92,12 +92,12 @@ class LLMProvider {
                            process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
       
       // ASI API key for production AI (Fetch.ai's ASI:One platform)
-      const asiApiKey = process.env.ASI_API_KEY ||
+      const asiApiKey = (process.env.ASI_API_KEY ||
                         process.env.NEXT_PUBLIC_ASI_API_KEY ||
-                        process.env.ASI_ONE_API_KEY;
+                        process.env.ASI_ONE_API_KEY || '').trim() || null;
       
       this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-      this.asiApiKey = asiApiKey || null;
+      this.asiApiKey = asiApiKey;
 
       // PRIORITY 1: Crypto.com AI Agent SDK + Ollama (HACKATHON + LOCAL AI)
       // The Crypto.com SDK uses OpenAI-compatible API, and Ollama provides one at /v1
