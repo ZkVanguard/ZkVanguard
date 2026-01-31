@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
+// Force dynamic rendering (uses request.url)
+export const dynamic = 'force-dynamic';
+
 /**
  * On-Chain Portfolio API
  * Fetches real portfolio data from Cronos blockchain
