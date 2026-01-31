@@ -47,18 +47,21 @@ const SYSTEM_CONTEXT = `You are an advanced AI assistant for ZkVanguard, a Web3 
 - Automated hedging strategies via Moonlander integration
 - Gasless transactions using x402 protocol (zero CRO gas fees)
 - Zero-knowledge proofs for privacy-preserving verification
-- Real market data integration
+- Real market data integration from Crypto.com Exchange
+- 🔮 **Polymarket prediction market insights** for risk-aware decision making
 - Compliance reporting and audit trails
 
 **Your Role:**
 - Provide intelligent, context-aware responses about DeFi, RWA, and portfolio management
 - Help users understand risk metrics and investment strategies
+- **Use Polymarket prediction data** to inform hedging and risk recommendations
 - Guide users through platform features
 - Explain complex financial concepts clearly
 - Assist with hedging decisions and portfolio optimization
 - Answer questions about blockchain, ZK proofs, and Cronos ecosystem
+- When prediction market data is available, reference specific probabilities and market signals
 
-Be conversational, helpful, and technically accurate. When discussing financial strategies, always emphasize risk considerations.`;
+Be conversational, helpful, and technically accurate. When discussing financial strategies, always emphasize risk considerations and reference prediction market signals when relevant.`;
 
 class LLMProvider {
   private aiClient: any = null;
@@ -372,6 +375,7 @@ class LLMProvider {
 
       // SMART FEATURE: Fetch real portfolio data for context-aware responses
       let portfolioContext = '';
+      let portfolioAssets: string[] = [];
       try {
         const portfolioData = await getPortfolioData();
         if (portfolioData && portfolioData.portfolio) {
@@ -386,10 +390,42 @@ class LLMProvider {
             portfolioContext += '\n• Holdings: ' + p.positions.map((pos: any) => 
               `${pos.symbol} ($${pos.value?.toFixed(2)}, ${pos.pnlPercentage?.toFixed(1)}%)`
             ).join(', ');
+            // Extract asset symbols for prediction market lookup
+            portfolioAssets = p.positions.map((pos: any) => pos.symbol?.toUpperCase()).filter(Boolean);
           }
         }
       } catch (error) {
         logger.warn('Could not fetch portfolio data for context');
+      }
+
+      // 🔮 SMART FEATURE: Fetch Polymarket prediction insights for context
+      let predictionContext = '';
+      try {
+        // Dynamic import to avoid circular dependencies
+        const { DelphiMarketService } = await import('../services/DelphiMarketService');
+        
+        // Get relevant predictions for portfolio assets (or default to major crypto)
+        const assets = portfolioAssets.length > 0 ? portfolioAssets : ['BTC', 'ETH', 'CRO'];
+        const predictions = await DelphiMarketService.getRelevantMarkets(assets);
+        
+        // Filter to HIGH impact predictions with strong signals
+        const significantPredictions = predictions
+          .filter(p => p.impact === 'HIGH' || (p.probability > 70 || p.probability < 30))
+          .slice(0, 5);
+        
+        if (significantPredictions.length > 0) {
+          predictionContext = '\n\n🔮 Polymarket Prediction Insights:\n';
+          for (const pred of significantPredictions) {
+            const signal = pred.probability > 70 ? '📈' : pred.probability < 30 ? '📉' : '⚖️';
+            predictionContext += `${signal} ${pred.question} (${pred.probability}% prob, ${pred.impact} impact)\n`;
+            if (pred.recommendation === 'HEDGE') {
+              predictionContext += `   ⚠️ Recommendation: HEDGE\n`;
+            }
+          }
+          logger.info('🔮 Added Polymarket context', { predictions: significantPredictions.length });
+        }
+      } catch (error) {
+        logger.warn('Could not fetch Polymarket predictions for context');
       }
 
       // SMART FEATURE: Detect if user wants to execute an action
@@ -453,8 +489,8 @@ class LLMProvider {
         };
       }
 
-      // Add user message to history with portfolio context
-      const enrichedMessage = userMessage + portfolioContext;
+      // Add user message to history with portfolio context and prediction insights
+      const enrichedMessage = userMessage + portfolioContext + predictionContext;
       history.push({
         role: 'user',
         content: enrichedMessage,
