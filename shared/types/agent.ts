@@ -233,4 +233,5 @@ export interface AgentExecutionReport {
   totalExecutionTime: number;
   status: 'success' | 'partial' | 'failed';
   errors?: Error[];
+  aiSummary?: string; // AI-generated summary of execution results
 }

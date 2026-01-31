@@ -91,18 +91,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if this should go through agent orchestration
-    // DISABLED: LeadAgent orchestration - using direct LLM + executePortfolioAction for real on-chain data
-    const useAgents = false; // await shouldUseAgents(message);
+    // LeadAgent orchestrates all specialized agents for complex operations
+    const useAgents = await shouldUseAgents(message);
     
     if (useAgents) {
-      logger.info('Routing message through LeadAgent', { message: message.substring(0, 50) });
+      logger.info('Routing message through LeadAgent orchestration', { message: message.substring(0, 50) });
       
       try {
         const orchestrator = getAgentOrchestrator();
+        await orchestrator.initialize(); // Ensure all agents are ready
         const leadAgent = await orchestrator.getLeadAgent();
         
         if (leadAgent) {
-          // Execute through LeadAgent
+          // Execute through LeadAgent - it will coordinate all specialized agents
           const report = await leadAgent.executeStrategyFromIntent(message);
           
           // Format the agent response
@@ -191,19 +192,27 @@ export async function POST(request: NextRequest) {
 function formatAgentResponse(report: any): { content: string } {
   const lines: string[] = [];
   
-  lines.push(`## Agent Execution Report\n`);
+  // If AI summary is available, lead with it
+  if (report.aiSummary) {
+    lines.push(`## 🤖 AI Summary\n`);
+    lines.push(report.aiSummary);
+    lines.push('\n---\n');
+  }
+  
+  lines.push(`## Multi-Agent Execution Report\n`);
   lines.push(`**Strategy:** ${report.strategy || 'Analysis'}`);
   lines.push(`**Status:** ${report.status === 'success' ? '✅ Success' : '❌ Failed'}`);
-  lines.push(`**Execution Time:** ${report.totalExecutionTime}ms\n`);
+  lines.push(`**Execution Time:** ${report.totalExecutionTime}ms`);
+  lines.push(`**Agents Coordinated:** LeadAgent → ${report.agents?.length || 0} specialized agents\n`);
   
   if (report.riskAnalysis) {
-    lines.push(`### Risk Analysis`);
-    lines.push(`- **Total Risk Score:** ${report.riskAnalysis.totalRisk || 'N/A'}`);
-    lines.push(`- **Volatility:** ${report.riskAnalysis.volatility || 'N/A'}`);
-    lines.push(`- **Market Sentiment:** ${report.riskAnalysis.sentiment || 'N/A'}`);
+    lines.push(`### 📊 Risk Analysis (RiskAgent)`);
+    lines.push(`- **Total Risk Score:** ${report.riskAnalysis.totalRisk || 'N/A'}/100`);
+    lines.push(`- **Volatility:** ${typeof report.riskAnalysis.volatility === 'number' ? (report.riskAnalysis.volatility * 100).toFixed(1) + '%' : 'N/A'}`);
+    lines.push(`- **Market Sentiment:** ${report.riskAnalysis.marketSentiment || report.riskAnalysis.sentiment || 'N/A'}`);
     if (report.riskAnalysis.recommendations?.length > 0) {
-      lines.push(`\n**Recommendations:**`);
-      report.riskAnalysis.recommendations.forEach((rec: string) => {
+      lines.push(`\n**AI Recommendations:**`);
+      report.riskAnalysis.recommendations.slice(0, 3).forEach((rec: string) => {
         lines.push(`- ${rec}`);
       });
     }
@@ -211,7 +220,7 @@ function formatAgentResponse(report: any): { content: string } {
   }
   
   if (report.hedgingStrategy) {
-    lines.push(`### Hedging Strategy`);
+    lines.push(`### 🛡️ Hedging Strategy (HedgingAgent)`);
     lines.push(`- **Recommended Action:** ${report.hedgingStrategy.action || 'N/A'}`);
     lines.push(`- **Confidence:** ${report.hedgingStrategy.confidence || 'N/A'}`);
     if (report.hedgingStrategy.positions?.length > 0) {
@@ -224,16 +233,16 @@ function formatAgentResponse(report: any): { content: string } {
   }
   
   if (report.settlement) {
-    lines.push(`### Settlement`);
+    lines.push(`### 💸 Settlement (SettlementAgent)`);
     lines.push(`- **Transactions:** ${report.settlement.transactionCount || 0}`);
-    lines.push(`- **Gasless:** ${report.settlement.gasless ? '✅ Yes' : '❌ No'}`);
+    lines.push(`- **Gasless via x402:** ${report.settlement.gasless ? '✅ Yes (0 CRO gas)' : '❌ No'}`);
     lines.push('');
   }
   
   if (report.zkProofs?.length > 0) {
-    lines.push(`### ZK Proofs Generated`);
+    lines.push(`### 🔐 ZK Proofs Generated`);
     report.zkProofs.forEach((proof: any) => {
-      lines.push(`- **${proof.proofType}:** ${proof.verified ? '✅ Verified' : '⏳ Pending'}`);
+      lines.push(`- **${proof.proofType}:** ${proof.verified ? '✅ Verified' : '⏳ Pending'} (${proof.protocol || 'STARK'})`);
     });
   }
   

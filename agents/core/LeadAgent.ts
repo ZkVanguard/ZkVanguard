@@ -157,10 +157,10 @@ export class LeadAgent extends BaseAgent {
   }
 
   /**
-   * Parse natural language strategy into structured intent using LLM
+   * Parse natural language strategy into structured intent using ASI AI
    */
   private async parseNaturalLanguage(input: StrategyInput): Promise<StrategyIntent> {
-    logger.info('Parsing natural language strategy with LLM', { agentId: this.id });
+    logger.info('Parsing natural language strategy with ASI AI', { agentId: this.id });
 
     const text = input.naturalLanguage.toLowerCase();
     let action: StrategyIntent['action'] = 'analyze';
@@ -168,17 +168,38 @@ export class LeadAgent extends BaseAgent {
     let yieldTarget: number | undefined;
     let riskLimit: number | undefined;
 
+    // Fetch Polymarket predictions for context
+    let predictionContext = '';
     try {
-      // Use LLM for intelligent intent parsing
+      const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+      const predictions = await DelphiMarketService.getRelevantMarkets(['BTC', 'ETH', 'CRO']);
+      const significantPredictions = predictions
+        .filter(p => p.impact === 'HIGH' || p.probability > 70 || p.probability < 30)
+        .slice(0, 3);
+      
+      if (significantPredictions.length > 0) {
+        predictionContext = '\n\nPolymarket Signals:\n' + significantPredictions
+          .map(p => `- ${p.question} (${p.probability}% prob, ${p.recommendation})`)
+          .join('\n');
+        logger.info('🔮 LeadAgent using Polymarket context', { predictions: significantPredictions.length });
+      }
+    } catch (e) {
+      logger.warn('Could not fetch Polymarket data for LeadAgent');
+    }
+
+    try {
+      // Use ASI AI for intelligent intent parsing
       const { llmProvider } = await import('../../lib/ai/llm-provider');
       
-      const llmResponse = await llmProvider.generateResponse(
-        `Parse this portfolio strategy request and extract the intent. Return a JSON object with: action (analyze/hedge/rebalance/optimize), yieldTarget (number or null), riskLimit (number or null), assets (array of asset symbols mentioned).
+      const llmResponse = await llmProvider.generateDirectResponse(
+        `Parse this portfolio strategy request and extract the intent. Consider the prediction market signals when determining risk level.${predictionContext}
 
 Request: "${input.naturalLanguage}"
 
+Return a JSON object with: action (analyze/hedge/rebalance/optimize), yieldTarget (number or null), riskLimit (number or null), assets (array of asset symbols mentioned), urgency (low/medium/high based on market signals).
+
 Respond ONLY with valid JSON, no explanation.`,
-        `strategy-parse-${Date.now()}`
+        'You are a DeFi strategy parser. Extract structured intent from natural language requests.'
       );
 
       // Try to parse LLM response as JSON
@@ -196,13 +217,13 @@ Respond ONLY with valid JSON, no explanation.`,
           riskLimit = parsed.riskLimit;
         }
         
-        logger.info('LLM parsed strategy intent', { action, yieldTarget, riskLimit });
+        logger.info('🤖 ASI AI parsed strategy intent', { action, yieldTarget, riskLimit, model: llmResponse.model });
       } catch (parseError) {
-        logger.warn('Could not parse LLM JSON response, using keyword fallback', { parseError });
+        logger.warn('Could not parse ASI AI JSON response, using keyword fallback', { parseError });
         // Fall through to keyword-based parsing below
       }
     } catch (llmError) {
-      logger.warn('LLM parsing failed, using keyword fallback', { llmError });
+      logger.warn('ASI AI parsing failed, using keyword fallback', { llmError });
     }
 
     // Fallback/supplement with keyword detection for required agents
@@ -352,6 +373,9 @@ Respond ONLY with valid JSON, no explanation.`,
           results,
         });
       }
+
+      // 6. Generate AI-powered summary of execution results
+      report.aiSummary = await this.generateAISummary(intent, results);
 
       report.totalExecutionTime = Date.now() - startTime;
       this.executionReports.set(executionId, report);
@@ -529,6 +553,48 @@ Respond ONLY with valid JSON, no explanation.`,
    */
   private handleAgentResult(result: unknown): void {
     logger.debug('Handling agent result', { agentId: this.id, result });
+  }
+
+  /**
+   * Generate AI-powered summary of multi-agent execution results
+   */
+  private async generateAISummary(intent: StrategyIntent, results: Record<string, unknown>): Promise<string> {
+    try {
+      const { llmProvider } = await import('../../lib/ai/llm-provider');
+      
+      // Build context from results
+      const riskAnalysis = results.riskAnalysis as RiskAnalysis | undefined;
+      const hedgingStrategy = results.hedgingStrategy as HedgingStrategy | undefined;
+      const settlement = results.settlement as SettlementResult | undefined;
+      
+      let contextStr = `Strategy: ${intent.action}\n`;
+      
+      if (riskAnalysis) {
+        contextStr += `Risk Analysis: Total Risk ${riskAnalysis.totalRisk}/100, Volatility ${(riskAnalysis.volatility * 100).toFixed(1)}%, Sentiment: ${riskAnalysis.marketSentiment}\n`;
+        if (riskAnalysis.recommendations?.length > 0) {
+          contextStr += `Recommendations: ${riskAnalysis.recommendations.slice(0, 2).join('; ')}\n`;
+        }
+      }
+      
+      if (hedgingStrategy) {
+        contextStr += `Hedging: Action ${hedgingStrategy.action || 'analyzed'}\n`;
+      }
+      
+      if (settlement) {
+        contextStr += `Settlement: ${settlement.transactionCount || 0} transactions, Gasless: ${settlement.gasless ? 'Yes' : 'No'}\n`;
+      }
+
+      const aiResponse = await llmProvider.generateDirectResponse(
+        `Summarize this multi-agent execution in 2-3 sentences for the user:\n\n${contextStr}\n\nBe concise and highlight key insights. Mention specific numbers.`,
+        'You are a DeFi portfolio assistant. Provide clear, actionable summaries.'
+      );
+      
+      logger.info('🤖 AI summary generated', { model: aiResponse.model });
+      return aiResponse.content;
+    } catch (error) {
+      logger.warn('Could not generate AI summary', { error });
+      return `Strategy "${intent.action}" executed successfully via multi-agent orchestration.`;
+    }
   }
 
   /**
