@@ -64,6 +64,9 @@ class LLMProvider {
   private aiClient: any = null;
   private openAIClient: any = null;
   private anthropicClient: any = null;
+  private asiApiKey: string | null = null;
+  private asiApiUrl: string = 'https://api.asi1.ai/v1';
+  private asiAvailable: boolean = false;
   private ollamaAvailable: boolean = false;
   private ollamaBaseUrl: string = 'http://localhost:11434';
   private activeProvider: string = 'none';
@@ -88,7 +91,13 @@ class LLMProvider {
       const anthropicKey = process.env.ANTHROPIC_API_KEY ||
                            process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
       
+      // ASI API key for production AI (Fetch.ai's ASI:One platform)
+      const asiApiKey = process.env.ASI_API_KEY ||
+                        process.env.NEXT_PUBLIC_ASI_API_KEY ||
+                        process.env.ASI_ONE_API_KEY;
+      
       this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      this.asiApiKey = asiApiKey || null;
 
       // PRIORITY 1: Crypto.com AI Agent SDK + Ollama (HACKATHON + LOCAL AI)
       // The Crypto.com SDK uses OpenAI-compatible API, and Ollama provides one at /v1
@@ -147,6 +156,37 @@ class LLMProvider {
         }
       }
 
+      // PRIORITY 1A.5: Crypto.com AI SDK with ASI API (if Ollama not available but ASI is)
+      if (cryptocomKey && this.asiApiKey) {
+        try {
+          const dynamicImport = new Function('modulePath', 'return import(modulePath)');
+          const module = await dynamicImport('@crypto.com/ai-agent-client').catch(() => null);
+          
+          if (module && module.createClient) {
+            // Configure Crypto.com SDK to use ASI API's OpenAI-compatible endpoint
+            const client = module.createClient({
+              openAI: {
+                apiKey: this.asiApiKey,
+                model: process.env.ASI_MODEL || 'asi1-mini',
+                baseURL: this.asiApiUrl, // ASI API is OpenAI-compatible
+              },
+              chainId: 240, // Cronos zkEVM Testnet
+            } as any);
+            
+            if (client) {
+              this.aiClient = client;
+              this.asiAvailable = true; // Mark ASI as available too
+              this.activeProvider = 'cryptocom-asi';
+              logger.info('✅ Crypto.com AI SDK + ASI API initialized - HACKATHON + PRODUCTION AI');
+              logger.info(`   Using ASI model: ${process.env.ASI_MODEL || 'asi1-mini'} via ASI:One API`);
+              return;
+            }
+          }
+        } catch (sdkError) {
+          logger.warn('Crypto.com AI SDK + ASI integration failed - trying alternatives');
+        }
+      }
+
       // PRIORITY 1B: Crypto.com AI SDK with OpenAI (if Ollama not available)
       if (cryptocomKey && openaiKey) {
         try {
@@ -201,6 +241,39 @@ class LLMProvider {
           }
         } catch (ollamaError) {
           logger.warn('Ollama not available');
+        }
+      }
+
+      // Priority 2.5: ASI API (Fetch.ai's ASI:One - Production AI when Ollama unavailable)
+      if (this.asiApiKey) {
+        try {
+          // Test ASI API connectivity
+          const testResponse = await fetch(`${this.asiApiUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.asiApiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'asi1-mini',
+              messages: [{ role: 'user', content: 'ping' }],
+              max_tokens: 5,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          
+          if (testResponse.ok) {
+            this.asiAvailable = true;
+            this.activeProvider = 'asi';
+            logger.info('✅ ASI API (Fetch.ai ASI:One) initialized - PRODUCTION AI ENABLED');
+            logger.info('   Using model: asi1-mini for balanced performance');
+            return;
+          } else {
+            const errorData = await testResponse.json().catch(() => ({}));
+            logger.warn(`ASI API test failed: ${testResponse.status} ${JSON.stringify(errorData)}`);
+          }
+        } catch (asiError) {
+          logger.warn(`ASI API not available: ${String(asiError)}`);
         }
       }
 
@@ -264,7 +337,7 @@ class LLMProvider {
    */
   isAvailable(): boolean {
     return this.aiClient !== null || this.openAIClient !== null || 
-           this.anthropicClient !== null || this.ollamaAvailable;
+           this.anthropicClient !== null || this.ollamaAvailable || this.asiAvailable;
   }
 
   /**
@@ -402,13 +475,17 @@ class LLMProvider {
       await this.waitForInit();
 
       // Use the active provider that was determined during initialization
-      // Priority order: Ollama (free, local) > Crypto.com AI > OpenAI > Anthropic
+      // Priority order: Ollama (free, local) > ASI API > Crypto.com AI > OpenAI > Anthropic
       if (this.ollamaAvailable) {
         // Priority 1: Use Ollama (FREE, LOCAL, SECURE)
         logger.info('Using Ollama (FREE LOCAL AI) for response generation');
         response = await this.generateWithOllama(history, context);
+      } else if (this.asiAvailable) {
+        // Priority 2: Use ASI API (Fetch.ai production AI)
+        logger.info('Using ASI API (Fetch.ai ASI:One) for response generation');
+        response = await this.generateWithASI(history, context);
       } else if (this.aiClient) {
-        // Priority 2: Use Crypto.com AI
+        // Priority 3: Use Crypto.com AI
         logger.info('Using Crypto.com AI for response generation');
         response = await this.generateWithCryptocomAI(history, context);
       } else if (this.openAIClient) {
@@ -484,7 +561,12 @@ class LLMProvider {
         confidence: 0.95,
       };
     } catch (error) {
-      logger.error('Crypto.com AI call failed, trying OpenAI fallback:', error);
+      logger.error('Crypto.com AI call failed, trying fallbacks:', error);
+      
+      // Try ASI API as primary fallback (production AI)
+      if (this.asiAvailable) {
+        return this.generateWithASI(history, context);
+      }
       
       // Try OpenAI as fallback if available
       if (this.openAIClient) {
@@ -501,6 +583,92 @@ class LLMProvider {
         return this.generateWithOllama(history, context);
       }
       
+      // Last resort: rule-based fallback
+      return this.generateFallbackResponse(
+        history[history.length - 1].content,
+        context
+      );
+    }
+  }
+
+  /**
+   * Generate response using ASI API (Fetch.ai's ASI:One - Production AI)
+   * Use this when Ollama is not available but you need real AI responses
+   * API docs: https://docs.asi1.ai/
+   */
+  private async generateWithASI(
+    history: ChatMessage[],
+    context?: Record<string, any>
+  ): Promise<LLMResponse> {
+    try {
+      if (!this.asiApiKey) {
+        throw new Error('ASI API key not configured');
+      }
+
+      // Format messages for ASI API (OpenAI-compatible format)
+      const messages = history.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      // Add context if provided
+      if (context && messages.length > 0) {
+        const contextStr = Object.entries(context)
+          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+          .join('\n');
+        messages[messages.length - 1].content += `\n\nContext:\n${contextStr}`;
+      }
+
+      // Use asi1-mini for balanced performance and speed
+      // Other models available: asi1-fast, asi1-extended, asi1-agentic
+      const model = process.env.ASI_MODEL || 'asi1-mini';
+
+      // Call ASI API
+      const response = await fetch(`${this.asiApiUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.asiApiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+          max_tokens: 800,
+        }),
+        signal: AbortSignal.timeout(60000), // 60s timeout
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`ASI API returned ${response.status}: ${JSON.stringify(errorData)}`);
+      }
+
+      const result = await response.json();
+      const content = result.choices?.[0]?.message?.content || '';
+
+      logger.info(`ASI API (${model}) response generated successfully - PRODUCTION AI`);
+      return {
+        content,
+        tokensUsed: result.usage?.total_tokens || 0,
+        model: `asi-${model}`,
+        confidence: 0.92,
+      };
+    } catch (error) {
+      logger.error('ASI API call failed:', error);
+      
+      // Try OpenAI as fallback
+      if (this.openAIClient) {
+        return this.generateWithOpenAI(history, context);
+      }
+      // Try Anthropic as fallback
+      if (this.anthropicClient) {
+        return this.generateWithAnthropic(history, context);
+      }
+      // Try Ollama as fallback
+      if (this.ollamaAvailable) {
+        return this.generateWithOllama(history, context);
+      }
       // Last resort: rule-based fallback
       return this.generateFallbackResponse(
         history[history.length - 1].content,
@@ -548,6 +716,10 @@ class LLMProvider {
       };
     } catch (error) {
       logger.error('OpenAI call failed:', error);
+      // Try ASI API as fallback
+      if (this.asiAvailable) {
+        return this.generateWithASI(history, context);
+      }
       // Try Anthropic as fallback
       if (this.anthropicClient) {
         return this.generateWithAnthropic(history, context);
@@ -608,6 +780,10 @@ class LLMProvider {
       };
     } catch (error) {
       logger.error('Anthropic Claude call failed:', error);
+      // Try ASI API as fallback
+      if (this.asiAvailable) {
+        return this.generateWithASI(history, context);
+      }
       // Try Ollama as fallback
       if (this.ollamaAvailable) {
         return this.generateWithOllama(history, context);
@@ -677,7 +853,11 @@ class LLMProvider {
         confidence: 0.88,
       };
     } catch (error) {
-      logger.error('Ollama call failed:', error);
+      logger.error('Ollama call failed, trying ASI API fallback:', error);
+      // Try ASI API as fallback (production AI)
+      if (this.asiAvailable) {
+        return this.generateWithASI(history, context);
+      }
       // Last resort: rule-based fallback
       return this.generateFallbackResponse(
         history[history.length - 1].content,
@@ -865,7 +1045,7 @@ class LLMProvider {
   async generateDirectResponse(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
     await this.waitForInit();
     
-    if (!this.ollamaAvailable && !this.openAIClient && !this.anthropicClient) {
+    if (!this.ollamaAvailable && !this.asiAvailable && !this.openAIClient && !this.anthropicClient) {
       throw new Error('No AI provider available');
     }
 
@@ -912,12 +1092,48 @@ class LLMProvider {
           confidence: 0.88,
         };
       } catch (error) {
-        logger.error('Direct Ollama call failed:', error);
-        throw error;
+        logger.error('Direct Ollama call failed, trying ASI API:', error);
+        // Fall through to ASI API
       }
     }
 
-    // Fallback to OpenAI or Anthropic
+    // Use ASI API if available (production AI - Fetch.ai)
+    if (this.asiAvailable && this.asiApiKey) {
+      try {
+        const asiModel = process.env.ASI_MODEL || 'asi1-mini';
+        const response = await fetch(`${this.asiApiUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.asiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: asiModel,
+            messages: messages.map(m => ({ role: m.role, content: m.content })),
+            temperature: 0.5,
+            max_tokens: 500,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+
+        if (!response.ok) {
+          throw new Error(`ASI API returned ${response.status}`);
+        }
+
+        const result = await response.json();
+        return {
+          content: result.choices?.[0]?.message?.content || '',
+          tokensUsed: result.usage?.total_tokens || 0,
+          model: `asi-${asiModel}-direct`,
+          confidence: 0.92,
+        };
+      } catch (error) {
+        logger.error('Direct ASI API call failed:', error);
+        // Fall through to OpenAI/Anthropic
+      }
+    }
+
+    // Fallback to OpenAI
     if (this.openAIClient) {
       const result = await this.openAIClient.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -933,6 +1149,7 @@ class LLMProvider {
       };
     }
 
+    // Fallback to Anthropic
     if (this.anthropicClient) {
       const result = await this.anthropicClient.messages.create({
         model: 'claude-3-haiku-20240307',
