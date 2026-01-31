@@ -504,7 +504,7 @@ async function printSummary() {
 
 // Run all tests
 async function runAllTests() {
-  console.log('🚀 CHRONOS VANGUARD - COMPREHENSIVE SYSTEM TEST');
+  console.log('🚀 ZKVANGUARD - COMPREHENSIVE SYSTEM TEST');
   console.log('Testing all AI agents, data sources, and integrations...\n');
   
   await testOllamaLLM();

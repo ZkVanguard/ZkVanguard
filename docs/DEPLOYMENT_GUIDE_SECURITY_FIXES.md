@@ -9,7 +9,7 @@
 
 ```powershell
 # Navigate to project root
-cd c:\Users\mrare\OneDrive\Documents\Chronos-Vanguard
+cd c:\Users\mrare\OneDrive\Documents\ZkVanguard
 
 # Compile contracts
 npx hardhat compile

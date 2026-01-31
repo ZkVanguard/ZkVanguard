@@ -785,20 +785,10 @@ export class ReportingAgent extends BaseAgent {
         settlementReport: (settlementResult.data as { report: SettlementReport }).report,
         portfolioReports: [(portfolioResult.data as { report: PortfolioReport }).report],
         auditReport: (auditResult.data as { report: AuditReport }).report,
-        recommendations: [
-          {
-            priority: 'HIGH',
-            category: 'RISK_MANAGEMENT',
-            recommendation: 'Consider reducing BTC allocation',
-            rationale: 'BTC contributes 60% of portfolio risk despite 40% allocation',
-          },
-          {
-            priority: 'MEDIUM',
-            category: 'HEDGING',
-            recommendation: 'Review hedge effectiveness',
-            rationale: 'Current hedge effectiveness at 85%, target is 90%',
-          },
-        ],
+        recommendations: await this.generateAIRecommendations(
+          (riskResult.data as { report: RiskReport }).report,
+          (perfResult.data as { report: PerformanceReport }).report,
+        ),
       };
 
       const reportId = report.reportId;
@@ -922,6 +912,132 @@ export class ReportingAgent extends BaseAgent {
 </body>
 </html>
     `;
+  }
+
+  /**
+   * Generate AI-powered recommendations using ASI API
+   */
+  private async generateAIRecommendations(
+    riskReport: RiskReport,
+    perfReport: PerformanceReport,
+  ): Promise<ComprehensiveReport['recommendations']> {
+    const defaultRecommendations: ComprehensiveReport['recommendations'] = [
+      {
+        priority: 'MEDIUM',
+        category: 'GENERAL',
+        recommendation: 'Monitor portfolio regularly',
+        rationale: 'Standard portfolio management best practice',
+      },
+    ];
+
+    try {
+      const { llmProvider } = await import('@/lib/ai/llm-provider');
+      
+      // Prepare analysis context for AI
+      const topRiskAssets = riskReport.assetRisks
+        .sort((a, b) => b.contribution - a.contribution)
+        .slice(0, 3)
+        .map(a => `${a.asset} (${a.contribution.toFixed(1)}% risk, ${a.allocation.toFixed(1)}% allocation, ${(a.volatility * 100).toFixed(0)}% vol)`)
+        .join(', ');
+
+      const systemPrompt = `You are a DeFi portfolio strategist specializing in institutional RWA management. Provide actionable, data-driven recommendations.`;
+
+      const aiPrompt = `Analyze this portfolio and provide 3 prioritized recommendations:
+
+RISK METRICS:
+- Total Risk Score: ${riskReport.summary.totalRisk}/100 (${riskReport.summary.riskLevel})
+- 95% VaR: $${riskReport.summary.var95.toLocaleString()}
+- 95% CVaR: $${riskReport.summary.cvar95.toLocaleString()}
+- Sharpe Ratio: ${riskReport.summary.sharpeRatio}
+- Portfolio Value: $${riskReport.summary.totalValue}
+
+TOP RISK CONTRIBUTORS:
+${topRiskAssets}
+
+PERFORMANCE:
+- Return: ${perfReport.summary.percentageReturn.toFixed(2)}%
+- Max Drawdown: ${perfReport.summary.maxDrawdown.toFixed(2)}%
+- Win Rate: ${perfReport.summary.winRate.toFixed(1)}%
+
+Respond in this EXACT format (3 recommendations):
+HIGH|CATEGORY|recommendation text|rationale
+MEDIUM|CATEGORY|recommendation text|rationale
+LOW|CATEGORY|recommendation text|rationale
+
+Categories: RISK_MANAGEMENT, HEDGING, DIVERSIFICATION, REBALANCING, OPTIMIZATION`;
+
+      const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, systemPrompt);
+      
+      // Parse AI recommendations
+      const recommendations: ComprehensiveReport['recommendations'] = [];
+      const lines = aiResponse.content.split('\n').filter(l => l.includes('|'));
+      
+      for (const line of lines.slice(0, 3)) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 4) {
+          const priority = parts[0].toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW';
+          if (['HIGH', 'MEDIUM', 'LOW'].includes(priority)) {
+            recommendations.push({
+              priority,
+              category: parts[1] || 'GENERAL',
+              recommendation: parts[2] || 'Review portfolio',
+              rationale: parts[3] || 'AI-generated insight',
+            });
+          }
+        }
+      }
+      
+      if (recommendations.length > 0) {
+        logger.info('🤖 AI recommendations generated', { 
+          count: recommendations.length,
+          model: aiResponse.model,
+        });
+        return recommendations;
+      }
+      
+      // If parsing failed, return defaults with AI enhancement attempt
+      logger.warn('Could not parse AI recommendations, using defaults');
+      return defaultRecommendations;
+      
+    } catch (error) {
+      logger.warn('AI recommendation generation failed, using rule-based fallback', { error });
+      
+      // Generate rule-based recommendations as fallback
+      const recommendations: ComprehensiveReport['recommendations'] = [];
+      
+      // High priority if risk is critical
+      if (riskReport.summary.riskLevel === 'CRITICAL') {
+        recommendations.push({
+          priority: 'HIGH',
+          category: 'RISK_MANAGEMENT',
+          recommendation: 'Reduce portfolio risk immediately',
+          rationale: `Risk score ${riskReport.summary.totalRisk}/100 exceeds safe thresholds`,
+        });
+      }
+      
+      // Check for concentration risk
+      const topContributor = riskReport.assetRisks.sort((a, b) => b.contribution - a.contribution)[0];
+      if (topContributor && topContributor.contribution > 50) {
+        recommendations.push({
+          priority: 'HIGH',
+          category: 'DIVERSIFICATION',
+          recommendation: `Reduce ${topContributor.asset} concentration`,
+          rationale: `${topContributor.asset} contributes ${topContributor.contribution.toFixed(1)}% of total risk`,
+        });
+      }
+      
+      // Performance-based recommendation
+      if (perfReport.summary.percentageReturn < 0) {
+        recommendations.push({
+          priority: 'MEDIUM',
+          category: 'OPTIMIZATION',
+          recommendation: 'Review underperforming positions',
+          rationale: `Portfolio return is ${perfReport.summary.percentageReturn.toFixed(2)}%`,
+        });
+      }
+      
+      return recommendations.length > 0 ? recommendations : defaultRecommendations;
+    }
   }
 
   /**
