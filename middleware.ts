@@ -56,7 +56,23 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // First, apply i18n middleware
+  // IMPORTANT: Skip i18n middleware entirely for API routes
+  // API routes should not go through internationalization
+  if (pathname.startsWith('/api')) {
+    // Still check geo-blocking for protected API routes
+    const isProtectedPath = PROTECTED_PATHS.some(path => pathname.startsWith(path));
+    if (isProtectedPath) {
+      const country = getCountryFromRequest(request);
+      if (country && BLOCKED_COUNTRIES.includes(country)) {
+        logGeoBlock(request, country, pathname);
+        return createBlockedResponse(country, pathname);
+      }
+    }
+    // Allow API requests to pass through without i18n processing
+    return NextResponse.next();
+  }
+  
+  // First, apply i18n middleware for non-API routes
   const intlResponse = intlMiddleware(request);
   
   // Skip geo-blocking for public paths
