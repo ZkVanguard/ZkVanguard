@@ -108,30 +108,42 @@ export class HedgingAgent extends BaseAgent {
    * Execute task
    */
   protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
-    logger.info('Executing hedging task', { taskId: task.id, action: task.action });
+    // Support both 'action' and 'type' fields for compatibility with LeadAgent
+    const taskAction = task.action || task.type || '';
+    logger.info('Executing hedging task', { taskId: task.id, action: taskAction });
 
     try {
-      switch (task.action) {
+      switch (taskAction) {
         case 'analyze_hedge':
+        case 'analyze-hedge':
           return await this.analyzeHedgeOpportunity(task);
         
         case 'open_hedge':
+        case 'open-hedge':
           return await this.openHedgePosition(task);
         
         case 'close_hedge':
+        case 'close-hedge':
           return await this.closeHedgePosition(task);
         
         case 'rebalance_hedge':
+        case 'rebalance-hedge':
           return await this.rebalanceHedge(task);
         
         case 'create_strategy':
+        case 'create-strategy':
+        case 'create_hedge':
+        case 'create-hedge':
           return await this.createHedgeStrategy(task);
         
         case 'monitor_positions':
+        case 'monitor-positions':
           return await this.monitorPositions(task);
         
         default:
-          throw new Error(`Unknown action: ${task.action}`);
+          // Graceful fallback: create hedge strategy for unknown hedge-related actions
+          logger.warn(`Unknown hedging action: ${taskAction}, using create_strategy fallback`, { taskId: task.id });
+          return await this.createHedgeStrategy(task);
       }
     } catch (error) {
       logger.error('Task execution failed', { taskId: task.id, error });

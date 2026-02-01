@@ -249,36 +249,50 @@ export class ReportingAgent extends BaseAgent {
    * Execute task
    */
   protected async onExecuteTask(task: AgentTask): Promise<TaskResult> {
-    logger.info('Executing reporting task', { taskId: task.id, action: task.action });
+    // Support both 'action' and 'type' fields for compatibility with LeadAgent
+    const taskAction = task.action || task.type || '';
+    logger.info('Executing reporting task', { taskId: task.id, action: taskAction });
 
     try {
-      switch (task.action) {
+      switch (taskAction) {
         case 'generate_risk_report':
+        case 'generate-risk-report':
           return await this.generateRiskReport(task);
         
         case 'generate_performance_report':
+        case 'generate-performance-report':
           return await this.generatePerformanceReport(task);
         
         case 'generate_settlement_report':
+        case 'generate-settlement-report':
           return await this.generateSettlementReport(task);
         
         case 'generate_portfolio_report':
+        case 'generate-portfolio-report':
           return await this.generatePortfolioReport(task);
         
         case 'generate_audit_report':
+        case 'generate-audit-report':
           return await this.generateAuditReport(task);
         
         case 'generate_comprehensive_report':
+        case 'generate-comprehensive-report':
+        case 'generate_report':
+        case 'generate-report':
           return await this.generateComprehensiveReport(task);
         
         case 'export_report':
+        case 'export-report':
           return await this.exportReport(task);
         
         case 'list_reports':
+        case 'list-reports':
           return await this.listReports(task);
         
         default:
-          throw new Error(`Unknown action: ${task.action}`);
+          // Graceful fallback: generate comprehensive report for unknown report actions
+          logger.warn(`Unknown reporting action: ${taskAction}, using generate_comprehensive_report fallback`, { taskId: task.id });
+          return await this.generateComprehensiveReport(task);
       }
     } catch (error) {
       logger.error('Task execution failed', { taskId: task.id, error });
