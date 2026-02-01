@@ -968,35 +968,64 @@ class LLMProvider {
     if (lower.includes('hedge') || lower.includes('protect') || lower.includes('insurance')) {
       // Generate ZK-protected hedges
       let hedgeInfo = '';
+      let hedgeActions: any[] = [];
       try {
         const portfolioData = await getPortfolioData();
         const portfolioValue = portfolioData?.portfolio?.totalValue || 10000;
         const riskScore = 0.65; // Could be fetched from risk assessment
         
         const privateHedges = await generatePrivateHedges(portfolioValue, riskScore);
-        hedgeInfo = '\n\n' + getHedgeSummary(privateHedges);
+        
+        // Build concise hedge summary
+        const totalEffectiveness = privateHedges.reduce((sum, h) => sum + h.effectiveness, 0) / privateHedges.length;
+        const topHedge = privateHedges.sort((a, b) => b.effectiveness - a.effectiveness)[0];
+        
+        hedgeInfo = `\n\n📊 **${privateHedges.length} strategies generated** | Avg effectiveness: ${(totalEffectiveness * 100).toFixed(0)}%`;
+        hedgeInfo += `\n📌 **Top recommendation:** ${topHedge?.priority || 'HIGH'} priority hedge (${(topHedge?.effectiveness * 100).toFixed(0)}% effective)`;
+        hedgeInfo += `\n🔐 ZK: ${privateHedges.filter(h => h.verified).length}/${privateHedges.length} verified`;
+        
+        // Build action buttons
+        hedgeActions = [
+          {
+            id: 'execute_hedge',
+            label: '⚡ Execute Top Hedge',
+            type: 'hedge',
+            params: {
+              hedgeId: topHedge?.hedgeId,
+              asset: 'BTC-PERP',
+              side: 'SHORT',
+              size: '0.1',
+              leverage: 2,
+              gasless: true,
+              zkVerified: topHedge?.verified
+            }
+          },
+          {
+            id: 'view_all_hedges',
+            label: '📋 View All Strategies',
+            type: 'view_hedges',
+            params: { hedges: privateHedges.map(h => ({ id: h.hedgeId, effectiveness: h.effectiveness, priority: h.priority })) }
+          },
+          {
+            id: 'adjust_risk',
+            label: '⚙️ Adjust Risk Level',
+            type: 'adjust',
+            params: { showModal: true }
+          }
+        ];
       } catch (error) {
         logger.warn('Could not generate private hedges', { error: String(error) });
+        hedgeInfo = '\n\n⚠️ Could not generate hedges. Try again or check portfolio data.';
       }
 
+      // Build action buttons HTML comment for parsing
+      const actionsComment = hedgeActions.length > 0 ? `\n\n<!--ACTIONS:${JSON.stringify(hedgeActions)}-->` : '';
+
       return {
-        content: `I'll protect your portfolio with ZK-private hedging strategies! 🛡️\n\n` +
-          `**Privacy-First Hedging:**\n` +
-          `• Strategy details are NEVER disclosed\n` +
-          `• Only effectiveness and cost are public\n` +
-          `• Each hedge has a ZK-STARK proof\n` +
-          `• Execution verified without revealing trades\n\n` +
-          `**Available Hedge Types:**\n` +
-          `• Short positions (high effectiveness)\n` +
-          `• Put options (downside protection)\n` +
-          `• Stablecoin allocation (safe haven)\n` +
-          `• Cross-asset hedges (correlation protection)\n\n` +
-          `**Privacy Benefits:**\n` +
-          `✓ No front-running risk\n` +
-          `✓ Strategy details remain confidential\n` +
-          `✓ Cryptographic proof of execution\n` +
-          `✓ Institutional-grade security\n` +
-          (hedgeInfo || '\n\nSay "Generate private hedges" to create ZK-protected strategies for your portfolio.'),
+        content: `✅ **HEDGE ANALYSIS** | Portfolio Protected 🛡️` +
+          hedgeInfo +
+          `\n\n⛽ Gasless execution via x402` +
+          actionsComment,
         model: 'rule-based-fallback',
         confidence: 0.9,
       };
