@@ -574,11 +574,12 @@ Respond ONLY with valid JSON, no explanation.`,
       }
       
       if (hedgingStrategy) {
-        contextStr += `Hedge: ${hedgingStrategy.action || 'recommended'}, Confidence: ${hedgingStrategy.confidence || 'medium'}\n`;
+        contextStr += `Hedge: ${hedgingStrategy.strategy || 'recommended'}, Status: ${hedgingStrategy.executionStatus || 'pending'}\n`;
       }
       
       if (settlement) {
-        contextStr += `Settlement: Gasless ${settlement.gasless ? 'enabled' : 'disabled'}\n`;
+        const hasGasless = settlement.payments?.some(p => p.isGasless) || settlement.totalGasSaved > 0;
+        contextStr += `Settlement: Gasless ${hasGasless ? 'enabled' : 'disabled'}\n`;
       }
 
       const aiResponse = await llmProvider.generateDirectResponse(
