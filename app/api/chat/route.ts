@@ -124,7 +124,13 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (agentError) {
-        logger.warn('LeadAgent execution failed, falling back to LLM', { error: agentError });
+        const errorMessage = agentError instanceof Error ? agentError.message : String(agentError);
+        const errorStack = agentError instanceof Error ? agentError.stack : undefined;
+        logger.error('LeadAgent execution failed, falling back to LLM', { 
+          error: errorMessage,
+          stack: errorStack,
+          message: message.substring(0, 100)
+        });
         // Fall through to LLM response
       }
     }
