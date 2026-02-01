@@ -570,30 +570,27 @@ Respond ONLY with valid JSON, no explanation.`,
       let contextStr = `Strategy: ${intent.action}\n`;
       
       if (riskAnalysis) {
-        contextStr += `Risk Analysis: Total Risk ${riskAnalysis.totalRisk}/100, Volatility ${(riskAnalysis.volatility * 100).toFixed(1)}%, Sentiment: ${riskAnalysis.marketSentiment}\n`;
-        if (riskAnalysis.recommendations?.length > 0) {
-          contextStr += `Recommendations: ${riskAnalysis.recommendations.slice(0, 2).join('; ')}\n`;
-        }
+        contextStr += `Risk: ${riskAnalysis.totalRisk}/100, Volatility ${(riskAnalysis.volatility * 100).toFixed(0)}%, Sentiment: ${riskAnalysis.marketSentiment}\n`;
       }
       
       if (hedgingStrategy) {
-        contextStr += `Hedging: Action ${hedgingStrategy.action || 'analyzed'}\n`;
+        contextStr += `Hedge: ${hedgingStrategy.action || 'recommended'}, Confidence: ${hedgingStrategy.confidence || 'medium'}\n`;
       }
       
       if (settlement) {
-        contextStr += `Settlement: ${settlement.transactionCount || 0} transactions, Gasless: ${settlement.gasless ? 'Yes' : 'No'}\n`;
+        contextStr += `Settlement: Gasless ${settlement.gasless ? 'enabled' : 'disabled'}\n`;
       }
 
       const aiResponse = await llmProvider.generateDirectResponse(
-        `Summarize this multi-agent execution in 2-3 sentences for the user:\n\n${contextStr}\n\nBe concise and highlight key insights. Mention specific numbers.`,
-        'You are a DeFi portfolio assistant. Provide clear, actionable summaries.'
+        `Write ONE sentence (max 20 words) summarizing this for a DeFi trader:\n${contextStr}\nBe direct. Include the key number. No fluff.`,
+        'You are a DeFi trading assistant. Be extremely concise.'
       );
       
       logger.info('🤖 AI summary generated', { model: aiResponse.model });
       return aiResponse.content;
     } catch (error) {
       logger.warn('Could not generate AI summary', { error });
-      return `Strategy "${intent.action}" executed successfully via multi-agent orchestration.`;
+      return `${intent.action} complete.`;
     }
   }
 
