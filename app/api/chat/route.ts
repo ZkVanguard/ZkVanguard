@@ -193,64 +193,121 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Format agent execution report into readable response
+ * Format agent execution report into concise, actionable response
  */
 function formatAgentResponse(report: any): { content: string } {
   const lines: string[] = [];
   
-  // If AI summary is available, lead with it
+  // Quick status line
+  const status = report.status === 'success' ? '✅' : '❌';
+  const strategy = report.strategy || 'analyze';
+  
+  // Concise metrics bar
+  const risk = report.riskAnalysis?.totalRisk ?? '—';
+  const vol = typeof report.riskAnalysis?.volatility === 'number' 
+    ? (report.riskAnalysis.volatility * 100).toFixed(0) + '%' : '—';
+  const sentiment = report.riskAnalysis?.marketSentiment || report.riskAnalysis?.sentiment || '—';
+  
+  lines.push(`${status} **${strategy.toUpperCase()}** | Risk: ${risk}/100 | Vol: ${vol} | ${sentiment}`);
+  
+  // AI summary (if available) - one line
   if (report.aiSummary) {
-    lines.push(`## 🤖 AI Summary\n`);
-    lines.push(report.aiSummary);
-    lines.push('\n---\n');
+    const summary = report.aiSummary.split('.').slice(0, 2).join('.') + '.';
+    lines.push(`\n${summary}`);
   }
   
-  lines.push(`## Multi-Agent Execution Report\n`);
-  lines.push(`**Strategy:** ${report.strategy || 'Analysis'}`);
-  lines.push(`**Status:** ${report.status === 'success' ? '✅ Success' : '❌ Failed'}`);
-  lines.push(`**Execution Time:** ${report.totalExecutionTime}ms`);
-  lines.push(`**Agents Coordinated:** LeadAgent → ${report.agents?.length || 0} specialized agents\n`);
-  
-  if (report.riskAnalysis) {
-    lines.push(`### 📊 Risk Analysis (RiskAgent)`);
-    lines.push(`- **Total Risk Score:** ${report.riskAnalysis.totalRisk || 'N/A'}/100`);
-    lines.push(`- **Volatility:** ${typeof report.riskAnalysis.volatility === 'number' ? (report.riskAnalysis.volatility * 100).toFixed(1) + '%' : 'N/A'}`);
-    lines.push(`- **Market Sentiment:** ${report.riskAnalysis.marketSentiment || report.riskAnalysis.sentiment || 'N/A'}`);
-    if (report.riskAnalysis.recommendations?.length > 0) {
-      lines.push(`\n**AI Recommendations:**`);
-      report.riskAnalysis.recommendations.slice(0, 3).forEach((rec: string) => {
-        lines.push(`- ${rec}`);
-      });
-    }
-    lines.push('');
-  }
-  
+  // Key recommendation (if hedging)
   if (report.hedgingStrategy) {
-    lines.push(`### 🛡️ Hedging Strategy (HedgingAgent)`);
-    lines.push(`- **Recommended Action:** ${report.hedgingStrategy.action || 'N/A'}`);
-    lines.push(`- **Confidence:** ${report.hedgingStrategy.confidence || 'N/A'}`);
-    if (report.hedgingStrategy.positions?.length > 0) {
-      lines.push(`\n**Suggested Positions:**`);
-      report.hedgingStrategy.positions.forEach((pos: any) => {
-        lines.push(`- ${pos.asset}: ${pos.direction} ${pos.size}`);
-      });
+    const action = report.hedgingStrategy.action || 'open position';
+    const conf = report.hedgingStrategy.confidence || 'medium';
+    const positions = report.hedgingStrategy.positions;
+    const suggested = report.hedgingStrategy.suggestedAction;
+    
+    if (suggested) {
+      // Use suggestedAction if available (from HedgingAgent)
+      const size = suggested.size || '0.1';
+      const leverage = suggested.leverage || 2;
+      const asset = suggested.market?.replace('-PERP', '') || 'BTC';
+      const side = suggested.side || 'SHORT';
+      lines.push(`\n📌 **Recommended:** ${side} ${asset}`);
+      lines.push(`   💰 Size: **${size}** | ⚡ Leverage: **${leverage}x**`);
+    } else if (positions?.length > 0) {
+      const pos = positions[0];
+      const size = pos.size || '0.1';
+      const leverage = pos.leverage || 2;
+      lines.push(`\n📌 **Recommended:** ${pos.direction?.toUpperCase() || 'HEDGE'} ${pos.asset || 'BTC'}`);
+      lines.push(`   💰 Size: **${size}** | ⚡ Leverage: **${leverage}x**`);
+    } else {
+      lines.push(`\n📌 **Recommended:** ${action} (${conf} confidence)`);
     }
-    lines.push('');
   }
   
-  if (report.settlement) {
-    lines.push(`### 💸 Settlement (SettlementAgent)`);
-    lines.push(`- **Transactions:** ${report.settlement.transactionCount || 0}`);
-    lines.push(`- **Gasless via x402:** ${report.settlement.gasless ? '✅ Yes (0 CRO gas)' : '❌ No'}`);
-    lines.push('');
-  }
-  
+  // ZK verification status
   if (report.zkProofs?.length > 0) {
-    lines.push(`### 🔐 ZK Proofs Generated`);
-    report.zkProofs.forEach((proof: any) => {
-      lines.push(`- **${proof.proofType}:** ${proof.verified ? '✅ Verified' : '⏳ Pending'} (${proof.protocol || 'STARK'})`);
+    const verified = report.zkProofs.filter((p: any) => p.verified).length;
+    lines.push(`\n🔐 ZK: ${verified}/${report.zkProofs.length} verified on-chain`);
+  }
+  
+  // Settlement info (brief)
+  if (report.settlement?.gasless) {
+    lines.push(`⛽ Gasless ready via x402`);
+  }
+  
+  // ACTION BUTTONS - Machine-readable actions for on-chain execution
+  lines.push(`\n---`);
+  
+  // Build action data for buttons
+  const actions: Array<{ id: string; label: string; type: string; params: any }> = [];
+  
+  if (report.strategy === 'hedge' || report.hedgingStrategy) {
+    const suggested = report.hedgingStrategy?.suggestedAction;
+    const positions = report.hedgingStrategy?.positions;
+    const pos = suggested || positions?.[0];
+    
+    actions.push({
+      id: 'execute_hedge',
+      label: `⚡ Execute ${pos?.side || 'SHORT'} ${pos?.market?.replace('-PERP', '') || pos?.asset || 'BTC'}`,
+      type: 'hedge',
+      params: {
+        asset: pos?.market || pos?.asset || 'BTC-PERP',
+        side: pos?.side || 'SHORT',
+        size: pos?.size || '0.1',
+        leverage: pos?.leverage || 2,
+        gasless: true
+      }
+    });
+    
+    actions.push({
+      id: 'adjust_params',
+      label: '⚙️ Adjust Parameters',
+      type: 'adjust',
+      params: { showModal: true }
+    });
+  } else {
+    actions.push({
+      id: 'create_hedge',
+      label: '🛡️ Create Hedge',
+      type: 'hedge',
+      params: { asset: 'BTC-PERP', side: 'SHORT', size: '0.1', leverage: 2 }
+    });
+    
+    actions.push({
+      id: 'analyze',
+      label: '📊 Full Analysis',
+      type: 'analyze',
+      params: {}
     });
   }
+  
+  actions.push({
+    id: 'view_positions',
+    label: '📋 View Positions',
+    type: 'status',
+    params: {}
+  });
+  
+  // Encode actions as special format that EnhancedChat will parse
+  lines.push(`<!--ACTIONS:${JSON.stringify(actions)}-->`);
   
   return { content: lines.join('\n') };
 }
