@@ -111,7 +111,7 @@ export class ProofGenerator {
         error: details,
       });
 
-      // Throw error instead of falling back to mock
+      // No fallback - real ZK proofs required
       throw error;
     }
   }
