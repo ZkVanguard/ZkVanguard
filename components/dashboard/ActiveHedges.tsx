@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo, useMemo, useRef, useEffect } from 'react';
-import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
 import { usePolling, useToggle } from '@/lib/hooks';
@@ -37,6 +37,21 @@ interface PerformanceStats {
   worstTrade: number;
 }
 
+interface AIRecommendation {
+  strategy: string;
+  confidence: number;
+  expectedReduction: number;
+  description: string;
+  actions: {
+    action: string;
+    asset: string;
+    size: number;
+    leverage: number;
+    protocol: string;
+    reason: string;
+  }[];
+}
+
 interface ActiveHedgesProps {
   address?: string;
   compact?: boolean;
@@ -61,6 +76,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
   const processingRef = useRef(false);
   const lastProcessedRef = useRef<string>('');
+  
+  // AI Recommendations state
+  const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [executingRecommendation, setExecutingRecommendation] = useState<string | null>(null);
 
   const activeHedges = useMemo(() => hedges.filter(h => h.status === 'active'), [hedges]);
   const closedHedges = useMemo(() => hedges.filter(h => h.status === 'closed'), [hedges]);
@@ -153,6 +173,95 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     window.addEventListener('hedgeAdded', handleHedgeAdded);
     return () => window.removeEventListener('hedgeAdded', handleHedgeAdded);
   }, [loadHedges]);
+
+  // Load AI recommendations
+  const loadRecommendations = useCallback(async () => {
+    if (!address) return;
+    
+    setLoadingRecommendations(true);
+    try {
+      const response = await fetch('/api/agents/hedging/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🤖 AI Recommendations:', data);
+        if (data.recommendations) {
+          setRecommendations(data.recommendations);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load AI recommendations:', error);
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }, [address]);
+
+  // Load recommendations on mount and when address changes
+  useEffect(() => {
+    if (address) {
+      loadRecommendations();
+    }
+  }, [address, loadRecommendations]);
+
+  // Execute AI recommendation
+  const executeRecommendation = async (rec: AIRecommendation) => {
+    if (!rec.actions || rec.actions.length === 0) return;
+    
+    const action = rec.actions[0];
+    setExecutingRecommendation(rec.strategy);
+    
+    try {
+      // Get current price for the asset
+      let currentPrice = 1000;
+      try {
+        const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
+        const tickerData = await tickerResponse.json();
+        const ticker = tickerData.result?.data?.find((t: any) => t.i === `${action.asset}_USDT`);
+        if (ticker) currentPrice = parseFloat(ticker.a);
+      } catch (e) {
+        console.warn('Failed to fetch price, using fallback');
+      }
+
+      const notionalValue = action.size * currentPrice;
+      
+      const response = await fetch('/api/agents/hedging/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolioId: 1,
+          asset: action.asset,
+          side: action.action,
+          notionalValue,
+          leverage: action.leverage || 5,
+          reason: `AI Recommended: ${rec.description}`,
+          autoApprovalEnabled: true,
+          autoApprovalThreshold: 1000000,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ AI Hedge executed:', data);
+        
+        // Refresh hedges and recommendations
+        window.dispatchEvent(new Event('hedgeAdded'));
+        loadRecommendations();
+      } else {
+        const error = await response.json();
+        console.error('❌ Failed to execute AI hedge:', error);
+        alert(`Failed to execute: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('❌ Error executing AI recommendation:', error);
+      alert('Failed to execute recommendation');
+    } finally {
+      setExecutingRecommendation(null);
+    }
+  };
 
   const handleClosePosition = async (hedge: HedgePosition) => {
     setSelectedHedge(hedge);
@@ -448,6 +557,153 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   <div className="text-[8px] sm:text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.04em] mb-0.5 sm:mb-1">Avg</div>
                   <div className="text-[12px] sm:text-[17px] font-bold text-[#007AFF] leading-none">{stats.avgHoldTime}</div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Recommendations Section */}
+          {recommendations.length > 0 && (
+            <div className="bg-gradient-to-br from-[#5856D6]/5 to-[#007AFF]/5 rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#5856D6]/20 p-3 sm:p-5">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#5856D6] to-[#007AFF] rounded-[10px] flex items-center justify-center">
+                    <Brain className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
+                      AI Recommendations
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] text-[#86868b]">Powered by Crypto.com AI</p>
+                  </div>
+                </div>
+                <button
+                  onClick={loadRecommendations}
+                  disabled={loadingRecommendations}
+                  className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                >
+                  <RefreshCw className={`w-4 h-4 text-[#5856D6] ${loadingRecommendations ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              
+              <div className="space-y-2 sm:space-y-3">
+                {recommendations.map((rec, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="p-3 sm:p-4 bg-white rounded-[12px] sm:rounded-[14px] border border-[#e8e8ed]"
+                  >
+                    <div className="flex items-start justify-between mb-2 sm:mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[13px] sm:text-[15px] font-semibold text-[#1d1d1f]">
+                            {rec.strategy}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold ${
+                            rec.confidence >= 0.8 ? 'bg-[#34C759]/10 text-[#34C759]' :
+                            rec.confidence >= 0.6 ? 'bg-[#FF9500]/10 text-[#FF9500]' :
+                            'bg-[#86868b]/10 text-[#86868b]'
+                          }`}>
+                            {(rec.confidence * 100).toFixed(0)}% confident
+                          </span>
+                        </div>
+                        <p className="text-[11px] sm:text-[12px] text-[#86868b] leading-relaxed">
+                          {rec.description}
+                        </p>
+                      </div>
+                      <div className="text-right ml-3">
+                        <div className="text-[11px] sm:text-[12px] text-[#86868b]">Risk Reduction</div>
+                        <div className="text-[15px] sm:text-[17px] font-bold text-[#34C759]">
+                          -{(rec.expectedReduction * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    {rec.actions && rec.actions.length > 0 && (
+                      <div className="space-y-2">
+                        {rec.actions.map((action, actionIndex) => (
+                          <div key={actionIndex} className="flex items-center justify-between p-2 sm:p-2.5 bg-[#f5f5f7] rounded-[8px] sm:rounded-[10px]">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-[6px] sm:rounded-[8px] flex items-center justify-center ${
+                                action.action === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
+                              }`}>
+                                {action.action === 'SHORT' ? (
+                                  <TrendingDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#FF3B30]" strokeWidth={2.5} />
+                                ) : (
+                                  <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#34C759]" strokeWidth={2.5} />
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-[11px] sm:text-[13px] font-semibold text-[#1d1d1f]">
+                                  {action.action} {action.asset}
+                                </div>
+                                <div className="text-[9px] sm:text-[10px] text-[#86868b]">
+                                  {action.size} @ {action.leverage}x via {action.protocol}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => executeRecommendation(rec)}
+                              disabled={executingRecommendation === rec.strategy}
+                              className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-[#5856D6] to-[#007AFF] text-white rounded-[6px] sm:rounded-[8px] text-[10px] sm:text-[11px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {executingRecommendation === rec.strategy ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Executing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="w-3 h-3" />
+                                  <span>Execute</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+              
+              <div className="mt-3 pt-3 border-t border-[#5856D6]/10 flex items-center justify-center gap-2 text-[10px] sm:text-[11px] text-[#86868b]">
+                <Sparkles className="w-3 h-3 text-[#5856D6]" />
+                <span>AI-powered insights from Crypto.com AI Agent SDK</span>
+              </div>
+            </div>
+          )}
+
+          {/* No Recommendations - Show loading or prompt */}
+          {recommendations.length === 0 && !loadingRecommendations && address && (
+            <div className="bg-gradient-to-br from-[#5856D6]/5 to-[#007AFF]/5 rounded-[16px] sm:rounded-[20px] border border-[#5856D6]/20 p-4 sm:p-5">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#5856D6] to-[#007AFF] rounded-[14px] flex items-center justify-center mb-3">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f] mb-1">Get AI Recommendations</h3>
+                <p className="text-[11px] sm:text-[12px] text-[#86868b] mb-3 max-w-[280px]">
+                  Let our AI analyze your portfolio and suggest optimal hedging strategies
+                </p>
+                <button
+                  onClick={loadRecommendations}
+                  className="px-4 py-2 bg-gradient-to-r from-[#5856D6] to-[#007AFF] text-white rounded-[10px] text-[12px] sm:text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Analyze Portfolio
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading Recommendations */}
+          {loadingRecommendations && (
+            <div className="bg-gradient-to-br from-[#5856D6]/5 to-[#007AFF]/5 rounded-[16px] sm:rounded-[20px] border border-[#5856D6]/20 p-4 sm:p-5">
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="w-5 h-5 text-[#5856D6] animate-spin" />
+                <span className="text-[13px] text-[#1d1d1f] font-medium">Analyzing portfolio with AI...</span>
               </div>
             </div>
           )}
@@ -815,6 +1071,139 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* AI Multi-Agent Recommendations Section */}
+          {!compact && (
+            <div className="bg-gradient-to-br from-[#f8f9ff] to-[#f0f4ff] rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#007AFF]/10 p-3 sm:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[12px] flex items-center justify-center">
+                    <Brain className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
+                      AI Multi-Agent Recommendations
+                    </h3>
+                    <span className="text-[11px] text-[#86868b]">
+                      LeadAgent • RiskAgent • HedgingAgent orchestration
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={loadRecommendations}
+                  disabled={loadingRecommendations}
+                  className="p-2 rounded-[10px] hover:bg-[#007AFF]/10 transition-colors disabled:opacity-50"
+                  title="Refresh recommendations"
+                >
+                  <RefreshCw className={`w-4 h-4 text-[#007AFF] ${loadingRecommendations ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {loadingRecommendations ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-[#007AFF]/30 border-t-[#007AFF] rounded-full animate-spin" />
+                    <span className="text-[13px] text-[#86868b]">Multi-agent analysis in progress...</span>
+                  </div>
+                </div>
+              ) : recommendations.length > 0 ? (
+                <div className="space-y-3">
+                  {recommendations.map((rec, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="p-4 bg-white rounded-[14px] border border-[#007AFF]/10 hover:border-[#007AFF]/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[14px] font-semibold text-[#1d1d1f]">
+                              {rec.strategy}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              rec.confidence >= 0.7 
+                                ? 'bg-[#34C759]/10 text-[#34C759]' 
+                                : rec.confidence >= 0.5 
+                                  ? 'bg-[#FF9500]/10 text-[#FF9500]'
+                                  : 'bg-[#86868b]/10 text-[#86868b]'
+                            }`}>
+                              {(rec.confidence * 100).toFixed(0)}% Confidence
+                            </span>
+                          </div>
+                          <p className="text-[12px] text-[#86868b] leading-relaxed">
+                            {rec.description}
+                          </p>
+                          {(rec as any).agentSource && (
+                            <div className="flex items-center gap-1 mt-2">
+                              <Sparkles className="w-3 h-3 text-[#5856D6]" />
+                              <span className="text-[10px] text-[#5856D6] font-medium">
+                                {(rec as any).agentSource}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[11px] text-[#86868b] mb-1">Risk Reduction</div>
+                          <div className="text-[15px] font-bold text-[#34C759]">
+                            {((rec.expectedReduction || 0) * 100).toFixed(0)}%
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {rec.actions && rec.actions.length > 0 && (
+                        <div className="flex items-center justify-between pt-3 border-t border-[#e8e8ed]">
+                          <div className="flex items-center gap-3 text-[11px] text-[#86868b]">
+                            <span className={`font-semibold ${
+                              rec.actions[0].action === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#34C759]'
+                            }`}>
+                              {rec.actions[0].action} {rec.actions[0].asset}
+                            </span>
+                            <span>Size: {rec.actions[0].size?.toFixed(4) || '0.25'}</span>
+                            <span>{rec.actions[0].leverage || 5}x leverage</span>
+                          </div>
+                          <button
+                            onClick={() => executeRecommendation(rec)}
+                            disabled={executingRecommendation === rec.strategy}
+                            className="px-4 py-2 bg-[#007AFF] text-white rounded-[10px] text-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {executingRecommendation === rec.strategy ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                Executing...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-3.5 h-3.5" />
+                                Execute
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 bg-[#f5f5f7] rounded-[14px] flex items-center justify-center mx-auto mb-3">
+                    <Brain className="w-6 h-6 text-[#86868b]" />
+                  </div>
+                  <p className="text-[13px] text-[#86868b] mb-3">
+                    No recommendations yet. Click refresh to run multi-agent analysis.
+                  </p>
+                  <button
+                    onClick={loadRecommendations}
+                    className="px-4 py-2 bg-[#007AFF] text-white rounded-[10px] text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                  >
+                    Run AI Analysis
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
