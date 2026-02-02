@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         strategy: `${hedgeSide} ${dominantAsset.symbol} Hedge`,
         confidence: Math.max(0.5, 1 - (riskAnalysis.totalRisk / 100)),
         expectedReduction: riskAnalysis.volatility * 0.5, // Aim to reduce 50% of volatility
-        description: riskAnalysis.recommendation || `Risk-adjusted ${hedgeSide.toLowerCase()} hedge based on ${riskAnalysis.marketSentiment} sentiment`,
+        description: riskAnalysis.recommendations?.[0] || `Risk-adjusted ${hedgeSide.toLowerCase()} hedge based on ${riskAnalysis.marketSentiment} sentiment`,
         riskScore: riskAnalysis.totalRisk,
         volatility: riskAnalysis.volatility,
         sentiment: riskAnalysis.marketSentiment,
