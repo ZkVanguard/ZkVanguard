@@ -266,5 +266,69 @@
     "preferencesDescription": "Mémoriser vos paramètres et préférences",
     "rejectOptional": "Refuser les optionnels",
     "savePreferences": "Enregistrer les préférences"
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "Janvier 2026",
+    "title": "Livre Blanc ZkVanguard",
+    "subtitle": "Gestion prédictive des risques par IA avec confidentialité Zero-Knowledge pour les actifs numériques institutionnels",
+    "readButton": "Lire le livre blanc",
+    "toc": "Table des matières",
+    "sections": {
+      "abstract": "Résumé",
+      "introduction": "Introduction et opportunité de marché",
+      "problem": "Le problème : Gestion réactive des risques",
+      "solution": "Notre solution : Intelligence prédictive",
+      "architecture": "Architecture technique",
+      "agents": "Système multi-agents IA",
+      "zkp": "Couche de confidentialité Zero-Knowledge",
+      "gasless": "Protocole de transaction sans gas (x402)",
+      "predictions": "Intégration des marchés prédictifs",
+      "multichain": "Stratégie multi-chaînes",
+      "security": "Analyse de sécurité",
+      "tokenomics": "Tokenomics et économie",
+      "roadmap": "Feuille de route",
+      "conclusion": "Conclusion",
+      "references": "Références"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard introduit un changement de paradigme dans la gestion des risques des actifs numériques institutionnels en combinant des agents IA autonomes avec l'intelligence des marchés prédictifs participatifs et la cryptographie zero-knowledge post-quantique. Contrairement aux systèmes réactifs traditionnels qui répondent après les crashs de marché, l'architecture prédictive de ZkVanguard anticipe les événements de volatilité 3 à 7 jours à l'avance, permettant une protection préventive du portefeuille.",
+      "p1": "La plateforme orchestre six agents IA spécialisés—Lead, Risque, Hedging, Règlement, Reporting et Surveillance des prix—qui analysent de manière autonome les portefeuilles, consomment les données des marchés prédictifs en temps réel de Delphi/Polymarket, génèrent des stratégies de couverture mathématiquement optimales et exécutent des transactions sans gas sur la blockchain Cronos. Toutes les données sensibles du portefeuille restent privées grâce à notre système de preuves ZK-STARK accéléré par CUDA avec une sécurité cible de 512 bits.",
+      "p2": "Avec 16 000 milliards de dollars d'actifs réels tokenisés (RWA) projetés d'ici 2030 et le capital institutionnel actuellement en attente en raison d'une infrastructure de risque inadéquate, ZkVanguard comble un écart critique du marché. Notre protocole x402 sans gas élimine les frais de transaction (couverture de 97,4% du gas)."
+    },
+    "introduction": {
+      "opportunity": "L'opportunité de 16 000 milliards de dollars",
+      "opportunityText": "Selon le rapport 2024 du Boston Consulting Group, le marché des actifs réels tokenisés devrait atteindre 16 000 milliards de dollars d'ici 2030, représentant l'une des plus grandes migrations de richesse de l'histoire financière.",
+      "barrier1Title": "Gestion réactive des risques :",
+      "barrier1": "Les outils existants ne répondent qu'après les crashs de marché, entraînant des drawdowns de 15-30% avant l'activation de la protection",
+      "barrier2Title": "Vulnérabilités de confidentialité :",
+      "barrier2": "La transparence des blockchains publiques expose les stratégies de trading institutionnelles",
+      "barrier3Title": "Coûts de transaction prohibitifs :",
+      "barrier3": "Les frais de gas de 5-50$ par transaction créent une inefficacité opérationnelle de 60-80%",
+      "timing": "Timing du marché",
+      "timingText": "La convergence de plusieurs développements technologiques et réglementaires crée une fenêtre d'entrée optimale sur le marché :",
+      "timing1Title": "Maturation des marchés prédictifs :",
+      "timing1": "Polymarket et plateformes similaires ont démontré une précision de plus de 85% sur les événements majeurs",
+      "timing2Title": "Avancement technologique ZK :",
+      "timing2": "Les preuves ZK-STARK atteignent désormais des performances pratiques (génération en 2-5 secondes) avec des garanties de sécurité post-quantique",
+      "timing3Title": "Adoption institutionnelle de la crypto :",
+      "timing3": "BlackRock, Fidelity et les grandes banques ont lancé des produits d'actifs numériques",
+      "timing4Title": "Clarté réglementaire :",
+      "timing4": "MiCA en Europe et les directives évolutives de la SEC fournissent des cadres de conformité plus clairs"
+    },
+    "problem": {
+      "paradigm": "Le paradigme réactif",
+      "paradigmText": "La gestion traditionnelle des risques cryptographiques fonctionne sur un paradigme fondamentalement défectueux : la réaction plutôt que la prédiction.",
+      "costTitle": "Le coût de la réaction",
+      "costText": "L'analyse des événements majeurs du marché de 2020-2025 révèle le véritable coût de la gestion réactive des risques :",
+      "tableEvent": "Événement",
+      "tableDrop": "Chute totale",
+      "tableLoss": "Perte avant couverture",
+      "tablePredictable": "Prévisible ?"
+    },
+    "conclusion": {
+      "title": "Conclusion",
+      "text": "ZkVanguard représente un changement de paradigme fondamental dans la gestion des risques des actifs numériques institutionnels. En combinant l'intelligence IA prédictive avec la confidentialité cryptographique post-quantique et l'exécution sans gas, nous abordons les trois barrières critiques empêchant l'adoption institutionnelle."
+    }
   }
 }

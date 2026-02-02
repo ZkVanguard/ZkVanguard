@@ -266,5 +266,69 @@
     "preferencesDescription": "설정 및 환경설정 기억",
     "rejectOptional": "선택사항 거부",
     "savePreferences": "설정 저장"
+  },
+  "whitepaper": {
+    "version": "버전 1.0",
+    "date": "2026년 1월",
+    "title": "ZkVanguard 백서",
+    "subtitle": "기관 디지털 자산을 위한 AI 기반 예측적 리스크 관리와 영지식 프라이버시",
+    "readButton": "백서 읽기",
+    "toc": "목차",
+    "sections": {
+      "abstract": "개요",
+      "introduction": "소개 및 시장 기회",
+      "problem": "문제: 반응적 리스크 관리",
+      "solution": "솔루션: 예측 인텔리전스",
+      "architecture": "기술 아키텍처",
+      "agents": "멀티 에이전트 AI 시스템",
+      "zkp": "영지식 프라이버시 레이어",
+      "gasless": "가스리스 트랜잭션 프로토콜 (x402)",
+      "predictions": "예측 시장 통합",
+      "multichain": "멀티체인 전략",
+      "security": "보안 분석",
+      "tokenomics": "토큰노믹스 및 경제",
+      "roadmap": "로드맵",
+      "conclusion": "결론",
+      "references": "참고문헌"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard는 자율 AI 에이전트와 크라우드소싱 예측 시장 인텔리전스, 포스트 양자 영지식 암호학을 결합하여 기관 디지털 자산 리스크 관리의 패러다임 전환을 도입합니다. 시장 폭락 후 대응하는 전통적인 반응적 시스템과 달리, ZkVanguard의 예측 아키텍처는 3-7일 전에 변동성 이벤트를 예측하여 선제적 포트폴리오 보호를 가능하게 합니다.",
+      "p1": "플랫폼은 6개의 전문 AI 에이전트(리드, 리스크, 헤징, 결제, 리포팅, 가격 모니터)를 조율하여 자율적으로 포트폴리오를 분석하고, Delphi/Polymarket의 실시간 예측 시장 데이터를 소비하며, 수학적으로 최적화된 헤지 전략을 생성하고, Cronos 블록체인에서 가스리스 트랜잭션을 실행합니다.",
+      "p2": "2030년까지 16조 달러의 토큰화된 실물 자산(RWA)이 예상되고 부적절한 리스크 인프라로 인해 기관 자본이 현재 대기 중인 상황에서, ZkVanguard는 중요한 시장 격차를 해결합니다. x402 가스리스 프로토콜은 거래 수수료를 제거합니다 (97.4% 가스 커버리지)."
+    },
+    "introduction": {
+      "opportunity": "16조 달러의 기회",
+      "opportunityText": "보스턴 컨설팅 그룹의 2024년 보고서에 따르면, 토큰화된 실물 자산 시장은 2030년까지 16조 달러에 달할 것으로 예상됩니다.",
+      "barrier1Title": "반응적 리스크 관리:",
+      "barrier1": "기존 도구는 시장 폭락 후에만 대응하여 보호가 활성화되기 전 15-30% 포트폴리오 드로다운 발생",
+      "barrier2Title": "프라이버시 취약점:",
+      "barrier2": "퍼블릭 블록체인 투명성이 기관 거래 전략을 노출",
+      "barrier3Title": "높은 거래 비용:",
+      "barrier3": "거래당 5-50달러의 가스 수수료가 60-80% 운영 비효율 발생",
+      "timing": "시장 타이밍",
+      "timingText": "여러 기술적 및 규제적 발전의 수렴이 최적의 시장 진입 창을 만들고 있습니다:",
+      "timing1Title": "예측 시장 성숙:",
+      "timing1": "Polymarket과 유사한 플랫폼이 주요 이벤트에서 85% 이상의 정확도를 입증",
+      "timing2Title": "ZK 기술 발전:",
+      "timing2": "ZK-STARK 증명이 이제 실용적인 성능(2-5초 생성)과 포스트 양자 보안 보장을 달성",
+      "timing3Title": "기관 암호화폐 채택:",
+      "timing3": "BlackRock, Fidelity 및 주요 은행들이 디지털 자산 제품을 출시",
+      "timing4Title": "규제 명확성:",
+      "timing4": "유럽의 MiCA와 진화하는 SEC 지침이 더 명확한 컴플라이언스 프레임워크 제공"
+    },
+    "problem": {
+      "paradigm": "반응적 패러다임",
+      "paradigmText": "전통적인 암호화폐 리스크 관리는 근본적으로 결함이 있는 패러다임에서 운영됩니다: 예측이 아닌 반응.",
+      "costTitle": "반응의 비용",
+      "costText": "2020-2025년 주요 시장 이벤트 분석은 반응적 리스크 관리의 실제 비용을 드러냅니다:",
+      "tableEvent": "이벤트",
+      "tableDrop": "총 하락",
+      "tableLoss": "헤지 전 손실",
+      "tablePredictable": "예측 가능?"
+    },
+    "conclusion": {
+      "title": "결론",
+      "text": "ZkVanguard는 기관 디지털 자산 리스크 관리의 근본적인 패러다임 전환을 나타냅니다. 예측 AI 인텔리전스와 포스트 양자 암호화 프라이버시, 가스리스 실행을 결합하여 기관 채택을 방해하는 세 가지 중요한 장벽을 해결합니다."
+    }
   }
 }

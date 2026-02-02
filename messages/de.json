@@ -266,5 +266,69 @@
     "preferencesDescription": "Ihre Einstellungen und Präferenzen merken",
     "rejectOptional": "Optionale ablehnen",
     "savePreferences": "Einstellungen speichern"
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "Januar 2026",
+    "title": "ZkVanguard Whitepaper",
+    "subtitle": "KI-gestütztes prädiktives Risikomanagement mit Zero-Knowledge-Datenschutz für institutionelle digitale Vermögenswerte",
+    "readButton": "Whitepaper lesen",
+    "toc": "Inhaltsverzeichnis",
+    "sections": {
+      "abstract": "Zusammenfassung",
+      "introduction": "Einführung & Marktchance",
+      "problem": "Das Problem: Reaktives Risikomanagement",
+      "solution": "Unsere Lösung: Prädiktive Intelligenz",
+      "architecture": "Technische Architektur",
+      "agents": "Multi-Agenten-KI-System",
+      "zkp": "Zero-Knowledge-Datenschutzschicht",
+      "gasless": "Gasfreies Transaktionsprotokoll (x402)",
+      "predictions": "Integration von Prognosemärkten",
+      "multichain": "Multi-Chain-Strategie",
+      "security": "Sicherheitsanalyse",
+      "tokenomics": "Tokenomics & Wirtschaft",
+      "roadmap": "Roadmap",
+      "conclusion": "Fazit",
+      "references": "Referenzen"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard führt einen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte ein, indem autonome KI-Agenten mit crowdsourced Prognosemarkeintelligenz und post-quantenresistenter Zero-Knowledge-Kryptographie kombiniert werden. Im Gegensatz zu traditionellen reaktiven Systemen, die erst nach Marktcrashs reagieren, antizipiert die prädiktive Architektur von ZkVanguard Volatilitätsereignisse 3-7 Tage im Voraus.",
+      "p1": "Die Plattform orchestriert sechs spezialisierte KI-Agenten—Lead, Risiko, Hedging, Settlement, Reporting und Preisüberwachung—die autonom Portfolios analysieren, Echtzeit-Prognosemarktdaten von Delphi/Polymarket konsumieren, mathematisch optimale Hedge-Strategien generieren und gasfreie Transaktionen auf der Cronos-Blockchain ausführen.",
+      "p2": "Mit prognostizierten 16 Billionen Dollar an tokenisierten Real-World-Assets (RWA) bis 2030 und institutionellem Kapital, das derzeit aufgrund unzureichender Risikoinfrastruktur abwartet, adressiert ZkVanguard eine kritische Marktlücke. Unser x402-Gasfreies-Protokoll eliminiert Transaktionsgebühren (97,4% Gas-Abdeckung)."
+    },
+    "introduction": {
+      "opportunity": "Die 16-Billionen-Dollar-Chance",
+      "opportunityText": "Laut dem BCG-Bericht 2024 wird der Markt für tokenisierte Real-World-Assets bis 2030 voraussichtlich 16 Billionen Dollar erreichen.",
+      "barrier1Title": "Reaktives Risikomanagement:",
+      "barrier1": "Bestehende Tools reagieren erst nach Marktcrashs, was zu 15-30% Portfolio-Drawdowns führt",
+      "barrier2Title": "Datenschutz-Schwachstellen:",
+      "barrier2": "Öffentliche Blockchain-Transparenz legt institutionelle Handelsstrategien offen",
+      "barrier3Title": "Prohibitive Transaktionskosten:",
+      "barrier3": "Gas-Gebühren von 5-50$ pro Transaktion schaffen 60-80% operative Ineffizienz",
+      "timing": "Markt-Timing",
+      "timingText": "Die Konvergenz mehrerer technologischer und regulatorischer Entwicklungen schafft ein optimales Markteintrittsfenster:",
+      "timing1Title": "Reife der Prognosemärkte:",
+      "timing1": "Polymarket und ähnliche Plattformen haben 85%+ Genauigkeit bei wichtigen Ereignissen demonstriert",
+      "timing2Title": "ZK-Technologie-Fortschritt:",
+      "timing2": "ZK-STARK-Beweise erreichen jetzt praktische Leistung (2-5 Sekunden Generierung) mit post-quanten Sicherheitsgarantien",
+      "timing3Title": "Institutionelle Krypto-Adoption:",
+      "timing3": "BlackRock, Fidelity und große Banken haben digitale Vermögensprodukte eingeführt",
+      "timing4Title": "Regulatorische Klarheit:",
+      "timing4": "MiCA in Europa und SEC-Richtlinien bieten klarere Compliance-Rahmen"
+    },
+    "problem": {
+      "paradigm": "Das reaktive Paradigma",
+      "paradigmText": "Traditionelles Kryptowährungs-Risikomanagement basiert auf einem grundlegend fehlerhaften Paradigma: Reaktion statt Vorhersage.",
+      "costTitle": "Die Kosten der Reaktion",
+      "costText": "Die Analyse wichtiger Marktereignisse von 2020-2025 offenbart die wahren Kosten des reaktiven Risikomanagements:",
+      "tableEvent": "Ereignis",
+      "tableDrop": "Gesamtrückgang",
+      "tableLoss": "Verlust vor Absicherung",
+      "tablePredictable": "Vorhersehbar?"
+    },
+    "conclusion": {
+      "title": "Fazit",
+      "text": "ZkVanguard repräsentiert einen fundamentalen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte. Durch die Kombination von prädiktiver KI-Intelligenz mit post-quanten kryptographischer Privatsphäre und gasfreier Ausführung adressieren wir die drei kritischen Barrieren, die die institutionelle Adoption verhindern."
+    }
   }
 }
