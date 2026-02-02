@@ -58,6 +58,8 @@
     "logs:agents": "tail -f logs/agents.log",
     "logs:contracts": "tail -f logs/contracts.log",
     "fund:wallets": "bun run scripts/setup/fund-wallets.ts",
+    "translate": "bun run scripts/translate-whitepaper.ts",
+    "translate:whitepaper": "bun run scripts/translate-whitepaper.ts",
     "dev": "bun run dev:next",
     "build": "next build",
     "build:full": "bun run compile && bun run frontend:build",

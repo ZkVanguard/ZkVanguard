@@ -223,15 +223,15 @@ export default function WhitepaperPage() {
               </table>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.3 Privacy Exposure</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.3 {t('problem.privacy')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              Public blockchain transparency creates significant competitive disadvantages for institutional traders:
+              {t('problem.privacyText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
-              <li><strong>Front-Running:</strong> MEV bots extract $500M+ annually by detecting and front-running large orders</li>
-              <li><strong>Strategy Leakage:</strong> Competitors can reverse-engineer trading strategies from on-chain activity</li>
-              <li><strong>Regulatory Risk:</strong> Public portfolio exposure may violate confidentiality requirements</li>
-              <li><strong>Market Impact:</strong> Visible large positions attract predatory trading</li>
+              <li><strong>{t('problem.frontRunning')}</strong> {t('problem.frontRunningText')}</li>
+              <li><strong>{t('problem.strategyLeakage')}</strong> {t('problem.strategyLeakageText')}</li>
+              <li><strong>{t('problem.regulatoryRisk')}</strong> {t('problem.regulatoryRiskText')}</li>
+              <li><strong>{t('problem.marketImpact')}</strong> {t('problem.marketImpactText')}</li>
             </ul>
           </section>
 
@@ -239,12 +239,12 @@ export default function WhitepaperPage() {
           <section id="solution" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">4</span>
-              Our Solution: Predictive Intelligence
+              {t('solution.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.1 The Predictive Paradigm</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.1 {t('solution.paradigm')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard introduces a fundamentally different approach: predictive risk management powered by crowd-sourced intelligence. Instead of reacting to crashes, we anticipate them:
+              {t('solution.paradigmText')}
             </p>
             <div className="bg-green-50 p-6 rounded-xl my-6 font-mono text-sm">
               <div className="text-green-600">
@@ -260,35 +260,35 @@ export default function WhitepaperPage() {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.2 Core Innovation Stack</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.2 {t('solution.coreStack')}</h3>
             <div className="grid md:grid-cols-2 gap-6 my-6">
               <div className="bg-[#f5f5f7] p-6 rounded-xl">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">🤖 Multi-Agent AI System</h4>
-                <p className="text-[#424245] text-sm">Six specialized agents coordinate autonomously to analyze, recommend, execute, and report on portfolio protection strategies.</p>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">🤖 {t('solution.multiAgent')}</h4>
+                <p className="text-[#424245] text-sm">{t('solution.multiAgentDesc')}</p>
               </div>
               <div className="bg-[#f5f5f7] p-6 rounded-xl">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">🔮 Prediction Intelligence</h4>
-                <p className="text-[#424245] text-sm">Real-time integration with Delphi/Polymarket prediction markets for crowd-sourced forecasting with 78%+ accuracy.</p>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">🔮 {t('solution.prediction')}</h4>
+                <p className="text-[#424245] text-sm">{t('solution.predictionDesc')}</p>
               </div>
               <div className="bg-[#f5f5f7] p-6 rounded-xl">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">🔐 ZK-STARK Privacy</h4>
-                <p className="text-[#424245] text-sm">CUDA-accelerated post-quantum zero-knowledge proofs (512-bit security, 180-bit soundness) protect all portfolio and trading data from public exposure.</p>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">🔐 {t('solution.zkStark')}</h4>
+                <p className="text-[#424245] text-sm">{t('solution.zkStarkDesc')}</p>
               </div>
               <div className="bg-[#f5f5f7] p-6 rounded-xl">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">⚡ Gasless Execution</h4>
-                <p className="text-[#424245] text-sm">x402 protocol provides 97.4% gas coverage, reducing transaction costs from $15-50 to effectively $0.00.</p>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">⚡ {t('solution.gasless')}</h4>
+                <p className="text-[#424245] text-sm">{t('solution.gaslessDesc')}</p>
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.3 User Experience Flow</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.3 {t('solution.uxFlow')}</h3>
             <ol className="list-decimal pl-6 text-[#424245] space-y-3">
-              <li><strong>Connect Portfolio (5 sec):</strong> Link wallet or RWA positions—AI automatically discovers all assets</li>
-              <li><strong>AI Risk Analysis (10 sec):</strong> Risk Agent calculates VaR, Sharpe ratio, and checks prediction markets</li>
-              <li><strong>Review Prediction (10 sec):</strong> User sees &quot;🔮 Delphi Alert: 73% probability BTC volatility spike&quot;</li>
-              <li><strong>User Decision (5 sec):</strong> Approve hedge, add to watchlist, or dismiss</li>
-              <li><strong>Auto-Execution (instant):</strong> Hedging Agent opens position on Moonlander perpetuals</li>
-              <li><strong>Gasless Settlement (instant):</strong> x402 processes transaction with $0.00 fees</li>
-              <li><strong>ZK Verification (2-5 sec):</strong> Privacy-preserved proof published on-chain</li>
+              <li>{t('solution.ux1')}</li>
+              <li>{t('solution.ux2')}</li>
+              <li>{t('solution.ux3')}</li>
+              <li>{t('solution.ux4')}</li>
+              <li>{t('solution.ux5')}</li>
+              <li>{t('solution.ux6')}</li>
+              <li>{t('solution.ux7')}</li>
             </ol>
           </section>
 
@@ -296,12 +296,12 @@ export default function WhitepaperPage() {
           <section id="architecture" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">5</span>
-              Technical Architecture
+              {t('architecture.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.1 System Overview</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.1 {t('architecture.overview')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard employs a layered architecture designed for security, scalability, and autonomous operation:
+              {t('architecture.overviewText')}
             </p>
             <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
               <pre style={{ color: '#4ade80' }}>{`┌─────────────────────────────────────────────────────────────────┐
@@ -346,14 +346,14 @@ export default function WhitepaperPage() {
 └─────────────────────────────────────────────────────────────────┘`}</pre>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.2 Technology Stack</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.2 {t('architecture.techStack')}</h3>
             <div className="overflow-x-auto my-6">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Layer</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Technology</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Purpose</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('architecture.tableLayer')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('architecture.tableTechnology')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('architecture.tablePurpose')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5e5e5]">
@@ -391,9 +391,9 @@ export default function WhitepaperPage() {
               </table>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.3 Deployed Smart Contracts</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.3 {t('architecture.contracts')}</h3>
             <p className="text-[#424245] leading-relaxed mb-4">
-              All smart contracts are deployed on Cronos Testnet (Chain ID: 338) and verified:
+              {t('architecture.contractsText')}
             </p>
             <div className="bg-[#f5f5f7] p-6 rounded-xl font-mono text-sm">
               <div className="space-y-2">
@@ -409,16 +409,16 @@ export default function WhitepaperPage() {
           <section id="agents" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">6</span>
-              Multi-Agent AI System
+              {t('agents.title')}
             </h2>
             
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard deploys six specialized AI agents that operate autonomously while maintaining human-in-the-loop control for critical decisions:
+              {t('agents.intro')}
             </p>
 
             <div className="space-y-6 my-8">
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">🎯 Lead Agent - Strategy Orchestrator</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">🎯 {t('agents.lead')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Coordinates all agent activities and workflow</li>
                   <li>Processes natural language commands via Crypto.com AI SDK</li>
@@ -428,7 +428,7 @@ export default function WhitepaperPage() {
               </div>
 
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">📊 Risk Agent - Real-Time Monitoring</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">📊 {t('agents.risk')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Calculates Value at Risk (VaR), volatility, Sharpe ratio, max drawdown</li>
                   <li>Monitors Delphi prediction markets for early warning signals</li>
@@ -438,7 +438,7 @@ export default function WhitepaperPage() {
               </div>
 
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">🛡️ Hedging Agent - Predictive Execution</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">🛡️ {t('agents.hedging')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Consumes prediction market data to calculate optimal hedge ratios</li>
                   <li>Adjusts hedge size based on Delphi probability (1.0-1.5x multiplier)</li>
@@ -448,7 +448,7 @@ export default function WhitepaperPage() {
               </div>
 
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">⚡ Settlement Agent - Gasless Transactions</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">⚡ {t('agents.settlement')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Processes all transactions via x402 gasless protocol</li>
                   <li>Achieves 97.4% gas refund coverage on Cronos</li>
@@ -458,7 +458,7 @@ export default function WhitepaperPage() {
               </div>
 
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">📝 Reporting Agent - ZK-Verified Compliance</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">📝 {t('agents.reporting')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Generates portfolio reports with ZK-STARK proofs</li>
                   <li>Enables auditors to verify compliance without seeing sensitive data</li>
@@ -468,7 +468,7 @@ export default function WhitepaperPage() {
               </div>
 
               <div className="border border-[#e5e5e5] rounded-xl p-6">
-                <h4 className="font-semibold text-[#1d1d1f] mb-2">👁️ Price Monitor Agent - Autonomous Surveillance</h4>
+                <h4 className="font-semibold text-[#1d1d1f] mb-2">👁️ {t('agents.priceMonitor')}</h4>
                 <ul className="list-disc pl-6 text-[#424245] space-y-1 text-sm">
                   <li>Tracks real-time prices across CoinGecko and Crypto.com APIs</li>
                   <li>Maintains configurable price alerts and thresholds</li>
@@ -483,12 +483,12 @@ export default function WhitepaperPage() {
           <section id="zkp" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">7</span>
-              Zero-Knowledge Privacy Layer
+              {t('zkp.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.1 ZK-STARK Protocol</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.1 {t('zkp.protocol')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard implements a CUDA-accelerated ZK-STARK (Zero-Knowledge Scalable Transparent ARgument of Knowledge) proof system based on the FRI (Fast Reed-Solomon Interactive Oracle Proof) protocol, following the specifications in Ben-Sasson et al. (ePrint 2018/046, 2018/828):
+              {t('zkp.protocolText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Post-Quantum Security:</strong> 512-bit target security with 180-bit effective soundness via 80 FRI queries and 20-bit proof-of-work grinding (per FRI Theorem 1.2: ε ≤ ρ^q)</li>
@@ -498,7 +498,7 @@ export default function WhitepaperPage() {
               <li><strong>CUDA Acceleration:</strong> GPU-optimized NTT and field operations via CuPy/Numba for sub-second proof generation</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.2 Security Parameters &amp; Soundness Proof</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.2 {t('zkp.security')}</h3>
             <p className="text-[#424245] leading-relaxed mb-4">
               Per FRI Theorem 1.2 (Ben-Sasson et al. 2018/828), soundness error ε ≤ ρ^q where ρ is the rate and q is the number of queries:
             </p>
@@ -533,15 +533,14 @@ Security Comparison:
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.3 Formal Mathematical Verification</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.3 {t('zkp.verification')}</h3>
             <div className="bg-green-50 border border-green-200 p-6 rounded-xl my-6">
               <div className="flex items-start gap-4">
                 <span className="text-3xl">✓</span>
                 <div>
-                  <h4 className="font-semibold text-green-800 mb-2">All 6 Cryptographic Theorems Proved</h4>
+                  <h4 className="font-semibold text-green-800 mb-2">{t('zkp.verificationTitle')}</h4>
                   <p className="text-sm text-green-700 mb-3">
-                    Our implementation has been formally verified against the academic definitions in Ben-Sasson et al. 
-                    (ePrint 2018/046, 2018/828). This is not just testing—it&apos;s mathematical proof.
+                    {t('zkp.verificationText')}
                   </p>
                   <Link 
                     href="/zk-verification"
@@ -606,9 +605,9 @@ Security Comparison:
               </table>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.4 Privacy-Preserving Hedge Architecture</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.4 {t('zkp.hedgeArch')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              When executing hedges on public blockchains, ZkVanguard protects user privacy through:
+              {t('zkp.hedgeArchText')}
             </p>
             <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
               <pre style={{ color: '#4ade80' }}>{`PUBLIC (On-Chain)           PRIVATE (ZK-Protected)
@@ -628,12 +627,12 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="gasless" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">8</span>
-              Gasless Transaction Protocol (x402)
+              {t('gasless.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.1 Protocol Overview</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.1 {t('gasless.overview')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              The x402 protocol eliminates gas fees for end users by leveraging EIP-3009 authorization and protocol-sponsored transactions:
+              {t('gasless.overviewText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Gas Coverage:</strong> 97.4% of transaction costs refunded</li>
@@ -642,14 +641,14 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               <li><strong>Transaction Types:</strong> Swaps, deposits, rebalances, hedge execution</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.2 Technical Implementation</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.2 {t('gasless.implementation')}</h3>
             <div className="bg-[#f5f5f7] p-6 rounded-xl my-6 font-mono text-sm">
               <p className="mb-2"><strong>Contract:</strong> 0x44098d0dE36e157b4C1700B48d615285C76fdE47</p>
               <p className="mb-2"><strong>Protocol:</strong> EIP-3009 (transferWithAuthorization)</p>
               <p><strong>TCRO Balance:</strong> 12.27 (sufficient for 1,200+ gasless transactions)</p>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.3 Flow Diagram</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.3 {t('gasless.flowDiagram')}</h3>
             <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
               <pre style={{ color: '#4ade80' }}>{`User Request → x402 Service → Eligibility Check → Execute Gasless
                                     │
@@ -671,12 +670,12 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="predictions" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">9</span>
-              Prediction Market Integration
+              {t('predictions.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.1 Data Sources</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.1 {t('predictions.sources')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard integrates with leading prediction markets to provide crowd-sourced forecasting:
+              {t('predictions.sourcesText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>Polymarket:</strong> Largest prediction market with $1B+ trading volume</li>
@@ -684,9 +683,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               <li><strong>Historical Accuracy:</strong> 78-85% on major events</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.2 Hedge Ratio Calculation</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.2 {t('predictions.hedgeRatio')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              The Hedging Agent uses prediction probabilities to dynamically adjust hedge ratios:
+              {t('predictions.hedgeRatioText')}
             </p>
             <div className="bg-[#f5f5f7] p-6 rounded-xl my-6 font-mono text-sm">
               <p className="mb-2">Base Hedge Ratio = 50% of exposure</p>
@@ -695,15 +694,15 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               <p>Final Hedge = 50% × 1.23 = 61.5% exposure protection</p>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.3 Example Prediction Scenarios</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.3 {t('predictions.scenarios')}</h3>
             <div className="overflow-x-auto my-6">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Market Question</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Probability</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Impact</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">AI Action</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('predictions.tableQuestion')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('predictions.tableProbability')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('predictions.tableImpact')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('predictions.tableAction')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5e5e5]">
@@ -740,18 +739,18 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="multichain" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">10</span>
-              Multi-Chain Strategy
+              {t('multichain.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.1 Supported Networks</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.1 {t('multichain.networks')}</h3>
             <div className="overflow-x-auto my-6">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Chain</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Type</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Status</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Features</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('multichain.tableChain')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('multichain.tableType')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('multichain.tableStatus')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('multichain.tableFeatures')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5e5e5]">
@@ -783,7 +782,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               </table>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.2 Expansion Roadmap</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.2 {t('multichain.roadmap')}</h3>
             <ol className="list-decimal pl-6 text-[#424245] space-y-2">
               <li><strong>Phase 1 (Current):</strong> Cronos ecosystem (EVM + zkEVM)</li>
               <li><strong>Phase 2 (Q1 2026):</strong> SUI integration (non-EVM validation)</li>
@@ -796,10 +795,10 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="security" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">11</span>
-              Security Analysis
+              {t('security.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.1 Smart Contract Security</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.1 {t('security.contracts')}</h3>
             <ul className="list-disc pl-6 text-[#424245] space-y-2">
               <li>Built on OpenZeppelin battle-tested libraries</li>
               <li>All contracts verified on block explorer</li>
@@ -809,7 +808,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               <li>Access control via Ownable pattern</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.2 Cryptographic Security</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.2 {t('security.cryptographic')}</h3>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
               <li><strong>ZK-STARK:</strong> 512-bit target security, 180-bit effective soundness (80 FRI queries × 20-bit grinding)</li>
               <li><strong>Prime Field:</strong> Goldilocks p = 2⁶⁴ - 2³² + 1 (post-quantum resistant, no discrete log/factoring)</li>
@@ -818,7 +817,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               <li><strong>Signatures:</strong> ECDSA with EIP-712 typed data</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.3 Operational Security</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">11.3 {t('security.operational')}</h3>
             <ul className="list-disc pl-6 text-[#424245] space-y-2">
               <li>Non-custodial: Users maintain full key control</li>
               <li>Human-in-the-loop: All hedges require user approval</li>
@@ -832,10 +831,10 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="tokenomics" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">12</span>
-              Tokenomics & Economics
+              {t('tokenomics.title')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.1 Revenue Streams</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.1 {t('tokenomics.revenue')}</h3>
             <div className="space-y-4 my-6">
               <div className="bg-[#f5f5f7] p-4 rounded-xl flex justify-between items-center">
                 <span className="font-medium">Performance Fees (20% of profits)</span>
@@ -855,12 +854,12 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.2 5-Year Projections</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.2 {t('tokenomics.projections')}</h3>
             <div className="overflow-x-auto my-6">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5] text-sm">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
-                    <th className="text-left p-3 font-semibold text-[#1d1d1f]">Metric</th>
+                    <th className="text-left p-3 font-semibold text-[#1d1d1f]">{t('tokenomics.tableMetric')}</th>
                     <th className="text-center p-3 font-semibold text-[#1d1d1f]">2026</th>
                     <th className="text-center p-3 font-semibold text-[#1d1d1f]">2027</th>
                     <th className="text-center p-3 font-semibold text-[#1d1d1f]">2028</th>
@@ -910,29 +909,29 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="roadmap" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">13</span>
-              Roadmap
+              {t('roadmap.title')}
             </h2>
             
             <div className="space-y-6 my-8">
               <div className="border-l-4 border-green-500 pl-6">
-                <h4 className="font-semibold text-[#1d1d1f]">Q1 2026 - Beta Launch ✅</h4>
-                <p className="text-[#424245] text-sm mt-1">5 AI agents, ZK-STARK privacy, x402 gasless, Cronos testnet deployment</p>
+                <h4 className="font-semibold text-[#1d1d1f]">{t('roadmap.q1_2026')}</h4>
+                <p className="text-[#424245] text-sm mt-1">{t('roadmap.q1_2026_desc')}</p>
               </div>
               <div className="border-l-4 border-blue-500 pl-6">
-                <h4 className="font-semibold text-[#1d1d1f]">Q2 2026 - SUI Integration</h4>
-                <p className="text-[#424245] text-sm mt-1">Multi-chain expansion, SUI mainnet deployment, cross-chain portfolio</p>
+                <h4 className="font-semibold text-[#1d1d1f]">{t('roadmap.q2_2026')}</h4>
+                <p className="text-[#424245] text-sm mt-1">{t('roadmap.q2_2026_desc')}</p>
               </div>
               <div className="border-l-4 border-purple-500 pl-6">
-                <h4 className="font-semibold text-[#1d1d1f]">Q3 2026 - Ethereum L2s</h4>
-                <p className="text-[#424245] text-sm mt-1">Arbitrum, Optimism, Base integration, unified multi-chain dashboard</p>
+                <h4 className="font-semibold text-[#1d1d1f]">{t('roadmap.q3_2026')}</h4>
+                <p className="text-[#424245] text-sm mt-1">{t('roadmap.q3_2026_desc')}</p>
               </div>
               <div className="border-l-4 border-orange-500 pl-6">
-                <h4 className="font-semibold text-[#1d1d1f]">Q4 2026 - Advanced Derivatives</h4>
-                <p className="text-[#424245] text-sm mt-1">Full Moonlander integration, options strategies, advanced hedging</p>
+                <h4 className="font-semibold text-[#1d1d1f]">{t('roadmap.q4_2026')}</h4>
+                <p className="text-[#424245] text-sm mt-1">{t('roadmap.q4_2026_desc')}</p>
               </div>
               <div className="border-l-4 border-gray-400 pl-6">
-                <h4 className="font-semibold text-[#1d1d1f]">2027-2030 - Global Scale</h4>
-                <p className="text-[#424245] text-sm mt-1">$100B+ TVL, 10,000+ institutions, IPO-ready platform</p>
+                <h4 className="font-semibold text-[#1d1d1f]">{t('roadmap.2027_2030')}</h4>
+                <p className="text-[#424245] text-sm mt-1">{t('roadmap.2027_2030_desc')}</p>
               </div>
             </div>
           </section>
@@ -959,7 +958,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="references" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">15</span>
-              References
+              {t('references.title')}
             </h2>
             
             <ol className="list-decimal pl-6 text-[#424245] space-y-3 text-sm">
@@ -982,22 +981,22 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
         {/* Footer CTA */}
         <div className="mt-16 text-center">
           <div className="bg-gradient-to-r from-[#007AFF] to-[#5856D6] rounded-2xl p-8 text-white">
-            <h3 className="text-2xl font-bold mb-4">Ready to Experience Predictive Risk Management?</h3>
+            <h3 className="text-2xl font-bold mb-4">{t('footerCta.title')}</h3>
             <p className="text-white/80 mb-6 max-w-xl mx-auto">
-              Join institutional traders who are already protecting their portfolios with AI-powered prediction intelligence.
+              {t('footerCta.subtitle')}
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link 
                 href="/dashboard"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#007AFF] rounded-full font-medium hover:bg-white/90 transition-colors"
               >
-                Launch App
+                {t('footerCta.launchApp')}
               </Link>
               <Link 
                 href="/docs"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-white/20 text-white rounded-full font-medium hover:bg-white/30 transition-colors"
               >
-                View Documentation
+                {t('footerCta.viewDocs')}
               </Link>
             </div>
           </div>

@@ -138,25 +138,190 @@
     "version": "版本 1.0",
     "date": "2026年1月",
     "title": "ZkVanguard 白皮书",
-    "subtitle": "为机构数字资产提供零知识隐私保护的AI驱动预测性风险管理",
+    "subtitle": "面向机构数字资产的AI驱动预测性风险管理与零知识隐私保护",
     "readButton": "阅读白皮书",
     "toc": "目录",
     "sections": {
       "abstract": "摘要",
-      "introduction": "简介与市场机会",
-      "problem": "问题：被动式风险管理",
-      "solution": "我们的解决方案：预测性智能",
+      "introduction": "简介与市场机遇",
+      "problem": "问题：被动风险管理",
+      "solution": "解决方案：预测性智能",
       "architecture": "技术架构",
       "agents": "多代理AI系统",
       "zkp": "零知识隐私层",
       "gasless": "无Gas交易协议 (x402)",
       "predictions": "预测市场集成",
-      "multichain": "多链战略",
+      "multichain": "多链策略",
       "security": "安全分析",
       "tokenomics": "代币经济学",
       "roadmap": "路线图",
       "conclusion": "结论",
       "references": "参考文献"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard通过将自主AI代理与众包预测市场智能和后量子零知识密码学相结合，引入了机构数字资产风险管理的范式转变。与传统的在市场崩盘后才做出响应的被动系统不同，ZkVanguard的预测架构能够提前3-7天预测波动事件，实现投资组合的先发保护。",
+      "p1": "该平台协调六个专业AI代理——领导代理、风险代理、对冲代理、结算代理、报告代理和价格监控代理——自主分析投资组合，消费来自Delphi/Polymarket的实时预测市场数据，生成数学最优对冲策略，并在Cronos区块链上执行无Gas交易。通过我们的CUDA加速ZK-STARK证明系统（512位目标安全性，通过FRI协议实现180位有效可靠性），所有敏感投资组合数据保持私密，同时通过可验证计算保持完全合规。",
+      "p2": "预计到2030年代币化真实世界资产（RWA）将达到16万亿美元，而机构资本目前因风险基础设施不足而处于观望状态，ZkVanguard解决了一个关键的市场缺口。我们的x402无Gas协议消除了交易费用（97.4%的Gas覆盖），而我们的隐私保护对冲架构保护机构交易策略免受抢跑交易和竞争情报暴露。"
+    },
+    "introduction": {
+      "opportunity": "16万亿美元的机遇",
+      "opportunityText": "根据波士顿咨询集团2024年的报告，代币化真实世界资产市场预计到2030年将达到16万亿美元，代表着金融历史上最大的财富迁移之一。目前，1.2万亿美元的机构资本参与去中心化金融，但由于三个关键障碍，这一数字仅占机构总资产的一小部分：",
+      "barrier1Title": "被动风险管理：",
+      "barrier1": "现有工具仅在市场崩盘后做出响应，导致15-30%的投资组合回撤后保护才激活",
+      "barrier2Title": "隐私漏洞：",
+      "barrier2": "公共区块链透明度暴露机构交易策略，使抢跑交易和竞争情报提取成为可能",
+      "barrier3Title": "高昂的交易成本：",
+      "barrier3": "每笔交易5-50美元的Gas费用造成60-80%的运营效率损失，尤其在高波动期间",
+      "timing": "市场时机",
+      "timingText": "多项技术和监管发展的融合创造了最佳的市场进入窗口：",
+      "timing1Title": "预测市场成熟：",
+      "timing1": "Polymarket等平台在重大事件上展示了85%以上的准确率，提供可靠的预测数据",
+      "timing2Title": "ZK技术进步：",
+      "timing2": "ZK-STARK证明现已实现实用性能（2-5秒生成）并具有后量子安全保证",
+      "timing3Title": "机构加密货币采用：",
+      "timing3": "贝莱德、富达和主要银行已推出数字资产产品，标志着主流机构接受",
+      "timing4Title": "监管明确：",
+      "timing4": "欧洲的MiCA和不断发展的SEC指南为机构参与者提供了更清晰的合规框架"
+    },
+    "problem": {
+      "paradigm": "被动范式",
+      "paradigmText": "传统的加密货币风险管理建立在一个根本性缺陷的范式上：反应而非预测。典型的工作流程遵循以下模式：",
+      "costTitle": "反应的代价",
+      "costText": "对2020-2025年主要市场事件的分析揭示了被动风险管理的真实成本：",
+      "tableEvent": "事件",
+      "tableDrop": "总跌幅",
+      "tableLoss": "对冲前损失",
+      "tablePredictable": "可预测?",
+      "privacy": "隐私暴露",
+      "privacyText": "公共区块链的透明度为机构交易者带来了显著的竞争劣势：",
+      "frontRunning": "抢先交易：",
+      "frontRunningText": "MEV 交易机器人每年通过检测并抢先执行大额订单，提取超过5亿美元的价值",
+      "strategyLeakage": "策略泄露：",
+      "strategyLeakageText": "竞争对手可以从链上活动逆向工程交易策略",
+      "regulatoryRisk": "监管风险：",
+      "regulatoryRiskText": "公共投资组合曝光可能违反保密要求",
+      "marketImpact": "市场影响：",
+      "marketImpactText": "显见的大额持仓吸引猎食性交易"
+    },
+    "conclusion": {
+      "title": "结论",
+      "text": "ZkVanguard代表了机构数字资产风险管理的根本性范式转变。通过将预测性AI智能与后量子加密隐私和无Gas执行相结合，我们解决了阻止机构采用的三个关键障碍：被动风险管理、隐私漏洞和高昂的交易成本。"
+    },
+    "solution": {
+      "title": "我们的解决方案：预测智能",
+      "paradigm": "预测范式",
+      "paradigmText": "ZkVanguard 引入了一种根本不同的方法：依托众包智能的预测风险管理。我们不是在故障发生后作出反应，而是提前预见它们：",
+      "coreStack": "核心创新栈",
+      "multiAgent": "多代理AI系统",
+      "multiAgentDesc": "六个专门的代理自治协作，分析、推荐、执行和报告组合保护策略。",
+      "prediction": "预测智能",
+      "predictionDesc": "实时与Delphi/Polymarket预测市场集成，实现众包预测，准确率超过78%。",
+      "zkStark": "ZK-STARK隐私",
+      "zkStarkDesc": "CUDA加速后量子零知识证明（512位安全性，180位稳健性）保护所有投资组合和交易数据免于公开展露。",
+      "gasless": "无gas执行",
+      "gaslessDesc": "x402 协议提供 97.4% 的气体覆盖度，将交易成本从 15-50 美元降低至实际上的 0.00 美元。",
+      "uxFlow": "用户体验流程",
+      "ux1": "连接投资组合（5秒）：链接钱包或实物资产头寸——AI自动发现所有资产",
+      "ux2": "AI风险分析（10秒）：风险代理计算VaR、夏普比率，并检查预测市场",
+      "ux3": "审查预测（10秒）：用户看到“🔮 德尔菲警报：BTC波动性飙升概率为73%”",
+      "ux4": "用户决策（5秒）：批准对冲、加入监控列表或忽略",
+      "ux5": "自动执行（即时）：保证金代理在Moonlander永续合约中开立仓位",
+      "ux6": "无 Gas 结算（即时）：x402 处理交易时无需支付任何费用",
+      "ux7": "零知识验证（2-5秒）：在链上发布隐私保护证明"
+    },
+    "architecture": {
+      "title": "技术架构",
+      "overview": "系统概述",
+      "overviewText": "ZkVanguard采用了一种分层架构，旨在实现安全、可扩展性和自主运行：",
+      "techStack": "技术栈",
+      "tableLayer": "层",
+      "tableTechnology": "技术",
+      "tablePurpose": "目的",
+      "contracts": "部署智能合约",
+      "contractsText": "所有智能合约均部署在Cronos测试网（链ID：338）并已验证："
+    },
+    "agents": {
+      "title": "多代理人工智能系统",
+      "intro": "ZkVanguard 部署了六个专门的AI代理，这些代理在保持人类在环控制的前提下自主运行，并对关键决策进行人工干预：",
+      "lead": "主代理 - 策略 orchestrator",
+      "risk": "风险代理 - 实时监控",
+      "hedging": "套期保值代理 - 预测执行",
+      "settlement": "结算代理 - 无Gas交易",
+      "reporting": "报告代理 - ZK-验证合规性",
+      "priceMonitor": "价格监控代理 - 自主监视"
+    },
+    "zkp": {
+      "title": "零知识隐私层",
+      "protocol": "ZK-STARK 协议",
+      "protocolText": "ZkVanguard 实现了一种基于快速傅里叶消去交互式预言证明（FRI）协议的 CUDA 加速零知识可扩展透明知识论据（ZK-STARK）证明系统：",
+      "security": "安全参数与正确性证明",
+      "verification": "形式化数学验证",
+      "verificationTitle": "所有6个密码学定理已被证明",
+      "verificationText": "我们的实现已经正式验证了Ben-Sasson等人提出的学术定义。这不仅仅是测试——这是数学证明。",
+      "hedgeArch": "隐私保护对冲架构",
+      "hedgeArchText": "在执行对公共区块链进行套期保值时，ZkVanguard 通过以下方式保护用户隐私："
+    },
+    "gasless": {
+      "title": "无gas交易协议（x402）",
+      "overview": "协议概述",
+      "overviewText": "x402协议通过利用EIP-3009授权和协议资助交易来消除最终用户的gas费用：",
+      "implementation": "技术实现",
+      "flowDiagram": "流程图"
+    },
+    "predictions": {
+      "title": "预测市场集成",
+      "sources": "数据源",
+      "sourcesText": "ZkVanguard 集成领先的预测市场，提供众包预测：",
+      "hedgeRatio": "保证金比率计算",
+      "hedgeRatioText": "对冲代理使用预测概率动态调整对冲比率：",
+      "scenarios": "示例预测场景",
+      "tableQuestion": "市场问题",
+      "tableProbability": "概率",
+      "tableImpact": "影响",
+      "tableAction": "AI行动"
+    },
+    "multichain": {
+      "title": "多链策略",
+      "networks": "支持的网络",
+      "tableChain": "链",
+      "tableType": "类型",
+      "tableStatus": "状态",
+      "tableFeatures": "功能特性",
+      "roadmap": "扩展路线图"
+    },
+    "security": {
+      "title": "安全分析",
+      "contracts": "智能合约安全",
+      "cryptographic": "密码安全",
+      "operational": "操作安全"
+    },
+    "tokenomics": {
+      "title": "代币经济学与经济模型",
+      "revenue": "收入来源",
+      "projections": "五年 projections 预测",
+      "tableMetric": "指标"
+    },
+    "roadmap": {
+      "title": "路线图",
+      "q1_2026": "2026年第一季度 - 测试版发布 ✅",
+      "q1_2026_desc": "5 人工智能代理，ZK-STARK 隐私保护，x402 无gas交易，Cronos 测试网部署",
+      "q2_2026": "2026年第二季度 - SUI集成",
+      "q2_2026_desc": "多链扩展，SUI 主网部署，跨链投资组合",
+      "q3_2026": "2026年第三季度 - 贝塔链（Ethereum L2）",
+      "q3_2026_desc": "Arbitrum、Optimism、Base 集成、统一多链仪表板",
+      "q4_2026": "2026年第四季度 - 高级衍生品",
+      "q4_2026_desc": "完整的Moonlander集成，期权策略，高级对冲",
+      "2027_2030": "2027-2030 - 全球规模",
+      "2027_2030_desc": "TVL超过1000亿美元，10000多家机构参与，准备进行首次公开平台发行"
+    },
+    "references": {
+      "title": "参考文献"
+    },
+    "footerCta": {
+      "title": "准备好体验预测风险管理了吗？",
+      "subtitle": "加入已经使用基于AI的预测智能来保护其投资组合的机构交易者行列。",
+      "launchApp": "启动应用",
+      "viewDocs": "查看文档"
     }
   },
   "zkProof": {
@@ -266,69 +431,5 @@
     "preferencesDescription": "记住您的设置和偏好",
     "rejectOptional": "拒绝可选",
     "savePreferences": "保存偏好设置"
-  },
-  "whitepaper": {
-    "version": "版本 1.0",
-    "date": "2026年1月",
-    "title": "ZkVanguard 白皮书",
-    "subtitle": "面向机构数字资产的AI驱动预测性风险管理与零知识隐私保护",
-    "readButton": "阅读白皮书",
-    "toc": "目录",
-    "sections": {
-      "abstract": "摘要",
-      "introduction": "简介与市场机遇",
-      "problem": "问题：被动风险管理",
-      "solution": "解决方案：预测性智能",
-      "architecture": "技术架构",
-      "agents": "多代理AI系统",
-      "zkp": "零知识隐私层",
-      "gasless": "无Gas交易协议 (x402)",
-      "predictions": "预测市场集成",
-      "multichain": "多链策略",
-      "security": "安全分析",
-      "tokenomics": "代币经济学",
-      "roadmap": "路线图",
-      "conclusion": "结论",
-      "references": "参考文献"
-    },
-    "abstract": {
-      "highlight": "ZkVanguard通过将自主AI代理与众包预测市场智能和后量子零知识密码学相结合，引入了机构数字资产风险管理的范式转变。与传统的在市场崩盘后才做出响应的被动系统不同，ZkVanguard的预测架构能够提前3-7天预测波动事件，实现投资组合的先发保护。",
-      "p1": "该平台协调六个专业AI代理——领导代理、风险代理、对冲代理、结算代理、报告代理和价格监控代理——自主分析投资组合，消费来自Delphi/Polymarket的实时预测市场数据，生成数学最优对冲策略，并在Cronos区块链上执行无Gas交易。通过我们的CUDA加速ZK-STARK证明系统（512位目标安全性，通过FRI协议实现180位有效可靠性），所有敏感投资组合数据保持私密，同时通过可验证计算保持完全合规。",
-      "p2": "预计到2030年代币化真实世界资产（RWA）将达到16万亿美元，而机构资本目前因风险基础设施不足而处于观望状态，ZkVanguard解决了一个关键的市场缺口。我们的x402无Gas协议消除了交易费用（97.4%的Gas覆盖），而我们的隐私保护对冲架构保护机构交易策略免受抢跑交易和竞争情报暴露。"
-    },
-    "introduction": {
-      "opportunity": "16万亿美元的机遇",
-      "opportunityText": "根据波士顿咨询集团2024年的报告，代币化真实世界资产市场预计到2030年将达到16万亿美元，代表着金融历史上最大的财富迁移之一。目前，1.2万亿美元的机构资本参与去中心化金融，但由于三个关键障碍，这一数字仅占机构总资产的一小部分：",
-      "barrier1Title": "被动风险管理：",
-      "barrier1": "现有工具仅在市场崩盘后做出响应，导致15-30%的投资组合回撤后保护才激活",
-      "barrier2Title": "隐私漏洞：",
-      "barrier2": "公共区块链透明度暴露机构交易策略，使抢跑交易和竞争情报提取成为可能",
-      "barrier3Title": "高昂的交易成本：",
-      "barrier3": "每笔交易5-50美元的Gas费用造成60-80%的运营效率损失，尤其在高波动期间",
-      "timing": "市场时机",
-      "timingText": "多项技术和监管发展的融合创造了最佳的市场进入窗口：",
-      "timing1Title": "预测市场成熟：",
-      "timing1": "Polymarket等平台在重大事件上展示了85%以上的准确率，提供可靠的预测数据",
-      "timing2Title": "ZK技术进步：",
-      "timing2": "ZK-STARK证明现已实现实用性能（2-5秒生成）并具有后量子安全保证",
-      "timing3Title": "机构加密货币采用：",
-      "timing3": "贝莱德、富达和主要银行已推出数字资产产品，标志着主流机构接受",
-      "timing4Title": "监管明确：",
-      "timing4": "欧洲的MiCA和不断发展的SEC指南为机构参与者提供了更清晰的合规框架"
-    },
-    "problem": {
-      "paradigm": "被动范式",
-      "paradigmText": "传统的加密货币风险管理建立在一个根本性缺陷的范式上：反应而非预测。典型的工作流程遵循以下模式：",
-      "costTitle": "反应的代价",
-      "costText": "对2020-2025年主要市场事件的分析揭示了被动风险管理的真实成本：",
-      "tableEvent": "事件",
-      "tableDrop": "总跌幅",
-      "tableLoss": "对冲前损失",
-      "tablePredictable": "可预测?"
-    },
-    "conclusion": {
-      "title": "结论",
-      "text": "ZkVanguard代表了机构数字资产风险管理的根本性范式转变。通过将预测性AI智能与后量子加密隐私和无Gas执行相结合，我们解决了阻止机构采用的三个关键障碍：被动风险管理、隐私漏洞和高昂的交易成本。"
-    }
   }
 }
