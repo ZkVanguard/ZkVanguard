@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllHedges, getActiveHedges, getHedgeStats } from '@/lib/db/hedges';
+import { getAllHedges, getActiveHedges, getHedgeStats, getActiveHedgesByWallet, getAllHedgesByWallet } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
  * 
  * Query params:
  * - portfolioId: Filter by portfolio (optional)
+ * - walletAddress: Filter by wallet address (optional)
  * - status: 'active' | 'all' (default: 'all')
  * - limit: Number of results (default: 50)
  */
@@ -23,14 +24,22 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
+    const walletAddress = searchParams.get('walletAddress');
     const status = searchParams.get('status') || 'all';
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    logger.info('📊 Fetching hedges from database', { portfolioId, status, limit });
+    logger.info('📊 Fetching hedges from database', { portfolioId, walletAddress, status, limit });
 
     let hedges;
     
-    if (status === 'active') {
+    // If wallet address provided, filter by wallet
+    if (walletAddress) {
+      if (status === 'active') {
+        hedges = await getActiveHedgesByWallet(walletAddress);
+      } else {
+        hedges = await getAllHedgesByWallet(walletAddress, limit);
+      }
+    } else if (status === 'active') {
       hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId) : undefined);
     } else {
       hedges = await getAllHedges(
@@ -43,7 +52,7 @@ export async function GET(request: NextRequest) {
     const includeStats = searchParams.get('includeStats') === 'true';
     const stats = includeStats ? await getHedgeStats() : null;
 
-    logger.info('✅ Hedges retrieved', { count: hedges.length });
+    logger.info('✅ Hedges retrieved', { count: hedges.length, walletAddress: walletAddress ? `${walletAddress.slice(0, 6)}...` : 'all' });
 
     return NextResponse.json({
       success: true,

@@ -4,6 +4,7 @@ export interface Hedge {
   id: number;
   order_id: string;
   portfolio_id: number | null;
+  wallet_address: string | null;
   asset: string;
   market: string;
   side: 'LONG' | 'SHORT';
@@ -30,6 +31,7 @@ export interface Hedge {
 export interface CreateHedgeParams {
   orderId: string;
   portfolioId?: number;
+  walletAddress?: string;
   asset: string;
   market: string;
   side: 'LONG' | 'SHORT';
@@ -49,16 +51,17 @@ export interface CreateHedgeParams {
 export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
   const sql = `
     INSERT INTO hedges (
-      order_id, portfolio_id, asset, market, side, 
+      order_id, portfolio_id, wallet_address, asset, market, side, 
       size, notional_value, leverage, entry_price, liquidation_price,
       stop_loss, take_profit, simulation_mode, reason, prediction_market, tx_hash
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
   `;
 
   const result = await queryOne<Hedge>(sql, [
     params.orderId,
     params.portfolioId || null,
+    params.walletAddress || null,
     params.asset,
     params.market,
     params.side,
@@ -95,6 +98,16 @@ export async function getActiveHedges(portfolioId?: number): Promise<Hedge[]> {
   
   const sql = 'SELECT * FROM hedges WHERE status = $1 ORDER BY created_at DESC';
   return query<Hedge>(sql, ['active']);
+}
+
+export async function getActiveHedgesByWallet(walletAddress: string): Promise<Hedge[]> {
+  const sql = 'SELECT * FROM hedges WHERE wallet_address = $1 AND status = $2 ORDER BY created_at DESC';
+  return query<Hedge>(sql, [walletAddress.toLowerCase(), 'active']);
+}
+
+export async function getAllHedgesByWallet(walletAddress: string, limit = 50): Promise<Hedge[]> {
+  const sql = 'SELECT * FROM hedges WHERE wallet_address = $1 ORDER BY created_at DESC LIMIT $2';
+  return query<Hedge>(sql, [walletAddress.toLowerCase(), limit]);
 }
 
 export async function getAllHedges(portfolioId?: number, limit = 50): Promise<Hedge[]> {

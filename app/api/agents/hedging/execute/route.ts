@@ -35,6 +35,8 @@ export interface HedgeExecutionRequest {
   autoApprovalEnabled?: boolean;
   autoApprovalThreshold?: number;
   signature?: string; // Manager signature (optional if auto-approved)
+  // Wallet Connection
+  walletAddress?: string; // Connected wallet address for hedge ownership
 }
 
 export interface HedgeExecutionResponse {
@@ -73,7 +75,8 @@ export async function POST(request: NextRequest) {
     const { 
       asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, 
       privateMode = false, privacyLevel = 'standard',
-      autoApprovalEnabled = false, autoApprovalThreshold = 10000, signature 
+      autoApprovalEnabled = false, autoApprovalThreshold = 10000, signature,
+      walletAddress
     } = body;
 
     // Check if signature is required
@@ -219,6 +222,7 @@ export async function POST(request: NextRequest) {
           reason,
           predictionMarket: reason,
           txHash: commitmentHash, // Store commitment hash as reference
+          walletAddress, // Associate hedge with wallet
         });
         
         logger.info('💾 Simulated hedge saved to database', { orderId, privateMode });
@@ -355,6 +359,7 @@ export async function POST(request: NextRequest) {
         reason,
         predictionMarket: reason,
         txHash: tradeResult.txHash,
+        walletAddress, // Associate hedge with wallet
       });
       logger.info('💾 On-chain hedge saved to database', { txHash: tradeResult.txHash });
     } catch (dbError) {
