@@ -11,7 +11,7 @@ export function Stats() {
     { label: t('aiAgents'), value: '6', prefix: '' },
     { label: t('gasSavings'), value: '100%', prefix: '' },
     { label: t('zkProofs'), value: '2K+', prefix: '' },
-    { label: 'Chains Supported', value: '2', prefix: '' },
+    { label: t('chainsSupported'), value: '2', prefix: '' },
   ];
 
   useEffect(() => {

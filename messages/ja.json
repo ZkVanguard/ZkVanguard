@@ -9,10 +9,10 @@
   "hero": {
     "eyebrow": "Cronos zkEVM",
     "quantumProof": "量子耐性",
-    "headline1": "あなたのポートフォリオ。",
-    "headline2": "保護されています。",
+    "headline1": "お客様のポートフォリオ。",
+    "headline2": "守ります。",
     "subtitle": "AIエージェントがリスクを管理。ゼロ知識証明がプライバシーを保護。",
-    "ctaDashboard": "ダッシュボードを起動",
+    "ctaDashboard": "ダッシュボードへ",
     "ctaLearnMore": "詳細を見る",
     "ctaArrow": "→"
   },
@@ -38,19 +38,17 @@
   },
   "stats": {
     "aiAgents": "AIエージェント",
-    "aiAgentsDesc": "自律的リスク管理",
-    "zkVerified": "ZK検証済み",
-    "zkVerifiedDesc": "暗号化プライバシー",
-    "riskCoverage": "リスクカバレッジ",
-    "riskCoverageDesc": "ポートフォリオ価値の",
-    "uptime": "稼働時間",
-    "uptimeDesc": "継続的な監視"
+    "gasSavings": "ガス節約",
+    "zkProofs": "ZK証明",
+    "responseTime": "応答時間",
+    "batchingNote": "Cronos zkEVMでのx402バッチ処理",
+    "chainsSupported": "サポートされたチェーン"
   },
   "cta": {
-    "title": "資産を保護する準備はできましたか？",
-    "subtitle": "ZK-STARKプライバシーによるAI駆動リスク管理を使用する数千の投資家に参加しましょう。",
-    "button": "ダッシュボードを起動",
-    "learnMore": "セキュリティについて詳しく"
+    "title": "お客様の資産を守る準備はできていますか？",
+    "subtitle": "ZK-STARKプライバシーとAI駆動型リスク管理を活用する多くの機関投資家にご参加ください。",
+    "button": "ダッシュボードへ",
+    "learnMore": "セキュリティについて"
   },
   "footer": {
     "product": "製品",
@@ -71,9 +69,9 @@
     "twitter": "Twitter",
     "privacy": "プライバシーポリシー",
     "terms": "利用規約",
-    "rights": "無断複写・転載を禁じます。",
+    "rights": "All rights reserved.",
     "testnet": "Cronos zkEVM テストネット",
-    "stage": "プレシードステージ",
+    "stage": "Pre-Seedステージ",
     "builtWith": "ZK-STARKで構築"
   },
   "connect": {
@@ -96,13 +94,14 @@
   },
   "agents": {
     "title": "AIエージェントネットワーク",
+    "subtitle": "マルチエージェントコンセンサスによる24時間365日の自律的ポートフォリオ管理",
     "active": "アクティブ",
     "idle": "アイドル",
-    "monitoring": "監視中",
-    "leadAgent": "リードリスクオーケストレーター",
-    "marketAgent": "市場インテリジェンスエージェント",
+    "monitoring": "モニタリング中",
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "マーケットインテリジェンスエージェント",
     "complianceAgent": "コンプライアンスエージェント",
-    "executionAgent": "実行エージェント"
+    "executionAgent": "エグゼキューションエージェント"
   },
   "common": {
     "loading": "読み込み中...",
@@ -134,5 +133,69 @@
       "description": "自動ヘッジと取引決済",
       "detail": "自動化された保護"
     }
+  },
+  "whitepaper": {
+    "version": "バージョン 1.0",
+    "date": "2026年1月",
+    "title": "ZkVanguard ホワイトペーパー",
+    "subtitle": "機関投資家向けデジタル資産のためのゼロ知識プライバシーを備えたAI主導型予測リスク管理",
+    "readButton": "ホワイトペーパーを読む",
+    "toc": "目次",
+    "sections": {
+      "abstract": "概要",
+      "introduction": "はじめにと市場機会",
+      "problem": "問題：事後的なリスク管理",
+      "solution": "私たちのソリューション：予測インテリジェンス",
+      "architecture": "技術アーキテクチャ",
+      "agents": "マルチエージェントAIシステム",
+      "zkp": "ゼロ知識プライバシーレイヤー",
+      "gasless": "ガスレストランザクションプロトコル (x402)",
+      "predictions": "予測市場統合",
+      "multichain": "マルチチェーン戦略",
+      "security": "セキュリティ分析",
+      "tokenomics": "トークノミクスと経済",
+      "roadmap": "ロードマップ",
+      "conclusion": "結論",
+      "references": "参照"
+    }
+  },
+  "zkProof": {
+    "title": "ZK証明ジェネレータ",
+    "subtitle": "ポートフォリオプライバシーのためのゼロ知識証明を生成・検証",
+    "selectScenario": "シナリオを選択",
+    "generateProof": "証明を生成",
+    "verifyProof": "証明を検証",
+    "proofGenerated": "証明が生成されました",
+    "proofVerified": "証明が検証されました",
+    "proofFailed": "検証に失敗しました",
+    "showSecrets": "秘密を表示",
+    "hideSecrets": "秘密を隠す",
+    "scenarios": {
+      "portfolioRisk": "ポートフォリオリスク評価",
+      "portfolioRiskDesc": "ポジションを明かさずにポートフォリオリスクが閾値未満であることを証明",
+      "settlementBatch": "決済バッチ検証",
+      "settlementBatchDesc": "取引詳細を明かさずに決済バッチが有効であることを証明",
+      "compliance": "規制コンプライアンス",
+      "complianceDesc": "機密データを公開せずに規制遵守を証明"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK真正性検証",
+    "subtitle": "当社のゼロ知識証明実装の真正性を検証",
+    "systemStatus": "システムステータス",
+    "operational": "稼働中",
+    "verifyProof": "証明を検証",
+    "pasteProof": "証明JSONをここに貼り付け",
+    "implementation": "実装詳細",
+    "cryptoParams": "暗号パラメータ",
+    "sourceCode": "ソースコード"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK数学的証明",
+    "subtitle": "ZkVanguardがBen-Sassonらの学術仕様に基づく本物のZK-STARKを実装していることの正式な検証",
+    "auditorSummary": "監査人向けクイックサマリー",
+    "implementation": "実装",
+    "securityLevel": "セキュリティレベル",
+    "academicFoundation": "学術的基盤"
   }
 }

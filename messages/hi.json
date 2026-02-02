@@ -29,7 +29,7 @@
     },
     "liveAnalytics": {
       "title": "लाइव एनालिटिक्स",
-      "description": "भविष्य कहनेवाला जोखिम स्कोरिंग के साथ रीयल-टाइम पोर्टफोलियो ट्रैकिंग"
+      "description": "प्रेडिक्टिव रिस्क स्कोरिंग के साथ रीयल-टाइम पोर्टफोलियो ट्रैकिंग"
     },
     "quantumProof": {
       "title": "क्वांटम सुरक्षा",
@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "AI एजेंट",
-    "aiAgentsDesc": "स्वायत्त जोखिम प्रबंधन",
-    "zkVerified": "ZK सत्यापित",
-    "zkVerifiedDesc": "क्रिप्टोग्राफिक गोपनीयता",
-    "riskCoverage": "जोखिम कवरेज",
-    "riskCoverageDesc": "पोर्टफोलियो मूल्य का",
-    "uptime": "अपटाइम",
-    "uptimeDesc": "निरंतर निगरानी"
+    "gasSavings": "गैस बचत",
+    "zkProofs": "ZK प्रमाण",
+    "responseTime": "प्रतिक्रिया समय",
+    "batchingNote": "Cronos zkEVM पर x402 बैचिंग",
+    "chainsSupported": "समर्थित चेन"
   },
   "cta": {
     "title": "अपनी संपत्ति सुरक्षित करने के लिए तैयार हैं?",
@@ -53,17 +51,17 @@
     "learnMore": "सुरक्षा के बारे में और जानें"
   },
   "footer": {
-    "product": "उत्पाद",
+    "product": "प्रोडक्ट",
     "platform": "प्लेटफॉर्म",
-    "resources": "संसाधन",
-    "legal": "कानूनी",
+    "resources": "रिसोर्सेज",
+    "legal": "लीगल",
     "dashboard": "डैशबोर्ड",
     "agents": "एजेंट",
     "simulator": "सिम्युलेटर",
     "documentation": "दस्तावेज़",
     "zkVerification": "ZK सत्यापन",
     "authenticity": "प्रामाणिकता",
-    "whitepaper": "व्हाइटपेपर",
+    "whitepaper": "Whitepaper",
     "api": "API",
     "contact": "संपर्क करें",
     "community": "समुदाय",
@@ -84,18 +82,19 @@
     "switchNetwork": "{network} पर स्विच करें"
   },
   "dashboard": {
-    "title": "जोखिम डैशबोर्ड",
-    "overview": "अवलोकन",
+    "title": "रिस्क डैशबोर्ड",
+    "overview": "ओवरव्यू",
     "positions": "पोजीशन",
     "analytics": "एनालिटिक्स",
     "settings": "सेटिंग्स",
-    "totalValue": "कुल पोर्टफोलियो मूल्य",
-    "riskScore": "जोखिम स्कोर",
-    "activePositions": "सक्रिय पोजीशन",
-    "monthlyReturn": "मासिक रिटर्न"
+    "totalValue": "कुल पोर्टफोलियो वैल्यू",
+    "riskScore": "रिस्क स्कोर",
+    "activePositions": "एक्टिव पोजीशन",
+    "monthlyReturn": "मंथली रिटर्न"
   },
   "agents": {
     "title": "AI एजेंट नेटवर्क",
+    "subtitle": "मल्टी-एजेंट सहमति के साथ 24/7 स्वायत्त पोर्टफोलियो प्रबंधन",
     "active": "सक्रिय",
     "idle": "निष्क्रिय",
     "monitoring": "निगरानी",
@@ -134,5 +133,69 @@
       "description": "ऑटो-हेज और लेनदेन निपटान",
       "detail": "स्वचालित सुरक्षा"
     }
+  },
+  "whitepaper": {
+    "version": "संस्करण 1.0",
+    "date": "जनवरी 2026",
+    "title": "ZkVanguard व्हाइटपेपर",
+    "subtitle": "संस्थागत डिजिटल संपत्तियों के लिए जीरो-नॉलेज गोपनीयता के साथ AI-संचालित प्रेडिक्टिव जोखिम प्रबंधन",
+    "readButton": "व्हाइटपेपर पढ़ें",
+    "toc": "विषय-सूची",
+    "sections": {
+      "abstract": "सारांश",
+      "introduction": "परिचय और बाजार अवसर",
+      "problem": "समस्या: प्रतिक्रियाशील जोखिम प्रबंधन",
+      "solution": "हमारा समाधान: प्रेडिक्टिव इंटेलिजेंस",
+      "architecture": "तकनीकी आर्किटेक्चर",
+      "agents": "मल्टी-एजेंट AI सिस्टम",
+      "zkp": "जीरो-नॉलेज गोपनीयता परत",
+      "gasless": "गैसलेस ट्रांजैक्शन प्रोटोकॉल (x402)",
+      "predictions": "प्रेडिक्शन मार्केट इंटिग्रेशन",
+      "multichain": "मल्टी-चेन रणनीति",
+      "security": "सुरक्षा विश्लेषण",
+      "tokenomics": "टोकनोमिक्स और अर्थशास्त्र",
+      "roadmap": "रोडमैप",
+      "conclusion": "निष्कर्ष",
+      "references": "संदर्भ"
+    }
+  },
+  "zkProof": {
+    "title": "ZK प्रूफ जनरेटर",
+    "subtitle": "पोर्टफोलियो गोपनीयता के लिए जीरो-नॉलेज प्रूफ जेनरेट और वेरिफाई करें",
+    "selectScenario": "सिनेरियो चुनें",
+    "generateProof": "प्रूफ जेनरेट करें",
+    "verifyProof": "प्रूफ वेरिफाई करें",
+    "proofGenerated": "प्रूफ जेनरेट हुआ",
+    "proofVerified": "प्रूफ वेरिफाईड",
+    "proofFailed": "वेरिफिकेशन विफल",
+    "showSecrets": "सीक्रेट्स दिखाएं",
+    "hideSecrets": "सीक्रेट्स छुपाएं",
+    "scenarios": {
+      "portfolioRisk": "पोर्टफोलियो जोखिम मूल्यांकन",
+      "portfolioRiskDesc": "पोजीशन प्रकट किए बिना साबित करें कि पोर्टफोलियो जोखिम सीमा से नीचे है",
+      "settlementBatch": "सेटलमेंट बैच वैलिडेशन",
+      "settlementBatchDesc": "ट्रांजैक्शन विवरण प्रकट किए बिना साबित करें कि सेटलमेंट बैच वैध है",
+      "compliance": "नियामक अनुपालन",
+      "complianceDesc": "संवेदनशील डेटा उजागर किए बिना नियमों का अनुपालन साबित करें"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK प्रामाणिकता सत्यापन",
+    "subtitle": "हमारे जीरो-नॉलेज प्रूफ कार्यान्वयन की प्रामाणिकता सत्यापित करें",
+    "systemStatus": "सिस्टम स्थिति",
+    "operational": "संचालनशील",
+    "verifyProof": "प्रूफ वेरिफाई करें",
+    "pasteProof": "अपना प्रूफ JSON यहां पेस्ट करें",
+    "implementation": "कार्यान्वयन विवरण",
+    "cryptoParams": "क्रिप्टोग्राफिक पैरामीटर",
+    "sourceCode": "सोर्स कोड"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK गणितीय प्रमाण",
+    "subtitle": "औपचारिक सत्यापन कि ZkVanguard Ben-Sasson आदि की अकादमिक विशिष्टताओं के अनुसार एक सच्चा ZK-STARK लागू करता है",
+    "auditorSummary": "ऑडिटर क्विक सारांश",
+    "implementation": "कार्यान्वयन",
+    "securityLevel": "सुरक्षा स्तर",
+    "academicFoundation": "अकादमिक आधार"
   }
 }

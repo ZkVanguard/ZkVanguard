@@ -2,7 +2,7 @@
   "nav": {
     "home": "首页",
     "dashboard": "仪表板",
-    "agents": "代理",
+    "agents": "智能代理",
     "simulator": "模拟器",
     "docs": "文档"
   },
@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "AI代理",
-    "aiAgentsDesc": "自主风险管理",
-    "zkVerified": "ZK验证",
-    "zkVerifiedDesc": "密码学隐私",
-    "riskCoverage": "风险覆盖",
-    "riskCoverageDesc": "投资组合价值的",
-    "uptime": "正常运行时间",
-    "uptimeDesc": "持续监控"
+    "gasSavings": "Gas费节省",
+    "zkProofs": "ZK证明",
+    "responseTime": "响应时间",
+    "batchingNote": "Cronos zkEVM上的x402批处理",
+    "chainsSupported": "支持的链"
   },
   "cta": {
     "title": "准备好保护您的资产了吗？",
@@ -73,14 +71,14 @@
     "terms": "服务条款",
     "rights": "版权所有。",
     "testnet": "Cronos zkEVM测试网",
-    "stage": "种子前阶段",
-    "builtWith": "使用ZK-STARK构建"
+    "stage": "Pre-Seed阶段",
+    "builtWith": "基于ZK-STARK构建"
   },
   "connect": {
     "button": "连接钱包",
     "disconnect": "断开连接",
     "connecting": "连接中...",
-    "wrongNetwork": "网络错误",
+    "wrongNetwork": "网络不正确",
     "switchNetwork": "切换到 {network}"
   },
   "dashboard": {
@@ -96,13 +94,14 @@
   },
   "agents": {
     "title": "AI代理网络",
+    "subtitle": "通过多代理共识实现24/7自主投资组合管理",
     "active": "活跃",
     "idle": "空闲",
     "monitoring": "监控中",
-    "leadAgent": "首席风险协调员",
-    "marketAgent": "市场情报代理",
-    "complianceAgent": "合规代理",
-    "executionAgent": "执行代理"
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "Market Intelligence Agent",
+    "complianceAgent": "Compliance Agent",
+    "executionAgent": "Execution Agent"
   },
   "common": {
     "loading": "加载中...",
@@ -134,5 +133,69 @@
       "description": "自动对冲和交易结算",
       "detail": "自动化保护"
     }
+  },
+  "whitepaper": {
+    "version": "版本 1.0",
+    "date": "2026年1月",
+    "title": "ZkVanguard 白皮书",
+    "subtitle": "为机构数字资产提供零知识隐私保护的AI驱动预测性风险管理",
+    "readButton": "阅读白皮书",
+    "toc": "目录",
+    "sections": {
+      "abstract": "摘要",
+      "introduction": "简介与市场机会",
+      "problem": "问题：被动式风险管理",
+      "solution": "我们的解决方案：预测性智能",
+      "architecture": "技术架构",
+      "agents": "多代理AI系统",
+      "zkp": "零知识隐私层",
+      "gasless": "无Gas交易协议 (x402)",
+      "predictions": "预测市场集成",
+      "multichain": "多链战略",
+      "security": "安全分析",
+      "tokenomics": "代币经济学",
+      "roadmap": "路线图",
+      "conclusion": "结论",
+      "references": "参考文献"
+    }
+  },
+  "zkProof": {
+    "title": "ZK证明生成器",
+    "subtitle": "生成并验证零知识证明以保护投资组合隐私",
+    "selectScenario": "选择场景",
+    "generateProof": "生成证明",
+    "verifyProof": "验证证明",
+    "proofGenerated": "证明已生成",
+    "proofVerified": "证明已验证",
+    "proofFailed": "验证失败",
+    "showSecrets": "显示秘密",
+    "hideSecrets": "隐藏秘密",
+    "scenarios": {
+      "portfolioRisk": "投资组合风险评估",
+      "portfolioRiskDesc": "在不披露仓位的情况下证明投资组合风险低于阈值",
+      "settlementBatch": "结算批次验证",
+      "settlementBatchDesc": "在不披露交易详情的情况下证明结算批次有效",
+      "compliance": "监管合规",
+      "complianceDesc": "在不暴露敏感数据的情况下证明符合法规"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK真实性验证",
+    "subtitle": "验证我们零知识证明实现的真实性",
+    "systemStatus": "系统状态",
+    "operational": "运行中",
+    "verifyProof": "验证证明",
+    "pasteProof": "在此粘贴您的证明JSON",
+    "implementation": "实现详情",
+    "cryptoParams": "加密参数",
+    "sourceCode": "源代码"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK数学证明",
+    "subtitle": "正式验证ZkVanguard按照Ben-Sasson等人的学术规范实现了真正的ZK-STARK",
+    "auditorSummary": "审计师快速摘要",
+    "implementation": "实现",
+    "securityLevel": "安全级别",
+    "academicFoundation": "学术基础"
   }
 }

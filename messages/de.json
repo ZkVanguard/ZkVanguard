@@ -21,7 +21,7 @@
     "subtitle": "Sicherheit auf Unternehmensniveau trifft auf autonome Intelligenz",
     "zkProofs": {
       "title": "ZK-STARK Beweise",
-      "description": "Post-Quanten-Sicherheit mit transparenten Beweisen, ohne Vertrauenssetup"
+      "description": "Post-Quanten-Sicherheit mit transparenten Beweisen, ohne Trusted Setup"
     },
     "aiAgents": {
       "title": "KI-Agenten",
@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "KI-Agenten",
-    "aiAgentsDesc": "Autonomes Risikomanagement",
-    "zkVerified": "ZK-Verifiziert",
-    "zkVerifiedDesc": "Kryptografische Privatsphäre",
-    "riskCoverage": "Risikoabdeckung",
-    "riskCoverageDesc": "Des Portfolio-Werts",
-    "uptime": "Verfügbarkeit",
-    "uptimeDesc": "Kontinuierliche Überwachung"
+    "gasSavings": "Gas-Einsparungen",
+    "zkProofs": "ZK-Beweise",
+    "responseTime": "Antwortzeit",
+    "batchingNote": "x402 Batching auf Cronos zkEVM",
+    "chainsSupported": "Unterstützte Blockchains"
   },
   "cta": {
     "title": "Bereit, Ihre Vermögenswerte zu sichern?",
@@ -74,7 +72,7 @@
     "rights": "Alle Rechte vorbehalten.",
     "testnet": "Cronos zkEVM Testnet",
     "stage": "Pre-Seed Phase",
-    "builtWith": "Gebaut mit ZK-STARK"
+    "builtWith": "Entwickelt mit ZK-STARK"
   },
   "connect": {
     "button": "Wallet verbinden",
@@ -96,13 +94,14 @@
   },
   "agents": {
     "title": "KI-Agenten-Netzwerk",
+    "subtitle": "24/7 autonomes Portfoliomanagement mit Multi-Agenten-Konsens",
     "active": "Aktiv",
     "idle": "Inaktiv",
     "monitoring": "Überwachung",
-    "leadAgent": "Hauptrisiko-Orchestrator",
-    "marketAgent": "Marktintelligenz-Agent",
-    "complianceAgent": "Compliance-Agent",
-    "executionAgent": "Ausführungs-Agent"
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "Market Intelligence Agent",
+    "complianceAgent": "Compliance Agent",
+    "executionAgent": "Execution Agent"
   },
   "common": {
     "loading": "Laden...",
@@ -134,5 +133,69 @@
       "description": "Auto-Hedge und Transaktionsabwicklung",
       "detail": "Automatisierter Schutz"
     }
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "Januar 2026",
+    "title": "ZkVanguard Whitepaper",
+    "subtitle": "KI-gestützte prädiktive Risikoverwaltung mit Zero-Knowledge-Datenschutz für institutionelle digitale Vermögenswerte",
+    "readButton": "Whitepaper lesen",
+    "toc": "Inhaltsverzeichnis",
+    "sections": {
+      "abstract": "Zusammenfassung",
+      "introduction": "Einführung und Marktchance",
+      "problem": "Das Problem: Reaktives Risikomanagement",
+      "solution": "Unsere Lösung: Prädiktive Intelligenz",
+      "architecture": "Technische Architektur",
+      "agents": "Multi-Agenten-KI-System",
+      "zkp": "Zero-Knowledge-Datenschutzschicht",
+      "gasless": "Gasfreies Transaktionsprotokoll (x402)",
+      "predictions": "Integration von Prognosemärkten",
+      "multichain": "Multi-Chain-Strategie",
+      "security": "Sicherheitsanalyse",
+      "tokenomics": "Tokenomics und Wirtschaft",
+      "roadmap": "Roadmap",
+      "conclusion": "Fazit",
+      "references": "Referenzen"
+    }
+  },
+  "zkProof": {
+    "title": "ZK-Beweis-Generator",
+    "subtitle": "Generieren und verifizieren Sie Zero-Knowledge-Beweise für Portfolio-Datenschutz",
+    "selectScenario": "Szenario auswählen",
+    "generateProof": "Beweis generieren",
+    "verifyProof": "Beweis verifizieren",
+    "proofGenerated": "Beweis generiert",
+    "proofVerified": "Beweis verifiziert",
+    "proofFailed": "Verifizierung fehlgeschlagen",
+    "showSecrets": "Geheimnisse anzeigen",
+    "hideSecrets": "Geheimnisse verbergen",
+    "scenarios": {
+      "portfolioRisk": "Portfolio-Risikobewertung",
+      "portfolioRiskDesc": "Beweisen Sie, dass das Portfolio-Risiko unter dem Schwellenwert liegt, ohne Positionen preiszugeben",
+      "settlementBatch": "Settlement-Batch-Validierung",
+      "settlementBatchDesc": "Beweisen Sie, dass der Settlement-Batch gültig ist, ohne Transaktionsdetails preiszugeben",
+      "compliance": "Regulatorische Compliance",
+      "complianceDesc": "Beweisen Sie die Einhaltung von Vorschriften, ohne sensible Daten preiszugeben"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK Authentizitätsverifizierung",
+    "subtitle": "Verifizieren Sie die Authentizität unserer Zero-Knowledge-Beweis-Implementierung",
+    "systemStatus": "Systemstatus",
+    "operational": "Betriebsbereit",
+    "verifyProof": "Einen Beweis verifizieren",
+    "pasteProof": "Fügen Sie Ihren Beweis-JSON hier ein",
+    "implementation": "Implementierungsdetails",
+    "cryptoParams": "Kryptografische Parameter",
+    "sourceCode": "Quellcode"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK Mathematischer Beweis",
+    "subtitle": "Formale Verifizierung, dass ZkVanguard einen echten ZK-STARK gemäß den akademischen Spezifikationen von Ben-Sasson et al. implementiert",
+    "auditorSummary": "Kurzfassung für Prüfer",
+    "implementation": "Implementierung",
+    "securityLevel": "Sicherheitsstufe",
+    "academicFoundation": "Akademische Grundlage"
   }
 }

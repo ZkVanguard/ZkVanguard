@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "وكلاء الذكاء الاصطناعي",
-    "aiAgentsDesc": "إدارة المخاطر المستقلة",
-    "zkVerified": "موثق بـ ZK",
-    "zkVerifiedDesc": "خصوصية تشفيرية",
-    "riskCoverage": "تغطية المخاطر",
-    "riskCoverageDesc": "من قيمة المحفظة",
-    "uptime": "وقت التشغيل",
-    "uptimeDesc": "مراقبة مستمرة"
+    "gasSavings": "توفير الغاز",
+    "zkProofs": "إثباتات ZK",
+    "responseTime": "وقت الاستجابة",
+    "batchingNote": "معالجة x402 على Cronos zkEVM",
+    "chainsSupported": "السلاسل المدعومة"
   },
   "cta": {
     "title": "هل أنت مستعد لتأمين أصولك؟",
@@ -56,14 +54,14 @@
     "product": "المنتج",
     "platform": "المنصة",
     "resources": "الموارد",
-    "legal": "قانوني",
+    "legal": "الشؤون القانونية",
     "dashboard": "لوحة التحكم",
     "agents": "الوكلاء",
     "simulator": "المحاكي",
     "documentation": "الوثائق",
     "zkVerification": "التحقق ZK",
     "authenticity": "الأصالة",
-    "whitepaper": "الورقة البيضاء",
+    "whitepaper": "Whitepaper",
     "api": "API",
     "contact": "اتصل بنا",
     "community": "المجتمع",
@@ -73,14 +71,14 @@
     "terms": "شروط الخدمة",
     "rights": "جميع الحقوق محفوظة.",
     "testnet": "شبكة اختبار Cronos zkEVM",
-    "stage": "مرحلة ما قبل البذور",
+    "stage": "مرحلة Pre-Seed",
     "builtWith": "مبني على ZK-STARK"
   },
   "connect": {
-    "button": "ربط المحفظة",
+    "button": "توصيل المحفظة",
     "disconnect": "قطع الاتصال",
     "connecting": "جاري الاتصال...",
-    "wrongNetwork": "شبكة خاطئة",
+    "wrongNetwork": "شبكة غير صحيحة",
     "switchNetwork": "التبديل إلى {network}"
   },
   "dashboard": {
@@ -96,18 +94,19 @@
   },
   "agents": {
     "title": "شبكة وكلاء الذكاء الاصطناعي",
+    "subtitle": "إدارة محفظة مستقلة على مدار الساعة مع إجماع متعدد الوكلاء",
     "active": "نشط",
     "idle": "خامل",
     "monitoring": "المراقبة",
-    "leadAgent": "منسق المخاطر الرئيسي",
-    "marketAgent": "وكيل استخبارات السوق",
-    "complianceAgent": "وكيل الامتثال",
-    "executionAgent": "وكيل التنفيذ"
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "Market Intelligence Agent",
+    "complianceAgent": "Compliance Agent",
+    "executionAgent": "Execution Agent"
   },
   "common": {
     "loading": "جاري التحميل...",
     "error": "خطأ",
-    "success": "نجح",
+    "success": "نجاح",
     "confirm": "تأكيد",
     "cancel": "إلغاء",
     "save": "حفظ",
@@ -134,5 +133,69 @@
       "description": "تحوط تلقائي وتسوية المعاملات",
       "detail": "حماية آلية"
     }
+  },
+  "whitepaper": {
+    "version": "الإصدار 1.0",
+    "date": "يناير 2026",
+    "title": "الورقة البيضاء ZkVanguard",
+    "subtitle": "إدارة المخاطر التنبؤية المدعومة بالذكاء الاصطناعي مع خصوصية المعرفة الصفرية للأصول الرقمية المؤسسية",
+    "readButton": "قراءة الورقة البيضاء",
+    "toc": "جدول المحتويات",
+    "sections": {
+      "abstract": "الملخص",
+      "introduction": "المقدمة وفرصة السوق",
+      "problem": "المشكلة: إدارة المخاطر التفاعلية",
+      "solution": "حلنا: الذكاء التنبؤي",
+      "architecture": "الهندسة التقنية",
+      "agents": "نظام الوكلاء المتعددين للذكاء الاصطناعي",
+      "zkp": "طبقة خصوصية المعرفة الصفرية",
+      "gasless": "بروتوكول المعاملات بدون غاز (x402)",
+      "predictions": "تكامل أسواق التنبؤ",
+      "multichain": "استراتيجية السلاسل المتعددة",
+      "security": "تحليل الأمان",
+      "tokenomics": "اقتصاديات الرموز",
+      "roadmap": "خارطة الطريق",
+      "conclusion": "الخلاصة",
+      "references": "المراجع"
+    }
+  },
+  "zkProof": {
+    "title": "مولد إثبات ZK",
+    "subtitle": "إنشاء والتحقق من إثباتات المعرفة الصفرية لخصوصية المحفظة",
+    "selectScenario": "اختر سيناريو",
+    "generateProof": "إنشاء الإثبات",
+    "verifyProof": "التحقق من الإثبات",
+    "proofGenerated": "تم إنشاء الإثبات",
+    "proofVerified": "تم التحقق من الإثبات",
+    "proofFailed": "فشل التحقق",
+    "showSecrets": "إظهار الأسرار",
+    "hideSecrets": "إخفاء الأسرار",
+    "scenarios": {
+      "portfolioRisk": "تقييم مخاطر المحفظة",
+      "portfolioRiskDesc": "أثبت أن مخاطر المحفظة أقل من الحد دون الكشف عن المراكز",
+      "settlementBatch": "التحقق من دفعة التسوية",
+      "settlementBatchDesc": "أثبت أن دفعة التسوية صالحة دون الكشف عن تفاصيل المعاملات",
+      "compliance": "الامتثال التنظيمي",
+      "complianceDesc": "أثبت الامتثال للوائح دون كشف البيانات الحساسة"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "التحقق من أصالة ZK-STARK",
+    "subtitle": "تحقق من أصالة تنفيذ إثبات المعرفة الصفرية لدينا",
+    "systemStatus": "حالة النظام",
+    "operational": "تعمل",
+    "verifyProof": "التحقق من إثبات",
+    "pasteProof": "الصق إثبات JSON هنا",
+    "implementation": "تفاصيل التنفيذ",
+    "cryptoParams": "المعلمات التشفيرية",
+    "sourceCode": "الكود المصدر"
+  },
+  "zkVerification": {
+    "title": "الإثبات الرياضي ZK-STARK",
+    "subtitle": "التحقق الرسمي من أن ZkVanguard ينفذ ZK-STARK حقيقي وفقًا لمواصفات Ben-Sasson وآخرين",
+    "auditorSummary": "ملخص سريع للمدققين",
+    "implementation": "التنفيذ",
+    "securityLevel": "مستوى الأمان",
+    "academicFoundation": "الأساس الأكاديمي"
   }
 }

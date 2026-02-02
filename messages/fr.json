@@ -8,11 +8,11 @@
   },
   "hero": {
     "eyebrow": "Cronos zkEVM",
-    "quantumProof": "À l'épreuve quantique",
+    "quantumProof": "Résistant au quantique",
     "headline1": "Votre portefeuille.",
     "headline2": "Protégé.",
-    "subtitle": "Les agents IA gèrent les risques. Les preuves à divulgation nulle protègent la confidentialité.",
-    "ctaDashboard": "Lancer le tableau de bord",
+    "subtitle": "Les agents IA gèrent les risques. Les preuves ZK protègent la confidentialité.",
+    "ctaDashboard": "Accéder au tableau de bord",
     "ctaLearnMore": "En savoir plus",
     "ctaArrow": "→"
   },
@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "Agents IA",
-    "aiAgentsDesc": "Gestion autonome des risques",
-    "zkVerified": "Vérifié ZK",
-    "zkVerifiedDesc": "Confidentialité cryptographique",
-    "riskCoverage": "Couverture des risques",
-    "riskCoverageDesc": "De la valeur du portefeuille",
-    "uptime": "Disponibilité",
-    "uptimeDesc": "Surveillance continue"
+    "gasSavings": "Économies de gaz",
+    "zkProofs": "Preuves ZK",
+    "responseTime": "Temps de réponse",
+    "batchingNote": "Traitement x402 sur Cronos zkEVM",
+    "chainsSupported": "Blockchains supportées"
   },
   "cta": {
     "title": "Prêt à sécuriser vos actifs ?",
@@ -63,7 +61,7 @@
     "documentation": "Documentation",
     "zkVerification": "Vérification ZK",
     "authenticity": "Authenticité",
-    "whitepaper": "Livre blanc",
+    "whitepaper": "Whitepaper",
     "api": "API",
     "contact": "Contact",
     "community": "Communauté",
@@ -73,11 +71,11 @@
     "terms": "Conditions d'utilisation",
     "rights": "Tous droits réservés.",
     "testnet": "Testnet Cronos zkEVM",
-    "stage": "Stade Pré-Seed",
-    "builtWith": "Construit avec ZK-STARK"
+    "stage": "Phase Pre-Seed",
+    "builtWith": "Développé avec ZK-STARK"
   },
   "connect": {
-    "button": "Connecter le portefeuille",
+    "button": "Connecter le wallet",
     "disconnect": "Déconnecter",
     "connecting": "Connexion...",
     "wrongNetwork": "Mauvais réseau",
@@ -96,11 +94,12 @@
   },
   "agents": {
     "title": "Réseau d'agents IA",
+    "subtitle": "Gestion de portefeuille autonome 24h/24 avec consensus multi-agents",
     "active": "Actif",
     "idle": "Inactif",
     "monitoring": "Surveillance",
-    "leadAgent": "Agent principal de risque",
-    "marketAgent": "Agent de renseignement de marché",
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "Agent d'intelligence de marché",
     "complianceAgent": "Agent de conformité",
     "executionAgent": "Agent d'exécution"
   },
@@ -134,5 +133,69 @@
       "description": "Auto-couverture et règlement des transactions",
       "detail": "Protection automatisée"
     }
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "Janvier 2026",
+    "title": "ZkVanguard Whitepaper",
+    "subtitle": "Gestion prédictive des risques alimentée par l'IA avec confidentialité Zero-Knowledge pour les actifs numériques institutionnels",
+    "readButton": "Lire le whitepaper",
+    "toc": "Sommaire",
+    "sections": {
+      "abstract": "Résumé",
+      "introduction": "Introduction et opportunité de marché",
+      "problem": "Le problème : Gestion réactive des risques",
+      "solution": "Notre solution : Intelligence prédictive",
+      "architecture": "Architecture technique",
+      "agents": "Système multi-agents IA",
+      "zkp": "Couche de confidentialité Zero-Knowledge",
+      "gasless": "Protocole gasless (x402)",
+      "predictions": "Intégration des marchés prédictifs",
+      "multichain": "Stratégie multi-chaînes",
+      "security": "Analyse de sécurité",
+      "tokenomics": "Tokenomics et modèle économique",
+      "roadmap": "Roadmap",
+      "conclusion": "Conclusion",
+      "references": "Références"
+    }
+  },
+  "zkProof": {
+    "title": "Générateur de preuves ZK",
+    "subtitle": "Générez et vérifiez des preuves zero-knowledge pour la confidentialité du portefeuille",
+    "selectScenario": "Sélectionner un scénario",
+    "generateProof": "Générer la preuve",
+    "verifyProof": "Vérifier la preuve",
+    "proofGenerated": "Preuve générée",
+    "proofVerified": "Preuve vérifiée",
+    "proofFailed": "Échec de la vérification",
+    "showSecrets": "Afficher les secrets",
+    "hideSecrets": "Masquer les secrets",
+    "scenarios": {
+      "portfolioRisk": "Évaluation du risque du portefeuille",
+      "portfolioRiskDesc": "Prouvez que le risque du portefeuille est inférieur au seuil sans révéler les positions",
+      "settlementBatch": "Validation du lot de règlement",
+      "settlementBatchDesc": "Prouvez que le lot de règlement est valide sans révéler les détails des transactions",
+      "compliance": "Conformité réglementaire",
+      "complianceDesc": "Prouvez la conformité aux réglementations sans exposer les données sensibles"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "Vérification d'authenticité ZK-STARK",
+    "subtitle": "Vérifiez l'authenticité de notre implémentation de preuve zero-knowledge",
+    "systemStatus": "État du système",
+    "operational": "Opérationnel",
+    "verifyProof": "Vérifier une preuve",
+    "pasteProof": "Collez votre preuve JSON ici",
+    "implementation": "Détails de l'implémentation",
+    "cryptoParams": "Paramètres cryptographiques",
+    "sourceCode": "Code source"
+  },
+  "zkVerification": {
+    "title": "Preuve mathématique ZK-STARK",
+    "subtitle": "Vérification formelle que ZkVanguard implémente un vrai ZK-STARK selon les spécifications académiques de Ben-Sasson et al.",
+    "auditorSummary": "Résumé rapide pour auditeurs",
+    "implementation": "Implémentation",
+    "securityLevel": "Niveau de sécurité",
+    "academicFoundation": "Fondement académique"
   }
 }

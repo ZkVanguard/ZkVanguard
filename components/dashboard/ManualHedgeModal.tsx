@@ -88,7 +88,10 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
           leverage,
           stopLoss: stopNum,
           takeProfit: targetNum,
-          reason: reason || `Manual ${hedgeType} hedge on ${asset}`
+          reason: reason || `Manual ${hedgeType} hedge on ${asset}`,
+          // Enable auto-approval for manual hedges (user-initiated)
+          autoApprovalEnabled: true,
+          autoApprovalThreshold: 1000000 // High threshold to auto-approve most manual hedges
         })
       });
 

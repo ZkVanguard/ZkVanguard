@@ -17,6 +17,8 @@
     "ctaArrow": "→"
   },
   "features": {
+    "title": "Core Features",
+    "subtitle": "Enterprise-grade infrastructure for secure, autonomous trading",
     "zkProofs": {
       "title": "ZK Proofs",
       "description": "Zero-knowledge verification for privacy & security."
@@ -39,12 +41,14 @@
     "gasSavings": "Gas Savings",
     "zkProofs": "ZK Proofs",
     "responseTime": "Response Time",
-    "batchingNote": "x402 batching on Cronos zkEVM"
+    "batchingNote": "x402 batching on Cronos zkEVM",
+    "chainsSupported": "Chains Supported"
   },
   "cta": {
     "title": "Ready to Start?",
     "subtitle": "Quantum-proof ZK-STARK verification meets autonomous AI agents",
-    "button": "Launch Dashboard"
+    "button": "Launch Dashboard",
+    "learnMore": "Learn more about security"
   },
   "footer": {
     "product": "PRODUCT",
@@ -90,6 +94,7 @@
   },
   "agents": {
     "title": "AI Agent Network",
+    "subtitle": "24/7 autonomous portfolio management with multi-agent consensus",
     "active": "Active",
     "idle": "Idle",
     "monitoring": "Monitoring",
@@ -128,5 +133,69 @@
       "description": "Auto-hedge & settle transactions",
       "detail": "Automated protection"
     }
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "January 2026",
+    "title": "ZkVanguard Whitepaper",
+    "subtitle": "AI-Powered Predictive Risk Management with Zero-Knowledge Privacy for Institutional Digital Assets",
+    "readButton": "Read Whitepaper",
+    "toc": "Table of Contents",
+    "sections": {
+      "abstract": "Abstract",
+      "introduction": "Introduction & Market Opportunity",
+      "problem": "The Problem: Reactive Risk Management",
+      "solution": "Our Solution: Predictive Intelligence",
+      "architecture": "Technical Architecture",
+      "agents": "Multi-Agent AI System",
+      "zkp": "Zero-Knowledge Privacy Layer",
+      "gasless": "Gasless Transaction Protocol (x402)",
+      "predictions": "Prediction Market Integration",
+      "multichain": "Multi-Chain Strategy",
+      "security": "Security Analysis",
+      "tokenomics": "Tokenomics & Economics",
+      "roadmap": "Roadmap",
+      "conclusion": "Conclusion",
+      "references": "References"
+    }
+  },
+  "zkProof": {
+    "title": "ZK Proof Generator",
+    "subtitle": "Generate and verify zero-knowledge proofs for portfolio privacy",
+    "selectScenario": "Select Scenario",
+    "generateProof": "Generate Proof",
+    "verifyProof": "Verify Proof",
+    "proofGenerated": "Proof Generated",
+    "proofVerified": "Proof Verified",
+    "proofFailed": "Verification Failed",
+    "showSecrets": "Show Secrets",
+    "hideSecrets": "Hide Secrets",
+    "scenarios": {
+      "portfolioRisk": "Portfolio Risk Assessment",
+      "portfolioRiskDesc": "Prove portfolio risk is below threshold without revealing positions",
+      "settlementBatch": "Settlement Batch Validation",
+      "settlementBatchDesc": "Prove settlement batch is valid without revealing transaction details",
+      "compliance": "Regulatory Compliance",
+      "complianceDesc": "Prove compliance with regulations without exposing sensitive data"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK Authenticity Verification",
+    "subtitle": "Verify the authenticity of our zero-knowledge proof implementation",
+    "systemStatus": "System Status",
+    "operational": "Operational",
+    "verifyProof": "Verify a Proof",
+    "pasteProof": "Paste your proof JSON here",
+    "implementation": "Implementation Details",
+    "cryptoParams": "Cryptographic Parameters",
+    "sourceCode": "Source Code"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK Mathematical Proof",
+    "subtitle": "Formal verification that ZkVanguard implements a TRUE ZK-STARK according to Ben-Sasson et al. academic specifications",
+    "auditorSummary": "Auditor Quick Summary",
+    "implementation": "Implementation",
+    "securityLevel": "Security Level",
+    "academicFoundation": "Academic Foundation"
   }
 }

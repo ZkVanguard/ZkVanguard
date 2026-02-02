@@ -169,6 +169,9 @@ export default function DashboardPage() {
           notionalValue: Math.round(notionalValue),
           leverage: 5,
           reason: market.question,
+          // Enable auto-approval for prediction market triggered hedges
+          autoApprovalEnabled: true,
+          autoApprovalThreshold: 50000
         })
       });
 

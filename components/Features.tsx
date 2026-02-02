@@ -46,10 +46,10 @@ export function Features() {
       {/* Section Header */}
       <div className="text-center mb-12 lg:mb-16">
         <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-4">
-          Core Features
+          {t('title')}
         </h2>
         <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] max-w-[600px] mx-auto">
-          Enterprise-grade infrastructure for secure, autonomous trading
+          {t('subtitle')}
         </p>
       </div>
 

@@ -51,7 +51,7 @@ export function AgentShowcase() {
           {t('title')}
         </h2>
         <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] max-w-[600px] mx-auto">
-          24/7 autonomous portfolio management with multi-agent consensus
+          {t('subtitle')}
         </p>
       </div>
       

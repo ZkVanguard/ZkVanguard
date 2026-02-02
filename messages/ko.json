@@ -8,11 +8,11 @@
   },
   "hero": {
     "eyebrow": "Cronos zkEVM",
-    "quantumProof": "양자 방어",
-    "headline1": "당신의 포트폴리오.",
+    "quantumProof": "양자 내성",
+    "headline1": "귀하의 포트폴리오.",
     "headline2": "보호됩니다.",
-    "subtitle": "AI 에이전트가 위험을 관리합니다. 영지식 증명이 개인정보를 보호합니다.",
-    "ctaDashboard": "대시보드 실행",
+    "subtitle": "AI 에이전트가 리스크를 관리합니다. 영지식 증명이 프라이버시를 보호합니다.",
+    "ctaDashboard": "대시보드 접속",
     "ctaLearnMore": "자세히 알아보기",
     "ctaArrow": "→"
   },
@@ -38,13 +38,11 @@
   },
   "stats": {
     "aiAgents": "AI 에이전트",
-    "aiAgentsDesc": "자율 위험 관리",
-    "zkVerified": "ZK 검증됨",
-    "zkVerifiedDesc": "암호화 프라이버시",
-    "riskCoverage": "위험 커버리지",
-    "riskCoverageDesc": "포트폴리오 가치의",
-    "uptime": "가동 시간",
-    "uptimeDesc": "지속적인 모니터링"
+    "gasSavings": "가스 절약",
+    "zkProofs": "ZK 증명",
+    "responseTime": "응답 시간",
+    "batchingNote": "Cronos zkEVM에서 x402 일괄 처리",
+    "chainsSupported": "지원되는 체인"
   },
   "cta": {
     "title": "자산을 보호할 준비가 되셨나요?",
@@ -70,10 +68,10 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "privacy": "개인정보 보호정책",
-    "terms": "서비스 약관",
-    "rights": "모든 권리 보유.",
+    "terms": "서비스 이용약관",
+    "rights": "All rights reserved.",
     "testnet": "Cronos zkEVM 테스트넷",
-    "stage": "프리시드 단계",
+    "stage": "Pre-Seed 단계",
     "builtWith": "ZK-STARK로 구축"
   },
   "connect": {
@@ -84,25 +82,26 @@
     "switchNetwork": "{network}로 전환"
   },
   "dashboard": {
-    "title": "위험 대시보드",
+    "title": "리스크 대시보드",
     "overview": "개요",
     "positions": "포지션",
-    "analytics": "분석",
+    "analytics": "애널리틱스",
     "settings": "설정",
     "totalValue": "총 포트폴리오 가치",
-    "riskScore": "위험 점수",
+    "riskScore": "리스크 스코어",
     "activePositions": "활성 포지션",
     "monthlyReturn": "월간 수익률"
   },
   "agents": {
     "title": "AI 에이전트 네트워크",
+    "subtitle": "멀티 에이전트 합의를 통한 24/7 자율 포트폴리오 관리",
     "active": "활성",
-    "idle": "유휴",
+    "idle": "대기",
     "monitoring": "모니터링",
-    "leadAgent": "리드 위험 조정자",
-    "marketAgent": "시장 인텔리전스 에이전트",
-    "complianceAgent": "규정 준수 에이전트",
-    "executionAgent": "실행 에이전트"
+    "leadAgent": "Lead Risk Orchestrator",
+    "marketAgent": "마켓 인텔리전스 에이전트",
+    "complianceAgent": "컴플라이언스 에이전트",
+    "executionAgent": "익스큐션 에이전트"
   },
   "common": {
     "loading": "로딩 중...",
@@ -134,5 +133,69 @@
       "description": "자동 헤지 및 거래 정산",
       "detail": "자동화된 보호"
     }
+  },
+  "whitepaper": {
+    "version": "버전 1.0",
+    "date": "2026년 1월",
+    "title": "ZkVanguard 백서",
+    "subtitle": "기관 디지털 자산을 위한 영지식 프라이버시를 갖춤 AI 기반 예측 위험 관리",
+    "readButton": "백서 읽기",
+    "toc": "목차",
+    "sections": {
+      "abstract": "초록",
+      "introduction": "소개 및 시장 기회",
+      "problem": "문제점: 반응적 위험 관리",
+      "solution": "우리의 솔루션: 예측 인텔리전스",
+      "architecture": "기술 아키텍처",
+      "agents": "멀티 에이전트 AI 시스템",
+      "zkp": "영지식 프라이버시 레이어",
+      "gasless": "가스리스 트랜잭션 프로토콜 (x402)",
+      "predictions": "예측 시장 통합",
+      "multichain": "멀티체인 전략",
+      "security": "보안 분석",
+      "tokenomics": "토큰노믹스 및 경제",
+      "roadmap": "로드맵",
+      "conclusion": "결론",
+      "references": "참고문헌"
+    }
+  },
+  "zkProof": {
+    "title": "ZK 증명 생성기",
+    "subtitle": "포트폴리오 프라이버시를 위한 영지식 증명 생성 및 검증",
+    "selectScenario": "시나리오 선택",
+    "generateProof": "증명 생성",
+    "verifyProof": "증명 검증",
+    "proofGenerated": "증명 생성됨",
+    "proofVerified": "증명 검증됨",
+    "proofFailed": "검증 실패",
+    "showSecrets": "비밀 표시",
+    "hideSecrets": "비밀 숨기기",
+    "scenarios": {
+      "portfolioRisk": "포트폴리오 위험 평가",
+      "portfolioRiskDesc": "포지션을 공개하지 않고 포트폴리오 위험이 임계값 미만임을 증명",
+      "settlementBatch": "정산 배치 검증",
+      "settlementBatchDesc": "거래 세부 정보를 공개하지 않고 정산 배치가 유효함을 증명",
+      "compliance": "규정 준수",
+      "complianceDesc": "민감한 데이터를 노출하지 않고 규정 준수를 증명"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "ZK-STARK 진정성 검증",
+    "subtitle": "우리의 영지식 증명 구현의 진정성 검증",
+    "systemStatus": "시스템 상태",
+    "operational": "운영 중",
+    "verifyProof": "증명 검증",
+    "pasteProof": "증명 JSON을 여기에 붙여넣으세요",
+    "implementation": "구현 세부 정보",
+    "cryptoParams": "암호화 매개변수",
+    "sourceCode": "소스 코드"
+  },
+  "zkVerification": {
+    "title": "ZK-STARK 수학적 증명",
+    "subtitle": "ZkVanguard가 Ben-Sasson 등의 학술 사양에 따른 진정한 ZK-STARK를 구현함을 공식 검증",
+    "auditorSummary": "감사자 빠른 요약",
+    "implementation": "구현",
+    "securityLevel": "보안 레벨",
+    "academicFoundation": "학술적 기반"
   }
 }
