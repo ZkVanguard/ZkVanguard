@@ -84,7 +84,7 @@ class CryptocomAIService {
             console.warn('createClient not found in @crypto.com/ai-agent-client');
             this.client = null;
           }
-        }).catch((error) => {
+        }).catch((_error) => {
           // Silent catch - fallback logic will be used
           this.client = null;
         });
@@ -621,7 +621,7 @@ EFFECTIVENESS: [0-100]`;
     }
   }
 
-  private fallbackHedgeRecommendations(portfolioData: any, riskProfile: any): HedgeRecommendation[] {
+  private fallbackHedgeRecommendations(_portfolioData: any, _riskProfile: any): HedgeRecommendation[] {
     return [
       {
         strategy: 'Stablecoin Hedge',

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Eye, EyeOff, Trash2, Download, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Terminal, Trash2, Download, Maximize2, Minimize2 } from 'lucide-react';
 
 export interface LogEntry {
   id: string;

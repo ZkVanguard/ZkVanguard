@@ -108,7 +108,7 @@ function SuiContextProvider({
   const [balanceRaw, setBalanceRaw] = useState<bigint>(BigInt(0));
   
   const account = useCurrentAccount();
-  const { currentWallet, connectionStatus } = useCurrentWallet();
+  const { currentWallet: _currentWallet, connectionStatus } = useCurrentWallet();
   const { mutate: connect, isPending: isConnecting } = useConnectWallet();
   const { mutate: disconnect } = useDisconnectWallet();
   const wallets = useWallets();

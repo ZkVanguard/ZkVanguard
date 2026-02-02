@@ -3,7 +3,7 @@
 import { ReactNode, createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import { WalletProviders } from './wallet-providers';
 import { SuiWalletProviders, useSui } from './sui-providers';
-import { ChainType, getChainInfo, NetworkType } from '../lib/contracts/addresses';
+import { ChainType, NetworkType } from '../lib/contracts/addresses';
 import { useAccount, useChainId } from 'wagmi';
 
 // ============================================
@@ -151,7 +151,7 @@ interface MultiChainProvidersProps {
  */
 export function MultiChainProviders({ 
   children,
-  defaultChain = 'sui',
+  defaultChain: _defaultChain = 'sui',
   defaultNetwork = 'testnet',
 }: MultiChainProvidersProps) {
   return (

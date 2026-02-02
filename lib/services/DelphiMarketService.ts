@@ -37,7 +37,7 @@ export class DelphiMarketService {
   /**
    * Generate crypto-specific predictions based on REAL market data from Crypto.com
    */
-  static async generateCryptoPredictions(assets: string[]): Promise<PredictionMarket[]> {
+  static async generateCryptoPredictions(_assets: string[]): Promise<PredictionMarket[]> {
     const predictions: PredictionMarket[] = [];
     
     try {
@@ -138,7 +138,7 @@ export class DelphiMarketService {
       }
 
       if (ethTicker) {
-        const change24h = parseFloat(ethTicker.c || '0') * 100;
+        const _change24h = parseFloat(ethTicker.c || '0') * 100;
         const price = parseFloat(ethTicker.a || '0');
         
         // ETH staking prediction

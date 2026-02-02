@@ -3,10 +3,9 @@
  * @module agents/specialized/RiskAgent
  */
 
-import { EventEmitter } from 'eventemitter3';
 import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
-import { AgentConfig, AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
+import { AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
 import { ethers } from 'ethers';
 
 /**
@@ -323,8 +322,9 @@ REC3: [third recommendation]`;
   private async calculateExposures(portfolioId: number): Promise<RiskAnalysis['exposures']> {
     try {
       // Import services for real portfolio data
-      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
-      const realMarketDataService = getMarketDataService();
+      const { getMarketDataService: _getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      _getMarketDataService(); // Service available but not needed in this method
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
       
       // Get real portfolio data

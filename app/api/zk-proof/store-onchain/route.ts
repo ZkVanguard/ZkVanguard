@@ -4,7 +4,7 @@ import { logger } from '@/lib/utils/logger';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { proofHash, merkleRoot, securityLevel, signature, address } = body;
+    const { proofHash, merkleRoot, securityLevel, signature: _signature, address } = body;
 
     if (!proofHash || !merkleRoot || !securityLevel) {
       return NextResponse.json(

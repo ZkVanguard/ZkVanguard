@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, memo } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 

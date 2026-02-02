@@ -69,7 +69,7 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Calculate real portfolio analysis from context
-  const portfolioAnalysis = useMemo(() => {
+  const _portfolioAnalysis = useMemo(() => {
     if (!positionsData || !derived) {
       return {
         recommendation: 'HOLD',

@@ -7,7 +7,7 @@ import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { MoonlanderClient } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
-import { DelphiMarketService, PredictionMarket } from '../../lib/services/DelphiMarketService';
+import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 

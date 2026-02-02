@@ -49,7 +49,7 @@ export function WithdrawModal({
   const { 
     writeContract: writeWithdraw, 
     data: withdrawHash,
-    isPending: isWithdrawPending,
+    isPending: _isWithdrawPending,
     error: withdrawError 
   } = useWriteContract();
 

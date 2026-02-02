@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useCallback, memo, useMemo, useRef, useEffect } from 'react';
+import { useState, memo, useMemo, useRef, useEffect } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { motion } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
-import { cache } from '@/lib/utils/cache';
 
 interface HedgePosition {
   id: string;
@@ -75,7 +73,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
   const processingRef = useRef(false);
-  const lastProcessedRef = useRef<string>('');
+  const _lastProcessedRef = useRef<string>('');
   
   // AI Recommendations state
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
@@ -128,7 +126,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             // Use pre-calculated stats from API for accuracy
             const totalPnL = data.summary.totalUnrealizedPnL || dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
             const profitable = data.summary.profitable ?? dbHedges.filter(h => h.pnl > 0).length;
-            const unprofitable = data.summary.unprofitable ?? dbHedges.filter(h => h.pnl <= 0).length;
+            const _unprofitable = data.summary.unprofitable ?? dbHedges.filter(h => h.pnl <= 0).length;
             const winRate = dbHedges.length > 0 ? (profitable / dbHedges.length) * 100 : 0;
             const pnlValues = dbHedges.map(h => h.pnl || 0);
             const bestTrade = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;

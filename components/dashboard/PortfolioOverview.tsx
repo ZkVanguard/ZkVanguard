@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DollarSign, RefreshCw, ChevronRight, TrendingUp, Shield } from 'lucide-react';
+import { DollarSign, RefreshCw, ChevronRight } from 'lucide-react';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { usePositions } from '@/contexts/PositionsContext';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
@@ -16,8 +16,8 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
   // Get ALL data from centralized context - zero redundant fetching!
   const { positionsData, derived, loading, refetch } = usePositions();
   
-  const [aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [_aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
+  const [_aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     async function fetchAIAnalysis() {

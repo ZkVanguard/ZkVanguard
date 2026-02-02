@@ -83,7 +83,7 @@ async function main() {
 }
 
 main()
-  .then((address) => {
+  .then((_address) => {
     console.log('\n✅ Deployment successful!');
     process.exit(0);
   })

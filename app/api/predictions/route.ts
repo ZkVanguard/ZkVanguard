@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 /**
  * Analyze predictions for risk assessment
  */
-function analyzePredictions(predictions: PredictionMarket[], assets: string[]) {
+function analyzePredictions(predictions: PredictionMarket[], _assets: string[]) {
   const hedgeSignals = predictions.filter(p => p.recommendation === 'HEDGE');
   const highImpact = predictions.filter(p => p.impact === 'HIGH');
   const highProbRisk = predictions.filter(p => p.probability > 70 && p.impact !== 'LOW');

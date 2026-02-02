@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     
     // In production, insert to PostgreSQL
     // Using native fetch to Neon's HTTP API for serverless compatibility
-    const query = `
+    const _query = `
       INSERT INTO analytics_events (event_type, session_id, page, chain, feature, error_type, metadata, user_agent_type, screen_width, referrer)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `;

@@ -5,10 +5,6 @@
 
 import {
   Client,
-  Block,
-  Transaction,
-  Wallet,
-  Token,
   CronosEvm,
   CronosZkEvm,
 } from '@crypto.com/developer-platform-client';
@@ -194,7 +190,7 @@ class CryptocomDeveloperPlatformService {
   /**
    * Get transactions for an address
    */
-  async getAddressTransactions(address: string, limit: number = 10): Promise<TransactionData[]> {
+  async getAddressTransactions(address: string, _limit: number = 10): Promise<TransactionData[]> {
     this.ensureInitialized();
 
     try {
@@ -291,7 +287,7 @@ class CryptocomDeveloperPlatformService {
   /**
    * Get all token balances for an address
    */
-  async getAllTokenBalances(address: string): Promise<TokenBalance[]> {
+  async getAllTokenBalances(_address: string): Promise<TokenBalance[]> {
     this.ensureInitialized();
 
     try {

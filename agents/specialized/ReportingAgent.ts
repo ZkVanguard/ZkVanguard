@@ -319,8 +319,7 @@ export class ReportingAgent extends BaseAgent {
 
       // Import real services
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
-      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
-      const realMarketDataService = getMarketDataService();
+      // RealMarketDataService available for future price data enhancements
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
@@ -448,8 +447,7 @@ export class ReportingAgent extends BaseAgent {
 
       // Import real services
       const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
-      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
-      const realMarketDataService = getMarketDataService();
+      // RealMarketDataService available for future enhancements
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
@@ -481,8 +479,7 @@ export class ReportingAgent extends BaseAgent {
       }));
       
       // Calculate daily returns based on actual portfolio value
-      // Use real P/L percentage as base and model realistic daily variations
-      const baseDailyReturn = percentageReturn / 30;
+      // Model realistic daily variations from real P/L percentage
       const dailyReturns: PerformanceReport['dailyReturns'] = [];
       let runningValue = startValue;
       let maxValue = startValue;

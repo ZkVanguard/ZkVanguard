@@ -2,7 +2,7 @@
  * React hooks for interacting with deployed smart contracts
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useChainId } from 'wagmi';
 import { getContractAddresses } from './addresses';
@@ -126,7 +126,7 @@ export function useUserPortfolios(userAddress?: string) {
         
         // Fetch PortfolioCreated events to get transaction hashes
         // Cronos RPC has a 2000 block limit, so we need to query in chunks
-        let events: any[] = [];
+        const events: any[] = [];
         try {
           const currentBlock = await provider.getBlockNumber();
           const portfolioCreatedFilter = contract.filters.PortfolioCreated();

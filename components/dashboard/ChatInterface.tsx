@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Brain, Shield, Zap, Activity, TrendingDown, CheckCircle } from 'lucide-react';
+import { Send, Bot, User, Shield, Zap, Activity, TrendingDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { sendAgentCommand, assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport, getAgentActivity } from '../../lib/api/agents';
+import { assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
@@ -245,7 +245,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
       let response: { content: string; agent: string; actions?: { label: string; action: () => void }[] };
 
       switch (intent) {
-        case 'buy_asset':
+        case 'buy_asset': {
           setActiveAgent('Lead Agent → DEX Agent');
           const buyAsset = params.asset as string;
           const buyAmount = params.amount as number;
@@ -283,8 +283,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             };
           }
           break;
+        }
           
-        case 'sell_asset':
+        case 'sell_asset': {
           setActiveAgent('Lead Agent → DEX Agent');
           const sellAsset = params.asset as string;
           const sellAmount = params.amount as number;
@@ -322,8 +323,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             };
           }
           break;
+        }
         
-        case 'analyze_portfolio':
+        case 'analyze_portfolio': {
           setActiveAgent('Lead Agent → Risk Agent');
           // Real API call
           const riskData = await assessPortfolioRisk(_address);
@@ -337,8 +339,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             agent: 'Risk Agent',
           };
           break;
+        }
 
-        case 'assess_risk':
+        case 'assess_risk': {
           setActiveAgent('Lead Agent → Risk Agent');
           const risk = await assessPortfolioRisk(_address);
           const riskLevel = risk.var < 0.1 ? 'LOW' : risk.var < 0.2 ? 'MEDIUM' : 'HIGH';
@@ -353,8 +356,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             agent: 'Risk Agent',
           };
           break;
+        }
 
-        case 'delphi_query':
+        case 'delphi_query': {
           setActiveAgent('Lead Agent → Delphi Integration');
           const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
           
@@ -382,13 +386,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
             agent: 'Delphi Integration',
           };
           break;
+        }
 
-        case 'hedge_portfolio':
+        case 'hedge_portfolio': {
           setActiveAgent('Lead Agent → Risk Agent → Hedging Agent');
           
           // Step 1: Get AI recommendations (no signature needed for analysis)
           const hedgeRecs = await getHedgingRecommendations(_address, []);
-          const amount = params.amount as number || 10000000;
+          const _amount = params.amount as number || 10000000;
           const targetYield = params.targetYield || 8;
           
           // Extract real portfolio data from recommendations
@@ -534,8 +539,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             actions: actions,
           };
           break;
+        }
 
-        case 'execute_settlement':
+        case 'execute_settlement': {
           setActiveAgent('Lead Agent → Settlement Agent');
           const settlement = await executeSettlementBatch([
             { recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', amount: 1000, token: '0x0' },
@@ -551,8 +557,9 @@ export function ChatInterface({ address: _address }: { address: string }) {
             agent: 'Settlement Agent',
           };
           break;
+        }
 
-        case 'generate_report':
+        case 'generate_report': {
           setActiveAgent('Lead Agent → Reporting Agent');
           const report = await generatePortfolioReport(_address, 'monthly');
           response = {
@@ -565,6 +572,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
             agent: 'Reporting Agent',
           };
           break;
+        }
 
         default:
           setActiveAgent('Lead Agent');

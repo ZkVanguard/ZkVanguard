@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { logger } from '../../../lib/utils/logger';
-import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, QrCode, ExternalLink } from 'lucide-react';
+import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, ExternalLink } from 'lucide-react';
 import { ProofVerification } from '../../../components/dashboard/ProofVerification';
 import { useAccount, useWalletClient, useSignMessage } from 'wagmi';
 
@@ -90,6 +89,8 @@ function ZKProofPage() {
   const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { signMessageAsync } = useSignMessage();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _walletAddress = address; // Store address for potential future use
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0]);
   const [proofResult, setProofResult] = useState<ProofResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -100,7 +101,9 @@ function ZKProofPage() {
   const [onChainTxHash, setOnChainTxHash] = useState<string | null>(null);
   const [isStoringOnChain, setIsStoringOnChain] = useState(false);
   const [copied, setCopied] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [shareableLink, setShareableLink] = useState<string>('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars  
   const [showQR, setShowQR] = useState(false);
   
   // Editable statement and witness
@@ -162,7 +165,6 @@ function ZKProofPage() {
       logger.info('Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
       
       const { convertToContractFormat } = await import('@/lib/api/zk');
-      const { useAccount } = await import('wagmi');
       
       // Use walletClient from component hook
       if (!walletClient) {

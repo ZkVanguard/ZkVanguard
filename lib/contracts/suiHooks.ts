@@ -7,7 +7,6 @@
 import { useCallback, useState } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
 import { useSui } from '../../app/sui-providers';
-import { getSuiContractAddresses } from './addresses';
 
 // ============================================
 // TYPES
@@ -60,7 +59,7 @@ export function useRWAManager() {
     address, 
     isConnected, 
     executeTransaction, 
-    network, 
+    network: _network, 
     contractAddresses 
   } = useSui();
   

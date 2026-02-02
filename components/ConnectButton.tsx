@@ -69,7 +69,7 @@ export function ConnectButton() {
     connectSui,
     disconnectSui,
     isConnectingSui,
-    isClient,
+    isClient: _isClient,
   } = useSuiWalletSafe();
   
   const suiAddress = suiAccount?.address ?? null;

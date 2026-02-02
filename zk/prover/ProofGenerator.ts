@@ -134,74 +134,75 @@ export class ProofGenerator {
     const timeout = Number(process.env.ZK_PYTHON_TIMEOUT) || 120000; // default 120s
 
     if (useHttp) {
-      return new Promise(async (resolve, reject) => {
+      return new Promise((resolve, reject) => {
         const controller = new AbortController();
         const timer = setTimeout(() => {
-          try { controller.abort(); } catch {}
+          try { controller.abort(); } catch { /* ignore abort errors */ }
           reject(new Error('HTTP request to ZK API timed out'));
         }, timeout);
 
-        try {
-          const apiUrl = zkApiUrl || 'http://localhost:8000';
-          const resp = await (globalThis as any).fetch(`${apiUrl}/api/zk/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({ proof_type: proofType, data: { statement, witness }, is_test: true }),
-          });
+        const executeHttpRequest = async () => {
+          try {
+            const apiUrl = zkApiUrl || 'http://localhost:8000';
+            const resp = await (globalThis as any).fetch(`${apiUrl}/api/zk/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
+              body: JSON.stringify({ proof_type: proofType, data: { statement, witness }, is_test: true }),
+            });
 
-          if (!resp.ok) {
-            const txt = await resp.text().catch(() => '');
-            logger.warn('ZK API non-OK response, falling back to CLI', { status: resp.status, body: txt });
-          } else {
-            const result = await resp.json().catch(() => null);
-            // Poll if pending
-            if (result && (result.status === 'pending' || result.job_id)) {
-              const jobId = result.job_id || (result as any).jobId;
-              const maxAttempts = Math.max(10, Math.floor(timeout / 1000));
-              for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                await new Promise((r) => setTimeout(r, 1000));
-                try {
-                  const statusResp = await (globalThis as any).fetch(`${apiUrl}/api/zk/proof/${jobId}`);
-                  if (!statusResp.ok) continue;
-                  const statusResult = await statusResp.json().catch(() => null);
-                  if (!statusResult) continue;
-                  if (statusResult.status === 'completed' && statusResult.proof) {
-                    clearTimeout(timer);
-                    resolve(statusResult);
-                    return;
+            if (!resp.ok) {
+              const txt = await resp.text().catch(() => '');
+              logger.warn('ZK API non-OK response, falling back to CLI', { status: resp.status, body: txt });
+            } else {
+              const result = await resp.json().catch(() => null);
+              // Poll if pending
+              if (result && (result.status === 'pending' || result.job_id)) {
+                const jobId = result.job_id || (result as any).jobId;
+                const maxAttempts = Math.max(10, Math.floor(timeout / 1000));
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                  await new Promise((r) => setTimeout(r, 1000));
+                  try {
+                    const statusResp = await (globalThis as any).fetch(`${apiUrl}/api/zk/proof/${jobId}`);
+                    if (!statusResp.ok) continue;
+                    const statusResult = await statusResp.json().catch(() => null);
+                    if (!statusResult) continue;
+                    if (statusResult.status === 'completed' && statusResult.proof) {
+                      clearTimeout(timer);
+                      resolve(statusResult);
+                      return;
+                    }
+                    if (statusResult.status === 'failed') {
+                      clearTimeout(timer);
+                      reject(new Error(statusResult.error || 'Proof generation failed on server'));
+                      return;
+                    }
+                  } catch (e) {
+                    // continue polling until timeout
                   }
-                  if (statusResult.status === 'failed') {
-                    clearTimeout(timer);
-                    reject(new Error(statusResult.error || 'Proof generation failed on server'));
-                    return;
-                  }
-                } catch (e) {
-                  // continue polling until timeout
                 }
+                clearTimeout(timer);
+                reject(new Error('Proof generation timeout while polling ZK API'));
+                return;
               }
-              clearTimeout(timer);
-              reject(new Error('Proof generation timeout while polling ZK API'));
-              return;
-            }
 
-            if (result) {
-              clearTimeout(timer);
-              resolve(result);
-              return;
+              if (result) {
+                clearTimeout(timer);
+                resolve(result);
+                return;
+              }
             }
+          } catch (err) {
+            logger.warn('HTTP ZK API request failed, will try CLI fallback', { error: err });
+          } finally {
+            try { clearTimeout(timer); } catch { /* ignore */ }
           }
-        } catch (err) {
-          logger.warn('HTTP ZK API request failed, will try CLI fallback', { error: err });
-        } finally {
-          try { clearTimeout(timer); } catch {}
-        }
 
-        // HTTP path failed — fall back to CLI spawn
-        try {
-          const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
-          const cliTimer = setTimeout(() => {}, timeout);
-          const pythonProcess = spawn(this.pythonPath, [
+          // HTTP path failed — fall back to CLI spawn
+          try {
+            const pythonScript = path.join(this.zkSystemPath, 'cli', 'generate_proof.py');
+            const cliTimer = setTimeout(() => { /* timeout handler */ }, timeout);
+            const pythonProcess = spawn(this.pythonPath, [
             pythonScript,
             '--proof-type',
             proofType,
@@ -234,9 +235,12 @@ export class ProofGenerator {
             clearTimeout(cliTimer);
             reject(new Error(`Failed to spawn Python process: ${error}`));
           });
-        } catch (cliErr) {
-          reject(cliErr);
-        }
+          } catch (cliErr) {
+            reject(cliErr);
+          }
+        };
+        
+        executeHttpRequest();
       });
     }
 

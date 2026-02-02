@@ -6,7 +6,7 @@ import { useAccount, useBalance } from 'wagmi';
 import { 
   Bot, Shield, Briefcase, TrendingUp, History, 
   BarChart3, Zap, MessageSquare, ChevronRight, 
-  Menu, X, Settings, ArrowUpRight, ArrowLeftRight
+  Menu, X, Settings, ArrowLeftRight
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
@@ -109,8 +109,9 @@ export default function DashboardPage() {
   const { data: balance } = useBalance({ address });
   const contractAddresses = useContractAddresses();
   // Get portfolio count and other data from centralized context - no redundant fetches!
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { derived } = usePositions();
-  const userPortfolioCount = derived?.portfolioCount || 0;
+  // Portfolio count available via derived?.portfolioCount if needed
   
   const [activeNav, setActiveNav] = useState<NavId>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

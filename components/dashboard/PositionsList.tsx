@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ChevronDown, ChevronUp, ExternalLink, Shield, Target, Zap, PieChart, Activity, Clock, Plus, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
@@ -97,7 +97,7 @@ PositionRow.displayName = 'PositionRow';
 export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   const { isConnected } = useAccount();
   // Get only portfolios owned by the connected wallet
-  const { data: userPortfolios, count: userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
+  const { data: userPortfolios, count: _userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
   const { positionsData, derived, error: positionsError, refetch: refetchPositions } = usePositions();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +108,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   const positions = positionsData?.positions || [];
   const totalValue = positionsData?.totalValue || 0;
   const lastUpdated = positionsData ? new Date(positionsData.lastUpdated) : null;
-  const error = positionsError;
+  const _error = positionsError;
   
   // Deposit modal state
   const [depositModalOpen, setDepositModalOpen] = useState(false);
@@ -129,10 +129,10 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   const [analyzedPortfolio, setAnalyzedPortfolio] = useState<OnChainPortfolio | null>(null);
 
   // Expanded predictions state (portfolio ID -> boolean)
-  const [expandedPredictions, setExpandedPredictions] = useState<Record<number, boolean>>({});
+  const [_expandedPredictions, _setExpandedPredictions] = useState<Record<number, boolean>>({});
   
   // Collapseable strategies section - default to expanded for quick view
-  const [strategiesCollapsed, setStrategiesCollapsed] = useState(false);
+  const [_strategiesCollapsed, _setStrategiesCollapsed] = useState(false);
 
   const openDepositModal = (portfolio: OnChainPortfolio) => {
     setSelectedPortfolio(portfolio);

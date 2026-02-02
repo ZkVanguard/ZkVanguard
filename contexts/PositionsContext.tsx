@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
@@ -51,7 +51,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [activeHedgesCount, setActiveHedgesCount] = useState<number>(0);
   const lastFetchRef = useRef<number>(0);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const _fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debug: Log when address changes
   useEffect(() => {

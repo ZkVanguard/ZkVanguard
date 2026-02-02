@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, RotateCcw, TrendingDown, TrendingUp, Activity, 
-  Shield, Zap, AlertTriangle, CheckCircle, Brain, ChevronDown,
-  Terminal, Eye, EyeOff, Settings, Download, XCircle, Wifi, WifiOff
+  Shield, Zap, AlertTriangle, CheckCircle, Brain,
+  Terminal, Eye, EyeOff, Wifi
 } from 'lucide-react';
-import { ZKVerificationBadge, ZKBadgeInline, type ZKProofData } from '../../../components/ZKVerificationBadge';
+import { ZKBadgeInline, type ZKProofData } from '../../../components/ZKVerificationBadge';
 
 // Real API integration types
 interface RealPriceData {
@@ -274,7 +274,7 @@ export default function SimulatorPage() {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<SimulationScenario>(scenarios[0]);
   const [portfolio, setPortfolio] = useState<PortfolioState>(initialPortfolio);
-  const [beforePortfolio, setBeforePortfolio] = useState<PortfolioState>(initialPortfolio);
+  const [, setBeforePortfolio] = useState<PortfolioState>(initialPortfolio);
   const [agentActions, setAgentActions] = useState<AgentAction[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(true);
@@ -295,12 +295,12 @@ export default function SimulatorPage() {
     ollama: boolean;
   }>({ prices: false, zkBackend: false, agents: false, ollama: false });
   const [realPrices, setRealPrices] = useState<Record<string, number>>({});
-  const [agentSystemStatus, setAgentSystemStatus] = useState<AgentStatus | null>(null);
+  const [, setAgentSystemStatus] = useState<AgentStatus | null>(null);
   
   // Dynamic simulation results - changes each run based on market conditions
   const [simulationSeed, setSimulationSeed] = useState<number>(Date.now());
   const [hedgeSavings, setHedgeSavings] = useState<number>(0);
-  const [responseTimeMs, setResponseTimeMs] = useState<number>(0);
+  const [, setResponseTimeMs] = useState<number>(0);
   const [unhedgedLoss, setUnhedgedLoss] = useState<number>(0);
   const [marketVarianceApplied, setMarketVarianceApplied] = useState<number>(0);
 
@@ -745,12 +745,15 @@ export default function SimulatorPage() {
     let currentPortfolio = { ...initialPortfolio };
     let hedgeActivated = false;
     let hedgePnL = 0;
+    // ZK proof generation result (used for demo display)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let realZkProofGenerated: RealZKProof | null = null;
     
     // Track position values at hedge activation for correct P&L calculation
     let btcValueAtHedgeActivation = 0;
     let ethValueAtHedgeActivation = 0;
     let croValueAtHedgeActivation = 0;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let hedgeActivationStep = 0;
 
     // Phase 1: Market event begins - Multi-source detection
@@ -1293,11 +1296,11 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
               setAiAnalysis({ response: aiResult.response, model: aiResult.model });
               addLog(`   └─ ✅ Model: ${aiResult.model}`, 'success');
               // Split AI response into readable lines
-              const lines = aiResult.response.split(/[.!?]\s+/).filter(l => l.trim().length > 10);
-              lines.slice(0, 4).forEach((line, i) => {
-                const trimmed = line.trim();
-                if (trimmed) {
-                  addLog(`   └─ 💬 ${trimmed}${trimmed.match(/[.!?]$/) ? '' : '.'}`, 'success');
+              const responseLines = aiResult.response.split(/[.!?]\s+/).filter(l => l.trim().length > 10);
+              responseLines.slice(0, 4).forEach((line) => {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                  addLog(`   └─ 💬 ${trimmedLine}${trimmedLine.match(/[.!?]$/) ? '' : '.'}`, 'success');
                 }
               });
               addAgentAction('Lead', 'ANALYSIS_COMPLETE', `Ollama/Qwen analysis: Hedge strategy ${hedgeSavings > portfolioLoss * 0.3 ? 'performing well' : 'needs adjustment'}`, {

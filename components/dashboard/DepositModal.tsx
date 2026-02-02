@@ -1,14 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, CheckCircle, AlertCircle, Coins, ExternalLink, Zap } from 'lucide-react';
+import { X, Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance } from 'wagmi';
-import { parseUnits, formatUnits, parseEther } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
-import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
-import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
-import { X402GaslessService } from '../../lib/services/X402GaslessService';
-import { ethers } from 'ethers';
 
 // WCRO contract address for wrapping native CRO
 const WCRO_ADDRESS = '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`;
@@ -122,7 +118,7 @@ export function DepositModal({
   const { 
     writeContract: writeWrap, 
     data: wrapHash,
-    isPending: isWrapPending,
+    isPending: _isWrapPending,
     error: wrapError 
   } = useWriteContract();
 
@@ -134,7 +130,7 @@ export function DepositModal({
   const { 
     writeContract: writeApprove, 
     data: approveHash,
-    isPending: isApprovePending,
+    isPending: _isApprovePending,
     error: approveError 
   } = useWriteContract();
 
@@ -142,7 +138,7 @@ export function DepositModal({
   const { 
     writeContract: writeDeposit, 
     data: depositHash,
-    isPending: isDepositPending,
+    isPending: _isDepositPending,
     error: depositError 
   } = useWriteContract();
 

@@ -63,7 +63,7 @@ export interface PortfolioActionRecommendation {
 export async function POST(request: NextRequest) {
   try {
     const body: PortfolioActionRequest = await request.json();
-    const { portfolioId, currentValue, targetYield, riskTolerance, assets, predictions, realMetrics } = body;
+    const { portfolioId, currentValue, targetYield: _targetYield, riskTolerance, assets, predictions, realMetrics } = body;
 
     logger.info('Portfolio action analysis requested', {
       portfolioId,
@@ -216,7 +216,7 @@ REASON3: [risk/opportunity assessment]`;
       }
       // Also match bullet points
       if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
-        const reason = trimmed.replace(/^[•\-\*]+\s*/, '').trim();
+        const reason = trimmed.replace(/^[•\-*]+\s*/, '').trim();
         if (reason.length > 10 && reason.length < 200 && !reason.toUpperCase().includes('ACTION') && !reason.toUpperCase().includes('CONFIDENCE')) {
           reasoning.push(`🤖 ${reason}`);
         }

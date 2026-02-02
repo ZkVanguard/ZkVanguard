@@ -208,7 +208,9 @@ export async function getMarketData(asset: string) {
           };
         }
       }
-    } catch {}
+    } catch {
+      // CoinGecko API error - fall through to error indicator
+    }
     
     // Return error indicator instead of fake data
     return {

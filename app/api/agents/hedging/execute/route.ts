@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
-import { MOONLANDER_CONTRACTS, PAIR_INDEX } from '@/integrations/moonlander/contracts';
+import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
 import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Initialize Moonlander client for Cronos Testnet
-    const provider = new ethers.JsonRpcProvider(
+    const _provider = new ethers.JsonRpcProvider(
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
     );
 

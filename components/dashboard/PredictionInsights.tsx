@@ -32,7 +32,7 @@ export const PredictionInsights = memo(function PredictionInsights({
   onTriggerAgentAnalysis 
 }: PredictionInsightsProps) {
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
-  const { isLoading: loading, error, setError, startLoading, stopLoading } = useLoading(true);
+  const { isLoading: loading, error, setError, startLoading: _startLoading, stopLoading } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'HIGH' | 'MODERATE' | 'LOW'>('all');
   const [selectedPrediction, setSelectedPrediction] = useState<PredictionMarket | null>(null);

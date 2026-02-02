@@ -19,7 +19,7 @@ class Logger {
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    const _timestamp = new Date().toISOString();
     const prefix = this.getPrefix(level);
 
     if (context && Object.keys(context).length > 0) {

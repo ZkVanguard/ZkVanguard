@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Fetch real prices from Crypto.com API
-    let priceMap: Record<string, number> = {};
+    const priceMap: Record<string, number> = {};
     try {
       const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
       const tickerData = await tickerResponse.json();

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
 // Generate deterministic fallback proof when ZK backend unavailable
-function generateFallbackProof(scenario: string, statement: Record<string, unknown>, witness: Record<string, unknown>) {
+function generateFallbackProof(scenario: string, statement: Record<string, unknown>, _witness: Record<string, unknown>) {
   const timestamp = Date.now();
   const hashInput = `${scenario}-${JSON.stringify(statement)}-${timestamp}`;
   const proofHash = `0x${Array.from(hashInput).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64)}`;
@@ -44,29 +44,29 @@ export async function POST(request: NextRequest) {
     const { scenario, statement, witness } = body;
 
     // Prepare data based on scenario type
-    let proofData: Record<string, unknown> = {};
+    let _proofData: Record<string, unknown> = {};
     
     if (scenario === 'portfolio_risk') {
-      proofData = {
+      _proofData = {
         portfolio_risk: (witness as any)?.actual_risk_score ?? null,
         portfolio_value: (witness as any)?.portfolio_value ?? null,
         threshold: (statement as any)?.threshold ?? null
       };
     } else if (scenario === 'settlement_batch') {
-      proofData = {
+      _proofData = {
         transaction_count: (witness as any)?.transactions?.length ?? 5,
         total_amount: (witness as any)?.total_amount ?? null,
         batch_id: (witness as any)?.batch_id ?? null
       };
     } else if (scenario === 'compliance_check') {
-      proofData = {
+      _proofData = {
         kyc_score: (witness as any)?.kyc_score ?? null,
         risk_level: (witness as any)?.risk_level ?? null,
         jurisdiction: (witness as any)?.jurisdiction ?? null
       };
     } else {
       // Generic data format
-      proofData = { ...(statement || {}), ...(witness || {}) };
+      _proofData = { ...(statement || {}), ...(witness || {}) };
     }
 
     // Call the real FastAPI ZK server

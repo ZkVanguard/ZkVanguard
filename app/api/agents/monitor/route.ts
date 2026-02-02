@@ -10,8 +10,7 @@ import {
   priceMonitorAgent, 
   PriceAlert, 
   AgentStatus, 
-  PriceData,
-  MonitorEvent 
+  PriceData
 } from '@/agents/specialized/PriceMonitorAgent';
 
 export interface MonitorControlRequest {
@@ -35,7 +34,7 @@ export interface MonitorControlResponse {
 }
 
 // Store for streaming connections
-const eventClients = new Set<ReadableStreamDefaultController>();
+const _eventClients = new Set<ReadableStreamDefaultController>();
 
 export async function POST(request: NextRequest): Promise<NextResponse<MonitorControlResponse>> {
   try {

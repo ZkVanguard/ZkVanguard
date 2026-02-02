@@ -426,7 +426,7 @@ async function testX402GaslessPayments() {
     });
     
     // Simulate gasless transaction structure
-    const gaslessTx = {
+    const _gaslessTx = {
       type: 'x402_gasless',
       commitment: '0x' + 'a'.repeat(64),
       payload: {

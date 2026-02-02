@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, CheckCircle, AlertCircle, ArrowDown, RefreshCw, ArrowDownUp, Shield } from 'lucide-react';
+import { X, Loader2, CheckCircle, AlertCircle, RefreshCw, ArrowDownUp } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
@@ -47,7 +47,7 @@ export function SwapModal({
   };
 
   // VVS Router address
-  const VVS_ROUTER = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae' as const;
+  const _VVS_ROUTER = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae' as const;
   
   // Actual token addresses for balance fetching
   const BALANCE_TOKEN_ADDRESSES: Record<string, string> = {
@@ -314,7 +314,7 @@ export function SwapModal({
       setErrorMessage('');
       setZkProofHash('');
       
-      const chainId = await publicClient?.getChainId();
+      const _chainId = await publicClient?.getChainId();
       const decimals = getTokenDecimals(tokenIn);
       const amountInWei = parseUnits(amountIn, decimals);
       const tokenInAddress = supportedTokens[tokenIn.toUpperCase()];

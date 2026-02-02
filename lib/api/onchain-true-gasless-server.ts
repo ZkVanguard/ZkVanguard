@@ -35,7 +35,7 @@ export async function storeCommitmentTrueGaslessServerSide(
   proofHash: string,
   merkleRoot: string,
   securityLevel: bigint,
-  userAddress: string
+  _userAddress: string
 ): Promise<StorageResult> {
   
   logger.info('TRUE GASLESS storage via x402 + USDC (SERVER)', {

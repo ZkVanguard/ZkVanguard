@@ -262,8 +262,8 @@ export class MCPClient extends EventEmitter {
    */
   async getHistoricalPrices(
     symbol: string,
-    interval: '1m' | '5m' | '1h' | '1d',
-    limit: number = 100
+    _interval: '1m' | '5m' | '1h' | '1d',
+    _limit: number = 100
   ): Promise<MCPPriceData[]> {
     logger.warn('Historical prices not yet implemented via MCP SSE', { symbol });
     throw new Error('Historical prices not supported via SSE');

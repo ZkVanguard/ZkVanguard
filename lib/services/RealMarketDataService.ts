@@ -6,7 +6,7 @@
 
 import axios from 'axios';
 import { ethers } from 'ethers';
-import { cryptocomExchangeService, type MarketPrice as ExchangeMarketPrice } from './CryptocomExchangeService';
+import { cryptocomExchangeService } from './CryptocomExchangeService';
 
 export interface MarketPrice {
   symbol: string;
@@ -574,7 +574,7 @@ class RealMarketDataService {
    */
   async getHistoricalPrices(
     symbol: string,
-    days: number = 30
+    _days: number = 30
   ): Promise<Array<{ timestamp: number; price: number }>> {
     console.warn(`[RealMarketData] Historical price data not implemented for ${symbol}`);
     // TODO: Implement with Crypto.com Exchange API historical data endpoints if available

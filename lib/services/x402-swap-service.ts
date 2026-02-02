@@ -8,7 +8,7 @@
  * - EIP-3009 payment authorization
  */
 
-import { X402FacilitatorService, PaymentChallenge, PaymentResult } from './x402-facilitator';
+import { X402FacilitatorService, PaymentChallenge } from './x402-facilitator';
 import { logger } from '../utils/logger';
 import { CronosNetwork, Contract, Scheme } from '@crypto.com/facilitator-client';
 

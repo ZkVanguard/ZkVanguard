@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
-import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 
 // Disable caching for this API route
 export const dynamic = 'force-dynamic';

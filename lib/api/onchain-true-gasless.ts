@@ -14,7 +14,6 @@
 import { config } from '../../app/providers';
 import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
 import { logger } from '../utils/logger';
-import { CONTRACT_ADDRESSES } from '../contracts/addresses';
 import { ethers } from 'ethers';
 
 // Import X402Client only on server-side to avoid node:crypto issues in browser
@@ -173,7 +172,7 @@ export async function storeCommitmentTrueGasless(
   const x402Client = new X402ClientClass();
   x402Client.setSigner(signer);
   
-  const approvalResult = await x402Client.executeGaslessTransfer({
+  const _approvalResult = await x402Client.executeGaslessTransfer({
     token: USDC_TOKEN,
     from: userAddress,
     to: X402_VERIFIER_ADDRESS,

@@ -152,7 +152,7 @@ interface SwapQuote {
   route: string;
 }
 
-interface SwapResult {
+interface _SwapResult {
   success: boolean;
   hash?: string;
   amountOut?: bigint;

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, memo, useEffect } from 'react';
 import { usePublicClient, useChainId } from 'wagmi';
-import { formatUnits, formatEther } from 'viem';
+import { formatEther } from 'viem';
 import { 
   ArrowDownUp, 
   ArrowDown, 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';

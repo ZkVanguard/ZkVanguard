@@ -9,10 +9,8 @@ import {
   executePortfolioAction, 
   getPortfolioData, 
   parseActionIntent,
-  formatActionResult,
-  type PortfolioAction 
+  formatActionResult
 } from '../services/portfolio-actions';
-import { generatePrivateHedges, getHedgeSummary } from '../services/zk-hedge-service';
 
 // Message types for conversation
 export interface ChatMessage {
@@ -431,7 +429,7 @@ class LLMProvider {
       // SMART FEATURE: Detect if user wants to execute an action
       let actionIntent = parseActionIntent(userMessage);
       let actionResult = null;
-      let actionExecuted = false;
+      let _actionExecuted = false;
 
       // For analysis actions without portfolio data, let the LLM respond intelligently
       if (actionIntent) {
@@ -449,7 +447,7 @@ class LLMProvider {
       if (actionIntent) {
         // Execute the action
         actionResult = await executePortfolioAction(actionIntent);
-        actionExecuted = true;
+        _actionExecuted = true;
         
         // Format action result with better error messages
         let formattedResult: string;

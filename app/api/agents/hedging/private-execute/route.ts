@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     let txHash: string | undefined;
     let onChainStored = false;
 
-    const provider = new ethers.JsonRpcProvider(
+    const _provider = new ethers.JsonRpcProvider(
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
     );
 

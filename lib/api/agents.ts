@@ -92,7 +92,7 @@ export async function getAgentActivity(_address: string) {
       const settlements = localStorage.getItem('settlement_history');
       if (settlements) {
         const settlementData = JSON.parse(settlements);
-        Object.values(settlementData).forEach((batch: any, index: number) => {
+        Object.values(settlementData).forEach((batch: any, _index: number) => {
           if (batch.type === 'hedge' && batch.managerSignature) {
             const timestamp = new Date(batch.timestamp);
             const isClosed = batch.status === 'closed';

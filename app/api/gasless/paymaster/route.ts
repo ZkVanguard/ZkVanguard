@@ -217,7 +217,7 @@ async function handleExecute(body: {
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, relayer);
 
   // Get nonce and deadline
-  const nonce = await contract.getNonce(userAddress);
+  const _nonce = await contract.getNonce(userAddress);
   const deadline = Math.floor(Date.now() / 1000) + 3600;
 
   logger.info('🚀 Relaying gasless transaction', {

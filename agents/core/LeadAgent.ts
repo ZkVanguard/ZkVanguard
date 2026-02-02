@@ -6,14 +6,12 @@
  * All executions go through SafeExecutionGuard for bulletproof safety.
  */
 
-import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { BaseAgent } from './BaseAgent';
 import { AgentRegistry } from './AgentRegistry';
 import { getSafeExecutionGuard, SafeExecutionGuard } from './SafeExecutionGuard';
 import { logger } from '@shared/utils/logger';
 import {
-  AgentConfig,
   AgentTask,
   AgentMessage,
   StrategyInput,
@@ -375,7 +373,7 @@ Respond ONLY with valid JSON, no explanation.`,
     }
 
     // Start tracking execution
-    const auditLog = this.executionGuard.startExecution(
+    this.executionGuard.startExecution(
       executionId,
       this.id,
       intent.action,
@@ -418,7 +416,7 @@ Respond ONLY with valid JSON, no explanation.`,
       if (intent.requiredAgents.includes('hedging') && validation.requiredApprovals.includes('multi_agent_consensus')) {
         logger.info('🗳️ Step 2: Requesting multi-agent consensus...', { executionId });
         
-        const consensus = await this.executionGuard.requestConsensus({
+        await this.executionGuard.requestConsensus({
           executionId,
           proposal: `Execute ${intent.action} strategy with estimated size $${estimatedPositionSize.toLocaleString()}`,
           requiredAgents: ['risk', 'hedging', 'settlement'],

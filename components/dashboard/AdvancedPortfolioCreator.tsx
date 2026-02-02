@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useSignMessage } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useCreatePortfolio } from '../../lib/contracts/hooks';
 import { 
-  Plus, Loader2, CheckCircle, XCircle, Shield, Sparkles, 
-  Filter, TrendingUp, Target, AlertTriangle, Lock, Eye, EyeOff, FileSignature, Info 
+  Loader2, CheckCircle, XCircle, Shield, Sparkles, 
+  Filter, Target, AlertTriangle, Lock, Eye, EyeOff, Info 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -46,9 +46,9 @@ export function AdvancedPortfolioCreator() {
   const [strategyPrivate, setStrategyPrivate] = useState(true);
   const [zkProofGenerated, setZkProofGenerated] = useState(false);
   const [zkProofHash, setZkProofHash] = useState('');
-  const [strategySigned, setStrategySigned] = useState(false);
+  const [_strategySigned, setStrategySigned] = useState(false);
   const [strategySignature, setStrategySignature] = useState('');
-  const [onChainTxHash, setOnChainTxHash] = useState('');
+  const [_onChainTxHash, setOnChainTxHash] = useState('');
   
   // Strategy configuration
   const [strategy, setStrategy] = useState<StrategyConfig>({

@@ -14,7 +14,6 @@
 import { logger } from '@/lib/utils/logger';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import axios from 'axios';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 export interface Position {
@@ -48,7 +47,7 @@ export interface Trade {
 }
 
 // CoinGecko ID mapping (FREE API, no registration required)
-const COINGECKO_IDS: Record<string, string> = {
+const _COINGECKO_IDS: Record<string, string> = {
   'CRO': 'crypto-com-chain',
   'BTC': 'bitcoin',
   'ETH': 'ethereum',

@@ -14,7 +14,7 @@
  * - addMargin: 0xfc05c34d
  */
 
-import { ethers, Contract, Wallet, Provider, Signer, parseUnits, formatUnits, AbiCoder, keccak256 } from 'ethers';
+import { ethers, Contract, Wallet, Provider, Signer, parseUnits, formatUnits, AbiCoder } from 'ethers';
 import { logger } from '../../shared/utils/logger';
 import { MOONLANDER_CONTRACTS, PAIR_INDEX, INDEX_TO_PAIR, NetworkType, PairSymbol } from './contracts';
 import { ERC20_ABI } from './abis';
@@ -501,7 +501,7 @@ export class MoonlanderOnChainClient {
   /**
    * Get specific trade - not available via Diamond proxy
    */
-  async getTrade(traderAddress: string, pairIndex: number, tradeIndex: number): Promise<Trade | null> {
+  async getTrade(_traderAddress: string, _pairIndex: number, _tradeIndex: number): Promise<Trade | null> {
     logger.warn('getTrade not available via Diamond proxy - use MoonlanderClient API instead');
     return null;
   }
@@ -509,7 +509,7 @@ export class MoonlanderOnChainClient {
   /**
    * Get open interest for a pair - not available via Diamond proxy
    */
-  async getOpenInterest(pairIndex: number): Promise<{ long: string; short: string }> {
+  async getOpenInterest(_pairIndex: number): Promise<{ long: string; short: string }> {
     logger.warn('getOpenInterest not available via Diamond proxy - use MoonlanderClient API instead');
     return { long: '0', short: '0' };
   }

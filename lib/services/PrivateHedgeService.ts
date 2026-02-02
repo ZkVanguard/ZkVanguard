@@ -226,7 +226,7 @@ export class PrivateHedgeService {
       salt: crypto.randomBytes(32).toString('hex'),
     };
 
-    const { commitmentHash, salt } = this.generateHedgeCommitment({
+    const { commitmentHash, salt: _salt } = this.generateHedgeCommitment({
       ...hedgeDetails,
       salt: hedgeDetails.salt,
     });
