@@ -10,16 +10,53 @@ import { LiveMetrics } from '../../components/LiveMetrics';
 
 export default function HomePage() {
   return (
-    <>
+    <div className="overflow-x-hidden">
+      {/* Hero Section */}
       <Hero />
-      <Stats />
-      <Features />
-      <AgentShowcase />
-      <HowItWorks />
-      <LiveMetrics />
+      
+      {/* Stats Section */}
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+        <div className="max-w-[1280px] mx-auto">
+          <Stats />
+        </div>
+      </section>
+      
+      {/* Features Section */}
+      <section id="features" className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+        <div className="max-w-[1280px] mx-auto">
+          <Features />
+        </div>
+      </section>
+      
+      {/* AI Agents Section */}
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-white">
+        <div className="max-w-[1280px] mx-auto">
+          <AgentShowcase />
+        </div>
+      </section>
+      
+      {/* How It Works Section */}
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+        <div className="max-w-[1280px] mx-auto">
+          <HowItWorks />
+        </div>
+      </section>
+      
+      {/* Live Metrics Section */}
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-white">
+        <div className="max-w-[1280px] mx-auto">
+          <LiveMetrics />
+        </div>
+      </section>
+      
+      {/* Market Opportunity Section - has own wrapper */}
       <MarketOpportunity />
+      
+      {/* Roadmap Section - has own wrapper */}
       <Roadmap />
+      
+      {/* CTA Section */}
       <CTASection />
-    </>
+    </div>
   );
 }

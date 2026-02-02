@@ -1,48 +1,59 @@
 'use client';
 
-const agents = [
-  {
-    id: 'lead',
-    name: 'Lead Agent',
-    role: 'Orchestrator',
-    status: 'Active',
-    bgColor: 'bg-[#007AFF]/[0.08]',
-  },
-  {
-    id: 'risk',
-    name: 'Risk Agent',
-    role: 'Risk Analyzer',
-    status: 'Active',
-    bgColor: 'bg-[#FF9500]/[0.08]',
-  },
-  {
-    id: 'hedging',
-    name: 'Hedging Agent',
-    role: 'Strategy Generator',
-    status: 'Active',
-    bgColor: 'bg-[#34C759]/[0.08]',
-  },
-  {
-    id: 'settlement',
-    name: 'Settlement Agent',
-    role: 'Transaction Executor',
-    status: 'Active',
-    bgColor: 'bg-[#AF52DE]/[0.08]',
-  },
-  {
-    id: 'reporting',
-    name: 'Reporting Agent',
-    role: 'Analytics Generator',
-    status: 'Active',
-    bgColor: 'bg-[#FF2D55]/[0.08]',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function AgentShowcase() {
+  const t = useTranslations('agents');
+  
+  const agents = [
+    {
+      id: 'lead',
+      name: 'Lead Agent',
+      role: 'Orchestrator',
+      description: 'Coordinates all agent activities and manages workflow',
+      bgColor: 'bg-[#007AFF]/[0.08]',
+    },
+    {
+      id: 'risk',
+      name: 'Risk Agent',
+      role: 'Risk Analyzer',
+      description: 'Analyzes market conditions and portfolio risks',
+      bgColor: 'bg-[#FF9500]/[0.08]',
+    },
+    {
+      id: 'hedging',
+      name: 'Hedging Agent',
+      role: 'Strategy Generator',
+      description: 'Creates optimal hedging strategies',
+      bgColor: 'bg-[#34C759]/[0.08]',
+    },
+    {
+      id: 'settlement',
+      name: 'Settlement Agent',
+      role: 'Transaction Executor',
+      description: 'Executes trades with gasless transactions',
+      bgColor: 'bg-[#AF52DE]/[0.08]',
+    },
+    {
+      id: 'reporting',
+      name: 'Reporting Agent',
+      role: 'Analytics Generator',
+      description: 'Generates compliance reports and analytics',
+      bgColor: 'bg-[#FF2D55]/[0.08]',
+    },
+  ];
+
   return (
     <div>
-      <h2 className="text-[40px] lg:text-[48px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-3 text-center">AI Agents</h2>
-      <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] text-center mb-12 lg:mb-16">24/7 autonomous portfolio management</p>
+      {/* Section Header */}
+      <div className="text-center mb-12 lg:mb-16">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-4">
+          {t('title')}
+        </h2>
+        <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] max-w-[600px] mx-auto">
+          24/7 autonomous portfolio management with multi-agent consensus
+        </p>
+      </div>
       
       {/* Mobile - vertical stack */}
       <div className="lg:hidden space-y-3">
