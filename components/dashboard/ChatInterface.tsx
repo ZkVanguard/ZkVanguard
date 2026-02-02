@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Shield, Zap, Activity, TrendingDown } from 'lucide-react';
+import { Send, Bot, User, Shield, Zap, Activity, TrendingDown, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';

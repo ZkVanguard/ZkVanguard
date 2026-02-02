@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus, Zap } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';

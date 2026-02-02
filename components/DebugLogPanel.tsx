@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Trash2, Download, Maximize2, Minimize2 } from 'lucide-react';
+import { Terminal, Trash2, Download, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react';
 
 export interface LogEntry {
   id: string;

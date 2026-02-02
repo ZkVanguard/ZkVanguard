@@ -512,6 +512,8 @@ export class ReportingAgent extends BaseAgent {
       // Get benchmark data (BTC) for comparison
       let benchmarkReturn = 0;
       try {
+        const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+        const realMarketDataService = getMarketDataService();
         const btcData = await realMarketDataService.getTokenPrice('BTC');
         benchmarkReturn = btcData.change24h * 30 || 0; // Approximate 30-day return
       } catch (error) {

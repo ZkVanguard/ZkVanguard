@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useSignMessage } from 'wagmi';
 import { useCreatePortfolio } from '../../lib/contracts/hooks';
 import { 
   Loader2, CheckCircle, XCircle, Shield, Sparkles, 
-  Filter, Target, AlertTriangle, Lock, Eye, EyeOff, Info 
+  Filter, Target, AlertTriangle, Lock, Eye, EyeOff, Info, FileSignature 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
