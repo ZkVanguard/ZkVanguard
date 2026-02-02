@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 
 const CONSENT_KEY = 'zkvanguard_cookie_consent';
 
@@ -13,6 +14,7 @@ interface ConsentSettings {
 }
 
 export function CookieConsent() {
+  const t = useTranslations('cookies');
   const [showBanner, setShowBanner] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [settings, setSettings] = useState<ConsentSettings>({
@@ -79,11 +81,10 @@ export function CookieConsent() {
           // Simple Banner
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex-1">
-              <h3 className="font-semibold text-[#1d1d1f] text-lg mb-1">🍪 Cookie Preferences</h3>
+              <h3 className="font-semibold text-[#1d1d1f] text-lg mb-1">🍪 {t('title')}</h3>
               <p className="text-[#86868b] text-sm">
-                We use cookies to improve your experience and analyze platform usage. 
-                Your wallet address is public blockchain data - we don't collect personal information.{' '}
-                <Link href="/privacy" className="text-[#007AFF] hover:underline">Privacy Policy</Link>
+                {t('description')}{' '}
+                <Link href="/privacy" className="text-[#007AFF] hover:underline">{t('privacyPolicy')}</Link>
               </p>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
@@ -91,19 +92,19 @@ export function CookieConsent() {
                 onClick={() => setShowDetails(true)}
                 className="px-4 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-lg transition-colors"
               >
-                Customize
+                {t('customize')}
               </button>
               <button
                 onClick={acceptNecessary}
                 className="px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg transition-colors"
               >
-                Necessary Only
+                {t('necessaryOnly')}
               </button>
               <button
                 onClick={acceptAll}
                 className="px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] rounded-lg transition-colors"
               >
-                Accept All
+                {t('acceptAll')}
               </button>
             </div>
           </div>
@@ -111,7 +112,7 @@ export function CookieConsent() {
           // Detailed Settings
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-[#1d1d1f] text-lg">Cookie Settings</h3>
+              <h3 className="font-semibold text-[#1d1d1f] text-lg">{t('settings')}</h3>
               <button
                 onClick={() => setShowDetails(false)}
                 className="text-[#86868b] hover:text-[#1d1d1f]"
@@ -124,18 +125,18 @@ export function CookieConsent() {
               {/* Necessary Cookies */}
               <div className="p-4 bg-[#f5f5f7] rounded-xl">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">Necessary</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Always On</span>
+                  <span className="font-medium text-[#1d1d1f]">{t('necessary')}</span>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{t('alwaysOn')}</span>
                 </div>
                 <p className="text-xs text-[#86868b]">
-                  Required for wallet connection, session management, and core platform functionality.
+                  {t('necessaryDescription')}
                 </p>
               </div>
 
               {/* Analytics Cookies */}
               <div className="p-4 bg-[#f5f5f7] rounded-xl">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">Analytics</span>
+                  <span className="font-medium text-[#1d1d1f]">{t('analytics')}</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -147,14 +148,14 @@ export function CookieConsent() {
                   </label>
                 </div>
                 <p className="text-xs text-[#86868b]">
-                  Anonymous usage data to improve platform features. No PII collected.
+                  {t('analyticsDescription')}
                 </p>
               </div>
 
               {/* Preferences Cookies */}
               <div className="p-4 bg-[#f5f5f7] rounded-xl">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">Preferences</span>
+                  <span className="font-medium text-[#1d1d1f]">{t('preferences')}</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -166,7 +167,7 @@ export function CookieConsent() {
                   </label>
                 </div>
                 <p className="text-xs text-[#86868b]">
-                  Remember your settings like theme, dashboard layout, and notification preferences.
+                  {t('preferencesDescription')}
                 </p>
               </div>
             </div>
@@ -176,13 +177,13 @@ export function CookieConsent() {
                 onClick={acceptNecessary}
                 className="px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg transition-colors"
               >
-                Reject Optional
+                {t('rejectOptional')}
               </button>
               <button
                 onClick={saveCustom}
                 className="px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] rounded-lg transition-colors"
               >
-                Save Preferences
+                {t('savePreferences')}
               </button>
             </div>
           </div>

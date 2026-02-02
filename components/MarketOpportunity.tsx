@@ -2,45 +2,48 @@
 
 import { motion } from 'framer-motion';
 import { DollarSign, Users, TrendingUp, Globe, Shield } from 'lucide-react';
-
-const marketData = [
-  {
-    icon: DollarSign,
-    label: 'RWA Market Size',
-    value: '$16T',
-    description: 'Expected by 2030 (BCG)',
-    color: 'text-green-500',
-  },
-  {
-    icon: TrendingUp,
-    label: 'Growth Rate',
-    value: '50x',
-    description: 'Market expansion 2024-2030',
-    color: 'text-blue-500',
-  },
-  {
-    icon: Globe,
-    label: 'Target Market',
-    value: '$1.2T',
-    description: 'DeFi institutional assets',
-    color: 'text-purple-500',
-  },
-  {
-    icon: Users,
-    label: 'Potential Users',
-    value: '10K+',
-    description: 'Institutional traders',
-    color: 'text-yellow-500',
-  },
-];
-
-const competitors = [
-  { name: 'Traditional Risk Tools', gap: 'No AI automation' },
-  { name: 'DeFi Protocols', gap: 'Limited RWA support' },
-  { name: 'Centralized Services', gap: 'Custodial risk' },
-];
+import { useTranslations } from 'next-intl';
 
 export function MarketOpportunity() {
+  const t = useTranslations('marketOpportunity');
+  
+  const marketData = [
+    {
+      icon: DollarSign,
+      label: t('rwaMarketSize'),
+      value: '$16T',
+      description: t('rwaDescription'),
+      color: 'text-green-500',
+    },
+    {
+      icon: TrendingUp,
+      label: t('growthRate'),
+      value: '50x',
+      description: t('growthDescription'),
+      color: 'text-blue-500',
+    },
+    {
+      icon: Globe,
+      label: t('targetMarket'),
+      value: '$1.2T',
+      description: t('targetDescription'),
+      color: 'text-purple-500',
+    },
+    {
+      icon: Users,
+      label: t('potentialUsers'),
+      value: '10K+',
+      description: t('usersDescription'),
+      color: 'text-yellow-500',
+    },
+  ];
+
+  const competitors = [
+    { name: t('traditionalTools'), gap: t('noAiAutomation') },
+    { name: t('defiProtocols'), gap: t('limitedRwa') },
+    { name: t('centralizedServices'), gap: t('custodialRisk') },
+  ];
+
   return (
     <section className="py-24 bg-[#F5F5F7] relative overflow-hidden">
       <div className="container mx-auto px-4 relative z-10">
@@ -52,11 +55,11 @@ export function MarketOpportunity() {
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             <span className="bg-gradient-to-r from-[#007AFF] to-[#5856D6] bg-clip-text text-transparent">
-              Massive Market Opportunity
+              {t('title')}
             </span>
           </h2>
           <p className="text-xl text-[#6E6E73] max-w-2xl mx-auto">
-            Positioned at the intersection of RWA tokenization and AI-powered DeFi
+            {t('subtitle')}
           </p>
         </motion.div>
 
@@ -91,7 +94,7 @@ export function MarketOpportunity() {
           viewport={{ once: true }}
           className="max-w-4xl mx-auto"
         >
-          <h3 className="text-2xl font-bold text-center mb-8 text-[#1D1D1F]">Our Competitive Edge</h3>
+          <h3 className="text-2xl font-bold text-center mb-8 text-[#1D1D1F]">{t('competitiveEdge')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {competitors.map((comp, index) => (
               <div key={index} className="p-6 bg-white border border-[#E5E5EA] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -112,7 +115,7 @@ export function MarketOpportunity() {
         >
           <div className="flex items-center space-x-3 mb-6">
             <Shield className="w-8 h-8 text-[#007AFF]" />
-            <h3 className="text-2xl font-bold text-[#1D1D1F]">Why ZkVanguard Wins</h3>
+            <h3 className="text-2xl font-bold text-[#1D1D1F]">{t('whyWins')}</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3">
@@ -122,8 +125,8 @@ export function MarketOpportunity() {
                 </svg>
               </div>
               <div>
-                <div className="font-semibold text-[#1D1D1F]">AI-Powered Automation</div>
-                <div className="text-sm text-[#6E6E73]">5 specialized agents working 24/7</div>
+                <div className="font-semibold text-[#1D1D1F]">{t('aiPowered')}</div>
+                <div className="text-sm text-[#6E6E73]">{t('aiDescription')}</div>
               </div>
             </div>
             <div className="flex items-start space-x-3">
@@ -133,8 +136,8 @@ export function MarketOpportunity() {
                 </svg>
               </div>
               <div>
-                <div className="font-semibold text-[#1D1D1F]">ZK-STARK Verification</div>
-                <div className="text-sm text-[#6E6E73]">Privacy + Auditability guaranteed</div>
+                <div className="font-semibold text-[#1D1D1F]">{t('zkVerificationFeature')}</div>
+                <div className="text-sm text-[#6E6E73]">{t('zkDescription')}</div>
               </div>
             </div>
             <div className="flex items-start space-x-3">
@@ -144,8 +147,8 @@ export function MarketOpportunity() {
                 </svg>
               </div>
               <div>
-                <div className="font-semibold text-[#1D1D1F]">Non-Custodial</div>
-                <div className="text-sm text-[#6E6E73]">Users keep full control of assets</div>
+                <div className="font-semibold text-[#1D1D1F]">{t('nonCustodial')}</div>
+                <div className="text-sm text-[#6E6E73]">{t('nonCustodialDescription')}</div>
               </div>
             </div>
             <div className="flex items-start space-x-3">
@@ -155,8 +158,8 @@ export function MarketOpportunity() {
                 </svg>
               </div>
               <div>
-                <div className="font-semibold text-[#1D1D1F]">Gas Optimization</div>
-                <div className="text-sm text-[#6E6E73]">67% savings via x402 batching</div>
+                <div className="font-semibold text-[#1D1D1F]">{t('gasOptimization')}</div>
+                <div className="text-sm text-[#6E6E73]">{t('gasDescription')}</div>
               </div>
             </div>
           </div>

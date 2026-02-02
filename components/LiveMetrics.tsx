@@ -2,38 +2,7 @@
 
 import { useEffect, useState, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
-
-// Static fallback component for SSR and loading states
-function StaticMetrics() {
-  return (
-    <div>
-      <div className="text-center mb-12 lg:mb-16">
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
-          Real-Time Platform Metrics
-        </h2>
-        <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">Total Value Locked</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">$2.8M</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">Transactions</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">1,247</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">Gas Savings</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">67%</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">AI Agents Online</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">5</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { useTranslations } from 'next-intl';
 
 // Memoized metric card to prevent unnecessary re-renders
 const MetricCard = memo(function MetricCard({ 
@@ -60,7 +29,40 @@ const MetricCard = memo(function MetricCard({
   );
 });
 
+// Static fallback component for SSR and loading states
+function StaticMetricsContent({ t }: { t: (key: string) => string }) {
+  return (
+    <div>
+      <div className="text-center mb-12 lg:mb-16">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
+          {t('title')}
+        </h2>
+        <p className="text-[17px] lg:text-[19px] text-[#86868b]">{t('subtitle')}</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">{t('tvl')}</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">$2.8M</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">{t('transactions')}</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">1,247</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">{t('gasSavings')}</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">67%</div>
+        </div>
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-[#86868b] mb-2">{t('aiAgentsOnline')}</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">5</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const LiveMetrics = memo(function LiveMetrics() {
+  const t = useTranslations('liveMetrics');
   const [mounted, setMounted] = useState(false);
   const [metrics, setMetrics] = useState({
     tvl: 2847500,
@@ -91,7 +93,7 @@ export const LiveMetrics = memo(function LiveMetrics() {
 
   // Return static content until client-side mount is complete
   if (!mounted) {
-    return <StaticMetrics />;
+    return <StaticMetricsContent t={t} />;
   }
 
   // Memoize formatted values to prevent recalculation on every render
@@ -110,22 +112,22 @@ export const LiveMetrics = memo(function LiveMetrics() {
         className="text-center mb-12 lg:mb-16"
       >
         <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
-          Real-Time Platform Metrics
+          {t('title')}
         </h2>
-        <p className="text-[17px] lg:text-[19px] text-[#86868b]">Live performance data from Cronos Testnet</p>
+        <p className="text-[17px] lg:text-[19px] text-[#86868b]">{t('subtitle')}</p>
       </motion.div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <MetricCard label="Total Value Locked" value={formattedMetrics.tvl} delay={0.1} />
-        <MetricCard label="Transactions" value={formattedMetrics.transactions} delay={0.2} />
-        <MetricCard label="Gas Savings" value={formattedMetrics.gasSaved} delay={0.3} />
+        <MetricCard label={t('tvl')} value={formattedMetrics.tvl} delay={0.1} />
+        <MetricCard label={t('transactions')} value={formattedMetrics.transactions} delay={0.2} />
+        <MetricCard label={t('gasSavings')} value={formattedMetrics.gasSaved} delay={0.3} />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.4 }}
           className="p-6 lg:p-8"
         >
-          <div className="text-[15px] text-[#86868b] mb-2">AI Agents</div>
+          <div className="text-[15px] text-[#86868b] mb-2">{t('aiAgentsOnline')}</div>
           <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter flex items-center gap-2">
             {formattedMetrics.agents}
             <div className="w-2 h-2 bg-[#34C759] rounded-full" />

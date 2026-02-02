@@ -2,39 +2,42 @@
 
 import { motion } from 'framer-motion';
 import { Target, TrendingUp, Users, Rocket } from 'lucide-react';
-
-const milestones = [
-  {
-    icon: Target,
-    title: 'Q1 2026: Testnet Launch',
-    description: 'Full agent system live on Cronos zkEVM testnet',
-    status: 'In Progress',
-    color: 'text-blue-500',
-  },
-  {
-    icon: Users,
-    title: 'Q2 2026: Beta Users',
-    description: '100+ institutional users managing $50M+ TVL',
-    status: 'Upcoming',
-    color: 'text-purple-500',
-  },
-  {
-    icon: TrendingUp,
-    title: 'Q3 2026: Mainnet',
-    description: 'Production launch with institutional partnerships',
-    status: 'Planned',
-    color: 'text-green-500',
-  },
-  {
-    icon: Rocket,
-    title: 'Q4 2026: Scale',
-    description: '$500M+ TVL across multiple chains',
-    status: 'Planned',
-    color: 'text-yellow-500',
-  },
-];
+import { useTranslations } from 'next-intl';
 
 export function Roadmap() {
+  const t = useTranslations('roadmap');
+  
+  const milestones = [
+    {
+      icon: Target,
+      title: t('q1Title'),
+      description: t('q1Description'),
+      status: t('inProgress'),
+      color: 'text-blue-500',
+    },
+    {
+      icon: Users,
+      title: t('q2Title'),
+      description: t('q2Description'),
+      status: t('upcoming'),
+      color: 'text-purple-500',
+    },
+    {
+      icon: TrendingUp,
+      title: t('q3Title'),
+      description: t('q3Description'),
+      status: t('planned'),
+      color: 'text-green-500',
+    },
+    {
+      icon: Rocket,
+      title: t('q4Title'),
+      description: t('q4Description'),
+      status: t('planned'),
+      color: 'text-yellow-500',
+    },
+  ];
+
   return (
     <section className="py-24 bg-white">
       <div className="container mx-auto px-4">
@@ -46,11 +49,11 @@ export function Roadmap() {
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             <span className="bg-gradient-to-r from-[#007AFF] to-[#5856D6] bg-clip-text text-transparent">
-              Product Roadmap
+              {t('title')}
             </span>
           </h2>
           <p className="text-xl text-[#6E6E73] max-w-2xl mx-auto">
-            Our path to revolutionizing institutional RWA risk management
+            {t('subtitle')}
           </p>
         </motion.div>
 
