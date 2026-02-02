@@ -190,7 +190,8 @@ export async function POST(request: NextRequest) {
     // Extract recommendation from HedgingAgent strategy
     const hedgingStrategy = executionReport.hedgingStrategy;
     if (hedgingStrategy) {
-      const existingRec = recommendations.find(r => r.strategy.includes(hedgingStrategy.asset || 'BTC'));
+      const hedgeAsset = hedgingStrategy.instruments?.[0]?.asset || 'BTC';
+      const existingRec = recommendations.find(r => r.strategy.includes(hedgeAsset));
       if (!existingRec && hedgingStrategy.strategy) {
         recommendations.push({
           strategy: hedgingStrategy.strategy,
