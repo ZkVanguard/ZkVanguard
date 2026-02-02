@@ -195,11 +195,18 @@ export async function POST(request: NextRequest) {
       if (!existingRec && hedgingStrategy.strategy) {
         recommendations.push({
           strategy: hedgingStrategy.strategy,
-          confidence: hedgingStrategy.confidence || 0.75,
-          expectedReduction: hedgingStrategy.expectedReduction || 0.3,
-          description: hedgingStrategy.description || 'HedgingAgent recommended strategy',
+          confidence: 0.75,
+          expectedReduction: 0.3,
+          description: `HedgingAgent strategy: ${hedgingStrategy.strategy} with estimated yield ${hedgingStrategy.estimatedYield}%`,
           agentSource: 'HedgingAgent',
-          actions: hedgingStrategy.actions || [],
+          actions: hedgingStrategy.instruments?.map(inst => ({
+            action: inst.type === 'perpetual' ? 'SHORT' : 'LONG',
+            asset: inst.asset,
+            size: inst.size,
+            leverage: inst.leverage || 5,
+            protocol: 'Moonlander',
+            reason: `Entry at $${inst.entryPrice}`,
+          })) || [],
         });
       }
     }
