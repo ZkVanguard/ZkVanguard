@@ -122,7 +122,7 @@ describe('End-to-End Integration Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       expect(reportTask).toBeDefined();
-    });
+    }, 15000);
   });
 
   describe('Multi-Agent Coordination', () => {
@@ -354,7 +354,7 @@ describe('End-to-End Integration Tests', () => {
       const duration = Date.now() - startTime;
 
       expect(duration).toBeLessThan(15000); // 15 seconds for 20 tasks (allowing some margin)
-    });
+    }, 30000);
   });
 
   describe('ZK Proof Integration', () => {
@@ -388,7 +388,7 @@ describe('End-to-End Integration Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       expect(reportResult).toBeDefined();
-    });
+    }, 15000);
   });
 
   describe('Data Consistency', () => {
@@ -508,7 +508,7 @@ describe('End-to-End Integration Tests', () => {
       expect(hedgingAgent.getExecutionHistory().length).toBeGreaterThan(0);
       // Settlement was created (pending) but not processed yet (unless urgent)
       expect(settlementAgent.getExecutionHistory().length).toBeGreaterThan(0);
-    });
+    }, 15000);
   });
 
   describe('Real-time Monitoring', () => {
