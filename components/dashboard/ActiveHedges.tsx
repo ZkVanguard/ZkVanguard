@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, memo, useMemo, useRef } from 'react';
+import { useState, useCallback, memo, useMemo, useRef, useEffect } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
@@ -142,6 +142,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   }, []);
 
   usePolling(loadHedges, 30000);
+
+  // Listen for hedge creation events to refresh immediately
+  useEffect(() => {
+    const handleHedgeAdded = () => {
+      console.log('🔄 [ActiveHedges] Hedge added event received, refreshing...');
+      loadHedges();
+    };
+
+    window.addEventListener('hedgeAdded', handleHedgeAdded);
+    return () => window.removeEventListener('hedgeAdded', handleHedgeAdded);
+  }, [loadHedges]);
 
   const handleClosePosition = async (hedge: HedgePosition) => {
     setSelectedHedge(hedge);
