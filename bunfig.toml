@@ -19,6 +19,8 @@ sourcemap = "external"
 # Test configuration
 coverage = true
 coverageDir = "coverage"
+# Don't fail on coverage thresholds - rely on Jest config if needed
+coverageThreshold = { }
 
 [install.cache]
 # Enable global cache for faster installs

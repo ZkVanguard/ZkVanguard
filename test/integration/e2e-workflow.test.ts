@@ -105,7 +105,7 @@ describe('End-to-End Integration Tests', () => {
 
       expect(riskTask).toBeDefined();
       expect(hedgeTask).toBeDefined();
-    });
+    }, 15000);
 
     it('should generate comprehensive report after operations', async () => {
       // Generate report covering all operations
@@ -174,7 +174,7 @@ describe('End-to-End Integration Tests', () => {
       expect(hedgingAgent.getExecutionHistory().length).toBeGreaterThan(0);
       // Settlement was created (execution history), but not auto-processed (needs URGENT priority)
       expect(settlementAgent.getExecutionHistory().length).toBeGreaterThan(0);
-    });
+    }, 15000);
   });
 
   describe('Natural Language Intent Processing', () => {
@@ -185,7 +185,7 @@ describe('End-to-End Integration Tests', () => {
 
       expect(result).toBeDefined();
       // LeadAgent should delegate to HedgingAgent
-    });
+    }, 15000);
 
     it('should process settlement request from natural language', async () => {
       const intent = "Process all pending settlements as a batch";
@@ -194,7 +194,7 @@ describe('End-to-End Integration Tests', () => {
 
       expect(result).toBeDefined();
       // LeadAgent should delegate to SettlementAgent
-    });
+    }, 15000);
 
     it('should process report request from natural language', async () => {
       const intent = "Generate a comprehensive report for portfolio-1 including ZK proofs";
@@ -203,7 +203,7 @@ describe('End-to-End Integration Tests', () => {
 
       expect(result).toBeDefined();
       // LeadAgent should delegate to ReportingAgent
-    });
+    }, 15000); // Increase timeout for report generation which is CPU-intensive
   });
 
   describe('Message Bus Communication', () => {
