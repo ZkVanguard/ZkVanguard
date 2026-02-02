@@ -9,9 +9,10 @@ interface ManualHedgeModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableAssets?: string[];
+  walletAddress?: string;
 }
 
-export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'ETH', 'CRO'] }: ManualHedgeModalProps) {
+export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'ETH', 'CRO'], walletAddress }: ManualHedgeModalProps) {
   const [hedgeType, setHedgeType] = useState<'SHORT' | 'LONG'>('SHORT');
   const [asset, setAsset] = useState('BTC');
   const [size, setSize] = useState('0.01');
@@ -91,7 +92,8 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
           reason: reason || `Manual ${hedgeType} hedge on ${asset}`,
           // Enable auto-approval for manual hedges (user-initiated)
           autoApprovalEnabled: true,
-          autoApprovalThreshold: 1000000 // High threshold to auto-approve most manual hedges
+          autoApprovalThreshold: 1000000, // High threshold to auto-approve most manual hedges
+          walletAddress, // Associate hedge with connected wallet
         })
       });
 

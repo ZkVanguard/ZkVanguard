@@ -3,7 +3,7 @@
  * Uses Crypto.com market data to calculate actual profit/loss on hedge positions
  */
 
-import { getActiveHedges, updateHedgePnL, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, updateHedgePnL, getActiveHedgesByWallet, type Hedge } from '@/lib/db/hedges';
 import { cryptocomExchangeService } from './CryptocomExchangeService';
 import { logger } from '@/lib/utils/logger';
 
@@ -222,8 +222,14 @@ export class HedgePnLTracker {
   /**
    * Get portfolio-level PnL summary
    */
-  async getPortfolioPnLSummary(portfolioId?: number) {
-    const hedges = await getActiveHedges(portfolioId);
+  async getPortfolioPnLSummary(portfolioId?: number, walletAddress?: string) {
+    // Use wallet filter if provided, otherwise use portfolio filter
+    let hedges;
+    if (walletAddress) {
+      hedges = await getActiveHedgesByWallet(walletAddress);
+    } else {
+      hedges = await getActiveHedges(portfolioId);
+    }
     
     if (hedges.length === 0) {
       return {

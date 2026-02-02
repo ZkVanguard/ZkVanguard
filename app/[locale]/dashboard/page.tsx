@@ -171,7 +171,8 @@ export default function DashboardPage() {
           reason: market.question,
           // Enable auto-approval for prediction market triggered hedges
           autoApprovalEnabled: true,
-          autoApprovalThreshold: 50000
+          autoApprovalThreshold: 50000,
+          walletAddress: address, // Associate hedge with connected wallet
         })
       });
 
@@ -579,6 +580,7 @@ export default function DashboardPage() {
         isOpen={hedgeModalOpen}
         onClose={() => setHedgeModalOpen(false)}
         availableAssets={portfolioAssets}
+        walletAddress={address}
       />
 
       {/* Settings Modal */}

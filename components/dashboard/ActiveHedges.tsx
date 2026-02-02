@@ -93,7 +93,13 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       
       // Database is the single source of truth now
       try {
-        const response = await fetch('/api/agents/hedging/pnl?summary=true');
+        // Include wallet address filter if available
+        const params = new URLSearchParams({ summary: 'true' });
+        if (address) {
+          params.set('walletAddress', address);
+        }
+        
+        const response = await fetch(`/api/agents/hedging/pnl?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
           console.log('🔍 ActiveHedges: Raw API response:', data);
@@ -159,7 +165,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     } finally {
       processingRef.current = false;
     }
-  }, []);
+  }, [address]);
 
   usePolling(loadHedges, 30000);
 
@@ -240,6 +246,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           reason: `AI Recommended: ${rec.description}`,
           autoApprovalEnabled: true,
           autoApprovalThreshold: 1000000,
+          walletAddress: address, // Associate hedge with connected wallet
         }),
       });
 
