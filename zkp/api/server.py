@@ -59,10 +59,18 @@ app = FastAPI(
     default_response_class=LargeIntJSONResponse  # Custom handler for big integers as strings
 )
 
-# CORS for Next.js frontend
+# CORS for Next.js frontend (local + Vercel deployments)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://zkvanguard.vercel.app",
+        "https://chronos-vanguard.vercel.app",
+        "https://*.vercel.app",
+        "https://starknova.xyz",
+        "https://*.starknova.xyz",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
