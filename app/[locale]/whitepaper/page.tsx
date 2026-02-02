@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
+import { useTranslations } from 'next-intl';
 
 export default function WhitepaperPage() {
+  const t = useTranslations('whitepaper');
+  
   return (
     <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
       {/* Force light theme styles */}
@@ -41,15 +44,15 @@ export default function WhitepaperPage() {
           {/* Header */}
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#007AFF]/10 rounded-full text-sm font-medium mb-6 text-[#007AFF]">
-            <span>Version 1.0</span>
+            <span>{t('version')}</span>
             <span>•</span>
-            <span>January 2026</span>
+            <span>{t('date')}</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-bold text-[#1d1d1f] mb-6 tracking-tight">
-            ZkVanguard Whitepaper
+            {t('title')}
           </h1>
           <p className="text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
-            AI-Powered Predictive Risk Management with Zero-Knowledge Privacy for Institutional Digital Assets
+            {t('subtitle')}
           </p>
         </div>
 
@@ -62,31 +65,31 @@ export default function WhitepaperPage() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-            Read Whitepaper
+            {t('readButton')}
           </a>
         </div>
 
         {/* Table of Contents */}
         <div className="bg-[#f5f5f7] rounded-2xl p-8 mb-16">
-          <h2 className="text-lg font-semibold text-[#1d1d1f] mb-6">Table of Contents</h2>
+          <h2 className="text-lg font-semibold text-[#1d1d1f] mb-6">{t('toc')}</h2>
           <nav className="space-y-3">
             {[
-              { num: "1", title: "Abstract", href: "#abstract" },
-              { num: "2", title: "Introduction & Market Opportunity", href: "#introduction" },
-              { num: "3", title: "The Problem: Reactive Risk Management", href: "#problem" },
-              { num: "4", title: "Our Solution: Predictive Intelligence", href: "#solution" },
-              { num: "5", title: "Technical Architecture", href: "#architecture" },
-              { num: "6", title: "Multi-Agent AI System", href: "#agents" },
-              { num: "7", title: "Zero-Knowledge Privacy Layer", href: "#zkp" },
-              { num: "8", title: "Gasless Transaction Protocol (x402)", href: "#gasless" },
-              { num: "9", title: "Prediction Market Integration", href: "#predictions" },
-              { num: "10", title: "Multi-Chain Strategy", href: "#multichain" },
-              { num: "11", title: "Security Analysis", href: "#security" },
-              { num: "12", title: "Tokenomics & Economics", href: "#tokenomics" },
-              { num: "13", title: "Roadmap", href: "#roadmap" },
-              { num: "14", title: "Conclusion", href: "#conclusion" },
-              { num: "15", title: "References", href: "#references" },
-            ].map(({ num, title, href }) => (
+              { num: "1", key: "abstract", href: "#abstract" },
+              { num: "2", key: "introduction", href: "#introduction" },
+              { num: "3", key: "problem", href: "#problem" },
+              { num: "4", key: "solution", href: "#solution" },
+              { num: "5", key: "architecture", href: "#architecture" },
+              { num: "6", key: "agents", href: "#agents" },
+              { num: "7", key: "zkp", href: "#zkp" },
+              { num: "8", key: "gasless", href: "#gasless" },
+              { num: "9", key: "predictions", href: "#predictions" },
+              { num: "10", key: "multichain", href: "#multichain" },
+              { num: "11", key: "security", href: "#security" },
+              { num: "12", key: "tokenomics", href: "#tokenomics" },
+              { num: "13", key: "roadmap", href: "#roadmap" },
+              { num: "14", key: "conclusion", href: "#conclusion" },
+              { num: "15", key: "references", href: "#references" },
+            ].map(({ num, key, href }) => (
               <a 
                 key={num}
                 href={href}
@@ -95,7 +98,7 @@ export default function WhitepaperPage() {
                 <span className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-sm font-medium text-[#86868b]">
                   {num}
                 </span>
-                <span>{title}</span>
+                <span>{t(`sections.${key}`)}</span>
               </a>
             ))}
           </nav>
@@ -108,18 +111,18 @@ export default function WhitepaperPage() {
           <section id="abstract" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">1</span>
-              Abstract
+              {t('sections.abstract')}
             </h2>
             <div className="bg-gradient-to-r from-[#007AFF]/5 to-transparent p-6 rounded-xl border-l-4 border-[#007AFF] mb-6">
               <p className="leading-relaxed m-0" style={{ color: '#1d1d1f' }}>
-                ZkVanguard introduces a paradigm shift in institutional digital asset risk management by combining autonomous AI agents with crowd-sourced prediction market intelligence and post-quantum zero-knowledge cryptography. Unlike traditional reactive systems that respond to market crashes after they occur, ZkVanguard&apos;s predictive architecture anticipates volatility events 3-7 days in advance, enabling preemptive portfolio protection.
+                {t('abstract.highlight')}
               </p>
             </div>
             <p className="text-[#424245] leading-relaxed">
-              The platform orchestrates six specialized AI agents—Lead, Risk, Hedging, Settlement, Reporting, and Price Monitor—that autonomously analyze portfolios, consume real-time prediction market data from Delphi/Polymarket, generate mathematically-optimal hedge strategies, and execute gasless transactions on the Cronos blockchain. All sensitive portfolio data remains private through our CUDA-accelerated ZK-STARK proof system with 512-bit target security (180-bit effective soundness via FRI protocol), while maintaining full regulatory compliance through verifiable computation.
+              {t('abstract.p1')}
             </p>
             <p className="text-[#424245] leading-relaxed">
-              With $16 trillion in tokenized real-world assets (RWA) projected by 2030 and institutional capital currently sidelined due to inadequate risk infrastructure, ZkVanguard addresses a critical market gap. Our x402 gasless protocol eliminates transaction fees (97.4% gas coverage), while our privacy-preserving hedge architecture protects institutional trading strategies from front-running and competitive intelligence exposure.
+              {t('abstract.p2')}
             </p>
           </section>
 
@@ -127,28 +130,28 @@ export default function WhitepaperPage() {
           <section id="introduction" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">2</span>
-              Introduction & Market Opportunity
+              {t('sections.introduction')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">2.1 The $16 Trillion Opportunity</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">2.1 {t('introduction.opportunity')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              According to Boston Consulting Group&apos;s 2024 report, the tokenized real-world asset market is projected to reach $16 trillion by 2030, representing one of the largest wealth migrations in financial history. Currently, $1.2 trillion in institutional capital participates in decentralized finance, yet this figure represents a fraction of total institutional assets due to three critical barriers:
+              {t('introduction.opportunityText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
-              <li><strong>Reactive Risk Management:</strong> Existing tools only respond after market crashes, resulting in 15-30% portfolio drawdowns before protection activates</li>
-              <li><strong>Privacy Vulnerabilities:</strong> Public blockchain transparency exposes institutional trading strategies, enabling front-running and competitive intelligence extraction</li>
-              <li><strong>Prohibitive Transaction Costs:</strong> Gas fees of $5-$50 per transaction create 60-80% operational inefficiency, particularly during high-volatility periods</li>
+              <li><strong>{t('introduction.barrier1Title')}</strong> {t('introduction.barrier1')}</li>
+              <li><strong>{t('introduction.barrier2Title')}</strong> {t('introduction.barrier2')}</li>
+              <li><strong>{t('introduction.barrier3Title')}</strong> {t('introduction.barrier3')}</li>
             </ul>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">2.2 Market Timing</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">2.2 {t('introduction.timing')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              The convergence of several technological and regulatory developments creates an optimal market entry window:
+              {t('introduction.timingText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
-              <li><strong>Prediction Market Maturation:</strong> Polymarket and similar platforms have demonstrated 85%+ accuracy on major events, providing reliable forecasting data</li>
-              <li><strong>ZK Technology Advancement:</strong> ZK-STARK proofs now achieve practical performance (2-5 second generation) with post-quantum security guarantees</li>
-              <li><strong>Institutional Crypto Adoption:</strong> BlackRock, Fidelity, and major banks have launched digital asset products, signaling mainstream institutional acceptance</li>
-              <li><strong>Regulatory Clarity:</strong> MiCA in Europe and evolving SEC guidance provide clearer compliance frameworks for institutional participants</li>
+              <li><strong>{t('introduction.timing1Title')}</strong> {t('introduction.timing1')}</li>
+              <li><strong>{t('introduction.timing2Title')}</strong> {t('introduction.timing2')}</li>
+              <li><strong>{t('introduction.timing3Title')}</strong> {t('introduction.timing3')}</li>
+              <li><strong>{t('introduction.timing4Title')}</strong> {t('introduction.timing4')}</li>
             </ul>
           </section>
 
@@ -156,12 +159,12 @@ export default function WhitepaperPage() {
           <section id="problem" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">3</span>
-              The Problem: Reactive Risk Management
+              {t('sections.problem')}
             </h2>
             
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.1 The Reactive Paradigm</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.1 {t('problem.paradigm')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              Traditional cryptocurrency risk management operates on a fundamentally flawed paradigm: reaction rather than prediction. The typical workflow follows this pattern:
+              {t('problem.paradigmText')}
             </p>
             <div className="bg-red-50 p-6 rounded-xl my-6 font-mono text-sm">
               <div className="text-red-600">
@@ -177,18 +180,18 @@ export default function WhitepaperPage() {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.2 The Cost of Reaction</h3>
+            <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">3.2 {t('problem.costTitle')}</h3>
             <p className="text-[#424245] leading-relaxed">
-              Analysis of major market events from 2020-2025 reveals the true cost of reactive risk management:
+              {t('problem.costText')}
             </p>
             <div className="overflow-x-auto my-6">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Event</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Total Drop</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Loss Before Hedge</th>
-                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">Predictable?</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('problem.tableEvent')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('problem.tableDrop')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('problem.tableLoss')}</th>
+                    <th className="text-left p-4 font-semibold text-[#1d1d1f]">{t('problem.tablePredictable')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5e5e5]">
@@ -938,17 +941,17 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           <section id="conclusion" className="mb-16 scroll-mt-24">
             <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
               <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">14</span>
-              Conclusion
+              {t('sections.conclusion')}
             </h2>
             
             <p className="text-[#424245] leading-relaxed">
-              ZkVanguard represents a fundamental shift in institutional digital asset risk management—from reactive systems that respond to market crashes after significant losses, to predictive intelligence that anticipates and preemptively protects against volatility events.
+              {t('conclusion.p1')}
             </p>
             <p className="text-[#424245] leading-relaxed mt-4">
-              By combining six specialized AI agents with crowd-sourced prediction market data, post-quantum zero-knowledge cryptography, and gasless transaction infrastructure, we deliver the comprehensive solution that institutional capital requires to confidently participate in the $16 trillion tokenized asset opportunity.
+              {t('conclusion.p2')}
             </p>
             <p className="text-[#424245] leading-relaxed mt-4">
-              Our platform is live on Cronos testnet, with production deployment planned for Q2 2026. We invite institutional partners, investors, and early adopters to join us in building the future of predictive risk management.
+              {t('conclusion.p3')}
             </p>
           </section>
 

@@ -266,5 +266,69 @@
     "preferencesDescription": "Remember your settings and preferences",
     "rejectOptional": "Reject Optional",
     "savePreferences": "Save Preferences"
+  },
+  "whitepaper": {
+    "version": "Version 1.0",
+    "date": "January 2026",
+    "title": "ZkVanguard Whitepaper",
+    "subtitle": "AI-Powered Predictive Risk Management with Zero-Knowledge Privacy for Institutional Digital Assets",
+    "readButton": "Read Whitepaper",
+    "toc": "Table of Contents",
+    "sections": {
+      "abstract": "Abstract",
+      "introduction": "Introduction & Market Opportunity",
+      "problem": "The Problem: Reactive Risk Management",
+      "solution": "Our Solution: Predictive Intelligence",
+      "architecture": "Technical Architecture",
+      "agents": "Multi-Agent AI System",
+      "zkp": "Zero-Knowledge Privacy Layer",
+      "gasless": "Gasless Transaction Protocol (x402)",
+      "predictions": "Prediction Market Integration",
+      "multichain": "Multi-Chain Strategy",
+      "security": "Security Analysis",
+      "tokenomics": "Tokenomics & Economics",
+      "roadmap": "Roadmap",
+      "conclusion": "Conclusion",
+      "references": "References"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard introduces a paradigm shift in institutional digital asset risk management by combining autonomous AI agents with crowd-sourced prediction market intelligence and post-quantum zero-knowledge cryptography. Unlike traditional reactive systems that respond to market crashes after they occur, ZkVanguard's predictive architecture anticipates volatility events 3-7 days in advance, enabling preemptive portfolio protection.",
+      "p1": "The platform orchestrates six specialized AI agents—Lead, Risk, Hedging, Settlement, Reporting, and Price Monitor—that autonomously analyze portfolios, consume real-time prediction market data from Delphi/Polymarket, generate mathematically-optimal hedge strategies, and execute gasless transactions on the Cronos blockchain. All sensitive portfolio data remains private through our CUDA-accelerated ZK-STARK proof system with 512-bit target security (180-bit effective soundness via FRI protocol), while maintaining full regulatory compliance through verifiable computation.",
+      "p2": "With $16 trillion in tokenized real-world assets (RWA) projected by 2030 and institutional capital currently sidelined due to inadequate risk infrastructure, ZkVanguard addresses a critical market gap. Our x402 gasless protocol eliminates transaction fees (97.4% gas coverage), while our privacy-preserving hedge architecture protects institutional trading strategies from front-running and competitive intelligence exposure."
+    },
+    "introduction": {
+      "opportunity": "The $16 Trillion Opportunity",
+      "opportunityText": "According to Boston Consulting Group's 2024 report, the tokenized real-world asset market is projected to reach $16 trillion by 2030, representing one of the largest wealth migrations in financial history. Currently, $1.2 trillion in institutional capital participates in decentralized finance, yet this figure represents a fraction of total institutional assets due to three critical barriers:",
+      "barrier1Title": "Reactive Risk Management:",
+      "barrier1": "Existing tools only respond after market crashes, resulting in 15-30% portfolio drawdowns before protection activates",
+      "barrier2Title": "Privacy Vulnerabilities:",
+      "barrier2": "Public blockchain transparency exposes institutional trading strategies, enabling front-running and competitive intelligence extraction",
+      "barrier3Title": "Prohibitive Transaction Costs:",
+      "barrier3": "Gas fees of $5-$50 per transaction create 60-80% operational inefficiency, particularly during high-volatility periods",
+      "timing": "Market Timing",
+      "timingText": "The convergence of several technological and regulatory developments creates an optimal market entry window:",
+      "timing1Title": "Prediction Market Maturation:",
+      "timing1": "Polymarket and similar platforms have demonstrated 85%+ accuracy on major events, providing reliable forecasting data",
+      "timing2Title": "ZK Technology Advancement:",
+      "timing2": "ZK-STARK proofs now achieve practical performance (2-5 second generation) with post-quantum security guarantees",
+      "timing3Title": "Institutional Crypto Adoption:",
+      "timing3": "BlackRock, Fidelity, and major banks have launched digital asset products, signaling mainstream institutional acceptance",
+      "timing4Title": "Regulatory Clarity:",
+      "timing4": "MiCA in Europe and evolving SEC guidance provide clearer compliance frameworks for institutional participants"
+    },
+    "problem": {
+      "paradigm": "The Reactive Paradigm",
+      "paradigmText": "Traditional cryptocurrency risk management operates on a fundamentally flawed paradigm: reaction rather than prediction. The typical workflow follows this pattern:",
+      "costTitle": "The Cost of Reaction",
+      "costText": "Analysis of major market events from 2020-2025 reveals the true cost of reactive risk management:",
+      "tableEvent": "Event",
+      "tableDrop": "Total Drop",
+      "tableLoss": "Loss Before Hedge",
+      "tablePredictable": "Predictable?"
+    },
+    "conclusion": {
+      "title": "Conclusion",
+      "text": "ZkVanguard represents a fundamental paradigm shift in institutional digital asset risk management. By combining predictive AI intelligence with post-quantum cryptographic privacy and gasless execution, we address the three critical barriers preventing institutional adoption: reactive risk management, privacy vulnerabilities, and prohibitive transaction costs."
+    }
   }
 }
