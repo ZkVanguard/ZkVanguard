@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, memo, useMemo, useRef, useEffect } from 'react';
+import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 
 interface HedgePosition {

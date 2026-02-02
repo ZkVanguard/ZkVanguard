@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, ExternalLink } from 'lucide-react';
+import { logger } from '@/lib/utils/logger';
 import { ProofVerification } from '../../../components/dashboard/ProofVerification';
 import { useAccount, useWalletClient, useSignMessage } from 'wagmi';
 

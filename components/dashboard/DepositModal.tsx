@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { X, Loader2, CheckCircle, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, parseEther } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
+import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
+import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
 // WCRO contract address for wrapping native CRO
 const WCRO_ADDRESS = '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`;

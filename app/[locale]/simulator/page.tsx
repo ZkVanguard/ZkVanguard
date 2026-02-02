@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Pause, RotateCcw, TrendingDown, TrendingUp, Activity, 
   Shield, Zap, AlertTriangle, CheckCircle, Brain,
-  Terminal, Eye, EyeOff, Wifi
+  Terminal, Eye, EyeOff, Wifi, WifiOff
 } from 'lucide-react';
 import { ZKBadgeInline, type ZKProofData } from '../../../components/ZKVerificationBadge';
 

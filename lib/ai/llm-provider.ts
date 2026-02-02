@@ -11,6 +11,7 @@ import {
   parseActionIntent,
   formatActionResult
 } from '../services/portfolio-actions';
+import { generatePrivateHedges, type PrivateHedge } from '../services/zk-hedge-service';
 
 // Message types for conversation
 export interface ChatMessage {
@@ -975,12 +976,12 @@ class LLMProvider {
         const privateHedges = await generatePrivateHedges(portfolioValue, riskScore);
         
         // Build concise hedge summary
-        const totalEffectiveness = privateHedges.reduce((sum, h) => sum + h.effectiveness, 0) / privateHedges.length;
-        const topHedge = privateHedges.sort((a, b) => b.effectiveness - a.effectiveness)[0];
+        const totalEffectiveness = privateHedges.reduce((sum: number, h: PrivateHedge) => sum + h.effectiveness, 0) / privateHedges.length;
+        const topHedge = privateHedges.sort((a: PrivateHedge, b: PrivateHedge) => b.effectiveness - a.effectiveness)[0];
         
         hedgeInfo = `\n\n📊 **${privateHedges.length} strategies generated** | Avg effectiveness: ${(totalEffectiveness * 100).toFixed(0)}%`;
         hedgeInfo += `\n📌 **Top recommendation:** ${topHedge?.priority || 'HIGH'} priority hedge (${(topHedge?.effectiveness * 100).toFixed(0)}% effective)`;
-        hedgeInfo += `\n🔐 ZK: ${privateHedges.filter(h => h.verified).length}/${privateHedges.length} verified`;
+        hedgeInfo += `\n🔐 ZK: ${privateHedges.filter((h: PrivateHedge) => h.verified).length}/${privateHedges.length} verified`;
         
         // Build action buttons
         hedgeActions = [
@@ -1002,7 +1003,7 @@ class LLMProvider {
             id: 'view_all_hedges',
             label: '📋 View All Strategies',
             type: 'view_hedges',
-            params: { hedges: privateHedges.map(h => ({ id: h.hedgeId, effectiveness: h.effectiveness, priority: h.priority })) }
+            params: { hedges: privateHedges.map((h: PrivateHedge) => ({ id: h.hedgeId, effectiveness: h.effectiveness, priority: h.priority })) }
           },
           {
             id: 'adjust_risk',
