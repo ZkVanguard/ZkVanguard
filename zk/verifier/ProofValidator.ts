@@ -93,15 +93,17 @@ export class ProofValidator {
     const isTestMode = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
     if (isTestMode) {
       // Mock validation - check structure more thoroughly
-      const hasProof = !!(proof && (proof.trace_merkle_root || proof.proofHash));
+      const hasMerkleRoot = !!(proof && (proof.merkle_root || proof.trace_merkle_root));
+      const hasQueryResponses = !!(proof && proof.query_responses);
       const hasStatement = !!statement;
-      // trace_length must not be 0 (explicitly invalid)
-      const hasValidTraceLength = proof.trace_length === undefined || Number(proof.trace_length) > 0;
+      // execution_trace_length (real) or trace_length (mock) must not be 0 (explicitly invalid)
+      const traceLength = (proof.execution_trace_length ?? proof.trace_length) as number | undefined;
+      const hasValidTraceLength = traceLength === undefined || traceLength > 0;
       // merkle root must not be all zeros
-      const merkleRoot = proof.trace_merkle_root as string | undefined;
+      const merkleRoot = (proof.merkle_root || proof.trace_merkle_root) as string | undefined;
       const hasValidMerkleRoot = !merkleRoot || 
         (merkleRoot.length > 8 && !/^0+$/.test(merkleRoot));
-      const isValid = hasProof && hasStatement && hasValidTraceLength && hasValidMerkleRoot;
+      const isValid = hasMerkleRoot && hasQueryResponses && hasStatement && hasValidTraceLength && hasValidMerkleRoot;
       return { verified: isValid, error: isValid ? undefined : 'Invalid proof structure' };
     }
 
@@ -179,26 +181,38 @@ export class ProofValidator {
    * Quick validation of proof structure (without full verification)
    */
   validateProofStructure(proof: Record<string, unknown>): boolean {
-    // Check required fields for STARK proof
-    const requiredFields = [
-      'version',
-      'trace_length',
-      'trace_merkle_root',
-      'fri_roots',
-      'query_responses',
-      'protocol',
-    ];
-
-    for (const field of requiredFields) {
-      if (!(field in proof)) {
-        logger.warn('Proof missing required field', { field });
-        return false;
-      }
+    // Check required fields for STARK proof - support both mock and real proof formats
+    // Real proofs use: merkle_root, query_responses, execution_trace_length, etc.
+    // Mock proofs use: trace_merkle_root, trace_length, fri_roots, etc.
+    
+    const hasMerkleRoot = proof.merkle_root || proof.trace_merkle_root;
+    const hasQueryResponses = proof.query_responses;
+    const hasTraceLength = proof.execution_trace_length || proof.trace_length;
+    const hasVersion = proof.version;
+    
+    if (!hasMerkleRoot) {
+      logger.warn('Proof missing required field', { field: 'merkle_root or trace_merkle_root' });
+      return false;
+    }
+    
+    if (!hasQueryResponses) {
+      logger.warn('Proof missing required field', { field: 'query_responses' });
+      return false;
+    }
+    
+    if (!hasTraceLength) {
+      logger.warn('Proof missing required field', { field: 'trace_length' });
+      return false;
+    }
+    
+    if (!hasVersion) {
+      logger.warn('Proof missing required field', { field: 'version' });
+      return false;
     }
 
-    // Check protocol is STARK
+    // Check protocol is STARK if present (optional for real proofs that don't include it)
     const protocol = proof.protocol as string | undefined;
-    if (!protocol || !protocol.includes('STARK')) {
+    if (protocol && !protocol.includes('STARK')) {
       logger.warn('Proof protocol is not STARK', { protocol });
       return false;
     }
@@ -210,12 +224,16 @@ export class ProofValidator {
    * Extract public outputs from proof
    */
   extractPublicOutputs(proof: Record<string, unknown>): Record<string, unknown> {
+    // Handle both mock and real proof formats
+    const innerProof = (proof.proof as Record<string, unknown>) || proof;
+    
     return {
-      publicOutput: proof.public_output,
-      statement: proof.statement,
-      protocol: proof.protocol,
-      securityLevel: proof.security_level,
-      generationTime: proof.generation_time,
+      publicOutput: innerProof.public_output || innerProof.public_inputs,
+      statement: innerProof.statement || { hash: innerProof.statement_hash },
+      protocol: innerProof.protocol || 'ZK-STARK',
+      securityLevel: innerProof.security_level,
+      generationTime: innerProof.generation_time,
+      proofHash: innerProof.proof_hash || innerProof.merkle_root || innerProof.trace_merkle_root,
     };
   }
 }

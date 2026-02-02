@@ -141,9 +141,15 @@ export class HedgingAgent extends BaseAgent {
           return await this.monitorPositions(task);
         
         default:
-          // Graceful fallback: create hedge strategy for unknown hedge-related actions
-          logger.warn(`Unknown hedging action: ${taskAction}, using create_strategy fallback`, { taskId: task.id });
-          return await this.createHedgeStrategy(task);
+          // Return error for unknown actions
+          logger.warn(`Unknown hedging action: ${taskAction}`, { taskId: task.id });
+          return {
+            success: false,
+            data: null,
+            error: `Unknown action: ${taskAction}`,
+            executionTime: 0,
+            agentId: this.agentId,
+          };
       }
     } catch (error) {
       logger.error('Task execution failed', { taskId: task.id, error });

@@ -5,6 +5,17 @@
 
 import { getCryptocomAIService } from '../lib/ai/cryptocom-service';
 
+// Mock portfolio data for testing
+const mockPortfolio = {
+  tokens: [
+    { symbol: 'BTC', usdValue: 50000 },
+    { symbol: 'ETH', usdValue: 30000 },
+    { symbol: 'CRO', usdValue: 15000 },
+    { symbol: 'USDC', usdValue: 5000 },
+  ],
+  totalValue: 100000,
+};
+
 describe('AI Service Tests', () => {
   describe('CryptocomAIService Initialization', () => {
     test('should initialize service without API key', () => {
@@ -66,7 +77,7 @@ describe('AI Service Tests', () => {
     });
 
     test('should return reasonable values', async () => {
-      const analysis = await service.analyzePortfolio('0x456', {});
+      const analysis = await service.analyzePortfolio('0x456', mockPortfolio);
       expect(analysis.totalValue).toBeGreaterThan(0);
       expect(analysis.riskScore).toBeGreaterThanOrEqual(0);
       expect(analysis.riskScore).toBeLessThanOrEqual(100);
@@ -75,7 +86,7 @@ describe('AI Service Tests', () => {
     });
 
     test('should provide top assets', async () => {
-      const analysis = await service.analyzePortfolio('0x789', {});
+      const analysis = await service.analyzePortfolio('0x789', mockPortfolio);
       expect(analysis.topAssets.length).toBeGreaterThan(0);
       analysis.topAssets.forEach(asset => {
         expect(asset).toHaveProperty('symbol');

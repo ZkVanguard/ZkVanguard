@@ -14,6 +14,16 @@ import { getCryptocomAIService } from '../lib/ai/cryptocom-service';
 describe('E2E Portfolio Management Tests', () => {
   const testAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEbC';
   const aiService = getCryptocomAIService();
+  
+  // Mock portfolio for AI analysis tests
+  const mockPortfolioForAI = {
+    tokens: [
+      { symbol: 'BTC', usdValue: 22500 },
+      { symbol: 'CRO', usdValue: 2750 },
+      { symbol: 'USDC', usdValue: 5000 },
+    ],
+    totalValue: 30250,
+  };
 
   describe('1. Portfolio Data Collection', () => {
     test('should collect portfolio data from all protocols', () => {
@@ -210,7 +220,7 @@ describe('E2E Portfolio Management Tests', () => {
 
   describe('3. AI-Powered Analysis', () => {
     test('should generate portfolio analysis with AI', async () => {
-      const analysis = await aiService.analyzePortfolio(testAddress, {});
+      const analysis = await aiService.analyzePortfolio(testAddress, mockPortfolioForAI);
 
       expect(analysis).toHaveProperty('totalValue');
       expect(analysis).toHaveProperty('positions');
@@ -226,7 +236,7 @@ describe('E2E Portfolio Management Tests', () => {
     });
 
     test('should provide actionable recommendations', async () => {
-      const analysis = await aiService.analyzePortfolio(testAddress, {});
+      const analysis = await aiService.analyzePortfolio(testAddress, mockPortfolioForAI);
 
       expect(analysis.recommendations.length).toBeGreaterThan(0);
       analysis.recommendations.forEach((rec) => {
@@ -236,7 +246,7 @@ describe('E2E Portfolio Management Tests', () => {
     });
 
     test('should identify top performing assets', async () => {
-      const analysis = await aiService.analyzePortfolio(testAddress, {});
+      const analysis = await aiService.analyzePortfolio(testAddress, mockPortfolioForAI);
 
       expect(analysis.topAssets.length).toBeGreaterThan(0);
       analysis.topAssets.forEach((asset) => {
