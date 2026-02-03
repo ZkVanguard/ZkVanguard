@@ -1,8 +1,61 @@
 "use client";
 
+import { useState } from 'react';
 import Link from 'next/link';
 
+interface WalletVerificationResult {
+  verified: boolean;
+  walletAddress: string;
+  hedgeId?: string;
+  hedgeDetails?: {
+    asset: string;
+    side: string;
+    size: number;
+    entryPrice: number;
+    leverage: number;
+    createdAt: string;
+  };
+  zkProofHash?: string;
+  walletBindingProof?: string;
+  verificationTimestamp: string;
+  error?: string;
+}
+
 export default function ZKVerificationPage() {
+  const [walletAddress, setWalletAddress] = useState('');
+  const [hedgeId, setHedgeId] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [result, setResult] = useState<WalletVerificationResult | null>(null);
+
+  const verifyOwnership = async () => {
+    if (!walletAddress) return;
+    
+    setVerifying(true);
+    setResult(null);
+    
+    try {
+      const response = await fetch('/api/zk/verify-ownership', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress,
+          hedgeId: hedgeId || undefined,
+        }),
+      });
+      
+      const data = await response.json();
+      setResult(data);
+    } catch (error) {
+      setResult({
+        verified: false,
+        walletAddress,
+        verificationTimestamp: new Date().toISOString(),
+        error: 'Verification request failed',
+      });
+    } finally {
+      setVerifying(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-white" style={{ colorScheme: 'light' }}>
       <main className="max-w-4xl mx-auto px-6 py-16">
@@ -45,6 +98,154 @@ export default function ZKVerificationPage() {
             </div>
           </div>
         </div>
+
+        {/* Wallet Ownership Verification Section */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">🔐 Verify Hedge Ownership</h2>
+          <p className="text-[#424245] mb-6">
+            Cryptographically verify that a hedge position belongs to your wallet using ZK proofs.
+            Each hedge is cryptographically bound to the wallet that created it.
+          </p>
+          
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-8">
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-purple-700 mb-2">
+                  Wallet Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={walletAddress}
+                  onChange={(e) => setWalletAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-4 py-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none bg-white text-[#1d1d1f]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-purple-700 mb-2">
+                  Hedge ID <span className="text-[#86868b]">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={hedgeId}
+                  onChange={(e) => setHedgeId(e.target.value)}
+                  placeholder="hedge-123456..."
+                  className="w-full px-4 py-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none bg-white text-[#1d1d1f]"
+                />
+              </div>
+            </div>
+            
+            <button
+              onClick={verifyOwnership}
+              disabled={!walletAddress || verifying}
+              className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            >
+              {verifying ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <span>🔍</span>
+                  <span>Verify Ownership</span>
+                </>
+              )}
+            </button>
+
+            {/* Verification Result */}
+            {result && (
+              <div className={`mt-6 p-6 rounded-xl border ${
+                result.verified 
+                  ? 'bg-green-50 border-green-200' 
+                  : 'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+                    result.verified ? 'bg-green-500' : 'bg-red-500'
+                  }`}>
+                    {result.verified ? '✓' : '✗'}
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${
+                      result.verified ? 'text-green-800' : 'text-red-800'
+                    }`}>
+                      {result.verified ? 'Ownership Verified' : 'Verification Failed'}
+                    </h3>
+                    <p className={`text-sm ${
+                      result.verified ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {result.verified 
+                        ? 'This hedge is cryptographically bound to your wallet'
+                        : result.error || 'No matching hedge found for this wallet'}
+                    </p>
+                  </div>
+                </div>
+
+                {result.verified && result.hedgeDetails && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Asset</p>
+                        <p className="font-semibold text-[#1d1d1f]">{result.hedgeDetails.asset}</p>
+                      </div>
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Position</p>
+                        <p className={`font-semibold ${
+                          result.hedgeDetails.side === 'SHORT' ? 'text-red-600' : 'text-green-600'
+                        }`}>{result.hedgeDetails.side}</p>
+                      </div>
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Size</p>
+                        <p className="font-semibold text-[#1d1d1f]">{result.hedgeDetails.size}</p>
+                      </div>
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Entry Price</p>
+                        <p className="font-semibold text-[#1d1d1f]">${result.hedgeDetails.entryPrice.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Leverage</p>
+                        <p className="font-semibold text-[#1d1d1f]">{result.hedgeDetails.leverage}x</p>
+                      </div>
+                      <div className="bg-white/60 p-3 rounded-lg">
+                        <p className="text-xs text-[#86868b] mb-1">Created</p>
+                        <p className="font-semibold text-[#1d1d1f] text-sm">
+                          {new Date(result.hedgeDetails.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {(result.zkProofHash || result.walletBindingProof) && (
+                      <div className="mt-4 p-4 bg-white/60 rounded-lg">
+                        <h4 className="text-sm font-semibold text-purple-700 mb-2">Cryptographic Proofs</h4>
+                        {result.zkProofHash && (
+                          <div className="mb-2">
+                            <p className="text-xs text-[#86868b]">ZK-STARK Proof Hash</p>
+                            <code className="text-xs font-mono text-[#1d1d1f] break-all">
+                              {result.zkProofHash}
+                            </code>
+                          </div>
+                        )}
+                        {result.walletBindingProof && (
+                          <div>
+                            <p className="text-xs text-[#86868b]">Wallet Binding Proof</p>
+                            <code className="text-xs font-mono text-[#1d1d1f] break-all">
+                              {result.walletBindingProof}
+                            </code>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <p className="text-xs text-[#86868b] mt-4">
+                  Verified at: {new Date(result.verificationTimestamp).toLocaleString()}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Academic References */}
         <section className="mb-16">
