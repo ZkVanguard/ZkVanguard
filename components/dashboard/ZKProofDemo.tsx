@@ -83,19 +83,18 @@ export function ZKProofDemo() {
           
           const gaslessApiResult = await response.json();
           
-          if (gaslessApiResult.success && gaslessApiResult.txHash) {
+          if (gaslessApiResult.success && gaslessApiResult.txHash && !gaslessApiResult.simulated) {
             setGaslessResult(gaslessApiResult);
             setShowForm(false); // Show success view with txHash
-            console.log('✅ TRUE GASLESS COMPLETE! 🎉');
-            console.log('   USDC paid:', gaslessApiResult.usdcFee);
-            console.log('   CRO paid:', gaslessApiResult.croGasPaid);
+            console.log('✅ ON-CHAIN STORAGE COMPLETE! 🎉');
             console.log('   Transaction:', gaslessApiResult.txHash);
             console.log('   Proof Hash:', result.commitment.proofHash);
             console.log('   Security: 521-bit NIST P-521');
             console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
           } else if (gaslessApiResult.success) {
-            // Demo mode - no txHash
-            console.log('✅ Proof stored (demo mode):', gaslessApiResult.message);
+            // Fallback - on-chain storage not available
+            console.log('✅ Proof verified off-chain!');
+            console.log('ℹ️  On-chain storage:', gaslessApiResult.message);
           } else {
             throw new Error(gaslessApiResult.error || 'Storage failed');
           }

@@ -113,8 +113,16 @@ export async function POST(request: NextRequest) {
           commitment: { proofHash, merkleRoot, securityLevel: securityLevel || 521, timestamp: Date.now(), verified: true }
         });
       } catch (txErr) {
-        console.error('[store-commitment] On-chain submission failed:', txErr);
-        console.error('[store-commitment] Error details:', JSON.stringify(txErr, Object.getOwnPropertyNames(txErr)));
+        const err = txErr as Error & { code?: string; reason?: string };
+        console.error('[store-commitment] On-chain submission failed:', err.message);
+        console.error('[store-commitment] Error code:', err.code);
+        console.error('[store-commitment] Error reason:', err.reason);
+        // Don't fall through to simulation - return the actual error
+        return NextResponse.json({
+          success: false,
+          error: `On-chain storage failed: ${err.reason || err.message}`,
+          details: { code: err.code, reason: err.reason }
+        }, { status: 500 });
       }
     }
 
