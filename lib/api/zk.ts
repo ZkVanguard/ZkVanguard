@@ -402,13 +402,19 @@ export async function generateProofForOnChain(
   // Wait for proof generation (CUDA-accelerated, NIST P-521)
   const { proof: starkProof, claim } = await waitForProof(jobStatus.job_id);
   
+  // Extract the claim string - backend returns full statement object as "claim"
+  // but verification endpoint expects just the claim string
+  const claimString = typeof claim === 'object' && claim !== null 
+    ? (claim as Record<string, unknown>).claim as string || JSON.stringify(claim)
+    : String(claim);
+  
   logger.info('Verifying proof off-chain with full 521-bit precision', {
     statementHash: starkProof.statement_hash,
-    claim,
+    claim: claimString,
   });
   
   // Verify proof OFF-CHAIN with full 521-bit precision
-  const offChainVerification = await verifyProofOffChain(starkProof, claim);
+  const offChainVerification = await verifyProofOffChain(starkProof, claimString);
   
   if (!offChainVerification.valid) {
     console.error('❌ Off-chain verification failed');
