@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS hedges (
   -- Order identification
   order_id VARCHAR(100) UNIQUE NOT NULL,
   portfolio_id INTEGER,
+  wallet_address VARCHAR(42), -- Associated wallet address
   
   -- Position details
   asset VARCHAR(20) NOT NULL,
@@ -46,13 +47,14 @@ CREATE TABLE IF NOT EXISTS hedges (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   closed_at TIMESTAMP WITH TIME ZONE,
   
-  -- Transaction reference (if on-chain)
-  tx_hash VARCHAR(66)
+  -- Transaction reference (if on-chain) / ZK proof hash
+  tx_hash VARCHAR(100)
 );
 
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_hedges_order_id ON hedges(order_id);
 CREATE INDEX IF NOT EXISTS idx_hedges_portfolio ON hedges(portfolio_id);
+CREATE INDEX IF NOT EXISTS idx_hedges_wallet ON hedges(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_hedges_status ON hedges(status);
 CREATE INDEX IF NOT EXISTS idx_hedges_asset ON hedges(asset);
 CREATE INDEX IF NOT EXISTS idx_hedges_created ON hedges(created_at);
