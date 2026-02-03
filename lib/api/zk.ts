@@ -82,6 +82,9 @@ export async function generateSettlementProof(
   try {
     logger.info('Generating ZK proof for payments', { count: payments.length });
     
+    // Calculate totals for the statement
+    const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+    
     const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
       method: 'POST',
       headers: {
@@ -90,11 +93,19 @@ export async function generateSettlementProof(
       body: JSON.stringify({
         proof_type: 'settlement',
         data: {
-          payments: payments.map(p => ({
-            recipient: p.recipient,
-            amount: p.amount,
-            token: p.token
-          }))
+          statement: {
+            claim: 'Settlement batch is valid and complete',
+            transaction_count: payments.length,
+            batch_id: `BATCH_${Date.now()}`
+          },
+          witness: {
+            payments: payments.map(p => ({
+              recipient: p.recipient,
+              amount: p.amount,
+              token: p.token
+            })),
+            total_amount: totalAmount
+          }
         },
         portfolio_id: portfolioId
       })
@@ -142,7 +153,18 @@ export async function generateRiskProof(
       },
       body: JSON.stringify({
         proof_type: 'risk',
-        data: portfolioData,
+        data: {
+          statement: {
+            claim: 'Portfolio risk is within acceptable threshold',
+            threshold: 100,
+            portfolio_id: portfolioId || 'PORTFOLIO_DEFAULT'
+          },
+          witness: {
+            portfolio_value: portfolioData.portfolio_value,
+            volatility: portfolioData.volatility,
+            value_at_risk: portfolioData.value_at_risk
+          }
+        },
         portfolio_id: portfolioId
       })
     });
@@ -178,7 +200,19 @@ export async function generateRebalanceProof(
       },
       body: JSON.stringify({
         proof_type: 'rebalance',
-        data: rebalanceData,
+        data: {
+          statement: {
+            claim: 'Portfolio rebalance maintains total value',
+            num_assets: rebalanceData.old_allocations.length,
+            portfolio_id: portfolioId || 'PORTFOLIO_DEFAULT'
+          },
+          witness: {
+            old_allocations: rebalanceData.old_allocations,
+            new_allocations: rebalanceData.new_allocations,
+            old_total: rebalanceData.old_allocations.reduce((a, b) => a + b, 0),
+            new_total: rebalanceData.new_allocations.reduce((a, b) => a + b, 0)
+          }
+        },
         portfolio_id: portfolioId
       })
     });
