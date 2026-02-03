@@ -43,6 +43,30 @@ export async function POST(request: NextRequest) {
     body = await request.json();
     const { scenario, statement, witness } = body;
 
+    // Validate required fields
+    if (!statement || Object.keys(statement).length === 0) {
+      console.error('❌ [ZK Generate] Missing or empty statement in request');
+      return NextResponse.json({
+        success: false,
+        error: 'Statement is required and cannot be empty'
+      }, { status: 400 });
+    }
+
+    if (!witness || Object.keys(witness).length === 0) {
+      console.error('❌ [ZK Generate] Missing or empty witness in request');
+      return NextResponse.json({
+        success: false,
+        error: 'Witness is required and cannot be empty'
+      }, { status: 400 });
+    }
+
+    console.log('📋 [ZK Generate] Received request:', { 
+      scenario, 
+      statementKeys: Object.keys(statement), 
+      witnessKeys: Object.keys(witness),
+      zkApiUrl: process.env.ZK_API_URL || 'localhost:8000 (default)'
+    });
+
     // Prepare data based on scenario type
     let _proofData: Record<string, unknown> = {};
     
