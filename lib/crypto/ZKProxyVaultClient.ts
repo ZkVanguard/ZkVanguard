@@ -59,6 +59,7 @@ export interface OnChainProxyPDA {
   createdAt: number;
   isActive: boolean;
   hasNoPrivateKey: true; // Always true - this is the security guarantee
+  txHash?: string; // Transaction hash from creation
 }
 
 export interface ZKProofData {
@@ -171,6 +172,7 @@ export class ZKProxyVaultClient {
       createdAt: Math.floor(Date.now() / 1000),
       isActive: true,
       hasNoPrivateKey: true,
+      txHash: receipt.hash,
     };
   }
 
