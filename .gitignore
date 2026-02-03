@@ -67,6 +67,8 @@ deployments/
 # Business Strategy Documents (Confidential)
 # -------------------------------------------
 docs/ACQUISITION_PLAN.md
+docs/GO_TO_MARKET_PLAN.md
+docs/VIDEO_PITCH_SCRIPTS.md
 
 # -------------------------------------------
 # Environment Files (CRITICAL - Contains private keys & API keys)
