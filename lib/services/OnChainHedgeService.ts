@@ -132,14 +132,14 @@ export class OnChainHedgeService {
       
       // Deposit funds if specified
       if (request.depositAmount && parseFloat(request.depositAmount) > 0) {
-        const depositTx = await this.client.deposit(
+        const depositTxHash = await this.client.deposit(
           result.proxyAddress,
-          request.depositAmount
+          BigInt(request.depositAmount)
         );
         
         logger.info('💰 Funds deposited to proxy', {
           amount: ethers.formatEther(request.depositAmount),
-          txHash: depositTx.txHash?.slice(0, 20) + '...',
+          txHash: depositTxHash?.slice(0, 20) + '...',
         });
       }
       
