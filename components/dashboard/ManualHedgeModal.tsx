@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Shield, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react';
+import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Lock, Database, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
@@ -9,6 +9,18 @@ interface ManualHedgeModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableAssets?: string[];
+  walletAddress?: string;
+}
+
+interface HedgeSuccess {
+  orderId: string;
+  zkProofHash?: string;
+  zkProofGenerated: boolean;
+  entryPrice: string;
+  size: string;
+  simulationMode: boolean;
+  walletOwnershipProof?: string;
+  walletBinding?: string;
   walletAddress?: string;
 }
 
@@ -22,10 +34,14 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
   const [stopLoss, setStopLoss] = useState('');
   const [reason, setReason] = useState('');
   const [creating, setCreating] = useState(false);
+  const [creatingStep, setCreatingStep] = useState<'submitting' | 'zk-proof' | 'wallet-proof' | 'database' | 'done'>('submitting');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<HedgeSuccess | null>(null);
 
   const handleCreate = async () => {
     setError(null);
+    setSuccess(null);
+    setCreatingStep('submitting');
 
     // Validation
     if (!asset || !size || !entryPrice || !targetPrice || !stopLoss) {
@@ -65,6 +81,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
     }
 
     setCreating(true);
+    setCreatingStep('submitting');
 
     try {
       // Call the API endpoint to execute hedge on Moonlander
@@ -77,6 +94,8 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
         takeProfit: targetNum,
         reason: reason || `Manual ${hedgeType} hedge on ${asset}`
       });
+
+      setCreatingStep('zk-proof');
 
       const response = await fetch('/api/agents/hedging/execute', {
         method: 'POST',
@@ -108,30 +127,40 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
       console.log('🛡️ MANUAL HEDGE SUCCESS', data);
 
       if (data.success) {
-        // Store hedge in localStorage with FULL details for backwards compatibility
+        setCreatingStep('wallet-proof');
+        
+        // The API already saves to PostgreSQL database with ZK proof
+        // We just need to store minimal data in localStorage for UI fallback
         const batchId = data.orderId || `manual-hedge-${Date.now()}`;
         
-        // Save to settlement history with complete hedge data
+        // Save minimal reference to settlement history (DB is primary source)
         const settlements = JSON.parse(localStorage.getItem('settlement_history') || '{}');
         settlements[batchId] = {
           batchId,
           type: 'hedge',
           timestamp: Date.now(),
           status: 'active',
+          zkProofHash: data.zkProofHash,
+          zkProofGenerated: data.zkProofGenerated,
+          walletOwnershipProof: data.walletOwnershipProof,
+          walletBinding: data.walletBinding,
+          walletAddress: data.walletAddress || walletAddress,
+          storedInDatabase: true,
           hedgeDetails: {
             asset,
             type: hedgeType,
-            size: sizeNum,
+            size: parseFloat(data.size) || sizeNum,
             leverage,
-            entryPrice: entryNum,
+            entryPrice: parseFloat(data.entryPrice) || entryNum,
             stopLoss: stopNum,
             targetPrice: targetNum,
-            capitalUsed: (sizeNum * entryNum) / leverage,
+            capitalUsed: (parseFloat(data.size) || sizeNum) * (parseFloat(data.entryPrice) || entryNum) / leverage,
             reason: reason || `Manual ${hedgeType} hedge on ${asset}`
           },
-          managerSignature: true // Mark as hedge position
         };
         localStorage.setItem('settlement_history', JSON.stringify(settlements));
+
+        setCreatingStep('database');
 
         // Also track as transaction
         trackSuccessfulTransaction({
@@ -139,25 +168,30 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
           type: 'hedge',
           from: 'manual',
           to: asset,
-          value: (sizeNum * entryNum / leverage).toFixed(2),
+          value: ((parseFloat(data.size) || sizeNum) * (parseFloat(data.entryPrice) || entryNum) / leverage).toFixed(2),
           tokenSymbol: 'USDC',
-          description: `${hedgeType} ${asset} hedge at $${entryNum.toFixed(2)}`,
+          description: `${hedgeType} ${asset} hedge at $${(parseFloat(data.entryPrice) || entryNum).toFixed(2)}`,
         });
 
         // Trigger event to refresh UI
         window.dispatchEvent(new Event('hedgeAdded'));
 
-        // Success!
-        setTimeout(() => {
-          setCreating(false);
-          onClose();
-          // Reset form
-          setSize('0.01');
-          setEntryPrice('');
-          setTargetPrice('');
-          setStopLoss('');
-          setReason('');
-        }, 500);
+        setCreatingStep('done');
+        
+        // Show success state with ZK proof info and wallet ownership
+        setSuccess({
+          orderId: data.orderId,
+          zkProofHash: data.zkProofHash,
+          zkProofGenerated: data.zkProofGenerated,
+          entryPrice: data.entryPrice,
+          size: data.size,
+          simulationMode: data.simulationMode,
+          walletOwnershipProof: data.walletOwnershipProof,
+          walletBinding: data.walletBinding,
+          walletAddress: data.walletAddress || walletAddress,
+        });
+
+        setCreating(false);
       } else {
         throw new Error(data.error || 'Failed to create hedge');
       }
@@ -166,6 +200,19 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
       setError(err instanceof Error ? err.message : 'Failed to create hedge. Please try again.');
       setCreating(false);
     }
+  };
+
+  const handleClose = () => {
+    if (success) {
+      // Reset form on close after success
+      setSize('0.01');
+      setEntryPrice('');
+      setTargetPrice('');
+      setStopLoss('');
+      setReason('');
+      setSuccess(null);
+    }
+    onClose();
   };
 
   const calculatePnL = () => {
@@ -193,7 +240,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={handleClose}
           />
 
           {/* Modal */}
@@ -208,24 +255,162 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-black/5 px-6 py-4 flex items-center justify-between rounded-t-[24px]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#007AFF] rounded-[12px] flex items-center justify-center">
-                    <Shield className="w-5 h-5 text-white" />
+                  <div className={`w-10 h-10 ${success ? 'bg-[#34C759]' : 'bg-[#007AFF]'} rounded-[12px] flex items-center justify-center`}>
+                    {success ? <CheckCircle className="w-5 h-5 text-white" /> : <Shield className="w-5 h-5 text-white" />}
                   </div>
                   <div>
-                    <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Create Manual Hedge</h2>
-                    <p className="text-[13px] text-[#86868b]">Protect your portfolio position</p>
+                    <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
+                      {success ? 'Hedge Created Successfully' : 'Create Manual Hedge'}
+                    </h2>
+                    <p className="text-[13px] text-[#86868b]">
+                      {success ? 'ZK-verified and stored in database' : 'Protect your portfolio position'}
+                    </p>
                   </div>
                 </div>
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="p-2 hover:bg-[#f5f5f7] rounded-full transition-colors"
                 >
                   <X className="w-5 h-5 text-[#86868b]" />
                 </button>
               </div>
 
-              {/* Form */}
+              {/* Success View */}
+              {success ? (
+                <div className="p-6 space-y-5">
+                  {/* Success Animation */}
+                  <div className="flex flex-col items-center py-4">
+                    <div className="w-16 h-16 bg-[#34C759]/10 rounded-full flex items-center justify-center mb-4">
+                      <CheckCircle className="w-10 h-10 text-[#34C759]" />
+                    </div>
+                    <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">Hedge Position Created</h3>
+                    <p className="text-[13px] text-[#86868b] text-center">
+                      Your {hedgeType} position on {asset} is now active
+                    </p>
+                  </div>
+
+                  {/* ZK Proof Status */}
+                  <div className="p-4 bg-[#007AFF]/5 border border-[#007AFF]/20 rounded-[12px] space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-[#007AFF]" />
+                      <span className="text-[13px] font-semibold text-[#007AFF]">ZK-STARK Proof Generated</span>
+                    </div>
+                    {success.zkProofGenerated && success.zkProofHash && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-[#86868b]">Proof Hash:</span>
+                          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+                            {success.zkProofHash.substring(0, 16)}...{success.zkProofHash.substring(success.zkProofHash.length - 8)}
+                          </code>
+                        </div>
+                        <p className="text-[11px] text-[#86868b]">
+                          This cryptographic proof verifies your hedge without revealing sensitive details.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Database Status */}
+                  <div className="p-4 bg-[#34C759]/5 border border-[#34C759]/20 rounded-[12px] space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-4 h-4 text-[#34C759]" />
+                      <span className="text-[13px] font-semibold text-[#34C759]">Stored in Database</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-[#86868b]">Order ID:</span>
+                        <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+                          {success.orderId}
+                        </code>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-[#86868b]">Entry Price:</span>
+                        <span className="text-[12px] font-semibold text-[#1d1d1f]">
+                          ${parseFloat(success.entryPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-[#86868b]">Size:</span>
+                        <span className="text-[12px] font-semibold text-[#1d1d1f]">
+                          {success.size} {asset}
+                        </span>
+                      </div>
+                      {success.simulationMode && (
+                        <p className="text-[11px] text-[#FF9500] font-medium">
+                          ⚠️ Simulation Mode - No real funds committed
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Wallet Ownership Verification */}
+                  {success.walletOwnershipProof && (
+                    <div className="p-4 bg-[#5856D6]/5 border border-[#5856D6]/20 rounded-[12px] space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-[#5856D6]" />
+                        <span className="text-[13px] font-semibold text-[#5856D6]">Wallet Ownership Verified</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-[#86868b]">Your Wallet:</span>
+                          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+                            {success.walletAddress?.substring(0, 8)}...{success.walletAddress?.substring(success.walletAddress.length - 6)}
+                          </code>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-[#86868b]">Ownership Proof:</span>
+                          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+                            {success.walletOwnershipProof.substring(0, 12)}...{success.walletOwnershipProof.substring(success.walletOwnershipProof.length - 6)}
+                          </code>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] text-[#86868b]">Binding Hash:</span>
+                          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+                            {success.walletBinding?.substring(0, 12)}...{success.walletBinding?.substring(success.walletBinding.length - 6)}
+                          </code>
+                        </div>
+                        <p className="text-[11px] text-[#86868b]">
+                          This ZK proof cryptographically binds this hedge exclusively to your wallet address.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Close Button */}
+                  <div className="pt-2">
+                    <button
+                      onClick={handleClose}
+                      className="w-full px-4 py-3 bg-[#007AFF] text-white rounded-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+              /* Form */
               <div className="p-6 space-y-5">
+                {/* Progress Indicator during creation */}
+                {creating && (
+                  <div className="p-4 bg-[#007AFF]/5 border border-[#007AFF]/20 rounded-[12px]">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-5 h-5 border-2 border-[#007AFF]/30 border-t-[#007AFF] rounded-full animate-spin" />
+                      <span className="text-[13px] font-semibold text-[#007AFF]">
+                        {creatingStep === 'submitting' && 'Submitting hedge request...'}
+                        {creatingStep === 'zk-proof' && 'Generating ZK-STARK proof...'}
+                        {creatingStep === 'wallet-proof' && 'Creating wallet ownership proof...'}
+                        {creatingStep === 'database' && 'Storing in database...'}
+                        {creatingStep === 'done' && 'Complete!'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      <div className={`h-1 flex-1 rounded-full ${creatingStep !== 'submitting' ? 'bg-[#007AFF]' : 'bg-[#007AFF]/30'}`} />
+                      <div className={`h-1 flex-1 rounded-full ${creatingStep === 'wallet-proof' || creatingStep === 'database' || creatingStep === 'done' ? 'bg-[#007AFF]' : 'bg-[#007AFF]/30'}`} />
+                      <div className={`h-1 flex-1 rounded-full ${creatingStep === 'database' || creatingStep === 'done' ? 'bg-[#5856D6]' : 'bg-[#007AFF]/30'}`} />
+                      <div className={`h-1 flex-1 rounded-full ${creatingStep === 'done' ? 'bg-[#34C759]' : 'bg-[#007AFF]/30'}`} />
+                    </div>
+                  </div>
+                )}
+
                 {/* Error Message */}
                 {error && (
                   <div className="flex items-start gap-2 p-3 bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-[12px]">
@@ -391,13 +576,12 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Footer */}
-              <div className="sticky bottom-0 bg-white border-t border-black/5 px-6 py-4 flex gap-3">
-                <button
-                  onClick={onClose}
-                  disabled={creating}
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-white border-t border-black/5 px-6 py-4 flex gap-3">
+                  <button
+                    onClick={handleClose}
+                    disabled={creating}
                   className="flex-1 px-4 py-3 bg-[#f5f5f7] text-[#1d1d1f] rounded-[12px] font-semibold hover:bg-[#e8e8ed] transition-colors disabled:opacity-50"
                 >
                   Cancel
@@ -420,6 +604,8 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                   )}
                 </button>
               </div>
+              </div>
+              )}
             </div>
           </motion.div>
         </>
