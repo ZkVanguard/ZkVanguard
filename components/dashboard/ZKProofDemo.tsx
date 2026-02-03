@@ -1,11 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles } from 'lucide-react';
+import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles, Search, Clock, Hash, Database } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';
 import { useWalletClient } from 'wagmi';
+
+interface StoredCommitment {
+  proofHash: string;
+  merkleRoot: string;
+  timestamp: number;
+  securityLevel: number;
+  verified: boolean;
+  usdcFee: string;
+}
 
 export function ZKProofDemo() {
   const { isConnected } = useAccount();
@@ -18,6 +27,41 @@ export function ZKProofDemo() {
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
   const [gaslessResult, setGaslessResult] = useState<{ txHash: string; trueGasless: boolean; x402Powered: boolean; usdcFee: string; croGasPaid: string; message: string } | null>(null);
+  
+  // Lookup state
+  const [lookupTxHash, setLookupTxHash] = useState('');
+  const [lookupResult, setLookupResult] = useState<StoredCommitment | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // Lookup proof by transaction hash
+  const handleLookupProof = async () => {
+    if (!lookupTxHash.trim()) return;
+    
+    setIsLookingUp(true);
+    setLookupError(null);
+    setLookupResult(null);
+    
+    try {
+      const response = await fetch('/api/zk-proof/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash: lookupTxHash.trim() }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.commitment) {
+        setLookupResult(data.commitment);
+      } else {
+        setLookupError(data.error || 'Commitment not found');
+      }
+    } catch (err) {
+      setLookupError('Failed to lookup proof: ' + (err as Error).message);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -240,6 +284,86 @@ export function ZKProofDemo() {
           {isGasless && gaslessResult && (
             <p className="text-[11px] text-[#86868b] text-center mt-2">{gaslessResult.message}</p>
           )}
+          
+          {/* Proof Lookup Section */}
+          <div className="mt-6 pt-4 border-t border-black/5">
+            <h4 className="text-[13px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+              <Search className="w-4 h-4 text-[#AF52DE]" />
+              Lookup Stored Proof
+            </h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={lookupTxHash}
+                onChange={(e) => setLookupTxHash(e.target.value)}
+                placeholder="Enter transaction hash (0x...)"
+                className="flex-1 px-3 py-2 text-[13px] border border-black/10 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#AF52DE]/30 focus:border-[#AF52DE]"
+              />
+              <button
+                onClick={handleLookupProof}
+                disabled={isLookingUp || !lookupTxHash.trim()}
+                className="px-4 py-2 bg-[#AF52DE] text-white text-[13px] font-semibold rounded-[8px] disabled:opacity-50 active:scale-[0.98] transition-transform flex items-center gap-2"
+              >
+                {isLookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                Lookup
+              </button>
+            </div>
+            
+            {lookupError && (
+              <p className="text-[12px] text-[#FF3B30] mt-2">{lookupError}</p>
+            )}
+            
+            {lookupResult && (
+              <div className="mt-3 bg-[#AF52DE]/5 border border-[#AF52DE]/20 rounded-[12px] p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-[#AF52DE]" />
+                  <span className="text-[13px] font-semibold text-[#AF52DE]">On-Chain Commitment</span>
+                  {lookupResult.verified && (
+                    <span className="ml-auto px-2 py-0.5 bg-[#34C759] text-white text-[10px] font-bold rounded-full">VERIFIED</span>
+                  )}
+                </div>
+                <div className="space-y-2 text-[11px]">
+                  <div className="flex items-start gap-2">
+                    <Hash className="w-3.5 h-3.5 text-[#86868b] mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[#86868b]">Proof Hash</span>
+                      <p className="font-mono text-[#1d1d1f] break-all">{lookupResult.proofHash}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Database className="w-3.5 h-3.5 text-[#86868b] mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[#86868b]">Merkle Root</span>
+                      <p className="font-mono text-[#1d1d1f] break-all">{lookupResult.merkleRoot}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-[#86868b]" />
+                      <div>
+                        <span className="text-[#86868b]">Timestamp</span>
+                        <p className="font-semibold text-[#1d1d1f]">{new Date(lookupResult.timestamp * 1000).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-[#86868b]" />
+                      <div>
+                        <span className="text-[#86868b]">Security</span>
+                        <p className="font-semibold text-[#007AFF]">{lookupResult.securityLevel}-bit</p>
+                      </div>
+                    </div>
+                  </div>
+                  {lookupResult.usdcFee && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#AF52DE]/10">
+                      <Zap className="w-3.5 h-3.5 text-[#34C759]" />
+                      <span className="text-[#86868b]">Fee Paid:</span>
+                      <span className="font-semibold text-[#34C759]">{lookupResult.usdcFee} USDC</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
