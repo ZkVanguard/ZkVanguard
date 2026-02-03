@@ -1,9 +1,10 @@
 /**
  * Real-time Hedge PnL Tracker
  * Uses Crypto.com market data to calculate actual profit/loss on hedge positions
+ * Supports ZK-verified ownership for privacy-preserving proxy wallets
  */
 
-import { getActiveHedges, updateHedgePnL, getActiveHedgesByWallet, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, updateHedgePnL, getOwnedHedges, verifyZKOwnership, type Hedge } from '@/lib/db/hedges';
 import { cryptocomExchangeService } from './CryptocomExchangeService';
 import { logger } from '@/lib/utils/logger';
 
@@ -23,6 +24,10 @@ export interface HedgePnLUpdate {
   isNearLiquidation: boolean;
   reason: string | null;
   createdAt: string | null;
+  walletAddress?: string | null;
+  // ZK verification fields
+  zkVerified?: boolean;
+  walletBindingHash?: string | null;
 }
 
 export class HedgePnLTracker {
@@ -77,6 +82,10 @@ export class HedgePnLTracker {
       isNearLiquidation,
       reason: hedge.reason,
       createdAt: hedge.created_at ? hedge.created_at.toISOString() : null,
+      walletAddress: hedge.wallet_address,
+      // Include ZK verification info
+      zkVerified: !!hedge.wallet_binding_hash,
+      walletBindingHash: hedge.wallet_binding_hash,
     };
   }
 
@@ -221,12 +230,17 @@ export class HedgePnLTracker {
 
   /**
    * Get portfolio-level PnL summary
+   * Uses ZK-verified ownership for privacy-preserving proxy wallet support
    */
   async getPortfolioPnLSummary(portfolioId?: number, walletAddress?: string) {
-    // Use wallet filter if provided, otherwise use portfolio filter
+    // Use ZK ownership verification if wallet provided (supports proxy wallets)
     let hedges;
     if (walletAddress) {
-      hedges = await getActiveHedgesByWallet(walletAddress);
+      // getOwnedHedges checks both direct wallet match AND ZK binding
+      hedges = await getOwnedHedges(walletAddress, true);
+      logger.info(`🔐 Fetching hedges with ZK ownership verification for ${walletAddress.slice(0, 10)}...`, {
+        found: hedges.length,
+      });
     } else {
       hedges = await getActiveHedges(portfolioId);
     }
@@ -239,13 +253,20 @@ export class HedgePnLTracker {
         avgPnLPercentage: 0,
         profitable: 0,
         unprofitable: 0,
+        zkVerified: !!walletAddress,
       };
     }
 
     const updates = await Promise.all(
       hedges.map(async hedge => {
         try {
-          return await this.getHedgePnL(hedge);
+          const pnl = await this.getHedgePnL(hedge);
+          // Mark as ZK verified if using binding hash
+          if (walletAddress && hedge.wallet_binding_hash) {
+            const isZkOwned = verifyZKOwnership(walletAddress, hedge.order_id, hedge.wallet_binding_hash);
+            return { ...pnl, zkVerified: isZkOwned };
+          }
+          return pnl;
         } catch (err) {
           logger.error(`Failed to get PnL for ${hedge.order_id}`, { error: err });
           return null;
