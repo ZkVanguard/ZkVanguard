@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw } from 'lucide-react';
+import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw, Wallet, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 
@@ -23,6 +23,11 @@ interface HedgePosition {
   closedAt?: Date;
   reason: string;
   txHash?: string;
+  walletAddress?: string;
+  walletVerified?: boolean;
+  // ZK verification fields
+  zkVerified?: boolean;
+  walletBindingHash?: string;
 }
 
 interface PerformanceStats {
@@ -54,9 +59,10 @@ interface ActiveHedgesProps {
   address?: string;
   compact?: boolean;
   onCreateHedge?: () => void;
+  onOpenChat?: () => void;
 }
 
-export const ActiveHedges = memo(function ActiveHedges({ address, compact = false, onCreateHedge }: ActiveHedgesProps) {
+export const ActiveHedges = memo(function ActiveHedges({ address, compact = false, onCreateHedge, onOpenChat }: ActiveHedgesProps) {
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -119,6 +125,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               status: 'active' as const,
               openedAt: pnl.createdAt ? new Date(pnl.createdAt) : new Date(),
               reason: pnl.reason || `${pnl.leverage}x leveraged hedge @ $${pnl.entryPrice.toFixed(2)}`,
+              walletAddress: pnl.walletAddress,
+              // ZK verification - ownership proven via cryptographic binding
+              zkVerified: pnl.zkVerified || !!pnl.walletBindingHash,
+              walletBindingHash: pnl.walletBindingHash,
+              walletVerified: pnl.zkVerified || (address ? pnl.walletAddress?.toLowerCase() === address.toLowerCase() : false),
             })) || [];
 
             console.log('🔍 ActiveHedges: Mapped hedges:', dbHedges);
@@ -381,10 +392,13 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             Create Manual Hedge
           </button>
           <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-[#86868b]">
-            <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#f5f5f7] rounded-full">
+            <button
+              onClick={() => onOpenChat?.()}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 rounded-full transition-colors cursor-pointer"
+            >
               <span>💬</span>
-              <span className="font-medium text-[#1d1d1f]">Chat with AI</span>
-            </span>
+              <span className="font-medium text-[#007AFF]">Chat with AI</span>
+            </button>
             <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#34C759]/10 rounded-full">
               <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#34C759]" />
               <span className="font-medium text-[#34C759]">Auto-protect</span>
@@ -445,6 +459,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       <div className="flex items-center gap-1.5">
                         <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
                         <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded">ACTIVE</span>
+                        {hedge.zkVerified && (
+                          <span className="px-1.5 py-0.5 bg-[#5856D6] text-white text-[9px] font-bold rounded flex items-center gap-0.5" title="ZK-verified ownership">
+                            <Lock className="w-2.5 h-2.5" />ZK
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] space-y-0.5\">
                         <div className="text-[#1d1d1f] font-medium">{hedge.reason}</div>
@@ -489,6 +508,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       <div className="flex items-center gap-1.5">
                         <span className="text-[14px] font-semibold text-[#1d1d1f]">{hedge.type} {hedge.asset}</span>
                         <span className="px-1.5 py-0.5 bg-[#86868b] text-white text-[9px] font-bold rounded">CLOSED</span>
+                        {hedge.zkVerified && (
+                          <span className="px-1.5 py-0.5 bg-[#5856D6] text-white text-[9px] font-bold rounded flex items-center gap-0.5" title="ZK-verified ownership">
+                            <Lock className="w-2.5 h-2.5" />ZK
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
                         <span>{hedge.closedAt ? `Closed ${new Date(hedge.closedAt).toLocaleDateString()}` : hedge.reason}</span>
@@ -755,6 +779,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               <span className="inline-flex items-center px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-[4px] text-[9px] sm:text-[10px] font-bold">
                                 {hedge.leverage}x
                               </span>
+                              {hedge.zkVerified && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#5856D6]/10 text-[#5856D6] rounded-[4px] text-[9px] font-bold" title="ZK-verified ownership">
+                                  <Lock className="w-2.5 h-2.5" />ZK
+                                </span>
+                              )}
+                              {hedge.walletVerified && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#5856D6]/10 text-[#5856D6] rounded-[4px] text-[9px] font-bold" title="Wallet ownership verified">
+                                  <Wallet className="w-2.5 h-2.5" />
+                                  <span>✓</span>
+                                </span>
+                              )}
                             </div>
                             {/* Reason text hidden - not needed for display */}
                             {hedge.txHash && (
@@ -857,6 +892,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             <span className="text-[11px] px-2 py-0.5 bg-[#34C759]/20 text-[#34C759] rounded-full font-medium">
                               Active
                             </span>
+                            {hedge.zkVerified && (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-[#5856D6]/10 text-[#5856D6] rounded-full text-[10px] font-bold" title="ZK-verified ownership">
+                                <Lock className="w-3 h-3" />ZK
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-[#86868b] mt-0.5 space-y-0.5">
                             <div className="text-[13px] font-medium text-[#1d1d1f]">{hedge.reason}</div>

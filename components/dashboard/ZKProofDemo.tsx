@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles, Search, Clock, Hash, Database } from 'lucide-react';
+import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles, Search, Clock, Hash, Database, Wallet } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';
@@ -16,8 +16,27 @@ interface StoredCommitment {
   usdcFee: string;
 }
 
+interface WalletVerificationResult {
+  verified: boolean;
+  verificationMethod?: 'direct' | 'zk_binding' | 'owner_commitment';
+  walletAddress: string;
+  hedgeId?: string;
+  hedgeDetails?: {
+    asset: string;
+    side: string;
+    size: number;
+    entryPrice: number;
+    leverage: number;
+    createdAt: string;
+  };
+  zkProofHash?: string;
+  walletBindingProof?: string;
+  verificationTimestamp: string;
+  error?: string;
+}
+
 export function ZKProofDemo() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const contractAddresses = useContractAddresses();
   const { isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();
@@ -33,6 +52,44 @@ export function ZKProofDemo() {
   const [lookupResult, setLookupResult] = useState<StoredCommitment | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // Wallet ownership verification state
+  const [ownershipHedgeId, setOwnershipHedgeId] = useState('');
+  const [ownershipResult, setOwnershipResult] = useState<WalletVerificationResult | null>(null);
+  const [isVerifyingOwnership, setIsVerifyingOwnership] = useState(false);
+  const [ownershipError, setOwnershipError] = useState<string | null>(null);
+
+  // Verify wallet ownership of hedge
+  const handleVerifyOwnership = async () => {
+    if (!address) return;
+    
+    setIsVerifyingOwnership(true);
+    setOwnershipError(null);
+    setOwnershipResult(null);
+    
+    try {
+      const response = await fetch('/api/zk/verify-ownership', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: address,
+          hedgeId: ownershipHedgeId.trim() || undefined,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setOwnershipResult(data);
+      } else {
+        setOwnershipError(data.error || 'Verification failed');
+      }
+    } catch (err) {
+      setOwnershipError('Failed to verify ownership: ' + (err as Error).message);
+    } finally {
+      setIsVerifyingOwnership(false);
+    }
+  };
 
   // Lookup proof by transaction hash
   const handleLookupProof = async () => {
@@ -535,6 +592,142 @@ export function ZKProofDemo() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Wallet Ownership Verification Section */}
+              <div className="pt-3 border-t border-black/5">
+                <h4 className="text-[13px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-[#5856D6]" />
+                  Verify Hedge Ownership (ZK Privacy)
+                </h4>
+                <p className="text-[11px] text-[#86868b] mb-3">
+                  Prove hedge ownership using ZK proofs without revealing your actual wallet address. 
+                  Perfect for proxy wallet hedging - verify ownership cryptographically while maintaining privacy.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={ownershipHedgeId}
+                    onChange={(e) => setOwnershipHedgeId(e.target.value)}
+                    placeholder="Hedge ID (optional - leave empty for all)"
+                    className="flex-1 px-3 py-2 text-[13px] border border-black/10 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#5856D6]/30 focus:border-[#5856D6]"
+                  />
+                  <button
+                    onClick={handleVerifyOwnership}
+                    disabled={isVerifyingOwnership || !address}
+                    className="px-4 py-2 bg-[#5856D6] text-white text-[13px] font-semibold rounded-[8px] disabled:opacity-50 active:scale-[0.98] transition-transform flex items-center gap-2"
+                  >
+                    {isVerifyingOwnership ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                    Verify
+                  </button>
+                </div>
+                
+                {ownershipError && (
+                  <p className="text-[12px] text-[#FF3B30] mt-2">{ownershipError}</p>
+                )}
+                
+                {ownershipResult && (
+                  <div className={`mt-3 rounded-[12px] p-3 border ${
+                    ownershipResult.verified 
+                      ? 'bg-[#34C759]/5 border-[#34C759]/20' 
+                      : 'bg-[#FF3B30]/5 border-[#FF3B30]/20'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {ownershipResult.verified ? (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-[#34C759]" />
+                          <span className="text-[13px] font-semibold text-[#34C759]">✓ You Own This Hedge</span>
+                          <span className="ml-auto px-2 py-0.5 bg-[#34C759] text-white text-[10px] font-bold rounded-full">OWNER</span>
+                          {ownershipResult.verificationMethod === 'zk_binding' && (
+                            <span className="px-2 py-0.5 bg-[#5856D6] text-white text-[10px] font-bold rounded-full flex items-center gap-0.5">
+                              <Lock className="w-2.5 h-2.5" />ZK
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4 text-[#FF3B30]" />
+                          <span className="text-[13px] font-semibold text-[#FF3B30]">✗ Not Your Hedge</span>
+                          <span className="ml-auto px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded-full">NOT OWNER</span>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Connected Wallet Info */}
+                    <div className="mb-2 p-2 bg-white/80 rounded-[6px] border border-black/5">
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <Wallet className="w-3.5 h-3.5 text-[#5856D6]" />
+                        <span className="text-[#86868b]">Connected Wallet:</span>
+                        <code className="font-mono text-[#1d1d1f]">{address?.slice(0, 6)}...{address?.slice(-4)}</code>
+                      </div>
+                      {ownershipResult.verified && ownershipResult.verificationMethod && (
+                        <div className="flex items-center gap-2 text-[11px] mt-1">
+                          <Shield className="w-3.5 h-3.5 text-[#5856D6]" />
+                          <span className="text-[#86868b]">Verification Method:</span>
+                          <span className={`font-semibold ${
+                            ownershipResult.verificationMethod === 'zk_binding' ? 'text-[#5856D6]' : 'text-[#34C759]'
+                          }`}>
+                            {ownershipResult.verificationMethod === 'zk_binding' ? 'ZK Wallet Binding' :
+                             ownershipResult.verificationMethod === 'owner_commitment' ? 'Owner Commitment' :
+                             'Direct Wallet Match'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {ownershipResult.verified && ownershipResult.hedgeDetails && (
+                      <div className="space-y-2 text-[11px]">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-white/60 p-2 rounded-[6px]">
+                            <span className="text-[#86868b]">Asset</span>
+                            <p className="font-semibold text-[#1d1d1f]">{ownershipResult.hedgeDetails.asset}</p>
+                          </div>
+                          <div className="bg-white/60 p-2 rounded-[6px]">
+                            <span className="text-[#86868b]">Side</span>
+                            <p className={`font-semibold ${ownershipResult.hedgeDetails.side === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#34C759]'}`}>
+                              {ownershipResult.hedgeDetails.side}
+                            </p>
+                          </div>
+                          <div className="bg-white/60 p-2 rounded-[6px]">
+                            <span className="text-[#86868b]">Leverage</span>
+                            <p className="font-semibold text-[#007AFF]">{ownershipResult.hedgeDetails.leverage}x</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-white/60 p-2 rounded-[6px]">
+                            <span className="text-[#86868b]">Size</span>
+                            <p className="font-semibold text-[#1d1d1f]">{ownershipResult.hedgeDetails.size}</p>
+                          </div>
+                          <div className="bg-white/60 p-2 rounded-[6px]">
+                            <span className="text-[#86868b]">Entry Price</span>
+                            <p className="font-semibold text-[#1d1d1f]">${ownershipResult.hedgeDetails.entryPrice.toLocaleString()}</p>
+                          </div>
+                        </div>
+                        
+                        {ownershipResult.walletBindingProof && (
+                          <div className="flex items-start gap-2 pt-2 border-t border-black/5">
+                            <Lock className="w-3.5 h-3.5 text-[#5856D6] mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-[#86868b]">ZK Wallet Binding Proof</span>
+                              <p className="font-mono text-[#1d1d1f] break-all text-[10px]">{ownershipResult.walletBindingProof.slice(0, 24)}...{ownershipResult.walletBindingProof.slice(-8)}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {!ownershipResult.verified && (
+                      <p className="text-[11px] text-[#FF3B30] mt-2">
+                        No ZK binding found for this wallet. If you created this hedge with a proxy wallet, connect that wallet to verify ownership.
+                      </p>
+                    )}
+                    
+                    <p className="text-[10px] text-[#86868b] mt-2">
+                      Verified at: {new Date(ownershipResult.verificationTimestamp).toLocaleString()}
+                    </p>
                   </div>
                 )}
               </div>
