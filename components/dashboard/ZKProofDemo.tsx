@@ -17,7 +17,7 @@ export function ZKProofDemo() {
   const [proofType, setProofType] = useState<'settlement' | 'risk' | 'rebalance'>('settlement');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofMetadata, setProofMetadata] = useState<Record<string, unknown> | null>(null);
-  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; trueGasless: true; x402Powered: true; usdcFee: string; croGasPaid: string; message: string } | null>(null);
+  const [gaslessResult, setGaslessResult] = useState<{ txHash: string; trueGasless: boolean; x402Powered: boolean; usdcFee: string; croGasPaid: string; message: string } | null>(null);
 
   // Generate proof using Python/CUDA backend and submit on-chain
   const handleGenerateAndVerifyProof = async () => {
@@ -83,8 +83,9 @@ export function ZKProofDemo() {
           
           const gaslessApiResult = await response.json();
           
-          if (gaslessApiResult.success) {
+          if (gaslessApiResult.success && gaslessApiResult.txHash) {
             setGaslessResult(gaslessApiResult);
+            setShowForm(false); // Show success view with txHash
             console.log('✅ TRUE GASLESS COMPLETE! 🎉');
             console.log('   USDC paid:', gaslessApiResult.usdcFee);
             console.log('   CRO paid:', gaslessApiResult.croGasPaid);
@@ -92,6 +93,9 @@ export function ZKProofDemo() {
             console.log('   Proof Hash:', result.commitment.proofHash);
             console.log('   Security: 521-bit NIST P-521');
             console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
+          } else if (gaslessApiResult.success) {
+            // Demo mode - no txHash
+            console.log('✅ Proof stored (demo mode):', gaslessApiResult.message);
           } else {
             throw new Error(gaslessApiResult.error || 'Storage failed');
           }
