@@ -64,6 +64,11 @@ coverage.json
 deployments/
 
 # -------------------------------------------
+# Business Strategy Documents (Confidential)
+# -------------------------------------------
+docs/ACQUISITION_PLAN.md
+
+# -------------------------------------------
 # Environment Files (CRITICAL - Contains private keys & API keys)
 # -------------------------------------------
 .env
