@@ -212,9 +212,9 @@ export function ZKProofDemo() {
           )}
           
           <div className="flex flex-col sm:flex-row gap-2">
-            {hash && (
+            {(hash || gaslessResult?.txHash) && (
               <a
-                href={`https://explorer.cronos.org/testnet/tx/${hash}`}
+                href={`https://explorer.cronos.org/testnet/tx/${hash || gaslessResult?.txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#34C759] text-white text-[13px] font-semibold rounded-[10px] active:scale-[0.98] transition-transform"
