@@ -631,7 +631,7 @@ export default function DashboardPage() {
                   }
                 />
                 <div className="flex-1">
-                  <ActiveHedges address={displayAddress} compact onCreateHedge={() => setHedgeModalOpen(true)} />
+                  <ActiveHedges address={displayAddress} compact onCreateHedge={() => setHedgeModalOpen(true)} onOpenChat={() => setShowChat(true)} />
                 </div>
               </Card>
             </div>
@@ -671,7 +671,7 @@ export default function DashboardPage() {
               title="Active Hedges" 
               subtitle="Your protective positions and options"
             />
-            <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} />
+            <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} onOpenChat={() => setShowChat(true)} />
           </Card>
         );
         
