@@ -318,3 +318,5 @@ whitepaper/
 *.old.json
 *.bak
 *.backup
+test/ZKProxyVault.test.cjs
+test/ZKProxyVault.test.js
