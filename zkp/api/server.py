@@ -322,8 +322,13 @@ async def _generate_proof_async(
         statement = data.get('statement')
         witness = data.get('witness')
 
-        if not statement:
-            raise ValueError("'statement' is required in the request data")
+        # Debug logging to help diagnose issues
+        print(f"[DEBUG] Received data: {data}")
+        print(f"[DEBUG] Statement: {statement}")
+        print(f"[DEBUG] Witness: {witness}")
+
+        if not statement or (isinstance(statement, dict) and len(statement) == 0):
+            raise ValueError("'statement' is required in the request data and cannot be empty")
         if not witness:
             # For tests that might not provide a witness for error-handling checks
             if is_test or os.environ.get("JEST_WORKER_ID") is not None or "pytest" in sys.modules:
