@@ -19,10 +19,12 @@ export async function POST(request: NextRequest) {
     // If proofHash is provided, look up in database
     if (proofHash) {
       try {
-        // First try to find by proof hash
+        // First try to find by proof hash (checks both zk_proof_hash and tx_hash columns)
         const hedge = await getHedgeByZkProofHash(proofHash);
         
         if (hedge) {
+          // Return proof hash from either column
+          const actualProofHash = hedge.zk_proof_hash || hedge.tx_hash;
           return NextResponse.json({
             success: true,
             found: true,
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
               status: hedge.status,
               createdAt: hedge.created_at,
             },
-            proofHash: hedge.zk_proof_hash,
+            proofHash: actualProofHash,
             walletAddress: hedge.wallet_address,
           });
         }
@@ -44,7 +46,8 @@ export async function POST(request: NextRequest) {
         // If not found by proof hash, try by hedge ID if provided
         if (hedgeId) {
           const hedgeById = await getHedgeById(hedgeId);
-          if (hedgeById && hedgeById.zk_proof_hash === proofHash) {
+          const hedgeProofHash = hedgeById?.zk_proof_hash || hedgeById?.tx_hash;
+          if (hedgeById && hedgeProofHash === proofHash) {
             return NextResponse.json({
               success: true,
               found: true,
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
                 status: hedgeById.status,
                 createdAt: hedgeById.created_at,
               },
-              proofHash: hedgeById.zk_proof_hash,
+              proofHash: hedgeProofHash,
               walletAddress: hedgeById.wallet_address,
             });
           }

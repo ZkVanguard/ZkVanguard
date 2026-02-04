@@ -202,7 +202,8 @@ export async function getHedgeById(hedgeId: string): Promise<Hedge | null> {
 }
 
 export async function getHedgeByZkProofHash(proofHash: string): Promise<Hedge | null> {
-  const sql = 'SELECT * FROM hedges WHERE zk_proof_hash = $1';
+  // Check both zk_proof_hash and tx_hash (legacy column where proof was stored)
+  const sql = 'SELECT * FROM hedges WHERE zk_proof_hash = $1 OR tx_hash = $1';
   return queryOne<Hedge>(sql, [proofHash]);
 }
 
