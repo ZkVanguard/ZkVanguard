@@ -177,7 +177,7 @@ export class OnChainHedgeService {
       });
       
       // Get proxy info
-      const proxyInfo = await this.client.getProxyInfo(proxyAddress);
+      const proxyInfo = await this.client.getProxy(proxyAddress);
       
       if (!proxyInfo || !proxyInfo.isActive) {
         return { success: false, error: 'Proxy not found or inactive' };
