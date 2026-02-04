@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Lock, Database, Wallet } from 'lucide-react';
+import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Lock, Database, Wallet, Copy, ExternalLink, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 
@@ -22,6 +22,60 @@ interface HedgeSuccess {
   walletOwnershipProof?: string;
   walletBinding?: string;
   walletAddress?: string;
+}
+
+// Component to display ZK proof hash with copy and verify functionality
+function ZKProofHashDisplay({ proofHash, orderId }: { proofHash: string; orderId: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(proofHash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+  
+  const verifyUrl = `/en/zk-verification?proofHash=${encodeURIComponent(proofHash)}&hedgeId=${encodeURIComponent(orderId)}`;
+  
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] text-[#86868b]">Proof Hash:</span>
+        <div className="flex items-center gap-1">
+          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
+            {proofHash.substring(0, 16)}...{proofHash.substring(proofHash.length - 8)}
+          </code>
+          <button
+            onClick={handleCopy}
+            className="p-1.5 hover:bg-[#f5f5f7] rounded-md transition-colors group"
+            title="Copy full proof hash"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-[#34C759]" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-[#86868b] group-hover:text-[#007AFF]" />
+            )}
+          </button>
+        </div>
+      </div>
+      <p className="text-[11px] text-[#86868b]">
+        This cryptographic proof verifies your hedge without revealing sensitive details.
+      </p>
+      <a
+        href={verifyUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-[8px] text-[12px] font-medium transition-colors"
+      >
+        <Shield className="w-3.5 h-3.5" />
+        Verify on ZK Page
+        <ExternalLink className="w-3 h-3" />
+      </a>
+    </div>
+  );
 }
 
 export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'ETH', 'CRO'], walletAddress }: ManualHedgeModalProps) {
@@ -296,17 +350,10 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
                       <span className="text-[13px] font-semibold text-[#007AFF]">ZK-STARK Proof Generated</span>
                     </div>
                     {success.zkProofGenerated && success.zkProofHash && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[12px] text-[#86868b]">Proof Hash:</span>
-                          <code className="text-[11px] font-mono bg-[#f5f5f7] px-2 py-1 rounded text-[#1d1d1f]">
-                            {success.zkProofHash.substring(0, 16)}...{success.zkProofHash.substring(success.zkProofHash.length - 8)}
-                          </code>
-                        </div>
-                        <p className="text-[11px] text-[#86868b]">
-                          This cryptographic proof verifies your hedge without revealing sensitive details.
-                        </p>
-                      </div>
+                      <ZKProofHashDisplay 
+                        proofHash={success.zkProofHash}
+                        orderId={success.orderId}
+                      />
                     )}
                   </div>
 

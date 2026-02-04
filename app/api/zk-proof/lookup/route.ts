@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { getHedgeByZkProofHash, getHedgeById } from '@/lib/db/hedges';
 
 const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
@@ -13,11 +14,75 @@ const X402_VERIFIER_ABI = [
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { txHash } = body;
+    const { txHash, proofHash, hedgeId } = body;
 
+    // If proofHash is provided, look up in database
+    if (proofHash) {
+      try {
+        // First try to find by proof hash
+        const hedge = await getHedgeByZkProofHash(proofHash);
+        
+        if (hedge) {
+          return NextResponse.json({
+            success: true,
+            found: true,
+            hedgeId: hedge.order_id,
+            hedgeDetails: {
+              asset: hedge.asset,
+              side: hedge.side,
+              size: hedge.size,
+              entryPrice: hedge.entry_price,
+              leverage: hedge.leverage,
+              status: hedge.status,
+              createdAt: hedge.created_at,
+            },
+            proofHash: hedge.zk_proof_hash,
+            walletAddress: hedge.wallet_address,
+          });
+        }
+
+        // If not found by proof hash, try by hedge ID if provided
+        if (hedgeId) {
+          const hedgeById = await getHedgeById(hedgeId);
+          if (hedgeById && hedgeById.zk_proof_hash === proofHash) {
+            return NextResponse.json({
+              success: true,
+              found: true,
+              hedgeId: hedgeById.order_id,
+              hedgeDetails: {
+                asset: hedgeById.asset,
+                side: hedgeById.side,
+                size: hedgeById.size,
+                entryPrice: hedgeById.entry_price,
+                leverage: hedgeById.leverage,
+                status: hedgeById.status,
+                createdAt: hedgeById.created_at,
+              },
+              proofHash: hedgeById.zk_proof_hash,
+              walletAddress: hedgeById.wallet_address,
+            });
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          found: false,
+          error: 'No hedge found with this proof hash',
+        });
+      } catch (dbError) {
+        console.error('Database lookup error:', dbError);
+        return NextResponse.json({
+          success: false,
+          found: false,
+          error: 'Database lookup failed',
+        }, { status: 500 });
+      }
+    }
+
+    // If txHash is provided, look up on-chain
     if (!txHash || !txHash.startsWith('0x')) {
       return NextResponse.json(
-        { success: false, error: 'Valid transaction hash (0x...) is required' },
+        { success: false, error: 'Valid transaction hash (0x...) or proof hash is required' },
         { status: 400 }
       );
     }

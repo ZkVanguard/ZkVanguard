@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface WalletVerificationResult {
@@ -21,11 +22,84 @@ interface WalletVerificationResult {
   error?: string;
 }
 
+interface ProofVerificationResult {
+  verified: boolean;
+  proofHash: string;
+  hedgeId?: string;
+  hedgeDetails?: {
+    asset: string;
+    side: string;
+    size: number;
+    entryPrice: number;
+    leverage: number;
+    status: string;
+    createdAt: string;
+  };
+  verificationTimestamp: string;
+  error?: string;
+}
+
 export default function ZKVerificationPage() {
+  const searchParams = useSearchParams();
   const [walletAddress, setWalletAddress] = useState('');
   const [hedgeId, setHedgeId] = useState('');
+  const [proofHash, setProofHash] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<WalletVerificationResult | null>(null);
+  const [proofResult, setProofResult] = useState<ProofVerificationResult | null>(null);
+  const [verifyingProof, setVerifyingProof] = useState(false);
+  const [activeTab, setActiveTab] = useState<'wallet' | 'proof'>('wallet');
+
+  // Pre-fill from URL params
+  useEffect(() => {
+    const urlProofHash = searchParams.get('proofHash');
+    const urlHedgeId = searchParams.get('hedgeId');
+    
+    if (urlProofHash) {
+      setProofHash(urlProofHash);
+      setActiveTab('proof');
+    }
+    if (urlHedgeId) {
+      setHedgeId(urlHedgeId);
+    }
+  }, [searchParams]);
+
+  const verifyProofHash = async () => {
+    if (!proofHash) return;
+    
+    setVerifyingProof(true);
+    setProofResult(null);
+    
+    try {
+      const response = await fetch('/api/zk-proof/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proofHash,
+          hedgeId: hedgeId || undefined,
+        }),
+      });
+      
+      const data = await response.json();
+      setProofResult({
+        verified: data.found === true,
+        proofHash,
+        hedgeId: data.hedgeId,
+        hedgeDetails: data.hedgeDetails,
+        verificationTimestamp: new Date().toISOString(),
+        error: data.found ? undefined : 'No hedge found with this proof hash',
+      });
+    } catch (error) {
+      setProofResult({
+        verified: false,
+        proofHash,
+        verificationTimestamp: new Date().toISOString(),
+        error: 'Verification request failed',
+      });
+    } finally {
+      setVerifyingProof(false);
+    }
+  };
 
   const verifyOwnership = async () => {
     if (!walletAddress) return;
@@ -101,12 +175,164 @@ export default function ZKVerificationPage() {
 
         {/* Wallet Ownership Verification Section */}
         <section className="mb-16">
-          <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">🔐 Verify Hedge Ownership</h2>
+          <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">🔐 Verify Hedge</h2>
           <p className="text-[#424245] mb-6">
-            Cryptographically verify that a hedge position belongs to your wallet using ZK proofs.
-            Each hedge is cryptographically bound to the wallet that created it.
+            Verify hedge positions using either your wallet address or a ZK proof hash.
           </p>
           
+          {/* Tab Selector */}
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setActiveTab('wallet')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all ${
+                activeTab === 'wallet'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+              }`}
+            >
+              By Wallet Address
+            </button>
+            <button
+              onClick={() => setActiveTab('proof')}
+              className={`px-4 py-2 rounded-xl font-medium transition-all ${
+                activeTab === 'proof'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+              }`}
+            >
+              By Proof Hash
+            </button>
+          </div>
+
+          {/* Proof Hash Verification */}
+          {activeTab === 'proof' && (
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-2xl p-8 mb-8">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Verify by ZK Proof Hash</h3>
+              <p className="text-sm text-blue-600 mb-6">
+                Enter the ZK-STARK proof hash from your hedge creation to verify it exists and view details.
+              </p>
+              
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-blue-700 mb-2">
+                    ZK Proof Hash <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={proofHash}
+                    onChange={(e) => setProofHash(e.target.value)}
+                    placeholder="c882825ddc9df038..."
+                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-[#1d1d1f] font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-700 mb-2">
+                    Hedge ID <span className="text-[#86868b]">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={hedgeId}
+                    onChange={(e) => setHedgeId(e.target.value)}
+                    placeholder="sim-hedge-123456..."
+                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-[#1d1d1f] font-mono text-sm"
+                  />
+                </div>
+              </div>
+              
+              <button
+                onClick={verifyProofHash}
+                disabled={!proofHash || verifyingProof}
+                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                {verifyingProof ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🔍</span>
+                    <span>Verify Proof Hash</span>
+                  </>
+                )}
+              </button>
+
+              {/* Proof Verification Result */}
+              {proofResult && (
+                <div className={`mt-6 p-6 rounded-xl border ${
+                  proofResult.verified 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+                      proofResult.verified ? 'bg-green-500' : 'bg-red-500'
+                    }`}>
+                      {proofResult.verified ? '✓' : '✗'}
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-bold ${
+                        proofResult.verified ? 'text-green-800' : 'text-red-800'
+                      }`}>
+                        {proofResult.verified ? 'Proof Verified' : 'Verification Failed'}
+                      </h3>
+                      <p className={`text-sm ${
+                        proofResult.verified ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {proofResult.verified 
+                          ? 'This ZK proof hash is valid and linked to a hedge position'
+                          : proofResult.error || 'No hedge found with this proof hash'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {proofResult.verified && proofResult.hedgeDetails && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Asset</p>
+                          <p className="font-semibold text-[#1d1d1f]">{proofResult.hedgeDetails.asset}</p>
+                        </div>
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Position</p>
+                          <p className={`font-semibold ${
+                            proofResult.hedgeDetails.side === 'SHORT' ? 'text-red-600' : 'text-green-600'
+                          }`}>{proofResult.hedgeDetails.side}</p>
+                        </div>
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Size</p>
+                          <p className="font-semibold text-[#1d1d1f]">{proofResult.hedgeDetails.size}</p>
+                        </div>
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Entry Price</p>
+                          <p className="font-semibold text-[#1d1d1f]">${proofResult.hedgeDetails.entryPrice?.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Leverage</p>
+                          <p className="font-semibold text-[#1d1d1f]">{proofResult.hedgeDetails.leverage}x</p>
+                        </div>
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Status</p>
+                          <p className={`font-semibold ${
+                            proofResult.hedgeDetails.status === 'active' ? 'text-green-600' : 'text-[#86868b]'
+                          }`}>{proofResult.hedgeDetails.status}</p>
+                        </div>
+                      </div>
+                      {proofResult.hedgeId && (
+                        <div className="bg-white/60 p-3 rounded-lg">
+                          <p className="text-xs text-[#86868b] mb-1">Hedge ID</p>
+                          <p className="font-mono text-sm text-[#1d1d1f]">{proofResult.hedgeId}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Wallet Verification */}
+          {activeTab === 'wallet' && (
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-8">
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
@@ -245,6 +471,7 @@ export default function ZKVerificationPage() {
               </div>
             )}
           </div>
+          )}
         </section>
 
         {/* Academic References */}

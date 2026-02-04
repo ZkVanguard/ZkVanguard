@@ -196,6 +196,16 @@ export async function getHedgeByOrderId(orderId: string): Promise<Hedge | null> 
   return queryOne<Hedge>(sql, [orderId]);
 }
 
+// Alias for getHedgeByOrderId for consistency
+export async function getHedgeById(hedgeId: string): Promise<Hedge | null> {
+  return getHedgeByOrderId(hedgeId);
+}
+
+export async function getHedgeByZkProofHash(proofHash: string): Promise<Hedge | null> {
+  const sql = 'SELECT * FROM hedges WHERE zk_proof_hash = $1';
+  return queryOne<Hedge>(sql, [proofHash]);
+}
+
 export async function getActiveHedges(portfolioId?: number): Promise<Hedge[]> {
   if (portfolioId) {
     const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 AND status = $2 ORDER BY created_at DESC';
