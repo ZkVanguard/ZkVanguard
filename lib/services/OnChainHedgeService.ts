@@ -183,18 +183,10 @@ export class OnChainHedgeService {
         return { success: false, error: 'Proxy not found or inactive' };
       }
       
-      // Generate ZK proof
-      const zkProof = await this.client.generateWithdrawalProof(
-        ownerAddress,
-        proxyAddress,
-        proxyInfo.zkBindingHash,
-        ethers.id(ownerSecret) // Convert secret to bytes32
-      );
+      // Attempt withdrawal (ZK proof is generated internally by the client)
+      const result = await this.client.withdraw(proxyAddress, BigInt(amount));
       
-      // Attempt withdrawal
-      const result = await this.client.withdraw(proxyAddress, amount, zkProof);
-      
-      if (result.requiresTimeLock) {
+      if (result.isTimeLocked) {
         logger.info('⏰ Withdrawal requires time-lock (large amount)', {
           unlockTime: new Date(result.unlockTime! * 1000).toISOString(),
         });
@@ -231,7 +223,11 @@ export class OnChainHedgeService {
    * Get all proxies owned by an address
    */
   async getOwnerProxies(ownerAddress: string): Promise<OnChainProxyPDA[]> {
-    return this.client.getOwnerProxies(ownerAddress);
+    const proxyAddresses = await this.client.getOwnerProxies(ownerAddress);
+    const proxies = await Promise.all(
+      proxyAddresses.map(addr => this.client.getProxy(addr))
+    );
+    return proxies.filter((p): p is OnChainProxyPDA => p !== null);
   }
   
   /**
@@ -246,7 +242,7 @@ export class OnChainHedgeService {
    * Verify proxy ownership (without revealing owner)
    */
   async verifyOwnership(proxyAddress: string, claimedOwner: string): Promise<boolean> {
-    return this.client.verifyProxyOwnership(proxyAddress, claimedOwner);
+    return this.client.verifyOwnership(proxyAddress, claimedOwner);
   }
   
   /**
