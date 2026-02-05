@@ -352,7 +352,8 @@ export async function POST(request: NextRequest) {
           simulationMode: true,
           reason,
           predictionMarket: reason,
-          txHash: commitmentHash, // Store commitment hash as reference
+          txHash: commitmentHash, // Store commitment hash as tx reference
+          zkProofHash, // Store ZK proof hash in dedicated column
           walletAddress, // Associate hedge with wallet
         });
         
@@ -579,6 +580,7 @@ export async function POST(request: NextRequest) {
         reason,
         predictionMarket: reason,
         txHash: tradeResult.txHash,
+        zkProofHash, // Store ZK proof hash in dedicated column
         walletAddress, // Associate hedge with wallet
       });
       logger.info('💾 On-chain hedge saved to database', { txHash: tradeResult.txHash });
