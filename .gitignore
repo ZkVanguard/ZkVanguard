@@ -320,3 +320,4 @@ whitepaper/
 *.backup
 test/ZKProxyVault.test.cjs
 test/ZKProxyVault.test.js
+docs/WEEKLY_SUBMISSION_2026-02-04.md
