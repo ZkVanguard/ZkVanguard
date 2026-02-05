@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
         if (hedge) {
           // Return proof hash from either column
           const actualProofHash = hedge.zk_proof_hash || hedge.tx_hash;
+          const metadata = hedge.metadata as Record<string, unknown> | null;
           return NextResponse.json({
             success: true,
             found: true,
@@ -37,9 +38,14 @@ export async function POST(request: NextRequest) {
               leverage: hedge.leverage,
               status: hedge.status,
               createdAt: hedge.created_at,
+              simulationMode: hedge.simulation_mode,
             },
             proofHash: actualProofHash,
             walletAddress: hedge.wallet_address,
+            ownerWallet: metadata?.ownerWallet as string || hedge.wallet_address,
+            proxyWallet: metadata?.proxyWallet as string || null,
+            walletBindingHash: hedge.wallet_binding_hash,
+            ownerCommitment: hedge.owner_commitment,
           });
         }
 
@@ -48,6 +54,7 @@ export async function POST(request: NextRequest) {
           const hedgeById = await getHedgeById(hedgeId);
           const hedgeProofHash = hedgeById?.zk_proof_hash || hedgeById?.tx_hash;
           if (hedgeById && hedgeProofHash === proofHash) {
+            const metadata = hedgeById.metadata as Record<string, unknown> | null;
             return NextResponse.json({
               success: true,
               found: true,
@@ -60,9 +67,14 @@ export async function POST(request: NextRequest) {
                 leverage: hedgeById.leverage,
                 status: hedgeById.status,
                 createdAt: hedgeById.created_at,
+                simulationMode: hedgeById.simulation_mode,
               },
               proofHash: hedgeProofHash,
               walletAddress: hedgeById.wallet_address,
+              ownerWallet: metadata?.ownerWallet as string || hedgeById.wallet_address,
+              proxyWallet: metadata?.proxyWallet as string || null,
+              walletBindingHash: hedgeById.wallet_binding_hash,
+              ownerCommitment: hedgeById.owner_commitment,
             });
           }
         }

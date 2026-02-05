@@ -34,7 +34,12 @@ interface ProofVerificationResult {
     leverage: number;
     status: string;
     createdAt: string;
+    simulationMode?: boolean;
   };
+  ownerWallet?: string;
+  proxyWallet?: string;
+  walletBindingHash?: string;
+  ownerCommitment?: string;
   verificationTimestamp: string;
   error?: string;
 }
@@ -86,6 +91,10 @@ export default function ZKVerificationPage() {
         proofHash,
         hedgeId: data.hedgeId,
         hedgeDetails: data.hedgeDetails,
+        ownerWallet: data.ownerWallet,
+        proxyWallet: data.proxyWallet,
+        walletBindingHash: data.walletBindingHash,
+        ownerCommitment: data.ownerCommitment,
         verificationTimestamp: new Date().toISOString(),
         error: data.found ? undefined : 'No hedge found with this proof hash',
       });
@@ -315,13 +324,75 @@ export default function ZKVerificationPage() {
                           <p className="text-xs text-[#86868b] mb-1">Status</p>
                           <p className={`font-semibold ${
                             proofResult.hedgeDetails.status === 'active' ? 'text-green-600' : 'text-[#86868b]'
-                          }`}>{proofResult.hedgeDetails.status}</p>
+                          }`}>
+                            {proofResult.hedgeDetails.status}
+                            {proofResult.hedgeDetails.simulationMode && ' (Sim)'}
+                          </p>
                         </div>
                       </div>
+                      
+                      {/* Hedge ID */}
                       {proofResult.hedgeId && (
                         <div className="bg-white/60 p-3 rounded-lg">
                           <p className="text-xs text-[#86868b] mb-1">Hedge ID</p>
                           <p className="font-mono text-sm text-[#1d1d1f]">{proofResult.hedgeId}</p>
+                        </div>
+                      )}
+
+                      {/* Wallet Information */}
+                      {(proofResult.ownerWallet || proofResult.proxyWallet) && (
+                        <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                          <h4 className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                            🔐 Wallet Ownership
+                          </h4>
+                          <div className="space-y-2">
+                            {proofResult.ownerWallet && (
+                              <div>
+                                <p className="text-xs text-purple-600 mb-1">Owner Wallet</p>
+                                <code className="text-xs font-mono text-[#1d1d1f] bg-white/60 px-2 py-1 rounded block break-all">
+                                  {proofResult.ownerWallet}
+                                </code>
+                              </div>
+                            )}
+                            {proofResult.proxyWallet && (
+                              <div>
+                                <p className="text-xs text-purple-600 mb-1">Proxy Wallet</p>
+                                <code className="text-xs font-mono text-[#1d1d1f] bg-white/60 px-2 py-1 rounded block break-all">
+                                  {proofResult.proxyWallet}
+                                </code>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ZK Cryptographic Proofs */}
+                      {(proofResult.walletBindingHash || proofResult.ownerCommitment) && (
+                        <div className="mt-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <h4 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
+                            🛡️ ZK Cryptographic Proofs
+                          </h4>
+                          <div className="space-y-2">
+                            {proofResult.walletBindingHash && (
+                              <div>
+                                <p className="text-xs text-blue-600 mb-1">Wallet Binding Hash</p>
+                                <code className="text-xs font-mono text-[#1d1d1f] bg-white/60 px-2 py-1 rounded block break-all">
+                                  {proofResult.walletBindingHash}
+                                </code>
+                              </div>
+                            )}
+                            {proofResult.ownerCommitment && (
+                              <div>
+                                <p className="text-xs text-blue-600 mb-1">Owner Commitment</p>
+                                <code className="text-xs font-mono text-[#1d1d1f] bg-white/60 px-2 py-1 rounded block break-all">
+                                  {proofResult.ownerCommitment}
+                                </code>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-blue-500 mt-2">
+                            These hashes cryptographically bind this hedge to the owner wallet without revealing sensitive data.
+                          </p>
                         </div>
                       )}
                     </div>
