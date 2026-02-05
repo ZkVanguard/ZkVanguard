@@ -18,8 +18,8 @@ ZkVanguard is a **multi-chain platform** supporting both **Cronos** and **SUI** 
 
 | Chain | Type | Status | Features |
 |-------|------|--------|----------|
-| **Cronos** | EVM | ✅ Live | x402 Gasless, VVS DEX, zkEVM |
-| **SUI** | Move | ✅ Ready | Sponsored Tx, Native Move, High TPS |
+| **Cronos** | EVM | ✅ Live | x402 Gasless, VVS DEX, ZK Proxy Vault |
+| **SUI** | Move | ✅ Live | Sponsored Tx, Native Move, ZK Proxy Vault |
 
 ---
 
@@ -32,12 +32,13 @@ ZkVanguard automates institutional crypto portfolio management with **predictive
 | Feature | What It Does |
 |---------|--------------|
 | **Multi-Chain** | Cronos + SUI with unified portfolio view |
+| **ZK Proxy Vault** | Bulletproof escrow with ZK ownership verification & time-locked withdrawals |
 | **Prediction Markets** | Polymarket/Delphi data predicts crashes *before* they happen |
 | **6 AI Agents** | Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor - autonomous coordination |
 | **Post-Quantum Privacy** | 521-bit ZK-STARK proofs, CUDA-accelerated, no trusted setup |
 | **Private Hedges** | Stealth addresses + ZK commitments hide hedge details on-chain |
+| **ZK Proof Verification** | Verify hedge ownership by wallet or proof hash |
 | **Gasless Transactions** | x402 on Cronos, Sponsored Tx on SUI |
-| **VVS Finance DEX** | Native Cronos swaps with best-price routing (V2/V3 pools) |
 
 ---
 
@@ -116,25 +117,37 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 |---------|---------|
 | Crypto.com AI SDK | AI-powered portfolio analysis & natural language |
 | Crypto.com Exchange API | Real-time prices (100 req/s) |
-| CoinGecko API | Fallback prices (50 req/min free tier) |
 | Polymarket + Delphi | Prediction market intelligence |
 | VVS Finance SDK | DEX swaps on Cronos |
 | Moonlander | Perpetual futures hedging |
-| Private Hedge Service | Stealth addresses + ZK commitment privacy |
-| Hedge PnL Tracker | Real-time P&L on hedge positions |
-| SUI Service | Multi-chain support (@mysten/dapp-kit) |
-| x402 Facilitator | Gasless transactions |
+| ZK Proof Verification | Verify hedge ownership by wallet or proof hash |
+| x402 Facilitator | Gasless transactions on Cronos |
+| SUI Sponsored Tx | Gasless transactions on SUI |
 
 ---
 
-## Deployed Contracts (Cronos Testnet)
+## Deployed Contracts
 
-```
-RWAManager:        0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189 (Updated Jan 16, 2026)
-ZKVerifier:        0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8
-PaymentRouter:     0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b
-GaslessZKVerifier: 0x44098d0dE36e157b4C1700B48d615285C76fdE47
-```
+### Cronos Testnet (EVM)
+
+| Contract | Address |
+|----------|---------|
+| RWAManager | `0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189` |
+| ZKVerifier | `0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8` |
+| ZKProxyVault | `0xE8c3Eba5A5eC3311965DA4E8d4F33F5D0a5E4F9a` |
+| PaymentRouter | `0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b` |
+| GaslessZKVerifier | `0x44098d0dE36e157b4C1700B48d615285C76fdE47` |
+
+### SUI Testnet (Move)
+
+| Module | Package ID |
+|--------|------------|
+| **Package** | `0x142e6c41391f0d27e2b5a2dbf35029809efbf78e340369ac6f1ce8fb8aa080b6` |
+| rwa_manager | Shared: `0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97` |
+| zk_verifier | Shared: `0x6c75de60a47a9704625ecfb29c7bb05b49df215729133349345d0a15bec84be8` |
+| zk_proxy_vault | Shared: `0x5a0c81e3c95abe2b802e65d69439923ba786cdb87c528737e1680a0c791378a4` |
+| zk_hedge_commitment | Shared: `0x9c33f0df3d6a2e9a0f137581912aefb6aafcf0423d933fea298d44e222787b02` |
+| payment_router | Shared: `0x1fba1a6a0be32f5d678da2910b99900f74af680531563fd7274d5059e1420678` |
 
 ---
 
@@ -142,7 +155,8 @@ GaslessZKVerifier: 0x44098d0dE36e157b4C1700B48d615285C76fdE47
 
 - **Frontend:** Next.js 14, TypeScript, TailwindCSS
 - **Backend:** Node.js, Python FastAPI, CUDA
-- **Blockchain:** Cronos zkEVM (EVM), SUI (Move)
+- **Blockchain:** Cronos (EVM/Solidity), SUI (Move)
+- **ZK:** ZK-STARK proofs, Post-quantum 521-bit curves
 - **AI:** Crypto.com AI SDK, Multi-agent orchestration
 - **Wallets:** RainbowKit (EVM), @mysten/dapp-kit (SUI)
 
