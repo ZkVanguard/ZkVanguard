@@ -1,53 +1,96 @@
 {
   "network": "sui-testnet",
-  "deployedAt": "2025-01-24T12:00:00Z",
-  "transactionDigest": "GpWKsg8871F7S81hPnbYgXFHZLVc5zfZtNKS7GemHsNC",
+  "deployedAt": "2026-02-04T20:00:00Z",
+  "transactionDigest": "CnHSt5JZt7X1feYuCYXjBFQQBjQazH55QZAgcoXST264",
   "deployer": "0xb157ee4953f0f552c7aa554d614762acf6ed6d6c8407f96aee18010724712126",
-  "packageId": "0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9",
+  "packageId": "0x142e6c41391f0d27e2b5a2dbf35029809efbf78e340369ac6f1ce8fb8aa080b6",
   "modules": [
     "rwa_manager",
     "zk_verifier", 
-    "payment_router"
+    "payment_router",
+    "zk_proxy_vault",
+    "zk_hedge_commitment"
   ],
   "objects": {
     "rwaManagerState": {
-      "id": "0x84925d623a658bc40a5821ef74458e7f8e8f5a2971c58ec9df6fb59277a8951d",
+      "id": "0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97",
       "type": "shared",
       "description": "Core RWA portfolio management state"
     },
     "zkVerifierState": {
-      "id": "0x19f9c7a1ca761442180928f0efe982d414fd324948a1a092a258e8116c56213e",
+      "id": "0x6c75de60a47a9704625ecfb29c7bb05b49df215729133349345d0a15bec84be8",
       "type": "shared",
       "description": "ZK proof verification state"
     },
     "paymentRouterState": {
-      "id": "0x08c0f37564f618162edc982d714b79dd946fbf7d387731f6c5ca3946d6cbe507",
+      "id": "0x1fba1a6a0be32f5d678da2910b99900f74af680531563fd7274d5059e1420678",
       "type": "shared",
       "description": "Payment routing and sponsored transaction state"
     },
+    "zkProxyVaultState": {
+      "id": "0x5a0c81e3c95abe2b802e65d69439923ba786cdb87c528737e1680a0c791378a4",
+      "type": "shared",
+      "description": "ZK Proxy Vault escrow state with time-locked withdrawals"
+    },
+    "zkHedgeCommitmentState": {
+      "id": "0x9c33f0df3d6a2e9a0f137581912aefb6aafcf0423d933fea298d44e222787b02",
+      "type": "shared",
+      "description": "Privacy-preserving hedge commitment storage"
+    },
     "rwaManagerAdminCap": {
-      "id": "0x5084205f4dedd52f9d7b6680f3ff27af1046f9e43a02b0de40b52815a91b3e37",
+      "id": "0x6e833ffd31b246c91fec2804db2a7d435a1a5d0b6980649c612a7c4598ef37ae",
       "type": "owned",
       "description": "Admin capability for RWA Manager"
     },
     "zkVerifierAdminCap": {
-      "id": "0xc75d4cb2e146dca7e4e3ab5f61a35ca47089fae87c9f37c55e6ec426535ec635",
+      "id": "0x7a3ed29e8ae4ba0a6046c504cf3f68ba3f513dc57449907ae86cbdc7d7987029",
       "type": "owned",
       "description": "Admin capability for ZK Verifier"
     },
     "paymentRouterAdminCap": {
-      "id": "0x96806d2d91e38658534d1d56269c97b9e883e6a4c5f2442bbdafefaa42503cf8",
+      "id": "0x058e97ad257e0b7de1271103dac70b7bb19dce2fc3025f3a7a0932cb339a8623",
       "type": "owned",
       "description": "Admin capability for Payment Router"
     },
+    "zkProxyVaultAdminCap": {
+      "id": "0xa0591efe532b7825b0eb6870d302ff9173efac516a8e9b6cdb55e7bf1b4ba0fd",
+      "type": "owned",
+      "description": "Admin capability for ZK Proxy Vault"
+    },
+    "zkProxyVaultGuardianCap": {
+      "id": "0x20760a1d34ae06fb974195c756bce3102f61bd202ee4f129df60cbce25a8f339",
+      "type": "owned",
+      "description": "Guardian capability for emergency operations"
+    },
+    "zkProxyVaultUpgraderCap": {
+      "id": "0xb479d03318f39b2506b79c651576b32153913269fb7cf16c5a13744e188ee3b5",
+      "type": "owned",
+      "description": "Upgrader capability for ZK Proxy Vault"
+    },
+    "zkHedgeCommitmentAdminCap": {
+      "id": "0x38826cc5da39abd80b1bebdf521975cb4a56419b286ba38bd8be1d524795d91a",
+      "type": "owned",
+      "description": "Admin capability for ZK Hedge Commitment"
+    },
+    "zkHedgeCommitmentRelayerCap": {
+      "id": "0x9aa58cee62fbff4fb64698c0f5b1563f7cbeeb08f7b738c1b3abcfd750f4235b",
+      "type": "owned",
+      "description": "Relayer capability for batch execution"
+    },
     "upgradeCap": {
-      "id": "0xfb1edf7256ca536619883b4e70afdf4762e3b1584f77f09913381fc9753ae745",
+      "id": "0x94e8328faae7101c2b81ddc4574f64755f04054c5fa1123e31a8d6895ca53223",
       "type": "owned",
       "description": "Upgrade capability for package"
     }
   },
   "gasCost": {
-    "storageCost": "99886800 MIST",
+    "storageCost": "181928800 MIST",
+    "computationCost": "1370000 MIST",
+    "storageRebate": "978120 MIST",
+    "total": "182320680 MIST"
+  },
+  "explorerUrl": "https://suiscan.xyz/testnet/tx/CnHSt5JZt7X1feYuCYXjBFQQBjQazH55QZAgcoXST264"
+}
     "computationCost": "1000000 MIST",
     "totalCost": "~99908680 MIST (~0.1 SUI)"
   },
