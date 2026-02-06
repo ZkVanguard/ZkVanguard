@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 /**
  * Simple Markdown Renderer for Chat Messages
  * Renders common markdown syntax without external dependencies

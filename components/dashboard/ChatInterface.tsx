@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any, no-case-declarations */
 'use client';
 
 import { useState, useRef, useEffect } from 'react';

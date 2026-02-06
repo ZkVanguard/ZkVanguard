@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';

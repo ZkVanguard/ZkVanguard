@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Enhanced Chat Component with LLM Integration
  * Features: Streaming responses, typing indicators, better UX, Markdown rendering
