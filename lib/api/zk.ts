@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK-STARK Integration - Real Python/CUDA Backend
  * Connects frontend to actual ZK proof generation system
@@ -623,7 +624,7 @@ export async function verifyWalletOwnership(
 ): Promise<{ verified: boolean; message: string }> {
   try {
     // Recreate the expected commitment
-    const expectedBinding = createHash('sha256')
+    const _expectedBinding = createHash('sha256')
       .update(`${walletAddress.toLowerCase()}:${hedgeId}`)
       .digest('hex');
     

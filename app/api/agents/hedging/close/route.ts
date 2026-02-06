@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { closeHedge, getHedgeByOrderId, clearSimulationHedges, clearAllHedges } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
-import crypto from 'crypto';
+import _crypto from 'crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Only the OWNER wallet can close and receive funds
     const ownerWallet = hedge.wallet_address;
     let isOwner = false;
-    let withdrawalDestination = ownerWallet;
+    const withdrawalDestination = ownerWallet;
 
     if (walletAddress && ownerWallet) {
       isOwner = verifyOwnership(walletAddress, orderId, ownerWallet);

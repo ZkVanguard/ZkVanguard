@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * On-Chain Hedge Service
  * 
@@ -13,9 +14,9 @@
  */
 
 import { ethers, Signer, Provider } from 'ethers';
-import { ZKProxyVaultClient, OnChainProxyPDA, ZKProofData } from '@/lib/crypto/ZKProxyVaultClient';
+import { ZKProxyVaultClient, OnChainProxyPDA } from '@/lib/crypto/ZKProxyVaultClient';
 import { logger } from '@/lib/utils/logger';
-import * as crypto from 'crypto';
+import * as _crypto from 'crypto';
 
 // Contract addresses on Cronos Testnet (from deployment)
 const DEPLOYED_ADDRESSES = {
