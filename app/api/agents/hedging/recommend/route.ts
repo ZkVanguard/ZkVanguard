@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { MCPClient } from '@/integrations/mcp/MCPClient';
@@ -93,12 +92,12 @@ export async function POST(request: NextRequest) {
       const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
       const tickerData = await tickerResponse.json();
       for (const token of tokens) {
-        const ticker = tickerData.result?.data?.find((t: any) => t.i === `${token}_USDT`);
+        const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${token}_USDT`);
         if (ticker) {
           priceMap[token] = parseFloat(ticker.a);
         }
       }
-    } catch (e) {
+    } catch {
       logger.warn('Failed to fetch prices from Crypto.com API, using MCP fallback');
     }
 
@@ -155,7 +154,26 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     // STEP 4: Generate Recommendations from Agent Results
     // ========================================================================
-    const recommendations: any[] = [];
+    interface HedgeRecommendation {
+      strategy: string;
+      confidence: number;
+      expectedReduction: number;
+      description: string;
+      riskScore?: number;
+      volatility?: number;
+      sentiment?: string;
+      agentSource: string;
+      actions: Array<{
+        action: string;
+        asset: string;
+        size: number;
+        leverage: number;
+        protocol: string;
+        reason: string;
+      }>;
+    }
+
+    const recommendations: HedgeRecommendation[] = [];
     
     // Extract recommendation from RiskAgent analysis
     const riskAnalysis = executionReport.riskAnalysis;

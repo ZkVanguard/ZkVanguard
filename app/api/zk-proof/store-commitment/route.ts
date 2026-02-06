@@ -1,6 +1,6 @@
-/* eslint-disable no-console */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { logger } from '@/lib/utils/logger';
 
 const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: true, ...json });
         }
         const text = await facilitatorRes.text();
-        console.warn('Facilitator returned non-ok:', facilitatorRes.status, text);
+        logger.warn('Facilitator returned non-ok:', { status: facilitatorRes.status, text });
       } catch (facErr) {
-        console.error('Facilitator call failed, falling back:', facErr);
+        logger.error('Facilitator call failed, falling back:', facErr);
       }
     }
 
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     const code = await provider.getCode(X402_VERIFIER_ADDRESS);
     const contractExists = code !== '0x';
 
-    console.log('[store-commitment] Contract check:', { 
+    logger.debug('[store-commitment] Contract check:', { 
       contractExists, 
       hasPrivateKey: !!SERVER_PRIVATE_KEY,
       privateKeyLength: SERVER_PRIVATE_KEY?.length,
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       try {
         const wallet = new ethers.Wallet(SERVER_PRIVATE_KEY, provider);
         const balance = await provider.getBalance(wallet.address);
-        console.log('[store-commitment] Wallet:', { 
+        logger.debug('[store-commitment] Wallet:', { 
           address: wallet.address, 
           balance: ethers.formatEther(balance) + ' CRO'
         });
@@ -115,9 +115,7 @@ export async function POST(request: NextRequest) {
         });
       } catch (txErr) {
         const err = txErr as Error & { code?: string; reason?: string };
-        console.error('[store-commitment] On-chain submission failed:', err.message);
-        console.error('[store-commitment] Error code:', err.code);
-        console.error('[store-commitment] Error reason:', err.reason);
+        logger.error('[store-commitment] On-chain submission failed:', err, { code: err.code, reason: err.reason });
         // Don't fall through to simulation - return the actual error
         return NextResponse.json({
           success: false,
@@ -148,7 +146,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Store commitment error:', error);
+    logger.error('Store commitment error:', error);
     return NextResponse.json(
       { 
         success: false, 

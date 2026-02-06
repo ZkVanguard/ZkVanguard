@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { logger } from '@/lib/utils/logger';
@@ -73,7 +72,21 @@ export async function POST(request: NextRequest) {
 /**
  * Format execution report into user-friendly response
  */
-function formatCommandResponse(report: any): string {
+interface FormattableReport {
+  status: string;
+  totalExecutionTime: number;
+  riskAnalysis?: {
+    totalRisk: number;
+    sentiment: string;
+  };
+  hedgingStrategy?: {
+    action?: string;
+    confidence?: string;
+  };
+  zkProofs?: unknown[];
+}
+
+function formatCommandResponse(report: FormattableReport): string {
   const lines: string[] = [];
   
   if (report.status === 'success') {

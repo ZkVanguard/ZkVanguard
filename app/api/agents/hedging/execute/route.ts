@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Execute Hedge Position on Moonlander
  * API endpoint for opening SHORT positions on Moonlander perpetuals
@@ -18,6 +17,7 @@ import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
 import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
+import type { NetworkType } from '@/integrations/moonlander/contracts';
 import { generateRebalanceProof, generateWalletOwnershipProof } from '@/lib/api/zk';
 import { deriveProxyPDA, type ProxyPDA } from '@/lib/crypto/ProxyPDA';
 import { getOnChainHedgeService } from '@/lib/services/OnChainHedgeService';
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
       try {
         const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
         const tickerData = await tickerResponse.json();
-        const ticker = tickerData.result.data.find((t: any) => t.i === `${baseAsset}_USDT`);
+        const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
         
         if (ticker) {
           mockPrice = parseFloat(ticker.a); // Ask price (current price)
@@ -328,7 +328,7 @@ export async function POST(request: NextRequest) {
       
       // Save to PostgreSQL (even in simulation mode)
       try {
-        console.log('💾 Attempting to save hedge to database:', {
+        logger.info('💾 Attempting to save hedge to database', {
           orderId,
           portfolioId: body.portfolioId,
           asset: privateMode ? '[PRIVATE]' : asset.toUpperCase(),
@@ -359,9 +359,7 @@ export async function POST(request: NextRequest) {
         });
         
         logger.info('💾 Simulated hedge saved to database', { orderId, privateMode });
-        console.log('✅ Hedge saved successfully to database');
       } catch (dbError) {
-        console.error('❌ Failed to save hedge to database:', dbError);
         logger.error('❌ Failed to save hedge to database', { error: dbError });
         // Continue anyway - don't fail the request if DB is down
       }
@@ -389,7 +387,7 @@ export async function POST(request: NextRequest) {
           
           if (ownershipResult.status === 'completed' && ownershipResult.proof) {
             walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-            walletBinding = (ownershipResult.proof as any).hedge_binding;
+            walletBinding = (ownershipResult.proof as Record<string, unknown>).hedge_binding as string | undefined;
             logger.info('✅ Wallet ownership proof generated', { 
               proofHash: walletOwnershipProof?.substring(0, 20) + '...',
               binding: walletBinding?.substring(0, 20) + '...'
@@ -460,7 +458,7 @@ export async function POST(request: NextRequest) {
       : (process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
     
     // Create on-chain client
-    const moonlander = new MoonlanderOnChainClient(rpcUrl, network as any);
+    const moonlander = new MoonlanderOnChainClient(rpcUrl, network as NetworkType);
     await moonlander.initialize(privateKey);
 
     // Map asset to Moonlander market format and get pair index
@@ -483,9 +481,9 @@ export async function POST(request: NextRequest) {
       
       const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
       const tickerData = await tickerResponse.json();
-      const ticker = tickerData.result.data.find((t: any) => t.i === `${baseAsset}_USDT`);
+      const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
       if (ticker) currentPrice = parseFloat(ticker.a);
-    } catch (e) {
+    } catch {
       logger.warn('Failed to fetch price, using fallback');
     }
 
@@ -610,7 +608,7 @@ export async function POST(request: NextRequest) {
         
         if (ownershipResult.status === 'completed' && ownershipResult.proof) {
           walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-          walletBinding = (ownershipResult.proof as any).hedge_binding;
+          walletBinding = (ownershipResult.proof as Record<string, unknown>).hedge_binding as string | undefined;
         }
       } catch (ownershipError) {
         logger.warn('⚠️ Wallet ownership proof generation failed for on-chain hedge', { error: String(ownershipError) });

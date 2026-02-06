@@ -1,5 +1,5 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
@@ -10,7 +10,7 @@ function generateFallbackProof(scenario: string, statement: Record<string, unkno
   const proofHash = `0x${Array.from(hashInput).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64)}`;
   const merkleRoot = `0x${Array.from(`merkle-${hashInput}`).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64)}`;
   
-  console.warn('⚠️ [ZK FALLBACK] Real ZK server unavailable - using deterministic fallback');
+  logger.warn('[ZK FALLBACK] Real ZK server unavailable - using deterministic fallback');
   
   return {
     success: true,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!statement || Object.keys(statement).length === 0) {
-      console.error('❌ [ZK Generate] Missing or empty statement in request');
+      logger.error('[ZK Generate] Missing or empty statement in request');
       return NextResponse.json({
         success: false,
         error: 'Statement is required and cannot be empty'
@@ -54,14 +54,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!witness || Object.keys(witness).length === 0) {
-      console.error('❌ [ZK Generate] Missing or empty witness in request');
+      logger.error('[ZK Generate] Missing or empty witness in request');
       return NextResponse.json({
         success: false,
         error: 'Witness is required and cannot be empty'
       }, { status: 400 });
     }
 
-    console.log('📋 [ZK Generate] Received request:', { 
+    logger.info('[ZK Generate] Received request:', { 
       scenario, 
       statementKeys: Object.keys(statement), 
       witnessKeys: Object.keys(witness),
@@ -73,21 +73,21 @@ export async function POST(request: NextRequest) {
     
     if (scenario === 'portfolio_risk') {
       _proofData = {
-        portfolio_risk: (witness as any)?.actual_risk_score ?? null,
-        portfolio_value: (witness as any)?.portfolio_value ?? null,
-        threshold: (statement as any)?.threshold ?? null
+        portfolio_risk: witness?.actual_risk_score ?? null,
+        portfolio_value: witness?.portfolio_value ?? null,
+        threshold: statement?.threshold ?? null
       };
     } else if (scenario === 'settlement_batch') {
       _proofData = {
-        transaction_count: (witness as any)?.transactions?.length ?? 5,
-        total_amount: (witness as any)?.total_amount ?? null,
-        batch_id: (witness as any)?.batch_id ?? null
+        transaction_count: (witness?.transactions as unknown[])?.length ?? 5,
+        total_amount: witness?.total_amount ?? null,
+        batch_id: witness?.batch_id ?? null
       };
     } else if (scenario === 'compliance_check') {
       _proofData = {
-        kyc_score: (witness as any)?.kyc_score ?? null,
-        risk_level: (witness as any)?.risk_level ?? null,
-        jurisdiction: (witness as any)?.jurisdiction ?? null
+        kyc_score: witness?.kyc_score ?? null,
+        risk_level: witness?.risk_level ?? null,
+        jurisdiction: witness?.jurisdiction ?? null
       };
     } else {
       // Generic data format
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the real FastAPI ZK server
-    console.log(`🔐 [ZK Generate] Calling ZK server at ${ZK_API_URL}/api/zk/generate`);
+    logger.info(`[ZK Generate] Calling ZK server at ${ZK_API_URL}/api/zk/generate`);
     
     const response = await fetch(`${ZK_API_URL}/api/zk/generate`, {
       method: 'POST',
@@ -114,34 +114,34 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ [ZK Generate] Server returned ${response.status}: ${errorText}`);
+      logger.error(`[ZK Generate] Server returned ${response.status}: ${errorText}`);
       throw new Error(`ZK API error: ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
-    console.log(`✅ [ZK Generate] Proof generated successfully:`, { status: result.status, hasProof: !!result.proof });
+    logger.info('[ZK Generate] Proof generated successfully:', { status: result.status, hasProof: !!result.proof });
     
     // Check if proof generation is complete
     if (result.status === 'pending' || result.job_id) {
       // Poll for completion
       const jobId = result.job_id;
       const maxAttempts = 30;
-      console.log(`⏳ [ZK Generate] Polling for job ${jobId} completion...`);
+      logger.info(`[ZK Generate] Polling for job ${jobId} completion...`);
       
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const statusResponse = await fetch(`${ZK_API_URL}/api/zk/proof/${jobId}`);
         if (!statusResponse.ok) {
-          console.error(`❌ [ZK Generate] Failed to check proof status (attempt ${attempt + 1}/${maxAttempts})`);
+          logger.error(`[ZK Generate] Failed to check proof status (attempt ${attempt + 1}/${maxAttempts})`);
           throw new Error('Failed to check proof status');
         }
         
         const statusResult = await statusResponse.json();
-        console.log(`📊 [ZK Generate] Status check ${attempt + 1}/${maxAttempts}: ${statusResult.status}`);
+        logger.debug(`[ZK Generate] Status check ${attempt + 1}/${maxAttempts}: ${statusResult.status}`);
         
         if (statusResult.status === 'completed' && statusResult.proof) {
-          console.log(`✅ [ZK Generate] Proof completed successfully in ${statusResult.duration_ms}ms`);
+          logger.info(`[ZK Generate] Proof completed successfully in ${statusResult.duration_ms}ms`);
           return NextResponse.json({
             success: true,
             proof: statusResult.proof,
@@ -151,16 +151,16 @@ export async function POST(request: NextRequest) {
             duration_ms: statusResult.duration_ms
           });
         } else if (statusResult.status === 'failed') {
-          console.error(`❌ [ZK Generate] Proof generation failed:`, statusResult.error);
+          logger.error('[ZK Generate] Proof generation failed:', undefined, { error: statusResult.error });
           throw new Error(statusResult.error || 'Proof generation failed');
         }
       }
       
-      console.error(`⏰ [ZK Generate] Proof generation timeout after ${maxAttempts} attempts`);
+      logger.error(`[ZK Generate] Proof generation timeout after ${maxAttempts} attempts`);
       throw new Error('Proof generation timeout');
     }
 
-    console.log(`✅ [ZK Generate] Proof returned immediately`);
+    logger.info('[ZK Generate] Proof returned immediately');
     return NextResponse.json({
       success: true,
       proof: result.proof,
@@ -170,9 +170,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`❌ [ZK Generate] ZK backend error: ${errorMessage}`);
-    console.error('Stack:', error instanceof Error ? error.stack : 'N/A');
-    console.warn(`⚠️ [ZK Generate] Falling back to deterministic proof generation`);
+    logger.error(`[ZK Generate] ZK backend error: ${errorMessage}`, error);
+    logger.warn('[ZK Generate] Falling back to deterministic proof generation');
     
     // Return fallback proof when ZK backend is unavailable
     const fallbackResult = generateFallbackProof(

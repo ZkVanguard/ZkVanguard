@@ -1,5 +1,5 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '@/lib/services/CryptocomDeveloperPlatformService';
 import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
@@ -10,7 +10,7 @@ import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
  */
 export async function GET() {
   try {
-    console.log('[Health Check] Starting comprehensive health check...');
+    logger.info('[Health Check] Starting comprehensive health check...');
     const startTime = Date.now();
 
     // Check Exchange API
@@ -24,7 +24,7 @@ export async function GET() {
       platformHealthy = await cryptocomDeveloperPlatform.healthCheck();
       platformNetwork = 'Cronos EVM';
     } catch (error) {
-      console.log('[Health Check] Developer Platform not configured');
+      logger.info('[Health Check] Developer Platform not configured', { error: error instanceof Error ? error.message : String(error) });
     }
     
     // Check AI Agent
@@ -44,7 +44,7 @@ export async function GET() {
         fetchTime: `${priceFetchTime}ms`,
       };
     } catch (error) {
-      console.error('[Health Check] Sample price fetch failed:', error);
+      logger.error('[Health Check] Sample price fetch failed', error);
     }
 
     const totalTime = Date.now() - startTime;
@@ -97,16 +97,16 @@ export async function GET() {
       },
     };
 
-    console.log('[Health Check] Complete:', JSON.stringify(health, null, 2));
+    logger.info('[Health Check] Complete', { data: health });
 
     return NextResponse.json(health);
-  } catch (error: any) {
-    console.error('[Health Check] Error:', error);
+  } catch (error: unknown) {
+    logger.error('[Health Check] Error', error);
     return NextResponse.json(
       {
         status: 'error',
         timestamp: new Date().toISOString(),
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

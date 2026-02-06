@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Private Hedge Execution API
  * 
@@ -109,11 +108,11 @@ export async function POST(request: NextRequest) {
     try {
       const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
       const tickerData = await tickerResponse.json();
-      const ticker = tickerData.result.data.find((t: any) => t.i === `${baseAsset}_USDT`);
+      const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
       if (ticker) {
         currentPrice = parseFloat(ticker.a);
       }
-    } catch (e) {
+    } catch {
       logger.warn('Failed to fetch price, using fallback');
     }
 

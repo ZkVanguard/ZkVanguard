@@ -1,5 +1,5 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 import { createPublicClient, http } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
@@ -34,12 +34,12 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[Transactions API] Starting...');
+    logger.info('[Transactions API] Starting...');
     const { id } = await context.params;
-    console.log('[Transactions API] Portfolio ID:', id);
+    logger.info(`[Transactions API] Portfolio ID: ${id}`);
     const portfolioId = BigInt(id);
     
-    console.log(`[Transactions API] Fetching transactions for portfolio ${portfolioId}...`);
+    logger.info(`[Transactions API] Fetching transactions for portfolio ${portfolioId}...`);
     
     const client = createPublicClient({
       chain: cronosTestnet,
@@ -47,18 +47,18 @@ export async function GET(
     });
 
     const addresses = getContractAddresses(338);
-    console.log('[Transactions API] RWA Manager:', addresses.rwaManager);
+    logger.info(`[Transactions API] RWA Manager: ${addresses.rwaManager}`);
     
     // Get current block number
     const currentBlock = await client.getBlockNumber();
-    console.log('[Transactions API] Current block:', currentBlock);
+    logger.info(`[Transactions API] Current block: ${currentBlock}`);
     
     // Cronos testnet has a max range of 2000 blocks, scan in chunks
     const CHUNK_SIZE = 1999n;
     const lookback = 10000n;
     const fromBlock = currentBlock > lookback ? currentBlock - lookback : 0n;
     
-    console.log(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}`);
+    logger.info(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}`);
 
     const depositLogs = [];
     const withdrawLogs = [];
@@ -69,7 +69,7 @@ export async function GET(
     while (start <= currentBlock) {
       const end = start + CHUNK_SIZE > currentBlock ? currentBlock : start + CHUNK_SIZE;
       
-      console.log(`[Transactions API] Chunk: ${start} to ${end}`);
+      logger.debug(`[Transactions API] Chunk: ${start} to ${end}`);
 
       // Fetch deposit events for this chunk
       const chunkDeposits = await client.getLogs({
@@ -134,7 +134,7 @@ export async function GET(
       start = end + 1n;
     }
 
-    console.log(`[Transactions API] Found ${depositLogs.length} deposits, ${withdrawLogs.length} withdrawals, ${rebalanceLogs.length} rebalances`);
+    logger.info(`[Transactions API] Found ${depositLogs.length} deposits, ${withdrawLogs.length} withdrawals, ${rebalanceLogs.length} rebalances`);
 
     const transactions: Transaction[] = [];
 
@@ -147,7 +147,7 @@ export async function GET(
         const decimals = TOKEN_DECIMALS[token] || 18;
         const symbol = TOKEN_SYMBOLS[token] || 'Unknown';
         
-        console.log(`Processing deposit: ${symbol} ${amount} at block ${log.blockNumber}`);
+        logger.debug(`Processing deposit: ${symbol} ${amount} at block ${log.blockNumber}`);
         
         transactions.push({
           type: 'deposit',
@@ -157,8 +157,8 @@ export async function GET(
           txHash: log.transactionHash || '',
           blockNumber: Number(log.blockNumber),
         });
-      } catch (err: any) {
-        console.error(`Error processing deposit log:`, err.message);
+      } catch (err: unknown) {
+        logger.error('Error processing deposit log', err);
       }
     }
 
@@ -179,8 +179,8 @@ export async function GET(
           txHash: log.transactionHash || '',
           blockNumber: Number(log.blockNumber),
         });
-      } catch (err: any) {
-        console.error(`Error processing withdrawal log:`, err.message);
+      } catch (err: unknown) {
+        logger.error('Error processing withdrawal log', err);
       }
     }
 
@@ -195,17 +195,17 @@ export async function GET(
           txHash: log.transactionHash || '',
           blockNumber: Number(log.blockNumber),
         });
-      } catch (err: any) {
-        console.error(`Error processing rebalance log:`, err.message);
+      } catch (err: unknown) {
+        logger.error('Error processing rebalance log', err);
       }
     }
 
     // Sort by timestamp descending (most recent first)
     transactions.sort((a, b) => b.timestamp - a.timestamp);
 
-    console.log(`✅ [Transactions API] Returning ${transactions.length} transactions`);
+    logger.info(`[Transactions API] Returning ${transactions.length} transactions`);
     if (transactions.length > 0) {
-      console.log('Sample transaction:', transactions[0]);
+      logger.debug('Sample transaction', { data: transactions[0] });
     }
 
     return NextResponse.json({ transactions }, {
@@ -213,11 +213,10 @@ export async function GET(
         'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     });
-  } catch (error: any) {
-    console.error('[Transactions API] Error:', error?.message || error);
-    console.error('[Transactions API] Stack:', error?.stack);
+  } catch (error: unknown) {
+    logger.error('[Transactions API] Error', error);
     return NextResponse.json(
-      { error: 'Failed to fetch transactions', details: error?.message },
+      { error: 'Failed to fetch transactions', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, type Log } from 'viem';
 import { CronosTestnet } from '@/lib/chains';
+import { logger } from '@/lib/utils/logger';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract (x402 + USDC)
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (txHash && !proofHash) {
       // Extract proofHash from transaction logs
       const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
-      const commitmentLog = receipt.logs.find((log: any) => 
+      const commitmentLog = receipt.logs.find((log: Log) => 
         log.address.toLowerCase() === GASLESS_VERIFIER_ADDRESS.toLowerCase()
       );
       
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
           };
         }
       } catch (zkError) {
-        console.error('ZK verification error:', zkError);
+        logger.error('ZK verification error:', zkError);
         // Continue even if ZK verification fails - on-chain proof still valid
       }
     }
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error('Error in comprehensive verification:', error);
+    logger.error('Error in comprehensive verification:', error);
     return NextResponse.json(
       { 
         success: false, 

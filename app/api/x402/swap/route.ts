@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * x402 Swap API Endpoint
  * POST /api/x402/swap - Execute DEX swaps with x402 gasless settlement
@@ -10,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
+import { logger } from '@/lib/utils/logger';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
       },
     });
   } catch (error) {
-    console.error('[x402/swap] Error:', error);
+    logger.error('[x402/swap] Error:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Use MAINNET service for accurate quotes (testnet has no stablecoin pools)
     // Explicitly pass the API key from env - Next.js should have loaded .env.local
     const vvsApiKey = process.env.SWAP_SDK_QUOTE_API_CLIENT_ID_25 || process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID;
-    console.log('[x402/swap] ENV Check:', {
+    logger.debug('[x402/swap] ENV Check:', {
       SWAP_SDK_25: process.env.SWAP_SDK_QUOTE_API_CLIENT_ID_25 ? 'present' : 'missing',
       NEXT_PUBLIC_VVS: process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID ? 'present' : 'missing',
       vvsApiKey: vvsApiKey ? `${vvsApiKey.slice(0,8)}...` : 'missing',
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       humanAmount = (numericAmount / 1e18).toString();
     }
     
-    console.log('[x402/swap] Getting VVS MAINNET quote:', { 
+    logger.debug('[x402/swap] Getting VVS MAINNET quote:', { 
       chainId: QUOTE_CHAIN_ID,
       tokenIn: resolvedTokenIn, 
       tokenOut: resolvedTokenOut, 
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // Get quote from VVS SDK using MAINNET for accurate pricing
       const quote = await vvsService.getQuote(resolvedTokenIn, resolvedTokenOut, humanAmount);
       
-      console.log('[x402/swap] VVS mainnet quote received:', {
+      logger.info('[x402/swap] VVS mainnet quote received:', {
         amountOut: quote.amountOut,
         formattedTrade: quote.formattedTrade,
       });
@@ -211,7 +211,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     } catch (vvsError) {
       // VVS API failed - try RealMarketDataService as fallback
-      console.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', vvsError);
+      logger.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', { error: vvsError instanceof Error ? vvsError.message : String(vvsError) });
       
       try {
         const { getMarketDataService } = await import('../../../../lib/services/RealMarketDataService');
@@ -246,7 +246,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         });
       } catch (fallbackError) {
-        console.error('[x402/swap] RealMarketDataService fallback failed, using mock prices:', fallbackError);
+        logger.error('[x402/swap] RealMarketDataService fallback failed, using mock prices:', fallbackError);
         
         // Final fallback: Use mock prices for demo
         const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
@@ -263,7 +263,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
   } catch (error) {
-    console.error('[x402/swap] Quote error:', error);
+    logger.error('[x402/swap] Quote error:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Failed to get quote' },
       { status: 500 }

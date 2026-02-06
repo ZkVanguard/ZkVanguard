@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Portfolio Strategy API - Store ZK-protected strategies on-chain
  * Requires wallet signature for any operation
@@ -130,7 +129,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Generate deterministic hash for strategy
-function generateStrategyHash(config: any): string {
+function generateStrategyHash(config: Record<string, unknown>): string {
   const data = JSON.stringify({
     targetYield: config.targetYield,
     riskTolerance: config.riskTolerance,

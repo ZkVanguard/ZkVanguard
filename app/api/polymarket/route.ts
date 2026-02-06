@@ -1,5 +1,5 @@
-/* eslint-disable no-console */
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     
     // Use closed=false to get active markets (active=true doesn't work properly)
     const url = `https://gamma-api.polymarket.com/markets?limit=${limit}&closed=${closed}`;
-    console.log('[Polymarket Proxy] Fetching:', url);
+    logger.info(`[Polymarket Proxy] Fetching: ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await response.json();
-    console.log(`[Polymarket Proxy] Fetched ${data.length} markets (closed=${closed})`);
+    logger.info(`[Polymarket Proxy] Fetched ${data.length} markets (closed=${closed})`);
     
     return NextResponse.json(data, {
       headers: {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Polymarket proxy error:', error);
+    logger.error('Polymarket proxy error', error);
     return NextResponse.json(
       { error: 'Failed to fetch Polymarket data' },
       { status: 500 }

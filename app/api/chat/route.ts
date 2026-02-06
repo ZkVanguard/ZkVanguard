@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Chat API Route - LLM-powered conversational interface with AI Agent orchestration
  * Supports both standard and streaming responses
@@ -196,7 +195,44 @@ export async function POST(request: NextRequest) {
 /**
  * Format agent execution report into concise, actionable response
  */
-function formatAgentResponse(report: any): { content: string } {
+interface AgentReport {
+  status: string;
+  strategy?: string;
+  riskAnalysis?: {
+    totalRisk?: number;
+    volatility?: number;
+    marketSentiment?: string;
+    sentiment?: string;
+  };
+  hedgingStrategy?: {
+    action?: string;
+    confidence?: string;
+    strategy?: string;
+    positions?: Array<{
+      asset?: string;
+      direction?: string;
+      size?: string;
+      leverage?: number;
+    }>;
+    suggestedAction?: {
+      market?: string;
+      side?: string;
+      size?: string;
+      leverage?: number;
+    };
+  };
+  settlement?: {
+    gasless?: boolean;
+  };
+  zkProofs?: Array<{
+    proofType?: string;
+    proofHash?: string;
+    verified: boolean;
+  }>;
+  aiSummary?: string;
+}
+
+function formatAgentResponse(report: AgentReport): { content: string } {
   const lines: string[] = [];
   
   // Quick status line
@@ -245,7 +281,7 @@ function formatAgentResponse(report: any): { content: string } {
   
   // ZK verification status
   if (report.zkProofs?.length > 0) {
-    const verified = report.zkProofs.filter((p: any) => p.verified).length;
+    const verified = report.zkProofs.filter((p) => p.verified).length;
     lines.push(`\n🔐 ZK: ${verified}/${report.zkProofs.length} verified on-chain`);
   }
   
@@ -258,7 +294,7 @@ function formatAgentResponse(report: any): { content: string } {
   lines.push(`\n---`);
   
   // Build action data for buttons
-  const actions: Array<{ id: string; label: string; type: string; params: any }> = [];
+  const actions: Array<{ id: string; label: string; type: string; params: Record<string, unknown> }> = [];
   
   if (report.strategy === 'hedge' || report.hedgingStrategy) {
     const suggested = report.hedgingStrategy?.suggestedAction;

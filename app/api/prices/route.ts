@@ -1,5 +1,5 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // Batch request
     if (symbols && symbols.length > 0) {
-      console.log(`[Market Data API] Fetching batch prices for: ${symbols.join(', ')}`);
+      logger.info(`[Market Data API] Fetching batch prices for: ${symbols.join(', ')}`);
       
       if (source === 'exchange') {
         // Direct from Exchange API
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
+    logger.info(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
 
     if (source === 'exchange') {
       // Direct from Exchange API with full market data
@@ -100,13 +100,13 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
       });
     }
-  } catch (error: any) {
-    console.error('[Market Data API] Error:', error);
+  } catch (error: unknown) {
+    logger.error('[Market Data API] Error', error);
     return NextResponse.json(
       { 
         success: false,
         error: 'Failed to fetch market data',
-        details: error.message,
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Market Data API] POST request for ${symbols.length} symbols, action: ${action}`);
+    logger.info(`[Market Data API] POST request for ${symbols.length} symbols, action: ${action}`);
 
     switch (action) {
       case 'prices': {
@@ -143,9 +143,9 @@ export async function POST(request: NextRequest) {
       case 'market-data': {
         // Full market data for each symbol
         const dataPromises = symbols.map(sym => 
-          cryptocomExchangeService.getMarketData(sym).catch(err => ({
+          cryptocomExchangeService.getMarketData(sym).catch((err: unknown) => ({
             symbol: sym,
-            error: err.message,
+            error: err instanceof Error ? err.message : 'Unknown error',
           }))
         );
         const marketData = await Promise.all(dataPromises);
@@ -181,13 +181,13 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-  } catch (error: any) {
-    console.error('[Market Data API] POST error:', error);
+  } catch (error: unknown) {
+    logger.error('[Market Data API] POST error', error);
     return NextResponse.json(
       { 
         success: false,
         error: 'Failed to process request',
-        details: error.message,
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

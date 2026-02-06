@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Analytics API Route
  * 
@@ -13,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 // PostgreSQL schema (run this in Neon console):
 /*
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     
     if (!databaseUrl) {
       // Store in memory/log for development
-      console.log('[Analytics]', {
+      logger.debug('[Analytics]', {
         event: body.event,
         page: body.page,
         chain: body.chain,
@@ -143,12 +143,13 @@ export async function POST(request: NextRequest) {
     
     // Use @neondatabase/serverless for edge runtime
     // For now, just log - actual DB integration requires installing the package
-    console.log('[Analytics DB]', { query: 'INSERT', values: values.slice(0, 4) });
+    logger.debug('[Analytics DB]', { query: 'INSERT', values: values.slice(0, 4) });
     
     return NextResponse.json({ success: true });
     
-  } catch (error: any) {
-    console.error('[Analytics Error]', error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('[Analytics Error]', { error: errorMessage });
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
@@ -182,7 +183,7 @@ export async function GET(request: NextRequest) {
         message: 'Database connected - real analytics available',
       });
     } catch (dbError) {
-      console.error('[Analytics] Database query failed:', dbError);
+      logger.error('[Analytics] Database query failed', dbError);
     }
   }
   

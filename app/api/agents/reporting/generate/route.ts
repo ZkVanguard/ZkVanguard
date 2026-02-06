@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Portfolio Reporting API Route
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         weekly: (portfolio.totalPnlPercentage || 0) * 2.5, // Estimate based on current
         monthly: (portfolio.totalPnlPercentage || 0) * 8   // Estimate based on current
       },
-      topPositions: (portfolio.positions || []).slice(0, 5).map((pos: any) => ({
+      topPositions: (portfolio.positions || []).slice(0, 5).map((pos: { symbol?: string; value?: number; pnlPercentage?: number }) => ({
         asset: pos.symbol || 'UNKNOWN',
         value: pos.value || 0,
         pnl: pos.pnlPercentage || 0
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       source: 'real-portfolio-data'
     });
   } catch (error) {
-    console.error('Report generation failed:', error);
+    logger.error('Report generation failed', error);
     return NextResponse.json(
       { error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
