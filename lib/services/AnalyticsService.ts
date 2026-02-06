@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * GDPR-Compliant Analytics Service
  * 

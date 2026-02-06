@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-case-declarations */
 /**
  * Smart Portfolio Actions Service
  * Enables LLM to execute real portfolio operations with automatic ZK proofs

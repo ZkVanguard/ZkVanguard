@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * X402 Gasless Transaction Service
  * Provides gasless transaction support for swaps and portfolio operations

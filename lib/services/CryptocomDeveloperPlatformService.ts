@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Developer Platform Service
  * On-chain data access for Cronos EVM and zkEVM

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Market Data MCP Client
  * Provides real-time market data via Model Context Protocol

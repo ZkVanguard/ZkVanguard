@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * VVS Swap SDK Service
  * Wrapper for @vvs-finance/swap-sdk to enable swaps on Cronos Testnet

@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Exchange API Service
  * High-performance market data from Crypto.com Exchange

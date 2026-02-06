@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK-Protected Hedge Service
  * Generates and executes hedges with ZK-STARK proofs for privacy

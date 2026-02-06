@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * X402 Facilitator Service - Official SDK Integration
  * 

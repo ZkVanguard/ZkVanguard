@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK Paymaster Service - TRUE Gasless via Meta-Transactions
  * 

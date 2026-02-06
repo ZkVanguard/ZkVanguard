@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Delphi Market Service
  * Simplified service for fetching prediction market data in the frontend

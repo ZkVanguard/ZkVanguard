@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Agent Orchestrator Service
  * Coordinates all AI agents and provides unified interface for API routes

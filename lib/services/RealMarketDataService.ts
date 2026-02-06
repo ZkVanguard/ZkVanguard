@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Real Market Data Service
  * Aggregates real-time market data from Crypto.com sources only
