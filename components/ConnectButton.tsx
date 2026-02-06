@@ -1,8 +1,8 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { ConnectButton as RainbowConnectButton } from '@rainbow-me/rainbowkit';
+import { logger } from '@/lib/utils/logger';
 import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut } from 'lucide-react';
 import { 
   useWallets, 
@@ -11,6 +11,7 @@ import {
   useDisconnectWallet, 
   useCurrentWallet,
 } from '@mysten/dapp-kit';
+import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 
 // Safe hook wrapper for Sui wallet functionality
 function useSuiWalletSafe() {
@@ -21,12 +22,12 @@ function useSuiWalletSafe() {
   }, []);
   
   // Call hooks unconditionally (required by React rules)
-  let wallets: any[] = [];
-  let suiAccount: any = null;
-  let currentWallet: any = null;
+  let wallets: WalletWithRequiredFeatures[] = [];
+  let suiAccount: WalletAccount | null = null;
+  let currentWallet: WalletWithRequiredFeatures | null = null;
   let connectionStatus = 'disconnected';
-  let connectSui: any = () => {};
-  let disconnectSui: any = () => {};
+  let connectSui: (args: { wallet: WalletWithRequiredFeatures }) => void = () => {};
+  let disconnectSui: () => void = () => {};
   let isConnectingSui = false;
 
   try {
@@ -42,7 +43,7 @@ function useSuiWalletSafe() {
     disconnectSui = disconnectState?.mutate || (() => {});
   } catch (e) {
     // Hooks failed - use defaults
-    console.warn('Sui wallet hooks unavailable:', e);
+    logger.warn('Sui wallet hooks unavailable', { component: 'ConnectButton', error: String(e) });
   }
 
   return {
@@ -78,7 +79,7 @@ export function ConnectButton() {
   const walletName = currentWallet?.name ?? 'SUI';
   
   // Filter to only Sui-compatible wallets
-  const suiWallets = wallets.filter((w: any) => 
+  const suiWallets = wallets.filter((w) => 
     w.chains?.some?.((c: string) => c.includes('sui'))
   );
 
@@ -91,7 +92,7 @@ export function ConnectButton() {
   const truncate = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   
   const handleConnectSui = () => {
-    console.log('Available Sui wallets:', suiWallets.map(w => w.name));
+    logger.debug('Available Sui wallets', { component: 'ConnectButton', data: suiWallets.map(w => w.name) });
     if (suiWallets.length > 0) {
       // Connect to first available Sui wallet
       connectSui({ wallet: suiWallets[0] });

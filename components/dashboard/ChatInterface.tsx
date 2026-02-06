@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any, no-case-declarations */
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -9,6 +8,7 @@ import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
 import { SwapModal } from './SwapModal';
+import { logger } from '../../lib/utils/logger';
 
 // Using VVS Finance SDK via API routes
 
@@ -66,7 +66,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
   // Generate ZK proof for response
   const generateResponseProof = async (): Promise<ZKProofData> => {
     try {
-      console.log('🔐 [ChatInterface] Requesting ZK proof generation...');
+      logger.debug('🔐 [ChatInterface] Requesting ZK proof generation...', { component: 'ChatInterface' });
       const response = await fetch('/api/zk-proof/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,11 +79,11 @@ export function ChatInterface({ address: _address }: { address: string }) {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ [ChatInterface] ZK proof received:', { 
+        logger.debug('✅ [ChatInterface] ZK proof received', { component: 'ChatInterface', data: { 
           success: data.success, 
           fallback: data.fallback,
           verified: data.proof?.verified 
-        });
+        }});
         
         if (data.success && data.proof) {
           return {
@@ -97,14 +97,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
           };
         }
       } else {
-        console.error('❌ [ChatInterface] ZK proof request failed:', response.status, response.statusText);
+        logger.error('❌ [ChatInterface] ZK proof request failed', undefined, { component: 'ChatInterface', data: { status: response.status, statusText: response.statusText } });
       }
     } catch (error) {
-      console.error('❌ [ChatInterface] ZK proof generation failed:', error);
+      logger.error('❌ [ChatInterface] ZK proof generation failed', error instanceof Error ? error : undefined, { component: 'ChatInterface' });
     }
     
     // Should not reach here if server is working
-    console.warn('⚠️ [ChatInterface] No proof returned from server');
+    logger.warn('⚠️ [ChatInterface] No proof returned from server', { component: 'ChatInterface' });
     return {
       proofHash: '0x0',
       merkleRoot: '0x0',
@@ -221,7 +221,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
       
       return data.response || "I'm here to help! Try asking about portfolio analysis, risk assessment, or hedging strategies.";
     } catch (error) {
-      console.error('LLM call failed:', error);
+      logger.error('LLM call failed', error instanceof Error ? error : undefined, { component: 'ChatInterface' });
       return "I'm having trouble connecting to the AI service. Please try again in a moment.";
     }
   };
@@ -411,7 +411,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
             `• Total Exposure: $${realExposure}\n` +
             `• Target Yield: ${targetYield}%\n\n` +
             `**AI-Recommended Hedges:**\n` +
-            hedgeRecs.map((s: any, i: number) => 
+            hedgeRecs.map((s: { action: string; asset: string; size: number; leverage: number; reason: string; capitalRequired?: number; targetPrice?: number; stopLoss?: number }, i: number) => 
               `${i + 1}. **${s.action}** on ${s.asset}\n` +
               `   • Size: ${s.size}${typeof s.size === 'number' && s.size < 1 ? ' BTC' : ''}\n` +
               `   • Leverage: ${s.leverage}x\n` +
@@ -483,7 +483,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
                       reason: topHedge.reason || 'Portfolio protection',
                     };
                     
-                    console.log('💾 [ChatInterface] Saving hedge to localStorage:', hedgeDetails);
+                    logger.debug('💾 [ChatInterface] Saving hedge to localStorage', { component: 'ChatInterface', data: hedgeDetails });
                     
                     const settlementHistory = JSON.parse(localStorage.getItem('settlement_history') || '{}');
                     settlementHistory[result.batchId] = {
@@ -495,11 +495,11 @@ export function ChatInterface({ address: _address }: { address: string }) {
                     };
                     localStorage.setItem('settlement_history', JSON.stringify(settlementHistory));
                     
-                    console.log('✅ [ChatInterface] Hedge saved to localStorage:', settlementHistory);
+                    logger.debug('✅ [ChatInterface] Hedge saved to localStorage', { component: 'ChatInterface', data: settlementHistory });
                     
                     // Dispatch custom event to notify ActiveHedges component
                     window.dispatchEvent(new Event('hedgeAdded'));
-                    console.log('📡 [ChatInterface] Dispatched hedgeAdded event');
+                    logger.debug('📡 [ChatInterface] Dispatched hedgeAdded event', { component: 'ChatInterface' });
                     
                     setMessages(prev => [...prev, {
                       id: Date.now().toString(),
@@ -517,11 +517,11 @@ export function ChatInterface({ address: _address }: { address: string }) {
                     }]);
                     
                     setShowApprovalModal(false);
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setMessages(prev => [...prev, {
                       id: Date.now().toString(),
                       role: 'assistant',
-                      content: `❌ **Hedge Execution Failed**\n\n${error.message || 'Unknown error'}`,
+                      content: `❌ **Hedge Execution Failed**\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
                       timestamp: new Date(),
                       aiPowered: true,
                     }]);
@@ -575,7 +575,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
           break;
         }
 
-        default:
+        default: {
           setActiveAgent('Lead Agent');
           // Use LLM for conversational responses
           const llmResponse = await callLLM(textToSend);
@@ -583,6 +583,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
             content: llmResponse,
             agent: 'Lead Agent (LLM-Powered)',
           };
+        }
       }
 
       // Generate ZK proof for the response
@@ -601,7 +602,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
       
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Agent command failed:', error);
+      logger.error('Agent command failed', error instanceof Error ? error : undefined, { component: 'ChatInterface' });
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),

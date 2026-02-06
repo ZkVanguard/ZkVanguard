@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,6 +8,7 @@ import {
   Filter, Target, AlertTriangle, Lock, Eye, EyeOff, Info, FileSignature 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logger } from '../../lib/utils/logger';
 
 interface StrategyConfig {
   name: string;
@@ -154,12 +154,12 @@ export function AdvancedPortfolioCreator() {
           setStrategySigned(true);
           setZkProofGenerated(true);
         } catch (signError) {
-          console.error('User rejected signature:', signError);
+          logger.error('User rejected signature', signError instanceof Error ? signError : undefined, { component: 'AdvancedPortfolioCreator' });
           throw new Error('Signature required to proceed');
         }
       }
     } catch (error) {
-      console.error('ZK proof generation failed:', error);
+      logger.error('ZK proof generation failed', error instanceof Error ? error : undefined, { component: 'AdvancedPortfolioCreator' });
       throw error;
     }
   };
@@ -193,11 +193,11 @@ export function AdvancedPortfolioCreator() {
         if (strategyResponse.ok) {
           const data = await strategyResponse.json();
           setOnChainTxHash(data.onChainHash);
-          console.log('✅ Portfolio and strategy committed on-chain:', data);
+          logger.info('✅ Portfolio and strategy committed on-chain', { component: 'AdvancedPortfolioCreator', data });
         }
       }
     } catch (err) {
-      console.error('Failed to create portfolio:', err);
+      logger.error('Failed to create portfolio', err instanceof Error ? err : undefined, { component: 'AdvancedPortfolioCreator' });
       throw err;
     }
   };
@@ -403,7 +403,13 @@ function StrategyStep({
   aiPreset, 
   setAiPreset,
   onNext 
-}: any) {
+}: {
+  strategy: StrategyConfig;
+  setStrategy: React.Dispatch<React.SetStateAction<StrategyConfig>>;
+  aiPreset: string;
+  setAiPreset: (preset: string) => void;
+  onNext: () => void;
+}) {
   return (
     <div className="space-y-5 sm:space-y-6">
       <div>
@@ -714,7 +720,12 @@ function StrategyStep({
 }
 
 // Asset Filters Step
-function FiltersStep({ filters, setFilters, onNext, onBack }: any) {
+function FiltersStep({ filters, setFilters, onNext, onBack }: {
+  filters: AssetFilter;
+  setFilters: React.Dispatch<React.SetStateAction<AssetFilter>>;
+  onNext: () => void;
+  onBack: () => void;
+}) {
   const categories = ['DeFi', 'Layer1', 'Layer2', 'Gaming', 'NFT', 'Stablecoin', 'RWA'];
 
   return (
@@ -863,7 +874,14 @@ function ZKProtectionStep({
   onGenerateProof,
   onNext, 
   onBack 
-}: any) {
+}: {
+  strategyPrivate: boolean;
+  setStrategyPrivate: (value: boolean) => void;
+  zkProofGenerated: boolean;
+  onGenerateProof: () => Promise<void>;
+  onNext: () => void;
+  onBack: () => void;
+}) {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerateProof = async () => {
@@ -871,7 +889,7 @@ function ZKProtectionStep({
     try {
       await onGenerateProof();
     } catch (error) {
-      console.error('Failed to generate proof:', error);
+      logger.error('Failed to generate proof', error instanceof Error ? error : undefined, { component: 'ZKProtectionStep' });
     } finally {
       setIsGenerating(false);
     }
@@ -1057,7 +1075,16 @@ function ReviewStep({
   isConfirming,
   onCreate, 
   onBack 
-}: any) {
+}: {
+  strategy: StrategyConfig;
+  filters: AssetFilter;
+  strategyPrivate: boolean;
+  zkProofGenerated: boolean;
+  isPending: boolean;
+  isConfirming: boolean;
+  onCreate: () => void;
+  onBack: () => void;
+}) {
   return (
     <div className="space-y-5 sm:space-y-6">
       <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] mb-4 flex items-center gap-2">

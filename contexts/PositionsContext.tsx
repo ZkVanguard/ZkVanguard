@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -6,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
 import { useUserPortfolios } from '@/lib/contracts/hooks';
+import { logger } from '@/lib/utils/logger';
 
 interface Position {
   symbol: string;
@@ -56,12 +56,12 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
   // Debug: Log when address changes
   useEffect(() => {
-    console.log('🔑 [PositionsContext] Address changed:', address || 'NOT CONNECTED');
+    logger.debug('Address changed', { component: 'PositionsContext', data: address || 'NOT CONNECTED' });
   }, [address]);
 
   const fetchPositions = useCallback(async (isBackgroundRefresh = false) => {
     if (!address) {
-      console.log('⚠️ [PositionsContext] No address, skipping fetch');
+      logger.debug('No address, skipping fetch', { component: 'PositionsContext' });
       setPositionsData(null);
       return;
     }
@@ -72,14 +72,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     
     // OPTIMIZATION: Show cached data immediately if available (stale-while-revalidate)
     if (cached) {
-      console.log('⚡ [PositionsContext] Using cached positions (will refresh in background)');
+      logger.debug('Using cached positions (will refresh in background)', { component: 'PositionsContext' });
       setPositionsData(cached);
       setLoading(false);
       
       // Check if cache is fresh enough (< 45s), skip refresh if so
       const now = Date.now();
       if (now - lastFetchRef.current < 45000 && !isBackgroundRefresh) {
-        console.log('⏭️ [PositionsContext] Cache is fresh, skipping background refresh');
+        logger.debug('Cache is fresh, skipping background refresh', { component: 'PositionsContext' });
         return;
       }
       
@@ -90,7 +90,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     // Debounce: prevent fetching more than once per 2 seconds
     const now = Date.now();
     if (now - lastFetchRef.current < 2000 && !isBackgroundRefresh) {
-      console.log('⏭️ [PositionsContext] Skipping fetch - too soon after last request');
+      logger.debug('Skipping fetch - too soon after last request', { component: 'PositionsContext' });
       return;
     }
 
@@ -101,8 +101,8 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      console.log(`🔄 [PositionsContext] Fetching positions for ${address} (deduped)`);
-      console.log(`📊 [PositionsContext] Loading: CRO, devUSDC, WCRO balances...`);
+      logger.info('Fetching positions (deduped)', { component: 'PositionsContext', data: address });
+      logger.debug('Loading: CRO, devUSDC, WCRO balances', { component: 'PositionsContext' });
       lastFetchRef.current = now;
       
       // Use deduped fetch to prevent duplicate requests
@@ -118,14 +118,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error);
       }
 
-      console.log(`✅ [PositionsContext] Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`);
-      console.log(`📊 [PositionsContext] Positions:`, data.positions?.map((p: any) => `${p.symbol}: $${p.balanceUSD}`).join(', '));
+      logger.info(`Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`, { component: 'PositionsContext' });
+      logger.debug('Positions detail', { component: 'PositionsContext', data: data.positions?.map((p: Position) => `${p.symbol}: $${p.balanceUSD}`).join(', ') });
       setPositionsData(data);
       
       // Cache for 45 seconds (increased from 30s)
       cache.set(cacheKey, data, 45000);
     } catch (err) {
-      console.error('❌ [PositionsContext] Error fetching positions:', err);
+      logger.error('Error fetching positions', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
       setError(err instanceof Error ? err.message : 'Failed to fetch positions');
       // Only clear data on initial load errors, keep stale data on refresh errors
       if (!isBackgroundRefresh) {
@@ -150,7 +150,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('👁️ [PositionsContext] Page visible - refreshing positions');
+        logger.debug('Page visible - refreshing positions', { component: 'PositionsContext' });
         fetchPositions(true);
       }
     };
@@ -161,7 +161,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     // Longer polling interval: 2 minutes instead of 1 minute
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        console.log('⏰ [PositionsContext] Auto-refreshing positions...');
+        logger.debug('Auto-refreshing positions', { component: 'PositionsContext' });
         fetchPositions(true);
       }
     }, 120000); // 2 minutes
@@ -186,7 +186,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
-        console.error('[PositionsContext] Error counting hedges from API:', err);
+        logger.error('Error counting hedges from API', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
       }
     };
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Enhanced Chat Component with LLM Integration
  * Features: Streaming responses, typing indicators, better UX, Markdown rendering
@@ -16,7 +15,7 @@ interface ChatAction {
   id: string;
   label: string;
   type: string;
-  params: any;
+  params: Record<string, unknown>;
 }
 
 interface Message {
@@ -30,7 +29,7 @@ interface Message {
 
 interface EnhancedChatProps {
   address?: string;
-  onActionTrigger?: (action: string, params: any) => void;
+  onActionTrigger?: (action: string, params: Record<string, unknown>) => void;
 }
 
 const QUICK_PROMPTS = [

@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,6 +6,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicCl
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
 import { getVVSFinanceService } from '@/lib/services/VVSFinanceService';
+import { logger } from '@/lib/utils/logger';
 
 // Using VVS Finance SDK via API route
 
@@ -95,8 +95,8 @@ export function SwapModal({
     publicClient?.getChainId().then(chainId => {
       setIsTestnet(chainId === 338);
       if (chainId === 338) {
-        console.warn('⚠️ VVS Finance contracts only exist on Cronos MAINNET (chain 25)');
-        console.warn('💡 Switch to mainnet in MetaMask to execute real swaps');
+        logger.warn('⚠️ VVS Finance contracts only exist on Cronos MAINNET (chain 25)', { component: 'SwapModal' });
+        logger.warn('💡 Switch to mainnet in MetaMask to execute real swaps', { component: 'SwapModal' });
       }
     });
   }, [publicClient]);
@@ -125,7 +125,7 @@ export function SwapModal({
       const tokenAddress = BALANCE_TOKEN_ADDRESSES[tokenSymbol] || BALANCE_TOKEN_ADDRESSES[tokenSymbol.toUpperCase()];
       
       if (!tokenAddress) {
-        console.warn('No balance address for token:', tokenSymbol);
+        logger.warn('No balance address for token', { component: 'SwapModal', data: tokenSymbol });
         setTokenInBalance('0');
         return;
       }
@@ -137,7 +137,7 @@ export function SwapModal({
         setTokenInBalance(formatUnits(balance, decimals));
       } else {
         // For ERC20 tokens (devUSDC, VVS, etc.)
-        console.log('Fetching balance for', tokenSymbol, 'at', tokenAddress);
+        logger.debug('Fetching balance for token', { component: 'SwapModal', data: { tokenSymbol, tokenAddress } });
         const balance = await publicClient.readContract({
           address: tokenAddress as `0x${string}`,
           abi: ERC20_BALANCE_ABI,
@@ -145,11 +145,11 @@ export function SwapModal({
           args: [address],
         });
         const decimals = getTokenDecimals(tokenSymbol);
-        console.log('Balance result:', balance, 'decimals:', decimals);
+        logger.debug('Balance result', { component: 'SwapModal', data: { balance, decimals } });
         setTokenInBalance(formatUnits(balance as bigint, decimals));
       }
     } catch (error) {
-      console.error('Failed to fetch balance:', error);
+      logger.error('Failed to fetch balance', error instanceof Error ? error : undefined, { component: 'SwapModal' });
       setTokenInBalance('0');
     } finally {
       setBalanceLoading(false);
@@ -227,7 +227,7 @@ export function SwapModal({
         const decimals = getTokenDecimals(tokenIn);
         const amountInWei = parseUnits(amountIn, decimals);
 
-        console.log('🔄 Fetching quote:', { tokenIn, tokenOut, amountIn, decimals, amountInWei: amountInWei.toString() });
+        logger.debug('🔄 Fetching quote', { component: 'SwapModal', data: { tokenIn, tokenOut, amountIn, decimals, amountInWei: amountInWei.toString() } });
 
         const quote = await dexService.getSwapQuote({
           tokenIn,
@@ -239,19 +239,19 @@ export function SwapModal({
         const outDecimals = getTokenDecimals(tokenOut);
         const formattedOut = formatUnits(quote.amountOut, outDecimals);
         
-        console.log('✅ Quote received:', { 
+        logger.debug('✅ Quote received', { component: 'SwapModal', data: { 
           amountOut: quote.amountOut.toString(), 
           outDecimals, 
           formattedOut,
           priceImpact: quote.priceImpact,
           route: quote.route 
-        });
+        }});
         
         setAmountOut(formattedOut);
         setPriceImpact(quote.priceImpact);
         setRoute(quote.route);
       } catch (error) {
-        console.error('Failed to get quote:', error);
+        logger.error('Failed to get quote', error instanceof Error ? error : undefined, { component: 'SwapModal' });
         setAmountOut('0');
       } finally {
         setQuoteLoading(false);
@@ -324,7 +324,7 @@ export function SwapModal({
       setStep('zk-proof');
       setZkProofGenerating(true);
       
-      console.log('🔐 Generating ZK-STARK proof for VVS Finance swap...');
+      logger.info('🔐 Generating ZK-STARK proof for VVS Finance swap...', { component: 'SwapModal' });
       
       // Call ZK backend to generate proof
       try {
@@ -353,7 +353,7 @@ export function SwapModal({
         
         if (zkResponse.ok) {
           const zkResult = await zkResponse.json();
-          console.log('✅ ZK proof job created:', zkResult.job_id);
+          logger.info('✅ ZK proof job created', { component: 'SwapModal', data: zkResult.job_id });
           
           // Poll for proof completion (max 10 seconds for better UX)
           for (let i = 0; i < 10; i++) {
@@ -363,14 +363,14 @@ export function SwapModal({
               const status = await statusRes.json();
               if (status.status === 'completed' && status.proof) {
                 setZkProofHash(status.proof.merkle_root || status.proof.proof_hash || 'verified');
-                console.log('✅ ZK-STARK proof generated!', status.proof.merkle_root);
+                logger.info('✅ ZK-STARK proof generated!', { component: 'SwapModal', data: status.proof.merkle_root });
                 break;
               }
             }
           }
         }
       } catch (zkError) {
-        console.warn('⚠️ ZK backend not available, proceeding with DEX swap:', zkError);
+        logger.warn('⚠️ ZK backend not available, proceeding with DEX swap', { component: 'SwapModal', data: zkError });
         // Continue without ZK proof - swap is still valid
       }
       
@@ -391,6 +391,7 @@ export function SwapModal({
         if (needsApproval) {
           setStep('approve');
           const approvalCall = dexService.getApprovalContractCall(tokenInAddress, amountInWei);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           writeApprove(approvalCall as any);
           return;
         }
@@ -398,7 +399,7 @@ export function SwapModal({
 
       // Step 4: Execute VVS Finance swap using SDK trade object
       setStep('swap');
-      console.log('🔄 Executing VVS Finance swap with SDK...');
+      logger.info('🔄 Executing VVS Finance swap with SDK...', { component: 'SwapModal' });
       
       // Get the full trade object from VVS SDK via API
       const tradeResponse = await fetch(`/api/x402/swap?tokenIn=${tokenIn}&tokenOut=${tokenOut}&amountIn=${amountIn}`);
@@ -424,12 +425,13 @@ export function SwapModal({
         quote
       );
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       writeSwap(swapCall as any);
       
-    } catch (error: any) {
-      console.error('Swap error:', error);
+    } catch (error: unknown) {
+      logger.error('Swap error', error instanceof Error ? error : undefined, { component: 'SwapModal' });
       setStep('error');
-      setErrorMessage(error.message || 'Swap failed');
+      setErrorMessage(error instanceof Error ? error.message : 'Swap failed');
       setZkProofGenerating(false);
     }
   };
@@ -458,6 +460,7 @@ export function SwapModal({
       quote
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     writeSwap(swapCall as any);
   };
 

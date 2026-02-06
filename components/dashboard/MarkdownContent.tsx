@@ -1,4 +1,3 @@
-/* eslint-disable no-useless-escape */
 /**
  * Simple Markdown Renderer for Chat Messages
  * Renders common markdown syntax without external dependencies
@@ -51,8 +50,8 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       }
 
       // List items (• or -)
-      if (line.match(/^[•\-]\s+/)) {
-        listItems.push(line.replace(/^[•\-]\s+/, ''));
+      if (line.match(/^[•-]\s+/)) {
+        listItems.push(line.replace(/^[•-]\s+/, ''));
         continue;
       }
 
@@ -114,13 +113,13 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       // Code: `text` (do first to avoid conflicts)
       .replace(/`([^`]+)`/g, '<code class="bg-[#f5f5f7] px-1.5 py-0.5 rounded-[4px] text-[12px] font-mono text-[#AF52DE] border border-black/5">$1</code>')
       // Bold: **text** or __text__
-      .replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-semibold text-[#1d1d1f]">$1</strong>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-[#1d1d1f]">$1</strong>')
       .replace(/__([^_]+)__/g, '<strong class="font-semibold text-[#1d1d1f]">$1</strong>')
       // Italic: *text* or _text_
-      .replace(/\*([^\*]+)\*/g, '<em class="italic text-[#1d1d1f]">$1</em>')
+      .replace(/\*([^*]+)\*/g, '<em class="italic text-[#1d1d1f]">$1</em>')
       .replace(/_([^_]+)_/g, '<em class="italic text-[#1d1d1f]">$1</em>')
       // Links: [text](url)
-      .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#007AFF] hover:text-[#0051D5] underline decoration-[#007AFF]/40 transition-colors">$1</a>');
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#007AFF] hover:text-[#0051D5] underline decoration-[#007AFF]/40 transition-colors">$1</a>');
 
     return result;
   };

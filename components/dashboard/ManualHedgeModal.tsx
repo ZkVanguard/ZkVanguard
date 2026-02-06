@@ -1,10 +1,10 @@
-/* eslint-disable no-console */
 'use client';
 
 import { useState } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Lock, Database, Wallet, Copy, ExternalLink, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
+import { logger } from '@/lib/utils/logger';
 
 interface ManualHedgeModalProps {
   isOpen: boolean;
@@ -140,14 +140,17 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
 
     try {
       // Call the API endpoint to execute hedge on Moonlander
-      console.log('🛡️ MANUAL HEDGE REQUEST', {
-        asset,
-        side: hedgeType,
-        notionalValue: Math.round(sizeNum * entryNum),
-        leverage,
-        stopLoss: stopNum,
-        takeProfit: targetNum,
-        reason: reason || `Manual ${hedgeType} hedge on ${asset}`
+      logger.info('Manual hedge request', {
+        component: 'ManualHedgeModal',
+        data: {
+          asset,
+          side: hedgeType,
+          notionalValue: Math.round(sizeNum * entryNum),
+          leverage,
+          stopLoss: stopNum,
+          takeProfit: targetNum,
+          reason: reason || `Manual ${hedgeType} hedge on ${asset}`
+        }
       });
 
       setCreatingStep('zk-proof');
@@ -171,7 +174,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
         })
       });
 
-      console.log('🛡️ MANUAL HEDGE API RESPONSE', response.status);
+      logger.info('Manual hedge API response', { component: 'ManualHedgeModal', data: response.status });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: `API error: ${response.status}` }));
@@ -179,7 +182,7 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
       }
 
       const data = await response.json();
-      console.log('🛡️ MANUAL HEDGE SUCCESS', data);
+      logger.info('Manual hedge success', { component: 'ManualHedgeModal', data });
 
       if (data.success) {
         setCreatingStep('wallet-proof');

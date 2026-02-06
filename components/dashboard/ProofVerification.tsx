@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 import { logger } from '../../lib/utils/logger';
 
@@ -146,7 +145,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         
         if (commitmentLog && commitmentLog.topics[1]) {
           normalizedProofHash = commitmentLog.topics[1];
-          console.log('✅ Proof hash extracted from transaction:', normalizedProofHash);
+          logger.debug('✅ Proof hash extracted from transaction', { component: 'ProofVerification', data: normalizedProofHash });
         }
       }
 
@@ -159,8 +158,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
         ? normalizedProofHash.padEnd(66, '0')
         : '0x' + normalizedProofHash.padEnd(64, '0');
 
-      console.log('📊 Querying contract:', GASLESS_VERIFIER_ADDRESS);
-      console.log('📊 Proof hash:', paddedProofHash);
+      logger.debug('📊 Querying contract', { component: 'ProofVerification', data: { contract: GASLESS_VERIFIER_ADDRESS, proofHash: paddedProofHash } });
 
       // Query on-chain commitment directly
       const commitment = await publicClient?.readContract({
@@ -185,13 +183,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
 
       const [onChainProofHash, merkleRoot, timestamp, verifier, verified, securityLevel] = commitment;
 
-      logger.debug('✅ ON-CHAIN COMMITMENT VERIFIED:');
-      console.log('   Proof Hash:', onChainProofHash);
-      console.log('   Merkle Root:', merkleRoot);
-      console.log('   Timestamp:', new Date(Number(timestamp) * 1000).toISOString());
-      console.log('   Verifier:', verifier);
-      console.log('   Verified:', verified);
-      console.log('   Security Level:', securityLevel.toString(), 'bits');
+      logger.debug('✅ ON-CHAIN COMMITMENT VERIFIED:', { component: 'ProofVerification', data: { proofHash: onChainProofHash, merkleRoot, timestamp: new Date(Number(timestamp) * 1000).toISOString(), verifier, verified, securityLevel: securityLevel.toString() } });
 
       if (!verified) {
         throw new Error('Proof not found on Cronos blockchain');
@@ -223,15 +215,13 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
               implementation: 'AuthenticZKStark'
             };
             
-            logger.debug('✅ ZK-STARK PROOF VERIFIED:');
-            console.log('   Valid:', zkResult.verified);
-            console.log('   Verification Time:', zkResult.duration_ms, 'ms');
+            logger.debug('✅ ZK-STARK PROOF VERIFIED', { component: 'ProofVerification', data: { valid: zkResult.verified, verificationTime: zkResult.duration_ms } });
             logger.debug('   System: ZK-STARK (Authentic)');
           } else {
             logger.debug('⚠️  ZK verification endpoint not responding (backend may be down)');
           }
         } catch (zkError) {
-          console.log('⚠️  ZK verification error:', zkError);
+          logger.warn('⚠️  ZK verification error', { component: 'ProofVerification', data: zkError });
           logger.debug('   On-chain proof still valid - ZK backend verification optional');
         }
       } else {
@@ -276,7 +266,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       });
 
     } catch (err) {
-      console.error('❌ Comprehensive verification error:', err);
+      logger.error('❌ Comprehensive verification error', err instanceof Error ? err : undefined, { component: 'ProofVerification' });
       setError(err instanceof Error ? err.message : 'Comprehensive verification failed');
     } finally {
       setComprehensiveVerifying(false);
@@ -313,7 +303,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       }
       
       let paddedProofHash = '0x' + hashWithoutPrefix;
-      console.log('🔍 Normalized proof hash:', paddedProofHash);
+      logger.debug('🔍 Normalized proof hash', { component: 'ProofVerification', data: paddedProofHash });
 
       // Step 1: Check transaction if provided and extract proof hash from logs
       let txExists = false;
@@ -322,7 +312,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       let extractedProofHash: string | null = null;
 
       if (txHash.trim()) {
-        console.log('🔍 Verifying transaction:', txHash);
+        logger.debug('🔍 Verifying transaction', { component: 'ProofVerification', data: txHash });
         const tx = await publicClient?.getTransaction({ 
           hash: txHash as `0x${string}` 
         });
@@ -337,8 +327,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
           
           // Extract proof hash from CommitmentStored event logs
           if (receipt?.logs && receipt.logs.length > 0) {
-            console.log('📋 Found', receipt.logs.length, 'logs in transaction');
-            console.log('   Contract address from tx:', contractAddress);
+            logger.debug('📋 Transaction logs found', { component: 'ProofVerification', data: { logCount: receipt.logs.length, contractAddress } });
             
             // Look for CommitmentStored event (first topic is event signature, second is indexed proofHash)
             // Try to find the log from ANY contract that has the right structure
@@ -347,22 +336,19 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             );
             
             if (commitmentStoredLog) {
-              logger.debug('✅ Found event log with topics');
-              console.log('   From contract:', commitmentStoredLog.address);
-              console.log('   Topics:', commitmentStoredLog.topics);
+              logger.debug('✅ Found event log with topics', { component: 'ProofVerification', data: { fromContract: commitmentStoredLog.address, topics: commitmentStoredLog.topics } });
               
               // The first indexed parameter (topics[1]) should be the proofHash
               if (commitmentStoredLog.topics[1]) {
                 extractedProofHash = commitmentStoredLog.topics[1];
-                console.log('📝 Extracted proof hash from transaction logs:', extractedProofHash);
+                logger.debug('📝 Extracted proof hash from transaction logs', { component: 'ProofVerification', data: extractedProofHash });
                 
                 // Update the contract address to the one that actually emitted the event
                 contractAddress = commitmentStoredLog.address;
-                console.log('📍 Using contract address:', contractAddress);
+                logger.debug('📍 Using contract address', { component: 'ProofVerification', data: contractAddress });
               }
             } else {
-              logger.debug('⚠️ No event logs with topics found');
-              console.log('   All logs:', receipt.logs.map(l => ({ address: l.address, topics: l.topics.length })));
+              logger.debug('⚠️ No event logs with topics found', { component: 'ProofVerification', data: receipt.logs.map(l => ({ address: l.address, topics: l.topics.length })) });
             }
           }
           
@@ -381,7 +367,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       // Step 2: Query commitment from contract using public mapping
       // Use the contract address from transaction if available, otherwise use default
       const actualContractAddress = contractAddress || '0xf4a4bBF21b2fa9C6Bd232ee1Cd0C847374Ccf6D3';
-      console.log('🔍 Querying contract:', actualContractAddress);
+      logger.debug('🔍 Querying contract', { component: 'ProofVerification', data: actualContractAddress });
       
       const commitment = await publicClient?.readContract({
         address: actualContractAddress as `0x${string}`,
@@ -469,11 +455,11 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                 match: statementVerified
               });
             } catch (e) {
-              console.log('Invalid statement JSON:', e);
+              logger.debug('Invalid statement JSON', { component: 'ProofVerification', data: e });
             }
           }
         } catch (e) {
-          console.log('Could not retrieve proof metadata:', e);
+          logger.debug('Could not retrieve proof metadata', { component: 'ProofVerification', data: e });
         }
         
         setResult({
@@ -497,7 +483,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       }
 
     } catch (err) {
-      console.error('Verification error:', err);
+      logger.error('Verification error', err instanceof Error ? err : undefined, { component: 'ProofVerification' });
       setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setVerifying(false);
@@ -677,7 +663,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                     <div>
                       <div className="text-[#86868b]">Security Level:</div>
                       <div className="text-[#34C759] font-semibold">
-                        {(result.comprehensiveVerification.onChainVerification as any).securityLevel || result.securityLevel} bits
+                        {(result.comprehensiveVerification.onChainVerification as Record<string, unknown>).securityLevel as React.ReactNode || result.securityLevel} bits
                       </div>
                     </div>
                     <div>
@@ -754,8 +740,8 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                     <li>✅ Your browser directly queried Cronos blockchain (no middleman)</li>
                     <li>✅ The ZK-STARK proof was verified cryptographically via authentic system</li>
                     <li>✅ The proof is immutably stored on-chain (cannot be tampered)</li>
-                    <li>✅ Verification method: <span className="text-[#34C759] font-mono">{(result.comprehensiveVerification as any).metadata?.verificationMethod || 'Client-Side Blockchain Verification'}</span></li>
-                    <li>✅ Trust model: <span className="text-[#AF52DE] font-semibold">{(result.comprehensiveVerification as any).metadata?.trustModel || 'Trustless - Verified in Your Browser'}</span></li>
+                    <li>✅ Verification method: <span className="text-[#34C759] font-mono">{((result.comprehensiveVerification as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.verificationMethod as React.ReactNode || 'Client-Side Blockchain Verification'}</span></li>
+                    <li>✅ Trust model: <span className="text-[#AF52DE] font-semibold">{((result.comprehensiveVerification as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.trustModel as React.ReactNode || 'Trustless - Verified in Your Browser'}</span></li>
                   </ul>
                   <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
                     <strong>🔍 Transparency:</strong> All verification happened in your browser! Open DevTools (F12) → Console 
