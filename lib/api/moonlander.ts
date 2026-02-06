@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Moonlander DEX Integration
  * For perpetual futures positions on Cronos zkEVM

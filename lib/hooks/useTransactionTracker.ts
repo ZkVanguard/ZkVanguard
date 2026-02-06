@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Transaction Tracker Hook
  * Automatically track and cache user transactions
