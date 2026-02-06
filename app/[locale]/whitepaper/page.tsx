@@ -1,4 +1,3 @@
-/* eslint-disable no-useless-escape */
 "use client";
 
 import Link from 'next/link';
@@ -23,9 +22,9 @@ export default function WhitepaperPage() {
         .light-theme a, .light-theme li {
           color: #1D1D1F !important;
         }
-        .light-theme .text-\[\#86868b\] { color: #86868b !important; }
-        .light-theme .text-\[\#424245\] { color: #424245 !important; }
-        .light-theme .text-\[\#007AFF\] { color: #007AFF !important; }
+        .light-theme .text-\\[\\#86868b\\] { color: #86868b !important; }
+        .light-theme .text-\\[\\#424245\\] { color: #424245 !important; }
+        .light-theme .text-\\[\\#007AFF\\] { color: #007AFF !important; }
         .light-theme .text-white { color: white !important; }
         .light-theme .text-red-600 { color: #dc2626 !important; }
         .light-theme .text-red-500 { color: #ef4444 !important; }
@@ -36,8 +35,8 @@ export default function WhitepaperPage() {
         .light-theme .text-orange-600 { color: #ea580c !important; }
         .light-theme .text-yellow-600 { color: #ca8a04 !important; }
         .light-theme .text-purple-600 { color: #9333ea !important; }
-        .light-theme .bg-\[\#007AFF\] { color: white !important; }
-        .light-theme .bg-\[\#007AFF\] * { color: white !important; }
+        .light-theme .bg-\\[\\#007AFF\\] { color: white !important; }
+        .light-theme .bg-\\[\\#007AFF\\] * { color: white !important; }
       `}</style>
       <Navbar />
       

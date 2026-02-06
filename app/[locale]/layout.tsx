@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
@@ -48,7 +47,7 @@ export default async function LocaleLayout({
   params: { locale: string };
 }) {
   // Validate locale
-  if (!locales.includes(locale as any)) {
+  if (!locales.includes(locale as typeof locales[number])) {
     notFound();
   }
 

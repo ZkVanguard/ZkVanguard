@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { Shield, CheckCircle, Code, Cpu, Lock, FileCode, Zap, Upload, AlertCircle } from 'lucide-react';
+import { logger } from '@/lib/utils/logger';
 
 interface AuthenticityData {
   authentic: boolean;
@@ -93,7 +93,7 @@ export default function AuthenticityVerificationPage() {
       if (encodedProof) {
         try {
           const decoded = atob(decodeURIComponent(encodedProof));
-          const proofData = JSON.parse(decoded);
+          const proofData = JSON.parse(decoded) as Record<string, unknown>;
           setProofInput(JSON.stringify(proofData, null, 2));
           
           // Auto-verify the proof
@@ -101,7 +101,7 @@ export default function AuthenticityVerificationPage() {
             verifyEmbeddedProof(proofData);
           }, 500);
         } catch (err) {
-          console.error('Failed to decode shared proof:', err);
+          logger.error('Failed to decode shared proof', err instanceof Error ? err : undefined, { component: 'AuthenticityVerification' });
         }
       }
     }
@@ -137,7 +137,7 @@ export default function AuthenticityVerificationPage() {
     setVerificationResult(null);
 
     try {
-      const proofData = JSON.parse(proofInput);
+      const proofData = JSON.parse(proofInput) as Record<string, unknown>;
       await performVerification(proofData);
     } catch (err) {
       setVerificationResult({
@@ -149,25 +149,25 @@ export default function AuthenticityVerificationPage() {
     }
   };
 
-  const verifyEmbeddedProof = async (proofData: any) => {
+  const verifyEmbeddedProof = async (proofData: Record<string, unknown>) => {
     setVerifying(true);
     try {
       await performVerification(proofData);
     } catch (err) {
-      console.error('Embedded proof verification failed:', err);
+      logger.error('Embedded proof verification failed', err instanceof Error ? err : undefined, { component: 'AuthenticityVerification' });
     } finally {
       setVerifying(false);
     }
   };
 
-  const performVerification = async (proofData: any) => {
+  const performVerification = async (proofData: Record<string, unknown>) => {
     const response = await fetch('/api/zk-proof/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        proof: proofData.proof || proofData,
-        statement: proofData.statement || {},
-        claim: proofData.claim
+        proof: (proofData as Record<string, unknown>).proof || proofData,
+        statement: (proofData as Record<string, unknown>).statement || {},
+        claim: (proofData as Record<string, unknown>).claim
       })
     });
 
