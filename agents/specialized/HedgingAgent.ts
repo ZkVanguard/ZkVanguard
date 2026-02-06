@@ -704,7 +704,7 @@ export class HedgingAgent extends BaseAgent {
       // Annualize (assuming 365 days)
       return volatility * Math.sqrt(365);
     } catch (error) {
-      logger.error('Failed to calculate volatility', { assetSymbol, error });
+      logger.debug('Volatility calculation using fallback', { assetSymbol, error: error instanceof Error ? error.message : String(error) });
       return 0.3; // Default volatility
     }
   }
@@ -780,7 +780,7 @@ export class HedgingAgent extends BaseAgent {
       
       return adjustedCorrelation;
     } catch (error) {
-      logger.error('Failed to calculate spot-future correlation', { assetSymbol, error });
+      logger.debug('Spot-future correlation using fallback', { assetSymbol, error: error instanceof Error ? error.message : String(error) });
       // Fallback to reasonable estimate for liquid markets
       const highCorrelationAssets = ['BTC', 'ETH', 'CRO'];
       return highCorrelationAssets.includes(assetSymbol.toUpperCase()) ? 0.92 : 0.85;

@@ -603,12 +603,17 @@ Respond ONLY with valid JSON, no explanation.`,
       throw new Error(`Agent not found: ${agentType}`);
     }
 
+    // Build parameters from payload (excluding 'type') for agent compatibility
+    const { type: _type, ...params } = taskPayload as Record<string, unknown>;
+
     const task: AgentTask = {
       id: uuidv4(),
+      action: payload.type,
       type: payload.type,
       status: 'queued',
       priority: 1,
       payload: taskPayload,
+      parameters: params,
       createdAt: new Date(),
     };
 

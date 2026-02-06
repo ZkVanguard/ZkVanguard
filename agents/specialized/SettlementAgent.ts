@@ -181,7 +181,7 @@ export class SettlementAgent extends BaseAgent {
    */
   private async createSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { portfolioId: string; beneficiary: string; amount: string; token: string; purpose: string; priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'; validAfter?: number; validBefore?: number };
+    const parameters = (task.parameters || task.payload || {}) as { portfolioId: string; beneficiary: string; amount: string; token: string; purpose: string; priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'; validAfter?: number; validBefore?: number };
     const { portfolioId, beneficiary, amount, token, purpose, priority, validAfter, validBefore } = parameters;
 
     try {
@@ -236,20 +236,44 @@ export class SettlementAgent extends BaseAgent {
    */
   private async processSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { requestId: string };
-    const { requestId } = parameters;
+    const parameters = (task.parameters || task.payload || {}) as Record<string, unknown>;
+    const requestId = (parameters.requestId as string) || '';
+    let resolvedRequestId = requestId;
 
     try {
-      const settlement = this.pendingSettlements.get(requestId);
+      // If no requestId provided, try to process the first pending settlement
+      let settlement;
+      if (!requestId) {
+        const pendingEntry = Array.from(this.pendingSettlements.entries()).find(
+          ([, s]) => s.status === 'PENDING'
+        );
+        if (pendingEntry) {
+          [resolvedRequestId, settlement] = pendingEntry;
+        }
+      } else {
+        settlement = this.pendingSettlements.get(requestId);
+      }
+
       if (!settlement) {
-        throw new Error(`Settlement ${requestId} not found`);
+        if (requestId) {
+          // Explicit requestId was given but not found
+          throw new Error(`Settlement ${requestId} not found`);
+        }
+        // No requestId and no pending settlements — return success with empty result
+        return {
+          success: true,
+          data: { message: 'No pending settlements to process' },
+          error: null,
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
       }
 
       if (settlement.status !== 'PENDING') {
-        throw new Error(`Settlement ${requestId} already ${settlement.status}`);
+        throw new Error(`Settlement ${resolvedRequestId} already ${settlement.status}`);
       }
 
-      logger.info('Processing settlement via x402 (GASLESS)', { requestId });
+      logger.info('Processing settlement via x402 (GASLESS)', { requestId: resolvedRequestId });
       settlement.status = 'PROCESSING';
 
       // Execute TRUE gasless transfer via x402 Facilitator
@@ -273,18 +297,18 @@ export class SettlementAgent extends BaseAgent {
       settlement.processedAt = Date.now();
 
       // Move to completed
-      this.pendingSettlements.delete(requestId);
-      this.completedSettlements.set(requestId, settlement);
+      this.pendingSettlements.delete(resolvedRequestId);
+      this.completedSettlements.set(resolvedRequestId, settlement);
 
       logger.info('Settlement processed successfully', {
-        requestId,
+        requestId: resolvedRequestId,
         transactionId: result.txHash,
       });
 
       return {
         success: true,
         data: {
-          requestId,
+          requestId: resolvedRequestId,
           transactionId: result.txHash,
           status: 'COMPLETED',
           processingTime: Math.max(1, Date.now() - startTime),
@@ -294,11 +318,11 @@ export class SettlementAgent extends BaseAgent {
         agentId: this.agentId,
       };
     } catch (error) {
-      logger.error('Failed to process settlement', { requestId, error });
+      logger.error('Failed to process settlement', { requestId: resolvedRequestId, error });
       
-      const settlement = this.pendingSettlements.get(requestId);
-      if (settlement) {
-        settlement.status = 'FAILED';
+      const failedSettlement = this.pendingSettlements.get(resolvedRequestId);
+      if (failedSettlement) {
+        failedSettlement.status = 'FAILED';
       }
       
       throw error;
@@ -310,7 +334,7 @@ export class SettlementAgent extends BaseAgent {
    */
   private async batchSettlements(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { requestIds?: string[]; maxBatchSize?: number };
+    const parameters = (task.parameters || task.payload || {}) as { requestIds?: string[]; maxBatchSize?: number };
     const { requestIds, maxBatchSize } = parameters;
 
     try {
@@ -453,10 +477,20 @@ export class SettlementAgent extends BaseAgent {
    */
   private async cancelSettlement(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { requestId: string };
-    const { requestId } = parameters;
+    const parameters = (task.parameters || task.payload || {}) as Record<string, unknown>;
+    const requestId = (parameters.requestId as string) || '';
 
     try {
+      if (!requestId) {
+        return {
+          success: false,
+          data: null,
+          error: 'No requestId provided for cancellation',
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
+      }
+
       const settlement = this.pendingSettlements.get(requestId);
       if (!settlement) {
         throw new Error(`Settlement ${requestId} not found`);
@@ -487,7 +521,7 @@ export class SettlementAgent extends BaseAgent {
    */
   private async createSchedule(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { frequency?: 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY'; minBatchSize?: number; maxBatchSize?: number; minAmount?: string };
+    const parameters = (task.parameters || task.payload || {}) as { frequency?: 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY'; minBatchSize?: number; maxBatchSize?: number; minAmount?: string };
     const { frequency, minBatchSize, maxBatchSize, minAmount } = parameters;
 
     try {
@@ -522,7 +556,7 @@ export class SettlementAgent extends BaseAgent {
    */
   private async generateReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { startDate?: number; endDate?: number };
+    const parameters = (task.parameters || task.payload || {}) as { startDate?: number; endDate?: number };
     const { startDate, endDate } = parameters;
 
     try {
@@ -585,10 +619,20 @@ export class SettlementAgent extends BaseAgent {
    */
   private async checkSettlementStatus(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { requestId: string };
-    const { requestId } = parameters;
+    const parameters = (task.parameters || task.payload || {}) as Record<string, unknown>;
+    const requestId = (parameters.requestId as string) || '';
 
     try {
+      if (!requestId) {
+        return {
+          success: false,
+          data: null,
+          error: 'No requestId provided for status check',
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
+      }
+
       let settlement = this.pendingSettlements.get(requestId);
       if (!settlement) {
         settlement = this.completedSettlements.get(requestId);

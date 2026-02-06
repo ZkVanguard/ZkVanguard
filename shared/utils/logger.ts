@@ -13,6 +13,7 @@ import fs from 'fs';
 // Detect serverless environment (Vercel, AWS Lambda, etc.)
 const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
 const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
 
 // Only create logs directory in non-serverless environments
 let logsDir: string | null = null;
@@ -94,6 +95,7 @@ if (isServerless || isProduction) {
 // Create logger instance
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
+  silent: isTest,
   format: customFormat,
   defaultMeta: { service: 'zkvanguard' },
   transports,

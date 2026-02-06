@@ -12,9 +12,15 @@ interface LogContext {
 }
 
 const isDevelopment = process.env.NODE_ENV === 'development';
+const isTest = process.env.NODE_ENV === 'test';
 
 class Logger {
   private log(level: LogLevel, message: string, context?: LogContext): void {
+    // Suppress all logs during test runs to keep output clean
+    if (isTest) {
+      return;
+    }
+
     if (!isDevelopment && (level === 'info' || level === 'debug')) {
       return;
     }
