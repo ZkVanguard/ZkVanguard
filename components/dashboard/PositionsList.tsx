@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
@@ -10,6 +9,68 @@ import { WithdrawModal } from './WithdrawModal';
 import PortfolioDetailModal from './PortfolioDetailModal';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
+import { logger } from '@/lib/utils/logger';
+
+interface Position {
+  symbol: string;
+  balance: string;
+  balanceUSD: string;
+  price: string;
+  change24h: number;
+}
+
+interface AgentRecommendation {
+  action: 'WITHDRAW' | 'HEDGE' | 'ADD_FUNDS' | 'HOLD';
+  confidence: number;
+  reasoning: string[];
+  riskScore: number;
+  agentAnalysis: {
+    riskAgent: string;
+    hedgingAgent: string;
+    leadAgent: string;
+  };
+  recommendations: string[];
+}
+
+interface SettlementBatch {
+  type: string;
+  status: string;
+}
+
+interface PortfolioAssetDetail {
+  symbol: string;
+  address: string;
+  allocation: number;
+  value: number;
+  change24h: number;
+}
+
+interface PortfolioTransaction {
+  type: 'deposit' | 'withdraw' | 'rebalance';
+  timestamp: number;
+  amount?: number;
+  token?: string;
+  changes?: { from: number; to: number; asset: string }[];
+  txHash: string;
+}
+
+interface PortfolioDetail {
+  id: number;
+  name: string;
+  totalValue: number;
+  status: 'FUNDED' | 'EMPTY' | 'NEW';
+  targetAPY: number;
+  riskLevel: string;
+  currentYield: number;
+  assets: PortfolioAssetDetail[];
+  lastRebalanced: number;
+  transactions: PortfolioTransaction[];
+  aiAnalysis: {
+    summary: string;
+    recommendations: string[];
+    riskAssessment: string;
+  };
+}
 
 interface PositionsListProps {
   address: string;
@@ -60,7 +121,7 @@ const TokenIcon = memo(({ symbol }: { symbol: string }) => {
 TokenIcon.displayName = 'TokenIcon';
 
 // Memoized position row component
-const PositionRow = memo(({ position, idx }: { position: any; idx: number }) => (
+const PositionRow = memo(({ position, idx }: { position: Position; idx: number }) => (
   <div key={idx} className="px-3 sm:px-4 py-3 sm:py-4 hover:bg-white/50 transition-colors">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3 sm:gap-4">
@@ -121,10 +182,10 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
 
   // Portfolio detail modal state
   const [portfolioDetailOpen, setPortfolioDetailOpen] = useState(false);
-  const [selectedDetailPortfolio, setSelectedDetailPortfolio] = useState<any>(null);
+  const [selectedDetailPortfolio, setSelectedDetailPortfolio] = useState<PortfolioDetail | null>(null);
 
   // Agent recommendation state
-  const [agentRecommendation, setAgentRecommendation] = useState<any>(null);
+  const [agentRecommendation, setAgentRecommendation] = useState<AgentRecommendation | null>(null);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [showRecommendationModal, setShowRecommendationModal] = useState(false);
   const [analyzedPortfolio, setAnalyzedPortfolio] = useState<OnChainPortfolio | null>(null);
@@ -163,15 +224,13 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       });
 
       // FETCH REAL PREDICTIONS from Polymarket/Delphi
-      console.log('🔮 Fetching real prediction market data for assets:', portfolioAssets);
+      logger.info('Fetching real prediction market data for assets', { component: 'PositionsList', data: portfolioAssets });
       let predictions: PredictionMarket[] = [];
       try {
         predictions = await DelphiMarketService.getRelevantMarkets(portfolioAssets);
-        console.log(`✅ Got ${predictions.length} predictions from Polymarket/Delphi:`, 
-          predictions.slice(0, 3).map(p => ({ q: p.question.slice(0, 50), prob: p.probability, rec: p.recommendation }))
-        );
+        logger.info(`Got ${predictions.length} predictions from Polymarket/Delphi`, { component: 'PositionsList', data: predictions.slice(0, 3).map(p => ({ q: p.question.slice(0, 50), prob: p.probability, rec: p.recommendation })) });
       } catch (predError) {
-        console.warn('⚠️ Failed to fetch predictions:', predError);
+        logger.warn('Failed to fetch predictions', { component: 'PositionsList', error: String(predError) });
         predictions = [];
       }
 
@@ -198,7 +257,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
         if (settlements) {
           const settlementData = JSON.parse(settlements);
           hedgeSignals = Object.values(settlementData).filter(
-            (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
+            (batch: SettlementBatch) => batch.type === 'hedge' && batch.status !== 'closed'
           ).length;
         }
       }
@@ -207,9 +266,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       const highRiskPredictions = predictions.filter(
         p => p.recommendation === 'HEDGE' || (p.impact === 'HIGH' && p.probability > 60)
       );
-      console.log(`🚨 High risk predictions: ${highRiskPredictions.length}`, 
-        highRiskPredictions.map(p => ({ q: p.question.slice(0, 40), prob: p.probability }))
-      );
+      logger.info(`High risk predictions: ${highRiskPredictions.length}`, { component: 'PositionsList', data: highRiskPredictions.map(p => ({ q: p.question.slice(0, 40), prob: p.probability })) });
 
       const response = await fetch('/api/agents/portfolio-action', {
         method: 'POST',
@@ -244,10 +301,10 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
         setAgentRecommendation(data);
         setShowRecommendationModal(true);
       } else {
-        console.error('Failed to get agent recommendation');
+        logger.error('Failed to get agent recommendation', undefined, { component: 'PositionsList' });
       }
     } catch (error) {
-      console.error('Error fetching agent recommendation:', error);
+      logger.error('Error fetching agent recommendation', error, { component: 'PositionsList' });
     } finally {
       setRecommendationLoading(false);
     }
@@ -277,7 +334,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       return;
     }
 
-    console.log(`📊 [PositionsList] Processing ${userPortfolios.length} user portfolios (parallel)`);
+    logger.info(`Processing ${userPortfolios.length} user portfolios (parallel)`, { component: 'PositionsList' });
     const startTime = Date.now();
     
     // PARALLEL: Fetch all portfolio assets simultaneously
@@ -314,7 +371,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
             }
           }
         } catch (err) {
-          console.warn(`⚠️ [PositionsList] Failed to fetch assets for portfolio ${p.id}:`, err);
+          logger.warn(`Failed to fetch assets for portfolio ${p.id}`, { component: 'PositionsList', error: String(err) });
         }
         
         return portfolio;
@@ -323,7 +380,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     // Wait for all portfolios in parallel
     const portfolios = await Promise.all(portfolioPromises);
     setOnChainPortfolios(portfolios);
-    console.log(`⚡ [PositionsList] Loaded ${portfolios.length} portfolios in ${Date.now() - startTime}ms`);
+    logger.info(`Loaded ${portfolios.length} portfolios in ${Date.now() - startTime}ms`, { component: 'PositionsList' });
   }, [userPortfolios]);
 
   useEffect(() => {
@@ -651,22 +708,22 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                       : 'bg-[#f5f5f7] border-2 border-dashed border-[#d1d1d6]'
                   }`}
                   onClick={async () => {
-                    console.log(`🔍 Opening portfolio #${portfolio.id} detail - Fetching fresh data...`);
-                    console.log(`📊 Current portfolio.assets:`, portfolio.assets);
-                    console.log(`💰 Current portfolio.assetBalances:`, portfolio.assetBalances);
+                    logger.info(`Opening portfolio #${portfolio.id} detail - Fetching fresh data...`, { component: 'PositionsList' });
+                    logger.debug(`Current portfolio.assets: ${JSON.stringify(portfolio.assets)}`, { component: 'PositionsList' });
+                    logger.debug(`Current portfolio.assetBalances: ${JSON.stringify(portfolio.assetBalances)}`, { component: 'PositionsList' });
                     
                     // Force refresh portfolio data from API (bypass cache)
                     try {
                       const freshRes = await fetch(`/api/portfolio/${portfolio.id}?refresh=true`);
                       if (freshRes.ok) {
                         const freshData = await freshRes.json();
-                        console.log(`✅ Fresh API data:`, freshData);
+                        logger.debug(`Fresh API data received for portfolio ${portfolio.id}`, { component: 'PositionsList' });
                         portfolio.assets = freshData.assets || [];
                         portfolio.assetBalances = freshData.assetBalances || [];
                         portfolio.calculatedValueUSD = freshData.calculatedValueUSD || 0;
                       }
                     } catch (err) {
-                      console.warn('Failed to fetch fresh portfolio data:', err);
+                      logger.warn('Failed to fetch fresh portfolio data', { component: 'PositionsList', error: String(err) });
                     }
                     
                     // Calculate real allocation percentages
@@ -684,19 +741,19 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                       };
                     }) || [];
 
-                    console.log(`📈 Assets with allocation:`, assetsWithAllocation);
+                    logger.debug(`Assets with allocation for portfolio ${portfolio.id}`, { component: 'PositionsList', data: assetsWithAllocation });
 
                     // Fetch real transaction history
-                    let transactions: any[] = [];
+                    let transactions: PortfolioTransaction[] = [];
                     try {
                       const txRes = await fetch(`/api/portfolio/${portfolio.id}/transactions`);
                       if (txRes.ok) {
                         const txData = await txRes.json();
                         transactions = txData.transactions || [];
-                        console.log(`📜 Transactions:`, transactions);
+                        logger.debug(`Fetched ${transactions.length} transactions for portfolio ${portfolio.id}`, { component: 'PositionsList' });
                       }
                     } catch (err) {
-                      console.warn('Failed to fetch transactions:', err);
+                      logger.warn('Failed to fetch transactions', { component: 'PositionsList', error: String(err) });
                     }
 
                     // Open detail modal with portfolio data
