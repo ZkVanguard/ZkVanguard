@@ -307,8 +307,7 @@ class CryptocomAIService {
         actions: [{
           action: 'buy',
           asset: 'USDC',
-          amount: '1000',
-          reason: 'Add stablecoin allocation for stability',
+          amount: 1000,
         }],
       }];
     }
