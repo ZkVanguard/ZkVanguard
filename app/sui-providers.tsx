@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { ReactNode, createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';

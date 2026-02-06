@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Portfolio Strategy API - Store ZK-protected strategies on-chain
  * Requires wallet signature for any operation

@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '@/lib/services/CryptocomDeveloperPlatformService';

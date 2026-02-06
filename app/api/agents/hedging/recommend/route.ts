@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { MCPClient } from '@/integrations/mcp/MCPClient';

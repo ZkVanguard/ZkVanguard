@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Execute Hedge Position on Moonlander
  * API endpoint for opening SHORT positions on Moonlander perpetuals

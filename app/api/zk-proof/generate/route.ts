@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';

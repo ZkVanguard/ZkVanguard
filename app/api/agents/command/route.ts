@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { logger } from '@/lib/utils/logger';

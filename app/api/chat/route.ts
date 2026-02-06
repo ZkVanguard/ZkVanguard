@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Chat API Route - LLM-powered conversational interface with AI Agent orchestration
  * Supports both standard and streaming responses

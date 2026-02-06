@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';

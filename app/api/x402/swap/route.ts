@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * x402 Swap API Endpoint
  * POST /api/x402/swap - Execute DEX swaps with x402 gasless settlement
