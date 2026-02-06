@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Simple in-memory cache utility for API responses
  * Reduces network requests and improves performance

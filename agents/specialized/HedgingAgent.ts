@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Hedging Agent
  * Specialized agent for automated hedging strategies using perpetual futures

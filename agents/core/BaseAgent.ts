@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview Base Agent abstract class for all specialized agents
  * @module agents/core/BaseAgent

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Transaction Cache Utility
  * Store and retrieve transactions from localStorage for persistent history

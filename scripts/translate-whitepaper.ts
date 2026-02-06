@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Whitepaper Translation Script using ASI/Ollama
  * Translates hardcoded whitepaper content to all supported languages

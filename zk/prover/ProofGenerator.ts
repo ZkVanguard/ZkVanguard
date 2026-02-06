@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview ZK Proof Generator - TypeScript wrapper for Python ZK-STARK system
  * @module zk/prover/ProofGenerator

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Transaction Tracker
  * Tracks all user transactions across the platform for display in Recent Transactions
