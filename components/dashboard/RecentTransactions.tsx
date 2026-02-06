@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useCallback, memo, useEffect } from 'react';
@@ -17,6 +16,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { usePolling, useLoading } from '@/lib/hooks';
+import { logger } from '@/lib/utils/logger';
 
 interface Transaction {
   hash: string;
@@ -95,7 +95,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
             });
           }
         } catch (err) {
-          console.error('Error parsing storage event:', err);
+          logger.error('Error parsing storage event', err instanceof Error ? err : undefined, { component: 'RecentTransactions' });
         }
       }
     };
@@ -115,7 +115,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
     setError(null);
 
     try {
-      console.log('Fetching transactions for address:', address);
+      logger.debug('Fetching transactions for address', { component: 'RecentTransactions', data: address });
       
       // Try to fetch from Cronos Explorer API first (more comprehensive)
       let txList: Transaction[] = [];
@@ -137,10 +137,10 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
         
         if (response.ok) {
           const data = await response.json();
-          console.log('Explorer API response:', data);
+          logger.debug('Explorer API response', { component: 'RecentTransactions', data });
           
           if (data.result && Array.isArray(data.result)) {
-            txList = data.result.map((tx: any) => {
+            txList = data.result.map((tx: { hash: string; input?: string; to?: string; from?: string; value?: string; status?: string | number; txreceipt_status?: string; timeStamp?: string; gasUsed?: string; gasPrice?: string; blockNumber?: string | number }) => {
               // Determine transaction type from input data or method name
               let txType: Transaction['type'] = 'unknown';
               const methodSig = tx.input?.slice(0, 10)?.toLowerCase() || '';
@@ -171,19 +171,19 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
           }
         }
       } catch (apiError) {
-        console.log('Explorer API not available, falling back to RPC:', apiError);
+        logger.debug('Explorer API not available, falling back to RPC', { component: 'RecentTransactions', data: apiError });
       }
 
       // If API didn't return results, fall back to RPC log scanning
       if (txList.length === 0) {
-        console.log('Falling back to RPC log scanning...');
+        logger.debug('Falling back to RPC log scanning...', { component: 'RecentTransactions' });
         
         // Get recent blocks to scan for transactions
         const currentBlock = await publicClient.getBlockNumber();
         // Cronos RPC has a STRICT 2000 block limit per request
         const fromBlock = currentBlock > BigInt(2000) ? currentBlock - BigInt(2000) : BigInt(0);
         
-        console.log(`Scanning blocks ${fromBlock} to ${currentBlock} (2000 block limit)`);
+        logger.debug(`Scanning blocks ${fromBlock} to ${currentBlock} (2000 block limit)`, { component: 'RecentTransactions' });
 
         // Key contract addresses
         const RWA_MANAGER = '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189'; // Portfolio contract (Updated Jan 16, 2026)
@@ -210,7 +210,8 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
             args: {
               from: address as `0x${string}`
             }
-          } as any).catch((e) => { console.log('Sent logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('Sent logs error', { data: e }); return []; }),
           // Received transfers (to user)
           publicClient.getLogs({
             fromBlock,
@@ -227,7 +228,8 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
             args: {
               to: address as `0x${string}`
             }
-          } as any).catch((e) => { console.log('Received logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('Received logs error', { data: e }); return []; }),
           // Swap events from VVS Router
           publicClient.getLogs({
             fromBlock,
@@ -238,7 +240,8 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               name: 'Swap',
               inputs: []
             },
-          } as any).catch((e) => { console.log('Swap logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('Swap logs error', { data: e }); return []; }),
           // Approval events
           publicClient.getLogs({
             fromBlock,
@@ -255,34 +258,39 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
             args: {
               owner: address as `0x${string}`
             }
-          } as any).catch((e) => { console.log('Approval logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('Approval logs error', { data: e }); return []; }),
           // RWAManager events (Portfolio deposits, withdrawals, rebalances)
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: RWA_MANAGER as `0x${string}`,
-          } as any).catch((e) => { console.log('RWA logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('RWA logs error', { data: e }); return []; }),
           // X402 Gasless transactions
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: X402_CONTRACT as `0x${string}`,
-          } as any).catch((e) => { console.log('X402 logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('X402 logs error', { data: e }); return []; }),
           // PaymentRouter events
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: PAYMENT_ROUTER as `0x${string}`,
-          } as any).catch((e) => { console.log('Payment logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('Payment logs error', { data: e }); return []; }),
           // ZKVerifier events
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: ZK_VERIFIER as `0x${string}`,
-          } as any).catch((e) => { console.log('ZK logs error:', e); return []; }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any).catch((e) => { logger.debug('ZK logs error', { data: e }); return []; }),
         ]);
 
-        console.log(`Found logs - Sent: ${sentLogs.length}, Received: ${receivedLogs.length}, Swaps: ${swapLogs.length}, Approvals: ${approvalLogs.length}, RWA: ${rwaLogs.length}, X402: ${x402Logs.length}, Payment: ${paymentLogs.length}, ZK: ${zkLogs.length}`);
+        logger.debug(`Found logs - Sent: ${sentLogs.length}, Received: ${receivedLogs.length}, Swaps: ${swapLogs.length}, Approvals: ${approvalLogs.length}, RWA: ${rwaLogs.length}, X402: ${x402Logs.length}, Payment: ${paymentLogs.length}, ZK: ${zkLogs.length}`, { component: 'RecentTransactions' });
 
         // Filter swap logs to only include those where user was involved
         const userSwapLogs = swapLogs.filter(log => 
@@ -309,7 +317,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
         const allLogs = [...sentLogs, ...receivedLogs, ...userSwapLogs, ...approvalLogs, ...userRWALogs, ...userX402Logs, ...paymentLogs, ...zkLogs];
         const uniqueTxHashes = [...new Set(allLogs.map(log => log.transactionHash))].slice(0, 50);
         
-        console.log(`Unique transaction hashes: ${uniqueTxHashes.length}`);
+        logger.debug(`Unique transaction hashes: ${uniqueTxHashes.length}`, { component: 'RecentTransactions' });
 
         // Fetch transaction details
         const txPromises = uniqueTxHashes.map(async (hash) => {
@@ -357,7 +365,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               blockNumber: Number(receipt.blockNumber),
             } as Transaction;
           } catch (err) {
-            console.error('Error fetching tx:', hash, err);
+            logger.error('Error fetching tx', err instanceof Error ? err : undefined, { component: 'RecentTransactions', data: hash });
             return null;
           }
         });
@@ -367,25 +375,26 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
       }
 
       // Add hedge settlements from localStorage (real user transactions only)
-      console.log(`Transactions from RPC: ${txList.length}, checking for hedge settlements...`);
+      logger.debug(`Transactions from RPC: ${txList.length}, checking for hedge settlements...`, { component: 'RecentTransactions' });
       
       // Add hedge settlements from localStorage
       try {
         const settlementsStr = localStorage.getItem('hedge-settlements');
         if (settlementsStr) {
           const settlements = JSON.parse(settlementsStr);
-          Object.values(settlements).forEach((batch: any) => {
-            if (batch.closedAt) {
-              const hedgeHash = batch.managerSignature || `0x${batch.batchId}`;
+          Object.values(settlements).forEach((batch: unknown) => {
+            const batchData = batch as { closedAt?: number; managerSignature?: string; batchId?: string; finalPnL?: number };
+            if (batchData.closedAt) {
+              const hedgeHash = batchData.managerSignature || `0x${batchData.batchId}`;
               if (!txList.find(tx => tx.hash === hedgeHash)) {
                 txList.push({
                   hash: hedgeHash,
                   type: 'swap',
                   status: 'success',
-                  timestamp: batch.closedAt,
+                  timestamp: batchData.closedAt,
                   from: address,
                   to: '0x0000000000000000000000000000000000000000', // Hedge settlement
-                  value: (batch.finalPnL || 0).toFixed(2),
+                  value: (batchData.finalPnL || 0).toFixed(2),
                   tokenSymbol: 'USD',
                   gasUsed: '0',
                   blockNumber: 0,
@@ -395,7 +404,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
           });
         }
       } catch (e) {
-        console.log('Could not load hedge settlements:', e);
+        logger.debug('Could not load hedge settlements', { component: 'RecentTransactions', data: e });
       }
       
       // Check for cached transactions in localStorage
@@ -410,7 +419,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
           });
         }
       } catch (e) {
-        console.log('Could not load cached transactions:', e);
+        logger.debug('Could not load cached transactions', { component: 'RecentTransactions', data: e });
       }
       
       // Sort by timestamp descending (most recent first)
@@ -420,15 +429,13 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
       try {
         localStorage.setItem('recent-transactions', JSON.stringify(txList.slice(0, 20)));
       } catch (e) {
-        console.log('Could not cache transactions:', e);
+        logger.debug('Could not cache transactions', { component: 'RecentTransactions', data: e });
       }
       
-      console.log(`Final transaction count: ${txList.length}`);
-      console.log('Transaction types:', txList.map(tx => tx.type).join(', '));
-      console.log('First 3 transactions:', txList.slice(0, 3));
+      logger.debug(`Final transaction count: ${txList.length}`, { component: 'RecentTransactions', data: { types: txList.map(tx => tx.type).join(', '), first3: txList.slice(0, 3) } });
       setTransactions(txList);
     } catch (err) {
-      console.error('Error fetching transactions:', err);
+      logger.error('Error fetching transactions', err instanceof Error ? err : undefined, { component: 'RecentTransactions' });
       setError('Failed to fetch transactions');
     } finally {
       setRefreshing(false);
@@ -446,7 +453,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
     return true;
   });
 
-  console.log(`Transactions in state: ${transactions.length}, Filtered: ${filteredTransactions.length}, Filter: ${filter}`);
+  logger.debug(`Transactions in state: ${transactions.length}, Filtered: ${filteredTransactions.length}, Filter: ${filter}`, { component: 'RecentTransactions' });
 
   const getTypeIcon = (type: Transaction['type']) => {
     switch (type) {

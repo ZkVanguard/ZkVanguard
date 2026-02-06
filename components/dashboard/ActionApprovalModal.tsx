@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, AlertTriangle, CheckCircle, XCircle, FileSignature, Loader2 } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
+import { logger } from '@/lib/utils/logger';
 
 export interface ActionPreview {
   title: string;
@@ -60,12 +60,12 @@ export function ActionApprovalModal({
 
       // Execute action with signature proof
       await onApprove(signature);
-    } catch (err: any) {
-      console.error('Signature or execution failed:', err);
-      if (err.message?.includes('User rejected')) {
+    } catch (err: unknown) {
+      logger.error('Signature or execution failed', err instanceof Error ? err : undefined, { component: 'ActionApprovalModal' });
+      if (err instanceof Error && err.message?.includes('User rejected')) {
         setError('Signature rejected. Action cancelled.');
       } else {
-        setError(err.message || 'Failed to execute action');
+        setError(err instanceof Error ? err.message : 'Failed to execute action');
       }
     } finally {
       setIsSigning(false);

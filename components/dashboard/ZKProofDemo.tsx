@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import { useState } from 'react';
@@ -7,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';
 import { useWalletClient } from 'wagmi';
+import { logger } from '../../lib/utils/logger';
 
 interface StoredCommitment {
   proofHash: string;
@@ -149,24 +149,24 @@ export function ZKProofDemo() {
       }
 
       // Generate proof using Python/CUDA backend (ZK-STARK)
-      console.log('🔐 Generating ZK-STARK proof with Python/CUDA backend...');
+      logger.info('🔐 Generating ZK-STARK proof with Python/CUDA backend...', { component: 'ZKProofDemo' });
       const result = await generateProofForOnChain(proofType, data, 1);
       
       setProofMetadata(result.metadata);
       
       // Result now contains: { starkProof, offChainVerification, commitment, metadata }
       // commitment contains: { proofHash, merkleRoot, verifiedOffChain, timestamp, metadata }
-      console.log('✅ Proof verified off-chain:', result.offChainVerification);
-      console.log('📝 On-chain commitment:', result.commitment);
+      logger.info('✅ Proof verified off-chain', { component: 'ZKProofDemo', data: result.offChainVerification });
+      logger.info('📝 On-chain commitment', { component: 'ZKProofDemo', data: result.commitment });
       
       // Store commitment on-chain (if wallet connected)
       if (isConnected && walletClient) {
-        console.log('⛓️  Storing commitment with TRUE gasless (x402 + USDC)...');
+        logger.info('⛓️  Storing commitment with TRUE gasless (x402 + USDC)...', { component: 'ZKProofDemo' });
         
         try {
           // Store commitment with TRUE GASLESS - x402 + USDC!
-          console.log('⚡ TRUE GASLESS: $0.01 USDC + $0.00 CRO');
-          console.log('💎 x402 makes USDC payment gasless!');
+          logger.info('⚡ TRUE GASLESS: $0.01 USDC + $0.00 CRO', { component: 'ZKProofDemo' });
+          logger.info('💎 x402 makes USDC payment gasless!', { component: 'ZKProofDemo' });
           
           // Call API route for gasless storage (server-side x402)
           const response = await fetch('/api/zk-proof/store-commitment', {
@@ -188,32 +188,25 @@ export function ZKProofDemo() {
           if (gaslessApiResult.success && gaslessApiResult.txHash && !gaslessApiResult.simulated) {
             setGaslessResult(gaslessApiResult);
             setShowForm(false); // Show success view with txHash
-            console.log('✅ ON-CHAIN STORAGE COMPLETE! 🎉');
-            console.log('   Transaction:', gaslessApiResult.txHash);
-            console.log('   Proof Hash:', result.commitment.proofHash);
-            console.log('   Security: 521-bit NIST P-521');
-            console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
+            logger.info('✅ ON-CHAIN STORAGE COMPLETE! 🎉', { component: 'ZKProofDemo', data: { txHash: gaslessApiResult.txHash, proofHash: result.commitment.proofHash, security: '521-bit NIST P-521', duration: result.offChainVerification.duration_ms } });
           } else if (gaslessApiResult.success) {
             // Fallback - on-chain storage not available
-            console.log('✅ Proof verified off-chain!');
-            console.log('ℹ️  On-chain storage:', gaslessApiResult.message);
+            logger.info('✅ Proof verified off-chain!', { component: 'ZKProofDemo' });
+            logger.info('ℹ️  On-chain storage', { component: 'ZKProofDemo', data: gaslessApiResult.message });
           } else {
             throw new Error(gaslessApiResult.error || 'Storage failed');
           }
         } catch (err) {
-          console.error('❌ Failed to store commitment on-chain:', err);
-          console.log('✅ But proof was still verified off-chain successfully!');
+          logger.error('❌ Failed to store commitment on-chain', err instanceof Error ? err : undefined, { component: 'ZKProofDemo' });
+          logger.info('✅ But proof was still verified off-chain successfully!', { component: 'ZKProofDemo' });
         }
       } else {
-        console.log('✅ Proof verified off-chain successfully!');
-        console.log('   Proof Hash:', result.commitment.proofHash);
-        console.log('   Security: 521-bit NIST P-521');
-        console.log('   Duration:', result.offChainVerification.duration_ms, 'ms');
-        console.log('ℹ️  Connect wallet to store commitment on-chain');
+        logger.info('✅ Proof verified off-chain successfully!', { component: 'ZKProofDemo', data: { proofHash: result.commitment.proofHash, security: '521-bit NIST P-521', duration: result.offChainVerification.duration_ms } });
+        logger.info('ℹ️  Connect wallet to store commitment on-chain', { component: 'ZKProofDemo' });
       }
       
     } catch (err) {
-      console.error('❌ Proof generation failed:', err);
+      logger.error('❌ Proof generation failed', err instanceof Error ? err : undefined, { component: 'ZKProofDemo' });
       alert('Failed to generate proof: ' + (err as Error).message);
     } finally {
       setIsGeneratingProof(false);

@@ -1,10 +1,10 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw, Wallet, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
+import { logger } from '@/lib/utils/logger';
 
 interface HedgePosition {
   id: string;
@@ -54,6 +54,7 @@ interface AIRecommendation {
     protocol: string;
     reason: string;
   }[];
+  agentSource?: string;
 }
 
 interface ActiveHedgesProps {
@@ -107,10 +108,10 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         const response = await fetch(`/api/agents/hedging/pnl?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
-          console.log('🔍 ActiveHedges: Raw API response:', data);
+          logger.debug('🔍 ActiveHedges: Raw API response', { component: 'ActiveHedges', data });
           if (data.success && data.summary) {
-            console.log('🔍 ActiveHedges: PnL details:', data.summary.details);
-            const dbHedges: HedgePosition[] = data.summary.details?.map((pnl: any) => ({
+            logger.debug('🔍 ActiveHedges: PnL details', { component: 'ActiveHedges', data: data.summary.details });
+            const dbHedges: HedgePosition[] = data.summary.details?.map((pnl: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed?: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt?: string; reason?: string; walletAddress?: string; zkVerified?: boolean; walletBindingHash?: string }) => ({
               id: pnl.orderId,
               type: pnl.side,
               asset: pnl.asset,
@@ -133,7 +134,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               walletVerified: pnl.zkVerified || (address ? pnl.walletAddress?.toLowerCase() === address.toLowerCase() : false),
             })) || [];
 
-            console.log('🔍 ActiveHedges: Mapped hedges:', dbHedges);
+            logger.debug('🔍 ActiveHedges: Mapped hedges', { component: 'ActiveHedges', data: dbHedges });
 
             // Use pre-calculated stats from API for accuracy
             const totalPnL = data.summary.totalUnrealizedPnL || dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
@@ -161,7 +162,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           }
         }
       } catch (dbErr) {
-        console.error('❌ Database not available:', dbErr);
+        logger.error('❌ Database not available', dbErr instanceof Error ? dbErr : undefined, { component: 'ActiveHedges' });
         setHedges([]);
         setLoading(false);
         processingRef.current = false;
@@ -169,7 +170,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       }
 
     } catch (error) {
-      console.error('❌ [ActiveHedges] Error loading hedges:', error);
+      logger.error('❌ [ActiveHedges] Error loading hedges', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
       setHedges([]);
       setLoading(false);
     } finally {
@@ -182,7 +183,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   // Listen for hedge creation events to refresh immediately
   useEffect(() => {
     const handleHedgeAdded = () => {
-      console.log('🔄 [ActiveHedges] Hedge added event received, refreshing...');
+      logger.debug('🔄 [ActiveHedges] Hedge added event received, refreshing...', { component: 'ActiveHedges' });
       loadHedges();
     };
 
@@ -204,13 +205,13 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       
       if (response.ok) {
         const data = await response.json();
-        console.log('🤖 AI Recommendations:', data);
+        logger.debug('🤖 AI Recommendations', { component: 'ActiveHedges', data });
         if (data.recommendations) {
           setRecommendations(data.recommendations);
         }
       }
     } catch (error) {
-      console.error('Failed to load AI recommendations:', error);
+      logger.error('Failed to load AI recommendations', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
     } finally {
       setLoadingRecommendations(false);
     }
@@ -236,10 +237,10 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       try {
         const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
         const tickerData = await tickerResponse.json();
-        const ticker = tickerData.result?.data?.find((t: any) => t.i === `${action.asset}_USDT`);
+        const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${action.asset}_USDT`);
         if (ticker) currentPrice = parseFloat(ticker.a);
       } catch (e) {
-        console.warn('Failed to fetch price, using fallback');
+        logger.warn('Failed to fetch price, using fallback', { component: 'ActiveHedges' });
       }
 
       const notionalValue = action.size * currentPrice;
@@ -262,18 +263,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ AI Hedge executed:', data);
+        logger.info('✅ AI Hedge executed', { component: 'ActiveHedges', data });
         
         // Refresh hedges and recommendations
         window.dispatchEvent(new Event('hedgeAdded'));
         loadRecommendations();
       } else {
         const error = await response.json();
-        console.error('❌ Failed to execute AI hedge:', error);
+        logger.error('❌ Failed to execute AI hedge', undefined, { component: 'ActiveHedges', data: error });
         alert(`Failed to execute: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('❌ Error executing AI recommendation:', error);
+      logger.error('❌ Error executing AI recommendation', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
       alert('Failed to execute recommendation');
     } finally {
       setExecutingRecommendation(null);
@@ -305,7 +306,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Hedge closed in database:', data);
+          logger.info('✅ Hedge closed in database', { component: 'ActiveHedges', data });
           
           // Remove from local state
           setHedges(prev => prev.filter(h => h.id !== selectedHedge.id));
@@ -327,7 +328,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           return;
         }
       } catch (apiErr) {
-        console.error('Failed to close in database, falling back to localStorage:', apiErr);
+        logger.error('Failed to close in database, falling back to localStorage', apiErr instanceof Error ? apiErr : undefined, { component: 'ActiveHedges' });
       }
 
       // Fallback to localStorage only
@@ -351,7 +352,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         }
       }
     } catch (error) {
-      console.error('Failed to close position:', error);
+      logger.error('Failed to close position', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
       alert('Failed to close position. Please try again.');
     } finally {
       setClosingPosition(null);
@@ -1183,11 +1184,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           <p className="text-[12px] text-[#86868b] leading-relaxed">
                             {rec.description}
                           </p>
-                          {(rec as any).agentSource && (
+                          {rec.agentSource && (
                             <div className="flex items-center gap-1 mt-2">
                               <Sparkles className="w-3 h-3 text-[#5856D6]" />
                               <span className="text-[10px] text-[#5856D6] font-medium">
-                                {(rec as any).agentSource}
+                                {rec.agentSource}
                               </span>
                             </div>
                           )}

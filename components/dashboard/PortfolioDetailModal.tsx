@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState } from 'react';
@@ -98,7 +97,7 @@ export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDe
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`flex items-center gap-2 px-4 py-3 font-medium transition-all relative ${
                   activeTab === tab.id
                     ? 'text-[#007AFF]'

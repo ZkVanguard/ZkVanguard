@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useCallback, memo, useMemo } from 'react';
@@ -134,7 +133,7 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
       if (settlements) {
         const settlementData = JSON.parse(settlements);
         marketSignals = Object.values(settlementData).filter(
-          (batch: any) => batch.type === 'hedge' && batch.status !== 'closed'
+          (batch: Record<string, unknown>) => batch.type === 'hedge' && batch.status !== 'closed'
         ).length;
       }
     }
