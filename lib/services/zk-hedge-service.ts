@@ -120,7 +120,7 @@ async function generateHedgeStrategies(portfolioValue: number, riskScore: number
   // This function contains the actual hedge logic
   // Strategy details are NOT sent to frontend
   
-  const strategies = [];
+  const strategies: HedgeStrategy[] = [];
   
   // Example: Generate hedges based on risk
   if (riskScore > 0.7) {

@@ -421,7 +421,7 @@ export class HedgingAgent extends BaseAgent {
           size: order.size,
           avgFillPrice: order.avgFillPrice,
           status: order.status,
-          leverage: Math.min(leverage || (order.leverage ?? 1), 20),
+          leverage: Math.min(leverage || 1, 20),
         },
         error: null,
         executionTime: Date.now() - startTime,

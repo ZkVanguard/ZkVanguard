@@ -133,7 +133,10 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
       if (settlements) {
         const settlementData = JSON.parse(settlements);
         marketSignals = Object.values(settlementData).filter(
-          (batch: Record<string, unknown>) => batch.type === 'hedge' && batch.status !== 'closed'
+          (batch) => {
+            const b = batch as Record<string, unknown>;
+            return b.type === 'hedge' && b.status !== 'closed';
+          }
         ).length;
       }
     }

@@ -251,7 +251,7 @@ export class VVSSwapSDKService {
         timestamp: Date.now(),
         from: senderAddress,
         to: '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae', // VVS Router
-        value: tradeAny.inputAmount?.toSignificant(6) || '0',
+        value: tradeAny.inputAmount?.toSignificant?.(6) || '0',
         tokenSymbol: tradeAny.inputAmount?.currency?.symbol || 'Unknown',
         description: `Swap tokens via VVS`,
       });
@@ -385,8 +385,8 @@ export class VVSSwapSDKService {
 
       // Fallback: estimate from amounts
       // This is a rough estimate
-      const inputAmount = parseFloat(tradeData.inputAmount?.toExact() || '0');
-      const outputAmount = parseFloat(tradeData.outputAmount?.toExact() || '0');
+      const inputAmount = parseFloat(tradeData.inputAmount?.toExact?.() || '0');
+      const outputAmount = parseFloat(tradeData.outputAmount?.toExact?.() || '0');
 
       if (inputAmount > 0 && outputAmount > 0) {
         // Simple price impact estimation (not accurate without price data)

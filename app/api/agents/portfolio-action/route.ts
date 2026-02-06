@@ -108,13 +108,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const riskAnalysisData = riskResult.data || {};
+      const riskAnalysisData = (riskResult.data || {}) as Record<string, unknown>;
       riskScore = riskResult.success && riskAnalysisData.riskScore 
         ? Number(riskAnalysisData.riskScore) 
         : 50;
-      volatility = riskAnalysisData.volatility || 0.3;
-      sentiment = riskAnalysisData.sentiment || 'neutral';
-      riskRecommendations = riskAnalysisData.recommendations || [];
+      volatility = (riskAnalysisData.volatility as number) || 0.3;
+      sentiment = (riskAnalysisData.sentiment as 'bullish' | 'bearish' | 'neutral') || 'neutral';
+      riskRecommendations = (riskAnalysisData.recommendations as string[]) || [];
     }
 
     // Analyze hedge requirements based on real signals

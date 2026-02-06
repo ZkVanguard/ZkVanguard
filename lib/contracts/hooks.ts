@@ -184,7 +184,8 @@ export function useUserPortfolios(userAddress?: string) {
         // Create a map of portfolioId -> txHash
         const txHashMap: Record<number, string> = {};
         for (const event of events) {
-          const portfolioId = Number(event.args?.[0] || event.args?.portfolioId);
+          const args = event.args as Record<string, unknown> | undefined;
+          const portfolioId = Number(args?.portfolioId || (Array.isArray(args) ? args[0] : 0));
           const txHash = event.transactionHash;
           txHashMap[portfolioId] = txHash;
         }

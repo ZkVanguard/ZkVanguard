@@ -60,7 +60,7 @@ interface PortfolioDetail {
   totalValue: number;
   status: 'FUNDED' | 'EMPTY' | 'NEW';
   targetAPY: number;
-  riskLevel: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
   currentYield: number;
   assets: PortfolioAssetDetail[];
   lastRebalanced: number;
@@ -257,7 +257,10 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
         if (settlements) {
           const settlementData = JSON.parse(settlements);
           hedgeSignals = Object.values(settlementData).filter(
-            (batch: SettlementBatch) => batch.type === 'hedge' && batch.status !== 'closed'
+            (batch) => {
+              const b = batch as SettlementBatch;
+              return b.type === 'hedge' && b.status !== 'closed';
+            }
           ).length;
         }
       }

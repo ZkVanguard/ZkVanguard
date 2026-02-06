@@ -323,8 +323,9 @@ export class ReportingAgent extends BaseAgent {
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
-      const positions: PortfolioPosition[] = portfolioData?.portfolio?.positions || [];
-      const totalValue = portfolioData?.portfolio?.totalValue || 0;
+      const portfolio = (portfolioData?.portfolio ?? {}) as { positions?: PortfolioPosition[]; totalValue?: number };
+      const positions: PortfolioPosition[] = portfolio.positions || [];
+      const totalValue = portfolio.totalValue || 0;
       
       // Calculate real asset risks from portfolio positions
       const assetRisks: RiskReport['assetRisks'] = [];
@@ -451,10 +452,11 @@ export class ReportingAgent extends BaseAgent {
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
-      const positions: PortfolioPosition[] = portfolioData?.portfolio?.positions || [];
-      const totalValue = portfolioData?.portfolio?.totalValue || 0;
-      const totalPnl = portfolioData?.portfolio?.totalPnl || 0;
-      const totalPnlPercentage = portfolioData?.portfolio?.totalPnlPercentage || 0;
+      const portfolio = (portfolioData?.portfolio ?? {}) as { positions?: PortfolioPosition[]; totalValue?: number; totalPnl?: number; totalPnlPercentage?: number };
+      const positions: PortfolioPosition[] = portfolio.positions || [];
+      const totalValue = portfolio.totalValue || 0;
+      const totalPnl = portfolio.totalPnl || 0;
+      const totalPnlPercentage = portfolio.totalPnlPercentage || 0;
       
       // Calculate performance metrics from real data
       const startValue = totalValue - totalPnl;

@@ -58,8 +58,9 @@ async function shouldUseAgents(message: string): Promise<boolean> {
     // Only use agents if we have actual portfolio data
     try {
       const portfolioData = await getPortfolioData();
-      const hasPortfolio = portfolioData?.portfolio?.totalValue > 0 || 
-                          (portfolioData?.portfolio?.positions?.length || 0) > 0;
+      const portfolio = (portfolioData?.portfolio ?? {}) as Record<string, unknown>;
+      const hasPortfolio = (portfolio.totalValue as number) > 0 || 
+                          ((portfolio.positions as unknown[])?.length || 0) > 0;
       if (!hasPortfolio) {
         logger.info('Analysis requested but no portfolio data - using LLM for intelligent response');
         return false;
@@ -223,6 +224,18 @@ interface AgentReport {
   };
   settlement?: {
     gasless?: boolean;
+    payments?: Array<{
+      from: string;
+      to: string;
+      token: string;
+      amount: number;
+      txHash: string;
+      isGasless: boolean;
+    }>;
+    totalGasSaved?: number;
+    batchId?: number;
+    portfolioId?: number;
+    timestamp?: Date;
   };
   zkProofs?: Array<{
     proofType?: string;
@@ -268,8 +281,8 @@ function formatAgentResponse(report: AgentReport): { content: string } {
       const side = suggested.side || 'SHORT';
       lines.push(`\n📌 **Recommended:** ${side} ${asset}`);
       lines.push(`   💰 Size: **${size}** | ⚡ Leverage: **${leverage}x**`);
-    } else if (positions?.length > 0) {
-      const pos = positions[0];
+    } else if ((positions?.length ?? 0) > 0) {
+      const pos = positions![0];
       const size = pos.size || '0.1';
       const leverage = pos.leverage || 2;
       lines.push(`\n📌 **Recommended:** ${pos.direction?.toUpperCase() || 'HEDGE'} ${pos.asset || 'BTC'}`);
@@ -280,9 +293,9 @@ function formatAgentResponse(report: AgentReport): { content: string } {
   }
   
   // ZK verification status
-  if (report.zkProofs?.length > 0) {
-    const verified = report.zkProofs.filter((p) => p.verified).length;
-    lines.push(`\n🔐 ZK: ${verified}/${report.zkProofs.length} verified on-chain`);
+  if ((report.zkProofs?.length ?? 0) > 0) {
+    const verified = report.zkProofs!.filter((p) => p.verified).length;
+    lines.push(`\n🔐 ZK: ${verified}/${report.zkProofs!.length} verified on-chain`);
   }
   
   // Settlement info (brief)
@@ -299,17 +312,20 @@ function formatAgentResponse(report: AgentReport): { content: string } {
   if (report.strategy === 'hedge' || report.hedgingStrategy) {
     const suggested = report.hedgingStrategy?.suggestedAction;
     const positions = report.hedgingStrategy?.positions;
-    const pos = suggested || positions?.[0];
+    const posSide = suggested?.side || positions?.[0]?.direction || 'SHORT';
+    const posMarket = suggested?.market || positions?.[0]?.asset || 'BTC-PERP';
+    const posSize = suggested?.size || positions?.[0]?.size || '0.1';
+    const posLeverage = suggested?.leverage || positions?.[0]?.leverage || 2;
     
     actions.push({
       id: 'execute_hedge',
-      label: `⚡ Execute ${pos?.side || 'SHORT'} ${pos?.market?.replace('-PERP', '') || pos?.asset || 'BTC'}`,
+      label: `⚡ Execute ${posSide} ${posMarket.replace('-PERP', '')}`,
       type: 'hedge',
       params: {
-        asset: pos?.market || pos?.asset || 'BTC-PERP',
-        side: pos?.side || 'SHORT',
-        size: pos?.size || '0.1',
-        leverage: pos?.leverage || 2,
+        asset: posMarket,
+        side: posSide,
+        size: posSize,
+        leverage: posLeverage,
         gasless: true
       }
     });

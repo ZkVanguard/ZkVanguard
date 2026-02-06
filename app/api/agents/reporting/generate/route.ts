@@ -28,19 +28,19 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const portfolio = portfolioData.portfolio;
+    const portfolio = portfolioData.portfolio as Record<string, unknown>;
     
     // Generate report from real portfolio data
     return NextResponse.json({
       period: period || 'daily',
-      totalValue: portfolio.totalValue || 0,
-      profitLoss: portfolio.totalPnl || 0,
+      totalValue: (portfolio.totalValue as number) || 0,
+      profitLoss: (portfolio.totalPnl as number) || 0,
       performance: {
-        daily: portfolio.totalPnlPercentage || 0,
-        weekly: (portfolio.totalPnlPercentage || 0) * 2.5, // Estimate based on current
-        monthly: (portfolio.totalPnlPercentage || 0) * 8   // Estimate based on current
+        daily: (portfolio.totalPnlPercentage as number) || 0,
+        weekly: ((portfolio.totalPnlPercentage as number) || 0) * 2.5, // Estimate based on current
+        monthly: ((portfolio.totalPnlPercentage as number) || 0) * 8   // Estimate based on current
       },
-      topPositions: (portfolio.positions || []).slice(0, 5).map((pos: { symbol?: string; value?: number; pnlPercentage?: number }) => ({
+      topPositions: ((portfolio.positions as Array<{ symbol?: string; value?: number; pnlPercentage?: number }>) || []).slice(0, 5).map((pos) => ({
         asset: pos.symbol || 'UNKNOWN',
         value: pos.value || 0,
         pnl: pos.pnlPercentage || 0

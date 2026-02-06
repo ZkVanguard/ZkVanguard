@@ -29,7 +29,7 @@ class RequestDeduplicator {
     // Return existing promise if request is still pending and not timed out
     if (pending && (now - pending.timestamp) < this.requestTimeout) {
       logger.debug(`Reusing pending request for: ${key}`, { component: 'deduper' });
-      return pending.promise;
+      return pending.promise as Promise<T>;
     }
 
     // Create new request

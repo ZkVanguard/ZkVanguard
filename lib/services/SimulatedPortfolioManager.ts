@@ -330,7 +330,7 @@ export class SimulatedPortfolioManager {
     const aiService = getCryptocomAIService();
     let analysis: Record<string, unknown> | null = null;
     try {
-      analysis = await aiService.analyzePortfolio('simulated-portfolio', portfolioData) as Record<string, unknown>;
+      analysis = await aiService.analyzePortfolio('simulated-portfolio', portfolioData) as unknown as Record<string, unknown>;
     } catch (e) {
       logger.warn('AI analysis failed, using fallback summary', { error: e instanceof Error ? e.message : String(e) });
       analysis = null;
@@ -349,8 +349,8 @@ export class SimulatedPortfolioManager {
     }
 
     // Ensure core scoring fields exist
-    analysis.riskScore = (analysis.riskScore !== undefined) ? analysis.riskScore : 50;
-    analysis.healthScore = (analysis.healthScore !== undefined) ? analysis.healthScore : (100 - analysis.riskScore);
+    analysis.riskScore = (analysis.riskScore !== undefined) ? Number(analysis.riskScore) : 50;
+    analysis.healthScore = (analysis.healthScore !== undefined) ? Number(analysis.healthScore) : (100 - Number(analysis.riskScore));
 
     const ret = {
       ...analysis,

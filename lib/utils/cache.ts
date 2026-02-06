@@ -35,7 +35,7 @@ class CacheManager {
     }
 
     logger.debug(`[Cache HIT] ${key} (age: ${(age / 1000).toFixed(1)}s)`, { component: 'cache' });
-    return entry.data;
+    return entry.data as T;
   }
 
   /**

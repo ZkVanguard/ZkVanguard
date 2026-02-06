@@ -77,11 +77,14 @@ interface FormattableReport {
   totalExecutionTime: number;
   riskAnalysis?: {
     totalRisk: number;
-    sentiment: string;
+    sentiment?: string;
+    marketSentiment?: string;
   };
   hedgingStrategy?: {
+    strategy?: string;
     action?: string;
     confidence?: string;
+    executionStatus?: string;
   };
   zkProofs?: unknown[];
 }
@@ -98,16 +101,16 @@ function formatCommandResponse(report: FormattableReport): string {
   if (report.riskAnalysis) {
     lines.push(`\n📊 Risk Analysis:`);
     lines.push(`  • Total Risk: ${report.riskAnalysis.totalRisk}`);
-    lines.push(`  • Sentiment: ${report.riskAnalysis.sentiment}`);
+    lines.push(`  • Sentiment: ${report.riskAnalysis.sentiment || report.riskAnalysis.marketSentiment || 'unknown'}`);
   }
   
   if (report.hedgingStrategy) {
     lines.push(`\n🛡️ Hedging Strategy:`);
-    lines.push(`  • Action: ${report.hedgingStrategy.action || 'Analyzed'}`);
-    lines.push(`  • Confidence: ${report.hedgingStrategy.confidence || 'High'}`);
+    lines.push(`  • Action: ${report.hedgingStrategy.action || report.hedgingStrategy.strategy || 'Analyzed'}`);
+    lines.push(`  • Confidence: ${report.hedgingStrategy.confidence || report.hedgingStrategy.executionStatus || 'High'}`);
   }
   
-  if (report.zkProofs?.length > 0) {
+  if (report.zkProofs && report.zkProofs.length > 0) {
     lines.push(`\n🔐 ZK Proofs: ${report.zkProofs.length} generated`);
   }
   

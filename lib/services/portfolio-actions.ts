@@ -53,8 +53,8 @@ export function checkAutoApproval(
   }
 
   // Check if hedge value is within threshold
-  const hedgeValue = action.params?.hedgeValue || action.params?.notionalValue || 0;
-  const threshold = portfolioSettings.autoApprovalThreshold || 10000;
+  const hedgeValue = Number(action.params?.hedgeValue || action.params?.notionalValue || 0);
+  const threshold = Number(portfolioSettings.autoApprovalThreshold || 10000);
 
   return hedgeValue > 0 && hedgeValue <= threshold;
 }
@@ -154,7 +154,7 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
       const result = await generateAnalysisFromOnChainData(action.type, portfolioData);
       
       // Generate ZK proof for the analysis
-      const zkProof = await generateActionProof(action, result);
+      const zkProof = await generateActionProof(action, Array.isArray(result) ? { items: result } : result);
       
       return {
         success: true,

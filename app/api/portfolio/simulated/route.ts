@@ -64,9 +64,10 @@ export async function POST(request: NextRequest) {
         // Use ZK-protected hedges if requested
         if (body.private) {
           const { generatePrivateHedges } = await import('@/lib/services/zk-hedge-service');
-          const portfolioValue = (await manager.getSummary()).totalValue || 10000;
+          const summary = await manager.getSummary();
+          const portfolioValue = Number(summary.currentValue || summary.totalValue || 10000);
           const riskData = await manager.assessRisk();
-          const riskScore = riskData.riskScore || 0.65;
+          const riskScore = Number(riskData.riskScore || 0.65);
           
           result = await generatePrivateHedges(portfolioValue, riskScore);
         } else {

@@ -89,7 +89,7 @@ class CryptocomAIAgentService {
                 cronosZkEvmKey: finalConfig.explorerApiKey,
                 cronosZkEvmTestnetKey: finalConfig.explorerApiKey,
               },
-            }) as AIAgentClient;
+            }) as unknown as AIAgentClient;
             
             this.isInitialized = true;
             logger.info('Crypto.com AI Agent SDK initialized', { component: 'AIAgent', data: finalConfig.chainId });
@@ -136,7 +136,7 @@ class CryptocomAIAgentService {
     try {
       logger.info('Processing query', { component: 'AIAgent', data: userQuery });
 
-      const result = await this.agent.query({
+      const result = await this.agent!.query({
         query: userQuery,
         context: conversationContext || [],
       });
@@ -172,7 +172,7 @@ class CryptocomAIAgentService {
         type: 'send',
         intent: query,
         result: result.response,
-        txHash: result.data?.txHash,
+        txHash: result.data?.txHash as string | undefined,
         data: result.data,
       };
     } catch (error) {
@@ -256,7 +256,7 @@ class CryptocomAIAgentService {
         type: 'swap',
         intent: query,
         result: result.response,
-        txHash: result.data?.txHash,
+        txHash: result.data?.txHash as string | undefined,
         data: result.data,
       };
     } catch (error) {

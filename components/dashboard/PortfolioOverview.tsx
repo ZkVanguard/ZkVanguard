@@ -30,7 +30,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         const aiService = getCryptocomAIService();
         const analysis = await aiService.analyzePortfolio(address, { 
           userPortfolioCount: derived.portfolioCount 
-        });
+        } as Record<string, unknown>);
         setAiAnalysis(analysis);
       } catch (aiError) {
         logger.warn('[PortfolioOverview] AI recommendations unavailable', { error: String(aiError) });

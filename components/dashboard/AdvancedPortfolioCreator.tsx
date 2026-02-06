@@ -406,8 +406,8 @@ function StrategyStep({
 }: {
   strategy: StrategyConfig;
   setStrategy: React.Dispatch<React.SetStateAction<StrategyConfig>>;
-  aiPreset: string;
-  setAiPreset: (preset: string) => void;
+  aiPreset: 'conservative' | 'balanced' | 'aggressive' | 'custom';
+  setAiPreset: (preset: 'conservative' | 'balanced' | 'aggressive' | 'custom') => void;
   onNext: () => void;
 }) {
   return (
@@ -580,7 +580,7 @@ function StrategyStep({
             </label>
             <select
               value={strategy.rebalanceFrequency}
-              onChange={(e) => setStrategy({ ...strategy, rebalanceFrequency: e.target.value })}
+              onChange={(e) => setStrategy({ ...strategy, rebalanceFrequency: e.target.value as 'daily' | 'weekly' | 'monthly' })}
               className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-[#f5f5f7] border border-black/5 rounded-[10px] text-[14px] sm:text-[15px] text-[#1d1d1f] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none transition-all cursor-pointer"
             >
               <option value="daily">Daily</option>
@@ -1136,15 +1136,15 @@ function ReviewStep({
           <div className="space-y-2 text-[12px] sm:text-[13px]">
             <div className="flex justify-between">
               <span className="text-[#86868b]">Min Market Cap:</span>
-              <span className="font-semibold text-[#1d1d1f]">${(filters.minMarketCap / 1000000).toFixed(1)}M</span>
+              <span className="font-semibold text-[#1d1d1f]">${((filters.minMarketCap ?? 0) / 1000000).toFixed(1)}M</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#86868b]">Max Volatility:</span>
-              <span className="font-semibold text-[#1d1d1f]">{filters.maxVolatility}%</span>
+              <span className="font-semibold text-[#1d1d1f]">{filters.maxVolatility ?? 0}%</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#86868b]">Categories:</span>
-              <span className="font-semibold text-[#1d1d1f]">{filters.allowedCategories.length} selected</span>
+              <span className="font-semibold text-[#1d1d1f]">{filters.allowedCategories?.length ?? 0} selected</span>
             </div>
           </div>
         </div>

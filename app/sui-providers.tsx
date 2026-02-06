@@ -67,7 +67,7 @@ interface SuiContextType {
   disconnectWallet: () => void;
   
   // Transactions
-  executeTransaction: (tx: { kind: string; data: Record<string, unknown> }) => Promise<{ digest: string; success: boolean }>;
+  executeTransaction: (tx: unknown) => Promise<{ digest: string; success: boolean }>;
   
   // Utilities
   getExplorerUrl: (type: 'tx' | 'address' | 'object', value: string) => string;
@@ -165,14 +165,14 @@ function SuiContextProvider({
     disconnect();
   }, [disconnect]);
 
-  const executeTransaction = useCallback(async (tx: { kind: string; data: Record<string, unknown> }): Promise<{ digest: string; success: boolean }> => {
+  const executeTransaction = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean }> => {
     if (!isConnected) {
       throw new Error('Wallet not connected');
     }
 
     try {
       const result = await signAndExecute({
-        transaction: tx,
+        transaction: tx as Parameters<typeof signAndExecute>[0]['transaction'],
       });
 
       return {

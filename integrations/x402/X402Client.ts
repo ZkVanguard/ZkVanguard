@@ -87,7 +87,7 @@ export class X402Client {
       const verification = await this.facilitator.verifyPayment({
         x402Version: 1,
         paymentHeader,
-        paymentRequirements,
+        paymentRequirements: paymentRequirements as unknown as Parameters<typeof this.facilitator.verifyPayment>[0]['paymentRequirements'],
       });
 
       logger.info('Payment verified via x402', {

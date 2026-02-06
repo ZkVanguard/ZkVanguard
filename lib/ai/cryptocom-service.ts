@@ -63,10 +63,11 @@ export interface IntentParsing {
 }
 
 interface PortfolioInput {
-  tokens?: Array<{ symbol: string; usdValue: number; value?: number }>;
+  tokens?: Array<{ symbol: string; usdValue?: number; value?: number }>;
   totalValue?: number;
   positions?: Array<{ symbol?: string; value?: number }>;
-  [key: string]: unknown;
+  address?: string;
+  lastUpdated?: string;
 }
 
 class CryptocomAIService {
@@ -84,7 +85,8 @@ class CryptocomAIService {
     if (this.apiKey) {
       try {
         // Dynamic import for Crypto.com AI Agent SDK (hackathon-provided)
-        import('@crypto.com/ai-agent-client').then((module: { createClient?: (config: Record<string, unknown>) => AIAgentClient }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        import('@crypto.com/ai-agent-client').then((module: any) => {
           const { createClient } = module;
           if (createClient) {
             this.client = createClient({
@@ -123,6 +125,9 @@ class CryptocomAIService {
 
     try {
       // Use Crypto.com AI for intent classification
+      if (!this.client?.analyze) {
+        return this.fallbackIntentParsing(input);
+      }
       const response = await this.client.analyze({
         text: input,
         task: 'intent_classification',
@@ -139,7 +144,7 @@ class CryptocomAIService {
       });
 
       return {
-        intent: response.intent || 'unknown',
+        intent: (response.intent || 'unknown') as IntentParsing['intent'],
         confidence: response.confidence || 0,
         entities: response.entities || {},
         parameters: response.parameters || {},
@@ -152,7 +157,7 @@ class CryptocomAIService {
 
   private calculateRealPortfolioAnalysis(portfolio?: PortfolioInput): PortfolioAnalysis {
     // Calculate analysis from REAL portfolio data
-    if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
+    if (portfolio && portfolio.tokens && (portfolio.totalValue ?? 0) > 0) {
       const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
       const totalValue = portfolio.totalValue as number;
       
@@ -212,7 +217,7 @@ class CryptocomAIService {
 
   private calculateRealRiskAssessment(portfolio?: PortfolioInput): RiskAssessment {
     // Calculate REAL risk metrics from portfolio data
-    if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
+    if (portfolio && portfolio.tokens && (portfolio.totalValue ?? 0) > 0) {
       const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
       const totalValue = portfolio.totalValue as number;
       
@@ -293,7 +298,7 @@ class CryptocomAIService {
 
   private generateRealHedgeRecommendations(portfolio?: PortfolioInput): HedgeRecommendation[] {
     // No portfolio data - return empty
-    if (!portfolio || !portfolio.tokens || portfolio.totalValue <= 0) {
+    if (!portfolio || !portfolio.tokens || (portfolio.totalValue ?? 0) <= 0) {
       return [];
     }
     
@@ -338,7 +343,7 @@ class CryptocomAIService {
       return this.calculateRealPortfolioAnalysis(portfolio);
     }
     try {
-      const analysis = await this.client.analyzePortfolio(address, portfolio);
+      const analysis = await this.client.analyzePortfolio(address, portfolio as unknown as Record<string, unknown>);
       return analysis;
     } catch (error) {
       logger.error('AI portfolio analysis failed', { error });
@@ -358,7 +363,7 @@ class CryptocomAIService {
     // Try Crypto.com AI SDK first
     if (this.client && typeof this.client.assessRisk === 'function') {
       try {
-        const risk = await this.client.assessRisk(portfolio);
+        const risk = await this.client.assessRisk(portfolio as unknown as Record<string, unknown>);
         return risk;
       } catch (error) {
         logger.warn('Crypto.com AI SDK risk assessment failed, trying Ollama', { error });
@@ -428,7 +433,7 @@ RISK_FACTOR2: [factor name] - [brief description]`;
     if (this.client && typeof this.client.generateHedgeRecommendations === 'function') {
       try {
         const recommendations = await this.client.generateHedgeRecommendations(
-          portfolio,
+          portfolio as unknown as Record<string, unknown>,
           riskProfile
         );
         return recommendations;

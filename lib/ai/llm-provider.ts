@@ -415,7 +415,13 @@ class LLMProvider {
       try {
         const portfolioData = await getPortfolioData();
         if (portfolioData && portfolioData.portfolio) {
-          const p = portfolioData.portfolio;
+          const p = portfolioData.portfolio as Record<string, unknown> & {
+            totalValue?: number;
+            cash?: number;
+            positions?: Array<{ symbol?: string; value?: number; pnlPercentage?: number }>;
+            totalPnl?: number;
+            totalPnlPercentage?: number;
+          };
           portfolioContext = `\n\nCurrent Portfolio:\n` +
             `• Total Value: $${p.totalValue?.toFixed(2) || 'N/A'}\n` +
             `• Cash: $${p.cash?.toFixed(2) || 'N/A'}\n` +
@@ -427,7 +433,7 @@ class LLMProvider {
               `${pos.symbol} ($${pos.value?.toFixed(2)}, ${pos.pnlPercentage?.toFixed(1)}%)`
             ).join(', ');
             // Extract asset symbols for prediction market lookup
-            portfolioAssets = p.positions.map((pos: { symbol?: string }) => pos.symbol?.toUpperCase()).filter(Boolean);
+            portfolioAssets = p.positions.map((pos: { symbol?: string }) => pos.symbol?.toUpperCase()).filter((s): s is string => Boolean(s));
           }
         }
       } catch (error) {
@@ -618,7 +624,7 @@ class LLMProvider {
       }
 
       // Call Crypto.com AI
-      const result = await this.aiClient.chat.completions.create({
+      const result = await this.aiClient!.chat.completions.create({
         model: 'gpt-4',
         messages,
         temperature: 0.7,
@@ -772,7 +778,7 @@ class LLMProvider {
       }
 
       // Call OpenAI directly
-      const result = await this.openAIClient.chat.completions.create({
+      const result = await this.openAIClient!.chat.completions.create({
         model: 'gpt-4o-mini', // Cost-effective model
         messages,
         temperature: 0.7,
@@ -834,7 +840,7 @@ class LLMProvider {
       }
 
       // Call Anthropic Claude
-      const result = await this.anthropicClient.messages.create({
+      const result = await this.anthropicClient!.messages.create({
         model: 'claude-3-haiku-20240307', // Cost-effective model
         max_tokens: 800,
         system: systemMessage,
@@ -846,7 +852,7 @@ class LLMProvider {
       logger.info('Anthropic Claude response generated successfully');
       return {
         content,
-        tokensUsed: result.usage?.input_tokens + result.usage?.output_tokens,
+        tokensUsed: (result.usage?.input_tokens ?? 0) + (result.usage?.output_tokens ?? 0),
         model: 'claude-3-haiku',
         confidence: 0.92,
       };
@@ -1007,7 +1013,8 @@ class LLMProvider {
       let hedgeActions: HedgeAction[] = [];
       try {
         const portfolioData = await getPortfolioData();
-        const portfolioValue = portfolioData?.portfolio?.totalValue || 10000;
+        const portfolio = portfolioData?.portfolio as Record<string, unknown> | undefined;
+        const portfolioValue = Number(portfolio?.totalValue || portfolio?.currentValue || 10000);
         const riskScore = 0.65; // Could be fetched from risk assessment
         
         const privateHedges = await generatePrivateHedges(portfolioValue, riskScore);
@@ -1236,7 +1243,7 @@ class LLMProvider {
 
     // Fallback to OpenAI
     if (this.openAIClient) {
-      const result = await this.openAIClient.chat.completions.create({
+      const result = await this.openAIClient!.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: messages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
         temperature: 0.5,
@@ -1252,7 +1259,7 @@ class LLMProvider {
 
     // Fallback to Anthropic
     if (this.anthropicClient) {
-      const result = await this.anthropicClient.messages.create({
+      const result = await this.anthropicClient!.messages.create({
         model: 'claude-3-haiku-20240307',
         max_tokens: 500,
         system: messages[0].content,
@@ -1260,7 +1267,7 @@ class LLMProvider {
       });
       return {
         content: result.content[0]?.type === 'text' ? result.content[0].text : '',
-        tokensUsed: result.usage?.input_tokens + result.usage?.output_tokens,
+        tokensUsed: (result.usage?.input_tokens ?? 0) + (result.usage?.output_tokens ?? 0),
         model: 'claude-3-haiku-direct',
         confidence: 0.92,
       };

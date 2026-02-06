@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
           
           if (ownershipResult.status === 'completed' && ownershipResult.proof) {
             walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-            walletBinding = (ownershipResult.proof as Record<string, unknown>).hedge_binding as string | undefined;
+            walletBinding = (ownershipResult.proof as unknown as Record<string, unknown>).hedge_binding as string | undefined;
             logger.info('✅ Wallet ownership proof generated', { 
               proofHash: walletOwnershipProof?.substring(0, 20) + '...',
               binding: walletBinding?.substring(0, 20) + '...'
@@ -608,7 +608,7 @@ export async function POST(request: NextRequest) {
         
         if (ownershipResult.status === 'completed' && ownershipResult.proof) {
           walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-          walletBinding = (ownershipResult.proof as Record<string, unknown>).hedge_binding as string | undefined;
+          walletBinding = (ownershipResult.proof as unknown as Record<string, unknown>).hedge_binding as string | undefined;
         }
       } catch (ownershipError) {
         logger.warn('⚠️ Wallet ownership proof generation failed for on-chain hedge', { error: String(ownershipError) });

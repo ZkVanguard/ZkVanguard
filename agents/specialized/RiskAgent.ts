@@ -329,8 +329,9 @@ REC3: [third recommendation]`;
       
       // Get real portfolio data
       const portfolioData = await getPortfolioData();
+      const portfolio = (portfolioData?.portfolio ?? {}) as { positions?: Array<{ symbol?: string; value: number }>; totalValue?: number };
       
-      if (!portfolioData?.portfolio?.positions || portfolioData.portfolio.positions.length === 0) {
+      if (!portfolio.positions || portfolio.positions.length === 0) {
         logger.info('No portfolio positions - will prompt user to add positions');
         // Return a meaningful default that indicates no positions
         // This helps the RiskAgent give actionable advice
@@ -341,8 +342,8 @@ REC3: [third recommendation]`;
         }];
       }
       
-      const positions = portfolioData.portfolio.positions;
-      const totalValue = portfolioData.portfolio.totalValue || 0;
+      const positions = portfolio.positions;
+      const totalValue = portfolio.totalValue || 0;
       
       if (totalValue === 0) {
         logger.warn('Portfolio has zero value');

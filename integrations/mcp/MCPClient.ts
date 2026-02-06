@@ -10,8 +10,9 @@ import { EventEmitter } from 'eventemitter3';
 import { logger } from '../../shared/utils/logger';
 import config from '../../shared/utils/config';
 import { RealMarketDataService } from '../../lib/services/RealMarketDataService';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import EventSource = require('eventsource');
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+const EventSourceModule = require('eventsource');
+const EventSourceConstructor = (EventSourceModule.default || EventSourceModule) as { new(url: string, options?: Record<string, unknown>): EventSource };
 
 export interface MCPPriceData {
   symbol: string;
@@ -65,7 +66,7 @@ export class MCPClient extends EventEmitter {
       logger.info('Connecting to MCP Server via SSE', { url: mcpUrl });
 
       // Connect via SSE (Server-Sent Events)
-      this.eventSource = new EventSource(mcpUrl, {
+      this.eventSource = new EventSourceConstructor(mcpUrl, {
         headers: {
           'Accept': 'text/event-stream',
         },

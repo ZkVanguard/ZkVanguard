@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
       if (result.success) {
         return NextResponse.json({
-          ...result.data,
+          ...(result.data as Record<string, unknown>),
           agentId: result.agentId,
           executionTime: result.executionTime,
           realAgent: true,

@@ -26,16 +26,17 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success) {
+      const data = result.data as Record<string, unknown>;
       return NextResponse.json({
         success: true,
         hedge: {
-          orderId: result.data.orderId,
-          market: result.data.market,
-          side: result.data.side,
-          size: result.data.size,
-          filledSize: result.data.filledSize,
-          avgFillPrice: result.data.avgFillPrice,
-          status: result.data.status,
+          orderId: data.orderId,
+          market: data.market,
+          side: data.side,
+          size: data.size,
+          filledSize: data.filledSize,
+          avgFillPrice: data.avgFillPrice,
+          status: data.status,
         },
         agentId: result.agentId,
         executionTime: result.executionTime,
