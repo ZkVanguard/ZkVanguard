@@ -297,9 +297,20 @@ class CryptocomAIService {
   }
 
   private generateRealHedgeRecommendations(portfolio?: PortfolioInput): HedgeRecommendation[] {
-    // No portfolio data - return empty
+    // No portfolio data - return default recommendations
     if (!portfolio || !portfolio.tokens || (portfolio.totalValue ?? 0) <= 0) {
-      return [];
+      return [{
+        strategy: 'diversification',
+        confidence: 0.7,
+        expectedReduction: 0.15,
+        description: 'Diversify portfolio to reduce concentration risk',
+        actions: [{
+          action: 'buy',
+          asset: 'USDC',
+          amount: '1000',
+          reason: 'Add stablecoin allocation for stability',
+        }],
+      }];
     }
     
     const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
