@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Production-safe logging utility
  * - info/debug logs only in development
@@ -24,8 +23,10 @@ class Logger {
     const prefix = this.getPrefix(level);
 
     if (context && Object.keys(context).length > 0) {
+      // eslint-disable-next-line no-console
       console[level === 'debug' ? 'log' : level](`${prefix} ${message}`, context);
     } else {
+      // eslint-disable-next-line no-console
       console[level === 'debug' ? 'log' : level](`${prefix} ${message}`);
     }
   }

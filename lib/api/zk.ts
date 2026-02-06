@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK-STARK Integration - Real Python/CUDA Backend
  * Connects frontend to actual ZK proof generation system
@@ -67,7 +66,7 @@ export async function checkZKSystemHealth(): Promise<ZKSystemHealth> {
     }
     return await response.json();
   } catch (error) {
-    console.error('❌ ZK system health check failed:', error);
+    logger.error('ZK system health check failed', error);
     throw error;
   }
 }
@@ -121,7 +120,7 @@ export async function generateSettlementProof(
     
     return result;
   } catch (error: unknown) {
-    console.error('❌ ZK proof generation failed:', error);
+    logger.error('ZK proof generation failed', error);
     
     // Provide helpful error message if backend is not running
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -176,7 +175,7 @@ export async function generateRiskProof(
 
     return await response.json();
   } catch (error) {
-    console.error('❌ Risk proof generation failed:', error);
+    logger.error('Risk proof generation failed', error);
     throw error;
   }
 }
@@ -224,7 +223,7 @@ export async function generateRebalanceProof(
 
     return await response.json();
   } catch (error) {
-    console.error('❌ Rebalance proof generation failed:', error);
+    logger.error('Rebalance proof generation failed', error);
     throw error;
   }
 }
@@ -242,7 +241,7 @@ export async function getProofStatus(jobId: string): Promise<ZKProofStatus> {
 
     return await response.json();
   } catch (error) {
-    console.error('❌ Failed to get proof status:', error);
+    logger.error('Failed to get proof status', error);
     throw error;
   }
 }
@@ -305,7 +304,7 @@ export async function verifyProofOffChain(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Backend verification error:', errorText);
+      logger.error('Backend verification error', undefined, { error: errorText });
       throw new Error(`Verification failed: ${response.statusText} - ${errorText}`);
     }
 
@@ -313,7 +312,7 @@ export async function verifyProofOffChain(
     logger.info('Off-chain verification response', { result });
     return result;
   } catch (error) {
-    console.error('❌ Proof verification failed:', error);
+    logger.error('Proof verification failed', error);
     return { valid: false };
   }
 }
@@ -418,8 +417,7 @@ export async function generateProofForOnChain(
   const offChainVerification = await verifyProofOffChain(starkProof, claimString);
   
   if (!offChainVerification.valid) {
-    console.error('❌ Off-chain verification failed');
-    console.error('   Verification result:', offChainVerification);
+    logger.error('Off-chain verification failed', undefined, { data: offChainVerification });
     throw new Error('Off-chain verification failed - proof invalid');
   }
   
@@ -607,7 +605,7 @@ export async function generateWalletOwnershipProof(
         verified: true,
         security_level: 128,
         timestamp: new Date().toISOString()
-      } as any,
+      } as unknown as ZKProof,
       timestamp: new Date().toISOString()
     };
   }

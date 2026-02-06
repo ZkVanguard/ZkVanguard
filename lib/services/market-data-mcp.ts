@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Market Data MCP Client
  * Provides real-time market data via Model Context Protocol
  */
 
-import { logger } from '@shared/utils/logger';
+import { logger } from '@/lib/utils/logger';
 
 export interface MarketDataPrice {
   symbol: string;
@@ -126,7 +125,7 @@ export class MarketDataMCPClient {
       };
       
       const cryptoSymbol = symbolMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}_USDT`;
-      const ticker = tickers.find((t: any) => t.i === cryptoSymbol);
+      const ticker = tickers.find((t: Record<string, string>) => t.i === cryptoSymbol);
       
       if (ticker) {
         const price = parseFloat(ticker.a || '0');

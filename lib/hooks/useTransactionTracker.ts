@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Transaction Tracker Hook
  * Automatically track and cache user transactions
@@ -6,6 +5,7 @@
 
 import { useEffect } from 'react';
 import { usePublicClient, useAccount } from 'wagmi';
+import { logger } from '@/lib/utils/logger';
 import { addTransactionToCache } from '../utils/transactionCache';
 
 export function useTransactionTracker() {
@@ -52,7 +52,7 @@ export function useTransactionTracker() {
           }
         } catch (error) {
           // Silently fail - this is background tracking
-          console.debug('Transaction tracking error:', error);
+          logger.debug('Transaction tracking error', { component: 'useTransactionTracker', error: String(error) });
         }
       },
     });

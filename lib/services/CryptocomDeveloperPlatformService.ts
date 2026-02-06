@@ -1,9 +1,9 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Developer Platform Service
  * On-chain data access for Cronos EVM and zkEVM
  */
 
+import { logger } from '@/lib/utils/logger';
 import {
   Client,
   CronosEvm,
@@ -64,7 +64,7 @@ class CryptocomDeveloperPlatformService {
       const key = apiKey || process.env.DASHBOARD_API_KEY || process.env.CRYPTOCOM_DEVELOPER_API_KEY;
       
       if (!key) {
-        console.warn('[DeveloperPlatform] No API key provided, some features may be limited');
+        logger.warn('No API key provided, some features may be limited', { component: 'DeveloperPlatform' });
       }
 
       // Set network
@@ -95,9 +95,10 @@ class CryptocomDeveloperPlatformService {
       });
 
       this.isInitialized = true;
-      console.log('[DeveloperPlatform] Initialized successfully on', this.network);
-    } catch (error: any) {
-      console.error('[DeveloperPlatform] Initialization failed:', error.message);
+      logger.info('Initialized successfully', { component: 'DeveloperPlatform', data: String(this.network) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Initialization failed: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -122,8 +123,9 @@ class CryptocomDeveloperPlatformService {
         symbol: 'CRO',
         decimals: 18,
       };
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get balance for ${address}:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get balance for ${address}: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -150,8 +152,9 @@ class CryptocomDeveloperPlatformService {
         decimals: 18,
         name: 'Unknown Token',
       };
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get token balance:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get token balance: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -169,7 +172,7 @@ class CryptocomDeveloperPlatformService {
       //   network: this.network,
       // });
 
-      const txData = {} as any;
+      const txData = {} as Record<string, string>;
 
       return {
         hash: txData.hash,
@@ -182,8 +185,9 @@ class CryptocomDeveloperPlatformService {
         timestamp: txData.timestamp ? parseInt(txData.timestamp) : Date.now() / 1000,
         status: txData.status === '1' ? 'success' : txData.status === '0' ? 'failed' : 'pending',
       };
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get transaction ${txHash}:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get transaction ${txHash}: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -201,9 +205,9 @@ class CryptocomDeveloperPlatformService {
       //   network: this.network,
       //   limit,
       // });
-      const txs = { data: { items: [] } } as any;
+      const txs = { data: { items: [], transactions: [] as Record<string, string>[] } };
 
-      return txs.data.transactions.map((tx: any) => ({
+      return txs.data.transactions.map((tx: Record<string, string>) => ({
         hash: tx.hash,
         from: tx.from,
         to: tx.to || '',
@@ -214,8 +218,9 @@ class CryptocomDeveloperPlatformService {
         timestamp: tx.timestamp ? parseInt(tx.timestamp) : Date.now() / 1000,
         status: tx.status === '1' ? 'success' : tx.status === '0' ? 'failed' : 'pending',
       }));
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get transactions for ${address}:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get transactions for ${address}: ${message}`, error, { component: 'DeveloperPlatform' });
       return [];
     }
   }
@@ -250,8 +255,9 @@ class CryptocomDeveloperPlatformService {
         gasUsed: blockData.gasUsed,
         gasLimit: blockData.gasLimit,
       };
-    } catch (error: any) {
-      console.error('[DeveloperPlatform] Failed to get latest block:', error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get latest block: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -269,18 +275,19 @@ class CryptocomDeveloperPlatformService {
       //   network: this.network,
       // });
 
-      const blockData = {} as any;
+      const blockData = {} as Record<string, string | string[]>;
 
       return {
-        number: parseInt(blockData.number),
-        hash: blockData.hash,
-        timestamp: parseInt(blockData.timestamp),
-        transactions: blockData.transactions || [],
-        gasUsed: blockData.gasUsed,
-        gasLimit: blockData.gasLimit,
+        number: parseInt(blockData.number as string),
+        hash: blockData.hash as string,
+        timestamp: parseInt(blockData.timestamp as string),
+        transactions: (blockData.transactions as string[]) || [],
+        gasUsed: blockData.gasUsed as string,
+        gasLimit: blockData.gasLimit as string,
       };
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get block ${blockNumber}:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get block ${blockNumber}: ${message}`, error, { component: 'DeveloperPlatform' });
       throw error;
     }
   }
@@ -294,10 +301,11 @@ class CryptocomDeveloperPlatformService {
     try {
       // Note: This would require iterating through known token contracts
       // For now, return empty array - implement token discovery logic as needed
-      console.warn('[DeveloperPlatform] getAllTokenBalances not fully implemented');
+      logger.warn('getAllTokenBalances not fully implemented', { component: 'DeveloperPlatform' });
       return [];
-    } catch (error: any) {
-      console.error(`[DeveloperPlatform] Failed to get all token balances:`, error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to get all token balances: ${message}`, error, { component: 'DeveloperPlatform' });
       return [];
     }
   }
@@ -313,7 +321,7 @@ class CryptocomDeveloperPlatformService {
       const block = await this.getLatestBlock();
       return block.number > 0;
     } catch (error) {
-      console.error('[DeveloperPlatform] Health check failed:', error);
+      logger.error('Health check failed', error, { component: 'DeveloperPlatform' });
       return false;
     }
   }

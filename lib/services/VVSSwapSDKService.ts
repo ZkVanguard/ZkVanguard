@@ -1,9 +1,9 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * VVS Swap SDK Service
  * Wrapper for @vvs-finance/swap-sdk to enable swaps on Cronos Testnet
  */
 
+import { logger } from '../utils/logger';
 import { 
   fetchBestTrade, 
   executeTrade,
@@ -27,6 +27,41 @@ export interface VVSSwapQuote {
   formattedTrade: string;
 }
 
+/** Extended trade data shape (VVS SDK runtime properties beyond type definitions) */
+interface VVSTradeData {
+  amountOut?: {
+    amount?: { numerator: unknown; denominator: unknown };
+    toExact?: () => string;
+    toSignificant?: (digits: number) => string;
+  };
+  outputAmount?: {
+    toExact?: () => string;
+    toSignificant?: (digits: number) => string;
+    currency?: { symbol?: string; address?: string };
+    quotient?: { toString: () => string };
+  };
+  inputAmount?: {
+    toExact?: () => string;
+    toSignificant?: (digits: number) => string;
+    currency?: { symbol?: string; address?: string };
+    quotient?: { toString: () => string };
+  };
+  minimumAmountOut?: {
+    quotient?: { toString: () => string };
+  };
+  route?: {
+    path?: Array<{ symbol?: string; address?: string }>;
+  };
+  swaps?: Array<{
+    route?: {
+      path?: Array<{ symbol?: string; address?: string }>;
+    };
+  }>;
+  priceImpact?: {
+    toSignificant: (digits: number) => string;
+  };
+}
+
 export class VVSSwapSDKService {
   private chainId: number;
   private quoteApiClientId: string | undefined;
@@ -39,9 +74,9 @@ export class VVSSwapSDKService {
     this.quoteApiClientId = 
       process.env[envKey] || // Server-side env variable
       process.env.NEXT_PUBLIC_VVS_QUOTE_API_CLIENT_ID || // Public fallback
-      (typeof window !== 'undefined' ? (window as any)[envKey] : undefined); // Client-side fallback
+      (typeof window !== 'undefined' ? (window as unknown as Record<string, string | undefined>)[envKey] : undefined); // Client-side fallback
     
-    console.log(`🔧 VVS SDK initialized for chain ${chainId}`, {
+    logger.debug(`VVS SDK initialized for chain ${chainId}`, {
       envKey,
       hasApiKey: !!this.quoteApiClientId,
       apiKeyPreview: this.quoteApiClientId ? `${this.quoteApiClientId.slice(0, 8)}...` : 'none',
@@ -63,7 +98,7 @@ export class VVSSwapSDKService {
       const inputTokenArg = inputToken === 'CRO' || inputToken === 'TCRO' ? 'NATIVE' : inputToken;
       const outputTokenArg = outputToken === 'CRO' || outputToken === 'TCRO' ? 'NATIVE' : outputToken;
 
-      console.log('🔄 Fetching VVS swap quote:', {
+      logger.debug('Fetching VVS swap quote', {
         chainId: this.chainId,
         inputToken: inputTokenArg,
         outputToken: outputTokenArg,
@@ -92,7 +127,7 @@ export class VVSSwapSDKService {
       );
 
       const formattedTrade = SwapSdkUtils.formatTrade(trade);
-      console.log('✅ VVS quote received:', formattedTrade);
+      logger.info('VVS quote received', { formattedTrade });
 
       // Extract route information
       const route = this.extractRoute(trade);
@@ -104,7 +139,7 @@ export class VVSSwapSDKService {
       // VVS SDK trade object has: type, amountIn, amountOut, routes, price, lpFeeRatio, lpFee, slippage
       // amountOut structure: { amount: Fraction, address, symbol, decimals }
       let amountOut = '0';
-      const tradeAny = trade as any;
+      const tradeAny = trade as unknown as VVSTradeData;
       
       // Try to extract from amountOut object structure
       if (tradeAny.amountOut) {
@@ -134,7 +169,7 @@ export class VVSSwapSDKService {
         }
       }
       
-      console.log('📊 Extracted amountOut:', amountOut);
+      logger.debug('Extracted amountOut', { amountOut });
 
       return {
         amountIn: amount,
@@ -145,7 +180,7 @@ export class VVSSwapSDKService {
         formattedTrade,
       };
     } catch (error) {
-      console.error('Failed to fetch VVS quote:', error);
+      logger.error('Failed to fetch VVS quote', error);
       throw new Error(`Failed to fetch swap quote: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -174,7 +209,7 @@ export class VVSSwapSDKService {
         useGasless = recommendation.shouldUse;
         
         if (useGasless) {
-          console.log(`🎯 Using x402 gasless mode: ${recommendation.reason}`);
+          logger.info('Using x402 gasless mode', { reason: recommendation.reason });
         }
       }
 
@@ -185,30 +220,30 @@ export class VVSSwapSDKService {
           if (result.success) {
             return result;
           }
-          console.warn('Gasless swap failed, falling back to regular swap');
+          logger.warn('Gasless swap failed, falling back to regular swap');
         } catch (gaslessError) {
-          console.warn('Gasless swap error, falling back to regular:', gaslessError);
+          logger.warn('Gasless swap error, falling back to regular', { error: String(gaslessError) });
         }
       }
 
       // Execute regular swap
-      console.log('🔄 Executing regular VVS swap...');
+      logger.info('Executing regular VVS swap');
 
       // Step 1: Approve token if needed
       const approvalTx = await approveIfNeeded(this.chainId, trade, signer);
       if (approvalTx) {
-        console.log('✅ Token approval tx:', approvalTx.hash);
+        logger.info('Token approval tx', { hash: approvalTx.hash });
         await approvalTx.wait();
-        console.log('✅ Token approved');
+        logger.info('Token approved');
       }
 
       // Step 2: Execute the trade
       const tx = await executeTrade(this.chainId, trade, signer);
-      console.log('✅ Swap tx submitted:', tx.hash);
+      logger.info('Swap tx submitted', { hash: tx.hash });
 
       // Cache the transaction
       const senderAddress = await signer.getAddress();
-      const tradeAny = trade as any;
+      const tradeAny = trade as unknown as VVSTradeData;
       addTransactionToCache({
         hash: tx.hash,
         type: 'swap',
@@ -227,7 +262,7 @@ export class VVSSwapSDKService {
         gasless: false,
       };
     } catch (error) {
-      console.error('Failed to execute VVS swap:', error);
+      logger.error('Failed to execute VVS swap', error);
       throw new Error(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -240,7 +275,7 @@ export class VVSSwapSDKService {
     signer: Signer
   ): Promise<{ hash: string; success: boolean; gasless: boolean; gasSaved?: string }> {
     const userAddress = await signer.getAddress();
-    const tradeData = trade as any;
+    const tradeData = trade as unknown as VVSTradeData;
 
     // Extract swap parameters
     const inputToken = tradeData.inputAmount?.currency?.address || '';
@@ -300,21 +335,21 @@ export class VVSSwapSDKService {
       // VVS SDK trade structure may vary, so handle gracefully
       if (trade && typeof trade === 'object') {
         // Check for common route patterns
-        const tradeData = trade as any;
+        const tradeData = trade as unknown as VVSTradeData;
         
         if (tradeData.route?.path) {
-          return tradeData.route.path.map((token: any) => 
-            token.symbol || token.address
+          return tradeData.route.path.map((token) => 
+            token.symbol || token.address || 'Unknown'
           );
         }
         
         if (tradeData.swaps) {
           const tokens = new Set<string>();
           tokens.add(tradeData.inputAmount?.currency?.symbol || 'Unknown');
-          tradeData.swaps.forEach((swap: any) => {
+          tradeData.swaps.forEach((swap) => {
             if (swap.route?.path) {
-              swap.route.path.forEach((token: any) => {
-                tokens.add(token.symbol || token.address);
+              swap.route.path.forEach((token) => {
+                tokens.add(token.symbol || token.address || 'Unknown');
               });
             }
           });
@@ -331,7 +366,7 @@ export class VVSSwapSDKService {
 
       return ['Unknown', 'Unknown'];
     } catch (error) {
-      console.warn('Failed to extract route:', error);
+      logger.warn('Failed to extract route', { error: String(error) });
       return ['Input Token', 'Output Token'];
     }
   }
@@ -341,7 +376,7 @@ export class VVSSwapSDKService {
    */
   private calculatePriceImpact(trade: Trade): number {
     try {
-      const tradeData = trade as any;
+      const tradeData = trade as unknown as VVSTradeData;
       
       // Check if priceImpact is directly available
       if (tradeData.priceImpact !== undefined) {
@@ -360,7 +395,7 @@ export class VVSSwapSDKService {
 
       return 0;
     } catch (error) {
-      console.warn('Failed to calculate price impact:', error);
+      logger.warn('Failed to calculate price impact', { error: String(error) });
       return 0;
     }
   }

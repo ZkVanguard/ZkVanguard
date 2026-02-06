@@ -1,10 +1,10 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Delphi Market Service
  * Simplified service for fetching prediction market data in the frontend
  * Optimized with caching to reduce network requests by 80%
  */
 
+import { logger } from '@/lib/utils/logger';
 import { cache } from '../utils/cache';
 
 export interface PredictionMarket {
@@ -53,15 +53,15 @@ export class DelphiMarketService {
       const tickers = data.result?.data || [];
       
       // Find relevant tickers
-      const btcTicker = tickers.find((t: any) => t.i === 'BTC_USDT');
-      const ethTicker = tickers.find((t: any) => t.i === 'ETH_USDT');
-      const croTicker = tickers.find((t: any) => t.i === 'CRO_USDT');
+      const btcTicker = tickers.find((t: Record<string, string>) => t.i === 'BTC_USDT');
+      const ethTicker = tickers.find((t: Record<string, string>) => t.i === 'ETH_USDT');
+      const croTicker = tickers.find((t: Record<string, string>) => t.i === 'CRO_USDT');
       
-      console.log('Real crypto prices:', {
+      logger.info('Real crypto prices', { component: 'DelphiMarket', data: {
         BTC: btcTicker?.a,
         ETH: ethTicker?.a,
         CRO: croTicker?.a
-      });
+      } });
 
       // Generate predictions based on REAL 24h price changes
       if (btcTicker) {
@@ -177,11 +177,11 @@ export class DelphiMarketService {
         source: 'crypto-analysis',
       });
 
-      console.log(`Generated ${predictions.length} crypto predictions from real market data`);
+      logger.info(`Generated ${predictions.length} crypto predictions from real market data`, { component: 'DelphiMarket' });
       return predictions;
 
     } catch (error) {
-      console.error('Failed to generate crypto predictions:', error);
+      logger.error('Failed to generate crypto predictions', error, { component: 'DelphiMarket' });
       return [];
     }
   }
@@ -195,10 +195,10 @@ export class DelphiMarketService {
     riskTolerance: number, // 0-100
     targetYield: number // e.g., 10 = 10%
   ): Promise<PredictionMarket[]> {
-    console.log(`Getting predictions for assets: ${assets.join(', ')}, risk: ${riskTolerance}, yield: ${targetYield}%`);
+    logger.info(`Getting predictions for assets: ${assets.join(', ')}, risk: ${riskTolerance}, yield: ${targetYield}%`, { component: 'DelphiMarket' });
     
     const allPredictions = await this.getRelevantMarkets(assets);
-    console.log(`Got ${allPredictions.length} raw predictions`);
+    logger.debug(`Got ${allPredictions.length} raw predictions`, { component: 'DelphiMarket' });
     
     // Less strict filtering - show more predictions for demo
     const filtered = allPredictions.filter(prediction => {
@@ -240,7 +240,7 @@ export class DelphiMarketService {
     
     // Limit to top 8 predictions for cleaner UI
     const result = sorted.slice(0, 8);
-    console.log(`Returning ${result.length} filtered predictions`);
+    logger.debug(`Returning ${result.length} filtered predictions`, { component: 'DelphiMarket' });
     return result;
   }
 
@@ -253,12 +253,12 @@ export class DelphiMarketService {
     const cacheKey = `polymarket-${assets.sort().join(',')}`;
     const cached = cache.get<PredictionMarket[]>(cacheKey);
     if (cached) {
-      console.log(`[Cache HIT] Polymarket data for ${assets.join(', ')}`);
+      logger.debug(`Cache HIT: Polymarket data for ${assets.join(', ')}`, { component: 'DelphiMarket' });
       return cached;
     }
 
     try {
-      console.log('Fetching live Polymarket data for assets:', assets);
+      logger.info('Fetching live Polymarket data', { component: 'DelphiMarket', data: assets });
       
       // Use direct Polymarket API (works in both browser and Node.js)
       const baseUrl = typeof window !== 'undefined' 
@@ -277,7 +277,7 @@ export class DelphiMarketService {
       }
 
       const markets = await response.json();
-      console.log(`Fetched ${markets.length} Polymarket markets (open/not closed)`);
+      logger.info(`Fetched ${markets.length} Polymarket markets (open/not closed)`, { component: 'DelphiMarket' });
 
       // Finance/crypto related keywords - only show markets relevant to trading/finance
       const financeKeywords = [
@@ -288,26 +288,26 @@ export class DelphiMarketService {
       ];
 
       // Filter to only finance/crypto related markets
-      const relevantMarkets = markets.filter((m: any) => {
+      const relevantMarkets = markets.filter((m: Record<string, string>) => {
         const q = (m.question || '').toLowerCase();
         const cat = (m.category || '').toLowerCase();
         return financeKeywords.some(kw => q.includes(kw)) || cat === 'crypto' || cat === 'economics';
       });
 
-      console.log(`Filtered to ${relevantMarkets.length} finance/crypto related markets`);
+      logger.debug(`Filtered to ${relevantMarkets.length} finance/crypto related markets`, { component: 'DelphiMarket' });
 
       // Convert Polymarket format to our format
       const predictions: PredictionMarket[] = relevantMarkets
         .slice(0, 20)
-        .map((market: any) => {
-          const question = market.question || 'Unknown prediction';
-          const volume = parseFloat(market.volume || market.volumeNum || 0);
+        .map((market: Record<string, unknown>) => {
+          const question = (market.question as string) || 'Unknown prediction';
+          const volume = parseFloat((market.volume as string) || (market.volumeNum as string) || '0');
           const q = question.toLowerCase();
           
           // Parse outcomePrices - it's a JSON string like "[\"0.89\", \"0.11\"]"
           let probability = 50;
           try {
-            const pricesStr = market.outcomePrices;
+            const pricesStr = market.outcomePrices as string;
             if (pricesStr) {
               const prices = typeof pricesStr === 'string' ? JSON.parse(pricesStr) : pricesStr;
               if (Array.isArray(prices) && prices.length > 0) {
@@ -315,7 +315,7 @@ export class DelphiMarketService {
               }
             }
           } catch (e) {
-            console.warn('Failed to parse outcomePrices:', market.outcomePrices);
+            logger.warn('Failed to parse outcomePrices', { component: 'DelphiMarket', data: market.outcomePrices });
           }
           
           // Categorize markets
@@ -342,10 +342,9 @@ export class DelphiMarketService {
           if (q.includes('federal') || q.includes('interest rate') || q.includes('inflation') || 
               q.includes('recession') || q.includes('treasury') || q.includes('spending')) {
             category = 'market';
-            relatedAssets = ['BTC', 'ETH', 'USDC']; // Macro events affect all crypto
+            relatedAssets = ['BTC', 'ETH', 'USDC'];
           }
           
-          // Default to major crypto assets for general finance markets
           if (relatedAssets.length === 0) {
             relatedAssets = ['BTC', 'ETH'];
           }
@@ -361,7 +360,7 @@ export class DelphiMarketService {
           else if (probability < 30 && impact === 'LOW') recommendation = 'IGNORE';
 
           return {
-            id: `polymarket-${market.id || Math.random()}`,
+            id: `polymarket-${(market.id as string) || Math.random()}`,
             question,
             category,
             probability: Math.round(probability * 10) / 10, // Round to 1 decimal
@@ -374,16 +373,15 @@ export class DelphiMarketService {
           };
         });
 
-      console.log(`Converted to ${predictions.length} prediction market entries`);
+      logger.info(`Converted to ${predictions.length} prediction market entries`, { component: 'DelphiMarket' });
       
-      // Cache the result for 60 seconds
       cache.set(cacheKey, predictions);
-      console.log(`[Cache SET] Polymarket data for ${assets.join(', ')}`);
+      logger.debug(`Cache SET: Polymarket data for ${assets.join(', ')}`, { component: 'DelphiMarket' });
 
       return predictions;
 
     } catch (error) {
-      console.error('Polymarket API error:', error);
+      logger.error('Polymarket API error', error, { component: 'DelphiMarket' });
       throw error;
     }
   }
@@ -398,7 +396,7 @@ export class DelphiMarketService {
     
     // First, generate crypto-specific predictions from real market data
     const cryptoPredictions = await this.generateCryptoPredictions(assets);
-    console.log(`Generated ${cryptoPredictions.length} crypto predictions from Crypto.com data`);
+    logger.info(`Generated ${cryptoPredictions.length} crypto predictions from Crypto.com data`, { component: 'DelphiMarket' });
     
     // Try Delphi API first
     try {
@@ -408,16 +406,16 @@ export class DelphiMarketService {
       if (!response.ok) throw new Error('Delphi API unavailable');
       
       const data = await response.json();
-      console.log('✅ Using Delphi API data');
+      logger.info('Using Delphi API data', { component: 'DelphiMarket' });
       realPredictions = this.parseMarkets(data, assets);
       usedSource = 'delphi';
     } catch (delphiError) {
-      console.log('Delphi API unavailable, trying Polymarket API...');
+      logger.warn('Delphi API unavailable, trying Polymarket API...', { component: 'DelphiMarket' });
       
       // Try Polymarket API as backup
       try {
         const polymarketData = await this.fetchPolymarketData(assets);
-        console.log(`✅ Using live Polymarket data: ${polymarketData.length} predictions`);
+        logger.info(`Using live Polymarket data: ${polymarketData.length} predictions`, { component: 'DelphiMarket' });
         
         // Filter to relevant assets
         realPredictions = this.filterByAssets(polymarketData, assets);
@@ -434,12 +432,12 @@ export class DelphiMarketService {
     
     // If we have predictions, return them
     if (allPredictions.length > 0) {
-      console.log(`Returning ${allPredictions.length} total predictions (${cryptoPredictions.length} crypto + ${realPredictions.length} ${usedSource})`);
+      logger.info(`Returning ${allPredictions.length} total predictions (${cryptoPredictions.length} crypto + ${realPredictions.length} ${usedSource})`, { component: 'DelphiMarket' });
       return allPredictions;
     }
     
     // ONLY if all APIs fail, throw error to make it clear
-    console.error('❌ NO REAL PREDICTION DATA AVAILABLE - All APIs failed');
+    logger.error('No real prediction data available - all APIs failed', undefined, { component: 'DelphiMarket' });
     throw new Error('Unable to fetch prediction market data from Delphi or Polymarket. Please check network connectivity.');
   }
 
@@ -461,12 +459,12 @@ export class DelphiMarketService {
 
     // If we have enough direct matches, return those
     if (directMatches.length >= 3) {
-      console.log(`filterByAssets: Found ${directMatches.length} direct matches`);
+      logger.debug(`filterByAssets: Found ${directMatches.length} direct matches`, { component: 'DelphiMarket' });
       return directMatches.slice(0, 10);
     }
 
     // Otherwise return a mix of direct matches + general market predictions
-    console.log(`filterByAssets: Only ${directMatches.length} direct matches, including general markets`);
+    logger.debug(`filterByAssets: Only ${directMatches.length} direct matches, including general markets`, { component: 'DelphiMarket' });
     const remaining = predictions.filter(p => !directMatches.includes(p)).slice(0, 10 - directMatches.length);
     return [...directMatches, ...remaining].slice(0, 10);
   }
@@ -669,13 +667,13 @@ export class DelphiMarketService {
     // Filter markets based on portfolio assets
     // If no assets provided, return all markets
     if (assets.length === 0) {
-      console.log('No assets provided, returning all mock markets');
+      logger.debug('No assets provided, returning all mock markets', { component: 'DelphiMarket' });
       return allMarkets;
     }
 
     // Normalize asset names for matching (handle variations like BTC/WBTC, USDC/devUSDC)
     const normalizedAssets = assets.map(a => a.toUpperCase().replace(/^(W|DEV)/, ''));
-    console.log('Filtering mock markets for normalized assets:', normalizedAssets);
+    logger.debug('Filtering mock markets for normalized assets', { component: 'DelphiMarket', data: normalizedAssets });
 
     const filtered = allMarkets.filter(market => {
       // Count how many of the market's assets are in the user's portfolio
@@ -695,7 +693,7 @@ export class DelphiMarketService {
       return true;
     });
     
-    console.log(`Filtered to ${filtered.length} mock markets from ${allMarkets.length} total`);
+    logger.debug(`Filtered to ${filtered.length} mock markets from ${allMarkets.length} total`, { component: 'DelphiMarket' });
     return filtered;
   }
 
@@ -703,7 +701,7 @@ export class DelphiMarketService {
    * Parse API response to PredictionMarket format
    * Uses real Polymarket-style data with asset-based filtering
    */
-  private static parseMarkets(data: any[], portfolioAssets: string[]): PredictionMarket[] {
+  private static parseMarkets(_data: unknown[], portfolioAssets: string[]): PredictionMarket[] {
     // Real prediction markets based on Polymarket (January 2026)
     const realisticMarkets: PredictionMarket[] = [
       // BTC predictions

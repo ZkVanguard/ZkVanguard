@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Pool } from 'pg';
+import { logger } from '@/lib/utils/logger';
 
 // PostgreSQL connection pool
 let pool: Pool | null = null;
@@ -23,20 +23,20 @@ export function getPool(): Pool {
     });
 
     pool.on('error', (err) => {
-      console.error('PostgreSQL pool error:', err);
+      logger.error('PostgreSQL pool error', err, { component: 'postgres' });
     });
   }
 
   return pool;
 }
 
-export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
+export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
   const pool = getPool();
   const result = await pool.query(text, params);
   return result.rows;
 }
 
-export async function queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
+export async function queryOne<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T | null> {
   const rows = await query<T>(text, params);
   return rows[0] || null;
 }

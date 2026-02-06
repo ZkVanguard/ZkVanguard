@@ -1,8 +1,9 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Simple in-memory cache utility for API responses
  * Reduces network requests and improves performance
  */
+
+import { logger } from '@/lib/utils/logger';
 
 interface CacheEntry<T> {
   data: T;
@@ -10,7 +11,7 @@ interface CacheEntry<T> {
 }
 
 class CacheManager {
-  private cache: Map<string, CacheEntry<any>>;
+  private cache: Map<string, CacheEntry<unknown>>;
   private defaultTTL: number;
 
   constructor(defaultTTL: number = 60000) {
@@ -33,7 +34,7 @@ class CacheManager {
       return null;
     }
 
-    console.log(`[Cache HIT] ${key} (age: ${(age / 1000).toFixed(1)}s)`);
+    logger.debug(`[Cache HIT] ${key} (age: ${(age / 1000).toFixed(1)}s)`, { component: 'cache' });
     return entry.data;
   }
 
@@ -46,7 +47,7 @@ class CacheManager {
       timestamp: Date.now(),
       ...(customTTL ? { ttl: customTTL } : {}),
     });
-    console.log(`[Cache SET] ${key}${customTTL ? ` (TTL: ${customTTL}ms)` : ''}`);
+    logger.debug(`[Cache SET] ${key}${customTTL ? ` (TTL: ${customTTL}ms)` : ''}`, { component: 'cache' });
   }
 
   /**
@@ -54,7 +55,7 @@ class CacheManager {
    */
   invalidate(key: string): void {
     this.cache.delete(key);
-    console.log(`[Cache INVALIDATE] ${key}`);
+    logger.debug(`[Cache INVALIDATE] ${key}`, { component: 'cache' });
   }
 
   /**
@@ -71,7 +72,7 @@ class CacheManager {
       }
     }
     
-    console.log(`[Cache INVALIDATE] ${count} keys matching "${pattern}"`);
+    logger.debug(`[Cache INVALIDATE] ${count} keys matching "${pattern}"`, { component: 'cache' });
   }
 
   /**
@@ -80,7 +81,7 @@ class CacheManager {
   clear(): void {
     const size = this.cache.size;
     this.cache.clear();
-    console.log(`[Cache CLEAR] ${size} entries removed`);
+    logger.debug(`[Cache CLEAR] ${size} entries removed`, { component: 'cache' });
   }
 
   /**
@@ -108,7 +109,7 @@ class CacheManager {
     }
 
     if (removed > 0) {
-      console.log(`[Cache CLEANUP] ${removed} expired entries removed`);
+      logger.debug(`[Cache CLEANUP] ${removed} expired entries removed`, { component: 'cache' });
     }
   }
 }
@@ -124,7 +125,7 @@ if (typeof window !== 'undefined') {
 /**
  * Higher-order function to cache async function results
  */
-export function withCache<T extends (...args: any[]) => Promise<any>>(
+export function withCache<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   keyGenerator: (...args: Parameters<T>) => string,
   ttl?: number

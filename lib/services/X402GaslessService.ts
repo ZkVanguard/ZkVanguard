@@ -1,10 +1,10 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * X402 Gasless Transaction Service
  * Provides gasless transaction support for swaps and portfolio operations
  * Uses deployed X402GaslessZKCommitmentVerifier contract for gas sponsorship
  */
 
+import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
 import { addTransactionToCache } from '../utils/transactionCache';
 
@@ -96,7 +96,7 @@ export class X402GaslessService {
 
       return { canExecute: true };
     } catch (error) {
-      console.error('Error checking gasless eligibility:', error);
+      logger.error('Error checking gasless eligibility', error);
       return { canExecute: false, reason: 'Error checking eligibility' };
     }
   }
@@ -123,18 +123,18 @@ export class X402GaslessService {
       const requiredAllowance = BigInt(this.config.feePerTransaction) * 100n;
 
       if (currentAllowance < requiredAllowance) {
-        console.log('Approving USDC for x402 contract...');
+        logger.info('Approving USDC for x402 contract');
         const approveTx = await usdcContract.approve(
           this.config.contractAddress,
           requiredAllowance
         );
         await approveTx.wait();
-        console.log('USDC approved for x402');
+        logger.info('USDC approved for x402');
       }
 
       return true;
     } catch (error) {
-      console.error('Error approving USDC:', error);
+      logger.error('Error approving USDC', error);
       return false;
     }
   }
@@ -193,7 +193,7 @@ export class X402GaslessService {
         signer
       );
 
-      console.log('Executing gasless transaction via x402...');
+      logger.info('Executing gasless transaction via x402');
       const tx = await x402Contract.storeCommitmentWithUSDC(
         proofHash,
         merkleRoot,
@@ -228,11 +228,11 @@ export class X402GaslessService {
         gasSponsored: ethers.formatEther(totalGasSponsored),
         feeInUSDC: ethers.formatUnits(this.config.feePerTransaction, 6),
       };
-    } catch (error: any) {
-      console.error('Gasless transaction failed:', error);
+    } catch (error) {
+      logger.error('Gasless transaction failed', error);
       return {
         success: false,
-        error: error?.message || 'Transaction failed',
+        error: error instanceof Error ? error.message : 'Transaction failed',
       };
     }
   }
@@ -267,9 +267,9 @@ export class X402GaslessService {
         data: swapData,
         userAddress: params.userAddress,
       });
-    } catch (error: any) {
-      console.error('Gasless swap failed:', error);
-      return { success: false, error: error?.message || 'Swap failed' };
+    } catch (error) {
+      logger.error('Gasless swap failed', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Swap failed' };
     }
   }
 
@@ -298,9 +298,9 @@ export class X402GaslessService {
         data: depositData,
         userAddress,
       });
-    } catch (error: any) {
-      console.error('Gasless deposit failed:', error);
-      return { success: false, error: error?.message || 'Deposit failed' };
+    } catch (error) {
+      logger.error('Gasless deposit failed', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Deposit failed' };
     }
   }
 
@@ -324,9 +324,9 @@ export class X402GaslessService {
         data: rebalanceData,
         userAddress,
       });
-    } catch (error: any) {
-      console.error('Gasless rebalance failed:', error);
-      return { success: false, error: error?.message || 'Rebalance failed' };
+    } catch (error) {
+      logger.error('Gasless rebalance failed', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Rebalance failed' };
     }
   }
 
@@ -356,7 +356,7 @@ export class X402GaslessService {
         enabled: this.config.enabled,
       };
     } catch (error) {
-      console.error('Error fetching x402 stats:', error);
+      logger.error('Error fetching x402 stats', error);
       return {
         totalGasSponsored: '0',
         feePerTransaction: '0',
@@ -406,7 +406,7 @@ export class X402GaslessService {
         savingsUSD: (regularGasCostUSD - x402FeeUSD).toFixed(4),
       };
     } catch (error) {
-      console.error('Error estimating gas savings:', error);
+      logger.error('Error estimating gas savings', error);
       return {
         regularGasCostCRO: '0',
         regularGasCostUSD: '0',

@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com AI Agent Service Wrapper
  * 
@@ -9,8 +8,13 @@
 import { logger } from '../utils/logger';
 
 // Note: @crypto.com/ai-agent-client types will be available at runtime
-// Using any for now until proper types are available
-type AIAgentClient = any;
+// Using interface for now until proper types are available
+interface AIAgentClient {
+  analyze?(params: Record<string, unknown>): Promise<{ intent?: string; confidence?: number; entities?: Record<string, unknown>; parameters?: Record<string, unknown> }>;
+  analyzePortfolio?(address: string, portfolio: Record<string, unknown>): Promise<PortfolioAnalysis>;
+  assessRisk?(portfolio: Record<string, unknown>): Promise<RiskAssessment>;
+  generateHedgeRecommendations?(portfolio: Record<string, unknown>, riskProfile: Record<string, unknown>): Promise<HedgeRecommendation[]>;
+}
 
 // Types for AI analysis
 export interface PortfolioAnalysis {
@@ -54,8 +58,15 @@ export interface HedgeRecommendation {
 export interface IntentParsing {
   intent: 'analyze_portfolio' | 'assess_risk' | 'generate_hedge' | 'execute_settlement' | 'generate_report' | 'unknown';
   confidence: number;
-  entities: Record<string, any>;
-  parameters: Record<string, any>;
+  entities: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+}
+
+interface PortfolioInput {
+  tokens?: Array<{ symbol: string; usdValue: number; value?: number }>;
+  totalValue?: number;
+  positions?: Array<{ symbol?: string; value?: number }>;
+  [key: string]: unknown;
 }
 
 class CryptocomAIService {
@@ -73,7 +84,7 @@ class CryptocomAIService {
     if (this.apiKey) {
       try {
         // Dynamic import for Crypto.com AI Agent SDK (hackathon-provided)
-        import('@crypto.com/ai-agent-client').then((module: any) => {
+        import('@crypto.com/ai-agent-client').then((module: { createClient?: (config: Record<string, unknown>) => AIAgentClient }) => {
           const { createClient } = module;
           if (createClient) {
             this.client = createClient({
@@ -82,14 +93,14 @@ class CryptocomAIService {
             }) as AIAgentClient;
             logger.info('Crypto.com AI Agent SDK initialized successfully');
           } else {
-            console.warn('createClient not found in @crypto.com/ai-agent-client');
+            logger.warn('createClient not found in @crypto.com/ai-agent-client');
             this.client = null;
           }
         }).catch((_error) => {
           // Silent catch - fallback logic will be used
           this.client = null;
         });
-      } catch (error) {
+      } catch (_error) {
         this.client = null;
       }
     }
@@ -134,12 +145,12 @@ class CryptocomAIService {
         parameters: response.parameters || {},
       };
     } catch (error) {
-      console.error('AI intent parsing failed:', error);
+      logger.error('AI intent parsing failed', error);
       return this.fallbackIntentParsing(input);
     }
   }
 
-  private calculateRealPortfolioAnalysis(portfolio?: Record<string, any>): PortfolioAnalysis {
+  private calculateRealPortfolioAnalysis(portfolio?: PortfolioInput): PortfolioAnalysis {
     // Calculate analysis from REAL portfolio data
     if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
       const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
@@ -199,7 +210,7 @@ class CryptocomAIService {
     };
   }
 
-  private calculateRealRiskAssessment(portfolio?: Record<string, any>): RiskAssessment {
+  private calculateRealRiskAssessment(portfolio?: PortfolioInput): RiskAssessment {
     // Calculate REAL risk metrics from portfolio data
     if (portfolio && portfolio.tokens && portfolio.totalValue > 0) {
       const tokens = portfolio.tokens as Array<{ symbol: string; usdValue: number }>;
@@ -280,7 +291,7 @@ class CryptocomAIService {
     };
   }
 
-  private generateRealHedgeRecommendations(portfolio?: Record<string, any>): HedgeRecommendation[] {
+  private generateRealHedgeRecommendations(portfolio?: PortfolioInput): HedgeRecommendation[] {
     // No portfolio data - return empty
     if (!portfolio || !portfolio.tokens || portfolio.totalValue <= 0) {
       return [];
@@ -321,7 +332,7 @@ class CryptocomAIService {
    */
   async analyzePortfolio(
     address: string,
-    portfolio: Record<string, any>
+    portfolio: PortfolioInput
   ): Promise<PortfolioAnalysis> {
     if (!this.client || typeof this.client.analyzePortfolio !== 'function') {
       return this.calculateRealPortfolioAnalysis(portfolio);
@@ -339,7 +350,7 @@ class CryptocomAIService {
    * Assess risk using AI or calculate from real portfolio data
    */
   async assessRisk(
-    portfolio: Record<string, any>
+    portfolio: PortfolioInput
   ): Promise<RiskAssessment> {
     // First calculate base metrics from portfolio data
     const baseAssessment = this.calculateRealRiskAssessment(portfolio);
@@ -362,7 +373,7 @@ class CryptocomAIService {
       if (llmProvider.getActiveProvider()?.includes('ollama')) {
         const tokens = portfolio.tokens || [];
         const portfolioSummary = tokens
-          .map((t: any) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)}`)
+          .map((t) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)}`)
           .join(', ');
         
         const aiPrompt = `Analyze this DeFi portfolio risk. Portfolio: ${portfolioSummary}. Total: $${portfolio.totalValue?.toFixed(0) || 0}. Base volatility: ${(baseAssessment.volatility * 100).toFixed(1)}%, VaR: ${(baseAssessment.var95 * 100).toFixed(1)}%.
@@ -407,8 +418,8 @@ RISK_FACTOR2: [factor name] - [brief description]`;
    * Generate hedge recommendations using AI
    */
   async generateHedgeRecommendations(
-    portfolio: Record<string, any>,
-    riskProfile: Record<string, any>
+    portfolio: PortfolioInput,
+    riskProfile: Record<string, unknown>
   ): Promise<HedgeRecommendation[]> {
     // Get base recommendations from rule-based logic
     const baseRecommendations = this.generateRealHedgeRecommendations(portfolio);
@@ -434,10 +445,10 @@ RISK_FACTOR2: [factor name] - [brief description]`;
       if (llmProvider.getActiveProvider()?.includes('ollama')) {
         const tokens = portfolio.tokens || [];
         const portfolioSummary = tokens
-          .map((t: any) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)} (${((t.usdValue || t.value || 0) / (portfolio.totalValue || 1) * 100).toFixed(0)}%)`)
+          .map((t) => `${t.symbol}: $${(t.usdValue || t.value || 0).toFixed(0)} (${((t.usdValue || t.value || 0) / (portfolio.totalValue || 1) * 100).toFixed(0)}%)`)
           .join(', ');
         
-        const aiPrompt = `Recommend hedging strategy for this DeFi portfolio: ${portfolioSummary}. Total: $${portfolio.totalValue?.toFixed(0) || 0}. Risk level: ${riskProfile?.overallRisk || 'medium'}.
+        const aiPrompt = `Recommend hedging strategy for this DeFi portfolio: ${portfolioSummary}. Total: $${portfolio.totalValue?.toFixed(0) || 0}. Risk level: ${String(riskProfile?.overallRisk || 'medium')}.
 
 Respond with ONLY this format:
 STRATEGY: [strategy type: protective-put, perpetual-short, or diversify]
@@ -555,11 +566,11 @@ EFFECTIVENESS: [0-100]`;
     };
   }
 
-  private fallbackRiskAssessment(portfolioData: any): RiskAssessment {
+  private fallbackRiskAssessment(portfolioData: PortfolioInput): RiskAssessment {
     // Deterministic fallback: compute volatility based on exposure to volatile assets
     try {
       const positions = Array.isArray(portfolioData.positions) ? portfolioData.positions : [];
-      const totalValue = portfolioData.totalValue || positions.reduce((s: number, p: any) => s + (p.value || 0), 0) || 1;
+      const totalValue = portfolioData.totalValue || positions.reduce((s: number, p) => s + (p.value || 0), 0) || 1;
 
       const volatileSymbols = new Set(['BTC', 'ETH', 'SOL', 'ADA', 'BNB', 'CRO', 'LTC', 'DOT']);
       const stableSymbols = new Set(['USDC', 'USDT', 'DAI']);
@@ -622,7 +633,7 @@ EFFECTIVENESS: [0-100]`;
     }
   }
 
-  private fallbackHedgeRecommendations(_portfolioData: any, _riskProfile: any): HedgeRecommendation[] {
+  private fallbackHedgeRecommendations(_portfolioData: unknown, _riskProfile: unknown): HedgeRecommendation[] {
     return [
       {
         strategy: 'Stablecoin Hedge',

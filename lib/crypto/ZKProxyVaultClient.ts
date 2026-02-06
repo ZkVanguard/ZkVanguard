@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Bulletproof On-Chain ZK Proxy System
  * 
@@ -15,6 +14,7 @@
 
 import { ethers, Contract, Signer, Provider } from 'ethers';
 import * as crypto from 'crypto';
+import { logger } from '@/lib/utils/logger';
 
 // Contract ABIs (simplified for key functions)
 const ZK_PROXY_VAULT_ABI = [
@@ -135,10 +135,13 @@ export class ZKProxyVaultClient {
       binding
     );
     
-    console.log('🔐 Creating on-chain PDA proxy...', {
-      owner: ownerAddress.slice(0, 10) + '...',
-      previewProxy: previewAddress.slice(0, 10) + '...',
-      binding: binding.slice(0, 16) + '...',
+    logger.info('Creating on-chain PDA proxy', {
+      component: 'ZKProxyVaultClient',
+      data: {
+        owner: ownerAddress.slice(0, 10) + '...',
+        previewProxy: previewAddress.slice(0, 10) + '...',
+        binding: binding.slice(0, 16) + '...',
+      },
     });
     
     // Create on-chain
@@ -146,7 +149,7 @@ export class ZKProxyVaultClient {
     const receipt = await tx.wait();
     
     // Find ProxyCreated event
-    const event = receipt.logs.find((log: any) => {
+    const event = receipt.logs.find((log: { topics: string[]; data: string }) => {
       try {
         const parsed = this.vault.interface.parseLog(log);
         return parsed?.name === 'ProxyCreated';
@@ -159,9 +162,9 @@ export class ZKProxyVaultClient {
       ? this.vault.interface.parseLog(event)?.args.proxyAddress 
       : previewAddress;
     
-    console.log('✅ On-chain PDA created:', {
-      proxy: proxyAddress,
-      txHash: receipt.hash,
+    logger.info('On-chain PDA created', {
+      component: 'ZKProxyVaultClient',
+      data: { proxy: proxyAddress, txHash: receipt.hash },
     });
     
     return {
@@ -183,15 +186,18 @@ export class ZKProxyVaultClient {
   async deposit(proxyAddress: string, amountWei: bigint): Promise<string> {
     if (!this.signer) throw new Error('Signer required for write operations');
     
-    console.log('💰 Depositing to proxy vault...', {
-      proxy: proxyAddress.slice(0, 10) + '...',
-      amount: ethers.formatEther(amountWei) + ' ETH',
+    logger.info('Depositing to proxy vault', {
+      component: 'ZKProxyVaultClient',
+      data: {
+        proxy: proxyAddress.slice(0, 10) + '...',
+        amount: ethers.formatEther(amountWei) + ' ETH',
+      },
     });
     
     const tx = await this.vault.deposit(proxyAddress, { value: amountWei });
     const receipt = await tx.wait();
     
-    console.log('✅ Deposit confirmed:', receipt.hash);
+    logger.info('Deposit confirmed', { component: 'ZKProxyVaultClient', data: { txHash: receipt.hash } });
     return receipt.hash;
   }
 
@@ -250,7 +256,7 @@ export class ZKProxyVaultClient {
     }
     
     // Generate ZK proof
-    console.log('🔐 Generating ZK withdrawal proof...');
+    logger.info('Generating ZK withdrawal proof', { component: 'ZKProxyVaultClient' });
     const zkProof = await this.generateWithdrawalProof(proxyAddress);
     
     // Check if time-lock applies
@@ -258,11 +264,14 @@ export class ZKProxyVaultClient {
     const duration = await this.vault.timeLockDuration();
     const isTimeLocked = amountWei >= threshold;
     
-    console.log('📤 Initiating withdrawal...', {
-      proxy: proxyAddress.slice(0, 10) + '...',
-      amount: ethers.formatEther(amountWei) + ' ETH',
-      timeLocked: isTimeLocked,
-      ...(isTimeLocked && { lockDuration: Number(duration) / 3600 + ' hours' }),
+    logger.info('Initiating withdrawal', {
+      component: 'ZKProxyVaultClient',
+      data: {
+        proxy: proxyAddress.slice(0, 10) + '...',
+        amount: ethers.formatEther(amountWei) + ' ETH',
+        timeLocked: isTimeLocked,
+        ...(isTimeLocked && { lockDuration: Number(duration) / 3600 + ' hours' }),
+      },
     });
     
     // Execute withdrawal with ZK proof
@@ -276,7 +285,7 @@ export class ZKProxyVaultClient {
     
     if (isTimeLocked) {
       // Find WithdrawalRequested event
-      const event = receipt.logs.find((log: any) => {
+      const event = receipt.logs.find((log: { topics: string[]; data: string }) => {
         try {
           const parsed = this.vault.interface.parseLog(log);
           return parsed?.name === 'WithdrawalRequested';
@@ -289,15 +298,18 @@ export class ZKProxyVaultClient {
         ? Number(this.vault.interface.parseLog(event)?.args.unlockTime)
         : Math.floor(Date.now() / 1000) + Number(duration);
       
-      console.log('⏳ Time-locked withdrawal initiated:', {
-        txHash: receipt.hash,
-        unlockTime: new Date(unlockTime * 1000).toISOString(),
+      logger.info('Time-locked withdrawal initiated', {
+        component: 'ZKProxyVaultClient',
+        data: {
+          txHash: receipt.hash,
+          unlockTime: new Date(unlockTime * 1000).toISOString(),
+        },
       });
       
       return { txHash: receipt.hash, isTimeLocked: true, unlockTime };
     }
     
-    console.log('✅ Instant withdrawal completed:', receipt.hash);
+    logger.info('Instant withdrawal completed', { component: 'ZKProxyVaultClient', data: { txHash: receipt.hash } });
     return { txHash: receipt.hash, isTimeLocked: false };
   }
 
@@ -310,7 +322,7 @@ export class ZKProxyVaultClient {
     const tx = await this.vault.executeWithdrawal(withdrawalId);
     const receipt = await tx.wait();
     
-    console.log('✅ Time-locked withdrawal executed:', receipt.hash);
+    logger.info('Time-locked withdrawal executed', { component: 'ZKProxyVaultClient', data: { txHash: receipt.hash } });
     return receipt.hash;
   }
 
@@ -323,7 +335,7 @@ export class ZKProxyVaultClient {
     const tx = await this.vault.cancelWithdrawal(withdrawalId);
     const receipt = await tx.wait();
     
-    console.log('❌ Withdrawal cancelled:', receipt.hash);
+    logger.info('Withdrawal cancelled', { component: 'ZKProxyVaultClient', data: { txHash: receipt.hash } });
     return receipt.hash;
   }
 

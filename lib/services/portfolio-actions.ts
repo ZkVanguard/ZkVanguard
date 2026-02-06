@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-case-declarations */
 /**
  * Smart Portfolio Actions Service
  * Enables LLM to execute real portfolio operations with automatic ZK proofs
@@ -8,7 +7,7 @@ import { logger } from '../utils/logger';
 
 export interface PortfolioAction {
   type: 'buy' | 'sell' | 'analyze' | 'assess-risk' | 'get-hedges' | 'execute-hedge' | 'rebalance' | 'snapshot';
-  params: Record<string, any>;
+  params: Record<string, unknown>;
   requiresSignature?: boolean;  // Manager approval required
   signatureMessage?: string;     // Message to sign for approval
   portfolioSettings?: {         // Portfolio configuration for auto-approval
@@ -29,7 +28,7 @@ export interface ZKProofData {
 export interface ActionResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   error?: string;
   zkProof?: ZKProofData;
   requiresApproval?: boolean;    // Action needs manager signature
@@ -63,7 +62,7 @@ export function checkAutoApproval(
 /**
  * Generate ZK proof for an action
  */
-async function generateActionProof(action: PortfolioAction, result: any): Promise<ZKProofData> {
+async function generateActionProof(action: PortfolioAction, result: Record<string, unknown>): Promise<ZKProofData> {
   try {
     const response = await fetch(
       `${typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000')}/api/zk-proof/generate`,
@@ -217,16 +216,19 @@ export async function executePortfolioAction(action: PortfolioAction): Promise<A
 /**
  * Generate analysis results from real on-chain portfolio data
  */
-async function generateAnalysisFromOnChainData(actionType: string, portfolioData: any): Promise<any> {
-  const portfolio = portfolioData.portfolio;
-  const positions = portfolio.positions || [];
-  const totalValue = portfolio.totalValue || 0;
+async function generateAnalysisFromOnChainData(
+  actionType: string,
+  portfolioData: Record<string, unknown>
+): Promise<Record<string, unknown> | Array<Record<string, unknown>>> {
+  const portfolio = portfolioData.portfolio as Record<string, unknown>;
+  const positions = (portfolio.positions || []) as Array<{ symbol: string; value: number }>;
+  const totalValue = (portfolio.totalValue || 0) as number;
 
   switch (actionType) {
-    case 'analyze':
+    case 'analyze': {
       // Calculate real metrics from on-chain positions
       const topPositions = positions
-        .sort((a: any, b: any) => b.value - a.value)
+        .sort((a, b) => b.value - a.value)
         .slice(0, 3);
       
       return {
@@ -234,9 +236,9 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
         totalValue,
         positions,
         healthScore: positions.length > 1 ? 70 : 40, // Diversification bonus
-        riskScore: positions.some((p: any) => p.symbol !== 'USDC' && p.symbol !== 'devUSDC') ? 55 : 15,
+        riskScore: positions.some(p => p.symbol !== 'USDC' && p.symbol !== 'devUSDC') ? 55 : 15,
         strengths: positions.length > 0 
-          ? topPositions.map((p: any) => `${p.symbol}: $${p.value.toFixed(2)} (${((p.value/totalValue)*100).toFixed(1)}%)`)
+          ? topPositions.map(p => `${p.symbol}: $${p.value.toFixed(2)} (${((p.value/totalValue)*100).toFixed(1)}%)`)
           : ['No positions yet'],
         risks: positions.length < 3 
           ? ['Low diversification - consider adding more assets']
@@ -247,15 +249,16 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
             ? ['Consider diversifying into more assets']
             : ['Portfolio is well diversified'],
       };
+    }
 
-    case 'assess-risk':
+    case 'assess-risk': {
       // Calculate risk metrics from real positions
-      const hasVolatileAssets = positions.some((p: any) => 
+      const hasVolatileAssets = positions.some(p => 
         !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol)
       );
       const volatileWeight = positions
-        .filter((p: any) => !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol))
-        .reduce((sum: number, p: any) => sum + (p.value / totalValue), 0);
+        .filter(p => !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol))
+        .reduce((sum: number, p) => sum + (p.value / totalValue), 0);
       
       const volatility = hasVolatileAssets ? 0.25 + (volatileWeight * 0.15) : 0.02;
       const var95 = volatility * 1.65; // 95% VaR approximation
@@ -267,16 +270,17 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
         var95,
         sharpeRatio: volatility > 0.1 ? 0.8 : 1.5,
         overallRisk: riskScore > 70 ? 'High' : riskScore > 40 ? 'Moderate' : 'Low',
-        exposures: positions.map((p: any) => ({
+        exposures: positions.map(p => ({
           asset: p.symbol,
           exposure: ((p.value / totalValue) * 100).toFixed(1),
           contribution: ['USDC', 'USDT', 'devUSDC'].includes(p.symbol) ? 0 : ((p.value / totalValue) * 50).toFixed(1),
         })),
       };
+    }
 
-    case 'get-hedges':
+    case 'get-hedges': {
       // Generate hedge recommendations based on real positions
-      const cryptoPositions = positions.filter((p: any) => 
+      const cryptoPositions = positions.filter(p => 
         !['USDC', 'USDT', 'devUSDC', 'DAI'].includes(p.symbol)
       );
       
@@ -284,7 +288,7 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
         return [];
       }
       
-      return cryptoPositions.map((p: any) => ({
+      return cryptoPositions.map(p => ({
         type: 'protective-put',
         asset: p.symbol,
         market: `${p.symbol}-USD`,
@@ -293,6 +297,7 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
         effectiveness: 0.85,
         cost: p.value * 0.02, // ~2% premium
       }));
+    }
 
     default:
       return { message: 'Unknown action type' };
@@ -303,7 +308,7 @@ async function generateAnalysisFromOnChainData(actionType: string, portfolioData
  * Get current portfolio data from on-chain sources ONLY
  * No simulated or mock data - real blockchain data only
  */
-export async function getPortfolioData(): Promise<any> {
+export async function getPortfolioData(): Promise<Record<string, unknown> | null> {
   try {
     // Import directly to avoid circular fetch issues
     const { getMarketDataService } = await import('./RealMarketDataService');
@@ -327,7 +332,7 @@ export async function getPortfolioData(): Promise<any> {
     const portfolioData = await marketData.getPortfolioData(address);
 
     // Transform to standard portfolio format
-    const positions = portfolioData.tokens.map((token: any) => ({
+    const positions = portfolioData.tokens.map((token: { symbol: string; balance: string; usdValue: number }) => ({
       symbol: token.symbol,
       amount: parseFloat(token.balance),
       currentPrice: token.usdValue / parseFloat(token.balance),
@@ -359,7 +364,7 @@ export async function getPortfolioData(): Promise<any> {
       lastUpdated: portfolioData.lastUpdated,
     };
   } catch (error) {
-    logger.error('Failed to get on-chain portfolio data:', error);
+    logger.error('Failed to get on-chain portfolio data', error);
     return null;
   }
 }
@@ -489,38 +494,44 @@ export function formatActionResult(action: PortfolioAction, result: ActionResult
     : '';
 
   switch (action.type) {
-    case 'buy':
+    case 'buy': {
+      const buyResult = data?.result as Record<string, number> | undefined;
+      const buyPortfolio = data?.portfolio as Record<string, number> | undefined;
       return `✅ **Purchase Completed**\n\n` +
         `• Bought ${action.params.amount} ${action.params.symbol}\n` +
-        `• Price: $${data.result?.price?.toFixed(4) || 'N/A'}\n` +
-        `• Total Cost: $${data.result?.total?.toFixed(2) || 'N/A'}\n` +
-        `• New Portfolio Value: $${data.portfolio?.totalValue?.toFixed(2) || 'N/A'}` +
+        `• Price: $${buyResult?.price?.toFixed(4) || 'N/A'}\n` +
+        `• Total Cost: $${buyResult?.total?.toFixed(2) || 'N/A'}\n` +
+        `• New Portfolio Value: $${buyPortfolio?.totalValue?.toFixed(2) || 'N/A'}` +
         zkBadge;
+    }
 
-    case 'sell':
+    case 'sell': {
+      const sellResult = data?.result as Record<string, number> | undefined;
       return `✅ **Sale Completed**\n\n` +
         `• Sold ${action.params.amount} ${action.params.symbol}\n` +
-        `• Price: $${data.result?.price?.toFixed(4) || 'N/A'}\n` +
-        `• Total Received: $${data.result?.total?.toFixed(2) || 'N/A'}\n` +
-        `• P/L: $${data.result?.pnl?.toFixed(2) || 'N/A'}` +
+        `• Price: $${sellResult?.price?.toFixed(4) || 'N/A'}\n` +
+        `• Total Received: $${sellResult?.total?.toFixed(2) || 'N/A'}\n` +
+        `• P/L: $${sellResult?.pnl?.toFixed(2) || 'N/A'}` +
         zkBadge;
+    }
 
-    case 'analyze':
-      const analysis = data.result || data;
-      const portfolioData = analysis.portfolioData || analysis;
-      const totalValue = portfolioData.totalValue || analysis.totalValue || 0;
-      const positions = portfolioData.positions || analysis.positions || [];
-      const pnl = portfolioData.totalPnl || analysis.totalPnl || 0;
-      const pnlPct = portfolioData.totalPnlPercentage || analysis.totalPnlPercentage || 0;
+    case 'analyze': {
+      const analysis = (data?.result ?? data ?? {}) as Record<string, unknown>;
+      const portfolioInfo = (analysis.portfolioData ?? analysis) as Record<string, unknown>;
+      const totalValue = (portfolioInfo.totalValue ?? analysis.totalValue ?? 0) as number;
+      const positions = (portfolioInfo.positions ?? analysis.positions ?? []) as unknown[];
+      const pnl = (portfolioInfo.totalPnl ?? analysis.totalPnl ?? 0) as number;
+      const pnlPct = (portfolioInfo.totalPnlPercentage ?? analysis.totalPnlPercentage ?? 0) as number;
       
       // Build summary from available data
-      const summaryText = analysis.summary || 
+      const summaryText = (analysis.summary as string) || 
         `Portfolio Value: $${totalValue.toFixed(2)} | P/L: $${pnl.toFixed(2)} (${pnlPct.toFixed(1)}%) | ${positions.length} positions`;
       
       // Extract insights
-      const strengths = analysis.strengths || analysis.topAssets?.map((a: any) => `${a.symbol}: $${a.value?.toFixed(2)}`) || [];
-      const risks = analysis.risks || (analysis.riskScore > 60 ? ['High risk exposure detected'] : []);
-      const recommendations = analysis.recommendations || [];
+      const topAssets = analysis.topAssets as Array<{ symbol: string; value?: number }> | undefined;
+      const strengths = (analysis.strengths as string[]) || topAssets?.map(a => `${a.symbol}: $${a.value?.toFixed(2)}`) || [];
+      const risks = (analysis.risks as string[]) || ((analysis.riskScore as number) > 60 ? ['High risk exposure detected'] : []);
+      const recommendations = (analysis.recommendations as string[]) || [];
       
       return `📊 **Portfolio Analysis**\n\n` +
         `${summaryText}\n\n` +
@@ -530,13 +541,14 @@ export function formatActionResult(action: PortfolioAction, result: ActionResult
         `**Risks:**\n${risks.length > 0 ? risks.map((r: string) => `• ${r}`).join('\n') : '• Risk within acceptable levels'}\n\n` +
         `**Recommendations:**\n${recommendations.length > 0 ? recommendations.map((r: string) => `• ${r}`).join('\n') : '• Continue monitoring market conditions'}` +
         zkBadge;
+    }
 
-    case 'assess-risk':
-      const risk = data.result || data;
-      const riskScore = risk.riskScore || risk.risk_score || 50;
-      const volatility = risk.volatility || risk.portfolioVolatility || 0.15;
-      const var95 = risk.var95 || risk.valueAtRisk || 0.05;
-      const sharpe = risk.sharpeRatio || risk.sharpe || null;
+    case 'assess-risk': {
+      const risk = (data?.result ?? data ?? {}) as Record<string, unknown>;
+      const riskScore = (risk.riskScore ?? risk.risk_score ?? 50) as number;
+      const volatility = (risk.volatility ?? risk.portfolioVolatility ?? 0.15) as number;
+      const var95 = (risk.var95 ?? risk.valueAtRisk ?? 0.05) as number;
+      const sharpe = (risk.sharpeRatio ?? risk.sharpe ?? null) as number | null;
       
       // Determine risk level
       let riskLevel = 'Moderate';
@@ -551,9 +563,10 @@ export function formatActionResult(action: PortfolioAction, result: ActionResult
         `• VaR (95%): ${(var95 * 100).toFixed(1)}%\n` +
         `• Sharpe Ratio: ${sharpe !== null ? sharpe.toFixed(2) : 'N/A'}` +
         zkBadge;
+    }
 
-    case 'get-hedges':
-      const hedges = data.result;
+    case 'get-hedges': {
+      const hedges = data?.result as Array<Record<string, unknown>> | undefined;
       if (!hedges || hedges.length === 0) {
         return `🛡️ **No hedge recommendations available**\n\nYour portfolio may not require hedging at this time.`;
       }
@@ -570,14 +583,15 @@ export function formatActionResult(action: PortfolioAction, result: ActionResult
       // Fallback for non-ZK hedges (shouldn't happen)
       return `🛡️ **Hedge Recommendations**\n\n` +
         `⚠️ Warning: These hedges are not ZK-protected!\n\n` +
-        hedges.map((h: any, i: number) =>
+        hedges.map((h: Record<string, unknown>, i: number) =>
           `${i + 1}. **${h.type}** ${h.market}\n` +
           `   • Action: ${h.action}\n` +
           `   • Reason: ${h.reason}\n` +
-          `   • Effectiveness: ${(h.effectiveness * 100).toFixed(0)}%`
+          `   • Effectiveness: ${((h.effectiveness as number) * 100).toFixed(0)}%`
         ).join('\n\n') +
         zkBadge +
         `\n\n💡 Consider using ZK-protected hedges for better privacy!`;
+    }
 
     default:
       return `✅ ${result.message}` + zkBadge;

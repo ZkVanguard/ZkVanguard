@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * SUI Contract Hooks
  * 
@@ -105,10 +104,11 @@ export function useRWAManager() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -147,10 +147,11 @@ export function useRWAManager() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -187,10 +188,11 @@ export function useRWAManager() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -257,10 +259,11 @@ export function useZKVerifier() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -301,10 +304,11 @@ export function useZKVerifier() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -371,10 +375,11 @@ export function usePaymentRouter() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 
@@ -412,10 +417,11 @@ export function usePaymentRouter() {
       
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setLoading(false);
-      return { success: false, error: err.message };
+      return { success: false, error: message };
     }
   }, [isConnected, address, executeTransaction, contractAddresses]);
 

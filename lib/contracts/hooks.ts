@@ -1,17 +1,42 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * React hooks for interacting with deployed smart contracts
  */
 
 import { useState, useEffect } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useChainId } from 'wagmi';
 import { getContractAddresses } from './addresses';
 import { RWA_MANAGER_ABI, ZK_VERIFIER_ABI, PAYMENT_ROUTER_ABI } from './abis';
 
 // In-memory cache for user portfolios (60s TTL)
-const portfolioCache = new Map<string, { data: any[]; timestamp: number }>();
+const portfolioCache = new Map<string, { data: UserPortfolio[]; timestamp: number }>();
 const PORTFOLIO_CACHE_TTL = 60000; // 60 seconds
+
+interface UserPortfolio {
+  id: number;
+  owner: string;
+  totalValue: bigint;
+  targetYield: bigint;
+  riskTolerance: bigint;
+  lastRebalance: bigint;
+  isActive: boolean;
+  txHash: string | null;
+}
+
+interface PortfolioData {
+  owner: string;
+  totalValue: bigint;
+  targetYield: bigint;
+  riskTolerance: bigint;
+  lastRebalance: bigint;
+  isActive: boolean;
+}
+
+interface PortfolioEvent {
+  args?: { portfolioId?: bigint; [key: string]: unknown } | bigint[];
+  transactionHash: string;
+}
 
 /**
  * Hook to read portfolio data from RWAManager
@@ -76,16 +101,7 @@ export function useUserPortfolios(userAddress?: string) {
   const chainId = useChainId();
   const addresses = getContractAddresses(chainId);
   const { data: totalCount } = usePortfolioCount();
-  const [userPortfolios, setUserPortfolios] = useState<Array<{
-    id: number;
-    owner: string;
-    totalValue: bigint;
-    targetYield: bigint;
-    riskTolerance: bigint;
-    lastRebalance: bigint;
-    isActive: boolean;
-    txHash: string | null;
-  }>>([]);
+  const [userPortfolios, setUserPortfolios] = useState<UserPortfolio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -100,14 +116,14 @@ export function useUserPortfolios(userAddress?: string) {
       const cacheKey = `portfolios-${userAddress}-${totalCount}`;
       const cached = portfolioCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < PORTFOLIO_CACHE_TTL) {
-        console.log(`⚡ [hooks] Using cached portfolios for ${userAddress}`);
+        logger.debug(`Using cached portfolios for ${userAddress}`, { component: 'hooks' });
         setUserPortfolios(cached.data);
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
-      console.log(`🔄 [hooks] Fetching portfolios for ${userAddress}...`);
+      logger.info(`Fetching portfolios for ${userAddress}`, { component: 'hooks' });
       const startTime = Date.now();
 
       try {
@@ -127,7 +143,7 @@ export function useUserPortfolios(userAddress?: string) {
         
         // Fetch PortfolioCreated events to get transaction hashes
         // Cronos RPC has a 2000 block limit, so we need to query in chunks
-        const events: any[] = [];
+        const events: PortfolioEvent[] = [];
         try {
           const currentBlock = await provider.getBlockNumber();
           const portfolioCreatedFilter = contract.filters.PortfolioCreated();
@@ -137,7 +153,7 @@ export function useUserPortfolios(userAddress?: string) {
           const TOTAL_BLOCKS = 20000; // Reduced from 50000
           const fromBlockStart = Math.max(0, currentBlock - TOTAL_BLOCKS);
           
-          console.log(`📜 [hooks] Querying events from block ${fromBlockStart} to ${currentBlock} in chunks...`);
+          logger.debug(`Querying events from block ${fromBlockStart} to ${currentBlock} in chunks`, { component: 'hooks' });
           
           // OPTIMIZATION: Query chunks in parallel (3 at a time)
           const chunks: Array<{ fromBlock: number; toBlock: number }> = [];
@@ -151,8 +167,8 @@ export function useUserPortfolios(userAddress?: string) {
             const batch = chunks.slice(i, i + 3);
             const batchPromises = batch.map(({ fromBlock, toBlock }) => 
               contract.queryFilter(portfolioCreatedFilter, fromBlock, toBlock)
-                .catch((err: any) => {
-                  console.warn(`Failed to query blocks ${fromBlock}-${toBlock}:`, err);
+                .catch((err: unknown) => {
+                  logger.warn(`Failed to query blocks ${fromBlock}-${toBlock}`, { component: 'hooks', error: String(err) });
                   return [];
                 })
             );
@@ -160,9 +176,9 @@ export function useUserPortfolios(userAddress?: string) {
             events.push(...batchResults.flat());
           }
           
-          console.log(`📜 [hooks] Found ${events.length} PortfolioCreated events`);
+          logger.debug(`Found ${events.length} PortfolioCreated events`, { component: 'hooks' });
         } catch (eventErr) {
-          console.error('Event query failed:', eventErr);
+          logger.error('Event query failed', eventErr, { component: 'hooks' });
         }
         
         // Create a map of portfolioId -> txHash
@@ -178,9 +194,9 @@ export function useUserPortfolios(userAddress?: string) {
         for (let i = 0; i < count; i++) {
           portfolioPromises.push(
             contract.portfolios(i)
-              .then((portfolio: any) => ({ i, portfolio }))
-              .catch((err: any) => {
-                console.warn(`Error fetching portfolio ${i}:`, err);
+              .then((portfolio: PortfolioData) => ({ i, portfolio }))
+              .catch((err: unknown) => {
+                logger.warn(`Error fetching portfolio ${i}`, { component: 'hooks', error: String(err) });
                 return null;
               })
           );
@@ -202,7 +218,7 @@ export function useUserPortfolios(userAddress?: string) {
                 riskTolerance: result.portfolio.riskTolerance,
                 lastRebalance: result.portfolio.lastRebalance,
                 isActive: result.portfolio.isActive,
-                txHash: txHash,
+                txHash,
               });
             }
           }
@@ -210,11 +226,11 @@ export function useUserPortfolios(userAddress?: string) {
         
         // Cache the results
         portfolioCache.set(cacheKey, { data: portfolios, timestamp: Date.now() });
-        console.log(`✅ [hooks] Fetched ${portfolios.length} portfolios in ${Date.now() - startTime}ms`);
+        logger.info(`Fetched ${portfolios.length} portfolios in ${Date.now() - startTime}ms`, { component: 'hooks' });
         
         setUserPortfolios(portfolios);
       } catch (error) {
-        console.error('Error fetching user portfolios:', error);
+        logger.error('Error fetching user portfolios', error, { component: 'hooks' });
         setUserPortfolios([]);
       } finally {
         setIsLoading(false);

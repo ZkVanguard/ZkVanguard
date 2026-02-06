@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * SUI Blockchain Service
  * 
@@ -8,6 +7,8 @@
  * - Sponsored transactions (gasless)
  * - Balance fetching
  */
+
+import { logger } from '@/lib/utils/logger';
 
 // SUI Network Configuration
 export const SUI_NETWORKS = {
@@ -107,8 +108,8 @@ export class SuiService {
         balance: balanceInSui,
         balanceRaw: totalBalance,
       };
-    } catch (error: any) {
-      console.error('[SuiService] Failed to get balance:', error.message);
+    } catch (error) {
+      logger.error('[SuiService] Failed to get balance', error, { component: 'SuiService' });
       return { balance: '0', balanceRaw: '0' };
     }
   }
@@ -136,8 +137,8 @@ export class SuiService {
       }
 
       return data.result || [];
-    } catch (error: any) {
-      console.error('[SuiService] Failed to get all balances:', error.message);
+    } catch (error) {
+      logger.error('[SuiService] Failed to get all balances', error, { component: 'SuiService' });
       return [];
     }
   }
@@ -145,7 +146,7 @@ export class SuiService {
   /**
    * Get transaction details
    */
-  async getTransaction(digest: string): Promise<any> {
+  async getTransaction(digest: string): Promise<unknown> {
     try {
       const response = await fetch(this.rpcUrl, {
         method: 'POST',
@@ -165,8 +166,8 @@ export class SuiService {
       }
 
       return data.result;
-    } catch (error: any) {
-      console.error('[SuiService] Failed to get transaction:', error.message);
+    } catch (error) {
+      logger.error('[SuiService] Failed to get transaction', error, { component: 'SuiService' });
       return null;
     }
   }
@@ -218,8 +219,8 @@ export class SuiService {
       }
 
       return { success: true, message: 'Tokens requested successfully' };
-    } catch (error: any) {
-      return { success: false, message: error.message };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : String(error) };
     }
   }
 }

@@ -1,8 +1,9 @@
-/* eslint-disable no-console */
 /**
  * Transaction Tracker
  * Tracks all user transactions across the platform for display in Recent Transactions
  */
+
+import { logger } from '@/lib/utils/logger';
 
 export interface TrackedTransaction {
   hash: string;
@@ -53,9 +54,9 @@ export function trackTransaction(tx: TrackedTransaction): void {
       storageArea: localStorage,
     }));
     
-    console.log('[TxTracker] Tracked transaction:', tx.hash, tx.type);
+    logger.debug('Tracked transaction', { component: 'TxTracker', data: { hash: tx.hash, type: tx.type } });
   } catch (error) {
-    console.error('[TxTracker] Failed to track transaction:', error);
+    logger.error('Failed to track transaction', error, { component: 'TxTracker' });
   }
 }
 
@@ -70,7 +71,7 @@ export function getTrackedTransactions(): TrackedTransaction[] {
     const txs = JSON.parse(stored) as TrackedTransaction[];
     return Array.isArray(txs) ? txs : [];
   } catch (error) {
-    console.error('[TxTracker] Failed to read transactions:', error);
+    logger.error('Failed to read transactions', error, { component: 'TxTracker' });
     return [];
   }
 }
@@ -93,10 +94,10 @@ export function updateTransactionStatus(
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
       
-      console.log('[TxTracker] Updated transaction status:', hash, status);
+      logger.debug('Updated transaction status', { component: 'TxTracker', data: { hash, status } });
     }
   } catch (error) {
-    console.error('[TxTracker] Failed to update transaction:', error);
+    logger.error('Failed to update transaction', error, { component: 'TxTracker' });
   }
 }
 
@@ -106,9 +107,9 @@ export function updateTransactionStatus(
 export function clearTrackedTransactions(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
-    console.log('[TxTracker] Cleared all transactions');
+    logger.debug('Cleared all transactions', { component: 'TxTracker' });
   } catch (error) {
-    console.error('[TxTracker] Failed to clear transactions:', error);
+    logger.error('Failed to clear transactions', error, { component: 'TxTracker' });
   }
 }
 
