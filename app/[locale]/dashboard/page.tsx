@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
@@ -128,7 +127,7 @@ export default function DashboardPage() {
   
   // Debug notification state changes
   useEffect(() => {
-    console.log('🔔 NOTIFICATION STATE CHANGED:', notification);
+    logger.debug('Notification state changed', { component: 'DashboardPage', data: notification });
   }, [notification]);
   
   // Close mobile menu on nav change
@@ -138,14 +137,13 @@ export default function DashboardPage() {
   };
 
   const handleOpenHedge = async (market: PredictionMarket) => {
-    console.log('🛡️ HEDGE BUTTON CLICKED', market);
-    logger.info('🛡️ Opening hedge on Moonlander', { market: market.question });
+    logger.info('Hedge button clicked', { component: 'DashboardPage', data: market });
+    logger.info('🛡️ Opening hedge on Moonlander', { data: market.question });
     
     // Show initial loading notification (no setTimeout yet)
     const loadingMsg = `🛡️ Processing hedge request...`;
-    console.log('🔔 SETTING NOTIFICATION:', loadingMsg);
+    logger.debug('Setting notification', { component: 'DashboardPage', data: loadingMsg });
     setNotification(loadingMsg);
-    console.log('🔔 NOTIFICATION STATE SHOULD BE:', loadingMsg);
     
     try {
       // Determine primary asset to hedge
@@ -155,11 +153,11 @@ export default function DashboardPage() {
       const baseNotional = 1000; // $1000 base hedge
       const notionalValue = baseNotional * (market.probability / 100);
       
-      console.log('🔧 Hedge parameters:', {
+      logger.debug('Hedge parameters', { component: 'DashboardPage', data: {
         asset: primaryAsset,
         notionalValue,
         leverage: 5
-      });
+      }});
       
       const response = await fetch('/api/agents/hedging/execute', {
         method: 'POST',
@@ -178,25 +176,25 @@ export default function DashboardPage() {
         })
       });
 
-      console.log('📡 API Response status:', response.status);
+      logger.debug('API Response status', { component: 'DashboardPage', data: response.status });
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('📦 API Response data:', data);
+      logger.debug('API Response data', { component: 'DashboardPage', data });
       
       if (data.success) {
         const simulationBadge = data.simulationMode ? '\n\n⚠️ SIMULATION MODE' : '\n\n🔴 LIVE TRADING';
         const msg = `✅ Hedge Opened Successfully\n\nMarket: ${data.market}\nSide: ${data.side}\nSize: ${data.size}\nEntry: $${data.entryPrice || 'Pending'}\nLeverage: ${data.leverage}x${simulationBadge}`;
-        console.log('✅ Setting success notification:', msg);
+        logger.info('Setting success notification', { component: 'DashboardPage' });
         setNotification(msg);
         logger.info('✅ Moonlander hedge successful', data);
         
         // Auto-clear after 10 seconds
         setTimeout(() => {
-          console.log('⏰ Clearing notification');
+          logger.debug('Clearing notification', { component: 'DashboardPage' });
           setNotification(null);
         }, 10000);
       } else {
@@ -204,8 +202,8 @@ export default function DashboardPage() {
       }
       
     } catch (error) {
-      console.error('❌ Hedge error:', error);
-      logger.error('❌ Moonlander hedge failed', { error });
+      logger.error('Hedge error', error instanceof Error ? error : undefined, { component: 'DashboardPage' });
+      logger.error('❌ Moonlander hedge failed', undefined, { error: error instanceof Error ? error.message : String(error) });
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       setNotification(`❌ Hedge Failed\n\n${errorMsg}\n\nCheck browser console for details.`);
       

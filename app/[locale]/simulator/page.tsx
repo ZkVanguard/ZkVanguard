@@ -1,8 +1,8 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logger } from '@/lib/utils/logger';
 import { 
   Play, Pause, RotateCcw, TrendingDown, TrendingUp, Activity, 
   Shield, Zap, AlertTriangle, CheckCircle, Brain,
@@ -308,69 +308,69 @@ export default function SimulatorPage() {
   // Check real API status on mount
   useEffect(() => {
     const checkAPIs = async () => {
-      console.log('🔍 Starting API status checks...');
+      logger.debug('Starting API status checks', { component: 'Simulator' });
       
       // Check prices API
       try {
-        console.log('📊 Checking prices API...');
+        logger.debug('Checking prices API', { component: 'Simulator' });
         const priceRes = await fetch('/api/prices?symbols=BTC,ETH,CRO');
         if (priceRes.ok) {
           const data = await priceRes.json();
-          console.log('✅ Prices API response:', data);
+          logger.debug('Prices API response', { component: 'Simulator', data });
           setApiStatus(prev => ({ ...prev, prices: true }));
           const prices: Record<string, number> = {};
           data.data?.forEach((p: RealPriceData) => { prices[p.symbol] = p.price; });
           setRealPrices(prices);
         } else {
-          console.warn('❌ Prices API not ok:', priceRes.status);
+          logger.warn('Prices API not ok', { component: 'Simulator', data: priceRes.status });
           setApiStatus(prev => ({ ...prev, prices: false }));
         }
       } catch (e) { 
-        console.error('❌ Prices API error:', e);
+        logger.error('Prices API error', e instanceof Error ? e : undefined, { component: 'Simulator' });
         setApiStatus(prev => ({ ...prev, prices: false })); 
       }
 
       // Check ZK backend via API proxy (browser can't call localhost:8000 directly due to CORS)
       try {
-        console.log('🔐 Checking ZK backend...');
+        logger.debug('Checking ZK backend', { component: 'Simulator' });
         const zkRes = await fetch('/api/zk-proof/health');
         if (zkRes.ok) {
           const data = await zkRes.json();
           const isHealthy = data.status === 'healthy';
-          console.log('✅ ZK Backend response:', { isHealthy, cuda: data.cuda_available, data });
+          logger.debug('ZK Backend response', { component: 'Simulator', data: { isHealthy, cuda: data.cuda_available } });
           setApiStatus(prev => ({ ...prev, zkBackend: isHealthy }));
         } else {
-          console.warn('❌ ZK Backend not ok:', zkRes.status);
+          logger.warn('ZK Backend not ok', { component: 'Simulator', data: zkRes.status });
           setApiStatus(prev => ({ ...prev, zkBackend: false }));
         }
       } catch (e) { 
-        console.error('❌ ZK Backend error:', e);
+        logger.error('ZK Backend error', e instanceof Error ? e : undefined, { component: 'Simulator' });
         setApiStatus(prev => ({ ...prev, zkBackend: false })); 
       }
 
       // Check agent status - mark as available if API responds
       try {
-        console.log('🤖 Checking agents status...');
+        logger.debug('Checking agents status', { component: 'Simulator' });
         const agentRes = await fetch('/api/agents/status');
         if (agentRes.ok) {
           const data = await agentRes.json();
           setAgentSystemStatus(data);
           // Agents are available if the status endpoint responds successfully
           // They initialize on-demand when first used
-          console.log('✅ Agents API response:', data);
+          logger.debug('Agents API response', { component: 'Simulator', data });
           setApiStatus(prev => ({ ...prev, agents: true }));
         } else {
-          console.warn('❌ Agents API not ok:', agentRes.status);
+          logger.warn('Agents API not ok', { component: 'Simulator', data: agentRes.status });
           setApiStatus(prev => ({ ...prev, agents: false }));
         }
       } catch (e) { 
-        console.error('❌ Agents API error:', e);
+        logger.error('Agents API error', e instanceof Error ? e : undefined, { component: 'Simulator' });
         setApiStatus(prev => ({ ...prev, agents: false })); 
       }
 
       // Check Ollama availability via chat health
       try {
-        console.log('🧠 Checking Ollama/chat health...');
+        logger.debug('Checking Ollama/chat health', { component: 'Simulator' });
         const chatRes = await fetch('/api/chat/health');
         if (chatRes.ok) {
           const data = await chatRes.json();
@@ -380,18 +380,18 @@ export default function SimulatorPage() {
                           data.model?.includes('qwen') || 
                           data.model?.includes('llama') ||
                           data.features?.localInference === true;
-          console.log('✅ Ollama status:', { isOllama, data });
+          logger.debug('Ollama status', { component: 'Simulator', data: { isOllama } });
           setApiStatus(prev => ({ ...prev, ollama: isOllama }));
         } else {
-          console.warn('❌ Chat health not ok:', chatRes.status);
+          logger.warn('Chat health not ok', { component: 'Simulator', data: chatRes.status });
           setApiStatus(prev => ({ ...prev, ollama: false }));
         }
       } catch (e) { 
-        console.error('❌ Ollama check error:', e);
+        logger.error('Ollama check error', e instanceof Error ? e : undefined, { component: 'Simulator' });
         setApiStatus(prev => ({ ...prev, ollama: false })); 
       }
       
-      console.log('🏁 API status checks complete');
+      logger.debug('API status checks complete', { component: 'Simulator' });
     };
     
     // Run immediately
@@ -422,7 +422,7 @@ export default function SimulatorPage() {
         data.data?.forEach((p: RealPriceData) => { prices[p.symbol] = p.price; });
         return prices;
       }
-    } catch (e) { console.warn('Failed to fetch real prices:', e); }
+    } catch (e) { logger.warn('Failed to fetch real prices', { component: 'Simulator', error: String(e) }); }
     return {};
   };
 
@@ -437,7 +437,7 @@ export default function SimulatorPage() {
         const data = await res.json();
         return data.proof || null;
       }
-    } catch (e) { console.warn('Failed to generate ZK proof:', e); }
+    } catch (e) { logger.warn('Failed to generate ZK proof', { component: 'Simulator', error: String(e) }); }
     return null;
   };
 
@@ -454,12 +454,12 @@ export default function SimulatorPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        console.log('Risk assessment result:', data);
+        logger.debug('Risk assessment result', { component: 'Simulator', data });
         return data.riskMetrics || data;
       } else {
-        console.warn('Risk API error:', res.status, await res.text());
+        logger.warn('Risk API error', { component: 'Simulator', data: res.status });
       }
-    } catch (e) { console.warn('Failed to assess risk:', e); }
+    } catch (e) { logger.warn('Failed to assess risk', { component: 'Simulator', error: String(e) }); }
     return null;
   };
 
@@ -470,7 +470,7 @@ export default function SimulatorPage() {
       const dynamicAutoApprovalThreshold = initialPortfolio.totalValue * 0.10; // 10% = $15M for $150M portfolio
       const isAutoApproved = notionalValue <= dynamicAutoApprovalThreshold;
       
-      console.log(`🤖 Auto-Approval Decision: $${notionalValue.toLocaleString()} ${isAutoApproved ? '≤' : '>'} $${dynamicAutoApprovalThreshold.toLocaleString()} threshold → ${isAutoApproved ? 'AUTO-APPROVED ✅' : 'Requires signature'}`);
+      logger.debug(`Auto-Approval Decision: $${notionalValue.toLocaleString()} ${isAutoApproved ? '≤' : '>'} $${dynamicAutoApprovalThreshold.toLocaleString()} threshold → ${isAutoApproved ? 'AUTO-APPROVED' : 'Requires signature'}`, { component: 'Simulator' });
       
       const res = await fetch('/api/agents/hedging/execute', {
         method: 'POST',
@@ -496,7 +496,7 @@ export default function SimulatorPage() {
           autoApproved: data.autoApproved ?? isAutoApproved
         };
       }
-    } catch (e) { console.warn('Failed to execute hedge:', e); }
+    } catch (e) { logger.warn('Failed to execute hedge', { component: 'Simulator', error: String(e) }); }
     return { success: false };
   };
 
@@ -523,7 +523,7 @@ export default function SimulatorPage() {
         const data = await res.json();
         return { predictions: data.predictions || [], analysis: data.analysis || {} };
       }
-    } catch (e) { console.warn('Failed to fetch predictions:', e); }
+    } catch (e) { logger.warn('Failed to fetch predictions', { component: 'Simulator', error: String(e) }); }
     return null;
   };
 
@@ -552,7 +552,7 @@ export default function SimulatorPage() {
           details: data.details 
         };
       }
-    } catch (e) { console.warn('Failed to execute agent command:', e); }
+    } catch (e) { logger.warn('Failed to execute agent command', { component: 'Simulator', error: String(e) }); }
     return { success: false, response: 'Agent unavailable' };
   };
 
@@ -567,21 +567,21 @@ export default function SimulatorPage() {
       const res = await fetch('/api/polymarket?limit=20&closed=false');
       if (res.ok) {
         const data = await res.json();
-        return data.slice(0, 10).map((m: any) => ({
+        return data.slice(0, 10).map((m: { question?: string; title?: string; outcomePrices?: string; volume?: string; liquidity?: string }) => ({
           question: m.question || m.title,
           outcomePrices: m.outcomePrices || '50/50',
           volume: m.volume || '0',
           liquidity: m.liquidity || '0',
         }));
       }
-    } catch (e) { console.warn('Failed to fetch Polymarket:', e); }
+    } catch (e) { logger.warn('Failed to fetch Polymarket', { component: 'Simulator', error: String(e) }); }
     return [];
   };
 
   // REAL API: Use Ollama/Qwen AI for analysis via chat endpoint
   const askAI = async (prompt: string): Promise<{ response: string; model: string; success: boolean }> => {
     try {
-      console.log('🤖 Calling AI with prompt:', prompt.slice(0, 100) + '...');
+      logger.debug('Calling AI with prompt', { component: 'Simulator', data: prompt.slice(0, 100) + '...' });
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -593,11 +593,11 @@ export default function SimulatorPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        console.log('🤖 AI Response:', { 
+        logger.debug('AI Response', { component: 'Simulator', data: { 
           success: data.success, 
           model: data.metadata?.model,
           responseLength: data.response?.length 
-        });
+        }});
         // Check both HTTP success and API success field
         if (data.success && data.response) {
           return { 
@@ -607,9 +607,9 @@ export default function SimulatorPage() {
           };
         }
       }
-      console.warn('🤖 AI request not OK:', res.status);
+      logger.warn('AI request not OK', { component: 'Simulator', data: res.status });
     } catch (e) { 
-      console.warn('🤖 Failed to call AI:', e); 
+      logger.warn('Failed to call AI', { component: 'Simulator', error: String(e) }); 
     }
     return { response: 'AI unavailable', model: 'none', success: false };
   };
@@ -920,8 +920,9 @@ export default function SimulatorPage() {
             const riskScore = riskResult.riskScore ?? 65; // Default risk score
             addLog(`   └─ REAL API Response: VaR ${(varValue * 100).toFixed(1)}% | Risk Score: ${riskScore.toFixed(0)}/100`, 'success');
             addLog(`   └─ Agent Status: ${riskResult.realAgent ? '✅ Real AI Agent' : '⚠️ Simulation Mode'}`, riskResult.realAgent ? 'success' : 'warning');
-            if ((riskResult as any).hackathonAPIs) {
-              addLog(`   └─ Using: ${(riskResult as any).hackathonAPIs.aiSDK || 'Crypto.com AI SDK'}`, 'info');
+            const riskResultExtended = riskResult as RealRiskAssessment & { hackathonAPIs?: { aiSDK?: string } };
+            if (riskResultExtended.hackathonAPIs) {
+              addLog(`   └─ Using: ${riskResultExtended.hackathonAPIs.aiSDK || 'Crypto.com AI SDK'}`, 'info');
             }
           } else {
             addLog('   └─ Current VaR: 6.8% (Threshold: 4.0%) [Simulated]', 'error');
@@ -1315,7 +1316,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
               addAgentAction('Lead', 'FALLBACK', 'Using rule-based risk engine (Ollama unavailable)');
             }
           } catch (e) {
-            console.error('AI analysis error:', e);
+            logger.error('AI analysis error', e instanceof Error ? e : undefined, { component: 'Simulator' });
             addLog('   └─ ⚠️ AI request timed out - continuing with rule-based logic', 'warning');
             addLog(`   └─ 📊 Rule-based: Hedge is offsetting ${((hedgeSavings / portfolioLoss) * 100).toFixed(0)}% of losses`, 'info');
           }

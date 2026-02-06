@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { ReactNode, createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { 
   createNetworkConfig, 
   SuiClientProvider, 
@@ -67,8 +67,7 @@ interface SuiContextType {
   disconnectWallet: () => void;
   
   // Transactions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executeTransaction: (tx: any) => Promise<{ digest: string; success: boolean }>;
+  executeTransaction: (tx: { kind: string; data: Record<string, unknown> }) => Promise<{ digest: string; success: boolean }>;
   
   // Utilities
   getExplorerUrl: (type: 'tx' | 'address' | 'object', value: string) => string;
@@ -139,7 +138,7 @@ function SuiContextProvider({
         // SUI has 9 decimals
         setBalance((Number(rawBalance) / 1e9).toFixed(4));
       } catch (error) {
-        console.error('[SuiProvider] Failed to fetch balance:', error);
+        logger.error('Failed to fetch balance', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
         setBalance('0');
         setBalanceRaw(BigInt(0));
       }
@@ -158,7 +157,7 @@ function SuiContextProvider({
     if (availableWallet) {
       connect({ wallet: availableWallet });
     } else {
-      console.error('[SuiProvider] No wallets available');
+      logger.error('No wallets available', undefined, { component: 'SuiProvider' });
     }
   }, [connect, wallets]);
 
@@ -166,8 +165,7 @@ function SuiContextProvider({
     disconnect();
   }, [disconnect]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const executeTransaction = useCallback(async (tx: any): Promise<{ digest: string; success: boolean }> => {
+  const executeTransaction = useCallback(async (tx: { kind: string; data: Record<string, unknown> }): Promise<{ digest: string; success: boolean }> => {
     if (!isConnected) {
       throw new Error('Wallet not connected');
     }
@@ -181,8 +179,8 @@ function SuiContextProvider({
         digest: result.digest,
         success: true,
       };
-    } catch (error: any) {
-      console.error('[SuiProvider] Transaction failed:', error);
+    } catch (error: unknown) {
+      logger.error('Transaction failed', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
       return {
         digest: '',
         success: false,
@@ -237,8 +235,8 @@ function SuiContextProvider({
         const error = await response.text();
         return { success: false, message: `Faucet request failed: ${error}` };
       }
-    } catch (error: any) {
-      return { success: false, message: `Faucet request failed: ${error.message}` };
+    } catch (error: unknown) {
+      return { success: false, message: `Faucet request failed: ${error instanceof Error ? error.message : String(error)}` };
     }
   }, [address, network]);
 
