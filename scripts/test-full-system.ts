@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Full System Integration Test
  * Tests: SafeExecutionGuard, Portfolio, ZK Proofs, Smart Contracts

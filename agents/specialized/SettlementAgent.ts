@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Settlement Agent
  * Specialized agent for payment settlement and batch processing using x402
