@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,6 +5,7 @@ import { DollarSign, RefreshCw, ChevronRight } from 'lucide-react';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { usePositions } from '@/contexts/PositionsContext';
 import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
+import { logger } from '@/lib/utils/logger';
 
 interface PortfolioOverviewProps {
   address?: string;
@@ -33,7 +33,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
         });
         setAiAnalysis(analysis);
       } catch (aiError) {
-        console.warn('[PortfolioOverview] AI recommendations unavailable:', aiError);
+        logger.warn('[PortfolioOverview] AI recommendations unavailable', { error: String(aiError) });
         // No problem - we have all the data we need from context
       } finally {
         setAiLoading(false);
@@ -46,7 +46,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
 
     // Listen for hedge updates to refresh
     const handleHedgeUpdate = () => {
-      console.log('📊 [PortfolioOverview] Hedge updated, refreshing...');
+      logger.debug('[PortfolioOverview] Hedge updated, refreshing');
       refetch();
     };
 
