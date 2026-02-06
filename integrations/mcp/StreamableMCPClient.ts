@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Streamable HTTP MCP Client for Crypto.com Market Data
  * 

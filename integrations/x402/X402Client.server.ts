@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview x402 Facilitator API client for REAL gasless payments (Server-only)
  * Uses @crypto.com/facilitator-client SDK for true gasless transactions

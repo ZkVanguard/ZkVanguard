@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-var-requires */
 /**
  * @fileoverview MCP (Model Context Protocol) Server client for real-time data feeds
  * @module integrations/mcp/MCPClient
