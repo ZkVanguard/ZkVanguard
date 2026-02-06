@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview x402 Facilitator API client for REAL gasless payments (Server-only)
  * Uses @crypto.com/facilitator-client SDK for true gasless transactions
@@ -95,6 +94,7 @@ export class X402Client {
       });
 
       // Build payment requirements
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const paymentReq = await this.facilitator.generatePaymentRequirements({
         network: this.network,
         payTo: request.to,
@@ -102,13 +102,14 @@ export class X402Client {
         description: 'Gasless payment via x402',
         maxAmountRequired: request.amount,
         maxTimeoutSeconds: 300,
-      } as any);
+      } as Parameters<typeof this.facilitator.generatePaymentRequirements>[0]);
 
       // Generate payment header (EIP-3009 signature)
       const paymentHeader = await this.facilitator.generatePaymentHeader({
         to: request.to,
         value: request.amount,
-        asset: request.token as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        asset: request.token as Parameters<typeof this.facilitator.generatePaymentHeader>[0]['asset'],
         signer: this.signer,
         validAfter: request.validAfter,
         validBefore: request.validBefore,

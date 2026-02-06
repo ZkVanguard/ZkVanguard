@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Hedging Agent
  * Specialized agent for automated hedging strategies using perpetual futures
@@ -6,11 +5,20 @@
 
 import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
-import { MoonlanderClient } from '@integrations/moonlander/MoonlanderClient';
+import { MoonlanderClient, OrderResult, PerpetualPosition, LiquidationRisk } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
 import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
+
+/** Extended client interface for duck-typing compatibility with varying implementations */
+interface MoonlanderClientExt {
+  openHedge?: (params: { market: string; side: 'LONG' | 'SHORT'; notionalValue: string; leverage?: number; stopLoss?: string; takeProfit?: string }) => Promise<OrderResult>;
+  createOrder?: (params: Record<string, unknown>) => Promise<OrderResult>;
+  getPosition?: (market: string) => Promise<PerpetualPosition | null>;
+  getPositions?: () => Promise<PerpetualPosition[]>;
+  calculateLiquidationRisk?: () => Promise<LiquidationRisk[]>;
+}
 
 export interface HedgeStrategy {
   strategyId: string;
@@ -309,9 +317,10 @@ export class HedgingAgent extends BaseAgent {
       logger.info('Opening hedge position', { market, side, notionalValue });
 
       // Support multiple MoonlanderClient interfaces used in tests/mocks
-      let order: any;
-      if (typeof (this.moonlanderClient as any).openHedge === 'function') {
-        order = await (this.moonlanderClient as any).openHedge({
+      const extClient = this.moonlanderClient as unknown as MoonlanderClientExt;
+      let order: OrderResult;
+      if (typeof extClient.openHedge === 'function') {
+        order = await extClient.openHedge({
           market,
           side,
           notionalValue,
@@ -321,11 +330,11 @@ export class HedgingAgent extends BaseAgent {
         });
       } else {
         const marketInfo = await this.moonlanderClient.getMarketInfo(market);
-        const markPrice = parseFloat((marketInfo.markPrice as unknown as string) || '1') || 1;
+        const markPrice = parseFloat(marketInfo.markPrice || '1') || 1;
         const size = (parseFloat(notionalValue) * (leverage || 1) / markPrice).toFixed(4);
 
-        if (typeof (this.moonlanderClient as any).createOrder === 'function') {
-          order = await (this.moonlanderClient as any).createOrder({
+        if (typeof extClient.createOrder === 'function') {
+          order = await extClient.createOrder({
             market,
             side: side === 'LONG' ? 'BUY' : 'SELL',
             type: 'MARKET',
@@ -337,14 +346,14 @@ export class HedgingAgent extends BaseAgent {
             side: side === 'LONG' ? 'BUY' : 'SELL',
             type: 'MARKET',
             size,
-          } as any);
+          });
         }
 
         // Place stop-loss if specified
         if (stopLoss) {
           const stopSide = side === 'LONG' ? 'SELL' : 'BUY';
-          if (typeof (this.moonlanderClient as any).createOrder === 'function') {
-            await (this.moonlanderClient as any).createOrder({
+          if (typeof extClient.createOrder === 'function') {
+            await extClient.createOrder({
               market,
               side: stopSide,
               type: 'STOP_MARKET',
@@ -362,15 +371,15 @@ export class HedgingAgent extends BaseAgent {
               stopPrice: stopLoss,
               reduceOnly: true,
               clientOrderId: `${order.orderId}-sl`,
-            } as any);
+            });
           }
         }
 
         // Place take-profit if specified
         if (takeProfit) {
           const tpSide = side === 'LONG' ? 'SELL' : 'BUY';
-          if (typeof (this.moonlanderClient as any).createOrder === 'function') {
-            await (this.moonlanderClient as any).createOrder({
+          if (typeof extClient.createOrder === 'function') {
+            await extClient.createOrder({
               market,
               side: tpSide,
               type: 'LIMIT',
@@ -390,7 +399,7 @@ export class HedgingAgent extends BaseAgent {
               reduceOnly: true,
               postOnly: true,
               clientOrderId: `${order.orderId}-tp`,
-            } as any);
+            });
           }
         }
       }
@@ -470,14 +479,15 @@ export class HedgingAgent extends BaseAgent {
       }
 
       // Get current position. Support clients that expose getPosition or only getPositions
-      let position: any = null;
-      if (typeof (this.moonlanderClient as any).getPosition === 'function') {
-        position = await (this.moonlanderClient as any).getPosition(strategy.targetMarket);
+      const extClient = this.moonlanderClient as unknown as MoonlanderClientExt;
+      let position: PerpetualPosition | null = null;
+      if (typeof extClient.getPosition === 'function') {
+        position = await extClient.getPosition(strategy.targetMarket);
       }
 
-      if (!position && typeof (this.moonlanderClient as any).getPositions === 'function') {
-        const positions = await (this.moonlanderClient as any).getPositions();
-        position = positions.find((p: any) => p.market === strategy.targetMarket) || null;
+      if (!position && typeof extClient.getPositions === 'function') {
+        const positions = await extClient.getPositions();
+        position = positions.find((p) => p.market === strategy.targetMarket) || null;
       }
 
       if (!position) {
@@ -522,9 +532,10 @@ export class HedgingAgent extends BaseAgent {
           (position.side === 'LONG' ? 'BUY' : 'SELL') :
           (position.side === 'LONG' ? 'SELL' : 'BUY');
 
-        let order: any;
-        if (typeof (this.moonlanderClient as any).createOrder === 'function') {
-          order = await (this.moonlanderClient as any).createOrder({
+        let order: OrderResult;
+        const rebalExtClient = this.moonlanderClient as unknown as MoonlanderClientExt;
+        if (typeof rebalExtClient.createOrder === 'function') {
+          order = await rebalExtClient.createOrder({
             market: strategy.targetMarket,
             side: adjustmentSide,
             type: 'MARKET',
@@ -599,19 +610,20 @@ export class HedgingAgent extends BaseAgent {
 
     try {
       // Get all positions (guard if client only exposes getPositions)
-      const positions = typeof (this.moonlanderClient as any).getPositions === 'function'
-        ? await (this.moonlanderClient as any).getPositions()
+      const monExtClient = this.moonlanderClient as unknown as MoonlanderClientExt;
+      const positions: PerpetualPosition[] = typeof monExtClient.getPositions === 'function'
+        ? await monExtClient.getPositions()
         : [];
 
       // Calculate liquidation risks if available on the client
-      const risks = typeof (this.moonlanderClient as any).calculateLiquidationRisk === 'function'
-        ? await (this.moonlanderClient as any).calculateLiquidationRisk()
+      const risks: LiquidationRisk[] = typeof monExtClient.calculateLiquidationRisk === 'function'
+        ? await monExtClient.calculateLiquidationRisk()
         : [];
       
       // Check each position against strategies
       const alerts = [];
       for (const position of positions) {
-        const risk = risks.find((r: any) => r.positionId === position.positionId);
+        const risk = risks.find((r) => r.positionId === position.positionId);
         
         if (risk && (risk.riskLevel === 'HIGH' || risk.riskLevel === 'CRITICAL')) {
           alerts.push({

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Streamable HTTP MCP Client for Crypto.com Market Data
  * 
@@ -68,7 +67,8 @@ class StreamableMCPClient {
         version: '1.0.0',
       }, {
         capabilities: {},
-      } as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as Record<string, unknown>);
 
       // Connect client to transport
       if (!this.transport || !this.client) {
@@ -77,7 +77,8 @@ class StreamableMCPClient {
       
       const transport = this.transport as StreamableHTTPClientTransport;
       const client = this.client as Client;
-      await client.connect(transport as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await client.connect(transport as unknown as Parameters<typeof client.connect>[0]);
 
       this.connected = true;
       logger.info('✅ Connected to Crypto.com MCP via Streamable HTTP');
@@ -120,7 +121,7 @@ class StreamableMCPClient {
       });
 
       // Parse result
-      const content = result.content as any;
+      const content = result.content as Array<{ text?: string }>;
       const priceData: MCPPriceData = {
         symbol,
         price: content?.[0]?.text ? parseFloat(content[0].text) : 0,

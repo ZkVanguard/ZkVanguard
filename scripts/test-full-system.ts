@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Full System Integration Test
  * Tests: SafeExecutionGuard, Portfolio, ZK Proofs, Smart Contracts
@@ -6,6 +5,11 @@
 
 import { SafeExecutionGuard } from '../agents/core/SafeExecutionGuard';
 import { ethers } from 'ethers';
+
+/** Extract error message from unknown catch value */
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 const COLORS = {
   reset: '\x1b[0m',
@@ -60,8 +64,8 @@ async function testSafeExecutionGuard() {
       fail('Valid $5M position rejected', result.errors.join(', '));
       failed++;
     }
-  } catch (e: any) {
-    fail('Valid execution test', e.message);
+  } catch (e: unknown) {
+    fail('Valid execution test', errMsg(e));
     failed++;
   }
 
@@ -83,8 +87,8 @@ async function testSafeExecutionGuard() {
       fail('Oversized position not rejected properly', result.errors.join(', '));
       failed++;
     }
-  } catch (e: any) {
-    fail('Position limit test', e.message);
+  } catch (e: unknown) {
+    fail('Position limit test', errMsg(e));
     failed++;
   }
 
@@ -106,8 +110,8 @@ async function testSafeExecutionGuard() {
       fail('Excessive leverage not rejected properly', result.errors.join(', '));
       failed++;
     }
-  } catch (e: any) {
-    fail('Leverage limit test', e.message);
+  } catch (e: unknown) {
+    fail('Leverage limit test', errMsg(e));
     failed++;
   }
 
@@ -129,8 +133,8 @@ async function testSafeExecutionGuard() {
       fail('High slippage not rejected properly', result.errors.join(', '));
       failed++;
     }
-  } catch (e: any) {
-    fail('Slippage limit test', e.message);
+  } catch (e: unknown) {
+    fail('Slippage limit test', errMsg(e));
     failed++;
   }
 
@@ -166,8 +170,8 @@ async function testSafeExecutionGuard() {
       fail('Consensus request failed');
       failed++;
     }
-  } catch (e: any) {
-    fail('Multi-agent consensus test', e.message);
+  } catch (e: unknown) {
+    fail('Multi-agent consensus test', errMsg(e));
     failed++;
   }
 
@@ -196,8 +200,8 @@ async function testSafeExecutionGuard() {
       fail('Execution tracking failed');
       failed++;
     }
-  } catch (e: any) {
-    fail('Audit logging test', e.message);
+  } catch (e: unknown) {
+    fail('Audit logging test', errMsg(e));
     failed++;
   }
 
@@ -213,8 +217,8 @@ async function testSafeExecutionGuard() {
     log(`    - Daily Volume %: ${status.dailyVolumePercent.toFixed(2)}%`);
     pass('Guard status retrieved');
     passed++;
-  } catch (e: any) {
-    fail('Guard status test', e.message);
+  } catch (e: unknown) {
+    fail('Guard status test', errMsg(e));
     failed++;
   }
 
@@ -256,8 +260,8 @@ async function testZKProofSystem() {
       fail('ZK commitment verification failed');
       failed++;
     }
-  } catch (e: any) {
-    log(`  ⚠️  ZK module not available: ${e.message}`, COLORS.yellow);
+  } catch (e: unknown) {
+    log(`  ⚠️  ZK module not available: ${errMsg(e)}`, COLORS.yellow);
     // Try alternative ZK path
     try {
       const crypto = await import('crypto');
@@ -307,8 +311,8 @@ async function testSmartContracts() {
           fail(`${name} not found at ${address}`);
           failed++;
         }
-      } catch (e: any) {
-        fail(`${name} check failed`, e.message);
+      } catch (e: unknown) {
+        fail(`${name} check failed`, errMsg(e));
         failed++;
       }
     }
@@ -330,13 +334,13 @@ async function testSmartContracts() {
         pass(`ZKVerifier.getCommitmentHash() working: ${commitmentHash.slice(0, 18)}...`);
         passed++;
       }
-    } catch (e: any) {
-      log(`  ⚠️  ZKVerifier read test: ${e.message.slice(0, 50)}...`, COLORS.yellow);
+    } catch (e: unknown) {
+      log(`  ⚠️  ZKVerifier read test: ${errMsg(e).slice(0, 50)}...`, COLORS.yellow);
       // Contract might have different ABI - still counts as deployed
     }
 
-  } catch (e: any) {
-    fail('Cronos Testnet connection', e.message);
+  } catch (e: unknown) {
+    fail('Cronos Testnet connection', errMsg(e));
     failed++;
   }
 
@@ -374,8 +378,8 @@ async function testPortfolioAndAgents() {
     testPortfolio.positions.forEach(p => {
       log(`    - ${p.asset}: ${p.amount} ($${p.valueUSD.toLocaleString()})`);
     });
-  } catch (e: any) {
-    fail('Portfolio creation', e.message);
+  } catch (e: unknown) {
+    fail('Portfolio creation', errMsg(e));
     failed++;
   }
 
@@ -395,8 +399,8 @@ async function testPortfolioAndAgents() {
     });
     pass('Agent task routing configured (snake_case & kebab-case)');
     passed++;
-  } catch (e: any) {
-    fail('Agent task routing', e.message);
+  } catch (e: unknown) {
+    fail('Agent task routing', errMsg(e));
     failed++;
   }
 
@@ -442,8 +446,8 @@ async function testX402GaslessPayments() {
     pass('Gasless transaction structure valid');
     passed++;
     
-  } catch (e: any) {
-    fail('X402 Gasless configuration', e.message);
+  } catch (e: unknown) {
+    fail('X402 Gasless configuration', errMsg(e));
     failed++;
   }
 

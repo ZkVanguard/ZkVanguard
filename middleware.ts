@@ -1,8 +1,8 @@
-/* eslint-disable no-console */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
+import { logger } from './lib/utils/logger';
 
 /**
  * Combined Middleware: i18n + Geo-Blocking
@@ -271,11 +271,11 @@ async function logGeoBlock(
       // - Analytics database
       // - Compliance audit log
       // - SIEM system
-      console.log('[GEO-BLOCK]', JSON.stringify(logEntry));
+      logger.info('[GEO-BLOCK]', { component: 'middleware', data: logEntry });
     }
   } catch (error) {
     // Don't let logging errors affect the request
-    console.error('[GEO-BLOCK LOG ERROR]', error);
+    logger.error('[GEO-BLOCK LOG ERROR]', error, { component: 'middleware' });
   }
 }
 

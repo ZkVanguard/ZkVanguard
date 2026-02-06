@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview x402 Facilitator API client for REAL gasless payments
  * Uses @crypto.com/facilitator-client SDK for true gasless transactions
@@ -80,7 +79,7 @@ export class X402Client {
    */
   async verifyPayment(
     paymentHeader: string,
-    paymentRequirements: any
+    paymentRequirements: Record<string, unknown>
   ): Promise<X402PaymentVerification> {
     try {
       logger.info('Verifying payment via x402 (gasless)');
@@ -140,7 +139,8 @@ export class X402Client {
       const paymentHeader = await this.facilitator.generatePaymentHeader({
         to: request.to,
         value: request.amount,
-        asset: request.token as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        asset: request.token as Parameters<typeof this.facilitator.generatePaymentHeader>[0]['asset'],
         signer: this.signer,
         validAfter: request.validAfter,
         validBefore: request.validBefore,

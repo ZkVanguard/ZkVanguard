@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview Base Agent abstract class for all specialized agents
  * @module agents/core/BaseAgent
@@ -104,7 +103,7 @@ export abstract class BaseAgent extends EventEmitter {
       const finalResult: TaskResult = Object.assign({}, result, { executionTime: Math.max(1, executionTime) });
 
       task.status = 'completed';
-      task.result = finalResult as any;
+      task.result = finalResult as TaskResult;
       task.executionTime = executionTime;
       task.completedAt = new Date();
 

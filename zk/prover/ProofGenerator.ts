@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @fileoverview ZK Proof Generator - TypeScript wrapper for Python ZK-STARK system
  * @module zk/prover/ProofGenerator
@@ -93,7 +92,7 @@ export class ProofGenerator {
         proof: resultProof,
         proofHash: (resultProof.merkle_root as string) || (resultProof.trace_merkle_root as string) || this.hashProofSync(resultProof),
         proofType,
-        verified: (result.proof as any)?.verified === true || (result.verified as boolean) === true || hasRequiredFields,
+        verified: resultProof?.verified === true || (result.verified as boolean) === true || hasRequiredFields,
         generationTime: Date.now() - startTime,
         protocol: (resultProof.protocol as string) || 'ZK-STARK',
       };

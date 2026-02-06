@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-var-requires */
 /**
  * @fileoverview MCP (Model Context Protocol) Server client for real-time data feeds
  * @module integrations/mcp/MCPClient
@@ -11,7 +10,8 @@ import { EventEmitter } from 'eventemitter3';
 import { logger } from '../../shared/utils/logger';
 import config from '../../shared/utils/config';
 import { RealMarketDataService } from '../../lib/services/RealMarketDataService';
-const { EventSource } = require('eventsource');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import EventSource = require('eventsource');
 
 export interface MCPPriceData {
   symbol: string;
@@ -107,26 +107,26 @@ export class MCPClient extends EventEmitter {
   /**
    * Handle MCP messages from SSE stream
    */
-  private handleMCPMessage(message: any): void {
+  private handleMCPMessage(message: Record<string, unknown>): void {
     try {
       // Handle different MCP message types
       if (message.type === 'price') {
         const priceData: MCPPriceData = {
-          symbol: message.symbol,
-          price: message.price,
-          timestamp: message.timestamp || Date.now(),
-          volume24h: message.volume24h,
-          priceChange24h: message.priceChange24h,
+          symbol: message.symbol as string,
+          price: message.price as number,
+          timestamp: (message.timestamp as number) || Date.now(),
+          volume24h: message.volume24h as number | undefined,
+          priceChange24h: message.priceChange24h as number | undefined,
         };
         
-        this.priceCache.set(message.symbol, priceData);
+        this.priceCache.set(message.symbol as string, priceData);
         this.emit('price-update', priceData);
         
       } else if (message.type === 'market-data') {
         this.emit('market-data', message.data as MCPMarketData);
         
       } else if (message.type === 'error') {
-        logger.error('MCP Server error', { error: message.error });
+        logger.error('MCP Server error', { error: String(message.error) });
         this.emit('error', message.error);
       }
     } catch (error) {

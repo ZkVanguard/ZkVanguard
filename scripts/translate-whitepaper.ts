@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Whitepaper Translation Script using ASI/Ollama
  * Translates hardcoded whitepaper content to all supported languages
@@ -51,11 +50,11 @@ async function checkOllama(): Promise<boolean> {
     if (response.ok) {
       const data = await response.json();
       if (data.models && data.models.length > 0) {
-        console.log('✅ Ollama available with models:', data.models.map((m: any) => m.name).join(', '));
+        console.log('✅ Ollama available with models:', data.models.map((m: { name: string }) => m.name).join(', '));
         return true;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('⚠️ Ollama not available');
   }
   return false;
@@ -79,7 +78,7 @@ async function checkASI(): Promise<boolean> {
       console.log('✅ ASI API available');
       return true;
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('⚠️ ASI API not available');
   }
   return false;
@@ -307,8 +306,9 @@ async function translateWhitepaperSection(locale: string, useASI: boolean): Prom
       
       // Small delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 200));
-    } catch (error: any) {
-      console.error(`\n   ⚠️ Failed to translate "${key}": ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`\n   ⚠️ Failed to translate "${key}": ${msg}`);
       translations[key] = englishText; // Fallback to English
     }
   }
@@ -396,8 +396,9 @@ async function main() {
       if (result.success) {
         await updateMessagesFile(locale, result.translations);
       }
-    } catch (error: any) {
-      console.error(`\n❌ Failed to translate ${LANGUAGE_NAMES[locale]}: ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`\n❌ Failed to translate ${LANGUAGE_NAMES[locale]}: ${msg}`);
     }
   }
   

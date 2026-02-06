@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Settlement Agent
  * Specialized agent for payment settlement and batch processing using x402
@@ -6,9 +5,16 @@
 
 import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
-import { X402Client } from '@integrations/x402/X402Client';
+import { X402Client, X402TransferResponse } from '@integrations/x402/X402Client';
 import { ethers } from 'ethers';
 import { logger } from '@shared/utils/logger';
+
+/** Extended client interface for duck-typing compatibility with varying implementations */
+interface X402ClientExt {
+  executeGaslessTransfer?: (params: Record<string, unknown>) => Promise<X402TransferResponse>;
+  executeBatchTransfer?: (params: Record<string, unknown>) => Promise<X402TransferResponse>;
+  batchTransfer?: (params: Record<string, unknown>) => Promise<X402TransferResponse>;
+}
 
 export interface SettlementRequest {
   requestId: string;
@@ -248,14 +254,15 @@ export class SettlementAgent extends BaseAgent {
 
       // Execute TRUE gasless transfer via x402 Facilitator
       // NO GAS COSTS - x402 handles everything!
-      const result = typeof (this.x402Client as any).executeGaslessTransfer === 'function'
-        ? await (this.x402Client as any).executeGaslessTransfer({
+      const extClient = this.x402Client as unknown as X402ClientExt;
+      const result = typeof extClient.executeGaslessTransfer === 'function'
+        ? await extClient.executeGaslessTransfer({
         token: settlement.token,
         from: await this.signer.getAddress(),
         to: settlement.beneficiary,
         amount: settlement.amount,
         })
-        : await (this.x402Client as any).batchTransfer({
+        : await (extClient.batchTransfer ?? extClient.executeGaslessTransfer)!({
           token: settlement.token,
           from: await this.signer.getAddress(),
           to: settlement.beneficiary,
@@ -369,9 +376,10 @@ export class SettlementAgent extends BaseAgent {
 
         try {
           // Execute TRUE gasless batch via x402 - NO GAS COSTS!
-          const batchResult = typeof (this.x402Client as any).executeBatchTransfer === 'function'
-            ? await (this.x402Client as any).executeBatchTransfer(batchRequest)
-            : await (this.x402Client as any).batchTransfer(batchRequest);
+          const batchExtClient = this.x402Client as unknown as X402ClientExt;
+          const batchResult = typeof batchExtClient.executeBatchTransfer === 'function'
+            ? await batchExtClient.executeBatchTransfer(batchRequest)
+            : await (batchExtClient.batchTransfer ?? batchExtClient.executeBatchTransfer)!(batchRequest);
           
           // Update settlement statuses
           for (const settlement of settlements) {
