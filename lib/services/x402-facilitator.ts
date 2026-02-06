@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * X402 Facilitator Service - Official SDK Integration
  * 
@@ -6,6 +5,7 @@
  * This is the CORE x402 integration for the hackathon.
  */
 
+import { logger } from '../utils/logger';
 import { 
   Facilitator, 
   CronosNetwork, 
@@ -196,11 +196,11 @@ export class X402FacilitatorService {
 
     try {
       // Step 1: Verify the payment
-      console.log('[X402] Verifying payment:', paymentId);
+      logger.info('X402 Verifying payment', { paymentId });
       const verifyResponse = await this.facilitator.verifyPayment(verifyRequest) as X402VerifyResponse;
       
       if (!verifyResponse.isValid) {
-        console.error('[X402] Verification failed:', verifyResponse);
+        logger.error('X402 Verification failed', undefined, { response: verifyResponse });
         return { 
           ok: false, 
           error: 'verify_failed', 
@@ -209,11 +209,11 @@ export class X402FacilitatorService {
       }
 
       // Step 2: Settle the payment on-chain
-      console.log('[X402] Settling payment:', paymentId);
+      logger.info('X402 Settling payment', { paymentId });
       const settleResponse = await this.facilitator.settlePayment(verifyRequest) as X402SettleResponse;
       
       if (settleResponse.event !== 'payment.settled') {
-        console.error('[X402] Settlement failed:', settleResponse);
+        logger.error('X402 Settlement failed', undefined, { response: settleResponse });
         return { 
           ok: false, 
           error: 'settle_failed', 
@@ -227,14 +227,14 @@ export class X402FacilitatorService {
         settledAt: Date.now(),
       });
 
-      console.log('[X402] Payment settled successfully:', settleResponse.txHash);
+      logger.info('X402 Payment settled successfully', { txHash: settleResponse.txHash });
       return {
         ok: true,
         txHash: settleResponse.txHash,
         paymentId,
       };
     } catch (error) {
-      console.error('[X402] Settlement error:', error);
+      logger.error('X402 Settlement error', error);
       return {
         ok: false,
         error: 'settle_failed',

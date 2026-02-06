@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Agent API Integration
  * Frontend interface to AI agents
  */
 
 import { AgentTask as SharedAgentTask } from '../../shared/types/agent';
+import { logger } from '@/lib/utils/logger';
 
 // Re-export for backward compatibility
 export type AgentTask = SharedAgentTask;
@@ -92,8 +92,18 @@ export async function getAgentActivity(_address: string) {
     try {
       const settlements = localStorage.getItem('settlement_history');
       if (settlements) {
-        const settlementData = JSON.parse(settlements);
-        Object.values(settlementData).forEach((batch: any, _index: number) => {
+        interface SettlementBatch {
+          type: string;
+          managerSignature?: string;
+          timestamp: string;
+          status?: string;
+          batchId: string;
+          hedgeDetails?: { type?: string; asset?: string };
+          closedAt?: string;
+          finalPnL?: number;
+        }
+        const settlementData = JSON.parse(settlements) as Record<string, SettlementBatch>;
+        Object.values(settlementData).forEach((batch) => {
           if (batch.type === 'hedge' && batch.managerSignature) {
             const timestamp = new Date(batch.timestamp);
             const isClosed = batch.status === 'closed';
@@ -131,7 +141,7 @@ export async function getAgentActivity(_address: string) {
         });
       }
     } catch (e) {
-      console.error('Error reading settlement history:', e);
+      logger.error('Error reading settlement history', e);
     }
   }
   

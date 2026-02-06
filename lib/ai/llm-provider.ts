@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Advanced LLM Provider for ZkVanguard
@@ -19,7 +18,7 @@ export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
   timestamp?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LLMResponse {
@@ -29,8 +28,8 @@ export interface LLMResponse {
   confidence?: number;
   sources?: string[];
   actionExecuted?: boolean;
-  actionResult?: any;
-  zkProof?: any; // ZK proof data if action was executed
+  actionResult?: unknown;
+  zkProof?: unknown;
 }
 
 export interface StreamChunk {
@@ -63,10 +62,47 @@ const SYSTEM_CONTEXT = `You are an advanced AI assistant for ZkVanguard, a Web3 
 
 Be conversational, helpful, and technically accurate. When discussing financial strategies, always emphasize risk considerations and reference prediction market signals when relevant.`;
 
+// Interfaces for dynamically-imported AI client SDKs
+interface ChatCompletionResponse {
+  choices: Array<{ message: { content: string } }>;
+  usage?: { total_tokens: number; input_tokens?: number; output_tokens?: number };
+}
+
+interface ChatClient {
+  chat: {
+    completions: {
+      create(params: Record<string, unknown>): Promise<ChatCompletionResponse>;
+    };
+  };
+}
+
+interface AnthropicContentBlock {
+  type: string;
+  text: string;
+}
+
+interface AnthropicResponse {
+  content: AnthropicContentBlock[];
+  usage?: { input_tokens: number; output_tokens: number };
+}
+
+interface AnthropicClient {
+  messages: {
+    create(params: Record<string, unknown>): Promise<AnthropicResponse>;
+  };
+}
+
+interface HedgeAction {
+  id: string;
+  label: string;
+  type: string;
+  params: Record<string, unknown>;
+}
+
 class LLMProvider {
-  private aiClient: any = null;
-  private openAIClient: any = null;
-  private anthropicClient: any = null;
+  private aiClient: ChatClient | null = null;
+  private openAIClient: ChatClient | null = null;
+  private anthropicClient: AnthropicClient | null = null;
   private asiApiKey: string | null = null;
   private asiApiUrl: string = 'https://api.asi1.ai/v1';
   private asiAvailable: boolean = false;
@@ -120,7 +156,7 @@ class LLMProvider {
           const models = await ollamaCheck.json();
           if (models.models && models.models.length > 0) {
             ollamaRunning = true;
-            logger.info('✅ Ollama detected with models:', models.models.map((m: any) => m.name).join(', '));
+            logger.info('✅ Ollama detected with models:', models.models.map((m: { name: string }) => m.name).join(', '));
           }
         }
       } catch (e) {
@@ -143,7 +179,7 @@ class LLMProvider {
                 baseURL: ollamaOpenAIUrl, // Point to Ollama's OpenAI-compatible API
               },
               chainId: 240, // Cronos zkEVM Testnet
-            } as any);
+            } as Record<string, unknown>);
             
             if (client) {
               this.aiClient = client;
@@ -174,7 +210,7 @@ class LLMProvider {
                 baseURL: this.asiApiUrl, // ASI API is OpenAI-compatible
               },
               chainId: 240, // Cronos zkEVM Testnet
-            } as any);
+            } as Record<string, unknown>);
             
             if (client) {
               this.aiClient = client;
@@ -203,7 +239,7 @@ class LLMProvider {
                 model: 'gpt-4o',
               },
               chainId: 240, // Cronos zkEVM Testnet
-            } as any);
+            } as Record<string, unknown>);
             
             if (client) {
               this.aiClient = client;
@@ -238,7 +274,7 @@ class LLMProvider {
             if (models.models && models.models.length > 0) {
               this.ollamaAvailable = true;
               this.activeProvider = 'ollama';
-              logger.info('✅ Ollama detected:', models.models.map((m: any) => m.name).join(', '));
+              logger.info('✅ Ollama detected:', models.models.map((m: { name: string }) => m.name).join(', '));
               return;
             }
           }
@@ -358,7 +394,7 @@ class LLMProvider {
   async generateResponse(
     userMessage: string,
     conversationId: string = 'default',
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       // Get or initialize conversation history
@@ -387,11 +423,11 @@ class LLMProvider {
             `• Total P/L: $${p.totalPnl?.toFixed(2) || 'N/A'} (${p.totalPnlPercentage?.toFixed(2) || 'N/A'}%)`;
           
           if (p.positions && p.positions.length > 0) {
-            portfolioContext += '\n• Holdings: ' + p.positions.map((pos: any) => 
+            portfolioContext += '\n• Holdings: ' + p.positions.map((pos: { symbol?: string; value?: number; pnlPercentage?: number }) => 
               `${pos.symbol} ($${pos.value?.toFixed(2)}, ${pos.pnlPercentage?.toFixed(1)}%)`
             ).join(', ');
             // Extract asset symbols for prediction market lookup
-            portfolioAssets = p.positions.map((pos: any) => pos.symbol?.toUpperCase()).filter(Boolean);
+            portfolioAssets = p.positions.map((pos: { symbol?: string }) => pos.symbol?.toUpperCase()).filter(Boolean);
           }
         }
       } catch (error) {
@@ -564,7 +600,7 @@ class LLMProvider {
    */
   private async generateWithCryptocomAI(
     history: ChatMessage[],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       // Format messages for the AI
@@ -634,7 +670,7 @@ class LLMProvider {
    */
   private async generateWithASI(
     history: ChatMessage[],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       if (!this.asiApiKey) {
@@ -718,7 +754,7 @@ class LLMProvider {
    */
   private async generateWithOpenAI(
     history: ChatMessage[],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       // Format messages for OpenAI
@@ -777,7 +813,7 @@ class LLMProvider {
    */
   private async generateWithAnthropic(
     history: ChatMessage[],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       // Extract system message and format for Anthropic
@@ -838,7 +874,7 @@ class LLMProvider {
    */
   private async generateWithOllama(
     history: ChatMessage[],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<LLMResponse> {
     try {
       // Use qwen2.5:7b which is already installed and optimized for CUDA
@@ -907,7 +943,7 @@ class LLMProvider {
    */
   private async generateFallbackResponse(
     userMessage: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
     portfolioContext?: string
   ): Promise<LLMResponse> {
     const lower = userMessage.toLowerCase();
@@ -968,7 +1004,7 @@ class LLMProvider {
     if (lower.includes('hedge') || lower.includes('protect') || lower.includes('insurance')) {
       // Generate ZK-protected hedges
       let hedgeInfo = '';
-      let hedgeActions: any[] = [];
+      let hedgeActions: HedgeAction[] = [];
       try {
         const portfolioData = await getPortfolioData();
         const portfolioValue = portfolioData?.portfolio?.totalValue || 10000;
@@ -1072,7 +1108,7 @@ class LLMProvider {
   async* streamResponse(
     userMessage: string,
     conversationId: string = 'default',
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): AsyncGenerator<StreamChunk> {
     // For now, generate full response and stream it
     // In production, this would use proper streaming APIs
@@ -1202,7 +1238,7 @@ class LLMProvider {
     if (this.openAIClient) {
       const result = await this.openAIClient.chat.completions.create({
         model: 'gpt-4o-mini',
-        messages: messages.map(m => ({ role: m.role as any, content: m.content })),
+        messages: messages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
         temperature: 0.5,
         max_tokens: 500,
       });

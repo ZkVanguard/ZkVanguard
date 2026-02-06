@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK-Protected Hedge Service
  * Generates and executes hedges with ZK-STARK proofs for privacy
@@ -6,6 +5,18 @@
 
 import { logger } from '../utils/logger';
 import { generateRebalanceProof } from '../api/zk';
+
+/** Internal hedge strategy (private details not exposed to frontend) */
+interface HedgeStrategy {
+  type: string;
+  market: string;
+  size: number;
+  leverage: number;
+  effectiveness: number;
+  estimatedCost?: string;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  riskReduction?: number;
+}
 
 export interface PrivateHedge {
   hedgeId: string;
@@ -66,7 +77,7 @@ export async function generatePrivateHedges(
 /**
  * Generate ZK proof for a hedge without revealing strategy
  */
-async function generateHedgeProof(hedge: any): Promise<{ proofHash: string; verified: boolean }> {
+async function generateHedgeProof(hedge: HedgeStrategy): Promise<{ proofHash: string; verified: boolean }> {
   try {
     // Use ZK proof generation with dummy allocations for hedge proof
     const result = await generateRebalanceProof(
@@ -105,7 +116,7 @@ async function generateHedgeProof(hedge: any): Promise<{ proofHash: string; veri
 /**
  * Generate hedge strategies (PRIVATE - not exposed to frontend)
  */
-async function generateHedgeStrategies(portfolioValue: number, riskScore: number): Promise<any[]> {
+async function generateHedgeStrategies(portfolioValue: number, riskScore: number): Promise<HedgeStrategy[]> {
   // This function contains the actual hedge logic
   // Strategy details are NOT sent to frontend
   

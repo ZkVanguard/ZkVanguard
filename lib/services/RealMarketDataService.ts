@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Real Market Data Service
  * Aggregates real-time market data from Crypto.com sources only
@@ -7,6 +6,7 @@
 
 import axios from 'axios';
 import { ethers } from 'ethers';
+import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from './CryptocomExchangeService';
 
 export interface MarketPrice {
@@ -30,12 +30,12 @@ export interface PortfolioData {
   address: string;
   totalValue: number;
   tokens: TokenBalance[];
-  nfts: any[];
+  nfts: unknown[];
   defiPositions: {
-    delphi?: any[];
-    vvs?: any[];
-    moonlander?: any[];
-    x402?: any[];
+    delphi?: unknown[];
+    vvs?: unknown[];
+    moonlander?: unknown[];
+    x402?: unknown[];
   };
   lastUpdated: number;
 }
@@ -58,7 +58,7 @@ class RealMarketDataService {
                    process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 
                    'https://evm-t3.cronos.org';
     
-    console.log(`[RealMarketData] Using RPC: ${rpcUrl}`);
+    logger.info('[RealMarketData] Using RPC', { data: rpcUrl });
     
     this.provider = new ethers.JsonRpcProvider(
       rpcUrl,
@@ -106,7 +106,7 @@ class RealMarketDataService {
     // Deduplicate concurrent requests for the same symbol
     const pending = this.pendingRequests.get(cacheKey);
     if (pending) {
-      console.log(`⚡ [RealMarketData] Reusing pending request for ${symbol}`);
+      logger.debug('Reusing pending request', { data: symbol });
       return pending;
     }
 
@@ -154,7 +154,7 @@ class RealMarketDataService {
 
     // OPTIMIZATION: If we have stale cache, return it immediately and refresh in background
     if (cached && now - cached.timestamp < 300000) { // 5 minutes stale cache
-      console.log(`⚡ [RealMarketData] Using stale cache for ${symbol}, refreshing in background`);
+      logger.debug('[RealMarketData] Using stale cache, refreshing in background', { data: symbol });
       
       // Return stale data immediately
       const staleResult = {
@@ -202,7 +202,7 @@ class RealMarketDataService {
 
     // SOURCE 1: Crypto.com Exchange API (PRIMARY - 100 req/s) with timeout
     try {
-      console.log(`📊 [RealMarketData] Fetching ${symbol} from Crypto.com Exchange API`);
+      logger.debug('[RealMarketData] Fetching from Crypto.com Exchange API', { data: symbol });
       const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Exchange API timeout')), 1500) // Reduced from 2s to 1.5s
       );
@@ -212,7 +212,7 @@ class RealMarketDataService {
       ]);
       
       this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
-      console.log(`✅ [RealMarketData] Got ${symbol} price from Exchange API: $${exchangeData.price}`);
+      logger.info('[RealMarketData] Got price from Exchange API', { data: `${symbol}: $${exchangeData.price}` });
       
       return {
         symbol,
@@ -222,13 +222,13 @@ class RealMarketDataService {
         timestamp: Date.now(),
         source: 'cryptocom-exchange',
       };
-    } catch (error: any) {
-      console.warn(`⚠️ [RealMarketData] Exchange API failed for ${symbol}:`, error.message);
+    } catch (error) {
+      logger.warn(`[RealMarketData] Exchange API failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
     }
 
     // SOURCE 2: Crypto.com MCP Server (FALLBACK 1 - Free, no limits) with timeout
     try {
-      console.log(`📊 [RealMarketData] Trying MCP Server for ${symbol}`);
+      logger.debug('[RealMarketData] Trying MCP Server', { data: symbol });
       const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('MCP timeout')), 1500) // Reduced from 2s to 1.5s
       );
@@ -239,7 +239,7 @@ class RealMarketDataService {
       
       if (mcpData) {
         this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
-        console.log(`✅ [RealMarketData] Got ${symbol} from MCP Server: $${mcpData.price}`);
+        logger.info('[RealMarketData] Got price from MCP Server', { data: `${symbol}: $${mcpData.price}` });
         
         return {
           symbol,
@@ -250,13 +250,13 @@ class RealMarketDataService {
           source: 'cryptocom-mcp',
         };
       }
-    } catch (error: any) {
-      console.warn(`⚠️ [RealMarketData] MCP Server failed for ${symbol}:`, error.message);
+    } catch (error) {
+      logger.warn(`[RealMarketData] MCP Server failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
     }
 
     // FALLBACK 3: Stale cache if available (up to 1 hour old)
     if (cached && now - cached.timestamp < 3600000) {
-      console.warn(`⚠️ [RealMarketData] Using stale cache for ${symbol} (${Math.round((now - cached.timestamp) / 1000)}s old)`);
+      logger.warn(`[RealMarketData] Using stale cache for ${symbol}`, { data: `${Math.round((now - cached.timestamp) / 1000)}s old` });
       return {
         symbol,
         price: cached.price,
@@ -268,7 +268,7 @@ class RealMarketDataService {
     }
 
     // FINAL: Throw error - NO MOCK PRICES
-    console.error(`❌ [RealMarketData] All Crypto.com sources failed for ${symbol}`);
+    logger.error(`[RealMarketData] All Crypto.com sources failed for ${symbol}`);
     throw new Error(`Unable to fetch real price for ${symbol} from Crypto.com sources. Please try again.`);
   }
 
@@ -284,17 +284,17 @@ class RealMarketDataService {
       ]);
       
       this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
-      console.log(`🔄 [RealMarketData] Background refresh: ${symbol} = $${exchangeData.price}`);
+      logger.debug(`[RealMarketData] Background refresh: ${symbol} = $${exchangeData.price}`);
     } catch (error) {
       // Try MCP as fallback
       try {
         const mcpData = await this.getMCPServerPrice(symbol);
         if (mcpData) {
           this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
-          console.log(`🔄 [RealMarketData] Background refresh (MCP): ${symbol} = $${mcpData.price}`);
+          logger.debug(`[RealMarketData] Background refresh (MCP): ${symbol} = $${mcpData.price}`);
         }
       } catch {
-        console.warn(`⚠️ [RealMarketData] Background refresh failed for ${symbol}`);
+        logger.warn(`[RealMarketData] Background refresh failed for ${symbol}`);
       }
     }
   }
@@ -316,10 +316,11 @@ class RealMarketDataService {
           change24h: response.data.change_24h ? parseFloat(response.data.change_24h) : undefined,
         };
       }
-    } catch (error: any) {
+    } catch (error) {
       // MCP Server might not support all tokens, fail silently
-      if (error?.response?.status !== 404) {
-        console.debug(`MCP Server query failed for ${symbol}:`, error.message);
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status !== 404) {
+        logger.debug(`MCP Server query failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
       }
     }
     return null;
@@ -333,7 +334,7 @@ class RealMarketDataService {
       this.getTokenPrice(symbol)
         .then(price => ({ symbol, price }))
         .catch(error => {
-          console.warn(`Failed to get price for ${symbol}:`, error);
+          logger.warn(`Failed to get price for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
           return null;
         })
     );
@@ -359,7 +360,7 @@ class RealMarketDataService {
 
     try {
       const portfolioStart = Date.now();
-      console.log(`🔄 [RealMarketData] Fetching portfolio for ${address}`);
+      logger.info(`[RealMarketData] Fetching portfolio for ${address}`);
       
       // Define all tokens upfront
       const testnetTokens = [
@@ -399,18 +400,18 @@ class RealMarketDataService {
           })();
           
           return await Promise.race([balancePromise, timeoutPromise]);
-        } catch (error: any) {
-          console.warn(`⚠️ [RealMarketData] Failed to fetch ${token.symbol} balance: ${error?.message}`);
+        } catch (error) {
+          logger.warn(`[RealMarketData] Failed to fetch ${token.symbol} balance`, { error: error instanceof Error ? (error as Error).message : String(error) });
           return null;
         }
       });
 
       const balances = (await Promise.all(balancePromises)).filter((b): b is NonNullable<typeof b> => b !== null && parseFloat(b.balance) > 0);
-      console.log(`⏱️ [RealMarketData] Fetched ${balances.length} balances in ${Date.now() - balanceStart}ms`);
+      logger.debug(`[RealMarketData] Fetched ${balances.length} balances in ${Date.now() - balanceStart}ms`);
 
       // If no balances found, return early with empty portfolio
       if (balances.length === 0) {
-        console.log(`📭 [RealMarketData] No token balances found for ${address}`);
+        logger.info(`[RealMarketData] No token balances found for ${address}`);
         return {
           address,
           totalValue: 0,
@@ -428,7 +429,7 @@ class RealMarketDataService {
       try {
         // Fetch all prices in one batch call
         const batchPrices = await cryptocomExchangeService.getBatchPrices(symbols);
-        console.log(`⏱️ [RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
+        logger.debug(`[RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
         
         // Map balances to final token data
         const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
@@ -438,7 +439,7 @@ class RealMarketDataService {
           // Fallback: stablecoins are always $1
           if (!price && STABLECOINS.includes(tokenBalance.symbol.toUpperCase())) {
             price = 1.0;
-            console.log(`💵 [RealMarketData] Using stablecoin price $1 for ${tokenBalance.symbol}`);
+            logger.debug(`[RealMarketData] Using stablecoin price $1 for ${tokenBalance.symbol}`);
           }
           
           if (price) {
@@ -452,11 +453,11 @@ class RealMarketDataService {
             });
             totalValue += value;
           } else {
-            console.warn(`⚠️ [RealMarketData] No price found for ${tokenBalance.symbol}`);
+            logger.warn(`[RealMarketData] No price found for ${tokenBalance.symbol}`);
           }
         }
       } catch (error) {
-        console.error(`❌ [RealMarketData] Batch price fetch failed, falling back to individual:`, error);
+        logger.error('[RealMarketData] Batch price fetch failed, falling back to individual', error);
         
         // Fallback: fetch prices individually if batch fails
         const pricePromises = balances.map(async (tokenBalance) => {
@@ -472,7 +473,7 @@ class RealMarketDataService {
               usdValue: value,
             };
           } catch (error) {
-            console.error(`Failed to fetch ${tokenBalance.symbol} price:`, error);
+            logger.error(`Failed to fetch ${tokenBalance.symbol} price`, error);
             return null;
           }
         });
@@ -482,7 +483,7 @@ class RealMarketDataService {
         totalValue = tokens.reduce((sum, t) => sum + t.usdValue, 0);
       }
 
-      console.log(`⏱️ [RealMarketData] Total portfolio data fetch: ${Date.now() - portfolioStart}ms`);
+      logger.debug(`[RealMarketData] Total portfolio data fetch: ${Date.now() - portfolioStart}ms`);
 
       return {
         address,
@@ -493,7 +494,7 @@ class RealMarketDataService {
         lastUpdated: Date.now(),
       };
     } catch (error) {
-      console.error('Failed to get portfolio data:', error);
+      logger.error('Failed to get portfolio data', error);
       // Return empty portfolio data instead of throwing
       return {
         address,
@@ -577,7 +578,7 @@ class RealMarketDataService {
     symbol: string,
     _days: number = 30
   ): Promise<Array<{ timestamp: number; price: number }>> {
-    console.warn(`[RealMarketData] Historical price data not implemented for ${symbol}`);
+    logger.warn(`[RealMarketData] Historical price data not implemented for ${symbol}`);
     // TODO: Implement with Crypto.com Exchange API historical data endpoints if available
     return [];
   }

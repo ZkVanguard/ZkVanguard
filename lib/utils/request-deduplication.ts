@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Request Deduplication Utility
  * 
@@ -6,13 +5,15 @@
  * If the same request is made while one is pending, returns the same promise.
  */
 
+import { logger } from '@/lib/utils/logger';
+
 interface PendingRequest<T> {
   promise: Promise<T>;
   timestamp: number;
 }
 
 class RequestDeduplicator {
-  private pendingRequests = new Map<string, PendingRequest<any>>();
+  private pendingRequests = new Map<string, PendingRequest<unknown>>();
   private requestTimeout = 30000; // 30s timeout for pending requests
 
   /**
@@ -27,12 +28,12 @@ class RequestDeduplicator {
 
     // Return existing promise if request is still pending and not timed out
     if (pending && (now - pending.timestamp) < this.requestTimeout) {
-      console.log(`⚡ [Deduper] Reusing pending request for: ${key}`);
+      logger.debug(`Reusing pending request for: ${key}`, { component: 'deduper' });
       return pending.promise;
     }
 
     // Create new request
-    console.log(`🔄 [Deduper] Creating new request for: ${key}`);
+    logger.debug(`Creating new request for: ${key}`, { component: 'deduper' });
     const promise = fetcher()
       .then((result) => {
         // Clean up after success

@@ -1,10 +1,20 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com AI Agent Service
  * Enhanced blockchain operations with natural language interface
  */
 
+import { logger } from '@/lib/utils/logger';
+
 // import { Agent } from '@crypto.com/ai-agent-client';
+
+interface AIAgentClient {
+  query(params: { query: string; context: unknown[] }): Promise<{
+    response?: string;
+    message?: string;
+    data?: Record<string, unknown>;
+    context?: unknown[];
+  }>;
+}
 
 export interface AgentConfig {
   openaiApiKey?: string;
@@ -17,9 +27,9 @@ export interface AgentConfig {
 export interface AgentQueryResult {
   success: boolean;
   response: string;
-  data?: any;
+  data?: Record<string, unknown>;
   error?: string;
-  context?: any[];
+  context?: unknown[];
 }
 
 export interface BlockchainOperation {
@@ -27,11 +37,11 @@ export interface BlockchainOperation {
   intent: string;
   result: string;
   txHash?: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 class CryptocomAIAgentService {
-  private agent: any = null;
+  private agent: AIAgentClient | null = null;
   private isInitialized: boolean = false;
   private config: AgentConfig = {};
 
@@ -79,28 +89,29 @@ class CryptocomAIAgentService {
                 cronosZkEvmKey: finalConfig.explorerApiKey,
                 cronosZkEvmTestnetKey: finalConfig.explorerApiKey,
               },
-            });
+            }) as AIAgentClient;
             
             this.isInitialized = true;
-            console.log('[AIAgent] Crypto.com AI Agent SDK initialized successfully', finalConfig.chainId);
+            logger.info('Crypto.com AI Agent SDK initialized', { component: 'AIAgent', data: finalConfig.chainId });
             return;
           }
         } catch (sdkError) {
-          console.warn('[AIAgent] Crypto.com AI Agent SDK not available, using LLM fallback:', sdkError);
+          logger.warn('Crypto.com AI Agent SDK not available, using LLM fallback', { component: 'AIAgent', data: sdkError });
         }
       }
 
       // If SDK not available, mark as initialized with LLM fallback mode
       if (hasOpenAIKey || hasDashboardKey) {
         this.isInitialized = true;
-        console.log('[AIAgent] Initialized with LLM fallback mode (API keys available but SDK not loaded)');
+        logger.info('Initialized with LLM fallback mode', { component: 'AIAgent' });
       } else {
         this.isInitialized = false;
-        console.warn('[AIAgent] No API keys configured - AI features will be limited');
+        logger.warn('No API keys configured - AI features will be limited', { component: 'AIAgent' });
       }
-    } catch (error: any) {
-      console.error('[AIAgent] Initialization failed:', error.message);
-      throw new Error(`Failed to initialize AI Agent: ${error.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Initialization failed', error, { component: 'AIAgent' });
+      throw new Error(`Failed to initialize AI Agent: ${message}`);
     }
   }
 
@@ -119,11 +130,11 @@ class CryptocomAIAgentService {
   /**
    * Process natural language query
    */
-  async query(userQuery: string, conversationContext?: any[]): Promise<AgentQueryResult> {
+  async query(userQuery: string, conversationContext?: unknown[]): Promise<AgentQueryResult> {
     this.ensureInitialized();
 
     try {
-      console.log('[AIAgent] Processing query:', userQuery);
+      logger.info('Processing query', { component: 'AIAgent', data: userQuery });
 
       const result = await this.agent.query({
         query: userQuery,
@@ -136,12 +147,13 @@ class CryptocomAIAgentService {
         data: result.data,
         context: result.context,
       };
-    } catch (error: any) {
-      console.error('[AIAgent] Query failed:', error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Query failed', error, { component: 'AIAgent' });
       return {
         success: false,
         response: 'Failed to process query',
-        error: error.message,
+        error: message,
       };
     }
   }
@@ -163,11 +175,12 @@ class CryptocomAIAgentService {
         txHash: result.data?.txHash,
         data: result.data,
       };
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         type: 'send',
         intent: `Send ${amount} ${symbol}`,
-        result: `Failed: ${error.message}`,
+        result: `Failed: ${message}`,
       };
     }
   }
@@ -184,11 +197,11 @@ class CryptocomAIAgentService {
         : 'What is my wallet balance?';
 
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to get balance',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -202,11 +215,11 @@ class CryptocomAIAgentService {
     try {
       const query = `Analyze the portfolio for address ${address}. Provide insights on holdings, diversification, and risk.`;
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to analyze portfolio',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -220,11 +233,11 @@ class CryptocomAIAgentService {
     try {
       const query = `Show me the last ${limit} transactions for ${address} and explain what they are.`;
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to get transactions',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -246,11 +259,12 @@ class CryptocomAIAgentService {
         txHash: result.data?.txHash,
         data: result.data,
       };
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         type: 'swap',
         intent: `Swap ${fromToken} to ${toToken}`,
-        result: `Failed: ${error.message}`,
+        result: `Failed: ${message}`,
       };
     }
   }
@@ -264,11 +278,11 @@ class CryptocomAIAgentService {
     try {
       const query = 'What is the latest block number on the blockchain?';
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to get latest block',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -282,11 +296,11 @@ class CryptocomAIAgentService {
     try {
       const query = `Analyze transaction ${txHash} and explain what happened.`;
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to analyze transaction',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -300,11 +314,11 @@ class CryptocomAIAgentService {
     try {
       const query = `Assess the risk for address ${address} if they ${action}`;
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to assess risk',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -318,11 +332,11 @@ class CryptocomAIAgentService {
     try {
       const query = `What is the smart contract at ${contractAddress}? Show me its ABI and functions.`;
       return await this.query(query);
-    } catch (error: any) {
+    } catch (error) {
       return {
         success: false,
         response: 'Failed to get contract info',
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -332,7 +346,7 @@ class CryptocomAIAgentService {
    */
   async parseIntent(userMessage: string): Promise<{
     intent: string;
-    entities: Record<string, any>;
+    entities: Record<string, unknown>;
     confidence: number;
   }> {
     this.ensureInitialized();
@@ -347,7 +361,7 @@ class CryptocomAIAgentService {
         entities: result.data || {},
         confidence: 0.7,
       };
-    } catch (error: any) {
+    } catch (error) {
       return {
         intent: 'error',
         entities: {},
@@ -368,7 +382,7 @@ class CryptocomAIAgentService {
       const result = await this.getLatestBlock();
       return result.success;
     } catch (error) {
-      console.error('[AIAgent] Health check failed:', error);
+      logger.error('Health check failed', error, { component: 'AIAgent' });
       return false;
     }
   }

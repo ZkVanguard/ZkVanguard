@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Simulated Portfolio Manager
  * 
@@ -284,7 +283,7 @@ export class SimulatedPortfolioManager {
   /**
    * Get AI-powered portfolio analysis using REAL agent orchestrator
    */
-  async analyzePortfolio(): Promise<any> {
+  async analyzePortfolio(): Promise<Record<string, unknown>> {
     try {
     const portfolioValue = await this.getPortfolioValue();
     
@@ -313,9 +312,9 @@ export class SimulatedPortfolioManager {
     logger.debug('SimulatedPortfolioManager.analyzePortfolio - orchestrator result', { result });
 
     if (result.success && result.data) {
-      const data = result.data as any;
+      const data = result.data as Record<string, unknown>;
       data.riskScore = (data.riskScore !== undefined) ? data.riskScore : 50;
-      data.healthScore = (data.healthScore !== undefined) ? data.healthScore : (100 - data.riskScore);
+      data.healthScore = (data.healthScore !== undefined) ? data.healthScore : (100 - (data.riskScore as number));
       return {
         ...data,
         portfolioData,
@@ -329,11 +328,11 @@ export class SimulatedPortfolioManager {
 
     // Fallback to AI service
     const aiService = getCryptocomAIService();
-    let analysis = null;
+    let analysis: Record<string, unknown> | null = null;
     try {
-      analysis = await aiService.analyzePortfolio('simulated-portfolio', portfolioData);
+      analysis = await aiService.analyzePortfolio('simulated-portfolio', portfolioData) as Record<string, unknown>;
     } catch (e) {
-      logger.warn('AI analysis failed, using fallback summary', { error: e });
+      logger.warn('AI analysis failed, using fallback summary', { error: e instanceof Error ? e.message : String(e) });
       analysis = null;
     }
 
@@ -363,7 +362,7 @@ export class SimulatedPortfolioManager {
     logger.debug('SimulatedPortfolioManager.analyzePortfolio - returning', { ret });
     return ret;
     } catch (e) {
-      logger.warn('analyzePortfolio failed unexpectedly, returning safe defaults', { error: e });
+      logger.warn('analyzePortfolio failed unexpectedly, returning safe defaults', { error: e instanceof Error ? e.message : String(e) });
       return {
         totalValue: this.initialCapital,
         positions: Array.from(this.positions.values()),
@@ -384,7 +383,7 @@ export class SimulatedPortfolioManager {
   /**
    * Get AI-powered risk assessment using REAL agent orchestrator
    */
-  async assessRisk(): Promise<any> {
+  async assessRisk(): Promise<Record<string, unknown>> {
     const portfolioValue = await this.getPortfolioValue();
     
     const portfolioData = {
@@ -430,7 +429,7 @@ export class SimulatedPortfolioManager {
   /**
    * Get AI-powered hedge recommendations using REAL agent orchestrator
    */
-  async getHedgeRecommendations(): Promise<any> {
+  async getHedgeRecommendations(): Promise<Record<string, unknown>> {
     const portfolioValue = await this.getPortfolioValue();
     
     // Find dominant asset
@@ -455,21 +454,21 @@ export class SimulatedPortfolioManager {
       notionalValue: portfolioValue,
     });
 
-      if (result.success && result.data) {
-      const hedgeAnalysis = result.data;
+    if (result.success && result.data) {
+      const hedgeAnalysis = result.data as Record<string, Record<string, unknown>>;
       const rawConfidence = hedgeAnalysis.riskMetrics?.hedgeEffectiveness || 0;
       const confidence = Math.max(0, Math.min(1, Number(rawConfidence)));
       return {
         recommendations: [{
           strategy: `${hedgeAnalysis.recommendation.action} ${hedgeAnalysis.recommendation.side} Position`,
           confidence,
-          expectedReduction: hedgeAnalysis.exposure.volatility * 60,
+          expectedReduction: Number(hedgeAnalysis.exposure.volatility) * 60,
           description: hedgeAnalysis.recommendation.reason,
           actions: [{
             action: hedgeAnalysis.recommendation.action,
             market: hedgeAnalysis.recommendation.market,
             asset: hedgeAnalysis.exposure.asset,
-            amount: parseFloat(hedgeAnalysis.recommendation.size),
+            amount: parseFloat(String(hedgeAnalysis.recommendation.size)),
             leverage: hedgeAnalysis.recommendation.leverage,
             reason: hedgeAnalysis.recommendation.reason,
           }]
@@ -506,28 +505,28 @@ export class SimulatedPortfolioManager {
   /**
    * Execute AI-recommended trades automatically
    */
-  async executeAIRecommendation(recommendation: any): Promise<Trade[]> {
+  async executeAIRecommendation(recommendation: Record<string, unknown>): Promise<Trade[]> {
     const trades: Trade[] = [];
 
-    for (const action of recommendation.actions || []) {
+    for (const action of (recommendation.actions as Array<Record<string, unknown>>) || []) {
       try {
         if (action.action === 'buy' || action.action === 'BUY') {
           const trade = await this.buy(
-            action.asset,
-            action.amount,
+            action.asset as string,
+            action.amount as number,
             `AI Recommendation: ${recommendation.strategy}`
           );
           trades.push(trade);
         } else if (action.action === 'sell' || action.action === 'SELL') {
           const trade = await this.sell(
-            action.asset,
-            action.amount,
+            action.asset as string,
+            action.amount as number,
             `AI Recommendation: ${recommendation.strategy}`
           );
           trades.push(trade);
         }
       } catch (error) {
-        console.error(`Failed to execute AI recommendation:`, error);
+        logger.error('Failed to execute AI recommendation', error);
       }
     }
 
@@ -568,7 +567,7 @@ export class SimulatedPortfolioManager {
   /**
    * Get portfolio summary with REAL data
    */
-  async getSummary(): Promise<any> {
+  async getSummary(): Promise<Record<string, unknown>> {
     const totalValue = await this.getPortfolioValue();
     const totalPnl = totalValue - this.initialCapital;
     const totalPnlPercentage = (totalPnl / this.initialCapital) * 100;

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * On-Chain Hedge Service
  * 
@@ -274,7 +273,7 @@ export function getOnChainHedgeService(
  * Helper to create service with wallet connection (for frontend use)
  */
 export async function createOnChainServiceWithWallet(
-  walletProvider: any, // ethers or wagmi provider
+  walletProvider: ethers.Eip1193Provider,
   network: keyof typeof DEPLOYED_ADDRESSES = 'cronos-testnet'
 ): Promise<OnChainHedgeService> {
   const provider = new ethers.BrowserProvider(walletProvider);

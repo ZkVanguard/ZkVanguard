@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Moonlander DEX Integration
  * For perpetual futures positions on Cronos zkEVM
@@ -38,9 +37,9 @@ export async function getMoonlanderPositions(address: string): Promise<Position[
         const data = await res.json();
         // Expect data.positions to be an array of Position-like objects
         if (Array.isArray(data?.positions)) {
-          return data.positions.map((p: any) => ({
+          return (data.positions as Array<Record<string, unknown>>).map((p) => ({
             id: String(p.id),
-            asset: p.asset,
+            asset: String(p.asset),
             type: p.type === 'LONG' ? 'LONG' : 'SHORT',
             size: Number(p.size),
             entryPrice: Number(p.entryPrice),
@@ -167,7 +166,7 @@ export async function getMarketData(asset: string) {
     };
     
     const cryptoAsset = tickerMap[asset] || asset.replace('-PERP', '_USDT');
-    const ticker = tickers.find((t: any) => t.i === cryptoAsset);
+    const ticker = tickers.find((t: Record<string, unknown>) => t.i === cryptoAsset);
     
     if (ticker) {
       const price = parseFloat(ticker.a || '0');

@@ -1,10 +1,10 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * Crypto.com Exchange API Service
  * High-performance market data from Crypto.com Exchange
  * Rate limit: 100 requests per second per IP
  */
 
+import { logger } from '@/lib/utils/logger';
 import axios, { AxiosInstance } from 'axios';
 
 export interface ExchangeTicker {
@@ -86,7 +86,7 @@ class CryptocomExchangeService {
     this.client.interceptors.response.use(
       response => response,
       error => {
-        console.error('[CryptocomExchange] API Error:', error.message);
+        logger.error('API Error', error, { component: 'CryptocomExchange' });
         throw error;
       }
     );
@@ -137,9 +137,10 @@ class CryptocomExchangeService {
       }
 
       throw new Error(`No data returned for ${instrumentName}`);
-    } catch (error: any) {
-      console.error(`[CryptocomExchange] Failed to fetch ${symbol}:`, error.message);
-      throw new Error(`Failed to fetch market data for ${symbol}: ${error.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to fetch ${symbol}`, error, { component: 'CryptocomExchange' });
+      throw new Error(`Failed to fetch market data for ${symbol}: ${message}`);
     }
   }
 
@@ -176,7 +177,7 @@ class CryptocomExchangeService {
           const price = await this.getPrice(symbol);
           prices[symbol] = price;
         } catch (error) {
-          console.warn(`[CryptocomExchange] Failed to fetch ${symbol}, skipping`);
+          logger.warn(`Failed to fetch ${symbol}, skipping`, { component: 'CryptocomExchange' });
         }
       });
       
@@ -200,8 +201,9 @@ class CryptocomExchangeService {
       }
 
       return [];
-    } catch (error: any) {
-      console.error('[CryptocomExchange] Failed to fetch all tickers:', error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to fetch all tickers: ${message}`, error, { component: 'CryptocomExchange' });
       return [];
     }
   }
@@ -257,7 +259,7 @@ class CryptocomExchangeService {
       });
       return response.data.code === 0;
     } catch (error) {
-      console.error('[CryptocomExchange] Health check failed:', error);
+      logger.error('Health check failed', error, { component: 'CryptocomExchange' });
       return false;
     }
   }

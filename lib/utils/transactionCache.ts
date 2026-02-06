@@ -1,8 +1,9 @@
-/* eslint-disable no-console */
 /**
  * Transaction Cache Utility
  * Store and retrieve transactions from localStorage for persistent history
  */
+
+import { logger } from '@/lib/utils/logger';
 
 export interface CachedTransaction {
   hash: string;
@@ -42,9 +43,9 @@ export function addTransactionToCache(tx: CachedTransaction): void {
     const trimmed = cached.slice(0, MAX_CACHED_TXS);
     
     localStorage.setItem(CACHE_KEY, JSON.stringify(trimmed));
-    console.log(`📝 Cached transaction: ${tx.hash} (${tx.type})`);
+    logger.debug(`Cached transaction: ${tx.hash} (${tx.type})`, { component: 'transactionCache' });
   } catch (e) {
-    console.error('Failed to cache transaction:', e);
+    logger.error('Failed to cache transaction', e, { component: 'transactionCache' });
   }
 }
 
@@ -58,7 +59,7 @@ export function getTransactionsFromCache(): CachedTransaction[] {
     
     return JSON.parse(cached);
   } catch (e) {
-    console.error('Failed to read transaction cache:', e);
+    logger.error('Failed to read transaction cache', e, { component: 'transactionCache' });
     return [];
   }
 }
@@ -82,10 +83,10 @@ export function updateTransactionStatus(
         ...additionalData,
       };
       localStorage.setItem(CACHE_KEY, JSON.stringify(cached));
-      console.log(`✅ Updated transaction ${hash}: ${status}`);
+      logger.debug(`Updated transaction ${hash}: ${status}`, { component: 'transactionCache' });
     }
   } catch (e) {
-    console.error('Failed to update transaction status:', e);
+    logger.error('Failed to update transaction status', e, { component: 'transactionCache' });
   }
 }
 
@@ -100,8 +101,8 @@ export function clearOldTransactions(): void {
     const filtered = cached.filter(tx => tx.timestamp > thirtyDaysAgo);
     
     localStorage.setItem(CACHE_KEY, JSON.stringify(filtered));
-    console.log(`🧹 Cleared ${cached.length - filtered.length} old transactions`);
+    logger.debug(`Cleared ${cached.length - filtered.length} old transactions`, { component: 'transactionCache' });
   } catch (e) {
-    console.error('Failed to clear old transactions:', e);
+    logger.error('Failed to clear old transactions', e, { component: 'transactionCache' });
   }
 }

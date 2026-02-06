@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * GDPR-Compliant Analytics Service
  * 
@@ -16,6 +15,8 @@
  * - Precise geolocation
  * - Portfolio values or positions
  */
+
+import { logger } from '@/lib/utils/logger';
 
 // Check if analytics consent is given
 function hasAnalyticsConsent(): boolean {
@@ -82,7 +83,7 @@ export interface AnalyticsPayload {
 export async function trackEvent(payload: AnalyticsPayload): Promise<void> {
   // Only track if consent given
   if (!hasAnalyticsConsent()) {
-    console.debug('[Analytics] Skipped - no consent');
+    logger.debug('Analytics event skipped - no consent', { component: 'AnalyticsService' });
     return;
   }
 

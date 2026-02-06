@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ZK Paymaster Service - TRUE Gasless via Meta-Transactions
  * 
@@ -140,7 +139,7 @@ export class ZKPaymasterService {
     userAddress: string,
     params: GaslessCommitmentParams
   ): Promise<{
-    message: Record<string, any>;
+    message: Record<string, string | number>;
     domain: TypedDataDomain;
     types: Record<string, TypedDataField[]>;
     primaryType: string;

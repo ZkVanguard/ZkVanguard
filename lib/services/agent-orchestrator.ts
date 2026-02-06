@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Agent Orchestrator Service
  * Coordinates all AI agents and provides unified interface for API routes
@@ -10,11 +9,11 @@ import { HedgingAgent } from '@/agents/specialized/HedgingAgent';
 import { SettlementAgent } from '@/agents/specialized/SettlementAgent';
 import { ReportingAgent } from '@/agents/specialized/ReportingAgent';
 import { LeadAgent } from '@/agents/core/LeadAgent';
-import { logger } from '@shared/utils/logger';
+import { logger } from '@/lib/utils/logger';
 
 export interface AgentOrchestrationResult {
   success: boolean;
-  data: any;
+  data: unknown;
   agentId: string;
   executionTime: number;
   error?: string;
@@ -125,22 +124,22 @@ export class AgentOrchestrator {
       // Initialize specialized agents
       logger.info('Creating RiskAgent...');
       this.riskAgent = new RiskAgent(
-        'risk-agent-001' as any,
-        this.provider as any
+        'risk-agent-001',
+        this.provider
       );
 
       logger.info('Creating HedgingAgent...');
       this.hedgingAgent = new HedgingAgent(
-        'hedging-agent-001' as any,
-        this.provider as any,
-        signerToUse as any
+        'hedging-agent-001',
+        this.provider,
+        signerToUse
       );
 
       logger.info('Creating SettlementAgent...');
       this.settlementAgent = new SettlementAgent(
-        'settlement-agent-001' as any,
-        this.provider as any,
-        signerToUse as any,
+        'settlement-agent-001',
+        this.provider,
+        signerToUse,
         process.env.PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000'
       );
 
@@ -219,7 +218,7 @@ export class AgentOrchestrator {
    */
   public async analyzePortfolio(params: {
     address: string;
-    portfolioData?: any;
+    portfolioData?: unknown;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -266,7 +265,7 @@ export class AgentOrchestrator {
    */
   public async assessRisk(params: {
     address: string;
-    portfolioData?: any;
+    portfolioData?: unknown;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -449,7 +448,7 @@ export class AgentOrchestrator {
           id: `process-settlement-${Date.now()}`,
           action: 'process_settlement',
           parameters: {
-            requestId: (createResult.data as any).requestId,
+            requestId: (createResult.data as Record<string, unknown>).requestId,
           },
           priority: 4,
           createdAt: new Date(),
