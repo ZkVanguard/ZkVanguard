@@ -56,6 +56,7 @@ class CryptocomExchangeService {
     'WETH': 'ETH_USD',  // Wrapped ETH (1:1 with ETH)
     'CRO': 'CRO_USD',
     'CRONOS': 'CRO_USD',
+    'WCRO': 'CRO_USD',  // Wrapped CRO (1:1 with CRO)
     'USDT': 'USDT_USD',
     'USDC': 'USDC_USD',
     'MATIC': 'MATIC_USD',

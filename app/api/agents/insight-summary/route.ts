@@ -134,8 +134,8 @@ export async function POST(request: NextRequest) {
 
     console.log('[InsightSummary] Extracted real market data:', marketData);
 
-    // Extract unique tokens from all predictions — only analyze BTC and ETH
-    const INSIGHT_TOKENS = ['BTC', 'ETH'];
+    // Extract unique tokens from all predictions — analyze BTC, ETH, and CRO
+    const INSIGHT_TOKENS = ['BTC', 'ETH', 'CRO'];
     const allTokens = [...new Set(predictions.flatMap(p => p.relatedAssets))]
       .filter(t => INSIGHT_TOKENS.includes(t));
     const hedgeAlerts = predictions.filter(p => p.recommendation === 'HEDGE').length;
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
             await llmProvider.waitForInit();
 
             const synthesisResponse = await llmProvider.generateDirectResponse(
-              `You are the Lead Agent approving a multi-agent market insights analysis. This is a general market analysis focused ONLY on BTC and ETH — NOT portfolio-specific. Do NOT mention portfolio values, portfolio health, or portfolio allocations.
+              `You are the Lead Agent approving a multi-agent market insights analysis. This is a general market analysis focused on BTC, ETH, and CRO — NOT portfolio-specific. Do NOT mention portfolio values, portfolio health, or portfolio allocations.
 
 RISK AGENT OUTPUT:
 ${riskContext}
@@ -345,18 +345,18 @@ ${hedgeContext}
 PREDICTION MARKET DATA:
 ${predictionsContext}
 
-Tokens analyzed: ${allTokens.join(', ')} (BTC and ETH only).
+Tokens analyzed: ${allTokens.join(', ')}.
 
 As the Lead Agent, provide your APPROVAL and synthesis in this JSON:
 {
   "approved": true,
   "approvalRationale": "One sentence explaining why you approve/reject based on market insights",
-  "overview": "2-3 sentence market overview for BTC and ETH synthesizing agent outputs with specific numbers. No portfolio references.",
+  "overview": "2-3 sentence market overview for BTC, ETH, and CRO synthesizing agent outputs with specific numbers. No portfolio references.",
   "sentiment": "bullish|bearish|neutral"
 }
 
 Return ONLY valid JSON.`,
-              'You are the Lead Agent orchestrator for market insights. You approve or reject recommendations from RiskAgent and HedgingAgent. Focus on BTC and ETH market outlook only. Never mention portfolio values or portfolio health.'
+              'You are the Lead Agent orchestrator for market insights. You approve or reject recommendations from RiskAgent and HedgingAgent. Focus on BTC, ETH, and CRO market outlook. Never mention portfolio values or portfolio health.'
             );
 
             try {
@@ -404,27 +404,6 @@ Return ONLY valid JSON.`,
         ? `${openHedges.length} hedge position(s) recommended: ${openHedges.map(h => `${h.symbol} ${h.side} ${h.leverage}x`).join(', ') || 'HOLD on all positions'}. Avg hedge effectiveness: ${(hedgeResults.reduce((s, h) => s + h.hedgeEffectiveness, 0) / hedgeResults.length).toFixed(0)}%.`
         : 'HedgingAgent: no immediate hedge triggers — maintaining monitor mode.';
 
-      // Determine sentiment from agent data
-      // Priority: RiskAgent sentiment (direct market read) > prediction signal count
-      const riskSentiment = riskAnalysis?.marketSentiment || 'neutral';
-      const bullishCount = predictions.filter(p => p.category === 'price' && p.probability > 55).length;
-      const bearishCount = hedgeAlerts;
-      let overallSentiment: 'bullish' | 'bearish' | 'neutral';
-      if (riskSentiment !== 'neutral') {
-        // RiskAgent has a directional read — trust it, but cross-check with predictions
-        if (riskSentiment === 'bearish' && bullishCount > bearishCount + 1) {
-          overallSentiment = 'neutral'; // Conflicting signals → neutral
-        } else if (riskSentiment === 'bullish' && bearishCount > bullishCount + 1) {
-          overallSentiment = 'neutral'; // Conflicting signals → neutral
-        } else {
-          overallSentiment = riskSentiment as 'bullish' | 'bearish';
-        }
-      } else {
-        overallSentiment = bullishCount > bearishCount ? 'bullish'
-          : bearishCount > bullishCount ? 'bearish'
-          : 'neutral';
-      }
-
       // Build token directions from prediction data + hedge agent context
       // Direction is derived from PREDICTION signals, not just hedge action.
       // HedgingAgent HOLD = "no hedge needed" — could still be bullish.
@@ -438,7 +417,7 @@ Return ONLY valid JSON.`,
           p.relatedAssets.length <= 2 ||
           p.id?.toLowerCase().includes(token.toLowerCase()) ||
           p.question.toLowerCase().includes(token.toLowerCase()) ||
-          p.question.toLowerCase().includes(token === 'BTC' ? 'bitcoin' : token === 'ETH' ? 'ethereum' : token.toLowerCase())
+          p.question.toLowerCase().includes(token === 'BTC' ? 'bitcoin' : token === 'ETH' ? 'ethereum' : token === 'CRO' ? 'cronos' : token.toLowerCase())
         );
         const bestPreds = specificPreds.length > 0 ? specificPreds : tokenPreds;
 
@@ -508,6 +487,19 @@ Return ONLY valid JSON.`,
         return { symbol: token, direction, confidence, shortTake };
       });
 
+      // Derive overall sentiment from computed token directions (majority vote)
+      // This ensures the banner is always consistent with individual token cards
+      const upTokens = tokenDirections.filter(t => t.direction === 'up').length;
+      const downTokens = tokenDirections.filter(t => t.direction === 'down').length;
+      let overallSentiment: 'bullish' | 'bearish' | 'neutral';
+      if (upTokens > downTokens) {
+        overallSentiment = 'bullish';
+      } else if (downTokens > upTokens) {
+        overallSentiment = 'bearish';
+      } else {
+        overallSentiment = 'neutral';
+      }
+
       // Build leverage recommendations from HedgingAgent data + prediction signals
       // Direction is based on WHERE the token is going (predictions), not just hedge action.
       // If HedgingAgent says HOLD and predictions are bullish → LONG (no hedge needed = confident in upside)
@@ -523,7 +515,7 @@ Return ONLY valid JSON.`,
             p.relatedAssets.length <= 2 ||
             p.id?.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
             p.question.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
-            p.question.toLowerCase().includes(hedge.symbol === 'BTC' ? 'bitcoin' : hedge.symbol === 'ETH' ? 'ethereum' : hedge.symbol.toLowerCase())
+            p.question.toLowerCase().includes(hedge.symbol === 'BTC' ? 'bitcoin' : hedge.symbol === 'ETH' ? 'ethereum' : hedge.symbol === 'CRO' ? 'cronos' : hedge.symbol.toLowerCase())
           );
           const bestPreds = specificPreds.length > 0 ? specificPreds : tokenPreds;
 
