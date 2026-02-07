@@ -2,31 +2,31 @@
 # Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Global owners - will be requested for review when someone opens a PR
-* @mrarejimmyz
+* @ZkVanguard
 
 # Smart contracts - require review from contract specialists
-/contracts/ @mrarejimmyz
-/scripts/deploy/ @mrarejimmyz
+/contracts/ @ZkVanguard
+/scripts/deploy/ @ZkVanguard
 
 # Documentation - can be reviewed by anyone
-/docs/ @mrarejimmyz
-*.md @mrarejimmyz
+/docs/ @ZkVanguard
+*.md @ZkVanguard
 
 # CI/CD and tooling
-/.github/ @mrarejimmyz
-/.husky/ @mrarejimmyz
-/scripts/ @mrarejimmyz
+/.github/ @ZkVanguard
+/.husky/ @ZkVanguard
+/scripts/ @ZkVanguard
 
 # AI Agents - require AI/ML expertise
-/agents/ @mrarejimmyz
-/lib/ai/ @mrarejimmyz
+/agents/ @ZkVanguard
+/lib/ai/ @ZkVanguard
 
 # Frontend - require frontend expertise  
-/app/ @mrarejimmyz
-/components/ @mrarejimmyz
-/styles/ @mrarejimmyz
+/app/ @ZkVanguard
+/components/ @ZkVanguard
+/styles/ @ZkVanguard
 
 # Security-critical files - require additional review
-.env.example @mrarejimmyz
-SECURITY.md @mrarejimmyz
-/contracts/core/ @mrarejimmyz
+.env.example @ZkVanguard
+SECURITY.md @ZkVanguard
+/contracts/core/ @ZkVanguard

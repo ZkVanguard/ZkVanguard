@@ -97,7 +97,7 @@ Institutional traders need **privacy** - competitors shouldn't see your hedge po
 ## Quick Start
 
 ```bash
-git clone https://github.com/mrarejimmyz/ZkVanguard.git && cd ZkVanguard && npm install
+git clone https://github.com/ZkVanguard/ZkVanguard.git && cd ZkVanguard && npm install
 
 # Terminal 1: ZK Backend
 cd zkp/api && pip install -r requirements.txt && python server.py

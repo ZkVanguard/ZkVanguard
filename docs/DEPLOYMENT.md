@@ -14,7 +14,7 @@ git init
 git add .
 git commit -m "Initial Next.js build"
 git branch -M main
-git remote add origin https://github.com/mrarejimmyz/ZkVanguard.git
+git remote add origin https://github.com/ZkVanguard/ZkVanguard.git
 git push -u origin main
 ```
 

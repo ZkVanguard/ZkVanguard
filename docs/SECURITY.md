@@ -12,7 +12,7 @@ We release patches for security vulnerabilities in the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability, please send an e-mail to security@zkvanguard.io or report it through our [security advisory page](https://github.com/mrarejimmyz/zkvanguard/security/advisories/new).
+If you discover a security vulnerability, please send an e-mail to security@zkvanguard.io or report it through our [security advisory page](https://github.com/ZkVanguard/ZkVanguard/security/advisories/new).
 
 ### What to Include
 

@@ -38,7 +38,7 @@ export function Footer() {
               <ul className="space-y-3">
                 <li><a href="https://calendly.com/ashishregmi2017/30min" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">{t('contact')}</a></li>
                 <li><a href="https://t.me/+QoAodv90iWExZmVh" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">{t('community')}</a></li>
-                <li><a href="https://github.com/mrarejimmyz/ZkVanguard" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">{t('github')}</a></li>
+                <li><a href="https://github.com/ZkVanguard/ZkVanguard" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">{t('github')}</a></li>
                 <li><a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors leading-relaxed">{t('twitter')}</a></li>
               </ul>
             </div>

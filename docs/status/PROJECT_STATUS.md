@@ -269,7 +269,7 @@ Duration: ~30 seconds
 
 ## 🔗 Important Links
 
-- **GitHub**: https://github.com/mrarejimmyz/ZkVanguard
+- **GitHub**: https://github.com/ZkVanguard/ZkVanguard
 - **Test Report**: [COMPLETE_SYSTEM_TEST_REPORT.md](./COMPLETE_SYSTEM_TEST_REPORT.md)
 - **Winning Strategy**: [WINNING_STRATEGY.md](./WINNING_STRATEGY.md)
 - **Demo Script**: [DEMO_SCRIPT.md](./DEMO_SCRIPT.md)
@@ -289,7 +289,7 @@ Duration: ~30 seconds
 - ✅ Documentation organized
 
 **Branch**: main  
-**Remote**: https://github.com/mrarejimmyz/ZkVanguard.git  
+**Remote**: https://github.com/ZkVanguard/ZkVanguard.git  
 **Status**: ✅ Pushed successfully
 
 ---

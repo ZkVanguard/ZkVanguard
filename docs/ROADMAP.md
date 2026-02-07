@@ -414,7 +414,7 @@ With proven cross-chain architecture from Cronos→SUI expansion, we now expand 
 
 Interested in shaping the future of ZkVanguard? Here's how you can help:
 
-1. **Developers**: Check our [GitHub Issues](https://github.com/mrarejimmyz/zkvanguard/issues) for open tasks
+1. **Developers**: Check our [GitHub Issues](https://github.com/ZkVanguard/ZkVanguard/issues) for open tasks
 2. **Users**: Share feedback via [Discord](https://discord.gg/zkvanguard) or feedback@zkvanguard.io
 3. **Researchers**: Propose new algorithms or risk models via GitHub Discussions
 4. **Investors**: Reach out to founders@zkvanguard.io for partnership opportunities

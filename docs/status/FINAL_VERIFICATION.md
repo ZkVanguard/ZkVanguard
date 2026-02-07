@@ -170,7 +170,7 @@ Total:            36/36 ✅ (100%)
 
 ### Git Status
 - **Branch**: main
-- **Remote**: https://github.com/mrarejimmyz/ZkVanguard.git
+- **Remote**: https://github.com/ZkVanguard/ZkVanguard.git
 - **Last Commit**: fe2aed0 "docs: Add comprehensive project status report"
 - **Files Changed**: 31 total (30 + 1)
 - **Status**: ✅ All changes pushed
@@ -320,7 +320,7 @@ npx tsx scripts/complete-system-test.ts
 
 ## 📞 Important Links
 
-- **GitHub**: https://github.com/mrarejimmyz/ZkVanguard.git
+- **GitHub**: https://github.com/ZkVanguard/ZkVanguard.git
 - **Test Report**: `COMPLETE_SYSTEM_TEST_REPORT.md`
 - **Winning Strategy**: `WINNING_STRATEGY.md`
 - **Demo Guide**: `DEMO_SCRIPT.md`

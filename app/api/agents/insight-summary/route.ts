@@ -556,28 +556,38 @@ Return ONLY valid JSON.`,
             direction = isBullish ? 'long' : isBearish ? 'short' : 'neutral';
           }
 
-          // Adjust leverage based on confidence + hedge effectiveness + direction strength
-          // Higher hedge effectiveness = better risk coverage = can justify higher leverage
+          // Adjust leverage based on confidence + hedge effectiveness + direction strength + risk score
+          // Lower risk score → more room for leverage. Higher hedge effectiveness → better risk coverage.
+          // Risk score is factored in: riskScore ≤ 30 boosts leverage tiers by ~1 step.
           let leverage: number;
           let riskLevel: 'conservative' | 'moderate' | 'aggressive';
           const hedgeEff = hedge.hedgeEffectiveness;
+          const riskScore = riskAnalysis?.totalRisk ?? 50;
+          const lowRisk = riskScore <= 30;       // favorable conditions — allow higher leverage
+          const medRisk = riskScore <= 50;       // normal conditions
+
           if (direction === 'neutral') {
-            leverage = 1;
+            leverage = lowRisk ? 1.5 : 1;
             riskLevel = 'conservative';
-          } else if (avgProb >= 75 && isBullish && !isBearish && hedgeEff >= 90) {
-            leverage = Math.min(hedge.leverage || 4, 5);
+          } else if (avgProb >= 75 && isBullish && !isBearish && hedgeEff >= 85) {
+            // Very strong signal + good hedge coverage
+            leverage = Math.min(hedge.leverage || 5, lowRisk ? 5 : 4);
             riskLevel = 'aggressive';
-          } else if (avgProb >= 70 && isBullish && hedgeEff >= 85) {
-            leverage = Math.min(hedge.leverage || 3, 4);
-            riskLevel = 'moderate';
-          } else if (avgProb >= 55 && hedgeEff >= 80) {
-            leverage = Math.min(hedge.leverage || 2, 3);
-            riskLevel = 'moderate';
-          } else if (avgProb >= 55) {
-            leverage = Math.min(hedge.leverage || 1.5, 2);
+          } else if ((avgProb >= 60 || (avgProb >= 50 && lowRisk)) && isBullish && hedgeEff >= 75) {
+            // Strong signal, or moderate signal with low risk + decent hedge
+            leverage = lowRisk ? 4 : medRisk ? 3 : 2.5;
+            riskLevel = lowRisk ? 'moderate' : 'moderate';
+          } else if ((avgProb >= 45 || lowRisk) && hedgeEff >= 70) {
+            // Moderate signal with hedge coverage — risk score differentiates
+            leverage = lowRisk ? 3 : medRisk ? 2.5 : 2;
+            riskLevel = lowRisk ? 'moderate' : 'conservative';
+          } else if (avgProb >= 40 && hedgeEff >= 50) {
+            // Lower conviction — scale with risk tolerance
+            leverage = lowRisk ? 2.5 : medRisk ? 2 : 1.5;
             riskLevel = 'conservative';
           } else {
-            leverage = Math.min(hedge.leverage || 1.5, 2);
+            // Weak signal — minimal leverage
+            leverage = lowRisk ? 2 : 1.5;
             riskLevel = 'conservative';
           }
 

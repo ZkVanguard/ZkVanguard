@@ -16,7 +16,7 @@ Before starting, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/mrarejimmyz/ZkVanguard.git
+git clone https://github.com/ZkVanguard/ZkVanguard.git
 cd ZkVanguard
 
 # Install all dependencies
@@ -366,7 +366,7 @@ const x402Client = new X402Client({
 
 ## Getting Help
 
-- **Issues**: https://github.com/mrarejimmyz/ZkVanguard/issues
+- **Issues**: https://github.com/ZkVanguard/ZkVanguard/issues
 - **Cronos Discord**: https://discord.gg/cronos
 - **Telegram**: https://t.me/cronoschain
 

@@ -14,8 +14,8 @@ Thank you for your interest in contributing to ZkVanguard! This document provide
 
 ```bash
 # Clone the repository
-git clone https://github.com/mrarejimmyz/zkvanguard.git
-cd zkvanguard
+git clone https://github.com/ZkVanguard/ZkVanguard.git
+cd ZkVanguard
 
 # Install dependencies
 npm install
