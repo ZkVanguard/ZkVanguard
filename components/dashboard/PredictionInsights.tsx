@@ -18,7 +18,6 @@ import {
   ChevronUp,
   Sparkles,
   Bot,
-  MessageSquare,
   Zap,
   ArrowRight
 } from 'lucide-react';
