@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { DelphiMarketService, PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePolling, useLoading } from '@/lib/hooks';
 import { 
   TrendingUp, 
+  TrendingDown,
   AlertTriangle, 
   CheckCircle, 
   Eye,
@@ -15,8 +16,41 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Bot,
+  MessageSquare,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
+
+interface TokenDirection {
+  symbol: string;
+  direction: 'up' | 'down' | 'sideways';
+  confidence: number;
+  shortTake: string;
+}
+
+interface LeverageRecommendation {
+  symbol: string;
+  direction: 'long' | 'short' | 'neutral';
+  leverage: string;
+  riskLevel: 'conservative' | 'moderate' | 'aggressive';
+  rationale: string;
+  confidence: number;
+  allocation: number;
+}
+
+interface UnifiedSummary {
+  overview: string;
+  riskAgent: string;
+  hedgingAgent: string;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  tokenDirections: TokenDirection[];
+  leverageRecommendations: LeverageRecommendation[];
+  hedgeAlerts: number;
+  leadAgentApproved?: boolean;
+  analyzedAt: number;
+}
 
 interface PredictionInsightsProps {
   assets?: string[];
@@ -39,6 +73,10 @@ export const PredictionInsights = memo(function PredictionInsights({
   const [actionFeedback, setActionFeedback] = useState<{ id: string; action: string } | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showAllPredictions, setShowAllPredictions] = useState(false);
+  const [agentSummary, setAgentSummary] = useState<UnifiedSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const summaryFetchedRef = useRef(false);
 
   const fetchPredictions = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setRefreshing(true);
@@ -59,6 +97,37 @@ export const PredictionInsights = memo(function PredictionInsights({
   }, [showAll, assets, setError, stopLoading]);
 
   usePolling(fetchPredictions, 60000);
+
+  // Fetch unified AI summary from agents when predictions load
+  const fetchAgentSummary = useCallback(async (preds: PredictionMarket[]) => {
+    if (summaryFetchedRef.current || preds.length === 0) return;
+
+    setSummaryLoading(true);
+    try {
+      const res = await fetch('/api/agents/insight-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ predictions: preds }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.summary) {
+          setAgentSummary(data.summary);
+          summaryFetchedRef.current = true;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch agent summary:', err);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (predictions.length > 0) {
+      fetchAgentSummary(predictions);
+    }
+  }, [predictions, fetchAgentSummary]);
 
   const filteredPredictions = predictions.filter(p => {
     if (filter === 'all') return true;
@@ -133,9 +202,12 @@ export const PredictionInsights = memo(function PredictionInsights({
   return (
     <div className="bg-white rounded-[16px] sm:rounded-[20px] shadow-sm border border-black/5 overflow-hidden">
       {/* Header - Collapseable */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between active:bg-[#f9f9f9] sm:hover:bg-[#f9f9f9] transition-colors"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsCollapsed(!isCollapsed); } }}
+        className="w-full px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between active:bg-[#f9f9f9] sm:hover:bg-[#f9f9f9] transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-9 h-9 sm:w-10 sm:h-10 bg-[#AF52DE] rounded-[10px] sm:rounded-[12px] flex items-center justify-center">
@@ -173,7 +245,7 @@ export const PredictionInsights = memo(function PredictionInsights({
             <ChevronUp className="w-5 h-5 text-[#86868b]" />
           )}
         </div>
-      </button>
+      </div>
 
       {!isCollapsed && (
         <>
@@ -195,6 +267,254 @@ export const PredictionInsights = memo(function PredictionInsights({
               ))}
             </div>
           </div>
+
+          {/* Unified AI Agent Summary */}
+          {(agentSummary || summaryLoading) && (
+            <div className="px-4 sm:px-6 pb-3">
+              <div className="bg-gradient-to-br from-[#AF52DE]/5 via-[#007AFF]/5 to-[#34C759]/5 border border-[#AF52DE]/15 rounded-[14px] overflow-hidden">
+                {/* Summary Header */}
+                <button
+                  onClick={() => setSummaryExpanded(!summaryExpanded)}
+                  className="w-full px-4 py-3 flex items-start gap-3 text-left"
+                >
+                  <div className="w-8 h-8 bg-[#AF52DE] rounded-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[13px] font-bold text-[#1d1d1f]">Agent Analysis</span>
+                      {agentSummary?.sentiment && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                          agentSummary.sentiment === 'bullish'
+                            ? 'bg-[#34C759]/15 text-[#34C759]'
+                            : agentSummary.sentiment === 'bearish'
+                            ? 'bg-[#FF3B30]/15 text-[#FF3B30]'
+                            : 'bg-[#86868b]/10 text-[#86868b]'
+                        }`}>
+                          {agentSummary.sentiment.toUpperCase()}
+                        </span>
+                      )}
+                      {agentSummary && agentSummary.hedgeAlerts > 0 && (
+                        <span className="px-1.5 py-0.5 bg-[#FF3B30]/10 text-[#FF3B30] rounded-full text-[9px] font-bold">
+                          {agentSummary.hedgeAlerts} HEDGE
+                        </span>
+                      )}
+                      {agentSummary?.leadAgentApproved !== undefined && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                          agentSummary.leadAgentApproved
+                            ? 'bg-[#34C759]/15 text-[#34C759]'
+                            : 'bg-[#FF9500]/15 text-[#FF9500]'
+                        }`}>
+                          {agentSummary.leadAgentApproved ? '✅ LEAD APPROVED' : '⏳ PENDING'}
+                        </span>
+                      )}
+                    </div>
+                    {summaryLoading && !agentSummary ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 border-[1.5px] border-[#AF52DE] border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[12px] text-[#86868b] italic">Agents analyzing market data...</span>
+                      </div>
+                    ) : agentSummary ? (
+                      <p className="text-[12px] sm:text-[13px] text-[#1d1d1f] leading-snug line-clamp-5">
+                        {agentSummary.overview}
+                      </p>
+                    ) : null}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-[#86868b] flex-shrink-0 mt-1 transition-transform ${
+                    summaryExpanded ? 'rotate-180' : ''
+                  }`} />
+                </button>
+
+                {/* Token Directions - always visible */}
+                {agentSummary?.tokenDirections && agentSummary.tokenDirections.length > 0 && (
+                  <div className="px-4 pb-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {agentSummary.tokenDirections.map((td) => (
+                        <div
+                          key={td.symbol}
+                          className={`p-3 rounded-[12px] border ${
+                            td.direction === 'up'
+                              ? 'bg-[#34C759]/5 border-[#34C759]/15'
+                              : td.direction === 'down'
+                              ? 'bg-[#FF3B30]/5 border-[#FF3B30]/15'
+                              : 'bg-[#FF9500]/5 border-[#FF9500]/15'
+                          }`}
+                        >
+                          {/* Token header row */}
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              {td.direction === 'up' ? (
+                                <TrendingUp className="w-4 h-4 text-[#34C759]" />
+                              ) : td.direction === 'down' ? (
+                                <TrendingDown className="w-4 h-4 text-[#FF3B30]" />
+                              ) : (
+                                <ArrowRight className="w-4 h-4 text-[#FF9500]" />
+                              )}
+                              <span className="text-[13px] font-bold text-[#1d1d1f]">{td.symbol}</span>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              td.direction === 'up'
+                                ? 'bg-[#34C759]/15 text-[#34C759]'
+                                : td.direction === 'down'
+                                ? 'bg-[#FF3B30]/15 text-[#FF3B30]'
+                                : 'bg-[#FF9500]/15 text-[#FF9500]'
+                            }`}>
+                              {td.direction === 'up' ? '↑ BULLISH' : td.direction === 'down' ? '↓ BEARISH' : '→ NEUTRAL'}
+                            </span>
+                          </div>
+                          {/* Confidence bar */}
+                          <div className="mb-1.5">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[9px] font-semibold text-[#86868b] uppercase tracking-wide">Confidence</span>
+                              <span className={`text-[10px] font-bold ${
+                                td.confidence >= 70 ? 'text-[#34C759]'
+                                  : td.confidence >= 50 ? 'text-[#FF9500]'
+                                  : 'text-[#FF3B30]'
+                              }`}>{td.confidence}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-black/5 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  td.direction === 'up' ? 'bg-[#34C759]'
+                                    : td.direction === 'down' ? 'bg-[#FF3B30]'
+                                    : 'bg-[#FF9500]'
+                                }`}
+                                style={{ width: `${Math.min(td.confidence, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          {/* Short take */}
+                          <p className="text-[10px] text-[#6e6e73] leading-snug">
+                            {td.shortTake}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Agent Leverage Recommendations */}
+                {agentSummary?.leverageRecommendations && agentSummary.leverageRecommendations.length > 0 && (
+                  <div className="px-4 pb-3">
+                    <div className="p-3 bg-[#007AFF]/5 border border-[#007AFF]/12 rounded-[12px]">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <div className="w-5 h-5 bg-[#007AFF] rounded-[6px] flex items-center justify-center">
+                          <Zap className="w-3 h-3 text-white" />
+                        </div>
+                        <span className="text-[11px] font-bold text-[#007AFF] uppercase tracking-wide">Agent Recommendations</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {agentSummary.leverageRecommendations.map((lr) => (
+                          <div key={lr.symbol} className={`p-2.5 rounded-[10px] border ${
+                            lr.direction === 'long'
+                              ? 'bg-[#34C759]/5 border-[#34C759]/12'
+                              : lr.direction === 'short'
+                              ? 'bg-[#FF3B30]/5 border-[#FF3B30]/12'
+                              : 'bg-[#FF9500]/5 border-[#FF9500]/12'
+                          }`}>
+                            {/* Top row: symbol + direction badges */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {lr.direction === 'long' ? (
+                                <TrendingUp className="w-4 h-4 text-[#34C759] flex-shrink-0" />
+                              ) : lr.direction === 'short' ? (
+                                <TrendingDown className="w-4 h-4 text-[#FF3B30] flex-shrink-0" />
+                              ) : (
+                                <ArrowRight className="w-4 h-4 text-[#FF9500] flex-shrink-0" />
+                              )}
+                              <span className="text-[13px] font-bold text-[#1d1d1f]">{lr.symbol}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                lr.direction === 'long'
+                                  ? 'bg-[#34C759]/15 text-[#34C759]'
+                                  : lr.direction === 'short'
+                                  ? 'bg-[#FF3B30]/15 text-[#FF3B30]'
+                                  : 'bg-[#FF9500]/15 text-[#FF9500]'
+                              }`}>
+                                {lr.direction.toUpperCase()}
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#007AFF]/12 text-[#007AFF] rounded-full text-[10px] font-bold">
+                                {lr.leverage}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${
+                                lr.riskLevel === 'aggressive'
+                                  ? 'bg-[#FF3B30]/12 text-[#FF3B30]'
+                                  : lr.riskLevel === 'moderate'
+                                  ? 'bg-[#FF9500]/12 text-[#FF9500]'
+                                  : 'bg-[#34C759]/12 text-[#34C759]'
+                              }`}>
+                                {lr.riskLevel.charAt(0).toUpperCase() + lr.riskLevel.slice(1)}
+                              </span>
+                            </div>
+                            {/* Bottom row: confidence + rationale */}
+                            <div className="mt-1.5 ml-6">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-[9px] font-semibold text-[#86868b] uppercase tracking-wide">
+                                  {lr.confidence}% confidence
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#6e6e73] leading-snug">
+                                {lr.rationale}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded: Full Agent Breakdown */}
+                {summaryExpanded && agentSummary && (
+                  <div className="px-4 pb-4 space-y-2.5 border-t border-[#AF52DE]/10 pt-3">
+                    {/* Full overview */}
+                    <p className="text-[12px] sm:text-[13px] text-[#1d1d1f] leading-relaxed">
+                      {agentSummary.overview}
+                    </p>
+
+                    {/* Risk Agent */}
+                    <div className="p-3 bg-white/60 rounded-[10px] border border-[#AF52DE]/10">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Zap className="w-3 h-3 text-[#AF52DE]" />
+                        <span className="text-[10px] font-bold text-[#AF52DE] uppercase tracking-wide">Risk Agent</span>
+                      </div>
+                      <p className="text-[12px] text-[#1d1d1f] leading-relaxed">
+                        {agentSummary.riskAgent}
+                      </p>
+                    </div>
+
+                    {/* Hedging Agent */}
+                    <div className="p-3 bg-white/60 rounded-[10px] border border-[#007AFF]/10">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Shield className="w-3 h-3 text-[#007AFF]" />
+                        <span className="text-[10px] font-bold text-[#007AFF] uppercase tracking-wide">Hedging Agent</span>
+                      </div>
+                      <p className="text-[12px] text-[#1d1d1f] leading-relaxed">
+                        {agentSummary.hedgingAgent}
+                      </p>
+                    </div>
+
+                    {/* Agent attribution */}
+                    <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#AF52DE]/10 text-[#AF52DE] rounded text-[9px] font-semibold">
+                        <Bot className="w-2.5 h-2.5" /> Lead Agent
+                      </span>
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#AF52DE]/10 text-[#AF52DE] rounded text-[9px] font-semibold">
+                        <Zap className="w-2.5 h-2.5" /> Risk Agent
+                      </span>
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded text-[9px] font-semibold">
+                        <Shield className="w-2.5 h-2.5" /> Hedging Agent
+                      </span>
+                      {agentSummary.leadAgentApproved && (
+                        <span className="ml-auto text-[9px] font-bold text-[#34C759]">
+                          ✅ All agents executed &middot; Lead Agent approved
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Predictions List */}
           {filteredPredictions.length === 0 ? (
@@ -419,8 +739,12 @@ export const PredictionInsights = memo(function PredictionInsights({
                 </div>
               </div>
 
-              {/* Recommendation Text */}
+              {/* Recommendation */}
               <div className="p-3 bg-[#AF52DE]/5 border border-[#AF52DE]/10 rounded-[12px] mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bot className="w-4 h-4 text-[#AF52DE]" />
+                  <span className="text-[12px] font-bold text-[#AF52DE] uppercase tracking-wide">Agent Recommendation</span>
+                </div>
                 <p className="text-[13px] text-[#1d1d1f] leading-relaxed">
                   {selectedPrediction.recommendation === 'HEDGE' ? (
                     <>This prediction has <strong>{selectedPrediction.probability}%</strong> probability with <strong>{selectedPrediction.impact}</strong> impact. Consider opening a hedge position to protect your <strong>{selectedPrediction.relatedAssets.join(', ')}</strong> holdings.</>

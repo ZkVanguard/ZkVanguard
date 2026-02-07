@@ -19,6 +19,14 @@ export interface PredictionMarket {
   confidence: number; // 0-100, based on volume and liquidity
   recommendation?: 'HEDGE' | 'MONITOR' | 'IGNORE';
   source?: 'polymarket' | 'crypto-analysis' | 'delphi';
+  aiSummary?: string; // AI-generated agent analysis summary
+  agentAnalysis?: {
+    riskAgent: string;
+    hedgingAgent: string;
+    sentiment: 'bullish' | 'bearish' | 'neutral';
+    actionRationale: string;
+    analyzedAt: number;
+  };
 }
 
 export interface DelphiInsight {
@@ -70,23 +78,32 @@ export class DelphiMarketService {
         const volume = parseFloat(btcTicker.v || '0') * price;
         
         // BTC price prediction based on momentum
-        const bullishProb = change24h > 0 ? Math.min(70 + change24h * 5, 85) : Math.max(30 + change24h * 5, 15);
+        const bullishProb = change24h > 0 ? Math.min(70 + change24h * 5, 95) : Math.max(30 + change24h * 5, 10);
+        // Dynamic confidence: base 55 + momentum strength (up to 20) + volume factor (up to 15) + trend clarity (up to 10)
+        const btcMomentumStrength = Math.min(Math.abs(change24h) * 4, 20);
+        const btcVolumeFactor = volume > 2e10 ? 15 : volume > 1e10 ? 12 : volume > 5e9 ? 8 : volume > 1e9 ? 5 : 2;
+        const btcTrendClarity = Math.abs(change24h) > 3 ? 10 : Math.abs(change24h) > 1.5 ? 7 : Math.abs(change24h) > 0.5 ? 4 : 1;
+        const btcConfidence = Math.min(Math.round(55 + btcMomentumStrength + btcVolumeFactor + btcTrendClarity), 96);
         predictions.push({
           id: 'crypto-btc-momentum',
-          question: `Will Bitcoin maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
+          question: `Will Bitcoin maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString()})`,
           category: 'price',
           probability: Math.round(bullishProb),
           volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
           impact: Math.abs(change24h) > 3 ? 'HIGH' : Math.abs(change24h) > 1 ? 'MODERATE' : 'LOW',
           relatedAssets: ['BTC'],
           lastUpdate: Date.now(),
-          confidence: 85,
+          confidence: btcConfidence,
           recommendation: change24h > 2 ? 'MONITOR' : change24h < -3 ? 'HEDGE' : 'MONITOR',
           source: 'crypto-analysis',
         });
 
         // BTC $100K prediction
         const to100k = ((100000 - price) / price) * 100;
+        // Dynamic confidence: closer to $100K = higher confidence, volume adds certainty
+        const btc100kProximity = price > 95000 ? 20 : price > 90000 ? 15 : price > 80000 ? 10 : price > 70000 ? 5 : 0;
+        const btc100kVolConf = volume > 2e10 ? 12 : volume > 1e10 ? 8 : volume > 5e9 ? 5 : 2;
+        const btc100kConfidence = Math.min(Math.round(50 + btc100kProximity + btc100kVolConf + btcTrendClarity), 92);
         predictions.push({
           id: 'crypto-btc-100k',
           question: `Will Bitcoin reach $100,000? (Currently $${price.toLocaleString()}, ${to100k.toFixed(1)}% away)`,
@@ -96,7 +113,7 @@ export class DelphiMarketService {
           impact: 'HIGH',
           relatedAssets: ['BTC', 'ETH', 'CRO'],
           lastUpdate: Date.now(),
-          confidence: 70,
+          confidence: btc100kConfidence,
           recommendation: 'MONITOR',
           source: 'crypto-analysis',
         });
@@ -107,7 +124,11 @@ export class DelphiMarketService {
         const price = parseFloat(croTicker.a || '0');
         const volume = parseFloat(croTicker.v || '0') * price;
         
-        // CRO specific prediction
+        // CRO specific prediction — dynamic confidence from CRO's own momentum & volume
+        const croMomentum = Math.min(Math.abs(change24h) * 3, 15);
+        const croVolConf = volume > 1e8 ? 10 : volume > 5e7 ? 7 : volume > 1e7 ? 4 : 2;
+        const croTrendClarity = Math.abs(change24h) > 3 ? 8 : Math.abs(change24h) > 1 ? 5 : 2;
+        const croConfidence = Math.min(Math.round(48 + croMomentum + croVolConf + croTrendClarity), 88);
         predictions.push({
           id: 'crypto-cro-momentum',
           question: `Will CRO outperform BTC this week? (CRO 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
@@ -117,12 +138,13 @@ export class DelphiMarketService {
           impact: 'MODERATE',
           relatedAssets: ['CRO'],
           lastUpdate: Date.now(),
-          confidence: 75,
+          confidence: croConfidence,
           recommendation: 'MONITOR',
           source: 'crypto-analysis',
         });
 
-        // CRO ecosystem growth
+        // CRO ecosystem growth — lower base confidence reflects speculative nature
+        const croEcoConf = Math.min(Math.round(42 + croMomentum + (change24h > 0 ? 8 : 0) + croVolConf), 82);
         predictions.push({
           id: 'crypto-cro-ecosystem',
           question: `Will Cronos DeFi TVL increase by Q2 2026? (Based on CRO price action)`,
@@ -132,27 +154,52 @@ export class DelphiMarketService {
           impact: 'MODERATE',
           relatedAssets: ['CRO'],
           lastUpdate: Date.now(),
-          confidence: 60,
+          confidence: croEcoConf,
           recommendation: change24h > 0 ? 'MONITOR' : 'HEDGE',
           source: 'crypto-analysis',
         });
       }
 
       if (ethTicker) {
-        const _change24h = parseFloat(ethTicker.c || '0') * 100;
+        const change24h = parseFloat(ethTicker.c || '0') * 100;
         const price = parseFloat(ethTicker.a || '0');
-        
-        // ETH staking prediction
+        const volume = parseFloat(ethTicker.v || '0') * price;
+
+        // ETH price/momentum prediction
+        const bullishProb = change24h > 0 ? Math.min(70 + change24h * 5, 95) : Math.max(30 + change24h * 5, 10);
+        // Dynamic confidence: base 50 + momentum strength (up to 18) + volume factor (up to 12) + trend clarity (up to 10)
+        // ETH uses different weights than BTC (lower base, different volume thresholds) for natural differentiation
+        const ethMomentumStrength = Math.min(Math.abs(change24h) * 3.5, 18);
+        const ethVolumeFactor = volume > 1e10 ? 12 : volume > 5e9 ? 9 : volume > 2e9 ? 6 : volume > 5e8 ? 4 : 2;
+        const ethTrendClarity = Math.abs(change24h) > 4 ? 10 : Math.abs(change24h) > 2 ? 7 : Math.abs(change24h) > 0.8 ? 4 : 1;
+        const ethConfidence = Math.min(Math.round(50 + ethMomentumStrength + ethVolumeFactor + ethTrendClarity), 94);
+        predictions.push({
+          id: 'crypto-eth-momentum',
+          question: `Will Ethereum maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString()})`,
+          category: 'price',
+          probability: Math.round(bullishProb),
+          volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
+          impact: Math.abs(change24h) > 3 ? 'HIGH' : Math.abs(change24h) > 1 ? 'MODERATE' : 'LOW',
+          relatedAssets: ['ETH'],
+          lastUpdate: Date.now(),
+          confidence: ethConfidence,
+          recommendation: change24h > 2 ? 'MONITOR' : change24h < -3 ? 'HEDGE' : 'MONITOR',
+          source: 'crypto-analysis',
+        });
+
+        // ETH staking prediction — confidence based on ETH stability (less volatile = more predictable staking yields)
+        const ethStabilityBonus = Math.abs(change24h) < 1 ? 12 : Math.abs(change24h) < 3 ? 8 : Math.abs(change24h) < 5 ? 4 : 0;
+        const ethStakingConf = Math.min(Math.round(55 + ethStabilityBonus + ethVolumeFactor + (price > 2000 ? 8 : price > 1500 ? 5 : 2)), 90);
         predictions.push({
           id: 'crypto-eth-staking',
-          question: `Will ETH staking yields remain above 4% APY? (ETH: $${price.toLocaleString()})`,
+          question: `Will ETH staking yields remain above 4% APY? (ETH: $${price.toLocaleString()}, 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
           category: 'defi',
           probability: 72,
-          volume: 'Network data',
+          volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
           impact: 'MODERATE',
           relatedAssets: ['ETH'],
           lastUpdate: Date.now(),
-          confidence: 80,
+          confidence: ethStakingConf,
           recommendation: 'MONITOR',
           source: 'crypto-analysis',
         });
@@ -163,6 +210,14 @@ export class DelphiMarketService {
         .filter(Boolean)
         .reduce((sum, t) => sum + parseFloat(t?.c || '0') * 100, 0) / 3;
 
+      // Market-wide sentiment — confidence from consensus across tickers
+      const tickerCount = [btcTicker, ethTicker, croTicker].filter(Boolean).length;
+      const alignedTickers = [btcTicker, ethTicker, croTicker]
+        .filter(Boolean)
+        .filter(t => (parseFloat(t?.c || '0') * 100 > 0) === (totalChange > 0)).length;
+      const consensusBonus = alignedTickers === tickerCount ? 15 : alignedTickers >= 2 ? 8 : 0;
+      const sentimentMomentum = Math.min(Math.abs(totalChange) * 3, 12);
+      const marketSentimentConf = Math.min(Math.round(45 + consensusBonus + sentimentMomentum + tickerCount * 3), 88);
       predictions.push({
         id: 'crypto-market-sentiment',
         question: `Will crypto market cap increase this month? (Avg 24h change: ${totalChange > 0 ? '+' : ''}${totalChange.toFixed(2)}%)`,
@@ -172,7 +227,7 @@ export class DelphiMarketService {
         impact: 'HIGH',
         relatedAssets: ['BTC', 'ETH', 'CRO', 'USDC'],
         lastUpdate: Date.now(),
-        confidence: 65,
+        confidence: marketSentimentConf,
         recommendation: totalChange > 1 ? 'MONITOR' : totalChange < -2 ? 'HEDGE' : 'MONITOR',
         source: 'crypto-analysis',
       });
@@ -599,7 +654,7 @@ export class DelphiMarketService {
         impact: 'HIGH' as const,
         relatedAssets: ['BTC'],
         lastUpdate: now - 600000,
-        confidence: 85,
+        confidence: 78,
         recommendation: 'HEDGE' as const,
       },
       {
