@@ -705,7 +705,18 @@ export class HedgingAgent extends BaseAgent {
       return volatility * Math.sqrt(365);
     } catch (error) {
       logger.debug('Volatility calculation using fallback', { assetSymbol, error: error instanceof Error ? error.message : String(error) });
-      return 0.3; // Default volatility
+      // Asset-specific historical volatility estimates (annualized)
+      // Based on typical crypto volatility ranges from real market data
+      const volatilityEstimates: Record<string, number> = {
+        'BTC': 0.45,   // BTC: lower vol, most liquid
+        'ETH': 0.58,   // ETH: higher vol than BTC
+        'CRO': 0.72,   // CRO: mid-cap, higher vol
+        'SOL': 0.65,   // SOL: high beta
+        'MATIC': 0.68,  // MATIC: mid-cap
+        'USDC': 0.01,  // Stablecoin
+        'USDT': 0.01,  // Stablecoin
+      };
+      return volatilityEstimates[assetSymbol.toUpperCase()] ?? 0.50;
     }
   }
 
@@ -781,9 +792,15 @@ export class HedgingAgent extends BaseAgent {
       return adjustedCorrelation;
     } catch (error) {
       logger.debug('Spot-future correlation using fallback', { assetSymbol, error: error instanceof Error ? error.message : String(error) });
-      // Fallback to reasonable estimate for liquid markets
-      const highCorrelationAssets = ['BTC', 'ETH', 'CRO'];
-      return highCorrelationAssets.includes(assetSymbol.toUpperCase()) ? 0.92 : 0.85;
+      // Asset-specific correlation estimates — more liquid assets have tighter spot-futures correlation
+      const correlationEstimates: Record<string, number> = {
+        'BTC': 0.96,   // BTC perps track spot very tightly
+        'ETH': 0.93,   // ETH perps slightly wider basis
+        'CRO': 0.87,   // CRO: less liquid perp market
+        'SOL': 0.91,
+        'MATIC': 0.88,
+      };
+      return correlationEstimates[assetSymbol.toUpperCase()] ?? 0.85;
     }
   }
 

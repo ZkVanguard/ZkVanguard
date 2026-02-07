@@ -229,7 +229,15 @@ export async function POST(request: NextRequest) {
 
         for (const symbol of tokensToHedge) {
           try {
-            const notionalValue = 1_000_000; // $1M standard notional for analysis
+            // Use market-cap-proportional notional for realistic differentiation
+            // BTC dominance ~50%, ETH ~18%, others smaller
+            const notionalByAsset: Record<string, number> = {
+              'BTC': 2_000_000,  // $2M — largest, most liquid
+              'ETH': 1_000_000,  // $1M — second largest
+              'CRO': 250_000,    // $250K — mid-cap
+              'SOL': 500_000,    // $500K
+            };
+            const notionalValue = notionalByAsset[symbol] ?? 500_000;
 
             const hedgeResult = await hedgingAgent.executeTask({
               id: `insight-hedge-${symbol}-${Date.now()}`,
@@ -397,13 +405,25 @@ Return ONLY valid JSON.`,
         : 'HedgingAgent: no immediate hedge triggers — maintaining monitor mode.';
 
       // Determine sentiment from agent data
+      // Priority: RiskAgent sentiment (direct market read) > prediction signal count
       const riskSentiment = riskAnalysis?.marketSentiment || 'neutral';
       const bullishCount = predictions.filter(p => p.category === 'price' && p.probability > 55).length;
       const bearishCount = hedgeAlerts;
-      const overallSentiment: 'bullish' | 'bearish' | 'neutral' =
-        riskSentiment === 'bullish' || bullishCount > bearishCount ? 'bullish'
-        : riskSentiment === 'bearish' || bearishCount > bullishCount ? 'bearish'
-        : 'neutral';
+      let overallSentiment: 'bullish' | 'bearish' | 'neutral';
+      if (riskSentiment !== 'neutral') {
+        // RiskAgent has a directional read — trust it, but cross-check with predictions
+        if (riskSentiment === 'bearish' && bullishCount > bearishCount + 1) {
+          overallSentiment = 'neutral'; // Conflicting signals → neutral
+        } else if (riskSentiment === 'bullish' && bearishCount > bullishCount + 1) {
+          overallSentiment = 'neutral'; // Conflicting signals → neutral
+        } else {
+          overallSentiment = riskSentiment as 'bullish' | 'bearish';
+        }
+      } else {
+        overallSentiment = bullishCount > bearishCount ? 'bullish'
+          : bearishCount > bullishCount ? 'bearish'
+          : 'neutral';
+      }
 
       // Build token directions from prediction data + hedge agent context
       // Direction is derived from PREDICTION signals, not just hedge action.
@@ -525,18 +545,26 @@ Return ONLY valid JSON.`,
             direction = isBullish ? 'long' : isBearish ? 'short' : 'neutral';
           }
 
-          // Adjust leverage based on confidence + direction strength
+          // Adjust leverage based on confidence + hedge effectiveness + direction strength
+          // Higher hedge effectiveness = better risk coverage = can justify higher leverage
           let leverage: number;
           let riskLevel: 'conservative' | 'moderate' | 'aggressive';
+          const hedgeEff = hedge.hedgeEffectiveness;
           if (direction === 'neutral') {
             leverage = 1;
             riskLevel = 'conservative';
-          } else if (avgProb >= 75 && isBullish && !isBearish) {
-            leverage = Math.min(hedge.leverage || 3, 5);
-            riskLevel = leverage >= 4 ? 'aggressive' : 'moderate';
-          } else if (avgProb >= 55) {
+          } else if (avgProb >= 75 && isBullish && !isBearish && hedgeEff >= 90) {
+            leverage = Math.min(hedge.leverage || 4, 5);
+            riskLevel = 'aggressive';
+          } else if (avgProb >= 70 && isBullish && hedgeEff >= 85) {
+            leverage = Math.min(hedge.leverage || 3, 4);
+            riskLevel = 'moderate';
+          } else if (avgProb >= 55 && hedgeEff >= 80) {
             leverage = Math.min(hedge.leverage || 2, 3);
             riskLevel = 'moderate';
+          } else if (avgProb >= 55) {
+            leverage = Math.min(hedge.leverage || 1.5, 2);
+            riskLevel = 'conservative';
           } else {
             leverage = Math.min(hedge.leverage || 1.5, 2);
             riskLevel = 'conservative';
