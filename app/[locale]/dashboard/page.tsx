@@ -551,7 +551,29 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="h-[70vh] lg:h-[520px]">
-                <EnhancedChat address={displayAddress} />
+                <EnhancedChat 
+                  address={displayAddress} 
+                  onActionTrigger={(action, params) => {
+                    switch (action) {
+                      case 'hedge':
+                        setHedgeModalOpen(true);
+                        break;
+                      case 'analyze':
+                        setActiveNav('insights');
+                        setShowChat(false);
+                        break;
+                      case 'status':
+                        setActiveNav('positions');
+                        setShowChat(false);
+                        break;
+                      case 'swap':
+                        setSwapModalOpen(true);
+                        break;
+                      default:
+                        logger.info('Chat action triggered', { component: 'DashboardPage', data: { action, params } });
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>

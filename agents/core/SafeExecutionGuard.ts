@@ -150,9 +150,16 @@ export class SafeExecutionGuard {
       }
     }
 
-    // 2. Check cooldown
+    // 2. Check cooldown (skip for read-only analysis actions — they don't move funds)
+    const isReadOnlyAction = (
+      params.action === 'analyze' || 
+      params.action === 'analysis' || 
+      params.action === 'assess_risk' ||
+      params.action === 'insight-summary'
+    ) && params.positionSizeUSD === 0;
+
     const timeSinceLastExecution = Date.now() - this.lastExecutionTime;
-    if (timeSinceLastExecution < this.limits.cooldownMs) {
+    if (!isReadOnlyAction && timeSinceLastExecution < this.limits.cooldownMs) {
       errors.push(`⏱️ Cooldown active. Wait ${Math.ceil((this.limits.cooldownMs - timeSinceLastExecution) / 1000)}s`);
     }
 
@@ -317,7 +324,17 @@ export class SafeExecutionGuard {
    */
   startExecution(executionId: string, agentId: string, action: string, params: Record<string, unknown>): AuditLog {
     this.activeExecutions.add(executionId);
-    this.lastExecutionTime = Date.now();
+    
+    // Only set cooldown timer for state-changing actions (not read-only analysis)
+    const isReadOnly = (
+      action === 'analyze' || 
+      action === 'analysis' || 
+      action === 'assess_risk' ||
+      action === 'insight-summary'
+    );
+    if (!isReadOnly) {
+      this.lastExecutionTime = Date.now();
+    }
 
     const auditLog: AuditLog = {
       id: uuidv4(),
