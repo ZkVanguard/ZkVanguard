@@ -90,8 +90,9 @@ export async function POST(request: NextRequest) {
       // Extract 24h change: "+8.84%" or "-3.5%"
       const changeMatch = p.question.match(/24h:\s*([+-]?\d+\.?\d*)%/);
       // Extract price patterns specific to Crypto.com predictions:
-      // "Currently $70,479.72" or "ETH: $2,056.04" or "Price: $2,056.04"
-      const priceMatch = p.question.match(/(?:Currently|Price:|[A-Z]{2,5}:)\s*\$(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/);
+      // "Currently $70,479.72" or "ETH: $2,056.04" or "Price: $2,056.04" or "CRO: $0.0795"
+      // Handles both comma-separated (107,479.72) and plain (107479.72) formats
+      const priceMatch = p.question.match(/(?:Currently|Price:|[A-Z]{2,5}:)\s*\$([\d,]+(?:\.\d+)?)/);
       // Extract volume from the volume field: "$1.2B 24h vol"
       const volMatch = p.volume?.match(/\$([\d.]+[BMK])/);
 
@@ -333,6 +334,23 @@ export async function POST(request: NextRequest) {
             const { llmProvider } = await import('@/lib/ai/llm-provider');
             await llmProvider.waitForInit();
 
+            // Compute tentative token directions BEFORE sending to LLM,
+            // so the LLM overview text aligns with the badges shown in UI
+            const tentativeDirections = allTokens.map(token => {
+              const tokenSpecificPreds = predictions.filter(p => 
+                p.relatedAssets.includes(token) && p.source === 'crypto-analysis' &&
+                (p.relatedAssets.length <= 2 || p.id?.toLowerCase().includes(token.toLowerCase()))
+              );
+              const tAvg = tokenSpecificPreds.length > 0
+                ? tokenSpecificPreds.reduce((s, p) => s + p.probability, 0) / tokenSpecificPreds.length
+                : 50;
+              const tBullish = tokenSpecificPreds.some(p => p.category === 'price' && p.probability > 55) || tAvg > 60;
+              const tHedge = tokenSpecificPreds.filter(p => p.recommendation === 'HEDGE');
+              const tBearish = tHedge.length > 0 && tAvg < 45;
+              return { token, direction: tBullish ? 'bullish' : tBearish ? 'bearish' : 'neutral' };
+            });
+            const directionHint = tentativeDirections.map(d => `${d.token}: ${d.direction}`).join(', ');
+
             const synthesisResponse = await llmProvider.generateDirectResponse(
               `You are the Lead Agent approving a multi-agent market insights analysis. This is a general market analysis focused on BTC, ETH, and CRO — NOT portfolio-specific. Do NOT mention portfolio values, portfolio health, or portfolio allocations.
 
@@ -346,13 +364,15 @@ PREDICTION MARKET DATA:
 ${predictionsContext}
 
 Tokens analyzed: ${allTokens.join(', ')}.
+Token outlook from prediction analysis: ${directionHint}.
+
+IMPORTANT: Your overview text MUST be consistent with these token outlooks. If a token is bullish, describe its outlook positively (price strength, uptrend, positive momentum). If bearish, describe downside risks. Do NOT contradict the above directional signals.
 
 As the Lead Agent, provide your APPROVAL and synthesis in this JSON:
 {
   "approved": true,
   "approvalRationale": "One sentence explaining why you approve/reject based on market insights",
-  "overview": "2-3 sentence market overview for BTC, ETH, and CRO synthesizing agent outputs with specific numbers. No portfolio references.",
-  "sentiment": "bullish|bearish|neutral"
+  "overview": "2-3 sentence market overview for BTC, ETH, and CRO with specific prices and percentages. Consistent with token outlooks above. No portfolio references."
 }
 
 Return ONLY valid JSON.`,
@@ -367,9 +387,8 @@ Return ONLY valid JSON.`,
               leadApproved = parsed.approved !== false;
               leadOverview = parsed.overview || '';
               approvalRationale = parsed.approvalRationale || '';
-              if (parsed.sentiment) {
-                // Use it below
-              }
+              // LLM sentiment is intentionally ignored — we derive sentiment
+              // from computed token directions for guaranteed consistency
               modelUsed = synthesisResponse.model || 'agent-orchestrator';
             } catch {
               console.warn('[InsightSummary] Could not parse LeadAgent synthesis JSON');
@@ -450,12 +469,12 @@ Return ONLY valid JSON.`,
           } else {
             direction = hasBullishSignal ? 'up' : hasBearishSignal ? 'down' : 'sideways';
           }
-          // Weighted composite: prediction probability (30%) + prediction confidence (25%) + hedge effectiveness (25%) + risk score (20%)
+          // Weighted composite: prediction probability (40%) + prediction confidence (35%) + risk score (25%)
+          // Note: hedge effectiveness measures protection quality, NOT directional confidence
           confidence = Math.round(
-            avgProb * 0.30 +
-            avgPredConfidence * 0.25 +
-            hedge.hedgeEffectiveness * 0.25 +
-            riskContrib * 0.20
+            avgProb * 0.40 +
+            avgPredConfidence * 0.35 +
+            riskContrib * 0.25
           );
         } else {
           direction = hasBullishSignal ? 'up' : hasBearishSignal ? 'down' : 'sideways';
@@ -470,7 +489,7 @@ Return ONLY valid JSON.`,
         // Build shortTake using REAL market data extracted from predictions
         const md = marketData[token];
         const parts: string[] = [];
-        if (md?.price) parts.push(`$${md.price.toLocaleString()}`);
+        if (md?.price) parts.push(`$${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`);
         if (md?.change24h !== undefined) parts.push(`${md.change24h > 0 ? '+' : ''}${md.change24h.toFixed(2)}% 24h`);
         if (md?.volume) parts.push(`${md.volume} vol`);
         if (md?.stakingYield) parts.push(md.stakingYield);
@@ -578,7 +597,7 @@ Return ONLY valid JSON.`,
             rationaleParts.push(`24h: ${md.change24h > 0 ? '+' : ''}${md.change24h.toFixed(2)}%`);
           }
           if (md?.price) {
-            rationaleParts.push(`Price: $${md.price.toLocaleString()}`);
+            rationaleParts.push(`Price: $${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`);
           }
           if (hedge.hedgeEffectiveness > 0) {
             rationaleParts.push(`Hedge eff: ${hedge.hedgeEffectiveness.toFixed(0)}%`);
@@ -736,8 +755,10 @@ function generateTokenFallback(token: string, predictions: PredictionMarket[]): 
   const avgProb = bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length;
   const hasBullish = bestPreds.some(p => p.category === 'price' && p.probability > 55);
   const hasHedge = bestPreds.some(p => p.recommendation === 'HEDGE');
+  // Match main path logic: bearish requires BOTH hedge signals AND low probability
+  const hasBearish = hasHedge && avgProb < 45;
 
-  const direction: 'up' | 'down' | 'sideways' = hasHedge ? 'down' : hasBullish ? 'up' : 'sideways';
+  const direction: 'up' | 'down' | 'sideways' = hasBullish ? 'up' : hasBearish ? 'down' : 'sideways';
   const confidence = Math.round(avgProb);
 
   const topPred = bestPreds.sort((a, b) => b.probability - a.probability)[0];

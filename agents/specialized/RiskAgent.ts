@@ -423,17 +423,26 @@ REC3: [third recommendation]`;
       ];
       
       for (const prediction of allPredictions) {
-        // High probability positive events = bullish
-        if (prediction.probability > 60) {
-          if (prediction.recommendation === 'HEDGE' || prediction.impact === 'HIGH') {
+        // Count based on recommendation + probability — not impact level
+        // HEDGE recommendation = agent sees downside risk = bearish signal
+        // High probability with no HEDGE = market expects positive outcome = bullish
+        if (prediction.probability >= 55) {
+          if (prediction.recommendation === 'HEDGE') {
             bearishCount++;
           } else {
             bullishCount++;
           }
-        } else if (prediction.probability < 40) {
-          // Low probability of positive events = bearish
-          bearishCount++;
+        } else if (prediction.probability <= 45) {
+          // Low probability of the predicted event = contrarian signal
+          if (prediction.recommendation === 'HEDGE') {
+            // Low probability hedge = minor risk, still slightly bearish
+            bearishCount++;
+          } else {
+            // Low probability of a positive event = bearish
+            bearishCount++;
+          }
         }
+        // Probability 45-55: genuinely uncertain, skip (doesn't skew sentiment)
       }
       
       // Determine overall sentiment

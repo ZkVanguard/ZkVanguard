@@ -86,7 +86,7 @@ export class DelphiMarketService {
         const btcConfidence = Math.min(Math.round(55 + btcMomentumStrength + btcVolumeFactor + btcTrendClarity), 96);
         predictions.push({
           id: 'crypto-btc-momentum',
-          question: `Will Bitcoin maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString()})`,
+          question: `Will Bitcoin maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString('en-US')})`,
           category: 'price',
           probability: Math.round(bullishProb),
           volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
@@ -98,17 +98,19 @@ export class DelphiMarketService {
           source: 'crypto-analysis',
         });
 
-        // BTC $100K prediction
-        const to100k = ((100000 - price) / price) * 100;
-        // Dynamic confidence: closer to $100K = higher confidence, volume adds certainty
-        const btc100kProximity = price > 95000 ? 20 : price > 90000 ? 15 : price > 80000 ? 10 : price > 70000 ? 5 : 0;
+        // BTC milestone prediction — dynamically adjust target based on current price
+        const btcTarget = price > 100000 ? 150000 : 100000;
+        const toTarget = ((btcTarget - price) / price) * 100;
+        const targetLabel = btcTarget >= 1000 ? `$${(btcTarget / 1000).toFixed(0)}K` : `$${btcTarget.toLocaleString('en-US')}`;
+        // Dynamic confidence: closer to target = higher confidence, volume adds certainty
+        const btcTargetProximity = toTarget < 5 ? 20 : toTarget < 10 ? 15 : toTarget < 20 ? 10 : toTarget < 35 ? 5 : 0;
         const btc100kVolConf = volume > 2e10 ? 12 : volume > 1e10 ? 8 : volume > 5e9 ? 5 : 2;
-        const btc100kConfidence = Math.min(Math.round(50 + btc100kProximity + btc100kVolConf + btcTrendClarity), 92);
+        const btc100kConfidence = Math.min(Math.round(50 + btcTargetProximity + btc100kVolConf + btcTrendClarity), 92);
         predictions.push({
           id: 'crypto-btc-100k',
-          question: `Will Bitcoin reach $100,000? (Currently $${price.toLocaleString()}, ${to100k.toFixed(1)}% away)`,
+          question: `Will Bitcoin reach ${targetLabel}? (Currently $${price.toLocaleString('en-US')}, ${toTarget.toFixed(1)}% away)`,
           category: 'price',
-          probability: price > 90000 ? 75 : price > 80000 ? 55 : 35,
+          probability: toTarget < 10 ? 75 : toTarget < 20 ? 55 : 35,
           volume: `$${(volume / 1e9).toFixed(1)}B daily`,
           impact: 'HIGH',
           relatedAssets: ['BTC', 'ETH', 'CRO'],
@@ -131,7 +133,7 @@ export class DelphiMarketService {
         const croConfidence = Math.min(Math.round(48 + croMomentum + croVolConf + croTrendClarity), 88);
         predictions.push({
           id: 'crypto-cro-momentum',
-          question: `Will CRO outperform BTC this week? (CRO 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
+          question: `Will CRO outperform BTC this week? (CRO: $${price.toFixed(4)}, 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
           category: 'price',
           probability: change24h > (btcTicker ? parseFloat(btcTicker.c || '0') * 100 : 0) ? 60 : 40,
           volume: `$${(volume / 1e6).toFixed(1)}M 24h vol`,
@@ -155,7 +157,7 @@ export class DelphiMarketService {
           relatedAssets: ['CRO'],
           lastUpdate: Date.now(),
           confidence: croEcoConf,
-          recommendation: change24h > 0 ? 'MONITOR' : 'HEDGE',
+          recommendation: change24h > 0 ? 'MONITOR' : change24h < -3 ? 'HEDGE' : 'MONITOR',
           source: 'crypto-analysis',
         });
       }
@@ -175,7 +177,7 @@ export class DelphiMarketService {
         const ethConfidence = Math.min(Math.round(50 + ethMomentumStrength + ethVolumeFactor + ethTrendClarity), 94);
         predictions.push({
           id: 'crypto-eth-momentum',
-          question: `Will Ethereum maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString()})`,
+          question: `Will Ethereum maintain ${change24h > 0 ? 'bullish' : 'bearish'} momentum this week? (24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%, Price: $${price.toLocaleString('en-US')})`,
           category: 'price',
           probability: Math.round(bullishProb),
           volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
@@ -192,9 +194,9 @@ export class DelphiMarketService {
         const ethStakingConf = Math.min(Math.round(55 + ethStabilityBonus + ethVolumeFactor + (price > 2000 ? 8 : price > 1500 ? 5 : 2)), 90);
         predictions.push({
           id: 'crypto-eth-staking',
-          question: `Will ETH staking yields remain above 4% APY? (ETH: $${price.toLocaleString()}, 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
+          question: `Will ETH staking yields remain above 4% APY? (ETH: $${price.toLocaleString('en-US')}, 24h: ${change24h > 0 ? '+' : ''}${change24h.toFixed(2)}%)`,
           category: 'defi',
-          probability: 72,
+          probability: Math.abs(change24h) < 2 ? 75 : Math.abs(change24h) < 5 ? 60 : 45,
           volume: `$${(volume / 1e9).toFixed(1)}B 24h vol`,
           impact: 'MODERATE',
           relatedAssets: ['ETH'],
@@ -409,9 +411,12 @@ export class DelphiMarketService {
           if (volume > 500000) impact = 'HIGH';
           else if (volume > 100000) impact = 'MODERATE';
 
-          // Determine recommendation
+          // Determine recommendation — only HEDGE on events that suggest downside risk
           let recommendation: 'HEDGE' | 'MONITOR' | 'IGNORE' = 'MONITOR';
-          if (probability > 70 && impact !== 'LOW') recommendation = 'HEDGE';
+          const isNegativeEvent = q.includes('drop') || q.includes('dip') || q.includes('crash') ||
+            q.includes('decline') || q.includes('depeg') || q.includes('hack') || q.includes('ban') ||
+            q.includes('recession') || q.includes('default') || q.includes('collapse');
+          if (probability > 70 && impact !== 'LOW' && isNegativeEvent) recommendation = 'HEDGE';
           else if (probability < 30 && impact === 'LOW') recommendation = 'IGNORE';
 
           return {
@@ -423,7 +428,7 @@ export class DelphiMarketService {
             impact,
             relatedAssets,
             lastUpdate: Date.now(),
-            confidence: Math.min(100, Math.floor(Math.sqrt(volume) / 10)),
+            confidence: Math.min(95, Math.max(20, Math.round(30 + Math.log10(Math.max(volume, 1000)) * 10))),
             recommendation,
           };
         });
