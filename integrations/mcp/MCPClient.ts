@@ -259,34 +259,143 @@ export class MCPClient extends EventEmitter {
   }
 
   /**
-   * Get historical price data
-   * Note: May not be supported by MCP SSE - placeholder for future enhancement
+   * Map token symbol to Crypto.com Exchange instrument name
+   */
+  private mapSymbolToInstrument(symbol: string, type: 'spot' | 'perp' = 'spot'): string {
+    const s = symbol.toUpperCase().replace('_USDT', '').replace('USD-PERP', '');
+    if (type === 'perp') {
+      return `${s}USD-PERP`;
+    }
+    return `${s}_USDT`;
+  }
+
+  /**
+   * Get historical price data via Crypto.com Exchange candlestick API
+   * Uses REAL candlestick (OHLCV) data from the Exchange — no hardcoded values
    */
   async getHistoricalPrices(
     symbol: string,
-    _interval: '1m' | '5m' | '1h' | '1d',
-    _limit: number = 100
+    interval: '1m' | '5m' | '1h' | '1d',
+    limit: number = 100,
+    instrumentType: 'spot' | 'perp' = 'spot'
   ): Promise<MCPPriceData[]> {
-    logger.warn('Historical prices not yet implemented via MCP SSE', { symbol });
-    throw new Error('Historical prices not supported via SSE');
+    const EXCHANGE_API = 'https://api.crypto.com/exchange/v1/public';
+
+    try {
+      const instrumentName = this.mapSymbolToInstrument(symbol, instrumentType);
+
+      // Map interval to Crypto.com timeframe format
+      const timeframeMap: Record<string, string> = {
+        '1m': '1m',
+        '5m': '5m',
+        '1h': '1h',
+        '1d': '1D',
+      };
+      const timeframe = timeframeMap[interval] || '1D';
+
+      const url = `${EXCHANGE_API}/get-candlestick?instrument_name=${instrumentName}&timeframe=${timeframe}&count=${Math.min(limit, 300)}`;
+
+      logger.info('Fetching real candlestick data from Exchange API', { symbol, instrumentName, timeframe, limit });
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Exchange API HTTP error: ${response.status}`);
+      }
+
+      const json = await response.json();
+
+      if (json.code !== 0 || !json.result?.data || json.result.data.length === 0) {
+        throw new Error(`Exchange API returned error code ${json.code}: ${json.message || 'no data'}`);
+      }
+
+      // Map candlestick data to MCPPriceData format
+      const candles = json.result.data as Array<{ t: number; o: string; h: string; l: string; c: string; v: string }>;
+
+      logger.info('Received real candlestick data', { symbol, instrumentName, count: candles.length });
+
+      return candles.map(candle => ({
+        symbol,
+        price: parseFloat(candle.c), // Close price
+        timestamp: candle.t,
+        volume24h: parseFloat(candle.v),
+        priceChange24h: ((parseFloat(candle.c) - parseFloat(candle.o)) / parseFloat(candle.o)) * 100,
+      }));
+    } catch (error) {
+      logger.error('Failed to fetch historical prices from Exchange API', {
+        symbol,
+        instrumentType,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**
-   * Get market sentiment data
-   * Note: May not be supported by MCP SSE - placeholder for future enhancement
+   * Get market sentiment derived from real ticker data
+   * Uses 24h price change, volume, and momentum from Exchange API
    */
-  async getMarketSentiment(_symbols?: string[]): Promise<Record<string, unknown>> {
-    logger.warn('Market sentiment not yet implemented via MCP SSE');
-    throw new Error('Market sentiment not supported via SSE');
+  async getMarketSentiment(symbols?: string[]): Promise<Record<string, unknown>> {
+    const targetSymbols = symbols || ['BTC', 'ETH', 'CRO'];
+    const sentiment: Record<string, unknown> = {};
+
+    for (const symbol of targetSymbols) {
+      try {
+        const priceData = await this.getPrice(symbol);
+        const change = priceData.priceChange24h || 0;
+
+        sentiment[symbol] = {
+          direction: change > 2 ? 'BULLISH' : change < -2 ? 'BEARISH' : 'NEUTRAL',
+          strength: Math.min(Math.abs(change) * 10, 100), // Normalize to 0-100
+          change24h: change,
+          volume24h: priceData.volume24h,
+        };
+      } catch (e) {
+        logger.warn('Failed to get sentiment for symbol', { symbol, error: e });
+      }
+    }
+
+    return sentiment;
   }
 
   /**
-   * Get volatility data
-   * Note: May not be supported by MCP SSE - placeholder for future enhancement
+   * Get volatility calculated from real candlestick data
+   * Returns annualized volatility computed from daily returns
    */
-  async getVolatility(symbol: string, _period: number = 30): Promise<number> {
-    logger.warn('Volatility data not yet implemented via MCP SSE', { symbol });
-    throw new Error('Volatility not supported via SSE');
+  async getVolatility(symbol: string, period: number = 30): Promise<number> {
+    const prices = await this.getHistoricalPrices(symbol, '1d', period);
+
+    if (prices.length < 5) {
+      throw new Error(`Insufficient price data for volatility calculation: got ${prices.length} candles`);
+    }
+
+    // Calculate daily log returns
+    const returns: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+      if (prices[i - 1].price > 0) {
+        returns.push(Math.log(prices[i].price / prices[i - 1].price));
+      }
+    }
+
+    if (returns.length < 3) {
+      throw new Error('Not enough valid returns for volatility calculation');
+    }
+
+    // Calculate standard deviation of returns
+    const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (returns.length - 1);
+    const dailyVol = Math.sqrt(variance);
+
+    // Annualize (crypto trades 365 days)
+    const annualizedVol = dailyVol * Math.sqrt(365);
+
+    logger.info('Calculated real volatility from candlestick data', {
+      symbol,
+      dataPoints: returns.length,
+      dailyVol: (dailyVol * 100).toFixed(2) + '%',
+      annualizedVol: (annualizedVol * 100).toFixed(2) + '%',
+    });
+
+    return annualizedVol;
   }
 
   /**
