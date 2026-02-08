@@ -40,6 +40,26 @@ interface HedgePosition {
   proxyVault?: string;
 }
 
+interface CloseReceipt {
+  success: boolean;
+  asset: string;
+  side: string;
+  collateral: number;
+  leverage: number;
+  realizedPnl: number;
+  fundsReturned: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  txHash: string;
+  explorerLink: string;
+  trader: string;
+  gasless: boolean;
+  gasSavings?: { userGasCost: string; relayerGasCost: string; totalSaved: string };
+  elapsed?: string;
+  finalStatus: string;
+  error?: string;
+}
+
 interface PerformanceStats {
   totalHedges: number;
   activeHedges: number;
@@ -89,6 +109,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [showCloseConfirm, _toggleCloseConfirm, openCloseConfirm, closeCloseConfirm] = useToggle(false);
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
+  const [closeReceipt, setCloseReceipt] = useState<CloseReceipt | null>(null);
   const processingRef = useRef(false);
   const _lastProcessedRef = useRef<string>('');
   
@@ -322,9 +343,25 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               gasSaved: data.gasSavings?.totalSaved,
             }});
             
-            // Show success notification with gas savings
-            const gasInfo = data.gasless ? `\n⚡ x402 Gasless — You paid $0.00 gas (saved ${data.gasSavings?.totalSaved || '~$0.15'})` : '';
-            alert(`✅ Hedge closed!\n\n${data.fundsReturned > 0 ? `${data.fundsReturned} USDC returned to your wallet` : 'Position liquidated'}\nPnL: ${data.realizedPnl} USDC\nTx: ${data.txHash?.slice(0, 16)}...${gasInfo}`);
+            // Show close receipt modal instead of alert
+            setCloseReceipt({
+              success: true,
+              asset: data.asset || selectedHedge.asset,
+              side: data.side || selectedHedge.type,
+              collateral: data.collateral || selectedHedge.capitalUsed,
+              leverage: data.leverage || selectedHedge.leverage,
+              realizedPnl: data.realizedPnl || 0,
+              fundsReturned: data.fundsReturned || 0,
+              balanceBefore: data.balanceBefore || 0,
+              balanceAfter: data.balanceAfter || 0,
+              txHash: data.txHash || '',
+              explorerLink: data.explorerLink || `https://explorer.cronos.org/testnet/tx/${data.txHash}`,
+              trader: data.trader || selectedHedge.walletAddress || '',
+              gasless: data.gasless || false,
+              gasSavings: data.gasSavings,
+              elapsed: data.elapsed,
+              finalStatus: data.finalStatus || 'closed',
+            });
             
             // Remove from local state
             setHedges(prev => prev.filter(h => h.id !== selectedHedge.id));
@@ -335,7 +372,23 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           }
         } catch (onChainErr) {
           logger.error('❌ On-chain close failed', onChainErr instanceof Error ? onChainErr : undefined, { component: 'ActiveHedges' });
-          alert(`Failed to close on-chain: ${onChainErr instanceof Error ? onChainErr.message : 'Unknown error'}`);
+          setCloseReceipt({
+            success: false,
+            asset: selectedHedge.asset,
+            side: selectedHedge.type,
+            collateral: selectedHedge.capitalUsed,
+            leverage: selectedHedge.leverage,
+            realizedPnl: 0,
+            fundsReturned: 0,
+            balanceBefore: 0,
+            balanceAfter: 0,
+            txHash: '',
+            explorerLink: '',
+            trader: selectedHedge.walletAddress || '',
+            gasless: false,
+            finalStatus: 'failed',
+            error: onChainErr instanceof Error ? onChainErr.message : 'Unknown error',
+          });
           return;
         }
       }
@@ -1003,7 +1056,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             )}
                             {hedge.proxyWallet && (
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] uppercase tracking-wider text-[#5856D6]">PROXY WALLET:</span>
+                                <span className="text-[10px] uppercase tracking-wider text-[#5856D6]">ZK PRIVACY ID:</span>
                                 <a
                                   href={`https://explorer.cronos.org/testnet/address/${hedge.proxyWallet}`}
                                   target="_blank"
@@ -1550,6 +1603,171 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[15px] font-semibold transition-colors"
                 >
                   {selectedHedge.onChain ? '⚡ Close & Withdraw (Gasless)' : 'Close Position'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Close Receipt Modal — shows full transaction details after close */}
+      <AnimatePresence>
+        {closeReceipt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => setCloseReceipt(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className={`p-5 ${closeReceipt.success ? 'bg-gradient-to-r from-[#34C759]/10 to-[#007AFF]/10' : 'bg-[#FF3B30]/10'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${closeReceipt.success ? 'bg-[#34C759]/20' : 'bg-[#FF3B30]/20'}`}>
+                    {closeReceipt.success ? (
+                      <CheckCircle className="w-7 h-7 text-[#34C759]" />
+                    ) : (
+                      <XCircle className="w-7 h-7 text-[#FF3B30]" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-[18px] font-bold text-[#1d1d1f]">
+                      {closeReceipt.success ? 'Position Closed' : 'Close Failed'}
+                    </h3>
+                    <p className="text-[12px] text-[#86868b]">
+                      {closeReceipt.success
+                        ? `${closeReceipt.asset} ${closeReceipt.side} x${closeReceipt.leverage} — ${closeReceipt.finalStatus}`
+                        : closeReceipt.error}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {closeReceipt.success && (
+                <div className="p-5 space-y-4">
+                  {/* Fund Flow Visualization */}
+                  <div className="p-4 bg-[#f5f5f7] rounded-xl space-y-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">Fund Flow</div>
+                    
+                    {/* Step 1: Contract releases */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[10px] font-bold text-[#007AFF]">1</div>
+                      <div className="flex-1">
+                        <div className="text-[11px] font-medium text-[#1d1d1f]">HedgeExecutor closes trade on DEX</div>
+                        <div className="text-[9px] text-[#86868b] font-mono">0x090b...62B9 → closeHedge()</div>
+                      </div>
+                    </div>
+                    
+                    {/* Step 2: DEX returns */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[10px] font-bold text-[#007AFF]">2</div>
+                      <div className="flex-1">
+                        <div className="text-[11px] font-medium text-[#1d1d1f]">DEX returns collateral {closeReceipt.realizedPnl >= 0 ? '+ profit' : '- loss'}</div>
+                        <div className="text-[9px] text-[#86868b]">Moonlander → HedgeExecutor</div>
+                      </div>
+                    </div>
+                    
+                    {/* Step 3: Funds sent to wallet */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-[#34C759]/10 flex items-center justify-center text-[10px] font-bold text-[#34C759]">3</div>
+                      <div className="flex-1">
+                        <div className="text-[11px] font-medium text-[#1d1d1f]">USDC sent to your wallet</div>
+                        <div className="text-[9px] text-[#86868b] font-mono">→ {closeReceipt.trader.slice(0, 8)}...{closeReceipt.trader.slice(-6)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Summary */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-[#86868b]">Collateral</span>
+                      <span className="text-[13px] font-semibold text-[#1d1d1f]">{closeReceipt.collateral.toLocaleString()} USDC</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-[#86868b]">Realized P/L</span>
+                      <span className={`text-[13px] font-bold ${closeReceipt.realizedPnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                        {closeReceipt.realizedPnl >= 0 ? '+' : ''}{closeReceipt.realizedPnl.toLocaleString()} USDC
+                      </span>
+                    </div>
+                    <div className="h-px bg-[#e8e8ed]" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-semibold text-[#1d1d1f]">Returned to Wallet</span>
+                      <span className={`text-[15px] font-bold ${closeReceipt.fundsReturned > 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                        {closeReceipt.fundsReturned > 0 ? closeReceipt.fundsReturned.toLocaleString() : '0'} USDC
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#86868b]">Balance before</span>
+                      <span className="font-mono text-[#86868b]">{closeReceipt.balanceBefore.toLocaleString()} USDC</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#86868b]">Balance after</span>
+                      <span className="font-mono font-semibold text-[#1d1d1f]">{closeReceipt.balanceAfter.toLocaleString()} USDC</span>
+                    </div>
+                  </div>
+
+                  {/* Gas Savings */}
+                  {closeReceipt.gasless && closeReceipt.gasSavings && (
+                    <div className="p-3 bg-[#AF52DE]/5 rounded-xl border border-[#AF52DE]/10">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Zap className="w-3.5 h-3.5 text-[#AF52DE]" />
+                        <span className="text-[11px] font-semibold text-[#AF52DE]">x402 Gasless</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[#86868b]">Your gas cost</span>
+                        <span className="font-semibold text-[#34C759]">{closeReceipt.gasSavings.userGasCost}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[#86868b]">Gas sponsored by relayer</span>
+                        <span className="font-mono text-[#86868b]">{closeReceipt.gasSavings.relayerGasCost}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] mt-1">
+                        <span className="text-[#86868b]">You saved</span>
+                        <span className="font-bold text-[#34C759]">{closeReceipt.gasSavings.totalSaved}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transaction Link */}
+                  {closeReceipt.txHash && (
+                    <a
+                      href={closeReceipt.explorerLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 p-3 bg-[#007AFF]/5 rounded-xl text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span className="text-[12px] font-semibold">View on Cronos Explorer</span>
+                      <span className="text-[10px] font-mono text-[#86868b]">{closeReceipt.txHash.slice(0, 10)}...{closeReceipt.txHash.slice(-8)}</span>
+                    </a>
+                  )}
+
+                  {closeReceipt.elapsed && (
+                    <div className="text-center text-[10px] text-[#86868b]">
+                      Transaction completed in {closeReceipt.elapsed}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dismiss Button */}
+              <div className="p-5 pt-0">
+                <button
+                  onClick={() => setCloseReceipt(null)}
+                  className={`w-full px-4 py-3 rounded-xl text-[15px] font-semibold transition-colors ${
+                    closeReceipt.success
+                      ? 'bg-[#34C759] hover:bg-[#34C759]/90 text-white'
+                      : 'bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white'
+                  }`}
+                >
+                  {closeReceipt.success ? 'Done' : 'Dismiss'}
                 </button>
               </div>
             </motion.div>
