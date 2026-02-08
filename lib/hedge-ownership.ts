@@ -101,7 +101,7 @@ export const CLOSE_HEDGE_DOMAIN = {
   version: '1',
   chainId: 338, // Cronos testnet
   verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`,
-} as const;
+};
 
 export const CLOSE_HEDGE_TYPES = {
   CloseHedge: [
@@ -109,4 +109,4 @@ export const CLOSE_HEDGE_TYPES = {
     { name: 'action', type: 'string' },
     { name: 'timestamp', type: 'uint256' },
   ],
-} as const;
+};
