@@ -102,50 +102,9 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     try {
       processingRef.current = true;
       
-      // Fetch from both DB and on-chain sources
-      let dbHedges: HedgePosition[] = [];
+      // Fetch on-chain hedges from HedgeExecutor contract
       let onChainHedges: HedgePosition[] = [];
 
-      // 1. Try database first
-      try {
-        const params = new URLSearchParams({ summary: 'true' });
-        if (address) {
-          params.set('walletAddress', address);
-        }
-        
-        const response = await fetch(`/api/agents/hedging/pnl?${params.toString()}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.summary?.details) {
-            dbHedges = data.summary.details.map((pnl: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed?: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt?: string; reason?: string; walletAddress?: string; zkVerified?: boolean; walletBindingHash?: string }) => ({
-              id: pnl.orderId,
-              type: pnl.side,
-              asset: pnl.asset,
-              size: pnl.size,
-              leverage: pnl.leverage,
-              entryPrice: pnl.entryPrice,
-              currentPrice: pnl.currentPrice,
-              targetPrice: 0,
-              stopLoss: 0,
-              capitalUsed: pnl.capitalUsed || (pnl.notionalValue / pnl.leverage),
-              pnl: pnl.unrealizedPnL,
-              pnlPercent: pnl.pnlPercentage,
-              status: 'active' as const,
-              openedAt: pnl.createdAt ? new Date(pnl.createdAt) : new Date(),
-              reason: pnl.reason || `${pnl.leverage}x leveraged hedge @ $${pnl.entryPrice.toFixed(2)}`,
-              walletAddress: pnl.walletAddress,
-              zkVerified: pnl.zkVerified || !!pnl.walletBindingHash,
-              walletBindingHash: pnl.walletBindingHash,
-              walletVerified: pnl.zkVerified || (address ? pnl.walletAddress?.toLowerCase() === address.toLowerCase() : false),
-              onChain: false,
-            }));
-          }
-        }
-      } catch (dbErr) {
-        logger.error('❌ Database not available', dbErr instanceof Error ? dbErr : undefined, { component: 'ActiveHedges' });
-      }
-
-      // 2. Fetch on-chain hedges from HedgeExecutor contract
       try {
         const onChainResponse = await fetch('/api/agents/hedging/onchain?stats=true');
         if (onChainResponse.ok) {
@@ -182,8 +141,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         logger.error('❌ On-chain hedges not available', onChainErr instanceof Error ? onChainErr : undefined, { component: 'ActiveHedges' });
       }
 
-      // 3. Merge: on-chain hedges take priority, then DB hedges
-      const allHedges = [...onChainHedges, ...dbHedges];
+      // Use on-chain hedges only (DB cleared)
+      const allHedges = [...onChainHedges];
       
       if (allHedges.length > 0) {
         const totalPnL = allHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);

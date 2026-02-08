@@ -179,17 +179,8 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     const fetchHedgeCount = async () => {
       try {
         let totalCount = 0;
-        
-        // Fetch DB hedges
-        const response = await fetch('/api/agents/hedging/pnl?summary=true');
-        if (response.ok && isMounted) {
-          const data = await response.json();
-          if (data.success && data.summary && data.summary.details) {
-            totalCount += data.summary.details.length;
-          }
-        }
 
-        // Also fetch on-chain hedges
+        // Fetch on-chain hedges only (DB cleared)
         try {
           const onChainResponse = await fetch('/api/agents/hedging/onchain');
           if (onChainResponse.ok && isMounted) {
