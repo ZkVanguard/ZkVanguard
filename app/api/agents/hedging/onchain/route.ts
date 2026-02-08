@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { MarketDataMCPClient } from '@/lib/services/market-data-mcp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,15 +25,58 @@ const PAIR_NAMES: Record<number, string> = {
   0: 'BTC', 1: 'ETH', 2: 'CRO', 3: 'ATOM', 4: 'DOGE', 5: 'SOL'
 };
 
-// Mock prices (matching MockMoonlander's initial prices)
-const MOCK_PRICES: Record<number, number> = {
-  0: 95000,  // BTC
-  1: 3200,   // ETH
-  2: 0.10,   // CRO
-  3: 8,      // ATOM
-  4: 0.35,   // DOGE
-  5: 200,    // SOL
+// Pair index → symbol mapping for live price lookups
+const PAIR_SYMBOLS: Record<number, string> = {
+  0: 'BTC', 1: 'ETH', 2: 'CRO', 3: 'ATOM', 4: 'DOGE', 5: 'SOL'
 };
+
+// Fallback prices only used if Crypto.com API is completely unreachable
+const FALLBACK_PRICES: Record<number, number> = {
+  0: 95000, 1: 3200, 2: 0.10, 3: 8, 4: 0.35, 5: 200
+};
+
+/**
+ * Fetch live prices from Crypto.com Exchange API via MCP client
+ * Returns a map of pairIndex → current USD price
+ */
+async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, number>> {
+  const prices: Record<number, number> = {};
+  const client = new MarketDataMCPClient();
+  
+  try {
+    await client.connect();
+    const uniquePairs = [...new Set(pairIndices)];
+    
+    // Fetch all needed prices in parallel
+    const results = await Promise.allSettled(
+      uniquePairs.map(async (idx) => {
+        const symbol = PAIR_SYMBOLS[idx];
+        if (!symbol) return { idx, price: FALLBACK_PRICES[idx] || 1000 };
+        const data = await client.getPrice(symbol);
+        return { idx, price: data.price };
+      })
+    );
+    
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value.price > 0) {
+        prices[result.value.idx] = result.value.price;
+      }
+    }
+  } catch (err) {
+    console.warn('Live price fetch failed, using fallbacks:', err instanceof Error ? err.message : err);
+  } finally {
+    await client.disconnect();
+  }
+  
+  // Fill in any missing prices with fallbacks
+  for (const idx of pairIndices) {
+    if (!prices[idx]) {
+      prices[idx] = FALLBACK_PRICES[idx] || 1000;
+    }
+  }
+  
+  return prices;
+}
 
 // Minimal ABI for reading hedge data
 const HEDGE_EXECUTOR_ABI = [
@@ -125,27 +169,40 @@ export async function GET(request: NextRequest) {
     // Fetch tx hashes from event logs in parallel with hedge details
     const txHashMap = await fetchTxHashes(contract, provider, hedgeIds);
 
-    // Fetch hedge details in small batches to respect RPC limits
+    // First pass: read all hedge data to determine which pair prices we need
     const BATCH_SIZE = 5;
-    const hedgeDetails = [];
+    const rawHedges: Array<{ hedgeId: string; hedgeIndex: number; data: Awaited<ReturnType<typeof contract.hedges>> }> = [];
     for (let i = 0; i < hedgeIds.length; i += BATCH_SIZE) {
       const batch = hedgeIds.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
         batch.map(async (hedgeId: string, batchIndex: number) => {
-        const hedgeIndex = i + batchIndex;
-        const h = await contract.hedges(hedgeId);
+          const data = await contract.hedges(hedgeId);
+          return { hedgeId, hedgeIndex: i + batchIndex, data };
+        })
+      );
+      rawHedges.push(...batchResults);
+    }
+
+    // Fetch LIVE prices from Crypto.com API for all active pairs
+    const activePairIndices = rawHedges
+      .filter(h => Number(h.data.status) === 1)
+      .map(h => Number(h.data.pairIndex));
+    const livePrices = await fetchLivePrices(activePairIndices);
+    console.log('📊 Live prices from Crypto.com:', Object.entries(livePrices).map(([k, v]) => `${PAIR_SYMBOLS[Number(k)]}=$${v}`).join(', '));
+
+    // Second pass: build hedge details with real prices
+    const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {
         const pairIndex = Number(h.pairIndex);
         const collateralAmount = Number(ethers.formatUnits(h.collateralAmount, 6));
         const leverage = Number(h.leverage);
         const isLong = h.isLong;
         const status = Number(h.status);
-        const entryPrice = MOCK_PRICES[pairIndex] || 1000;
 
-        // Simulate current price with some movement for display
-        const priceMovement = (Math.sin(Number(h.openTimestamp) * 0.001) * 0.03);
-        const currentPrice = entryPrice * (1 + priceMovement);
+        // Use MockMoonlander entry price (hardcoded in contract) and LIVE current price
+        const entryPrice = FALLBACK_PRICES[pairIndex] || 1000;
+        const currentPrice = status === 1 ? (livePrices[pairIndex] || entryPrice) : entryPrice;
 
-        // Calculate unrealized PnL
+        // Calculate unrealized PnL using real price delta
         const positionSize = collateralAmount * leverage;
         const priceChange = (currentPrice - entryPrice) / entryPrice;
         const unrealizedPnl = isLong
@@ -164,7 +221,7 @@ export async function GET(request: NextRequest) {
           hedgeId: hedgeId,
           orderId: hedgeId.slice(0, 18),
           trader: h.trader,
-          asset: PAIR_NAMES[pairIndex] || `PAIR-${pairIndex}`,
+          asset: PAIR_SYMBOLS[pairIndex] || PAIR_NAMES[pairIndex] || `PAIR-${pairIndex}`,
           pairIndex,
           tradeIndex: Number(h.tradeIndex),
           side: isLong ? 'LONG' : 'SHORT',
@@ -192,11 +249,9 @@ export async function GET(request: NextRequest) {
           onChain: true,
           chain: 'cronos-testnet',
           contractAddress: HEDGE_EXECUTOR,
+          priceSource: status === 1 ? 'crypto.com' : 'closed',
         };
-      })
-      );
-      hedgeDetails.push(...batchResults);
-    }
+    });
 
     // Filter active hedges for summary
     const activeHedges = hedgeDetails.filter(h => h.status === 'active');
