@@ -94,6 +94,55 @@ interface ActiveHedgesProps {
 }
 
 export const ActiveHedges = memo(function ActiveHedges({ address, compact = false, onCreateHedge, onOpenChat }: ActiveHedgesProps) {
+  // EIP-712 signature helper for closing hedges
+  const signCloseHedge = async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
+    try {
+      if (typeof window === 'undefined' || !(window as unknown as { ethereum?: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum) {
+        logger.warn('No wallet provider found, skipping signature', { component: 'ActiveHedges' });
+        return null;
+      }
+      const ethereum = (window as unknown as { ethereum: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum;
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
+      if (!accounts || accounts.length === 0) return null;
+      const signer = accounts[0];
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      const domain = {
+        name: 'Chronos Vanguard',
+        version: '1',
+        chainId: 338,
+        verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9',
+      };
+      const types = {
+        CloseHedge: [
+          { name: 'hedgeId', type: 'bytes32' },
+          { name: 'action', type: 'string' },
+          { name: 'timestamp', type: 'uint256' },
+        ],
+      };
+      const value = { hedgeId, action: 'close', timestamp: String(timestamp) };
+
+      // EIP-712 structured signing via MetaMask
+      const msgParams = JSON.stringify({
+        types: { EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }], ...types },
+        primaryType: 'CloseHedge',
+        domain,
+        message: value,
+      });
+
+      const signature = await ethereum.request({
+        method: 'eth_signTypedData_v4',
+        params: [signer, msgParams],
+      });
+
+      logger.info('🔑 Signed close-hedge message', { component: 'ActiveHedges', signer });
+      return { signature, timestamp };
+    } catch (err) {
+      logger.warn('Wallet signature declined or failed', { component: 'ActiveHedges', error: err });
+      return null;
+    }
+  };
+
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -324,12 +373,23 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
       if (selectedHedge.onChain && selectedHedge.hedgeId) {
         try {
+          // Sign the close request with the user's wallet (EIP-712)
+          const sigResult = await signCloseHedge(selectedHedge.hedgeId);
+
+          const closePayload: Record<string, unknown> = {
+            hedgeId: selectedHedge.hedgeId,
+          };
+
+          if (sigResult) {
+            closePayload.signature = sigResult.signature;
+            closePayload.walletAddress = address;
+            closePayload.signatureTimestamp = sigResult.timestamp;
+          }
+
           const response = await fetch('/api/agents/hedging/close-onchain', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              hedgeId: selectedHedge.hedgeId,
-            }),
+            body: JSON.stringify(closePayload),
           });
 
           const data = await response.json();

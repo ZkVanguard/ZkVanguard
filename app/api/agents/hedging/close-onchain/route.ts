@@ -14,6 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TYPES } from '@/lib/hedge-ownership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,13 +43,67 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { hedgeId } = body;
+    const { hedgeId, signature, walletAddress, signatureTimestamp } = body;
 
     if (!hedgeId) {
       return NextResponse.json(
         { success: false, error: 'Missing hedgeId (bytes32)' },
         { status: 400 }
       );
+    }
+
+    // ── Signature verification ──────────────────────────────────────
+    // Look up who owns this hedge
+    const ownerEntry = getHedgeOwner(hedgeId);
+
+    if (ownerEntry) {
+      // Hedge has a registered owner → require EIP-712 signature
+      if (!signature || !walletAddress) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet signature required to close this hedge. Provide signature and walletAddress.' },
+          { status: 401 }
+        );
+      }
+
+      // Verify the signature timestamp is recent (5 min window)
+      const ts = Number(signatureTimestamp || 0);
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - ts) > 300) {
+        return NextResponse.json(
+          { success: false, error: 'Signature expired. Please sign again.' },
+          { status: 401 }
+        );
+      }
+
+      // Recover signer from EIP-712 typed data
+      try {
+        const recoveredAddress = ethers.verifyTypedData(
+          CLOSE_HEDGE_DOMAIN,
+          CLOSE_HEDGE_TYPES,
+          { hedgeId, action: 'close', timestamp: ts },
+          signature
+        );
+
+        if (recoveredAddress.toLowerCase() !== ownerEntry.walletAddress.toLowerCase()) {
+          console.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${ownerEntry.walletAddress}`);
+          return NextResponse.json(
+            { success: false, error: 'Signature does not match hedge owner. You can only close your own hedges.' },
+            { status: 403 }
+          );
+        }
+
+        console.log(`✅ Signature verified: ${recoveredAddress} owns hedge ${hedgeId.slice(0, 18)}...`);
+      } catch (sigErr) {
+        console.error('Signature verification error:', sigErr);
+        return NextResponse.json(
+          { success: false, error: 'Invalid signature format' },
+          { status: 401 }
+        );
+      }
+    } else {
+      // Legacy hedge (opened before ownership registry) — allow close without signature
+      // but log a warning
+      console.warn(`⚠️ No ownership record for hedge ${hedgeId.slice(0, 18)}... — allowing legacy close`);
     }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, { batchMaxCount: 1 });
@@ -123,6 +178,9 @@ export async function POST(request: NextRequest) {
     const croPrice = 0.10; // approximate CRO price
     const gasCostUSD = gasCostCRO * croPrice;
     const elapsed = Date.now() - startTime;
+
+    // Remove from ownership registry (hedge is now closed)
+    removeHedgeOwnership(hedgeId);
 
     console.log(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}`);
 

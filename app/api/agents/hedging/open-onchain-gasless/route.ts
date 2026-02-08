@@ -20,6 +20,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -164,6 +165,18 @@ export async function POST(request: NextRequest) {
 
     const totalHedges = await contract.totalHedgesOpened();
     const elapsed = Date.now() - startTime;
+
+    // Register hedge ownership for signature-verified close
+    registerHedgeOwnership(commitmentHash, {
+      walletAddress: userWallet,
+      pairIndex,
+      asset,
+      side,
+      collateral: Number(collateralAmount),
+      leverage: Number(leverage),
+      openedAt: new Date().toISOString(),
+      txHash: tx.hash,
+    });
 
     console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
 
