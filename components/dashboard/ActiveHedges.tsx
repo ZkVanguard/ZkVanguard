@@ -1009,13 +1009,13 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                                  title="ZK Proxy Wallet — funds held privately via ZK binding"
+                                  title="ZK Privacy Address — identity obfuscation via PDA derivation"
                                 >
                                   <span className="font-mono">{hedge.proxyWallet.slice(0, 10)}...{hedge.proxyWallet.slice(-6)}</span>
                                   <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                                 <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-[#5856D6]/10 text-[#5856D6] rounded text-[8px] font-bold">
-                                  <Lock className="w-2 h-2" />PDA
+                                  <Lock className="w-2 h-2" />ZK ID
                                 </span>
                               </div>
                             )}
@@ -1077,7 +1077,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
-                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">Proxy Wallet (PDA)</div>
+                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">ZK Privacy Address</div>
                             {hedge.proxyWallet ? (
                               <a
                                 href={`https://explorer.cronos.org/testnet/address/${hedge.proxyWallet}`}
@@ -1091,7 +1091,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             ) : (
                               <span className="font-mono text-[11px] text-[#86868b]">Deriving...</span>
                             )}
-                            <div className="text-[9px] text-[#86868b] mt-0.5">Funds held via ZK binding</div>
+                            <div className="text-[9px] text-[#86868b] mt-0.5">Privacy ID — not a fund holder</div>
                           </div>
                           <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
                             <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">ZK Verification</div>
@@ -1102,13 +1102,19 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             <div className="text-[9px] text-[#86868b] mt-0.5">STARK proof on-chain</div>
                           </div>
                           <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
-                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">Withdraw Destination</div>
-                            {hedge.walletAddress ? (
-                              <span className="font-mono text-[11px] text-[#1d1d1f]">{hedge.walletAddress.slice(0, 8)}...{hedge.walletAddress.slice(-6)}</span>
-                            ) : (
-                              <span className="text-[11px] text-[#86868b]">Connected wallet</span>
-                            )}
-                            <div className="text-[9px] text-[#86868b] mt-0.5">Close returns funds here</div>
+                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">Funds Location</div>
+                            <a
+                              href="https://explorer.cronos.org/testnet/address/0x090b6221137690EbB37667E4644287487CE462B9"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-[#007AFF] hover:underline"
+                            >
+                              <span className="font-mono text-[11px]">HedgeExecutor</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                            <div className="text-[9px] text-[#86868b] mt-0.5">
+                              Withdraw → {hedge.walletAddress ? `${hedge.walletAddress.slice(0, 6)}...${hedge.walletAddress.slice(-4)}` : 'your wallet'}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1512,14 +1518,12 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       This will execute <code className="text-[10px] bg-[#AF52DE]/10 px-1 py-0.5 rounded">closeHedge()</code> via x402 gasless relay. 
                       Your collateral {selectedHedge.pnl >= 0 ? '+ profit' : '- loss'} will be transferred directly back to your wallet — <strong>zero gas fees</strong>.
                     </p>
-                    {selectedHedge.proxyWallet && (
-                      <div className="flex items-center gap-1 text-[10px] text-[#86868b]">
-                        <span>Proxy:</span>
-                        <span className="font-mono">{selectedHedge.proxyWallet.slice(0, 10)}...{selectedHedge.proxyWallet.slice(-6)}</span>
-                        <span>→</span>
-                        <span>Your wallet</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 text-[10px] text-[#86868b]">
+                      <span>Contract:</span>
+                      <span className="font-mono">0x090b...62B9</span>
+                      <span>→</span>
+                      <span className="font-semibold text-[#1d1d1f]">Your original wallet</span>
+                    </div>
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-[#86868b]">Estimated return</span>
                       <span className="font-semibold text-[#1d1d1f]">
