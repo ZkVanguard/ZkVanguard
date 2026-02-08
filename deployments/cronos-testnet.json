@@ -1,0 +1,24 @@
+{
+  "network": "cronos-testnet",
+  "chainId": 338,
+  "timestamp": "2025-12-15T00:09:43.005Z",
+  "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
+  "contracts": {
+    "ZKVerifier": "0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8",
+    "RWAManager": "0x170E8232E9e18eeB1839dB1d939501994f1e272F",
+    "PaymentRouter": "0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b",
+    "MockGroth16Verifier": "0x1dDb2A6b64beF9E9435be251c78C84ACaEd94953"
+  },
+  "UniversalRelayer": "0x9E5512b683d92290ccD20F483D20699658bcb9f3",
+  "GaslessZKVerifier": "0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F",
+  "zkCommitmentVerifier": "0x76Faf645C0B3c1e37fbf3EF189EdAfB0D4Fc2a8E",
+  "deployedAt": "2025-12-16T04:44:46.011Z",
+  "zkPaymaster": "0x81E2d8d860847Ca1b3ADd950dBeED6191be23D87",
+  "X402GaslessZKCommitmentVerifier": "0x44098d0dE36e157b4C1700B48d615285C76fdE47",
+  "usdcToken": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+  "GaslessZKCommitmentVerifier": "0x76Faf645C0B3c1e37fbf3EF189EdAfB0D4Fc2a8E",
+  "MockMoonlander": "0x158F3febb8f5c8E48eE4C81A976f20f7Be1faFf2",
+  "ZKHedgeCommitment": "0xa1FF9dFeB4fF9d815FDE34d5F3c61a893806A93E",
+  "lastDeployment": "2026-02-08T02:23:31.928Z",
+  "HedgeExecutor": "0x6aee32F2A71Ce980639e775B675e4240eB40BDE1"
+}

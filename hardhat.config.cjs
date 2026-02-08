@@ -37,7 +37,7 @@ const config = {
       chainId: 338,
       url: process.env.CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org/',
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      gasPrice: 5000000000000, // 5000 gwei
+      gasPrice: 500000000000, // 500 gwei (minimum for testnet)
       timeout: 60000,
     },
     'cronos-mainnet': {

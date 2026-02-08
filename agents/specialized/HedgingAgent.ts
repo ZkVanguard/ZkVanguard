@@ -7,6 +7,7 @@ import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
 import { MoonlanderClient, OrderResult, PerpetualPosition, LiquidationRisk } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
+import { HedgeExecutorClient, HedgeExecutorConfig, OnChainHedgeResult } from '@integrations/hedge-executor/HedgeExecutorClient';
 import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
@@ -60,13 +61,17 @@ export interface HedgeAnalysis {
 export class HedgingAgent extends BaseAgent {
   private moonlanderClient: MoonlanderClient;
   private mcpClient: MCPClient;
+  private hedgeExecutorClient?: HedgeExecutorClient;
+  private useOnChainExecution: boolean = false;
   private activeStrategies: Map<string, HedgeStrategy> = new Map();
+  private onChainHedges: Map<string, OnChainHedgeResult> = new Map();
   private monitoringInterval?: NodeJS.Timeout;
 
   constructor(
     agentId: string,
     private provider: ethers.Provider,
-    private signer: ethers.Wallet | ethers.Signer
+    private signer: ethers.Wallet | ethers.Signer,
+    hedgeExecutorConfig?: HedgeExecutorConfig
   ) {
     super(agentId, 'HedgingAgent', [
       AgentCapability.RISK_ANALYSIS,
@@ -76,6 +81,26 @@ export class HedgingAgent extends BaseAgent {
 
     this.moonlanderClient = new MoonlanderClient(provider, signer);
     this.mcpClient = new MCPClient();
+
+    // Enable on-chain execution if config provided
+    if (hedgeExecutorConfig) {
+      this.hedgeExecutorClient = new HedgeExecutorClient(hedgeExecutorConfig);
+      this.useOnChainExecution = true;
+      logger.info('HedgingAgent: On-chain execution enabled via HedgeExecutor', {
+        contract: hedgeExecutorConfig.contractAddress,
+      });
+    }
+  }
+
+  /**
+   * Enable/disable on-chain execution at runtime
+   */
+  setOnChainExecution(enabled: boolean) {
+    if (enabled && !this.hedgeExecutorClient) {
+      throw new Error('HedgeExecutorClient not configured');
+    }
+    this.useOnChainExecution = enabled;
+    logger.info(`On-chain execution ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -316,7 +341,7 @@ export class HedgingAgent extends BaseAgent {
   }
 
   /**
-   * Open hedge position
+   * Open hedge position (on-chain or off-chain based on configuration)
    */
   private async openHedgePosition(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
@@ -324,7 +349,44 @@ export class HedgingAgent extends BaseAgent {
     const { market, side, notionalValue, leverage, stopLoss, takeProfit } = parameters;
 
     try {
-      logger.info('Opening hedge position', { market, side, notionalValue });
+      // ═══════════════════════════════════════════════════════════
+      // ON-CHAIN EXECUTION (via HedgeExecutor contract)
+      // ═══════════════════════════════════════════════════════════
+      if (this.useOnChainExecution && this.hedgeExecutorClient) {
+        logger.info('Opening ON-CHAIN hedge position', { market, side, notionalValue });
+
+        const result = await this.hedgeExecutorClient.openHedge({
+          market,
+          side,
+          collateralAmount: notionalValue,
+          leverage: Math.min(leverage || 1, 100),
+        });
+
+        this.onChainHedges.set(result.hedgeId, result);
+
+        return {
+          success: true,
+          data: {
+            hedgeId: result.hedgeId,
+            txHash: result.txHash,
+            market,
+            side,
+            collateralAmount: result.collateralAmount,
+            leverage: result.leverage,
+            openPrice: result.openPrice,
+            executionMode: 'on-chain',
+            commitmentHash: result.commitmentHash,
+          },
+          error: null,
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // OFF-CHAIN EXECUTION (legacy MoonlanderClient REST API)
+      // ═══════════════════════════════════════════════════════════
+      logger.info('Opening hedge position (off-chain)', { market, side, notionalValue });
 
       // Support multiple MoonlanderClient interfaces used in tests/mocks
       const extClient = this.moonlanderClient as unknown as MoonlanderClientExt;
@@ -444,15 +506,42 @@ export class HedgingAgent extends BaseAgent {
   }
 
   /**
-   * Close hedge position
+   * Close hedge position (on-chain or off-chain)
    */
   private async closeHedgePosition(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { market: string; size: string };
-    const { market, size } = parameters;
+    const parameters = task.parameters as { market: string; size: string; hedgeId?: string };
+    const { market, size, hedgeId } = parameters;
 
     try {
-      logger.info('Closing hedge position', { market });
+      // ═══════════════════════════════════════════════════════════
+      // ON-CHAIN CLOSE (via HedgeExecutor contract)
+      // ═══════════════════════════════════════════════════════════
+      if (this.useOnChainExecution && this.hedgeExecutorClient && hedgeId) {
+        logger.info('Closing ON-CHAIN hedge position', { hedgeId, market });
+
+        const result = await this.hedgeExecutorClient.closeHedge(hedgeId);
+        this.onChainHedges.delete(hedgeId);
+
+        return {
+          success: true,
+          data: {
+            hedgeId,
+            txHash: result.txHash,
+            pnl: result.pnl,
+            closePrice: result.closePrice,
+            executionMode: 'on-chain',
+          },
+          error: null,
+          executionTime: Date.now() - startTime,
+          agentId: this.agentId,
+        };
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // OFF-CHAIN CLOSE (legacy)
+      // ═══════════════════════════════════════════════════════════
+      logger.info('Closing hedge position (off-chain)', { market });
 
       const order = await this.moonlanderClient.closePosition({ market, size });
 

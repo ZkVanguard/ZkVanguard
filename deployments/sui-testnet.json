@@ -4,12 +4,15 @@
   "transactionDigest": "CnHSt5JZt7X1feYuCYXjBFQQBjQazH55QZAgcoXST264",
   "deployer": "0xb157ee4953f0f552c7aa554d614762acf6ed6d6c8407f96aee18010724712126",
   "packageId": "0x142e6c41391f0d27e2b5a2dbf35029809efbf78e340369ac6f1ce8fb8aa080b6",
+  "packageIdV2": "0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a",
+  "packageIdV2Digest": "ADVbaBELTMwMUkU4WdWnkGtrbvzYjpzq6uEWxgF9RPx8",
   "modules": [
     "rwa_manager",
     "zk_verifier", 
     "payment_router",
     "zk_proxy_vault",
-    "zk_hedge_commitment"
+    "zk_hedge_commitment",
+    "hedge_executor"
   ],
   "objects": {
     "rwaManagerState": {
@@ -36,6 +39,18 @@
       "id": "0x9c33f0df3d6a2e9a0f137581912aefb6aafcf0423d933fea298d44e222787b02",
       "type": "shared",
       "description": "Privacy-preserving hedge commitment storage"
+    },
+    "hedgeExecutorState": {
+      "id": "0xb6432f1ecc1f55a1f3f3c8c09d110c4bda9ed6536bd9ea4c9cb5e739c41cb41e",
+      "type": "shared",
+      "packageId": "0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a",
+      "description": "On-chain hedge execution state (v2)"
+    },
+    "hedgeExecutorAdminCap": {
+      "id": "0x0cf85817dfe410f3bcc5ba9ab64409f5c1e7f1401afc1f958143c2f9e0cb51f4",
+      "type": "owned",
+      "packageId": "0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a",
+      "description": "Admin capability for Hedge Executor (v2)"
     },
     "rwaManagerAdminCap": {
       "id": "0x6e833ffd31b246c91fec2804db2a7d435a1a5d0b6980649c612a7c4598ef37ae",
