@@ -6,16 +6,7 @@
 
 import { ethers } from 'ethers';
 import { logger } from '@shared/utils/logger';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Load ABI
-const HedgeExecutorABI = JSON.parse(
-  fs.readFileSync(
-    path.join(__dirname, '../../contracts/abi/HedgeExecutor.json'),
-    'utf-8'
-  )
-);
+import HedgeExecutorABI from '../../contracts/abi/HedgeExecutor.json';
 
 export interface OnChainHedgeResult {
   hedgeId: string;
