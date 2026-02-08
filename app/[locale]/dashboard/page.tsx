@@ -76,6 +76,10 @@ const EnhancedChat = nextDynamic(() => import('@/components/dashboard/EnhancedCh
 const SettingsModal = nextDynamic(() => import('@/components/dashboard/SettingsModal').then(mod => ({ default: mod.SettingsModal })), {
   ssr: false
 });
+
+const MockUSDCFaucet = nextDynamic(() => import('@/components/dashboard/MockUSDCFaucet').then(mod => ({ default: mod.MockUSDCFaucet })), {
+  ssr: false
+});
 // Reusable loading skeleton
 function LoadingSkeleton({ height = "h-40" }: { height?: string }) {
   return (
@@ -687,13 +691,16 @@ export default function DashboardPage() {
         
       case 'hedges':
         return (
-          <Card>
-            <CardHeader 
-              title="Active Hedges" 
-              subtitle="Your protective positions and options"
-            />
-            <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} onOpenChat={() => setShowChat(true)} />
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader 
+                title="Active Hedges" 
+                subtitle="Your protective positions and options"
+              />
+              <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} onOpenChat={() => setShowChat(true)} />
+            </Card>
+            <MockUSDCFaucet />
+          </div>
         );
         
       case 'swap':
