@@ -2,6 +2,11 @@
  * On-Chain Hedge Positions API
  * Reads hedge positions directly from the HedgeExecutor smart contract on Cronos testnet
  * 
+ * Uses ThrottledProvider for:
+ *  - Concurrency control (max 3 parallel RPC calls)
+ *  - Retry with exponential backoff on 429s
+ *  - 30s response cache to avoid redundant calls
+ * 
  * GET /api/agents/hedging/onchain
  * Query params:
  *   - address: Wallet address to filter by (optional, defaults to deployer)
@@ -10,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { MarketDataMCPClient } from '@/lib/services/market-data-mcp';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -112,43 +118,55 @@ function deriveProxyAddress(owner: string, nonce: number, zkBindingHash: string)
   return '0x' + hash.slice(-40);
 }
 
-// Fetch tx hashes from HedgeOpened event logs
+// Fetch tx hashes from HedgeOpened event logs (throttled)
 async function fetchTxHashes(
   contract: ethers.Contract,
   provider: ethers.JsonRpcProvider,
-  hedgeIds: string[]
+  hedgeIds: string[],
+  tp: ReturnType<typeof getCronosProvider>
 ): Promise<Record<string, string>> {
   const txHashMap: Record<string, string> = {};
   try {
-    // Query HedgeOpened events using event topic
-    // Cronos testnet limits getLogs to 2000 blocks, so query in chunks
     const hedgeOpenedTopic = ethers.id('HedgeOpened(bytes32,address,uint256,bool,uint256,uint256,bytes32)');
     const contractAddress = await contract.getAddress();
-    const latestBlock = await provider.getBlockNumber();
+    const latestBlock = await tp.call('blockNumber', () => provider.getBlockNumber(), 15_000);
     
-    // Scan back in 2000-block chunks (up to ~50K blocks = ~2 days)
-    const MAX_SCAN_BLOCKS = 50000;
+    // Reduced scan range + smaller chunks for rate-limit friendliness
+    const MAX_SCAN_BLOCKS = 20000;
     const CHUNK_SIZE = 2000;
     const startBlock = Math.max(0, latestBlock - MAX_SCAN_BLOCKS);
     
+    // Throttle log queries through the semaphore
+    const chunks: Array<{ from: number; to: number }> = [];
     for (let from = startBlock; from <= latestBlock; from += CHUNK_SIZE) {
-      const to = Math.min(from + CHUNK_SIZE - 1, latestBlock);
-      try {
-        const logs = await provider.getLogs({
-          address: contractAddress,
-          topics: [hedgeOpenedTopic],
-          fromBlock: from,
-          toBlock: to,
-        });
+      chunks.push({ from, to: Math.min(from + CHUNK_SIZE - 1, latestBlock) });
+    }
 
-        for (const log of logs) {
-          const hedgeId = log.topics[1];
-          if (hedgeId && hedgeIds.includes(hedgeId)) {
-            txHashMap[hedgeId] = log.transactionHash;
+    const logResults = await tp.throttledAll(
+      chunks.map(({ from, to }) => ({
+        key: `logs-${from}-${to}`,
+        fn: async () => {
+          try {
+            return await provider.getLogs({
+              address: contractAddress,
+              topics: [hedgeOpenedTopic],
+              fromBlock: from,
+              toBlock: to,
+            });
+          } catch {
+            return [];
           }
+        },
+        ttl: 60_000, // Cache log results for 60s
+      }))
+    );
+
+    for (const logs of logResults) {
+      for (const log of logs) {
+        const hedgeId = log.topics[1];
+        if (hedgeId && hedgeIds.includes(hedgeId)) {
+          txHashMap[hedgeId] = log.transactionHash;
         }
-      } catch {
-        // Skip failed chunks silently
       }
     }
   } catch (err) {
@@ -163,36 +181,39 @@ export async function GET(request: NextRequest) {
     const address = searchParams.get('address') || DEPLOYER;
     const includeStats = searchParams.get('stats') === 'true';
 
-    // Use a non-batching provider to avoid Cronos RPC batch size limit (max 10)
-    const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, {
-      batchMaxCount: 1,
-    });
+    // Throttled provider: max 3 concurrent RPC calls, 30s cache, auto-retry on 429
+    const tp = getCronosProvider(RPC_URL);
+    const provider = tp.provider;
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
 
-    // Get all hedge IDs — merge deployer + relayer hedges (privacy relayer uses separate wallet)
-    const deployerHedges: string[] = await contract.getUserHedges(address);
-    const relayerHedges: string[] = address === DEPLOYER 
-      ? await contract.getUserHedges(RELAYER)
-      : [];
-    // Merge and deduplicate
+    // Get all hedge IDs — throttled, cached
+    const [deployerHedges, relayerHedges] = await tp.throttledAll([
+      {
+        key: `hedgeIds-${address}`,
+        fn: async () => [...(await contract.getUserHedges(address))] as string[],
+      },
+      {
+        key: address === DEPLOYER ? `hedgeIds-${RELAYER}` : null,
+        fn: async () => address === DEPLOYER
+          ? [...(await contract.getUserHedges(RELAYER))] as string[]
+          : [] as string[],
+      },
+    ]);
     const hedgeIds = [...new Set([...deployerHedges, ...relayerHedges])];
 
-    // Fetch tx hashes from event logs in parallel with hedge details
-    const txHashMap = await fetchTxHashes(contract, provider, hedgeIds);
+    // Fetch tx hashes (throttled, cached log queries)
+    const txHashMap = await fetchTxHashes(contract, provider, hedgeIds, tp);
 
-    // First pass: read all hedge data to determine which pair prices we need
-    const BATCH_SIZE = 5;
-    const rawHedges: Array<{ hedgeId: string; hedgeIndex: number; data: Awaited<ReturnType<typeof contract.hedges>> }> = [];
-    for (let i = 0; i < hedgeIds.length; i += BATCH_SIZE) {
-      const batch = hedgeIds.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (hedgeId: string, batchIndex: number) => {
+    // Read all hedge data — throttled through semaphore
+    const rawHedges = await tp.throttledAll(
+      hedgeIds.map((hedgeId, idx) => ({
+        key: `hedge-${hedgeId}`,
+        fn: async () => {
           const data = await contract.hedges(hedgeId);
-          return { hedgeId, hedgeIndex: i + batchIndex, data };
-        })
-      );
-      rawHedges.push(...batchResults);
-    }
+          return { hedgeId, hedgeIndex: idx, data };
+        },
+      }))
+    );
 
     // Fetch LIVE prices from Crypto.com API for all active pairs
     const activePairIndices = rawHedges
@@ -201,23 +222,26 @@ export async function GET(request: NextRequest) {
     const livePrices = await fetchLivePrices(activePairIndices);
     console.log('📊 Live prices from Crypto.com:', Object.entries(livePrices).map(([k, v]) => `${PAIR_SYMBOLS[Number(k)]}=$${v}`).join(', '));
 
-    // Fetch entry prices from MockMoonlander for all hedges
-    // Note: MockMoonlander trader = HedgeExecutor contract (not user/relayer), 
-    // because HedgeExecutor calls MockMoonlander internally
+    // Fetch entry prices from MockMoonlander — throttled
     const entryPriceMap: Record<string, number> = {};
     try {
       const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
-      const pricePromises = rawHedges.map(async ({ hedgeId, data: h }) => {
-        try {
-          const trade = await moonlander.getTrade(HEDGE_EXECUTOR, Number(h.pairIndex), Number(h.tradeIndex));
-          if (trade && trade.openPrice > 0n) {
-            entryPriceMap[hedgeId] = Number(trade.openPrice) / 1e10;
-          }
-        } catch {
-          // Trade may not exist on MockMoonlander (closed/liquidated)
-        }
-      });
-      await Promise.all(pricePromises);
+      const tradeResults = await tp.throttledAll(
+        rawHedges.map(({ hedgeId, data: h }) => ({
+          key: `trade-${hedgeId}`,
+          fn: async () => {
+            try {
+              const trade = await moonlander.getTrade(HEDGE_EXECUTOR, Number(h.pairIndex), Number(h.tradeIndex));
+              return { hedgeId, openPrice: trade && trade.openPrice > 0n ? Number(trade.openPrice) / 1e10 : 0 };
+            } catch {
+              return { hedgeId, openPrice: 0 };
+            }
+          },
+        }))
+      );
+      for (const { hedgeId, openPrice } of tradeResults) {
+        if (openPrice > 0) entryPriceMap[hedgeId] = openPrice;
+      }
     } catch {
       console.warn('Could not fetch entry prices from MockMoonlander');
     }
@@ -297,7 +321,7 @@ export async function GET(request: NextRequest) {
     let protocolStats = null;
     if (includeStats) {
       try {
-        const stats = await contract.getProtocolStats();
+        const stats = await tp.call('protocolStats', () => contract.getProtocolStats(), 15_000);
         protocolStats = {
           totalOpened: Number(stats[0]),
           totalClosed: Number(stats[1]),
