@@ -23,6 +23,8 @@ interface HedgeSuccess {
   walletOwnershipProof?: string;
   walletBinding?: string;
   walletAddress?: string;
+  txHash?: string;
+  onChain?: boolean;
 }
 
 // Component to display ZK proof hash with copy and verify functionality
@@ -247,6 +249,8 @@ export function ManualHedgeModal({ isOpen, onClose, availableAssets = ['BTC', 'E
           walletOwnershipProof: data.walletOwnershipProof,
           walletBinding: data.walletBinding,
           walletAddress: data.walletAddress || walletAddress,
+          txHash: data.txHash,
+          onChain: data.onChain,
         });
 
         setCreating(false);
