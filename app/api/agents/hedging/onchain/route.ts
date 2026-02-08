@@ -33,8 +33,15 @@ const PAIR_SYMBOLS: Record<number, string> = {
 
 // Fallback prices only used if Crypto.com API is completely unreachable
 const FALLBACK_PRICES: Record<number, number> = {
-  0: 95000, 1: 3200, 2: 0.10, 3: 8, 4: 0.35, 5: 200
+  0: 71230, 1: 2111, 2: 0.081, 3: 1.979, 4: 0.097, 5: 88.02
 };
+
+// MockMoonlander contract — reads actual openPrice for each trade
+const MOCK_MOONLANDER = '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54';
+const MOONLANDER_ABI = [
+  'function getTrade(address trader, uint256 pairIndex, uint256 tradeIndex) view returns (tuple(address trader, uint256 pairIndex, uint256 index, uint256 collateralAmount, uint256 positionSizeUsd, uint256 openPrice, bool isLong, uint256 leverage, uint256 tp, uint256 sl, bool isOpen))',
+  'function mockPrices(uint256) view returns (uint256)',
+];
 
 /**
  * Fetch live prices from Crypto.com Exchange API via MCP client
@@ -194,6 +201,27 @@ export async function GET(request: NextRequest) {
     const livePrices = await fetchLivePrices(activePairIndices);
     console.log('📊 Live prices from Crypto.com:', Object.entries(livePrices).map(([k, v]) => `${PAIR_SYMBOLS[Number(k)]}=$${v}`).join(', '));
 
+    // Fetch entry prices from MockMoonlander for all hedges
+    // Note: MockMoonlander trader = HedgeExecutor contract (not user/relayer), 
+    // because HedgeExecutor calls MockMoonlander internally
+    const entryPriceMap: Record<string, number> = {};
+    try {
+      const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
+      const pricePromises = rawHedges.map(async ({ hedgeId, data: h }) => {
+        try {
+          const trade = await moonlander.getTrade(HEDGE_EXECUTOR, Number(h.pairIndex), Number(h.tradeIndex));
+          if (trade && trade.openPrice > 0n) {
+            entryPriceMap[hedgeId] = Number(trade.openPrice) / 1e10;
+          }
+        } catch {
+          // Trade may not exist on MockMoonlander (closed/liquidated)
+        }
+      });
+      await Promise.all(pricePromises);
+    } catch {
+      console.warn('Could not fetch entry prices from MockMoonlander');
+    }
+
     // Second pass: build hedge details with real prices
     const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {
         const pairIndex = Number(h.pairIndex);
@@ -202,8 +230,8 @@ export async function GET(request: NextRequest) {
         const isLong = h.isLong;
         const status = Number(h.status);
 
-        // Use MockMoonlander entry price (hardcoded in contract) and LIVE current price
-        const entryPrice = FALLBACK_PRICES[pairIndex] || 1000;
+        // Use actual entry price from MockMoonlander, fallback to live price
+        const entryPrice = entryPriceMap[hedgeId] || livePrices[pairIndex] || FALLBACK_PRICES[pairIndex] || 1000;
         const currentPrice = status === 1 ? (livePrices[pairIndex] || entryPrice) : entryPrice;
 
         // Calculate unrealized PnL using real price delta

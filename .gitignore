@@ -320,3 +320,10 @@ whitepaper/
 test/ZKProxyVault.test.cjs
 test/ZKProxyVault.test.js
 docs/WEEKLY_SUBMISSION_2026-02-04.md
+ZKProxyVault_flat.sol
+zkproxy-vault-input.json
+MockMoonlander_flat.sol
+mock-contracts-input.json
+HedgeExecutor_flat.sol
+hedge-executor-metadata.json
+hedge-executor-input.json
