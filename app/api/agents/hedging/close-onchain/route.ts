@@ -83,8 +83,19 @@ export async function POST(request: NextRequest) {
     const feeData = await provider.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('1500', 'gwei');
 
+    // Estimate actual gas needed (typically ~153K, NOT 2M) with 20% safety buffer
+    let gasLimit: bigint;
+    try {
+      const estimated = await contract.closeHedge.estimateGas(hedgeId, { gasPrice });
+      gasLimit = (estimated * 120n) / 100n;
+      console.log(`⛽ Estimated gas: ${estimated.toString()} → using ${gasLimit.toString()} (with 20% buffer)`);
+    } catch (estErr: unknown) {
+      gasLimit = 300_000n; // Conservative fallback (actual ~153K)
+      console.warn(`⚠️ Gas estimation failed, using fallback ${gasLimit.toString()}:`, (estErr as Error).message?.slice(0, 100));
+    }
+
     const tx = await contract.closeHedge(hedgeId, {
-      gasLimit: 2_000_000,
+      gasLimit,
       gasPrice,
     });
 
