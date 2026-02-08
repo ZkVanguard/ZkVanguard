@@ -178,13 +178,31 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
     const fetchHedgeCount = async () => {
       try {
+        let totalCount = 0;
+        
+        // Fetch DB hedges
         const response = await fetch('/api/agents/hedging/pnl?summary=true');
         if (response.ok && isMounted) {
           const data = await response.json();
           if (data.success && data.summary && data.summary.details) {
-            setActiveHedgesCount(data.summary.details.length);
+            totalCount += data.summary.details.length;
           }
         }
+
+        // Also fetch on-chain hedges
+        try {
+          const onChainResponse = await fetch('/api/agents/hedging/onchain');
+          if (onChainResponse.ok && isMounted) {
+            const onChainData = await onChainResponse.json();
+            if (onChainData.success && onChainData.summary?.activeCount) {
+              totalCount += onChainData.summary.activeCount;
+            }
+          }
+        } catch {
+          // On-chain API may not be available
+        }
+
+        if (isMounted) setActiveHedgesCount(totalCount);
       } catch (err) {
         logger.error('Error counting hedges from API', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
       }

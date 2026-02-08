@@ -29,6 +29,11 @@ interface HedgePosition {
   // ZK verification fields
   zkVerified?: boolean;
   walletBindingHash?: string;
+  // On-chain fields
+  onChain?: boolean;
+  chain?: string;
+  contractAddress?: string;
+  hedgeId?: string;
 }
 
 interface PerformanceStats {
@@ -97,9 +102,12 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     try {
       processingRef.current = true;
       
-      // Database is the single source of truth now
+      // Fetch from both DB and on-chain sources
+      let dbHedges: HedgePosition[] = [];
+      let onChainHedges: HedgePosition[] = [];
+
+      // 1. Try database first
       try {
-        // Include wallet address filter if available
         const params = new URLSearchParams({ summary: 'true' });
         if (address) {
           params.set('walletAddress', address);
@@ -108,10 +116,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         const response = await fetch(`/api/agents/hedging/pnl?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
-          logger.debug('🔍 ActiveHedges: Raw API response', { component: 'ActiveHedges', data });
-          if (data.success && data.summary) {
-            logger.debug('🔍 ActiveHedges: PnL details', { component: 'ActiveHedges', data: data.summary.details });
-            const dbHedges: HedgePosition[] = data.summary.details?.map((pnl: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed?: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt?: string; reason?: string; walletAddress?: string; zkVerified?: boolean; walletBindingHash?: string }) => ({
+          if (data.success && data.summary?.details) {
+            dbHedges = data.summary.details.map((pnl: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed?: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt?: string; reason?: string; walletAddress?: string; zkVerified?: boolean; walletBindingHash?: string }) => ({
               id: pnl.orderId,
               type: pnl.side,
               asset: pnl.asset,
@@ -119,7 +125,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               leverage: pnl.leverage,
               entryPrice: pnl.entryPrice,
               currentPrice: pnl.currentPrice,
-              targetPrice: 0, // Not tracked in DB yet
+              targetPrice: 0,
               stopLoss: 0,
               capitalUsed: pnl.capitalUsed || (pnl.notionalValue / pnl.leverage),
               pnl: pnl.unrealizedPnL,
@@ -128,42 +134,76 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               openedAt: pnl.createdAt ? new Date(pnl.createdAt) : new Date(),
               reason: pnl.reason || `${pnl.leverage}x leveraged hedge @ $${pnl.entryPrice.toFixed(2)}`,
               walletAddress: pnl.walletAddress,
-              // ZK verification - ownership proven via cryptographic binding
               zkVerified: pnl.zkVerified || !!pnl.walletBindingHash,
               walletBindingHash: pnl.walletBindingHash,
               walletVerified: pnl.zkVerified || (address ? pnl.walletAddress?.toLowerCase() === address.toLowerCase() : false),
-            })) || [];
-
-            logger.debug('🔍 ActiveHedges: Mapped hedges', { component: 'ActiveHedges', data: dbHedges });
-
-            // Use pre-calculated stats from API for accuracy
-            const totalPnL = data.summary.totalUnrealizedPnL || dbHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
-            const profitable = data.summary.profitable ?? dbHedges.filter(h => h.pnl > 0).length;
-            const _unprofitable = data.summary.unprofitable ?? dbHedges.filter(h => h.pnl <= 0).length;
-            const winRate = dbHedges.length > 0 ? (profitable / dbHedges.length) * 100 : 0;
-            const pnlValues = dbHedges.map(h => h.pnl || 0);
-            const bestTrade = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
-            const worstTrade = pnlValues.length > 0 ? Math.min(...pnlValues) : 0;
-
-            setStats({
-              totalHedges: data.summary.totalHedges || dbHedges.length,
-              activeHedges: dbHedges.length,
-              winRate: Math.round(winRate),
-              totalPnL,
-              avgHoldTime: '24h',
-              bestTrade,
-              worstTrade,
-            });
-            setHedges(dbHedges);
-            
-            setLoading(false);
-            processingRef.current = false;
-            return;
+              onChain: false,
+            }));
           }
         }
       } catch (dbErr) {
         logger.error('❌ Database not available', dbErr instanceof Error ? dbErr : undefined, { component: 'ActiveHedges' });
-        setHedges([]);
+      }
+
+      // 2. Fetch on-chain hedges from HedgeExecutor contract
+      try {
+        const onChainResponse = await fetch('/api/agents/hedging/onchain?stats=true');
+        if (onChainResponse.ok) {
+          const onChainData = await onChainResponse.json();
+          if (onChainData.success && onChainData.summary?.details) {
+            logger.debug('🔗 On-chain hedges loaded', { component: 'ActiveHedges', count: onChainData.summary.details.length });
+            onChainHedges = onChainData.summary.details.map((h: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt: string; reason: string; walletAddress: string; zkVerified: boolean; onChain: boolean }) => ({
+              id: `onchain-${h.orderId}`,
+              type: h.side as 'SHORT' | 'LONG',
+              asset: h.asset,
+              size: h.size,
+              leverage: h.leverage,
+              entryPrice: h.entryPrice,
+              currentPrice: h.currentPrice,
+              targetPrice: 0,
+              stopLoss: 0,
+              capitalUsed: h.capitalUsed || h.size,
+              pnl: h.unrealizedPnL || 0,
+              pnlPercent: h.pnlPercentage || 0,
+              status: 'active' as const,
+              openedAt: h.createdAt ? new Date(h.createdAt) : new Date(),
+              reason: h.reason || `${h.leverage}x ${h.side} ${h.asset} on-chain hedge`,
+              walletAddress: h.walletAddress,
+              zkVerified: h.zkVerified,
+              walletVerified: true,
+              onChain: true,
+              chain: 'cronos-testnet',
+              hedgeId: h.orderId,
+              contractAddress: '0x090b6221137690EbB37667E4644287487CE462B9',
+            }));
+          }
+        }
+      } catch (onChainErr) {
+        logger.error('❌ On-chain hedges not available', onChainErr instanceof Error ? onChainErr : undefined, { component: 'ActiveHedges' });
+      }
+
+      // 3. Merge: on-chain hedges take priority, then DB hedges
+      const allHedges = [...onChainHedges, ...dbHedges];
+      
+      if (allHedges.length > 0) {
+        const totalPnL = allHedges.reduce((sum, h) => sum + (h.pnl || 0), 0);
+        const profitable = allHedges.filter(h => h.pnl > 0).length;
+        const _unprofitable = allHedges.filter(h => h.pnl <= 0).length;
+        const winRate = allHedges.length > 0 ? (profitable / allHedges.length) * 100 : 0;
+        const pnlValues = allHedges.map(h => h.pnl || 0);
+        const bestTrade = pnlValues.length > 0 ? Math.max(...pnlValues) : 0;
+        const worstTrade = pnlValues.length > 0 ? Math.min(...pnlValues) : 0;
+
+        setStats({
+          totalHedges: allHedges.length,
+          activeHedges: allHedges.length,
+          winRate: Math.round(winRate),
+          totalPnL,
+          avgHoldTime: '24h',
+          bestTrade,
+          worstTrade,
+        });
+        setHedges(allHedges);
         setLoading(false);
         processingRef.current = false;
         return;
@@ -413,9 +453,16 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
               {stats.activeHedges > 0 ? (
+                <>
                 <span className="text-[10px] sm:text-[11px] font-bold text-[#34C759] uppercase tracking-[0.04em] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[#34C759]/10 rounded-full">
                   {stats.activeHedges} Active
                 </span>
+                {activeHedges.some(h => h.onChain) && (
+                  <span className="text-[9px] sm:text-[10px] font-bold text-[#FF9500] uppercase tracking-[0.04em] px-1.5 py-0.5 bg-[#FF9500]/10 rounded-full">
+                    ⛓ On-Chain
+                  </span>
+                )}
+                </>
               ) : (
                 <span className="text-[10px] sm:text-[11px] font-bold text-[#86868b] uppercase tracking-[0.04em] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[#f5f5f7] rounded-full">
                   {stats.totalHedges} Closed
@@ -561,6 +608,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   <span className="text-[9px] sm:text-[11px] font-semibold text-[#34C759] uppercase tracking-[0.06em] px-2 sm:px-2.5 py-0.5 sm:py-1 bg-[#34C759]/10 rounded-full">
                     {stats.activeHedges} Active
                   </span>
+                  {activeHedges.some(h => h.onChain) && (
+                    <span className="text-[9px] sm:text-[10px] font-bold text-[#FF9500] uppercase tracking-[0.04em] px-2 py-0.5 bg-[#FF9500]/10 rounded-full">
+                      ⛓ {activeHedges.filter(h => h.onChain).length} On-Chain
+                    </span>
+                  )}
                   <span className="text-[11px] sm:text-[13px] text-[#86868b]">
                     of {stats.totalHedges} total
                   </span>
@@ -792,6 +844,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                                   <span>✓</span>
                                 </span>
                               )}
+                              {hedge.onChain && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#FF9500]/10 text-[#FF9500] rounded-[4px] text-[9px] font-bold" title="On-chain verified position">
+                                  ⛓ ON-CHAIN
+                                </span>
+                              )}
                             </div>
                             {/* Reason text hidden - not needed for display */}
                             {hedge.txHash && (
@@ -899,9 +956,29 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                                 <Lock className="w-3 h-3" />ZK
                               </span>
                             )}
+                            {hedge.onChain && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#FF9500]/10 text-[#FF9500] rounded-full text-[10px] font-bold" title="On-chain verified position on Cronos testnet">
+                                ⛓ ON-CHAIN
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-[#86868b] mt-0.5 space-y-0.5">
                             <div className="text-[13px] font-medium text-[#1d1d1f]">{hedge.reason}</div>
+                            {hedge.onChain && hedge.contractAddress && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wider text-[#FF9500]">CONTRACT:</span>
+                                <a
+                                  href={`https://explorer.cronos.org/testnet3/address/${hedge.contractAddress}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                  title="View HedgeExecutor on Cronos Explorer"
+                                >
+                                  <span className="font-mono">{hedge.contractAddress.slice(0, 10)}...{hedge.contractAddress.slice(-6)}</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
+                            )}
                             {hedge.txHash && (
                               <div className="flex items-center gap-1">
                                 <span className="text-[10px] uppercase tracking-wider">TRANSACTION:</span>
