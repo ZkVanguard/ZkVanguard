@@ -29,11 +29,15 @@ interface HedgePosition {
   // ZK verification fields
   zkVerified?: boolean;
   walletBindingHash?: string;
+  commitmentHash?: string;
   // On-chain fields
   onChain?: boolean;
   chain?: string;
   contractAddress?: string;
   hedgeId?: string;
+  // Proxy wallet (ZK privacy)
+  proxyWallet?: string;
+  proxyVault?: string;
 }
 
 interface PerformanceStats {
@@ -111,7 +115,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           const onChainData = await onChainResponse.json();
           if (onChainData.success && onChainData.summary?.details) {
             logger.debug('🔗 On-chain hedges loaded', { component: 'ActiveHedges', count: onChainData.summary.details.length });
-            onChainHedges = onChainData.summary.details.map((h: { orderId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt: string; reason: string; walletAddress: string; zkVerified: boolean; onChain: boolean }) => ({
+            onChainHedges = onChainData.summary.details.map((h: { orderId: string; hedgeId: string; side: 'SHORT' | 'LONG'; asset: string; size: number; leverage: number; entryPrice: number; currentPrice: number; capitalUsed: number; notionalValue: number; unrealizedPnL: number; pnlPercentage: number; createdAt: string; reason: string; walletAddress: string; txHash: string | null; proxyWallet: string; proxyVault: string; commitmentHash: string; zkVerified: boolean; onChain: boolean }) => ({
               id: `onchain-${h.orderId}`,
               type: h.side as 'SHORT' | 'LONG',
               asset: h.asset,
@@ -128,12 +132,16 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               openedAt: h.createdAt ? new Date(h.createdAt) : new Date(),
               reason: h.reason || `${h.leverage}x ${h.side} ${h.asset} on-chain hedge`,
               walletAddress: h.walletAddress,
+              txHash: h.txHash || undefined,
               zkVerified: h.zkVerified,
               walletVerified: true,
               onChain: true,
               chain: 'cronos-testnet',
-              hedgeId: h.orderId,
+              hedgeId: h.hedgeId || h.orderId,
               contractAddress: '0x090b6221137690EbB37667E4644287487CE462B9',
+              proxyWallet: h.proxyWallet,
+              proxyVault: h.proxyVault,
+              commitmentHash: h.commitmentHash,
             }));
           }
         }
@@ -292,7 +300,44 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     closeCloseConfirm();
     
     try {
-      // Try to close in database first
+      // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
+      if (selectedHedge.onChain && selectedHedge.hedgeId) {
+        try {
+          const response = await fetch('/api/agents/hedging/close-onchain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hedgeId: selectedHedge.hedgeId,
+            }),
+          });
+
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            logger.info('✅ Hedge closed on-chain, funds withdrawn', { component: 'ActiveHedges', data: {
+              txHash: data.txHash,
+              fundsReturned: data.fundsReturned,
+              withdrawTo: data.withdrawalDestination,
+            }});
+            
+            // Show success notification
+            alert(`✅ Hedge closed!\n\n${data.fundsReturned > 0 ? `${data.fundsReturned} USDC returned to your wallet` : 'Position liquidated'}\nPnL: ${data.realizedPnl} USDC\nTx: ${data.txHash?.slice(0, 16)}...`);
+            
+            // Remove from local state
+            setHedges(prev => prev.filter(h => h.id !== selectedHedge.id));
+            window.dispatchEvent(new Event('hedgeAdded'));
+            return;
+          } else {
+            throw new Error(data.error || 'Close failed');
+          }
+        } catch (onChainErr) {
+          logger.error('❌ On-chain close failed', onChainErr instanceof Error ? onChainErr : undefined, { component: 'ActiveHedges' });
+          alert(`Failed to close on-chain: ${onChainErr instanceof Error ? onChainErr.message : 'Unknown error'}`);
+          return;
+        }
+      }
+
+      // Fallback: Try to close in database for non-on-chain hedges
       try {
         const response = await fetch('/api/agents/hedging/close', {
           method: 'POST',
@@ -953,6 +998,30 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                                 </a>
                               </div>
                             )}
+                            {hedge.proxyWallet && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wider text-[#5856D6]">PROXY WALLET:</span>
+                                <a
+                                  href={`https://explorer.cronos.org/testnet/address/${hedge.proxyWallet}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
+                                  title="ZK Proxy Wallet — funds held privately via ZK binding"
+                                >
+                                  <span className="font-mono">{hedge.proxyWallet.slice(0, 10)}...{hedge.proxyWallet.slice(-6)}</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-[#5856D6]/10 text-[#5856D6] rounded text-[8px] font-bold">
+                                  <Lock className="w-2 h-2" />PDA
+                                </span>
+                              </div>
+                            )}
+                            {hedge.commitmentHash && hedge.commitmentHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] uppercase tracking-wider text-[#5856D6]">ZK COMMITMENT:</span>
+                                <span className="font-mono text-[10px] text-[#86868b]">{hedge.commitmentHash.slice(0, 14)}...{hedge.commitmentHash.slice(-8)}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -994,6 +1063,54 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       </div>
                     </div>
 
+                    {/* ZK Privacy & Proxy Wallet Section */}
+                    {hedge.onChain && hedge.zkVerified && (
+                      <div className="mt-4 pt-4 border-t border-[#e8e8ed]">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-6 h-6 rounded-lg bg-[#5856D6]/10 flex items-center justify-center">
+                            <Shield className="w-3.5 h-3.5 text-[#5856D6]" />
+                          </div>
+                          <span className="text-[12px] font-semibold text-[#5856D6] uppercase tracking-wider">ZK Privacy Shield</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
+                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">Proxy Wallet (PDA)</div>
+                            {hedge.proxyWallet ? (
+                              <a
+                                href={`https://explorer.cronos.org/testnet/address/${hedge.proxyWallet}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[#007AFF] hover:underline"
+                              >
+                                <span className="font-mono text-[11px]">{hedge.proxyWallet.slice(0, 8)}...{hedge.proxyWallet.slice(-6)}</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            ) : (
+                              <span className="font-mono text-[11px] text-[#86868b]">Deriving...</span>
+                            )}
+                            <div className="text-[9px] text-[#86868b] mt-0.5">Funds held via ZK binding</div>
+                          </div>
+                          <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
+                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">ZK Verification</div>
+                            <div className="flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5 text-[#34C759]" />
+                              <span className="text-[12px] font-semibold text-[#34C759]">Verified</span>
+                            </div>
+                            <div className="text-[9px] text-[#86868b] mt-0.5">STARK proof on-chain</div>
+                          </div>
+                          <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
+                            <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">Withdraw Destination</div>
+                            {hedge.walletAddress ? (
+                              <span className="font-mono text-[11px] text-[#1d1d1f]">{hedge.walletAddress.slice(0, 8)}...{hedge.walletAddress.slice(-6)}</span>
+                            ) : (
+                              <span className="text-[11px] text-[#86868b]">Connected wallet</span>
+                            )}
+                            <div className="text-[9px] text-[#86868b] mt-0.5">Close returns funds here</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Footer */}
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#e8e8ed] text-[11px] text-[#86868b]">
                       <div className="flex items-center gap-4">
@@ -1001,15 +1118,26 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           <Clock className="w-3 h-3" />
                           <span>{new Date(hedge.openedAt).toLocaleString()}</span>
                         </div>
-                        <div>Capital: ${hedge.capitalUsed} USDC</div>
+                        <div>Capital: ${hedge.capitalUsed?.toLocaleString()} USDC</div>
                       </div>
-                      <button
-                        onClick={() => handleClosePosition(hedge)}
-                        disabled={closingPosition === hedge.id}
-                        className="px-3 py-1.5 bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#FF3B30] rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
-                      >
-                        {closingPosition === hedge.id ? 'Closing...' : 'Close Position'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {hedge.onChain && (
+                          <span className="text-[9px] text-[#5856D6] font-medium">
+                            <Lock className="w-2.5 h-2.5 inline mr-0.5" />Funds return to your wallet on close
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleClosePosition(hedge)}
+                          disabled={closingPosition === hedge.id}
+                          className="px-4 py-1.5 bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#FF3B30] rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {closingPosition === hedge.id ? (
+                            <><RefreshCw className="w-3 h-3 animate-spin" />Closing &amp; Withdrawing...</>
+                          ) : (
+                            <>{hedge.onChain ? '🔐 Close & Withdraw' : 'Close Position'}</>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -1370,6 +1498,33 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     Closing this position will lock in the current P/L. This action cannot be undone.
                   </p>
                 </div>
+
+                {selectedHedge.onChain && (
+                  <div className="p-3 bg-[#5856D6]/10 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-[#5856D6]" />
+                      <span className="text-[12px] font-semibold text-[#5856D6]">On-Chain Close &amp; Withdraw</span>
+                    </div>
+                    <p className="text-[11px] text-[#1d1d1f]">
+                      This will execute <code className="text-[10px] bg-[#5856D6]/10 px-1 py-0.5 rounded">closeHedge()</code> on the HedgeExecutor contract. 
+                      Your collateral {selectedHedge.pnl >= 0 ? '+ profit' : '- loss'} will be transferred directly back to your wallet.
+                    </p>
+                    {selectedHedge.proxyWallet && (
+                      <div className="flex items-center gap-1 text-[10px] text-[#86868b]">
+                        <span>Proxy:</span>
+                        <span className="font-mono">{selectedHedge.proxyWallet.slice(0, 10)}...{selectedHedge.proxyWallet.slice(-6)}</span>
+                        <span>→</span>
+                        <span>Your wallet</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#86868b]">Estimated return</span>
+                      <span className="font-semibold text-[#1d1d1f]">
+                        {Math.max(0, selectedHedge.capitalUsed + selectedHedge.pnl).toLocaleString()} USDC
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
@@ -1383,7 +1538,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   onClick={confirmClosePosition}
                   className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[15px] font-semibold transition-colors"
                 >
-                  Close Position
+                  {selectedHedge.onChain ? '🔐 Close & Withdraw' : 'Close Position'}
                 </button>
               </div>
             </motion.div>
