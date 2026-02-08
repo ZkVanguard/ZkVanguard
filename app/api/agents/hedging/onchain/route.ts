@@ -41,7 +41,7 @@ const FALLBACK_PRICES: Record<number, number> = {
  */
 async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, number>> {
   const prices: Record<number, number> = {};
-  const client = new MarketDataMCPClient();
+  const client = MarketDataMCPClient.getInstance();
   
   try {
     await client.connect();
@@ -64,8 +64,6 @@ async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, nu
     }
   } catch (err) {
     console.warn('Live price fetch failed, using fallbacks:', err instanceof Error ? err.message : err);
-  } finally {
-    await client.disconnect();
   }
   
   // Fill in any missing prices with fallbacks
