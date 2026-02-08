@@ -105,10 +105,22 @@ export async function POST(request: NextRequest) {
     const side = isLong ? 'LONG' : 'SHORT';
     console.log(`🔐 x402 Gasless openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | trader: ${trader}`);
 
-    // Use dynamic gas price
+    // Use dynamic gas price with gas estimation
     const feeData = await provider.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('1500', 'gwei');
-    const gasLimit = 2_000_000;
+    
+    // Estimate gas first, add 20% buffer (more efficient than hardcoded 2M)
+    let gasLimit = 1_200_000; // reasonable default
+    try {
+      const estimatedGas = await contract.openHedge.estimateGas(
+        pairIndex, collateralRaw, leverage, isLong, commitmentHash, nullifier, merkleRoot,
+        { value: ethers.parseEther('0.06') }
+      );
+      gasLimit = Math.ceil(Number(estimatedGas) * 1.2); // 20% buffer
+      console.log(`⛽ Estimated gas: ${estimatedGas} → using ${gasLimit} (with 20% buffer)`);
+    } catch {
+      console.log(`⛽ Gas estimation failed, using default ${gasLimit}`);
+    }
 
     // Calculate gas savings for the user
     const gasCostCRO = Number(ethers.formatEther(gasPrice * BigInt(gasLimit)));
