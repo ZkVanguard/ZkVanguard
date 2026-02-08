@@ -73,9 +73,13 @@ export async function POST(request: NextRequest) {
     // Execute on-chain closeHedge — this triggers fund withdrawal back to trader
     console.log(`Closing hedge on-chain: ${hedgeId.slice(0, 18)}... | ${PAIR_NAMES[pairIndex]} ${isLong ? 'LONG' : 'SHORT'} | ${collateral} USDC x${leverage}`);
 
+    // Use dynamic gas price based on current network conditions (fallback to 1500 gwei)
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice || ethers.parseUnits('1500', 'gwei');
+
     const tx = await contract.closeHedge(hedgeId, {
       gasLimit: 2_000_000,
-      gasPrice: ethers.parseUnits('5000', 'gwei'),
+      gasPrice,
     });
 
     const receipt = await tx.wait();
