@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
 
 // Contract addresses from deployment
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
+const ZK_PROXY_VAULT = '0x7F75Ca65D32752607fF481F453E4fbD45E61FdFd';
 const DEPLOYER = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';
 const RPC_URL = 'https://evm-t3.cronos.org';
 
@@ -44,9 +45,67 @@ const HEDGE_EXECUTOR_ABI = [
   'function totalCollateralLocked() view returns (uint256)',
   'function totalPnlRealized() view returns (int256)',
   'function accumulatedFees() view returns (uint256)',
+  // Events for tx hash lookup
+  'event HedgeOpened(bytes32 indexed hedgeId, address indexed trader, uint256 pairIndex, bool isLong, uint256 collateral, uint256 leverage, bytes32 commitmentHash)',
 ];
 
 const STATUS_NAMES = ['PENDING', 'ACTIVE', 'CLOSED', 'LIQUIDATED', 'CANCELLED'];
+
+// Derive ZK proxy wallet address (mirrors ZKProxyVault._deriveProxyAddress)
+function deriveProxyAddress(owner: string, nonce: number, zkBindingHash: string): string {
+  const packed = ethers.solidityPacked(
+    ['string', 'address', 'uint256', 'bytes32'],
+    ['CHRONOS_PDA_V1', owner, nonce, zkBindingHash]
+  );
+  const hash = ethers.keccak256(packed);
+  // Take last 20 bytes as address
+  return '0x' + hash.slice(-40);
+}
+
+// Fetch tx hashes from HedgeOpened event logs
+async function fetchTxHashes(
+  contract: ethers.Contract,
+  provider: ethers.JsonRpcProvider,
+  hedgeIds: string[]
+): Promise<Record<string, string>> {
+  const txHashMap: Record<string, string> = {};
+  try {
+    // Query HedgeOpened events using event topic
+    // Cronos testnet limits getLogs to 2000 blocks, so query in chunks
+    const hedgeOpenedTopic = ethers.id('HedgeOpened(bytes32,address,uint256,bool,uint256,uint256,bytes32)');
+    const contractAddress = await contract.getAddress();
+    const latestBlock = await provider.getBlockNumber();
+    
+    // Scan back in 2000-block chunks (up to ~50K blocks = ~2 days)
+    const MAX_SCAN_BLOCKS = 50000;
+    const CHUNK_SIZE = 2000;
+    const startBlock = Math.max(0, latestBlock - MAX_SCAN_BLOCKS);
+    
+    for (let from = startBlock; from <= latestBlock; from += CHUNK_SIZE) {
+      const to = Math.min(from + CHUNK_SIZE - 1, latestBlock);
+      try {
+        const logs = await provider.getLogs({
+          address: contractAddress,
+          topics: [hedgeOpenedTopic],
+          fromBlock: from,
+          toBlock: to,
+        });
+
+        for (const log of logs) {
+          const hedgeId = log.topics[1];
+          if (hedgeId && hedgeIds.includes(hedgeId)) {
+            txHashMap[hedgeId] = log.transactionHash;
+          }
+        }
+      } catch {
+        // Skip failed chunks silently
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch HedgeOpened events for tx hashes:', err instanceof Error ? err.message : err);
+  }
+  return txHashMap;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,13 +122,17 @@ export async function GET(request: NextRequest) {
     // Get all hedge IDs for this address
     const hedgeIds: string[] = await contract.getUserHedges(address);
 
+    // Fetch tx hashes from event logs in parallel with hedge details
+    const txHashMap = await fetchTxHashes(contract, provider, hedgeIds);
+
     // Fetch hedge details in small batches to respect RPC limits
     const BATCH_SIZE = 5;
     const hedgeDetails = [];
     for (let i = 0; i < hedgeIds.length; i += BATCH_SIZE) {
       const batch = hedgeIds.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(async (hedgeId: string) => {
+        batch.map(async (hedgeId: string, batchIndex: number) => {
+        const hedgeIndex = i + batchIndex;
         const h = await contract.hedges(hedgeId);
         const pairIndex = Number(h.pairIndex);
         const collateralAmount = Number(ethers.formatUnits(h.collateralAmount, 6));
@@ -79,8 +142,7 @@ export async function GET(request: NextRequest) {
         const entryPrice = MOCK_PRICES[pairIndex] || 1000;
 
         // Simulate current price with some movement for display
-        // In production this would come from Pyth/oracle
-        const priceMovement = (Math.sin(Number(h.openTimestamp) * 0.001) * 0.03); // ±3% movement
+        const priceMovement = (Math.sin(Number(h.openTimestamp) * 0.001) * 0.03);
         const currentPrice = entryPrice * (1 + priceMovement);
 
         // Calculate unrealized PnL
@@ -90,6 +152,13 @@ export async function GET(request: NextRequest) {
           ? positionSize * priceChange
           : positionSize * (-priceChange);
         const pnlPercent = (unrealizedPnl / collateralAmount) * 100;
+
+        // Derive ZK proxy wallet address for this hedge
+        const proxyWallet = deriveProxyAddress(
+          h.trader,
+          hedgeIndex,
+          h.commitmentHash
+        );
 
         return {
           hedgeId: hedgeId,
@@ -116,7 +185,9 @@ export async function GET(request: NextRequest) {
           closeTimestamp: Number(h.closeTimestamp),
           realizedPnl: Number(ethers.formatUnits(h.realizedPnl, 6)),
           createdAt: new Date(Number(h.openTimestamp) * 1000).toISOString(),
-          txHash: null, // Not stored in contract
+          txHash: txHashMap[hedgeId] || null,
+          proxyWallet,
+          proxyVault: ZK_PROXY_VAULT,
           zkVerified: h.commitmentHash !== ethers.ZeroHash,
           onChain: true,
           chain: 'cronos-testnet',
@@ -174,6 +245,7 @@ export async function GET(request: NextRequest) {
         unprofitable,
         details: activeHedges.map(h => ({
           orderId: h.orderId,
+          hedgeId: h.hedgeId,
           side: h.side,
           asset: h.asset,
           size: h.size,
@@ -187,6 +259,10 @@ export async function GET(request: NextRequest) {
           createdAt: h.createdAt,
           reason: `${h.leverage}x ${h.side} ${h.asset} on-chain hedge`,
           walletAddress: h.trader,
+          txHash: h.txHash,
+          proxyWallet: h.proxyWallet,
+          proxyVault: h.proxyVault,
+          commitmentHash: h.commitmentHash,
           zkVerified: h.zkVerified,
           onChain: true,
         })),
