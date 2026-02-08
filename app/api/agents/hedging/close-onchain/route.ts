@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const RPC_URL = 'https://evm-t3.cronos.org';
-const DEPLOYER_PK = process.env.DEPLOYER_PRIVATE_KEY || '0x7af57dd2889cb16393ff945b87a8ce670aea2950179c425a572059017636b18d';
+const DEPLOYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
 
 const HEDGE_EXECUTOR_ABI = [
   'function closeHedge(bytes32 hedgeId) external',

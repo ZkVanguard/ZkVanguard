@@ -18,6 +18,7 @@ export const dynamic = 'force-dynamic';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const ZK_PROXY_VAULT = '0x7F75Ca65D32752607fF481F453E4fbD45E61FdFd';
 const DEPLOYER = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';
+const RELAYER = '0xb61C1cF5152015E66d547F9c1c45cC592a870D10';
 const RPC_URL = 'https://evm-t3.cronos.org';
 
 // Pair names
@@ -161,8 +162,13 @@ export async function GET(request: NextRequest) {
     });
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
 
-    // Get all hedge IDs for this address
-    const hedgeIds: string[] = await contract.getUserHedges(address);
+    // Get all hedge IDs — merge deployer + relayer hedges (privacy relayer uses separate wallet)
+    const deployerHedges: string[] = await contract.getUserHedges(address);
+    const relayerHedges: string[] = address === DEPLOYER 
+      ? await contract.getUserHedges(RELAYER)
+      : [];
+    // Merge and deduplicate
+    const hedgeIds = [...new Set([...deployerHedges, ...relayerHedges])];
 
     // Fetch tx hashes from event logs in parallel with hedge details
     const txHashMap = await fetchTxHashes(contract, provider, hedgeIds);
