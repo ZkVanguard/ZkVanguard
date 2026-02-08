@@ -289,6 +289,7 @@ export function ManualHedgeModal({
         merkleRoot as `0x${string}`,
       ],
       value: ORACLE_FEE,
+      gas: 2_000_000n, // openHedge uses ~1.1M gas; explicit limit prevents estimation failures
     });
 
     setTxStep('open-confirming');

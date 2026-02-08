@@ -19,7 +19,7 @@ interface HedgePosition {
   capitalUsed: number;
   pnl: number;
   pnlPercent: number;
-  status: 'active' | 'closed' | 'triggered';
+  status: 'active' | 'closed' | 'triggered' | 'pending' | 'liquidated' | 'cancelled';
   openedAt: Date;
   closedAt?: Date;
   reason: string;
@@ -93,8 +93,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [executingRecommendation, setExecutingRecommendation] = useState<string | null>(null);
 
-  const activeHedges = useMemo(() => hedges.filter(h => h.status === 'active'), [hedges]);
-  const closedHedges = useMemo(() => hedges.filter(h => h.status === 'closed'), [hedges]);
+  const activeHedges = useMemo(() => hedges.filter(h => h.status === 'active' || h.status === 'pending'), [hedges]);
+  const closedHedges = useMemo(() => hedges.filter(h => h.status === 'closed' || h.status === 'liquidated' || h.status === 'cancelled'), [hedges]);
 
   const loadHedges = useCallback(async () => {
     if (processingRef.current) return;
