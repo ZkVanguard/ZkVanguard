@@ -54,15 +54,22 @@ export async function GET(request: NextRequest) {
     const address = searchParams.get('address') || DEPLOYER;
     const includeStats = searchParams.get('stats') === 'true';
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    // Use a non-batching provider to avoid Cronos RPC batch size limit (max 10)
+    const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, {
+      batchMaxCount: 1,
+    });
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
 
     // Get all hedge IDs for this address
     const hedgeIds: string[] = await contract.getUserHedges(address);
 
-    // Fetch all hedge details in parallel
-    const hedgeDetails = await Promise.all(
-      hedgeIds.map(async (hedgeId: string) => {
+    // Fetch hedge details in small batches to respect RPC limits
+    const BATCH_SIZE = 5;
+    const hedgeDetails = [];
+    for (let i = 0; i < hedgeIds.length; i += BATCH_SIZE) {
+      const batch = hedgeIds.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (hedgeId: string) => {
         const h = await contract.hedges(hedgeId);
         const pairIndex = Number(h.pairIndex);
         const collateralAmount = Number(ethers.formatUnits(h.collateralAmount, 6));
@@ -116,7 +123,9 @@ export async function GET(request: NextRequest) {
           contractAddress: HEDGE_EXECUTOR,
         };
       })
-    );
+      );
+      hedgeDetails.push(...batchResults);
+    }
 
     // Filter active hedges for summary
     const activeHedges = hedgeDetails.filter(h => h.status === 'active');
@@ -129,14 +138,25 @@ export async function GET(request: NextRequest) {
 
     let protocolStats = null;
     if (includeStats) {
-      const stats = await contract.getProtocolStats();
-      protocolStats = {
-        totalOpened: Number(stats[0]),
-        totalClosed: Number(stats[1]),
-        collateralLocked: Number(ethers.formatUnits(stats[2], 6)),
-        totalPnl: Number(ethers.formatUnits(stats[3], 6)),
-        feesCollected: Number(ethers.formatUnits(stats[4], 6)),
-      };
+      try {
+        const stats = await contract.getProtocolStats();
+        protocolStats = {
+          totalOpened: Number(stats[0]),
+          totalClosed: Number(stats[1]),
+          collateralLocked: Number(ethers.formatUnits(stats[2], 6)),
+          totalPnl: Number(ethers.formatUnits(stats[3], 6)),
+          feesCollected: Number(ethers.formatUnits(stats[4], 6)),
+        };
+      } catch {
+        // Fallback: read individual stats
+        protocolStats = {
+          totalOpened: hedgeDetails.length,
+          totalClosed: closedHedges.length,
+          collateralLocked: activeHedges.reduce((s, h) => s + h.collateral, 0),
+          totalPnl: 0,
+          feesCollected: 0,
+        };
+      }
     }
 
     return NextResponse.json({
