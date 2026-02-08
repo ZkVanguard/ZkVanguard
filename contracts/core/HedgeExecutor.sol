@@ -218,7 +218,8 @@ contract HedgeExecutor is
         bytes32 commitmentHash,
         bytes32 nullifier,
         bytes32 merkleRoot
-    ) external nonReentrant whenNotPaused returns (bytes32 hedgeId) {
+    ) external payable nonReentrant whenNotPaused returns (bytes32 hedgeId) {
+        require(msg.value >= 0.06 ether, "Insufficient oracle fee");
         // Validation
         require(collateralAmount >= minCollateral, "Below min collateral");
         require(leverage >= 2 && leverage <= maxLeverage, "Invalid leverage");
@@ -416,7 +417,8 @@ contract HedgeExecutor is
         bytes32 commitmentHash,
         bytes32 nullifier,
         bytes32 merkleRoot
-    ) external onlyRole(AGENT_ROLE) nonReentrant whenNotPaused returns (bytes32 hedgeId) {
+    ) external payable onlyRole(AGENT_ROLE) nonReentrant whenNotPaused returns (bytes32 hedgeId) {
+        require(msg.value >= 0.06 ether, "Insufficient oracle fee");
         require(collateralAmount >= minCollateral, "Below min collateral");
         require(leverage >= 2 && leverage <= maxLeverage, "Invalid leverage");
         require(!nullifierUsed[nullifier], "Nullifier already used");
