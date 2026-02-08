@@ -37,7 +37,7 @@ const FALLBACK_PRICES: Record<number, number> = {
 };
 
 // MockMoonlander contract — reads actual openPrice for each trade
-const MOCK_MOONLANDER = '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54';
+const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
 const MOONLANDER_ABI = [
   'function getTrade(address trader, uint256 pairIndex, uint256 tradeIndex) view returns (tuple(address trader, uint256 pairIndex, uint256 index, uint256 collateralAmount, uint256 positionSizeUsd, uint256 openPrice, bool isLong, uint256 leverage, uint256 tp, uint256 sl, bool isOpen))',
   'function mockPrices(uint256) view returns (uint256)',

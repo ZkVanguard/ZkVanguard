@@ -220,9 +220,9 @@ contract MockMoonlander {
         
         // Calculate return amount
         uint256 returnAmount = trade.collateralAmount;
-        if (pnl > 0) {
+        if (pnl >= 0) {
             returnAmount += uint256(pnl);
-        } else if (pnl < 0 && uint256(-pnl) < trade.collateralAmount) {
+        } else if (uint256(-pnl) < trade.collateralAmount) {
             returnAmount -= uint256(-pnl);
         } else {
             returnAmount = 0; // Liquidated
