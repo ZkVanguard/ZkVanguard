@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2 } from 'lucide-react';
+import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
@@ -159,6 +159,10 @@ export function ManualHedgeModal({
   const [txStep, setTxStep] = useState<TxStep>('idle');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<HedgeSuccess | null>(null);
+
+  // ── x402 Gasless mode toggle ──────────────────────────────────
+  const [useGasless, setUseGasless] = useState(true); // Default to gasless
+  const [gaslessSavings, setGaslessSavings] = useState<string | null>(null);
 
   // Store collateral for use in proceedToOpenHedge
   const [pendingCollateral, setPendingCollateral] = useState<string>('10');
@@ -353,8 +357,129 @@ export function ManualHedgeModal({
     }
   }, [openError]);
 
+  // ── x402 Gasless create handler ────────────────────────────────
+  const handleGaslessCreate = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!address) {
+      setError('Please connect your wallet first');
+      return;
+    }
+
+    const collateralAmount = parseFloat(collateralInput);
+    if (!collateralInput || !entryPrice || !targetPrice || !stopLoss) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    if (collateralAmount < 1) { setError('Minimum collateral is 1 USDC'); return; }
+    if (leverage < 2 || leverage > 100) { setError('Leverage must be between 2x and 100x'); return; }
+
+    const balNum = parseFloat(usdcBalance);
+    if (balNum < collateralAmount) {
+      setError(`Insufficient MockUSDC. Have ${balNum.toLocaleString()}, need ${collateralAmount.toLocaleString()}. Mint more below.`);
+      return;
+    }
+
+    setPendingCollateral(collateralInput);
+    setTxStep('checking');
+
+    // Step 1: Ensure approval (still requires wallet signature — but no gas for the hedge itself)
+    const requiredAmount = parseUnits(collateralInput, 6);
+    if (currentAllowance < requiredAmount) {
+      setTxStep('approving');
+      writeApprove({
+        address: MOCK_USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [HEDGE_EXECUTOR_ADDRESS, requiredAmount],
+      });
+      setTxStep('approve-confirming');
+      // After approval confirms, the useEffect will call handleGaslessOpen
+      return;
+    }
+
+    // Step 2: Call gasless server API
+    await handleGaslessOpen();
+  };
+
+  const handleGaslessOpen = async () => {
+    try {
+      setTxStep('opening');
+
+      const pairIndex = PAIR_INDEX[asset] ?? 0;
+      const isLong = hedgeType === 'LONG';
+
+      logger.info('Opening hedge via x402 gasless', {
+        component: 'ManualHedgeModal',
+        data: { pairIndex, collateral: pendingCollateral, leverage, isLong, gasless: true },
+      });
+
+      const res = await fetch('/api/agents/hedging/open-onchain-gasless', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pairIndex,
+          collateralAmount: pendingCollateral,
+          leverage,
+          isLong,
+          walletAddress: address,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setError(data.error || 'Gasless hedge creation failed');
+        setTxStep('error');
+        return;
+      }
+
+      setTxStep('done');
+      setGaslessSavings(data.gasSavings?.totalSaved || '$0.00');
+
+      setSuccess({
+        hedgeId: data.hedgeId,
+        txHash: data.txHash,
+        asset,
+        hedgeType,
+        collateral: pendingCollateral,
+        leverage,
+        entryPrice: entryPrice || '0',
+      });
+
+      trackSuccessfulTransaction({
+        hash: data.txHash,
+        type: 'hedge',
+        from: address || 'unknown',
+        to: HEDGE_EXECUTOR_ADDRESS,
+        value: parseFloat(pendingCollateral).toFixed(2),
+        tokenSymbol: 'USDC',
+        description: `⚡ x402 Gasless ${hedgeType} ${asset} hedge — ${pendingCollateral} USDC × ${leverage}x`,
+      });
+
+      window.dispatchEvent(new Event('hedgeAdded'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gasless request failed');
+      setTxStep('error');
+    }
+  };
+
+  // ── Handle approve confirmed for gasless mode ─────────────────
+  useEffect(() => {
+    if (isApproveConfirmed && txStep === 'approve-confirming' && useGasless) {
+      logger.info('Approval confirmed, proceeding to gasless open', { component: 'ManualHedgeModal' });
+      handleGaslessOpen();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isApproveConfirmed, txStep, useGasless]);
+
   // ── Main create handler ───────────────────────────────────────
   const handleCreate = async () => {
+    if (useGasless) {
+      return handleGaslessCreate();
+    }
+
     setError(null);
     setSuccess(null);
     resetApprove();
@@ -533,7 +658,7 @@ export function ManualHedgeModal({
                       {success ? 'Hedge Created On-Chain' : 'Create On-Chain Hedge'}
                     </h2>
                     <p className="text-[13px] text-[#86868b]">
-                      {success ? 'Confirmed on Cronos Testnet' : 'Sign with your wallet — on-chain execution'}
+                      {success ? (gaslessSavings ? 'x402 Gasless — Confirmed on Cronos' : 'Confirmed on Cronos Testnet') : (useGasless ? 'x402 Gasless — zero gas fees' : 'Sign with your wallet — on-chain execution')}
                     </p>
                   </div>
                 </div>
@@ -553,6 +678,12 @@ export function ManualHedgeModal({
                     <p className="text-[13px] text-[#86868b] text-center">
                       Your {success.hedgeType} position on {success.asset} is live on the blockchain
                     </p>
+                    {gaslessSavings && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#AF52DE]/10 rounded-full mt-2">
+                        <Zap className="w-3.5 h-3.5 text-[#AF52DE]" />
+                        <span className="text-[11px] font-semibold text-[#AF52DE]">x402 Gasless — You saved {gaslessSavings} in gas!</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* On-Chain Badge */}
@@ -652,6 +783,35 @@ export function ManualHedgeModal({
                       </div>
                     </div>
                   )}
+
+                  {/* x402 Gasless Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setUseGasless(!useGasless)}
+                    disabled={isBusy}
+                    className={`w-full flex items-center justify-between p-3 rounded-[12px] border-2 transition-all ${
+                      useGasless
+                        ? 'border-[#AF52DE] bg-[#AF52DE]/5'
+                        : 'border-[#e8e8ed] bg-[#f5f5f7] hover:border-[#AF52DE]/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap className={`w-4 h-4 ${useGasless ? 'text-[#AF52DE]' : 'text-[#86868b]'}`} />
+                      <div className="text-left">
+                        <span className={`text-[13px] font-semibold ${useGasless ? 'text-[#AF52DE]' : 'text-[#1d1d1f]'}`}>
+                          x402 Gasless Mode
+                        </span>
+                        <p className="text-[11px] text-[#86868b]">
+                          {useGasless ? 'Zero gas fees — server relays your transaction' : 'You pay gas from your CRO balance'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full transition-all flex items-center ${
+                      useGasless ? 'bg-[#AF52DE] justify-end' : 'bg-[#e8e8ed] justify-start'
+                    }`}>
+                      <div className="w-5 h-5 bg-white rounded-full shadow-sm mx-0.5" />
+                    </div>
+                  </button>
 
                   {/* Wallet + Balance Bar */}
                   <div className="flex items-center gap-2 p-3 bg-[#f5f5f7] rounded-[12px]">
@@ -883,12 +1043,12 @@ export function ManualHedgeModal({
                           <Loader2 className="w-4 h-4 animate-spin" />
                           {txStep === 'approving' || txStep === 'approve-confirming'
                             ? 'Approving...'
-                            : 'Creating...'}
+                            : useGasless ? 'Creating (Gasless)...' : 'Creating...'}
                         </>
                       ) : (
                         <>
-                          <Shield className="w-4 h-4" />
-                          Create On-Chain Hedge
+                          {useGasless ? <Zap className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                          {useGasless ? '⚡ Create Gasless Hedge' : 'Create On-Chain Hedge'}
                         </>
                       )}
                     </button>

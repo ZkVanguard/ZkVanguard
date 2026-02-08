@@ -314,14 +314,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           const data = await response.json();
           
           if (response.ok && data.success) {
-            logger.info('✅ Hedge closed on-chain, funds withdrawn', { component: 'ActiveHedges', data: {
+            logger.info('✅ Hedge closed on-chain via x402 gasless, funds withdrawn', { component: 'ActiveHedges', data: {
               txHash: data.txHash,
               fundsReturned: data.fundsReturned,
               withdrawTo: data.withdrawalDestination,
+              gasless: data.gasless,
+              gasSaved: data.gasSavings?.totalSaved,
             }});
             
-            // Show success notification
-            alert(`✅ Hedge closed!\n\n${data.fundsReturned > 0 ? `${data.fundsReturned} USDC returned to your wallet` : 'Position liquidated'}\nPnL: ${data.realizedPnl} USDC\nTx: ${data.txHash?.slice(0, 16)}...`);
+            // Show success notification with gas savings
+            const gasInfo = data.gasless ? `\n⚡ x402 Gasless — You paid $0.00 gas (saved ${data.gasSavings?.totalSaved || '~$0.15'})` : '';
+            alert(`✅ Hedge closed!\n\n${data.fundsReturned > 0 ? `${data.fundsReturned} USDC returned to your wallet` : 'Position liquidated'}\nPnL: ${data.realizedPnl} USDC\nTx: ${data.txHash?.slice(0, 16)}...${gasInfo}`);
             
             // Remove from local state
             setHedges(prev => prev.filter(h => h.id !== selectedHedge.id));
@@ -1134,7 +1137,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           {closingPosition === hedge.id ? (
                             <><RefreshCw className="w-3 h-3 animate-spin" />Closing &amp; Withdrawing...</>
                           ) : (
-                            <>{hedge.onChain ? '🔐 Close & Withdraw' : 'Close Position'}</>
+                            <>{hedge.onChain ? '⚡ Close & Withdraw (Gasless)' : 'Close Position'}</>
                           )}
                         </button>
                       </div>
@@ -1500,14 +1503,14 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                 </div>
 
                 {selectedHedge.onChain && (
-                  <div className="p-3 bg-[#5856D6]/10 rounded-xl space-y-2">
+                  <div className="p-3 bg-[#AF52DE]/10 rounded-xl space-y-2">
                     <div className="flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-[#5856D6]" />
-                      <span className="text-[12px] font-semibold text-[#5856D6]">On-Chain Close &amp; Withdraw</span>
+                      <Lock className="w-4 h-4 text-[#AF52DE]" />
+                      <span className="text-[12px] font-semibold text-[#AF52DE]">⚡ x402 Gasless Close &amp; Withdraw</span>
                     </div>
                     <p className="text-[11px] text-[#1d1d1f]">
-                      This will execute <code className="text-[10px] bg-[#5856D6]/10 px-1 py-0.5 rounded">closeHedge()</code> on the HedgeExecutor contract. 
-                      Your collateral {selectedHedge.pnl >= 0 ? '+ profit' : '- loss'} will be transferred directly back to your wallet.
+                      This will execute <code className="text-[10px] bg-[#AF52DE]/10 px-1 py-0.5 rounded">closeHedge()</code> via x402 gasless relay. 
+                      Your collateral {selectedHedge.pnl >= 0 ? '+ profit' : '- loss'} will be transferred directly back to your wallet — <strong>zero gas fees</strong>.
                     </p>
                     {selectedHedge.proxyWallet && (
                       <div className="flex items-center gap-1 text-[10px] text-[#86868b]">
@@ -1522,6 +1525,10 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       <span className="font-semibold text-[#1d1d1f]">
                         {Math.max(0, selectedHedge.capitalUsed + selectedHedge.pnl).toLocaleString()} USDC
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#86868b]">Gas cost to you</span>
+                      <span className="font-semibold text-[#34C759]">$0.00 ✅</span>
                     </div>
                   </div>
                 )}
@@ -1538,7 +1545,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   onClick={confirmClosePosition}
                   className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[15px] font-semibold transition-colors"
                 >
-                  {selectedHedge.onChain ? '🔐 Close & Withdraw' : 'Close Position'}
+                  {selectedHedge.onChain ? '⚡ Close & Withdraw (Gasless)' : 'Close Position'}
                 </button>
               </div>
             </motion.div>
