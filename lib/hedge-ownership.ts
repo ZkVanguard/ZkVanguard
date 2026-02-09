@@ -83,45 +83,15 @@ export async function registerHedgeOwnership(
  * Look up the wallet that owns a hedge.
  * Accepts either commitmentHash or hedge_id_onchain (both are valid lookup keys).
  * Returns null if the hedge isn't in the registry.
+ * 
+ * IMPORTANT: Check hedge_ownership table FIRST (has correct owner for gasless hedges),
+ * then fall back to hedges table (which may have relayer address for gasless hedges).
  */
 export async function getHedgeOwner(hedgeIdOrCommitment: string): Promise<HedgeOwnershipEntry | null> {
   try {
     const lookupValue = hedgeIdOrCommitment.toLowerCase();
 
-    // First check hedges table by commitment_hash OR hedge_id_onchain
-    const hedge = await queryOne<{
-      wallet_address: string;
-      asset: string;
-      side: string;
-      size: number;
-      leverage: number;
-      created_at: Date;
-      tx_hash: string;
-      hedge_id_onchain: string;
-      commitment_hash: string;
-    }>(
-      `SELECT wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain, commitment_hash
-       FROM hedges 
-       WHERE commitment_hash = $1 OR hedge_id_onchain = $1`,
-      [lookupValue]
-    );
-
-    if (hedge && hedge.wallet_address) {
-      return {
-        walletAddress: hedge.wallet_address,
-        pairIndex: 0, // Could derive from asset
-        asset: hedge.asset,
-        side: hedge.side,
-        collateral: hedge.size,
-        leverage: hedge.leverage,
-        openedAt: hedge.created_at.toISOString(),
-        txHash: hedge.tx_hash || '',
-        onChainHedgeId: hedge.hedge_id_onchain || undefined,
-        commitmentHash: hedge.commitment_hash || undefined
-      };
-    }
-
-    // Fall back to dedicated hedge_ownership table
+    // FIRST check dedicated hedge_ownership table (has correct owner for gasless hedges)
     const ownership = await queryOne<{
       wallet_address: string;
       pair_index: number;
@@ -152,6 +122,39 @@ export async function getHedgeOwner(hedgeIdOrCommitment: string): Promise<HedgeO
         txHash: ownership.tx_hash || '',
         onChainHedgeId: ownership.on_chain_hedge_id || undefined,
         commitmentHash: ownership.commitment_hash || undefined
+      };
+    }
+
+    // Fall back to hedges table (for legacy non-gasless hedges)
+    const hedge = await queryOne<{
+      wallet_address: string;
+      asset: string;
+      side: string;
+      size: number;
+      leverage: number;
+      created_at: Date;
+      tx_hash: string;
+      hedge_id_onchain: string;
+      commitment_hash: string;
+    }>(
+      `SELECT wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain, commitment_hash
+       FROM hedges 
+       WHERE commitment_hash = $1 OR hedge_id_onchain = $1`,
+      [lookupValue]
+    );
+
+    if (hedge && hedge.wallet_address) {
+      return {
+        walletAddress: hedge.wallet_address,
+        pairIndex: 0, // Could derive from asset
+        asset: hedge.asset,
+        side: hedge.side,
+        collateral: hedge.size,
+        leverage: hedge.leverage,
+        openedAt: hedge.created_at.toISOString(),
+        txHash: hedge.tx_hash || '',
+        onChainHedgeId: hedge.hedge_id_onchain || undefined,
+        commitmentHash: hedge.commitment_hash || undefined
       };
     }
 
