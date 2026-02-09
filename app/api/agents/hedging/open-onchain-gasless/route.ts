@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
     } catch { /* parsing failed, use commitmentHash */ }
 
     // Register hedge ownership for signature-verified close
-    registerHedgeOwnership(commitmentHash, {
+    await registerHedgeOwnership(commitmentHash, {
       walletAddress: userWallet,
       pairIndex,
       asset,

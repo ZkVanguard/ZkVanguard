@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // ── Signature verification ──────────────────────────────────────
     // Look up who owns this hedge
-    const ownerEntry = getHedgeOwner(hedgeId);
+    const ownerEntry = await getHedgeOwner(hedgeId);
 
     if (ownerEntry) {
       // Hedge has a registered owner → require EIP-712 signature
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
     const elapsed = Date.now() - startTime;
 
     // Remove from ownership registry (hedge is now closed)
-    removeHedgeOwnership(hedgeId);
+    await removeHedgeOwnership(hedgeId);
 
     // ═══ DB UPDATE: Persist closed status to Neon ═══
     try {

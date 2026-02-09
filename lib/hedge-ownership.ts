@@ -2,8 +2,7 @@
  * On-Chain Hedge Ownership Registry
  * 
  * Maps commitmentHash (used as hedgeId in the gasless flow) → user walletAddress.
- * Persisted as a JSON file so the close API can verify the caller truly owns the hedge
- * without relying on the on-chain trader field (which is the relayer in ZK-private mode).
+ * Now backed by Neon PostgreSQL instead of filesystem for serverless compatibility.
  * 
  * Security model:
  *  - On OPEN: walletAddress is recorded against the hedgeId
@@ -11,10 +10,7 @@
  *  - The relayer never reveals user wallets on-chain, but the API can verify ownership off-chain
  */
 
-import fs from 'fs';
-import path from 'path';
-
-const REGISTRY_PATH = path.join(process.cwd(), 'deployments', 'hedge-ownership.json');
+import { query, queryOne } from './db/postgres';
 
 export interface HedgeOwnershipEntry {
   walletAddress: string;
@@ -28,67 +24,229 @@ export interface HedgeOwnershipEntry {
   onChainHedgeId?: string; // bytes32 from HedgeExecutor events, if available
 }
 
-type OwnershipRegistry = Record<string, HedgeOwnershipEntry>;
-
-function loadRegistry(): OwnershipRegistry {
-  try {
-    if (fs.existsSync(REGISTRY_PATH)) {
-      return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
-    }
-  } catch {
-    console.warn('⚠️ Could not load hedge ownership registry, starting fresh');
-  }
-  return {};
-}
-
-function saveRegistry(registry: OwnershipRegistry): void {
-  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2));
-}
-
 /**
  * Register hedge ownership when a gasless hedge is opened.
  * Called by the open-onchain-gasless route after successful tx.
+ * 
+ * Now stores in Neon DB instead of filesystem.
  */
-export function registerHedgeOwnership(
+export async function registerHedgeOwnership(
   commitmentHash: string,
   entry: HedgeOwnershipEntry
-): void {
-  const registry = loadRegistry();
-  registry[commitmentHash.toLowerCase()] = entry;
-  saveRegistry(registry);
-  console.log(`🔑 Registered hedge ownership: ${commitmentHash.slice(0, 18)}... → ${entry.walletAddress}`);
+): Promise<void> {
+  try {
+    // Try to update existing hedge first, then insert if not found
+    const result = await query<{ id: number }>(
+      `UPDATE hedges 
+       SET wallet_address = $1, 
+           tx_hash = $2,
+           hedge_id_onchain = $3,
+           updated_at = NOW()
+       WHERE commitment_hash = $4
+       RETURNING id`,
+      [entry.walletAddress, entry.txHash, entry.onChainHedgeId, commitmentHash.toLowerCase()]
+    );
+
+    if (result.length === 0) {
+      // Insert new ownership record into hedge_ownership table
+      await query(
+        `INSERT INTO hedge_ownership (commitment_hash, wallet_address, pair_index, asset, side, collateral, leverage, opened_at, tx_hash, on_chain_hedge_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (commitment_hash) DO UPDATE SET
+           wallet_address = EXCLUDED.wallet_address,
+           tx_hash = EXCLUDED.tx_hash,
+           on_chain_hedge_id = EXCLUDED.on_chain_hedge_id,
+           updated_at = NOW()`,
+        [
+          commitmentHash.toLowerCase(),
+          entry.walletAddress,
+          entry.pairIndex,
+          entry.asset,
+          entry.side,
+          entry.collateral,
+          entry.leverage,
+          entry.openedAt,
+          entry.txHash,
+          entry.onChainHedgeId
+        ]
+      );
+    }
+    console.log(`🔑 Registered hedge ownership: ${commitmentHash.slice(0, 18)}... → ${entry.walletAddress}`);
+  } catch (error) {
+    console.error('Failed to register hedge ownership:', error);
+    // Don't throw - ownership registration is non-critical
+  }
 }
 
 /**
  * Look up the wallet that owns a hedge.
- * Returns null if the hedge isn't in the registry (e.g., opened before this feature).
+ * Returns null if the hedge isn't in the registry.
  */
-export function getHedgeOwner(commitmentHash: string): HedgeOwnershipEntry | null {
-  const registry = loadRegistry();
-  return registry[commitmentHash.toLowerCase()] ?? null;
+export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwnershipEntry | null> {
+  try {
+    // First check hedges table
+    const hedge = await queryOne<{
+      wallet_address: string;
+      asset: string;
+      side: string;
+      size: number;
+      leverage: number;
+      created_at: Date;
+      tx_hash: string;
+      hedge_id_onchain: string;
+    }>(
+      `SELECT wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain
+       FROM hedges 
+       WHERE commitment_hash = $1`,
+      [commitmentHash.toLowerCase()]
+    );
+
+    if (hedge && hedge.wallet_address) {
+      return {
+        walletAddress: hedge.wallet_address,
+        pairIndex: 0, // Could derive from asset
+        asset: hedge.asset,
+        side: hedge.side,
+        collateral: hedge.size,
+        leverage: hedge.leverage,
+        openedAt: hedge.created_at.toISOString(),
+        txHash: hedge.tx_hash || '',
+        onChainHedgeId: hedge.hedge_id_onchain || undefined
+      };
+    }
+
+    // Fall back to dedicated hedge_ownership table
+    const ownership = await queryOne<{
+      wallet_address: string;
+      pair_index: number;
+      asset: string;
+      side: string;
+      collateral: number;
+      leverage: number;
+      opened_at: string;
+      tx_hash: string;
+      on_chain_hedge_id: string;
+    }>(
+      `SELECT wallet_address, pair_index, asset, side, collateral, leverage, opened_at, tx_hash, on_chain_hedge_id
+       FROM hedge_ownership 
+       WHERE commitment_hash = $1`,
+      [commitmentHash.toLowerCase()]
+    );
+
+    if (ownership) {
+      return {
+        walletAddress: ownership.wallet_address,
+        pairIndex: ownership.pair_index,
+        asset: ownership.asset,
+        side: ownership.side,
+        collateral: ownership.collateral,
+        leverage: ownership.leverage,
+        openedAt: ownership.opened_at,
+        txHash: ownership.tx_hash || '',
+        onChainHedgeId: ownership.on_chain_hedge_id || undefined
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Failed to get hedge owner:', error);
+    return null;
+  }
 }
 
 /**
  * Remove a hedge from the registry (called after successful close).
  */
-export function removeHedgeOwnership(commitmentHash: string): void {
-  const registry = loadRegistry();
-  delete registry[commitmentHash.toLowerCase()];
-  saveRegistry(registry);
+export async function removeHedgeOwnership(commitmentHash: string): Promise<void> {
+  try {
+    await query(
+      `DELETE FROM hedge_ownership WHERE commitment_hash = $1`,
+      [commitmentHash.toLowerCase()]
+    );
+  } catch (error) {
+    console.error('Failed to remove hedge ownership:', error);
+  }
 }
 
 /**
  * Get all hedges owned by a wallet address.
  */
-export function getHedgesByWallet(walletAddress: string): Record<string, HedgeOwnershipEntry> {
-  const registry = loadRegistry();
+export async function getHedgesByWallet(walletAddress: string): Promise<Record<string, HedgeOwnershipEntry>> {
   const result: Record<string, HedgeOwnershipEntry> = {};
-  const normalized = walletAddress.toLowerCase();
-  for (const [hash, entry] of Object.entries(registry)) {
-    if (entry.walletAddress.toLowerCase() === normalized) {
-      result[hash] = entry;
+  
+  try {
+    // Get from hedges table
+    const hedges = await query<{
+      commitment_hash: string;
+      wallet_address: string;
+      asset: string;
+      side: string;
+      size: number;
+      leverage: number;
+      created_at: Date;
+      tx_hash: string;
+      hedge_id_onchain: string;
+    }>(
+      `SELECT commitment_hash, wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain
+       FROM hedges 
+       WHERE LOWER(wallet_address) = LOWER($1) AND commitment_hash IS NOT NULL`,
+      [walletAddress]
+    );
+
+    for (const h of hedges) {
+      if (h.commitment_hash) {
+        result[h.commitment_hash] = {
+          walletAddress: h.wallet_address,
+          pairIndex: 0,
+          asset: h.asset,
+          side: h.side,
+          collateral: h.size,
+          leverage: h.leverage,
+          openedAt: h.created_at.toISOString(),
+          txHash: h.tx_hash || '',
+          onChainHedgeId: h.hedge_id_onchain || undefined
+        };
+      }
     }
+
+    // Also get from hedge_ownership table
+    const ownership = await query<{
+      commitment_hash: string;
+      wallet_address: string;
+      pair_index: number;
+      asset: string;
+      side: string;
+      collateral: number;
+      leverage: number;
+      opened_at: string;
+      tx_hash: string;
+      on_chain_hedge_id: string;
+    }>(
+      `SELECT commitment_hash, wallet_address, pair_index, asset, side, collateral, leverage, opened_at, tx_hash, on_chain_hedge_id
+       FROM hedge_ownership 
+       WHERE LOWER(wallet_address) = LOWER($1)`,
+      [walletAddress]
+    );
+
+    for (const o of ownership) {
+      if (!result[o.commitment_hash]) {
+        result[o.commitment_hash] = {
+          walletAddress: o.wallet_address,
+          pairIndex: o.pair_index,
+          asset: o.asset,
+          side: o.side,
+          collateral: o.collateral,
+          leverage: o.leverage,
+          openedAt: o.opened_at,
+          txHash: o.tx_hash || '',
+          onChainHedgeId: o.on_chain_hedge_id || undefined
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get hedges by wallet:', error);
   }
+
   return result;
 }
 
