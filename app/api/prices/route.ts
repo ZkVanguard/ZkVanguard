@@ -33,6 +33,8 @@ export async function GET(request: NextRequest) {
           })),
           source: 'cryptocom-exchange',
           timestamp: new Date().toISOString(),
+        }, {
+          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
         });
       } else {
         // Use fallback system (auto)
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest) {
           })),
           source: 'multi-source-fallback',
           timestamp: new Date().toISOString(),
+        }, {
+          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
         });
       }
     }
@@ -98,6 +102,8 @@ export async function GET(request: NextRequest) {
         },
         source: 'multi-source-fallback',
         timestamp: new Date().toISOString(),
+      }, {
+        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
       });
     }
   } catch (error: unknown) {

@@ -64,35 +64,34 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Fetch transactions for platform contracts
+    // Fetch transactions for platform contracts (in parallel)
     if (contracts) {
       const contractList = contracts.split(',');
-      for (const contractAddr of contractList.slice(0, 5)) { // Limit to 5 contracts
-        try {
+      const contractResults = await Promise.allSettled(
+        contractList.slice(0, 5).map(async (contractAddr) => {
           const contractUrl = `${baseUrl}?module=account&action=txlist&address=${contractAddr.trim()}&page=1&offset=20&sort=desc`;
           logger.info(`[Cronos Explorer Proxy] Fetching contract txs: ${contractUrl}`);
-          
           const response = await fetch(contractUrl, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
             signal: AbortSignal.timeout(10000),
           });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.result && Array.isArray(data.result)) {
-              // Filter to only include txs involving the user (if address provided)
-              const relevantTxs = address
-                ? data.result.filter((tx: BlockscoutTransaction) => 
-                    tx.from?.toLowerCase() === address.toLowerCase() ||
-                    tx.to?.toLowerCase() === address.toLowerCase()
-                  )
-                : data.result;
-              allResults.push(...relevantTxs);
-            }
-          }
-        } catch (e) {
-          logger.warn(`[Cronos Explorer Proxy] Contract ${contractAddr} fetch failed`, { error: e instanceof Error ? e.message : String(e) });
+          if (!response.ok) return [];
+          const data = await response.json();
+          if (!data.result || !Array.isArray(data.result)) return [];
+          return address
+            ? data.result.filter((tx: BlockscoutTransaction) =>
+                tx.from?.toLowerCase() === address.toLowerCase() ||
+                tx.to?.toLowerCase() === address.toLowerCase()
+              )
+            : data.result;
+        })
+      );
+      for (const result of contractResults) {
+        if (result.status === 'fulfilled') {
+          allResults.push(...result.value);
+        } else {
+          logger.warn(`[Cronos Explorer Proxy] Contract fetch failed`, { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
         }
       }
     }

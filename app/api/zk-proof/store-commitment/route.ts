@@ -104,7 +104,10 @@ export async function POST(request: NextRequest) {
         const merkleRootBytes = ethers.isHexString(merkleRoot) ? merkleRoot : ethers.hexlify(ethers.toUtf8Bytes(String(merkleRoot))).padEnd(66, '0');
 
         const tx = await contract.storeCommitmentWithUSDC(proofHashBytes, merkleRootBytes, BigInt(securityLevel || 521));
-        const receipt = await tx.wait();
+        const receipt = await Promise.race([
+          tx.wait(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('tx.wait() timed out after 60s')), 60000)),
+        ]) as Awaited<ReturnType<typeof tx.wait>>;
 
         return NextResponse.json({
           success: true,

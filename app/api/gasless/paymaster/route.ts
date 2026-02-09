@@ -249,7 +249,10 @@ async function handleExecute(body: {
     { gasLimit: 300000 }
   );
 
-  const receipt = await tx.wait();
+  const receipt = await Promise.race([
+    tx.wait(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('tx.wait() timed out after 60s')), 60000)),
+  ]) as Awaited<ReturnType<typeof tx.wait>>;
 
   logger.info('✅ Gasless transaction relayed', {
     txHash: receipt.hash,

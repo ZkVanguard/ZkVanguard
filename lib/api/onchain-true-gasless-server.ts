@@ -137,7 +137,10 @@ export async function storeCommitmentTrueGaslessServerSide(
 
     // Call contract to store commitment (uses server wallet, but contract sponsors gas via USDC payment)
     const tx = await contract.storeCommitmentWithUSDC(proofHash, merkleRoot, securityLevel);
-    const receipt = await tx.wait();
+    const receipt = await Promise.race([
+      tx.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('tx.wait() timed out after 60s')), 60000)),
+    ]) as Awaited<ReturnType<typeof tx.wait>>;
 
     logger.info('✅ Commitment stored on-chain!', {
       txHash: receipt.hash,

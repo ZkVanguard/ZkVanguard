@@ -10,6 +10,15 @@ import { logger } from '@/lib/utils/logger';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: ${label} exceeded ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export interface PortfolioActionRequest {
   portfolioId: number;
   currentValue: number;
@@ -172,7 +181,37 @@ REASON1: [include prediction market insight if available]
 REASON2: [portfolio metric based reason]
 REASON3: [risk/opportunity assessment]`;
 
-    const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, systemPrompt);
+    let aiResponse: { content: string; model: string };
+    try {
+      aiResponse = await withTimeout(
+        llmProvider.generateDirectResponse(aiPrompt, systemPrompt),
+        20000,
+        'LLM generateDirectResponse'
+      );
+    } catch (timeoutErr) {
+      logger.warn('LLM call timed out, using rule-based fallback', { error: timeoutErr });
+      // Rule-based fallback decision
+      if (riskScore > riskTolerance && highRiskPredictions.length > 0) {
+        action = 'HEDGE';
+        confidence = 0.7;
+      } else if (riskScore > riskTolerance + 20) {
+        action = 'WITHDRAW';
+        confidence = 0.65;
+      } else if (riskScore < 30 && sentiment === 'bullish') {
+        action = 'ADD_FUNDS';
+        confidence = 0.6;
+      } else {
+        action = 'HOLD';
+        confidence = 0.6;
+      }
+      reasoning.push(`🤖 Rule-based: ${action} (AI timed out) based on risk ${riskScore}/100`);
+      reasoning.push(`🤖 Sentiment: ${sentiment}, volatility: ${(volatility * 100).toFixed(1)}%`);
+      if (highRiskPredictions.length > 0) {
+        reasoning.push(`🤖 ${highRiskPredictions.length} hedge signal(s) from prediction markets`);
+      }
+      // Skip AI parsing, jump to recommendations
+      aiResponse = { content: '', model: 'rule-based-fallback' };
+    }
     
     logger.info('🤖 AI Response received', { 
       model: aiResponse.model, 
@@ -181,7 +220,8 @@ REASON3: [risk/opportunity assessment]`;
       predictionsUsed: predictions.length,
     });
 
-    // Parse AI response for action
+    // Parse AI response for action (skip if rule-based fallback was used)
+    if (aiResponse.content.length > 0) {
     const content = aiResponse.content.toUpperCase();
     const actionMatch = content.match(/ACTION:\s*(HOLD|ADD_FUNDS|WITHDRAW|HEDGE)/i);
     if (actionMatch) {
@@ -247,6 +287,7 @@ REASON3: [risk/opportunity assessment]`;
         reasoning.push(`🤖 No critical market signals requiring immediate action`);
       }
     }
+    } // end AI content parsing
 
     logger.info('🤖 AI portfolio decision complete', { 
       action, 

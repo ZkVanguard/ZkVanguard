@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // All active hedges with PnL
+    // All active hedges with PnL (limited to 50 to avoid N+1 explosion)
     let hedges;
     if (walletAddress) {
       hedges = await getActiveHedgesByWallet(walletAddress);
@@ -83,14 +83,18 @@ export async function GET(request: NextRequest) {
       hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId) : undefined);
     }
     
+    // Cap at 50 hedges to prevent excessive API calls
+    const limitedHedges = hedges.slice(0, 50);
     const pnlUpdates = await Promise.all(
-      hedges.map(hedge => hedgePnLTracker.getHedgePnL(hedge))
+      limitedHedges.map(hedge => hedgePnLTracker.getHedgePnL(hedge))
     );
 
     return NextResponse.json({
       success: true,
       hedges: pnlUpdates,
       count: pnlUpdates.length,
+      total: hedges.length,
+      truncated: hedges.length > 50,
     });
 
   } catch (error) {

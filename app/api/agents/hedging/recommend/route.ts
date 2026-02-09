@@ -15,6 +15,20 @@ import { HedgingAgent } from '@/agents/specialized/HedgingAgent';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Singleton agent instances (avoid re-initializing every request)
+let _cachedLeadAgent: LeadAgent | null = null;
+let _cachedRegistry: AgentRegistry | null = null;
+let _agentInitPromise: Promise<void> | null = null;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: ${label} exceeded ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 /**
  * Hedging Recommendations API Route
  * Uses the FULL Multi-Agent System:
@@ -51,26 +65,31 @@ export async function POST(request: NextRequest) {
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
     const signer = privateKey ? new ethers.Wallet(privateKey, provider) : undefined;
 
-    // Create agent registry and register specialized agents
-    const registry = new AgentRegistry();
-    
-    // Initialize RiskAgent
-    const riskAgent = new RiskAgent('risk-agent-1', provider, signer);
-    await riskAgent.initialize();
-    registry.register(riskAgent);
-    
-    // Initialize HedgingAgent (only if we have a signer)
-    if (signer) {
-      const hedgingAgent = new HedgingAgent('hedging-agent-1', provider, signer);
-      await hedgingAgent.initialize();
-      registry.register(hedgingAgent);
+    // Use cached agent instances (singleton per process)
+    if (!_cachedLeadAgent || !_cachedRegistry) {
+      if (!_agentInitPromise) {
+        _agentInitPromise = (async () => {
+          const registry = new AgentRegistry();
+          const riskAgent = new RiskAgent('risk-agent-1', provider, signer);
+          await riskAgent.initialize();
+          registry.register(riskAgent);
+          if (signer) {
+            const hedgingAgent = new HedgingAgent('hedging-agent-1', provider, signer);
+            await hedgingAgent.initialize();
+            registry.register(hedgingAgent);
+          }
+          const leadAgent = new LeadAgent('lead-agent-1', provider, signer, registry);
+          await leadAgent.initialize();
+          _cachedRegistry = registry;
+          _cachedLeadAgent = leadAgent;
+        })();
+      }
+      await _agentInitPromise;
     }
+    const registry = _cachedRegistry!;
+    const leadAgent = _cachedLeadAgent!;
     
-    // Initialize LeadAgent as orchestrator
-    const leadAgent = new LeadAgent('lead-agent-1', provider, signer, registry);
-    await leadAgent.initialize();
-    
-    logger.info('✅ Multi-Agent System initialized', { 
+    logger.info('✅ Multi-Agent System ready (cached)', { 
       agents: ['LeadAgent', 'RiskAgent', signer ? 'HedgingAgent' : '(HedgingAgent - no signer)'] 
     });
 
@@ -102,23 +121,26 @@ export async function POST(request: NextRequest) {
       logger.warn('Failed to fetch prices from Crypto.com API, using MCP fallback');
     }
 
-    for (const symbol of tokens) {
-      try {
-        const price = priceMap[symbol] || (await mcpClient.getPrice(symbol)).price;
-        // Simulate portfolio balance (in production, fetch from on-chain)
-        const simulatedBalance = symbol === 'BTC' ? 0.5 : symbol === 'ETH' ? 5 : symbol === 'CRO' ? 10000 : 1000;
-        const value = simulatedBalance * price;
-        
-        portfolioData.tokens.push({
-          symbol,
-          balance: simulatedBalance,
-          price,
-          value,
-        });
-        portfolioData.totalValue += value;
-      } catch (error) {
-        logger.warn(`Failed to fetch ${symbol} data:`, { error });
+    // Fetch remaining prices in parallel via MCP fallback
+    const missingTokens = tokens.filter(t => !priceMap[t]);
+    if (missingTokens.length > 0) {
+      const mcpResults = await Promise.allSettled(
+        missingTokens.map(sym => mcpClient.getPrice(sym).then(r => ({ sym, price: r.price })))
+      );
+      for (const result of mcpResults) {
+        if (result.status === 'fulfilled') {
+          priceMap[result.value.sym] = result.value.price;
+        }
       }
+    }
+
+    for (const symbol of tokens) {
+      const price = priceMap[symbol];
+      if (!price) { logger.warn(`No price for ${symbol}, skipping`); continue; }
+      const simulatedBalance = symbol === 'BTC' ? 0.5 : symbol === 'ETH' ? 5 : symbol === 'CRO' ? 10000 : 1000;
+      const value = simulatedBalance * price;
+      portfolioData.tokens.push({ symbol, balance: simulatedBalance, price, value });
+      portfolioData.totalValue += value;
     }
 
     logger.info('📊 Portfolio data gathered', { 
@@ -131,8 +153,8 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     logger.info('🎯 LeadAgent orchestrating multi-agent hedge analysis...');
     
-    // Execute strategy through LeadAgent (coordinates RiskAgent + HedgingAgent)
-    const executionReport = await leadAgent.executeStrategyFromIntent({
+    // Execute strategy through LeadAgent with 30s timeout
+    const executionReport = await withTimeout(leadAgent.executeStrategyFromIntent({
       action: 'hedge',
       targetPortfolio: 1,
       objectives: {
@@ -144,7 +166,7 @@ export async function POST(request: NextRequest) {
       },
       requiredAgents: ['risk', 'hedging', 'reporting'],
       estimatedComplexity: 'medium',
-    });
+    }), 30000, 'LeadAgent.executeStrategyFromIntent');
 
     logger.info('📋 Multi-Agent execution complete', {
       executionId: executionReport.executionId,

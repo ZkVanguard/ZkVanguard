@@ -200,7 +200,10 @@ export class ZKPaymasterService {
         }
       );
 
-      const receipt = await tx.wait();
+      const receipt = await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('tx.wait() timed out after 60s')), 60000)),
+      ]) as Awaited<ReturnType<typeof tx.wait>>;
 
       // Compute gas cost from receipt (avoids 2 extra getBalance RPC calls)
       const gasCost = receipt.gasUsed * (receipt.gasPrice || 0n);

@@ -88,38 +88,34 @@ export async function GET(
     const assetBalances: Array<{ token: string; symbol: string; balance: string; valueUSD: number }> = [];
     
     if (assets && assets.length > 0) {
-      // Fetch allocation for each deposited asset from the contract's internal accounting
-      for (const assetAddress of assets) {
-        try {
-          // Use getAssetAllocation to read the portfolio's allocation for this asset
-          const allocation = await client.readContract({
+      // Batch fetch all asset allocations in parallel (avoids N+1)
+      const allocationResults = await Promise.allSettled(
+        assets.map(assetAddress =>
+          client.readContract({
             address: addresses.rwaManager as `0x${string}`,
             abi: RWA_MANAGER_ABI,
             functionName: 'getAssetAllocation',
             args: [portfolioId, assetAddress as `0x${string}`],
-          }) as bigint;
-          
-          const addr = assetAddress.toLowerCase();
-          const decimals = TOKEN_DECIMALS[addr] || 18;
-          const price = TOKEN_PRICES[addr] || 1.0;
-          const symbol = TOKEN_SYMBOLS[addr] || 'Unknown';
-          
-          const balanceNum = Number(allocation) / Math.pow(10, decimals);
-          const valueUSD = balanceNum * price;
-          
-          logger.debug(`[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, value=$${valueUSD.toFixed(2)}`);
-          
-          if (balanceNum > 0) {
-            assetBalances.push({
-              token: assetAddress,
-              symbol,
-              balance: balanceNum.toFixed(4),
-              valueUSD,
-            });
-            calculatedValue += valueUSD;
-          }
-        } catch (err) {
-          logger.warn(`[Portfolio API] Failed to fetch allocation for ${assetAddress}`, { error: err instanceof Error ? err.message : String(err) });
+          }).then(allocation => ({ assetAddress, allocation: allocation as bigint }))
+        )
+      );
+
+      for (const result of allocationResults) {
+        if (result.status === 'rejected') {
+          logger.warn(`[Portfolio API] Failed to fetch allocation`, { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
+          continue;
+        }
+        const { assetAddress, allocation } = result.value;
+        const addr = assetAddress.toLowerCase();
+        const decimals = TOKEN_DECIMALS[addr] || 18;
+        const price = TOKEN_PRICES[addr] || 1.0;
+        const symbol = TOKEN_SYMBOLS[addr] || 'Unknown';
+        const balanceNum = Number(allocation) / Math.pow(10, decimals);
+        const valueUSD = balanceNum * price;
+        logger.debug(`[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, value=$${valueUSD.toFixed(2)}`);
+        if (balanceNum > 0) {
+          assetBalances.push({ token: assetAddress, symbol, balance: balanceNum.toFixed(4), valueUSD });
+          calculatedValue += valueUSD;
         }
       }
     }
@@ -166,7 +162,11 @@ export async function GET(
     // Cache the response
     portfolioCache.set(cacheKey, { data: portfolioData, timestamp: Date.now() });
 
-    return NextResponse.json(portfolioData);
+    return NextResponse.json(portfolioData, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    });
   } catch (error: unknown) {
     logger.error('[Portfolio API] Error fetching portfolio', error);
     return NextResponse.json(
