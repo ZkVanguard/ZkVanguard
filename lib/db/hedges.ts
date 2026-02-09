@@ -377,6 +377,123 @@ export async function clearAllHedges(): Promise<number> {
   return result.length;
 }
 
+/**
+ * Get active on-chain hedge count directly from DB.
+ * Eliminates the need to call getUserHedges() + hedges() on-chain just for a count.
+ */
+export async function getActiveOnChainHedgeCount(): Promise<number> {
+  try {
+    const sql = "SELECT COUNT(*) as count FROM hedges WHERE on_chain = true AND status = 'active'";
+    const row = await queryOne<{ count: string }>(sql);
+    return parseInt(row?.count || '0', 10);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Get ALL on-chain hedges from DB with full details.
+ * This replaces the expensive multi-RPC-call flow in the onchain route.
+ */
+export async function getAllOnChainHedges(activeOnly = false): Promise<Hedge[]> {
+  try {
+    const statusFilter = activeOnly ? "AND status = 'active'" : '';
+    const sql = `SELECT * FROM hedges WHERE on_chain = true ${statusFilter} ORDER BY created_at DESC`;
+    return await query<Hedge>(sql);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Update hedge with live price data and computed PnL.
+ * Called during background sync to keep DB fresh.
+ */
+export async function updateHedgePrice(hedgeIdOnchain: string, currentPrice: number, source: string): Promise<void> {
+  try {
+    await query(`
+      UPDATE hedges SET
+        current_price = $1,
+        price_source = $2,
+        price_updated_at = NOW(),
+        updated_at = NOW()
+      WHERE hedge_id_onchain = $3 OR order_id = $3
+    `, [currentPrice, source, hedgeIdOnchain]);
+  } catch (err) {
+    console.warn('updateHedgePrice failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Batch-update prices for multiple hedges (by asset symbol).
+ * More efficient than updating one-by-one.
+ */
+export async function batchUpdateHedgePrices(priceMap: Record<string, { price: number; source: string }>): Promise<void> {
+  try {
+    for (const [asset, { price, source }] of Object.entries(priceMap)) {
+      await query(`
+        UPDATE hedges SET
+          current_price = $1,
+          price_source = $2,
+          price_updated_at = NOW(),
+          updated_at = NOW()
+        WHERE UPPER(asset) = UPPER($3) AND on_chain = true AND status = 'active'
+      `, [price, source, asset]);
+    }
+  } catch (err) {
+    console.warn('batchUpdateHedgePrices failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Mark a hedge as closed in DB (called after on-chain close).
+ */
+export async function closeOnChainHedge(hedgeIdOnchain: string, realizedPnl: number, closeTxHash?: string): Promise<void> {
+  try {
+    await query(`
+      UPDATE hedges SET
+        status = 'closed',
+        realized_pnl = $1,
+        closed_at = NOW(),
+        updated_at = NOW(),
+        tx_hash = COALESCE($2, tx_hash)
+      WHERE hedge_id_onchain = $3 OR order_id = $3
+    `, [realizedPnl, closeTxHash || null, hedgeIdOnchain]);
+  } catch (err) {
+    console.warn('closeOnChainHedge failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Get on-chain hedge protocol stats directly from DB.
+ * Replaces contract.getProtocolStats() RPC call.
+ */
+export async function getOnChainProtocolStats() {
+  try {
+    const sql = `
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'active') AS active_count,
+        COUNT(*) FILTER (WHERE status IN ('closed', 'liquidated')) AS closed_count,
+        COUNT(*) AS total_count,
+        COALESCE(SUM(size) FILTER (WHERE status = 'active'), 0) AS collateral_locked,
+        COALESCE(SUM(realized_pnl), 0) AS total_pnl,
+        0 AS fees_collected
+      FROM hedges
+      WHERE on_chain = true
+    `;
+    return await queryOne<{
+      active_count: string;
+      closed_count: string;
+      total_count: string;
+      collateral_locked: string;
+      total_pnl: string;
+      fees_collected: string;
+    }>(sql);
+  } catch {
+    return null;
+  }
+}
+
 // ─── On-Chain Hedge DB Functions ─────────────────────────────────────────────
 // These enable DB-first lookup for tx hashes, eliminating slow event log scanning.
 // On-chain hedge data is stored at creation time and queried instantly.

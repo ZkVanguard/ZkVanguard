@@ -172,30 +172,22 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [address, fetchPositions]);
 
-  // Fetch active hedge count from database API (single source of truth)
+  // Fetch active hedge count from DB-backed list API (no RPC calls)
   useEffect(() => {
     let isMounted = true;
 
     const fetchHedgeCount = async () => {
       try {
-        let totalCount = 0;
-
-        // Fetch on-chain hedges only (DB cleared)
-        try {
-          const onChainResponse = await fetch('/api/agents/hedging/onchain');
-          if (onChainResponse.ok && isMounted) {
-            const onChainData = await onChainResponse.json();
-            if (onChainData.success && onChainData.summary?.activeCount) {
-              totalCount += onChainData.summary.activeCount;
-            }
+        // Use DB-backed /api/agents/hedging/list for instant count (no RPC)
+        const response = await fetch('/api/agents/hedging/list?status=active&includeStats=true');
+        if (response.ok && isMounted) {
+          const data = await response.json();
+          if (data.success) {
+            setActiveHedgesCount(data.count || 0);
           }
-        } catch {
-          // On-chain API may not be available
         }
-
-        if (isMounted) setActiveHedgesCount(totalCount);
       } catch (err) {
-        logger.error('Error counting hedges from API', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
+        logger.error('Error counting hedges from DB', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
       }
     };
 

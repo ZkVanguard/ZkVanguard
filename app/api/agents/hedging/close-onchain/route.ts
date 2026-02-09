@@ -184,6 +184,15 @@ export async function POST(request: NextRequest) {
     // Remove from ownership registry (hedge is now closed)
     removeHedgeOwnership(hedgeId);
 
+    // ═══ DB UPDATE: Persist closed status to Neon ═══
+    try {
+      const { closeOnChainHedge } = await import('@/lib/db/hedges');
+      await closeOnChainHedge(hedgeId, realizedPnl, tx.hash);
+      console.log(`✅ DB updated: hedge ${hedgeId.slice(0,18)}... marked as closed`);
+    } catch (dbErr) {
+      console.warn('Failed to update DB (non-critical):', dbErr instanceof Error ? dbErr.message : dbErr);
+    }
+
     console.log(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}`);
 
     return NextResponse.json({

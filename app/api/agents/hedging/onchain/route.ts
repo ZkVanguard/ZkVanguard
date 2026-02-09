@@ -15,7 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { getTxHashesFromDb, cacheTxHashes } from '@/lib/db/hedges';
+import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices } from '@/lib/db/hedges';
+import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -205,8 +206,165 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const address = searchParams.get('address') || DEPLOYER;
     const includeStats = searchParams.get('stats') === 'true';
+    const forceRpc = searchParams.get('forceRpc') === 'true'; // Debug flag to bypass DB
 
-    // Throttled provider: max 3 concurrent RPC calls, 30s cache, auto-retry on 429
+    // ═══════════════════════════════════════════════════════════
+    // DB-FIRST APPROACH: Serve from Neon DB (instant, no RPC)
+    // ═══════════════════════════════════════════════════════════
+    if (!forceRpc) {
+      const dbStart = Date.now();
+      const [dbHedges, dbStats, cachedPrices] = await Promise.all([
+        getAllOnChainHedges(false), // All hedges (active + closed)
+        includeStats ? getOnChainProtocolStats() : Promise.resolve(null),
+        getCachedPrices(['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL'], 30_000),
+      ]);
+
+      if (dbHedges.length > 0) {
+        // Filter by wallet if specified
+        const filteredHedges = address === DEPLOYER
+          ? dbHedges // Show all for deployer
+          : dbHedges.filter(h => h.wallet_address?.toLowerCase() === address.toLowerCase());
+
+        // Overlay live prices from cache (or DB-stored prices if cache miss)
+        const priceMap: Record<string, number> = {};
+        for (const symbol of ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL']) {
+          const cached = cachedPrices[symbol];
+          priceMap[symbol] = cached?.price ?? FALLBACK_PRICES[Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === symbol) as unknown as number] ?? 1000;
+        }
+
+        // If price cache is stale, refresh from Crypto.com (fire-and-forget)
+        if (Object.keys(cachedPrices).length < 6) {
+          fetchLivePrices([0, 1, 2, 3, 4, 5]).then(livePrices => {
+            const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
+              symbol: PAIR_SYMBOLS[parseInt(idx)],
+              price,
+              source: 'cryptocom-exchange',
+            }));
+            upsertPrices(priceUpdates).catch(() => {});
+            // Also update hedge prices in DB
+            const priceMapForDb: Record<string, { price: number; source: string }> = {};
+            for (const [idx, price] of Object.entries(livePrices)) {
+              priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
+            }
+            batchUpdateHedgePrices(priceMapForDb).catch(() => {});
+          }).catch(() => {});
+        }
+
+        // Build response from DB data
+        const hedgeDetails = filteredHedges.map(h => {
+          const currentPrice = priceMap[h.asset] || h.current_price || h.entry_price || 1000;
+          const entryPrice = h.entry_price || currentPrice;
+          
+          // Calculate unrealized PnL
+          const positionSize = h.size * h.leverage;
+          const priceChange = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0;
+          const unrealizedPnl = h.side === 'LONG'
+            ? positionSize * priceChange
+            : positionSize * (-priceChange);
+          const pnlPercent = h.size > 0 ? (unrealizedPnl / h.size) * 100 : 0;
+
+          return {
+            hedgeId: h.hedge_id_onchain || h.order_id,
+            orderId: h.order_id.slice(0, 18),
+            trader: h.wallet_address || DEPLOYER,
+            asset: h.asset,
+            pairIndex: Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === h.asset) || 0,
+            side: h.side,
+            type: h.side,
+            collateral: h.size,
+            size: h.size,
+            capitalUsed: h.size,
+            leverage: h.leverage,
+            entryPrice,
+            currentPrice: Math.round(currentPrice * 100) / 100,
+            unrealizedPnL: h.status === 'active' ? Math.round(unrealizedPnl * 100) / 100 : 0,
+            pnlPercentage: h.status === 'active' ? Math.round(pnlPercent * 100) / 100 : 0,
+            status: h.status,
+            isLong: h.side === 'LONG',
+            commitmentHash: h.commitment_hash || ethers.ZeroHash,
+            nullifier: h.nullifier || ethers.ZeroHash,
+            openTimestamp: Math.floor(new Date(h.created_at).getTime() / 1000),
+            closeTimestamp: h.closed_at ? Math.floor(new Date(h.closed_at).getTime() / 1000) : 0,
+            realizedPnl: h.realized_pnl || 0,
+            createdAt: h.created_at.toISOString(),
+            txHash: h.tx_hash || null,
+            proxyWallet: h.proxy_wallet || null,
+            proxyVault: ZK_PROXY_VAULT,
+            zkVerified: !!h.commitment_hash && h.commitment_hash !== ethers.ZeroHash,
+            onChain: true,
+            chain: h.chain || 'cronos-testnet',
+            contractAddress: h.contract_address || HEDGE_EXECUTOR,
+            priceSource: h.status === 'active' ? (cachedPrices[h.asset] ? 'db-cache' : 'db-stored') : 'closed',
+          };
+        });
+
+        const activeHedges = hedgeDetails.filter(h => h.status === 'active');
+        const closedHedges = hedgeDetails.filter(h => h.status === 'closed' || h.status === 'liquidated');
+        const totalUnrealizedPnL = activeHedges.reduce((sum, h) => sum + h.unrealizedPnL, 0);
+        const profitable = activeHedges.filter(h => h.unrealizedPnL > 0).length;
+        const unprofitable = activeHedges.filter(h => h.unrealizedPnL <= 0).length;
+
+        let protocolStats = null;
+        if (includeStats && dbStats) {
+          protocolStats = {
+            totalOpened: parseInt(dbStats.total_count || '0'),
+            totalClosed: parseInt(dbStats.closed_count || '0'),
+            collateralLocked: parseFloat(dbStats.collateral_locked || '0'),
+            totalPnl: parseFloat(dbStats.total_pnl || '0'),
+            feesCollected: parseFloat(dbStats.fees_collected || '0'),
+          };
+        }
+
+        console.log(`⚡ DB-first onchain: ${hedgeDetails.length} hedges in ${Date.now() - dbStart}ms (NO RPC calls)`);
+
+        return NextResponse.json({
+          success: true,
+          source: 'db-cache',
+          chain: 'cronos-testnet',
+          chainId: 338,
+          contract: HEDGE_EXECUTOR,
+          summary: {
+            totalHedges: hedgeDetails.length,
+            activeCount: activeHedges.length,
+            closedCount: closedHedges.length,
+            totalUnrealizedPnL: Math.round(totalUnrealizedPnL * 100) / 100,
+            profitable,
+            unprofitable,
+            details: activeHedges.map(h => ({
+              orderId: h.orderId,
+              hedgeId: h.hedgeId,
+              side: h.side,
+              asset: h.asset,
+              size: h.size,
+              leverage: h.leverage,
+              entryPrice: h.entryPrice,
+              currentPrice: h.currentPrice,
+              capitalUsed: h.capitalUsed,
+              notionalValue: h.collateral * h.leverage,
+              unrealizedPnL: h.unrealizedPnL,
+              pnlPercentage: h.pnlPercentage,
+              createdAt: h.createdAt,
+              reason: `${h.leverage}x ${h.side} ${h.asset} on-chain hedge`,
+              walletAddress: h.trader,
+              txHash: h.txHash,
+              proxyWallet: h.proxyWallet,
+              proxyVault: h.proxyVault,
+              commitmentHash: h.commitmentHash,
+              zkVerified: h.zkVerified,
+              onChain: true,
+            })),
+          },
+          allHedges: hedgeDetails,
+          protocolStats,
+          dbElapsed: Date.now() - dbStart + 'ms',
+        });
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FALLBACK: RPC mode (DB empty or forceRpc=true)
+    // ═══════════════════════════════════════════════════════════
+    console.log('⚠️ DB empty or forceRpc=true — falling back to RPC (slow)');
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);

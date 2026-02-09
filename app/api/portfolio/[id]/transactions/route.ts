@@ -3,6 +3,7 @@ import { logger } from '@/lib/utils/logger';
 import { createPublicClient, http, type PublicClient, type Block } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getCachedTransactions, getLastCachedBlock, insertTransactions } from '@/lib/db/transactions';
 
 // Disable caching for this API route
 export const dynamic = 'force-dynamic';
@@ -55,23 +56,41 @@ export async function GET(
     logger.info(`[Transactions API] Portfolio ID: ${id}`);
     const portfolioId = BigInt(id);
     
-    logger.info(`[Transactions API] Fetching transactions for portfolio ${portfolioId}...`);
+    // ══════ DB-FIRST: Return cached transactions ══════
+    const cachedTxs = await getCachedTransactions(Number(portfolioId));
+    if (cachedTxs.length > 0) {
+      logger.info(`[Transactions API] DB cache HIT: ${cachedTxs.length} transactions (no RPC)`);
+      const transactions = cachedTxs.map(tx => ({
+        type: tx.tx_type,
+        timestamp: tx.timestamp,
+        amount: tx.amount,
+        token: tx.token_symbol,
+        txHash: tx.tx_hash,
+        blockNumber: tx.block_number,
+      }));
+      return NextResponse.json({ transactions, source: 'db-cache' }, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      });
+    }
+
+    // ══════ DB empty: Initial scan from chain ══════
+    logger.info(`[Transactions API] DB cache MISS - scanning chain for portfolio ${portfolioId}...`);
     
     const client = getViemClient();
-
     const addresses = getContractAddresses(338);
     logger.info(`[Transactions API] RWA Manager: ${addresses.rwaManager}`);
     
     // Get current block number
     const currentBlock = await client.getBlockNumber();
-    logger.info(`[Transactions API] Current block: ${currentBlock}`);
+    const lastCached = BigInt(await getLastCachedBlock(Number(portfolioId)));
+    logger.info(`[Transactions API] Current block: ${currentBlock}, last cached: ${lastCached || 'none'}`);
     
     // Cronos testnet has a max range of 2000 blocks, scan in chunks
     const CHUNK_SIZE = 1999n;
     const lookback = 10000n;
-    const fromBlock = currentBlock > lookback ? currentBlock - lookback : 0n;
+    const fromBlock = lastCached > 0n ? lastCached + 1n : (currentBlock > lookback ? currentBlock - lookback : 0n);
     
-    logger.info(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}`);
+    logger.info(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}${lastCached > 0n ? ' (incremental)' : ' (full)'}`);
 
     const depositLogs = [];
     const withdrawLogs = [];
@@ -235,9 +254,28 @@ export async function GET(
     logger.info(`[Transactions API] Returning ${transactions.length} transactions`);
     if (transactions.length > 0) {
       logger.debug('Sample transaction', { data: transactions[0] });
+      
+      // ══════ Persist to DB for future instant serving ══════
+      insertTransactions(transactions.map(tx => ({
+        portfolioId: Number(portfolioId),
+        txType: tx.type,
+        txHash: tx.txHash,
+        blockNumber: tx.blockNumber,
+        timestamp: tx.timestamp,
+        token: tx.type !== 'rebalance' ? (TOKEN_SYMBOLS[allLogs.find(l => l.transactionHash === tx.txHash)?.args?.token?.toLowerCase() || ''] || 'Unknown') : undefined,
+        tokenSymbol: tx.token,
+        amount: tx.amount,
+        depositor: tx.type === 'deposit' ? allLogs.find(l => l.transactionHash === tx.txHash && l._type === 'deposit')?.args?.depositor : undefined,
+        recipient: tx.type === 'withdraw' ? allLogs.find(l => l.transactionHash === tx.txHash && l._type === 'withdraw')?.args?.recipient : undefined,
+        contractAddress: addresses.rwaManager,
+      }))).then(inserted => {
+        logger.info(`[Transactions API] Persisted ${inserted} new transactions to DB`);
+      }).catch(err => {
+        logger.warn('Failed to persist transactions to DB (non-critical)', err);
+      });
     }
 
-    return NextResponse.json({ transactions }, {
+    return NextResponse.json({ transactions, source: 'chain-scan' }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
       },

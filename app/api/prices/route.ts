@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -67,26 +68,71 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // ═══ DB-FIRST: Check cache before hitting Crypto.com ═══
+    if (source === 'auto') {
+      const cached = await getCachedPrice(symbol, 30_000);
+      if (cached) {
+        logger.info(`[Market Data API] Cache HIT for ${symbol}`);
+        return NextResponse.json({
+          success: true,
+          data: {
+            symbol: cached.symbol,
+            price: cached.price,
+            change24h: cached.change_24h,
+            volume24h: cached.volume_24h,
+            source: 'db-cache',
+          },
+          source: 'db-cache',
+          timestamp: new Date().toISOString(),
+        }, {
+          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+        });
+      }
+      logger.info(`[Market Data API] Cache MISS for ${symbol} — fetching from Crypto.com`);
+    }
+
     logger.info(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
 
     if (source === 'exchange') {
-      // Direct from Exchange API with full market data
-      const marketData = await cryptocomExchangeService.getMarketData(symbol);
+      // Use fallback system
+      const marketData = getMarketDataService();
+      const price = await marketData.getTokenPrice(symbol);
+      // Cache in DB
+      upsertPrices([{
+        symbol: price.symbol,
+        price: price.price,
+        change24h: price.change24h,
+        volume24h: price.volume24h,
+        source: price.source,
+      }]).catch(() => {});
+      
       return NextResponse.json({
         success: true,
         data: {
-          symbol: marketData.symbol,
-          price: marketData.price,
-          change24h: marketData.change24h,
-          volume24h: marketData.volume24h,
-          high24h: marketData.high24h,
-          low24h: marketData.low24h,
-          source: marketData.source,
+          symbol: price.symbol,
+          price: price.price,
+          change24h: price.change24h,
+          volume24h: price.volume24h,
+          source: price.source,
         },
-        source: 'cryptocom-exchange',
+        source: 'multi-source-fallback',
         timestamp: new Date().toISOString(),
+      }, {
+        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
       });
-    } else {
+    }
+  } catch (error: unknown) {
+    logger.error('[Market Data API] Error', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Failed to fetch market data',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
       // Use fallback system
       const marketData = getMarketDataService();
       const price = await marketData.getTokenPrice(symbol);
