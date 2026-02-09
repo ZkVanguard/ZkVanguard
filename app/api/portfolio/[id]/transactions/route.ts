@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, type PublicClient, type Block } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 
 // Disable caching for this API route
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Module-level singleton viem client (reused across requests)
+let _viemClient: PublicClient | null = null;
+function getViemClient(): PublicClient {
+  if (!_viemClient) {
+    _viemClient = createPublicClient({
+      chain: cronosTestnet,
+      transport: http('https://evm-t3.cronos.org', {
+        retryCount: 3,
+        retryDelay: 500,
+        batch: { batchSize: 1 },
+      }),
+    });
+  }
+  return _viemClient;
+}
 
 // Token symbols mapping
 const TOKEN_SYMBOLS: Record<string, string> = {
@@ -41,14 +57,7 @@ export async function GET(
     
     logger.info(`[Transactions API] Fetching transactions for portfolio ${portfolioId}...`);
     
-    const client = createPublicClient({
-      chain: cronosTestnet,
-      transport: http('https://evm-t3.cronos.org', {
-        retryCount: 3,
-        retryDelay: 500,
-        batch: { batchSize: 1 },
-      }),
-    });
+    const client = getViemClient();
 
     const addresses = getContractAddresses(338);
     logger.info(`[Transactions API] RWA Manager: ${addresses.rwaManager}`);
@@ -75,64 +84,57 @@ export async function GET(
       
       logger.debug(`[Transactions API] Chunk: ${start} to ${end}`);
 
-      // Fetch deposit events for this chunk
-      const chunkDeposits = await client.getLogs({
-        address: addresses.rwaManager as `0x${string}`,
-        event: {
-          type: 'event',
-          name: 'Deposited',
-          inputs: [
-            { type: 'uint256', indexed: true, name: 'portfolioId' },
-            { type: 'address', indexed: true, name: 'token' },
-            { type: 'uint256', indexed: false, name: 'amount' },
-            { type: 'address', indexed: true, name: 'depositor' },
-          ],
-        },
-        args: {
-          portfolioId,
-        },
-        fromBlock: start,
-        toBlock: end,
-      });
+      // Fetch all 3 event types in parallel per chunk
+      const [chunkDeposits, chunkWithdraws, chunkRebalances] = await Promise.all([
+        client.getLogs({
+          address: addresses.rwaManager as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Deposited',
+            inputs: [
+              { type: 'uint256', indexed: true, name: 'portfolioId' },
+              { type: 'address', indexed: true, name: 'token' },
+              { type: 'uint256', indexed: false, name: 'amount' },
+              { type: 'address', indexed: true, name: 'depositor' },
+            ],
+          },
+          args: { portfolioId },
+          fromBlock: start,
+          toBlock: end,
+        }),
+        client.getLogs({
+          address: addresses.rwaManager as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Withdrawn',
+            inputs: [
+              { type: 'uint256', indexed: true, name: 'portfolioId' },
+              { type: 'address', indexed: true, name: 'token' },
+              { type: 'uint256', indexed: false, name: 'amount' },
+              { type: 'address', indexed: true, name: 'recipient' },
+            ],
+          },
+          args: { portfolioId },
+          fromBlock: start,
+          toBlock: end,
+        }),
+        client.getLogs({
+          address: addresses.rwaManager as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Rebalanced',
+            inputs: [
+              { type: 'uint256', indexed: true, name: 'portfolioId' },
+            ],
+          },
+          args: { portfolioId },
+          fromBlock: start,
+          toBlock: end,
+        }),
+      ]);
+
       depositLogs.push(...chunkDeposits);
-
-      // Fetch withdrawal events for this chunk
-      const chunkWithdraws = await client.getLogs({
-        address: addresses.rwaManager as `0x${string}`,
-        event: {
-          type: 'event',
-          name: 'Withdrawn',
-          inputs: [
-            { type: 'uint256', indexed: true, name: 'portfolioId' },
-            { type: 'address', indexed: true, name: 'token' },
-            { type: 'uint256', indexed: false, name: 'amount' },
-            { type: 'address', indexed: true, name: 'recipient' },
-          ],
-        },
-        args: {
-          portfolioId,
-        },
-        fromBlock: start,
-        toBlock: end,
-      });
       withdrawLogs.push(...chunkWithdraws);
-
-      // Fetch rebalance events for this chunk
-      const chunkRebalances = await client.getLogs({
-        address: addresses.rwaManager as `0x${string}`,
-        event: {
-          type: 'event',
-          name: 'Rebalanced',
-          inputs: [
-            { type: 'uint256', indexed: true, name: 'portfolioId' },
-          ],
-        },
-        args: {
-          portfolioId,
-        },
-        fromBlock: start,
-        toBlock: end,
-      });
       rebalanceLogs.push(...chunkRebalances);
       
       start = end + 1n;
@@ -142,10 +144,31 @@ export async function GET(
 
     const transactions: Transaction[] = [];
 
+    // Deduplicate block fetches: collect all unique block numbers, fetch each once
+    const allLogs = [
+      ...depositLogs.map(l => ({ ...l, _type: 'deposit' as const })),
+      ...withdrawLogs.map(l => ({ ...l, _type: 'withdraw' as const })),
+      ...rebalanceLogs.map(l => ({ ...l, _type: 'rebalance' as const })),
+    ];
+    const uniqueBlockNumbers = [...new Set(allLogs.map(l => l.blockNumber))];
+    const blockMap = new Map<bigint, Block>();
+    
+    // Fetch blocks in parallel batches of 5
+    for (let i = 0; i < uniqueBlockNumbers.length; i += 5) {
+      const batch = uniqueBlockNumbers.slice(i, i + 5);
+      const blocks = await Promise.all(
+        batch.map(bn => client.getBlock({ blockNumber: bn }).catch(() => null))
+      );
+      for (let j = 0; j < batch.length; j++) {
+        if (blocks[j]) blockMap.set(batch[j], blocks[j]!);
+      }
+    }
+
     // Process deposits
     for (const log of depositLogs) {
       try {
-        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        const block = blockMap.get(log.blockNumber);
+        if (!block) continue;
         const token = log.args.token?.toLowerCase() || '';
         const amount = log.args.amount || 0n;
         const decimals = TOKEN_DECIMALS[token] || 18;
@@ -169,7 +192,8 @@ export async function GET(
     // Process withdrawals
     for (const log of withdrawLogs) {
       try {
-        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        const block = blockMap.get(log.blockNumber);
+        if (!block) continue;
         const token = log.args.token?.toLowerCase() || '';
         const amount = log.args.amount || 0n;
         const decimals = TOKEN_DECIMALS[token] || 18;
@@ -191,7 +215,8 @@ export async function GET(
     // Process rebalances
     for (const log of rebalanceLogs) {
       try {
-        const block = await client.getBlock({ blockNumber: log.blockNumber });
+        const block = blockMap.get(log.blockNumber);
+        if (!block) continue;
         
         transactions.push({
           type: 'rebalance',

@@ -72,41 +72,72 @@ export async function POST(request: NextRequest) {
       totalValue: 0,
     };
 
+    // Known token addresses on Cronos testnet for ERC20 balance lookups
+    const TOKEN_ADDRESSES: Record<string, string> = {
+      USDC: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
+      USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    };
+    const TOKEN_DECIMALS: Record<string, number> = {
+      CRO: 18, BTC: 8, ETH: 18, USDC: 6, USDT: 6,
+    };
+    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+
     const volatilities = new Map<string, number>();
+    const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
 
-    for (const symbol of tokens) {
-      try {
-        const priceData = await mcpClient.getPrice(symbol);
-        const historicalData = await mcpClient.getHistoricalPrices(symbol, '1d'); // Daily data
-        
-        // Calculate volatility from historical prices
-        if (historicalData && historicalData.length > 1) {
-          const returns = [];
-          for (let i = 1; i < historicalData.length; i++) {
-            returns.push((historicalData[i].price - historicalData[i-1].price) / historicalData[i-1].price);
+    // Fetch all token data in parallel
+    const tokenResults = await Promise.allSettled(
+      tokens.map(async (symbol) => {
+        try {
+          const priceData = await mcpClient.getPrice(symbol);
+          const historicalData = await mcpClient.getHistoricalPrices(symbol, '1d');
+          
+          // Calculate volatility from historical prices
+          if (historicalData && historicalData.length > 1) {
+            const returns = [];
+            for (let i = 1; i < historicalData.length; i++) {
+              returns.push((historicalData[i].price - historicalData[i-1].price) / historicalData[i-1].price);
+            }
+            const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+            const volatility = Math.sqrt(variance) * Math.sqrt(252);
+            volatilities.set(symbol, volatility);
           }
-          const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-          const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-          const volatility = Math.sqrt(variance) * Math.sqrt(252); // Annualized
-          volatilities.set(symbol, volatility);
-        }
 
-        // Get balance from blockchain
-        const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
-        const balance = await provider.getBalance(address);
-        const balanceInToken = parseFloat(ethers.formatEther(balance));
-        const value = balanceInToken * priceData.price;
-        
-        portfolioData.tokens.push({
-          symbol,
-          balance: balanceInToken,
-          price: priceData.price,
-          value,
-          // Note: volatility handled separately in risk assessment
-        });
-        portfolioData.totalValue += value;
-      } catch (error) {
-        console.warn(`Failed to fetch ${symbol} data:`, error);
+          // Get correct balance per token type
+          let balanceInToken = 0;
+          if (symbol === 'CRO') {
+            // CRO is the native currency — use getBalance
+            const balance = await provider.getBalance(address);
+            balanceInToken = parseFloat(ethers.formatEther(balance));
+          } else if (TOKEN_ADDRESSES[symbol]) {
+            // Known ERC20 token — use balanceOf
+            const tokenContract = new ethers.Contract(TOKEN_ADDRESSES[symbol], ERC20_ABI, provider);
+            const balance = await tokenContract.balanceOf(address);
+            balanceInToken = parseFloat(ethers.formatUnits(balance, TOKEN_DECIMALS[symbol] || 18));
+          } else {
+            // BTC/ETH — user likely doesn't hold native BTC/ETH on Cronos; value is 0
+            balanceInToken = 0;
+          }
+          const value = balanceInToken * priceData.price;
+          
+          return {
+            symbol,
+            balance: balanceInToken,
+            price: priceData.price,
+            value,
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch ${symbol} data:`, error);
+          return null;
+        }
+      })
+    );
+
+    for (const result of tokenResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        portfolioData.tokens.push(result.value);
+        portfolioData.totalValue += result.value.value;
       }
     }
 
