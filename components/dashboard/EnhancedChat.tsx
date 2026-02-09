@@ -30,6 +30,7 @@ interface Message {
 interface EnhancedChatProps {
   address?: string;
   onActionTrigger?: (action: string, params: Record<string, unknown>) => void;
+  hideHeader?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -210,7 +211,7 @@ function MarkdownContent({ content, isUser }: { content: string; isUser: boolean
   );
 }
 
-export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
+export function EnhancedChat({ address, onActionTrigger, hideHeader = false }: EnhancedChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -319,38 +320,40 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-white to-[#fafafa] rounded-2xl border border-[#e5e5ea] overflow-hidden shadow-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-[#e5e5ea] bg-gradient-to-r from-[#f5f5f7] to-white">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/25">
-              <Bot className="w-6 h-6 text-white" />
+    <div className="flex flex-col h-full bg-white overflow-hidden">
+      {/* Header - only show if not hidden by parent */}
+      {!hideHeader && (
+        <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 border-b border-[#e5e5ea] bg-gradient-to-r from-[#f5f5f7] to-white">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
+            <div>
+              <h3 className="font-semibold text-[14px] text-[#1d1d1f]">ZK Vanguard AI</h3>
+              <p className="text-[11px] text-[#86868b]">Powered by Advanced LLM</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-[15px] text-[#1d1d1f]">ZK Vanguard AI</h3>
-            <p className="text-xs text-[#86868b]">Powered by Advanced LLM</p>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-full">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[11px] font-medium text-emerald-700">Online</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="text-xs font-medium text-emerald-700">Online</span>
-        </div>
-      </div>
+      )}
 
       {/* Quick Prompts */}
-      <div className="flex gap-2 p-3 overflow-x-auto border-b border-[#e5e5ea] bg-white scrollbar-thin scrollbar-thumb-[#e5e5ea] scrollbar-track-transparent">
+      <div className="flex-shrink-0 flex gap-2 p-2.5 overflow-x-auto border-b border-[#e5e5ea] bg-[#fafafa] scrollbar-thin scrollbar-thumb-[#e5e5ea] scrollbar-track-transparent">
         {QUICK_PROMPTS.map((prompt, idx) => (
           <button
             key={idx}
             onClick={() => handleQuickPrompt(prompt.prompt)}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-medium bg-gradient-to-b from-white to-[#f5f5f7] hover:from-[#f5f5f7] hover:to-[#e5e5ea] text-[#1d1d1f] rounded-xl border border-[#e5e5ea] hover:border-[#007AFF] hover:shadow-md whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium bg-white hover:bg-[#f5f5f7] text-[#1d1d1f] rounded-lg border border-[#e5e5ea] hover:border-[#007AFF] whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             <prompt.icon className="w-3.5 h-3.5 text-[#86868b] group-hover:text-[#007AFF] transition-colors" />
             {prompt.label}
@@ -359,7 +362,7 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-white to-[#fafafa]">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3 bg-white">
         <AnimatePresence mode="popLayout">
           {messages.map((message) => (
             <motion.div
@@ -370,35 +373,35 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
               transition={{ duration: 0.3, ease: 'easeOut' }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex gap-3 max-w-[90%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex gap-2.5 max-w-[85%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                 {/* Avatar */}
-                <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center shadow-md ${
+                <div className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
                   message.role === 'user'
                     ? 'bg-gradient-to-br from-[#007AFF] to-[#5856D6]'
                     : 'bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500'
                 }`}>
                   {message.role === 'user' ? (
-                    <User className="w-5 h-5 text-white" />
+                    <User className="w-4 h-4 text-white" />
                   ) : (
-                    <Bot className="w-5 h-5 text-white" />
+                    <Bot className="w-4 h-4 text-white" />
                   )}
                 </div>
 
                 {/* Message Bubble */}
                 <div
-                  className={`rounded-2xl px-4 py-3 shadow-sm ${
+                  className={`rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white rounded-tr-md'
-                      : 'bg-white text-[#1d1d1f] rounded-tl-md border border-[#e5e5ea] shadow-md'
+                      ? 'bg-gradient-to-br from-[#007AFF] to-[#5856D6] text-white rounded-tr-sm'
+                      : 'bg-[#f5f5f7] text-[#1d1d1f] rounded-tl-sm'
                   }`}
                 >
-                  <div className={`text-sm leading-relaxed ${message.role === 'user' ? 'text-white' : 'text-[#1d1d1f]'}`}>
+                  <div className={`text-[13px] sm:text-sm leading-relaxed ${message.role === 'user' ? 'text-white' : 'text-[#1d1d1f]'}`}>
                     <MarkdownContent content={message.content} isUser={message.role === 'user'} />
                   </div>
                   
                   {/* Action Buttons */}
                   {message.actions && message.actions.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-[#e5e5ea]">
+                    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-black/5">
                       {message.actions.map((action) => (
                         <button
                           key={action.id}
@@ -410,12 +413,12 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                               sendMessage(`/${action.type} ${JSON.stringify(action.params)}`);
                             }
                           }}
-                          className={`px-3 py-2 text-xs font-medium rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
+                          className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-all duration-200 flex items-center gap-1 ${
                             action.type === 'hedge' 
-                              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-500/25 hover:shadow-lg'
+                              ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                               : action.type === 'adjust'
-                              ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-amber-500/25'
-                              : 'bg-gradient-to-r from-[#007AFF] to-[#5856D6] hover:from-[#0066DD] hover:to-[#4745C4] text-white shadow-md shadow-blue-500/25'
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'bg-[#007AFF] hover:bg-[#0066DD] text-white'
                           }`}
                         >
                           {action.label}
@@ -424,8 +427,8 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
                     </div>
                   )}
 
-                  <div className={`text-[10px] mt-2 flex items-center gap-1 ${message.role === 'user' ? 'text-white/60 justify-end' : 'text-[#86868b]'}`}>
-                    {message.role === 'assistant' && <Sparkles className="w-3 h-3" />}
+                  <div className={`text-[10px] mt-1.5 flex items-center gap-1 ${message.role === 'user' ? 'text-white/60 justify-end' : 'text-[#86868b]'}`}>
+                    {message.role === 'assistant' && <Sparkles className="w-2.5 h-2.5" />}
                     {new Date(message.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -445,16 +448,16 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
             exit={{ opacity: 0 }}
             className="flex justify-start"
           >
-            <div className="flex gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center shadow-md">
-                <Bot className="w-5 h-5 text-white" />
+            <div className="flex gap-2.5">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 flex items-center justify-center">
+                <Bot className="w-4 h-4 text-white" />
               </div>
-              <div className="bg-white rounded-2xl rounded-tl-md px-5 py-4 border border-[#e5e5ea] shadow-md">
-                <div className="flex gap-1.5 items-center">
-                  <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-fuchsia-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  <span className="ml-2 text-xs text-[#86868b]">Thinking...</span>
+              <div className="bg-[#f5f5f7] rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="ml-2 text-[11px] text-[#86868b]">Thinking...</span>
                 </div>
               </div>
             </div>
@@ -465,29 +468,29 @@ export function EnhancedChat({ address, onActionTrigger }: EnhancedChatProps) {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-[#e5e5ea] bg-gradient-to-r from-[#f5f5f7] to-white">
-        <div className="flex gap-3">
+      <div className="flex-shrink-0 p-3 sm:p-4 border-t border-[#e5e5ea] bg-white">
+        <div className="flex gap-2">
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Ask me anything about your portfolio or DeFi..."
+            placeholder="Ask about your portfolio or DeFi..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3.5 bg-white border border-[#e5e5ea] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#007AFF]/50 focus:border-[#007AFF] text-sm text-[#1d1d1f] placeholder-[#86868b] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+            className="flex-1 px-3 py-2.5 sm:px-4 sm:py-3 bg-[#f5f5f7] border border-transparent rounded-xl focus:outline-none focus:bg-white focus:border-[#007AFF] text-[13px] sm:text-sm text-[#1d1d1f] placeholder-[#86868b] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="px-5 py-3.5 bg-gradient-to-br from-[#007AFF] to-[#5856D6] hover:from-[#0066DD] hover:to-[#4745C4] disabled:from-[#e5e5ea] disabled:to-[#e5e5ea] disabled:cursor-not-allowed rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg shadow-[#007AFF]/25 disabled:shadow-none"
+            className="px-4 py-2.5 sm:px-5 sm:py-3 bg-[#007AFF] hover:bg-[#0066DD] disabled:bg-[#e5e5ea] disabled:cursor-not-allowed rounded-xl transition-all duration-200 active:scale-95"
           >
-            <Send className="w-5 h-5 text-white" />
+            <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </button>
         </div>
-        <p className="text-[10px] text-[#86868b] mt-2 text-center flex items-center justify-center gap-1">
-          <Sparkles className="w-3 h-3" />
-          Powered by ASI • Context-aware • ZK-verified responses
+        <p className="text-[9px] sm:text-[10px] text-[#86868b] mt-2 text-center flex items-center justify-center gap-1">
+          <Sparkles className="w-2.5 h-2.5" />
+          Powered by ASI • Context-aware
         </p>
       </div>
     </div>

@@ -575,7 +575,8 @@ export default function DashboardPage() {
               </div>
               <div className="h-[70vh] lg:h-[520px]">
                 <EnhancedChat 
-                  address={displayAddress} 
+                  address={displayAddress}
+                  hideHeader={true}
                   onActionTrigger={(action, params) => {
                     switch (action) {
                       case 'hedge':

@@ -432,7 +432,33 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     }, 0);
   }, [positions, totalValue]);
 
-  // Show loading state with detailed skeleton for expected tokens
+  // First check if wallet is connected - before any loading checks
+  if (!isConnected) {
+    return (
+      <div className="bg-white rounded-[20px] shadow-sm border border-black/5 p-12 text-center">
+        <div className="w-20 h-20 bg-[#f5f5f7] rounded-[22px] flex items-center justify-center mx-auto mb-5">
+          <Wallet className="w-10 h-10 text-[#86868b]" />
+        </div>
+        <h3 className="text-[22px] font-semibold text-[#1d1d1f] mb-2 tracking-[-0.02em]">Connect Your Wallet</h3>
+        <p className="text-[15px] text-[#86868b] max-w-[280px] mx-auto mb-6">
+          Connect your wallet to view your token positions and portfolio strategies
+        </p>
+        
+        {/* AI Assistant CTA - available even without wallet */}
+        <div className="mt-6 pt-6 border-t border-[#e8e8ed]">
+          <div className="flex items-center justify-center gap-2 text-[#007AFF] mb-3">
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[15px] font-semibold">AI Portfolio Assistant Available</span>
+          </div>
+          <p className="text-[13px] text-[#86868b] max-w-[320px] mx-auto">
+            While you connect, feel free to chat with our AI assistant to learn about portfolio strategies and DeFi concepts
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state with detailed skeleton for expected tokens (only when connected)
   if (loading || !positionsData || portfolioLoading || !hasInitiallyLoaded) {
     const expectedTokens = ['CRO', 'devUSDC', 'WCRO'];
     
@@ -509,20 +535,6 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="bg-white rounded-[20px] shadow-sm border border-black/5 p-12 text-center">
-        <div className="w-20 h-20 bg-[#f5f5f7] rounded-[22px] flex items-center justify-center mx-auto mb-5">
-          <Wallet className="w-10 h-10 text-[#86868b]" />
-        </div>
-        <h3 className="text-[22px] font-semibold text-[#1d1d1f] mb-2 tracking-[-0.02em]">Connect Your Wallet</h3>
-        <p className="text-[15px] text-[#86868b] max-w-[280px] mx-auto">
-          Connect your wallet to view your token positions and portfolio strategies
-        </p>
       </div>
     );
   }
@@ -960,6 +972,57 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State - No Portfolios or Positions */}
+      {onChainPortfolios.length === 0 && (positions.length === 0 || totalValue === 0) && (
+        <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-8 text-center">
+          <div className="max-w-md mx-auto">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-[#007AFF]/10 to-[#AF52DE]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-[#007AFF]" />
+            </div>
+            
+            {/* Title */}
+            <h3 className="text-[20px] font-semibold text-[#1d1d1f] mb-2 tracking-[-0.02em]">
+              Get Started with AI-Powered Portfolio Management
+            </h3>
+            
+            {/* Description */}
+            <p className="text-[15px] text-[#86868b] mb-6">
+              No positions yet? No problem! Our AI assistant can help you understand DeFi strategies, 
+              analyze market conditions, and guide you through creating your first portfolio.
+            </p>
+            
+            {/* Features List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 text-left">
+              <div className="flex items-start gap-3 p-3 bg-[#f5f5f7] rounded-xl">
+                <Target className="w-5 h-5 text-[#007AFF] flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[13px] font-semibold text-[#1d1d1f]">Portfolio Strategy</p>
+                  <p className="text-[11px] text-[#86868b]">AI-optimized allocation</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-[#f5f5f7] rounded-xl">
+                <Shield className="w-5 h-5 text-[#34C759] flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[13px] font-semibold text-[#1d1d1f]">Risk Management</p>
+                  <p className="text-[11px] text-[#86868b]">Automated hedging</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* CTA */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 bg-[#007AFF]/10 rounded-xl">
+                <Sparkles className="w-4 h-4 text-[#007AFF]" />
+                <span className="text-[13px] font-medium text-[#007AFF]">
+                  Chat with AI Assistant to get started
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
