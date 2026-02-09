@@ -7,33 +7,22 @@ const pool = new Pool({
 async function main() {
   const client = await pool.connect();
   try {
-    // Check all recent hedges in DB with their wallet addresses
+    // Fix the existing hedge entry_price
     const res = await client.query(`
-      SELECT 
-        hedge_id_onchain,
-        commitment_hash, 
-        wallet_address, 
-        asset, 
-        status,
-        size,
-        created_at
+      UPDATE hedges 
+      SET entry_price = 2112.91 
+      WHERE hedge_id_onchain LIKE '0x6325054f%' AND entry_price IS NULL
+      RETURNING hedge_id_onchain, entry_price, current_price
+    `);
+    console.log('Fixed hedges:', res.rows);
+    
+    // Verify
+    const verify = await client.query(`
+      SELECT hedge_id_onchain, entry_price, current_price, asset 
       FROM hedges 
-      ORDER BY created_at DESC 
-      LIMIT 10
+      WHERE status = 'active'
     `);
-    
-    console.log('=== Recent Hedges in DB ===');
-    res.rows.forEach(r => {
-      console.log(`${r.asset} | status=${r.status} | wallet=${r.wallet_address?.slice(0,10)} | hedge=${r.hedge_id_onchain?.slice(0,10)}`);
-    });
-    
-    // Check the user's specific hedge
-    const hedge = await client.query(`
-      SELECT * FROM hedges 
-      WHERE hedge_id_onchain LIKE '0x6325054f%' OR commitment_hash LIKE '0xddb0c5e5%'
-    `);
-    console.log('\n=== User hedge 0x6325054f... ===');
-    console.log(hedge.rows);
+    console.log('Active hedges after fix:', verify.rows);
     
   } finally {
     client.release();

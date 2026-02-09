@@ -126,7 +126,34 @@ export async function POST(request: NextRequest) {
 
     const asset = PAIR_NAMES[pairIndex] || `PAIR-${pairIndex}`;
     const side = isLong ? 'LONG' : 'SHORT';
-    console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | relayer: ${relayer.address} (user hidden)`);
+    
+    // Fetch live entry price from Crypto.com API (important for PnL calculation!)
+    let entryPrice: number | null = null;
+    try {
+      const symbolMap: Record<number, string> = { 0: 'BTC_USDT', 1: 'ETH_USDT', 2: 'CRO_USDT', 3: 'ATOM_USDT', 4: 'DOGE_USDT', 5: 'SOL_USDT' };
+      const tickerResponse = await fetch(`https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=${symbolMap[pairIndex]}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (tickerResponse.ok) {
+        const tickerData = await tickerResponse.json();
+        const ticker = tickerData.result?.data?.[0];
+        if (ticker && ticker.a) {
+          entryPrice = parseFloat(ticker.a);
+          console.log(`📈 Entry price for ${asset}: $${entryPrice}`);
+        }
+      }
+    } catch (priceErr) {
+      console.warn('Could not fetch entry price:', priceErr instanceof Error ? priceErr.message : priceErr);
+    }
+    
+    // Fallback prices if API fails
+    if (!entryPrice) {
+      const fallbackPrices: Record<number, number> = { 0: 71230, 1: 2111, 2: 0.081, 3: 1.979, 4: 0.097, 5: 88.02 };
+      entryPrice = fallbackPrices[pairIndex] || 1000;
+      console.log(`⚠️ Using fallback entry price for ${asset}: $${entryPrice}`);
+    }
+    
+    console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} | relayer: ${relayer.address} (user hidden)`);
 
     // Use dynamic gas price with gas estimation
     const feeData = await provider.getFeeData();
@@ -217,6 +244,7 @@ export async function POST(request: NextRequest) {
       side: side as 'LONG' | 'SHORT',
       collateral: Number(collateralAmount),
       leverage: Number(leverage),
+      entryPrice: entryPrice, // CRITICAL: Store entry price for PnL calculation!
       chain: 'cronos-testnet',
       chainId: 338,
       contractAddress: HEDGE_EXECUTOR,
@@ -229,7 +257,7 @@ export async function POST(request: NextRequest) {
       metadata: { gasless: true, x402: true },
     }).catch(err => console.warn('DB persist skipped:', err instanceof Error ? err.message : err));
 
-    console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
+    console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Entry: $${entryPrice} | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
 
     return NextResponse.json({
       success: true,
@@ -250,6 +278,7 @@ export async function POST(request: NextRequest) {
       side,
       collateral: Number(collateralAmount),
       leverage: Number(leverage),
+      entryPrice: entryPrice, // Entry price for PnL calculation
       totalHedges: Number(totalHedges),
       explorerLink: `https://explorer.cronos.org/testnet/tx/${tx.hash}`,
       // x402 Gasless info
