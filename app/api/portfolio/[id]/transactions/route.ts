@@ -262,11 +262,8 @@ export async function GET(
         txHash: tx.txHash,
         blockNumber: tx.blockNumber,
         timestamp: tx.timestamp,
-        token: tx.type !== 'rebalance' ? (TOKEN_SYMBOLS[allLogs.find(l => l.transactionHash === tx.txHash)?.args?.token?.toLowerCase() || ''] || 'Unknown') : undefined,
         tokenSymbol: tx.token,
         amount: tx.amount,
-        depositor: tx.type === 'deposit' ? allLogs.find(l => l.transactionHash === tx.txHash && l._type === 'deposit')?.args?.depositor : undefined,
-        recipient: tx.type === 'withdraw' ? allLogs.find(l => l.transactionHash === tx.txHash && l._type === 'withdraw')?.args?.recipient : undefined,
         contractAddress: addresses.rwaManager,
       }))).then(inserted => {
         logger.info(`[Transactions API] Persisted ${inserted} new transactions to DB`);

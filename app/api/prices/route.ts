@@ -94,7 +94,32 @@ export async function GET(request: NextRequest) {
     logger.info(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
 
     if (source === 'exchange') {
-      // Use fallback system
+      // Direct from Exchange API with full market data
+      const marketData = await cryptocomExchangeService.getMarketData(symbol);
+      // Cache in DB for other routes
+      upsertPrices([{
+        symbol: marketData.symbol,
+        price: marketData.price,
+        change24h: marketData.change24h,
+        volume24h: marketData.volume24h,
+        source: marketData.source,
+      }]).catch(() => {});
+      return NextResponse.json({
+        success: true,
+        data: {
+          symbol: marketData.symbol,
+          price: marketData.price,
+          change24h: marketData.change24h,
+          volume24h: marketData.volume24h,
+          high24h: marketData.high24h,
+          low24h: marketData.low24h,
+          source: marketData.source,
+        },
+        source: 'cryptocom-exchange',
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Use fallback system (auto)
       const marketData = getMarketDataService();
       const price = await marketData.getTokenPrice(symbol);
       // Cache in DB
@@ -133,38 +158,7 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-      // Use fallback system
-      const marketData = getMarketDataService();
-      const price = await marketData.getTokenPrice(symbol);
       
-      return NextResponse.json({
-        success: true,
-        data: {
-          symbol: price.symbol,
-          price: price.price,
-          change24h: price.change24h,
-          volume24h: price.volume24h,
-          source: price.source,
-        },
-        source: 'multi-source-fallback',
-        timestamp: new Date().toISOString(),
-      }, {
-        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
-      });
-    }
-  } catch (error: unknown) {
-    logger.error('[Market Data API] Error', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to fetch market data',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

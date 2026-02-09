@@ -32,6 +32,21 @@ export interface Hedge {
   wallet_binding_hash: string | null;
   owner_commitment: string | null;
   metadata: Record<string, unknown> | null;
+  // On-chain fields (added by add-onchain-fields.sql migration)
+  hedge_id_onchain: string | null;
+  chain: string | null;
+  chain_id: number | null;
+  contract_address: string | null;
+  commitment_hash: string | null;
+  nullifier: string | null;
+  proxy_wallet: string | null;
+  on_chain: boolean | null;
+  explorer_link: string | null;
+  block_number: number | null;
+  // DB-first optimization fields (added by db-first-optimization.sql migration)
+  current_price: number | null;
+  price_source: string | null;
+  price_updated_at: Date | null;
 }
 
 export interface CreateHedgeParams {

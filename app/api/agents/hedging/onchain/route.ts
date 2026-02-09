@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices } from '@/lib/db/hedges';
+import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 
 export const runtime = 'nodejs';
@@ -286,7 +286,7 @@ export async function GET(request: NextRequest) {
             openTimestamp: Math.floor(new Date(h.created_at).getTime() / 1000),
             closeTimestamp: h.closed_at ? Math.floor(new Date(h.closed_at).getTime() / 1000) : 0,
             realizedPnl: h.realized_pnl || 0,
-            createdAt: h.created_at.toISOString(),
+            createdAt: new Date(h.created_at).toISOString(),
             txHash: h.tx_hash || null,
             proxyWallet: h.proxy_wallet || null,
             proxyVault: ZK_PROXY_VAULT,
