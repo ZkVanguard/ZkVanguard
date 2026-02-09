@@ -15,6 +15,12 @@ import { ethers } from 'ethers';
 const X402_VERIFIER_ADDRESS = '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852' as `0x${string}`;
 const USDC_TOKEN = '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`;
 
+// Cached contract instances (reused across invocations within same serverless lifecycle)
+let _cachedWallet: ethers.Wallet | null = null;
+let _cachedUsdcContract: ethers.Contract | null = null;
+let _cachedVerifierContract: ethers.Contract | null = null;
+let _lastPrivateKey: string | null = null;
+
 interface StorageResult {
   txHash: string;
   usdcFee: string;
@@ -68,7 +74,14 @@ export async function storeCommitmentTrueGaslessServerSide(
       throw new Error('No server wallet configured. Please set SERVER_WALLET_PRIVATE_KEY in environment variables.');
     }
     
-    const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
+    const serverWallet = (() => {
+      if (_cachedWallet && _lastPrivateKey === serverPrivateKey) return _cachedWallet;
+      _cachedWallet = new ethers.Wallet(serverPrivateKey, provider);
+      _lastPrivateKey = serverPrivateKey;
+      _cachedUsdcContract = null; // Reset dependent contracts
+      _cachedVerifierContract = null;
+      return _cachedWallet;
+    })();
     
     // Set signer on x402 client
     x402.setSigner(serverWallet);
@@ -84,13 +97,16 @@ export async function storeCommitmentTrueGaslessServerSide(
     
     const feeAmount = BigInt(usdcFee); // 0.01 USDC in 6 decimals
 
-    // Ensure the server wallet has USDC and allowance for the contract
-    const erc20Abi = [
-      'function balanceOf(address) view returns (uint256)',
-      'function allowance(address,address) view returns (uint256)',
-      'function approve(address,uint256) returns (bool)'
-    ];
-    const usdc = new ethers.Contract(USDC_TOKEN, erc20Abi, serverWallet);
+    // Reuse cached ERC20 contract instance
+    if (!_cachedUsdcContract) {
+      const erc20Abi = [
+        'function balanceOf(address) view returns (uint256)',
+        'function allowance(address,address) view returns (uint256)',
+        'function approve(address,uint256) returns (bool)'
+      ];
+      _cachedUsdcContract = new ethers.Contract(USDC_TOKEN, erc20Abi, serverWallet);
+    }
+    const usdc = _cachedUsdcContract;
 
     const balance: bigint = await usdc.balanceOf(serverWallet.address);
     if (balance < feeAmount) {
@@ -110,11 +126,14 @@ export async function storeCommitmentTrueGaslessServerSide(
     // The contract will verify USDC was received and store the commitment
     logger.info('Step 2: Contract stores commitment (gas sponsored by contract)');
 
-    const abi = [
-      'function storeCommitmentWithUSDC(bytes32 proofHash, bytes32 merkleRoot, uint256 securityLevel) external'
-    ];
-
-    const contract = new ethers.Contract(X402_VERIFIER_ADDRESS, abi, serverWallet);
+    // Reuse cached verifier contract instance
+    if (!_cachedVerifierContract) {
+      const abi = [
+        'function storeCommitmentWithUSDC(bytes32 proofHash, bytes32 merkleRoot, uint256 securityLevel) external'
+      ];
+      _cachedVerifierContract = new ethers.Contract(X402_VERIFIER_ADDRESS, abi, serverWallet);
+    }
+    const contract = _cachedVerifierContract;
 
     // Call contract to store commitment (uses server wallet, but contract sponsors gas via USDC payment)
     const tx = await contract.storeCommitmentWithUSDC(proofHash, merkleRoot, securityLevel);

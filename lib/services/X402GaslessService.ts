@@ -65,6 +65,19 @@ export class X402GaslessService {
     'function balanceOf(address account) external view returns (uint256)',
   ];
 
+  // Cached contract instances (keyed by provider identity)
+  private static cachedERC20Contracts: Map<string, ethers.Contract> = new Map();
+
+  private static getERC20Contract(providerOrSigner: ethers.Provider | ethers.Signer): ethers.Contract {
+    const key = 'usdc-' + (providerOrSigner instanceof ethers.Wallet ? providerOrSigner.address : 'provider');
+    let contract = this.cachedERC20Contracts.get(key);
+    if (!contract) {
+      contract = new ethers.Contract(this.config.usdcAddress, this.ERC20_ABI, providerOrSigner);
+      this.cachedERC20Contracts.set(key, contract);
+    }
+    return contract;
+  }
+
   /**
    * Check if user can execute gasless transaction
    */
@@ -77,12 +90,8 @@ export class X402GaslessService {
     }
 
     try {
-      // Check USDC balance
-      const usdcContract = new ethers.Contract(
-        this.config.usdcAddress,
-        this.ERC20_ABI,
-        provider
-      );
+      // Check USDC balance using cached contract
+      const usdcContract = this.getERC20Contract(provider);
 
       const balance = await usdcContract.balanceOf(userAddress);
       const requiredFee = BigInt(this.config.feePerTransaction);
@@ -109,11 +118,7 @@ export class X402GaslessService {
     userAddress: string
   ): Promise<boolean> {
     try {
-      const usdcContract = new ethers.Contract(
-        this.config.usdcAddress,
-        this.ERC20_ABI,
-        signer
-      );
+      const usdcContract = this.getERC20Contract(signer);
 
       const currentAllowance = await usdcContract.allowance(
         userAddress,
@@ -202,9 +207,6 @@ export class X402GaslessService {
 
       const receipt = await tx.wait();
 
-      // Get gas sponsored info
-      const totalGasSponsored = await x402Contract.totalGasSponsored();
-
       // Cache the transaction
       if (receipt?.hash) {
         addTransactionToCache({
@@ -225,7 +227,7 @@ export class X402GaslessService {
       return {
         success: true,
         txHash: receipt?.hash,
-        gasSponsored: ethers.formatEther(totalGasSponsored),
+        gasSponsored: receipt ? ethers.formatEther(receipt.gasUsed * (receipt.gasPrice || 0n)) : '0',
         feeInUSDC: ethers.formatUnits(this.config.feePerTransaction, 6),
       };
     } catch (error) {
