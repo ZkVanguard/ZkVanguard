@@ -162,11 +162,6 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [showCloseConfirm, _toggleCloseConfirm, openCloseConfirm, closeCloseConfirm] = useToggle(false);
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
-  
-  // DEBUG: Track showCloseConfirm state changes  
-  useEffect(() => {
-    console.log('[DEBUG] showCloseConfirm changed to:', showCloseConfirm);
-  }, [showCloseConfirm]);
   const [closeReceipt, setCloseReceipt] = useState<CloseReceipt | null>(null);
   const [detailHedge, setDetailHedge] = useState<HedgePosition | null>(null);
   const processingRef = useRef(false);
@@ -395,61 +390,24 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
       if (selectedHedge.onChain && selectedHedge.hedgeId) {
         try {
-          // WALLET OWNERSHIP CHECK: Verify connected wallet matches hedge owner
-          // This prevents the confusing "signature mismatch" error downstream
-          const hedgeOwner = selectedHedge.walletAddress?.toLowerCase();
-          const connectedWallet = address?.toLowerCase();
+          // NOTE: For ZK privacy hedges, the hedge.walletAddress might show the proxy wallet,
+          // NOT the true owner. The backend verifies ownership via EIP-712 signature against
+          // the TRUE owner stored in hedge_ownership table. So we skip frontend ownership check
+          // and let the signature verification handle it properly.
           
-          if (hedgeOwner && connectedWallet && hedgeOwner !== connectedWallet) {
-            // Edge case: Check if owner is 'anonymous' (legacy gasless hedges without wallet binding)
-            if (hedgeOwner === 'anonymous') {
-              logger.warn('⚠️ Hedge has anonymous owner - cannot verify ownership', { component: 'ActiveHedges' });
-              setCloseReceipt({
-                success: false,
-                asset: selectedHedge.asset,
-                side: selectedHedge.type,
-                collateral: selectedHedge.capitalUsed,
-                leverage: selectedHedge.leverage,
-                realizedPnl: 0,
-                fundsReturned: 0,
-                balanceBefore: 0,
-                balanceAfter: 0,
-                txHash: '',
-                explorerLink: '',
-                trader: address || '',
-                gasless: false,
-                error: 'This hedge was created without wallet binding and cannot be closed with signature verification. Please contact support.',
-                finalStatus: 'ownership_unknown',
-              });
-              setClosingPosition(null);
-              return;
-            }
-            
-            // Normal case: Connected wallet doesn't match hedge owner
-            logger.warn('⚠️ Wallet mismatch - cannot close hedge owned by different wallet', { 
-              component: 'ActiveHedges', 
-              data: { hedgeOwner, connectedWallet }
-            });
-            setCloseReceipt({
-              success: false,
-              asset: selectedHedge.asset,
-              side: selectedHedge.type,
-              collateral: selectedHedge.capitalUsed,
-              leverage: selectedHedge.leverage,
-              realizedPnl: 0,
-              fundsReturned: 0,
-              balanceBefore: 0,
-              balanceAfter: 0,
-              txHash: '',
-              explorerLink: '',
-              trader: hedgeOwner || '',
-              gasless: false,
-              error: `This hedge belongs to ${hedgeOwner?.slice(0, 6)}...${hedgeOwner?.slice(-4)}. Please switch to that wallet to close it.`,
-              finalStatus: 'wrong_wallet',
-            });
-            setClosingPosition(null);
-            return;
-          }
+          // Debug logging
+          console.log('[DEBUG] Close position - ZK hedge flow:', {
+            hedgeId: selectedHedge.hedgeId,
+            displayedWallet: selectedHedge.walletAddress, // Might be proxy
+            connectedWallet: address, // User's actual wallet
+            proxyWallet: selectedHedge.proxyWallet,
+            commitmentHash: selectedHedge.commitmentHash,
+            zkVerified: selectedHedge.zkVerified,
+          });
+          
+          // The user signs with their REAL wallet, and the backend verifies
+          // this signature against the TRUE owner from hedge_ownership table
+          // This works even when hedge.walletAddress shows the proxy wallet
 
           // Sign the close request with the user's wallet (EIP-712)
           const sigResult = await signCloseHedge(selectedHedge.hedgeId);
@@ -1948,7 +1906,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => { console.log('[DEBUG] Backdrop clicked'); closeCloseConfirm(); }}
+            onClick={closeCloseConfirm}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -2026,7 +1984,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => { console.log('[DEBUG] Cancel clicked, showCloseConfirm before:', showCloseConfirm); closeCloseConfirm(); console.log('[DEBUG] closeCloseConfirm called'); }}
+                  onClick={closeCloseConfirm}
                   className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] rounded-xl text-[15px] font-semibold transition-colors"
                 >
                   Cancel
