@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TYPES } from '@/lib/hedge-ownership';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,8 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ No ownership record for hedge ${hedgeId.slice(0, 18)}... — allowing legacy close`);
     }
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, { batchMaxCount: 1 });
+    const tp = getCronosProvider(RPC_URL);
+    const provider = tp.provider;
     const wallet = new ethers.Wallet(DEPLOYER_PK, provider);
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
     const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, provider);

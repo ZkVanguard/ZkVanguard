@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, { batchMaxCount: 1 });
+    const tp = getCronosProvider(RPC_URL);
+    const provider = tp.provider;
     const relayer = new ethers.Wallet(RELAYER_PK, provider);
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, relayer);
     const usdc = new ethers.Contract(MOCK_USDC, ERC20_ABI, relayer);

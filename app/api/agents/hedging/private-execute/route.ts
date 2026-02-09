@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,9 +155,9 @@ export async function POST(request: NextRequest) {
     let txHash: string | undefined;
     let onChainStored = false;
 
-    const _provider = new ethers.JsonRpcProvider(
+    const _provider = getCronosProvider(
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    );
+    ).provider;
 
     const privateKey = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY;
     

@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
         });
 
         const rpcUrl = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org/';
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = getCronosProvider(rpcUrl).provider;
         const signer = new ethers.Wallet(executorPrivateKey, provider);
 
         const hedgeClient = new HedgeExecutorClient({
@@ -330,9 +331,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Initialize Moonlander client for Cronos Testnet
-    const _provider = new ethers.JsonRpcProvider(
+    const _provider = getCronosProvider(
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    );
+    ).provider;
 
     // Use wallet for signing (in production, use secure key management)
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
@@ -570,8 +571,11 @@ export async function POST(request: NextRequest) {
       ? MOONLANDER_CONTRACTS.CRONOS_EVM.RPC_URL 
       : (process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
     
-    // Create on-chain client
-    const moonlander = new MoonlanderOnChainClient(rpcUrl, network as NetworkType);
+    // Create on-chain client (pass throttled provider for testnet)
+    const moonlanderProvider = network === 'CRONOS_EVM' 
+      ? rpcUrl 
+      : getCronosProvider(rpcUrl).provider;
+    const moonlander = new MoonlanderOnChainClient(moonlanderProvider, network as NetworkType);
     await moonlander.initialize(privateKey);
 
     // Map asset to Moonlander market format and get pair index
