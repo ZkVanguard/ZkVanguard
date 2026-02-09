@@ -390,9 +390,61 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
       if (selectedHedge.onChain && selectedHedge.hedgeId) {
         try {
-          // NOTE: We don't pre-check wallet ownership here because for gasless hedges,
-          // the displayed walletAddress may be the relayer (not the actual owner).
-          // The server verifies true ownership via the hedge_ownership registry.
+          // WALLET OWNERSHIP CHECK: Verify connected wallet matches hedge owner
+          // This prevents the confusing "signature mismatch" error downstream
+          const hedgeOwner = selectedHedge.walletAddress?.toLowerCase();
+          const connectedWallet = address?.toLowerCase();
+          
+          if (hedgeOwner && connectedWallet && hedgeOwner !== connectedWallet) {
+            // Edge case: Check if owner is 'anonymous' (legacy gasless hedges without wallet binding)
+            if (hedgeOwner === 'anonymous') {
+              logger.warn('⚠️ Hedge has anonymous owner - cannot verify ownership', { component: 'ActiveHedges' });
+              setCloseReceipt({
+                success: false,
+                asset: selectedHedge.asset,
+                side: selectedHedge.type,
+                collateral: selectedHedge.capitalUsed,
+                leverage: selectedHedge.leverage,
+                realizedPnl: 0,
+                fundsReturned: 0,
+                balanceBefore: 0,
+                balanceAfter: 0,
+                txHash: '',
+                explorerLink: '',
+                trader: address || '',
+                gasless: false,
+                error: 'This hedge was created without wallet binding and cannot be closed with signature verification. Please contact support.',
+                finalStatus: 'ownership_unknown',
+              });
+              setClosingPosition(null);
+              return;
+            }
+            
+            // Normal case: Connected wallet doesn't match hedge owner
+            logger.warn('⚠️ Wallet mismatch - cannot close hedge owned by different wallet', { 
+              component: 'ActiveHedges', 
+              data: { hedgeOwner, connectedWallet }
+            });
+            setCloseReceipt({
+              success: false,
+              asset: selectedHedge.asset,
+              side: selectedHedge.type,
+              collateral: selectedHedge.capitalUsed,
+              leverage: selectedHedge.leverage,
+              realizedPnl: 0,
+              fundsReturned: 0,
+              balanceBefore: 0,
+              balanceAfter: 0,
+              txHash: '',
+              explorerLink: '',
+              trader: hedgeOwner || '',
+              gasless: false,
+              error: `This hedge belongs to ${hedgeOwner?.slice(0, 6)}...${hedgeOwner?.slice(-4)}. Please switch to that wallet to close it.`,
+              finalStatus: 'wrong_wallet',
+            });
+            setClosingPosition(null);
+            return;
+          }
 
           // Sign the close request with the user's wallet (EIP-712)
           const sigResult = await signCloseHedge(selectedHedge.hedgeId);
