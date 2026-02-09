@@ -51,18 +51,28 @@ interface UnifiedSummary {
   analyzedAt: number;
 }
 
+interface HedgeInitialValues {
+  asset?: string;
+  side?: 'LONG' | 'SHORT';
+  leverage?: number;
+  size?: number;
+  reason?: string;
+}
+
 interface PredictionInsightsProps {
   assets?: string[];
   showAll?: boolean;
   onOpenHedge?: (market: PredictionMarket) => void;
   onTriggerAgentAnalysis?: (market: PredictionMarket) => void;
+  onCreateRecommendedHedge?: (values: HedgeInitialValues) => void;
 }
 
 export const PredictionInsights = memo(function PredictionInsights({ 
   assets = ['BTC', 'ETH', 'CRO', 'USDC'], 
   showAll = false, 
   onOpenHedge, 
-  onTriggerAgentAnalysis 
+  onTriggerAgentAnalysis,
+  onCreateRecommendedHedge,
 }: PredictionInsightsProps) {
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
   const { isLoading: loading, error, setError, startLoading: _startLoading, stopLoading } = useLoading(true);
@@ -454,6 +464,29 @@ export const PredictionInsights = memo(function PredictionInsights({
                               <p className="text-[11px] text-[#6e6e73] leading-snug">
                                 {lr.rationale}
                               </p>
+                              {/* Create Hedge Button */}
+                              {onCreateRecommendedHedge && lr.direction !== 'neutral' && (
+                                <button
+                                  onClick={() => {
+                                    const leverageNum = parseInt(lr.leverage.replace(/[^\d]/g, '')) || 2;
+                                    onCreateRecommendedHedge({
+                                      asset: lr.symbol,
+                                      side: lr.direction.toUpperCase() as 'LONG' | 'SHORT',
+                                      leverage: leverageNum,
+                                      size: 100, // Default $100 collateral
+                                      reason: `AI Recommendation: ${lr.rationale}`,
+                                    });
+                                  }}
+                                  className={`mt-2 w-full py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                                    lr.direction === 'long'
+                                      ? 'bg-[#34C759] hover:bg-[#2fb350] text-white'
+                                      : 'bg-[#FF3B30] hover:bg-[#e6342b] text-white'
+                                  }`}
+                                >
+                                  <Shield className="w-3 h-3" />
+                                  Create {lr.direction.toUpperCase()} Hedge
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}

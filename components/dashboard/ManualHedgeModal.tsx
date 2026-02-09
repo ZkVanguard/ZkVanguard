@@ -77,11 +77,20 @@ const HEDGE_EXECUTOR_ABI = [
 ] as const;
 
 // ── Interfaces ──────────────────────────────────────────────────
+interface HedgeInitialValues {
+  asset?: string;
+  side?: 'LONG' | 'SHORT';
+  leverage?: number;
+  size?: number;
+  reason?: string;
+}
+
 interface ManualHedgeModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableAssets?: string[];
   walletAddress?: string;
+  initialValues?: HedgeInitialValues;
 }
 
 interface HedgeSuccess {
@@ -138,6 +147,7 @@ export function ManualHedgeModal({
   isOpen,
   onClose,
   availableAssets = ['BTC', 'ETH', 'CRO'],
+  initialValues,
 }: ManualHedgeModalProps) {
   // ── Form state ────────────────────────────────────────────────
   const [hedgeType, setHedgeType] = useState<'SHORT' | 'LONG'>('SHORT');
@@ -148,6 +158,17 @@ export function ManualHedgeModal({
   const [targetPrice, setTargetPrice] = useState('');
   const [stopLoss, setStopLoss] = useState('');
   const [reason, setReason] = useState('');
+
+  // ── Apply initial values from AI recommendation ───────────────
+  useEffect(() => {
+    if (isOpen && initialValues) {
+      if (initialValues.asset) setAsset(initialValues.asset);
+      if (initialValues.side) setHedgeType(initialValues.side);
+      if (initialValues.leverage) setLeverage(initialValues.leverage);
+      if (initialValues.size) setCollateralInput(initialValues.size.toString());
+      if (initialValues.reason) setReason(initialValues.reason);
+    }
+  }, [isOpen, initialValues]);
 
   // ── Wallet / chain state ──────────────────────────────────────
   const { address } = useAccount();

@@ -126,6 +126,15 @@ export default function DashboardPage() {
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
   
+  // Initial values for hedge modal (from AI recommendations)
+  const [hedgeInitialValues, setHedgeInitialValues] = useState<{
+    asset?: string;
+    side?: 'LONG' | 'SHORT';
+    leverage?: number;
+    size?: number;
+    reason?: string;
+  } | undefined>(undefined);
+  
   const displayAddress = address?.toString() || '';
   const portfolioAssets = ['CRO', 'USDC', 'WBTC', 'ETH'];
   
@@ -138,6 +147,13 @@ export default function DashboardPage() {
   const handleNavChange = (id: NavId) => {
     setActiveNav(id);
     setMobileMenuOpen(false);
+  };
+
+  // Handle AI recommendation -> pre-fill hedge modal
+  const handleCreateRecommendedHedge = (values: typeof hedgeInitialValues) => {
+    logger.info('Creating hedge from AI recommendation', { component: 'DashboardPage', data: values });
+    setHedgeInitialValues(values);
+    setHedgeModalOpen(true);
   };
 
   const handleOpenHedge = async (market: PredictionMarket) => {
@@ -604,9 +620,13 @@ export default function DashboardPage() {
       {/* Manual Hedge Modal */}
       <ManualHedgeModal
         isOpen={hedgeModalOpen}
-        onClose={() => setHedgeModalOpen(false)}
+        onClose={() => {
+          setHedgeModalOpen(false);
+          setHedgeInitialValues(undefined); // Clear pre-filled values
+        }}
         availableAssets={portfolioAssets}
         walletAddress={address}
+        initialValues={hedgeInitialValues}
       />
 
       {/* Settings Modal */}
@@ -756,6 +776,7 @@ export default function DashboardPage() {
           <PredictionInsights 
             onOpenHedge={handleOpenHedge}
             onTriggerAgentAnalysis={handleAgentAnalysis}
+            onCreateRecommendedHedge={handleCreateRecommendedHedge}
             assets={portfolioAssets}
           />
         );
