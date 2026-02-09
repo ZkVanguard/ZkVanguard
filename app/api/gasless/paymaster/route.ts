@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,7 +63,7 @@ export async function GET() {
       });
     }
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = getCronosProvider(RPC_URL).provider;
     const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider);
 
     const [totalCommitments, totalGasSponsored, totalTxRelayed, balance] = await contract.getStats();
@@ -144,7 +145,7 @@ async function handlePrepare(body: {
     }, { status: 400 });
   }
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const provider = getCronosProvider(RPC_URL).provider;
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider);
 
   // Get user's nonce
@@ -212,7 +213,7 @@ async function handleExecute(body: {
     }, { status: 500 });
   }
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const provider = getCronosProvider(RPC_URL).provider;
   const relayer = new ethers.Wallet(relayerPrivateKey, provider);
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, relayer);
 

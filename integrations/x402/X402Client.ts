@@ -7,6 +7,7 @@
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 import { ethers } from 'ethers';
 import { logger } from '../../shared/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export interface X402TransferRequest {
   token: string;
@@ -58,7 +59,8 @@ export class X402Client {
       network: CronosNetwork.CronosTestnet,
     });
 
-    this.provider = provider || new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
+    // Use throttled provider for rate-limit protection on Vercel
+    this.provider = provider || getCronosProvider(process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org').provider;
     
     logger.info('x402 Facilitator client initialized', {
       network: 'Cronos Testnet',
