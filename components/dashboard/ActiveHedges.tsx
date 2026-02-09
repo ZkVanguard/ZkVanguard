@@ -5,6 +5,7 @@ import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, External
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
+import { useWalletClient } from 'wagmi';
 
 interface HedgePosition {
   id: string;
@@ -94,28 +95,28 @@ interface ActiveHedgesProps {
 }
 
 export const ActiveHedges = memo(function ActiveHedges({ address, compact = false, onCreateHedge, onOpenChat }: ActiveHedgesProps) {
-  // EIP-712 signature helper for closing hedges
+  // Get the connected wallet client (works with OKX, MetaMask, etc.)
+  const { data: walletClient } = useWalletClient();
+  
+  // EIP-712 signature helper for closing hedges - uses wagmi walletClient for correct wallet
   const signCloseHedge = async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
     try {
-      if (typeof window === 'undefined' || !(window as unknown as { ethereum?: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum) {
-        logger.warn('No wallet provider found, skipping signature', { component: 'ActiveHedges' });
-        return null;
+      if (!walletClient) {
+        logger.warn('No wallet client available, trying fallback', { component: 'ActiveHedges' });
+        // Fallback to window.ethereum if walletClient not available
+        if (typeof window === 'undefined' || !(window as unknown as { ethereum?: unknown }).ethereum) {
+          logger.warn('No wallet provider found', { component: 'ActiveHedges' });
+          return null;
+        }
       }
-      const ethereum = (window as unknown as { ethereum: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum;
-      // Use eth_accounts (no popup) since wallet is already connected; fall back to eth_requestAccounts only if needed
-      let accounts = await ethereum.request({ method: 'eth_accounts', params: [] }) as unknown as string[];
-      if (!accounts || accounts.length === 0) {
-        accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
-      }
-      if (!accounts || accounts.length === 0) return null;
-      const signer = accounts[0];
+      
       const timestamp = Math.floor(Date.now() / 1000);
 
       const domain = {
         name: 'Chronos Vanguard',
         version: '1',
         chainId: 338,
-        verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9',
+        verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`,
       };
       const types = {
         CloseHedge: [
@@ -123,15 +124,38 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           { name: 'action', type: 'string' },
           { name: 'timestamp', type: 'uint256' },
         ],
-      };
-      const value = { hedgeId, action: 'close', timestamp: String(timestamp) };
+      } as const;
+      const message = { hedgeId: hedgeId as `0x${string}`, action: 'close', timestamp: BigInt(timestamp) };
 
-      // EIP-712 structured signing via MetaMask
+      // Use wagmi walletClient (uses the CONNECTED wallet - OKX, MetaMask, etc.)
+      if (walletClient) {
+        logger.info('🔑 Signing with connected wallet via wagmi', { component: 'ActiveHedges', wallet: walletClient.account?.address });
+        
+        const signature = await walletClient.signTypedData({
+          domain,
+          types,
+          primaryType: 'CloseHedge',
+          message,
+        });
+
+        logger.info('🔑 Signed close-hedge message', { component: 'ActiveHedges', signer: walletClient.account?.address });
+        return { signature, timestamp };
+      }
+
+      // Fallback: direct window.ethereum (legacy)
+      const ethereum = (window as unknown as { ethereum: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum;
+      let accounts = await ethereum.request({ method: 'eth_accounts', params: [] }) as unknown as string[];
+      if (!accounts || accounts.length === 0) {
+        accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
+      }
+      if (!accounts || accounts.length === 0) return null;
+      const signer = accounts[0];
+
       const msgParams = JSON.stringify({
         types: { EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }], ...types },
         primaryType: 'CloseHedge',
         domain,
-        message: value,
+        message: { hedgeId, action: 'close', timestamp: String(timestamp) },
       });
 
       const signature = await ethereum.request({
@@ -139,7 +163,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         params: [signer, msgParams],
       });
 
-      logger.info('🔑 Signed close-hedge message', { component: 'ActiveHedges', signer });
+      logger.info('🔑 Signed close-hedge message (fallback)', { component: 'ActiveHedges', signer });
       return { signature, timestamp };
     } catch (err) {
       logger.warn('Wallet signature declined or failed', { component: 'ActiveHedges', error: err });
