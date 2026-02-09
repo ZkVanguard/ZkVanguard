@@ -263,7 +263,7 @@ async function handleExecute(body: {
   return NextResponse.json({
     success: true,
     txHash: receipt.hash,
-    explorerUrl: `https://explorer.cronos.org/testnet3/tx/${receipt.hash}`,
+    explorerUrl: `https://explorer.cronos.org/testnet/tx/${receipt.hash}`,
     gasUsed: receipt.gasUsed.toString(),
     costBreakdown: {
       userCost: '$0.00 ✅',

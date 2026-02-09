@@ -722,7 +722,7 @@ export function ManualHedgeModal({
                     </div>
                     <TxHashDisplay hash={success.txHash} label="Transaction" />
                     <a
-                      href={`https://explorer.cronos.org/testnet3/tx/${success.txHash}`}
+                      href={`https://explorer.cronos.org/testnet/tx/${success.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-[8px] text-[12px] font-medium transition-colors"

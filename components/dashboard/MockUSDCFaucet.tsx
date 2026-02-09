@@ -215,7 +215,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
       {/* Tx Link */}
       {mintHash && (
         <a
-          href={`https://explorer.cronos.org/testnet3/tx/${mintHash}`}
+          href={`https://explorer.cronos.org/testnet/tx/${mintHash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1 text-[12px] text-[#007AFF] hover:underline"

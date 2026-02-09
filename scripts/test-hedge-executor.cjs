@@ -410,7 +410,7 @@ async function main() {
   console.log("  ├─ MockMoonlander:    " + deployment.MockMoonlander);
   console.log("  ├─ ZKHedgeCommitment: " + deployment.ZKHedgeCommitment);
   console.log("  └─ USDC:              " + deployment.usdcToken);
-  console.log("\n  Explorer: https://explorer.cronos.org/testnet3/address/" + deployment.HedgeExecutor);
+  console.log("\n  Explorer: https://explorer.cronos.org/testnet/address/" + deployment.HedgeExecutor);
   console.log("");
 
   if (failed > 0) process.exit(1);

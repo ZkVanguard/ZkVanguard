@@ -180,7 +180,7 @@ async function main() {
   console.log(`  HedgeExecutor:     ${hedgeExecutorAddress}`);
   console.log(`  Deployer:          ${deployer.address}`);
   console.log('\nNext steps:');
-  console.log('  1. Verify on explorer: https://explorer.cronos.org/testnet3');
+  console.log('  1. Verify on explorer: https://explorer.cronos.org/testnet');
   console.log('  2. Test with: npx hardhat run scripts/test-hedge-executor.ts --network cronos-testnet');
   console.log('  3. Update agents/specialized/HedgingAgent.ts with on-chain addresses');
 }
