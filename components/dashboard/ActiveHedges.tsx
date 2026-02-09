@@ -378,18 +378,72 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
       if (selectedHedge.onChain && selectedHedge.hedgeId) {
         try {
+          // Check wallet ownership BEFORE asking for signature
+          // This gives better UX than making user sign then failing
+          if (selectedHedge.walletAddress && address) {
+            const hedgeOwner = selectedHedge.walletAddress.toLowerCase();
+            const connectedWallet = address.toLowerCase();
+            if (hedgeOwner !== connectedWallet) {
+              logger.warn('⚠️ Wrong wallet connected - hedge owned by different address', { 
+                component: 'ActiveHedges',
+                hedgeOwner: hedgeOwner.slice(0, 10) + '...',
+                connected: connectedWallet.slice(0, 10) + '...'
+              });
+              setCloseReceipt({
+                success: false,
+                asset: selectedHedge.asset,
+                side: selectedHedge.type,
+                collateral: selectedHedge.capitalUsed,
+                leverage: selectedHedge.leverage,
+                realizedPnl: 0,
+                fundsReturned: 0,
+                balanceBefore: 0,
+                balanceAfter: 0,
+                txHash: '',
+                explorerLink: '',
+                trader: address || '',
+                gasless: false,
+                error: `Wrong wallet connected. This hedge was created by ${hedgeOwner.slice(0, 6)}...${hedgeOwner.slice(-4)}. Please switch to that wallet to close it.`,
+                finalStatus: 'wrong_wallet',
+              });
+              setClosingPosition(null);
+              return;
+            }
+          }
+
           // Sign the close request with the user's wallet (EIP-712)
           const sigResult = await signCloseHedge(selectedHedge.hedgeId);
 
-          const closePayload: Record<string, unknown> = {
-            hedgeId: selectedHedge.hedgeId,
-          };
-
-          if (sigResult) {
-            closePayload.signature = sigResult.signature;
-            closePayload.walletAddress = address;
-            closePayload.signatureTimestamp = sigResult.timestamp;
+          // Signature is REQUIRED for on-chain hedges - abort if user declined
+          if (!sigResult) {
+            logger.warn('⚠️ Signature declined - cannot close on-chain hedge without wallet verification', { component: 'ActiveHedges' });
+            setCloseReceipt({
+              success: false,
+              asset: selectedHedge.asset,
+              side: selectedHedge.type,
+              collateral: selectedHedge.capitalUsed,
+              leverage: selectedHedge.leverage,
+              realizedPnl: 0,
+              fundsReturned: 0,
+              balanceBefore: 0,
+              balanceAfter: 0,
+              txHash: '',
+              explorerLink: '',
+              trader: address || '',
+              gasless: false,
+              error: 'Signature required. Please sign the message in your wallet to verify ownership and close the hedge.',
+              finalStatus: 'signature_declined',
+            });
+            setClosingPosition(null);
+            return;
           }
+
+          const closePayload = {
+            hedgeId: selectedHedge.hedgeId,
+            signature: sigResult.signature,
+            walletAddress: address,
+            signatureTimestamp: sigResult.timestamp,
+          };
 
           const response = await fetch('/api/agents/hedging/close-onchain', {
             method: 'POST',
