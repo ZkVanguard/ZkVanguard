@@ -43,7 +43,11 @@ export async function GET(
     
     const client = createPublicClient({
       chain: cronosTestnet,
-      transport: http('https://evm-t3.cronos.org'),
+      transport: http('https://evm-t3.cronos.org', {
+        retryCount: 3,
+        retryDelay: 500,
+        batch: { batchSize: 1 },
+      }),
     });
 
     const addresses = getContractAddresses(338);
