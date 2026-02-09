@@ -50,10 +50,14 @@ export async function GET(
     
     logger.info(`[Portfolio API] Fetching portfolio ${portfolioId}${bypassCache ? ' (cache bypassed)' : ''}...`);
     
-    // Create public client for Cronos Testnet
+    // Create public client for Cronos Testnet (with retry for rate-limit protection)
     const client = createPublicClient({
       chain: cronosTestnet,
-      transport: http('https://evm-t3.cronos.org'),
+      transport: http('https://evm-t3.cronos.org', {
+        retryCount: 3,
+        retryDelay: 500,
+        batch: { batchSize: 1 },
+      }),
     });
 
     const addresses = getContractAddresses(338); // Cronos Testnet chain ID

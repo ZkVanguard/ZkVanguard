@@ -3,6 +3,7 @@ import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { MCPClient } from '@/integrations/mcp/MCPClient';
 import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 /**
  * Risk Assessment API Route
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get balance from blockchain
-        const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+        const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
         const balance = await provider.getBalance(address);
         const balanceInToken = parseFloat(ethers.formatEther(balance));
         const value = balanceInToken * priceData.price;
