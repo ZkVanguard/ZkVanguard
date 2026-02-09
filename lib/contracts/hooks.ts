@@ -2,12 +2,13 @@
  * React hooks for interacting with deployed smart contracts
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { logger } from '@/lib/utils/logger';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useChainId } from 'wagmi';
 import { getContractAddresses } from './addresses';
 import { RWA_MANAGER_ABI, ZK_VERIFIER_ABI, PAYMENT_ROUTER_ABI } from './abis';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 // In-memory cache for user portfolios (60s TTL)
 const portfolioCache = new Map<string, { data: UserPortfolio[]; timestamp: number }>();
@@ -52,7 +53,7 @@ export function usePortfolio(portfolioId: bigint) {
     args: [portfolioId],
     query: {
       enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000' && !!portfolioId,
-      refetchInterval: 10000,
+      refetchInterval: 30000,
     },
   });
 }
@@ -71,7 +72,7 @@ export function usePortfolioAssets(portfolioId: bigint) {
     args: [portfolioId],
     query: {
       enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000' && portfolioId !== undefined,
-      refetchInterval: 10000,
+      refetchInterval: 30000,
     },
   });
 }
@@ -89,7 +90,7 @@ export function usePortfolioCount() {
     functionName: 'portfolioCount',
     query: {
       enabled: !!addresses.rwaManager && addresses.rwaManager !== '0x0000000000000000000000000000000000000000',
-      refetchInterval: 10000, // Refetch every 10 seconds
+      refetchInterval: 30000, // Refetch every 30 seconds
     },
   });
 }
@@ -128,9 +129,10 @@ export function useUserPortfolios(userAddress?: string) {
 
       try {
         const { ethers } = await import('ethers');
-        const provider = new ethers.JsonRpcProvider(
+        const throttled = getCronosProvider(
           process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
         );
+        const provider = throttled.provider;
         
         const contract = new ethers.Contract(
           addresses.rwaManager,
