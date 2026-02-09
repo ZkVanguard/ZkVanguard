@@ -641,18 +641,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       </div>
                       <div className="text-[11px] space-y-0.5">
                         <div className="text-[#1d1d1f] font-medium">{hedge.reason}</div>
-                        {hedge.txHash && (
+                        {(hedge.txHash || hedge.onChain) && (
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] uppercase tracking-wider text-[#86868b]">TX:</span>
                             <a
-                              href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                              href={hedge.txHash ? `https://explorer.cronos.org/testnet/tx/${hedge.txHash}` : `https://explorer.cronos.org/testnet/address/${hedge.contractAddress || '0x090b6221137690EbB37667E4644287487CE462B9'}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                              title="View on Cronos Explorer"
+                              title={hedge.txHash ? 'View transaction on Cronos Explorer' : 'View contract on Cronos Explorer'}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="font-mono">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
+                              <span className="font-mono">{hedge.txHash ? `${hedge.txHash.slice(0, 8)}...${hedge.txHash.slice(-6)}` : 'View on Explorer'}</span>
                               <ExternalLink className="w-2.5 h-2.5" />
                             </a>
                           </div>
@@ -978,19 +978,19 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               )}
                             </div>
                             {/* Reason text hidden - not needed for display */}
-                            {hedge.txHash && (
+                            {hedge.onChain && (
                               <div className="text-[9px] sm:text-[11px] space-y-0.5">
                               <div className="flex items-center gap-1">
                                 <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#86868b]">TX:</span>
                                 <a
-                                  href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                  href={hedge.txHash ? `https://explorer.cronos.org/testnet/tx/${hedge.txHash}` : `https://explorer.cronos.org/testnet/address/${hedge.contractAddress || '0x090b6221137690EbB37667E4644287487CE462B9'}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                                  title="View on Cronos Explorer"
+                                  title={hedge.txHash ? 'View transaction on Cronos Explorer' : 'View contract on Cronos Explorer'}
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
+                                  <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash ? `${hedge.txHash.slice(0, 8)}...${hedge.txHash.slice(-6)}` : 'View on Explorer'}</span>
                                   <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
                                 </a>
                               </div>
@@ -1107,17 +1107,17 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                                 </a>
                               </div>
                             )}
-                            {hedge.txHash && (
+                            {hedge.onChain && (
                               <div className="flex items-center gap-1">
                                 <span className="text-[10px] uppercase tracking-wider">TRANSACTION:</span>
                                 <a
-                                  href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
+                                  href={hedge.txHash ? `https://explorer.cronos.org/testnet/tx/${hedge.txHash}` : `https://explorer.cronos.org/testnet/address/${hedge.contractAddress || '0x090b6221137690EbB37667E4644287487CE462B9'}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
-                                  title="View on Cronos Explorer"
+                                  title={hedge.txHash ? 'View collateral transfer transaction' : 'View HedgeExecutor contract'}
                                 >
-                                  <span className="font-mono">{hedge.txHash.slice(0, 10)}...{hedge.txHash.slice(-8)}</span>
+                                  <span className="font-mono">{hedge.txHash ? `${hedge.txHash.slice(0, 10)}...${hedge.txHash.slice(-8)}` : 'View Contract'}</span>
                                   <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               </div>
@@ -1739,6 +1739,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           </a>
                         </div>
                       )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#86868b]">Collateral (USDC)</span>
+                        <a
+                          href={`https://explorer.cronos.org/testnet/token/0x28217DAddC55e3C4831b4A48A00Ce04880786967/token-transfers?address=${detailHedge.contractAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
+                        >
+                          <span className="font-mono">View USDC in Contract</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
                       {detailHedge.walletAddress && (
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] text-[#86868b]">Trader Wallet</span>
@@ -1804,15 +1816,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  {detailHedge.txHash && (
+                  {detailHedge.onChain && (
                     <a
-                      href={`https://explorer.cronos.org/testnet/tx/${detailHedge.txHash}`}
+                      href={detailHedge.txHash
+                        ? `https://explorer.cronos.org/testnet/tx/${detailHedge.txHash}`
+                        : `https://explorer.cronos.org/testnet/address/${detailHedge.contractAddress}`
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 px-4 py-3 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-xl text-[13px] font-semibold transition-colors flex items-center justify-center gap-2"
                     >
                       <ExternalLink className="w-4 h-4" />
-                      View on Explorer
+                      {detailHedge.txHash ? 'View Transaction' : 'View Contract'}
                     </a>
                   )}
                   {detailHedge.status === 'active' && (

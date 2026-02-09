@@ -376,3 +376,162 @@ export async function clearAllHedges(): Promise<number> {
   const result = await query(sql);
   return result.length;
 }
+
+// ─── On-Chain Hedge DB Functions ─────────────────────────────────────────────
+// These enable DB-first lookup for tx hashes, eliminating slow event log scanning.
+// On-chain hedge data is stored at creation time and queried instantly.
+
+export interface OnChainHedgeParams {
+  hedgeIdOnchain: string;       // bytes32 from HedgeExecutor
+  txHash: string;               // Transaction hash
+  trader: string;               // On-chain trader address
+  asset: string;
+  side: 'LONG' | 'SHORT';
+  collateral: number;
+  leverage: number;
+  entryPrice?: number;
+  chain?: string;
+  chainId?: number;
+  contractAddress?: string;
+  commitmentHash?: string;
+  nullifier?: string;
+  proxyWallet?: string;
+  blockNumber?: number;
+  explorerLink?: string;
+  walletAddress?: string;       // Real owner wallet (for ZK-private hedges)
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Upsert an on-chain hedge into the DB.
+ * Called at creation time (from open-onchain-gasless route) so the tx hash
+ * is immediately available — no event log scanning needed.
+ */
+export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<Hedge | null> {
+  try {
+    const orderId = params.hedgeIdOnchain; // Use on-chain hedgeId as order_id
+    const explorerLink = params.explorerLink || `https://explorer.cronos.org/testnet/tx/${params.txHash}`;
+
+    const sql = `
+      INSERT INTO hedges (
+        order_id, wallet_address, asset, market, side,
+        size, notional_value, leverage, entry_price,
+        simulation_mode, tx_hash, on_chain, chain, chain_id,
+        contract_address, hedge_id_onchain, commitment_hash,
+        nullifier, proxy_wallet, block_number, explorer_link,
+        metadata, status
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9,
+        false, $10, true, $11, $12,
+        $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, 'active'
+      )
+      ON CONFLICT (order_id) DO UPDATE SET
+        tx_hash = COALESCE(EXCLUDED.tx_hash, hedges.tx_hash),
+        block_number = COALESCE(EXCLUDED.block_number, hedges.block_number),
+        explorer_link = COALESCE(EXCLUDED.explorer_link, hedges.explorer_link),
+        on_chain = true,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `;
+
+    return await queryOne<Hedge>(sql, [
+      orderId,
+      params.walletAddress || params.trader,
+      params.asset,
+      `${params.asset}/USD`,
+      params.side,
+      params.collateral,
+      params.collateral * params.leverage,
+      params.leverage,
+      params.entryPrice || null,
+      params.txHash,
+      params.chain || 'cronos-testnet',
+      params.chainId || 338,
+      params.contractAddress || '0x090b6221137690EbB37667E4644287487CE462B9',
+      params.hedgeIdOnchain,
+      params.commitmentHash || null,
+      params.nullifier || null,
+      params.proxyWallet || null,
+      params.blockNumber || null,
+      explorerLink,
+      JSON.stringify(params.metadata || {}),
+    ]);
+  } catch (error) {
+    // If on-chain columns don't exist yet, log and return null (non-fatal)
+    console.warn('upsertOnChainHedge failed (migration may not be run yet):', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/**
+ * Get an on-chain hedge by its bytes32 hedgeId.
+ * Returns instantly from DB instead of scanning event logs.
+ */
+export async function getOnChainHedgeByHedgeId(hedgeIdOnchain: string): Promise<Hedge | null> {
+  try {
+    const sql = 'SELECT * FROM hedges WHERE hedge_id_onchain = $1 OR order_id = $1';
+    return await queryOne<Hedge>(sql, [hedgeIdOnchain]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch-fetch tx hashes for multiple on-chain hedgeIds from DB.
+ * Returns a map of hedgeId → txHash. Much faster than event log scanning.
+ */
+export async function getTxHashesFromDb(hedgeIds: string[]): Promise<Record<string, string>> {
+  if (hedgeIds.length === 0) return {};
+
+  try {
+    // Use ANY() for batch lookup
+    const sql = `
+      SELECT hedge_id_onchain, tx_hash 
+      FROM hedges 
+      WHERE hedge_id_onchain = ANY($1) 
+        AND tx_hash IS NOT NULL
+    `;
+    const rows = await query<{ hedge_id_onchain: string; tx_hash: string }>(sql, [hedgeIds]);
+
+    const map: Record<string, string> = {};
+    for (const row of rows) {
+      if (row.hedge_id_onchain && row.tx_hash) {
+        map[row.hedge_id_onchain] = row.tx_hash;
+      }
+    }
+    return map;
+  } catch {
+    // If columns don't exist, return empty (non-fatal)
+    return {};
+  }
+}
+
+/**
+ * Bulk-save tx hashes discovered from event log scanning.
+ * Called as a background cache-fill for hedges not yet in DB.
+ */
+export async function cacheTxHashes(entries: Array<{ hedgeId: string; txHash: string; blockNumber?: number }>): Promise<void> {
+  if (entries.length === 0) return;
+
+  try {
+    for (const { hedgeId, txHash, blockNumber } of entries) {
+      const explorerLink = `https://explorer.cronos.org/testnet/tx/${txHash}`;
+      await query(`
+        INSERT INTO hedges (order_id, hedge_id_onchain, tx_hash, block_number, explorer_link, on_chain, simulation_mode, asset, market, side, size, notional_value, leverage, status)
+        VALUES ($1, $2, $3, $4, $5, true, false, 'UNKNOWN', 'UNKNOWN', 'LONG', 0, 0, 1, 'active')
+        ON CONFLICT (order_id) DO UPDATE SET
+          tx_hash = COALESCE(EXCLUDED.tx_hash, hedges.tx_hash),
+          block_number = COALESCE(EXCLUDED.block_number, hedges.block_number),
+          explorer_link = COALESCE(EXCLUDED.explorer_link, hedges.explorer_link),
+          hedge_id_onchain = COALESCE(EXCLUDED.hedge_id_onchain, hedges.hedge_id_onchain),
+          on_chain = true,
+          updated_at = CURRENT_TIMESTAMP
+      `, [hedgeId, hedgeId, txHash, blockNumber || null, explorerLink]);
+    }
+  } catch (error) {
+    console.warn('cacheTxHashes failed:', error instanceof Error ? error.message : error);
+  }
+}

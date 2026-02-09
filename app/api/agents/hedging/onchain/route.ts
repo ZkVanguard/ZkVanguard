@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { getTxHashesFromDb, cacheTxHashes } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -132,7 +133,9 @@ function deriveProxyAddress(owner: string, nonce: number, zkBindingHash: string)
   return '0x' + hash.slice(-40);
 }
 
-// Fetch tx hashes from HedgeOpened event logs (throttled)
+// Fetch tx hashes from contract event logs (throttled)
+// Scans ALL events from the contract and matches hedgeIds from topics,
+// avoiding hardcoded event signatures that may differ from the deployed implementation.
 async function fetchTxHashes(
   contract: ethers.Contract,
   provider: ethers.JsonRpcProvider,
@@ -141,14 +144,15 @@ async function fetchTxHashes(
 ): Promise<Record<string, string>> {
   const txHashMap: Record<string, string> = {};
   try {
-    const hedgeOpenedTopic = ethers.id('HedgeOpened(bytes32,address,uint256,bool,uint256,uint256,bytes32)');
     const contractAddress = await contract.getAddress();
     const latestBlock = await tp.call('blockNumber', () => provider.getBlockNumber(), 15_000);
     
-    // Tight scan range + bigger chunks — fast enough for every request
-    const MAX_SCAN_BLOCKS = 5000;
-    const CHUNK_SIZE = 5000;
+    // Wider scan range, respecting RPC max block distance of 2000
+    const MAX_SCAN_BLOCKS = 50_000;
+    const CHUNK_SIZE = 2000;
     const startBlock = Math.max(0, latestBlock - MAX_SCAN_BLOCKS);
+    const hedgeIdSet = new Set(hedgeIds);
+    const remainingIds = new Set(hedgeIds);
     
     // Throttle log queries through the semaphore
     const chunks: Array<{ from: number; to: number }> = [];
@@ -158,12 +162,13 @@ async function fetchTxHashes(
 
     const logResults = await tp.throttledAll(
       chunks.map(({ from, to }) => ({
-        key: `logs-${from}-${to}`,
+        key: `logs-all-${from}-${to}`,
         fn: async () => {
           try {
+            // Scan ALL events from the contract (no topic filter)
+            // to handle upgraded implementations with different event signatures
             return await provider.getLogs({
               address: contractAddress,
-              topics: [hedgeOpenedTopic],
               fromBlock: from,
               toBlock: to,
             });
@@ -177,14 +182,20 @@ async function fetchTxHashes(
 
     for (const logs of logResults) {
       for (const log of logs) {
+        // Match hedgeId from topic[1] (indexed first param in HedgeOpened variants)
         const hedgeId = log.topics[1];
-        if (hedgeId && hedgeIds.includes(hedgeId)) {
+        if (hedgeId && hedgeIdSet.has(hedgeId)) {
           txHashMap[hedgeId] = log.transactionHash;
+          remainingIds.delete(hedgeId);
         }
       }
     }
+    
+    if (remainingIds.size > 0) {
+      console.warn(`Could not find tx hashes for ${remainingIds.size}/${hedgeIds.length} hedges (may be outside ${MAX_SCAN_BLOCKS}-block scan window)`);
+    }
   } catch (err) {
-    console.warn('Could not fetch HedgeOpened events for tx hashes:', err instanceof Error ? err.message : err);
+    console.warn('Could not fetch events for tx hashes:', err instanceof Error ? err.message : err);
   }
   return txHashMap;
 }
@@ -256,11 +267,48 @@ export async function GET(request: NextRequest) {
       console.warn('Could not fetch entry prices from MockMoonlander');
     }
 
-    // Fetch tx hashes (5k block scan, cached 120s — fast enough for default)
+    // ── Step 3b: DB-first tx hash lookup (instant), event scan only for misses ──
     const skipTxHashes = searchParams.get('txhashes') === 'false';
-    const txHashMap = skipTxHashes
-      ? {} as Record<string, string>
-      : await fetchTxHashes(contract, provider, hedgeIds, tp);
+    let txHashMap: Record<string, string> = {};
+    if (!skipTxHashes) {
+      // 1. Check Neon DB first — instant lookup
+      txHashMap = await getTxHashesFromDb(hedgeIds);
+      const dbHits = Object.keys(txHashMap).length;
+      const missingIds = hedgeIds.filter(id => !txHashMap[id]);
+
+      if (missingIds.length > 0) {
+        // 2. Fall back to event log scan ONLY for DB-misses
+        const scannedHashes = await fetchTxHashes(contract, provider, missingIds, tp);
+        Object.assign(txHashMap, scannedHashes);
+
+        // 3. Persist discovered hashes back to DB (fire-and-forget)
+        const newEntries = Object.entries(scannedHashes).map(([hedgeId, txHash]) => ({ hedgeId, txHash }));
+        if (newEntries.length > 0) {
+          cacheTxHashes(newEntries).catch(() => {});
+        }
+      }
+
+      // 4. Last resort — check deployment file for demo hedge hashes
+      const stillMissing = hedgeIds.filter(id => !txHashMap[id]);
+      if (stillMissing.length > 0) {
+        try {
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const deployPath = path.join(process.cwd(), 'deployments', 'cronos-testnet.json');
+          const deployData = JSON.parse(await fs.readFile(deployPath, 'utf-8'));
+          const demoHedges = deployData.demoHedges || [];
+          for (const demo of demoHedges) {
+            if (demo.hedgeId && demo.txHash && stillMissing.includes(demo.hedgeId)) {
+              txHashMap[demo.hedgeId] = demo.txHash;
+            }
+          }
+        } catch { /* deployment file not available */ }
+      }
+
+      if (dbHits > 0) {
+        console.log(`⚡ TX hashes: ${dbHits} from DB, ${Object.keys(txHashMap).length - dbHits} from scan/deploy`);
+      }
+    }
 
     // Second pass: build hedge details with real prices
     const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {

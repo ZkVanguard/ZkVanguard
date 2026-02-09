@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { upsertOnChainHedge } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -168,6 +169,23 @@ export async function POST(request: NextRequest) {
     const totalHedges = await contract.totalHedgesOpened();
     const elapsed = Date.now() - startTime;
 
+    // Extract on-chain hedgeId from HedgeOpened event
+    let onChainHedgeId = commitmentHash; // fallback
+    try {
+      const iface = new ethers.Interface([
+        'event HedgeOpened(bytes32 indexed hedgeId, address indexed trader, uint256 pairIndex, bool isLong, uint256 collateral, uint256 leverage, bytes32 commitmentHash)',
+      ]);
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
+          if (parsed && parsed.name === 'HedgeOpened') {
+            onChainHedgeId = parsed.args.hedgeId;
+            break;
+          }
+        } catch { /* not this event */ }
+      }
+    } catch { /* parsing failed, use commitmentHash */ }
+
     // Register hedge ownership for signature-verified close
     registerHedgeOwnership(commitmentHash, {
       walletAddress: userWallet,
@@ -179,6 +197,27 @@ export async function POST(request: NextRequest) {
       openedAt: new Date().toISOString(),
       txHash: tx.hash,
     });
+
+    // Persist to Neon DB — tx hash instantly available on next query (no event scan)
+    upsertOnChainHedge({
+      hedgeIdOnchain: onChainHedgeId,
+      txHash: tx.hash,
+      trader: relayer.address,
+      asset,
+      side: side as 'LONG' | 'SHORT',
+      collateral: Number(collateralAmount),
+      leverage: Number(leverage),
+      chain: 'cronos-testnet',
+      chainId: 338,
+      contractAddress: HEDGE_EXECUTOR,
+      commitmentHash,
+      nullifier,
+      proxyWallet: relayer.address,
+      blockNumber: receipt.blockNumber,
+      explorerLink: `https://explorer.cronos.org/testnet/tx/${tx.hash}`,
+      walletAddress: userWallet !== 'anonymous' ? userWallet : undefined,
+      metadata: { gasless: true, x402: true },
+    }).catch(err => console.warn('DB persist skipped:', err instanceof Error ? err.message : err));
 
     console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
 
