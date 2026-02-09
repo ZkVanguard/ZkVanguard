@@ -37,12 +37,32 @@ interface AssetFilter {
   minLiquidity?: number;
 }
 
-export function AdvancedPortfolioCreator() {
+interface AdvancedPortfolioCreatorProps {
+  /** External control for modal visibility */
+  isOpen?: boolean;
+  /** Callback when modal visibility changes */
+  onOpenChange?: (isOpen: boolean) => void;
+  /** Hide the trigger button (for embedded use) */
+  hideTrigger?: boolean;
+}
+
+export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = false }: AdvancedPortfolioCreatorProps = {}) {
   const { isConnected, address } = useAccount();
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
   const { signMessageAsync } = useSignMessage();
   
-  const [showModal, setShowModal] = useState(false);
+  const [internalShowModal, setInternalShowModal] = useState(false);
+  
+  // Use external control if provided, otherwise use internal state
+  const showModal = isOpen !== undefined ? isOpen : internalShowModal;
+  const setShowModal = (value: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(value);
+    } else {
+      setInternalShowModal(value);
+    }
+  };
+  
   const [step, setStep] = useState<'strategy' | 'filters' | 'review' | 'zk-protection'>('strategy');
   const [strategyPrivate, setStrategyPrivate] = useState(true);
   const [zkProofGenerated, setZkProofGenerated] = useState(false);
@@ -203,7 +223,7 @@ export function AdvancedPortfolioCreator() {
   };
 
   if (!isConnected) {
-    return (
+    return hideTrigger ? null : (
       <button
         className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#86868b] rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-white flex items-center gap-2 cursor-not-allowed"
         disabled
@@ -216,13 +236,15 @@ export function AdvancedPortfolioCreator() {
 
   return (
     <>
-      <button
-        onClick={() => setShowModal(true)}
-        className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.98] rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-white transition-all flex items-center gap-2"
-      >
-        <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-        Create AI-Managed Portfolio
-      </button>
+      {!hideTrigger && (
+        <button
+          onClick={() => setShowModal(true)}
+          className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.98] rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-white transition-all flex items-center gap-2"
+        >
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+          Create AI-Managed Portfolio
+        </button>
+      )}
 
       <AnimatePresence>
         {showModal && (
