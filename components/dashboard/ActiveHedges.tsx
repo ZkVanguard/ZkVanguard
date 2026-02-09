@@ -185,7 +185,9 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       let onChainHedges: HedgePosition[] = [];
 
       try {
-        const onChainResponse = await fetch('/api/agents/hedging/onchain?stats=true');
+        // Pass user's wallet address to filter hedges they actually own
+        const walletParam = address ? `&walletAddress=${address}` : '';
+        const onChainResponse = await fetch(`/api/agents/hedging/onchain?stats=true${walletParam}`);
         if (onChainResponse.ok) {
           const onChainData = await onChainResponse.json();
           if (onChainData.success && onChainData.summary?.details) {
@@ -1709,8 +1711,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       <div className="h-px bg-[#e8e8ed]" />
                       <div className="flex items-center justify-between">
                         <span className="text-[12px] font-semibold text-[#1d1d1f]">Estimated Return</span>
-                        <span className={`text-[17px] font-bold ${((detailHedge.capitalUsed || 0) + detailHedge.pnl) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                          {Math.max(0, (detailHedge.capitalUsed || 0) + detailHedge.pnl).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
+                        <span className={`text-[17px] font-bold ${((detailHedge.capitalUsed || 0) + (detailHedge.pnl || 0)) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                          {Math.max(0, (detailHedge.capitalUsed || 0) + (detailHedge.pnl || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-[#86868b]">
