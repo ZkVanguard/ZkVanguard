@@ -378,38 +378,9 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       // For on-chain hedges, call the on-chain close API which triggers actual fund withdrawal
       if (selectedHedge.onChain && selectedHedge.hedgeId) {
         try {
-          // Check wallet ownership BEFORE asking for signature
-          // This gives better UX than making user sign then failing
-          if (selectedHedge.walletAddress && address) {
-            const hedgeOwner = selectedHedge.walletAddress.toLowerCase();
-            const connectedWallet = address.toLowerCase();
-            if (hedgeOwner !== connectedWallet) {
-              logger.warn('⚠️ Wrong wallet connected - hedge owned by different address', { 
-                component: 'ActiveHedges',
-                hedgeOwner: hedgeOwner.slice(0, 10) + '...',
-                connected: connectedWallet.slice(0, 10) + '...'
-              });
-              setCloseReceipt({
-                success: false,
-                asset: selectedHedge.asset,
-                side: selectedHedge.type,
-                collateral: selectedHedge.capitalUsed,
-                leverage: selectedHedge.leverage,
-                realizedPnl: 0,
-                fundsReturned: 0,
-                balanceBefore: 0,
-                balanceAfter: 0,
-                txHash: '',
-                explorerLink: '',
-                trader: address || '',
-                gasless: false,
-                error: `Wrong wallet connected. This hedge was created by ${hedgeOwner.slice(0, 6)}...${hedgeOwner.slice(-4)}. Please switch to that wallet to close it.`,
-                finalStatus: 'wrong_wallet',
-              });
-              setClosingPosition(null);
-              return;
-            }
-          }
+          // NOTE: We don't pre-check wallet ownership here because for gasless hedges,
+          // the displayed walletAddress may be the relayer (not the actual owner).
+          // The server verifies true ownership via the hedge_ownership registry.
 
           // Sign the close request with the user's wallet (EIP-712)
           const sigResult = await signCloseHedge(selectedHedge.hedgeId);
