@@ -4,6 +4,7 @@ import { MCPClient } from '@/integrations/mcp/MCPClient';
 import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 // Import the multi-agent system
 import { LeadAgent } from '@/agents/core/LeadAgent';
@@ -43,9 +44,9 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     // STEP 1: Initialize Multi-Agent System
     // ========================================================================
-    const provider = new ethers.JsonRpcProvider(
+    const provider = getCronosProvider(
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    );
+    ).provider;
     
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
     const signer = privateKey ? new ethers.Wallet(privateKey, provider) : undefined;
