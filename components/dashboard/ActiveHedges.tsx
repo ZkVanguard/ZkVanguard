@@ -1096,7 +1096,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                               <div className="flex items-center gap-1">
                                 <span className="text-[10px] uppercase tracking-wider text-[#FF9500]">CONTRACT:</span>
                                 <a
-                                  href={`https://explorer.cronos.org/testnet3/address/${hedge.contractAddress}`}
+                                  href={`https://explorer.cronos.org/testnet/address/${hedge.contractAddress}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
@@ -1666,6 +1666,36 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   </div>
                 </div>
 
+                {/* Amount Held */}
+                {detailHedge.onChain && (
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Funds Held in Contract</div>
+                    <div className="p-4 bg-gradient-to-r from-[#34C759]/5 to-[#007AFF]/5 rounded-xl border border-[#34C759]/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-[#86868b]">Collateral Locked</span>
+                        <span className="text-[15px] font-bold text-[#1d1d1f]">{detailHedge.capitalUsed?.toLocaleString()} USDC</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-[#86868b]">Unrealized P/L</span>
+                        <span className={`text-[15px] font-bold ${detailHedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                          {detailHedge.pnl >= 0 ? '+' : ''}{detailHedge.pnl.toFixed(2)} USDC
+                        </span>
+                      </div>
+                      <div className="h-px bg-[#e8e8ed]" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] font-semibold text-[#1d1d1f]">Estimated Return</span>
+                        <span className={`text-[17px] font-bold ${((detailHedge.capitalUsed || 0) + detailHedge.pnl) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                          {Math.max(0, (detailHedge.capitalUsed || 0) + detailHedge.pnl).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-[#86868b]">
+                        <Lock className="w-3 h-3 text-[#5856D6]" />
+                        <span>Funds held in HedgeExecutor contract — returned to your wallet on close</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* On-Chain Info */}
                 {detailHedge.onChain && (
                   <div className="space-y-2.5">
@@ -1685,7 +1715,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] text-[#86868b]">Contract</span>
                           <a
-                            href={`https://explorer.cronos.org/testnet3/address/${detailHedge.contractAddress}`}
+                            href={`https://explorer.cronos.org/testnet/address/${detailHedge.contractAddress}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
