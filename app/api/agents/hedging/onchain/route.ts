@@ -225,9 +225,9 @@ export async function GET(request: NextRequest) {
       ]);
 
       if (dbHedges.length > 0) {
-        // Filter by wallet ownership (using hedge_ownership registry for gasless hedges)
+        // Filter by wallet ownership - ALWAYS filter when address is provided
         let filteredHedges = dbHedges;
-        if (address && address !== DEPLOYER) {
+        if (address) {
           // Check both: direct wallet_address match OR commitment_hash in user's owned hedges
           const ownedCommitmentSet = new Set(Object.keys(userOwnedCommitments || {}));
           
@@ -238,6 +238,8 @@ export async function GET(request: NextRequest) {
             if (h.commitment_hash && ownedCommitmentSet.has(h.commitment_hash.toLowerCase())) return true;
             return false;
           });
+          
+          console.log(`🔍 Filtered hedges for ${address.slice(0,10)}...: ${filteredHedges.length}/${dbHedges.length}`);
         }
 
         // Overlay live prices from cache (or DB-stored prices if cache miss)
