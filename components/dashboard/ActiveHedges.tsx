@@ -248,10 +248,20 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           worstTrade,
         });
         setHedges(allHedges);
-        setLoading(false);
-        processingRef.current = false;
-        return;
+      } else {
+        // No hedges found - clear state and show empty UI
+        setHedges([]);
+        setStats({
+          totalHedges: 0,
+          activeHedges: 0,
+          winRate: 0,
+          totalPnL: 0,
+          avgHoldTime: '0h',
+          bestTrade: 0,
+          worstTrade: 0,
+        });
       }
+      setLoading(false);
 
     } catch (error) {
       logger.error('❌ [ActiveHedges] Error loading hedges', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
