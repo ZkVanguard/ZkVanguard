@@ -7,6 +7,7 @@ import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import PortfolioDetailModal from './PortfolioDetailModal';
+import { AdvancedPortfolioCreator } from './AdvancedPortfolioCreator';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
 import { logger } from '@/lib/utils/logger';
@@ -992,8 +993,8 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
             
             {/* Description */}
             <p className="text-[15px] text-[#86868b] mb-6">
-              No positions yet? No problem! Our AI assistant can help you understand DeFi strategies, 
-              analyze market conditions, and guide you through creating your first portfolio.
+              No positions yet? No problem! Create your first AI-managed portfolio with custom risk settings, 
+              automated hedging, and ZK-protected strategies.
             </p>
             
             {/* Features List */}
@@ -1014,14 +1015,12 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               </div>
             </div>
             
-            {/* CTA */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-[#007AFF]/10 rounded-xl">
-                <Sparkles className="w-4 h-4 text-[#007AFF]" />
-                <span className="text-[13px] font-medium text-[#007AFF]">
-                  Chat with AI Assistant to get started
-                </span>
-              </div>
+            {/* CTA - Create Portfolio Button */}
+            <div className="flex flex-col items-center gap-3">
+              <AdvancedPortfolioCreator />
+              <p className="text-[12px] text-[#86868b]">
+                Or chat with AI Assistant for guidance
+              </p>
             </div>
           </div>
         </div>
