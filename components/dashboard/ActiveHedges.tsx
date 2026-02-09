@@ -163,6 +163,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
   const [closeReceipt, setCloseReceipt] = useState<CloseReceipt | null>(null);
+  const [detailHedge, setDetailHedge] = useState<HedgePosition | null>(null);
   const processingRef = useRef(false);
   const _lastProcessedRef = useRef<string>('');
   
@@ -617,7 +618,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             {activeHedges.length > 0 ? (
               /* Active positions */
               activeHedges.slice(0, 2).map((hedge) => (
-                <div key={hedge.id} className="flex items-center justify-between p-2 sm:p-3 bg-[#34C759]/5 rounded-[10px] sm:rounded-[12px] border border-[#34C759]/20">
+                <div key={hedge.id} className="flex items-center justify-between p-2 sm:p-3 bg-[#34C759]/5 rounded-[10px] sm:rounded-[12px] border border-[#34C759]/20 cursor-pointer hover:bg-[#34C759]/10 transition-colors" onClick={() => setDetailHedge(hedge)}>
                   <div className="flex items-center gap-2">
                     <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] sm:rounded-[10px] flex items-center justify-center ${
                       hedge.type === 'SHORT' ? 'bg-[#FF3B30]/10' : 'bg-[#34C759]/10'
@@ -638,17 +639,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] space-y-0.5\">
+                      <div className="text-[11px] space-y-0.5">
                         <div className="text-[#1d1d1f] font-medium">{hedge.reason}</div>
                         {hedge.txHash && (
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] uppercase tracking-wider">TX:</span>
+                            <span className="text-[10px] uppercase tracking-wider text-[#86868b]">TX:</span>
                             <a
                               href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
                               title="View on Cronos Explorer"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <span className="font-mono">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
                               <ExternalLink className="w-2.5 h-2.5" />
@@ -937,7 +939,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     {activeHedges.slice(0, 5).map((hedge) => (
                       <div
                         key={hedge.id}
-                        className="flex-shrink-0 w-[240px] sm:w-[280px] p-3 sm:p-4 bg-[#f5f5f7] rounded-[12px] sm:rounded-[14px] border border-[#e8e8ed]"
+                        className="flex-shrink-0 w-[240px] sm:w-[280px] p-3 sm:p-4 bg-[#f5f5f7] rounded-[12px] sm:rounded-[14px] border border-[#e8e8ed] cursor-pointer hover:border-[#007AFF]/30 hover:shadow-md transition-all"
+                        onClick={() => setDetailHedge(hedge)}
                       >
                         <div className="flex items-center gap-2 mb-2 sm:mb-3">
                           <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] sm:rounded-[10px] flex items-center justify-center ${
@@ -978,13 +981,14 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                             {hedge.txHash && (
                               <div className="text-[9px] sm:text-[11px] space-y-0.5">
                               <div className="flex items-center gap-1">
-                                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider">TX:</span>
+                                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[#86868b]">TX:</span>
                                 <a
                                   href={`https://explorer.cronos.org/testnet/tx/${hedge.txHash}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-0.5 text-[#007AFF] hover:underline"
                                   title="View on Cronos Explorer"
+                                  onClick={(e) => e.stopPropagation()}
                                 >
                                   <span className="font-mono text-[9px] sm:text-[10px]">{hedge.txHash.slice(0, 8)}...{hedge.txHash.slice(-6)}</span>
                                   <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
@@ -1020,7 +1024,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         </div>
 
                         <button
-                          onClick={() => handleClosePosition(hedge)}
+                          onClick={(e) => { e.stopPropagation(); handleClosePosition(hedge); }}
                           disabled={closingPosition === hedge.id}
                           className="w-full mt-2 sm:mt-3 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#FF3B30] rounded-[8px] sm:rounded-[10px] text-[11px] sm:text-[13px] font-semibold transition-colors disabled:opacity-50 active:scale-[0.98]"
                         >
@@ -1570,6 +1574,232 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           </a>
         </div>
       )}
+
+      {/* Hedge Detail Modal — comprehensive info about a specific hedge */}
+      <AnimatePresence>
+        {detailHedge && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setDetailHedge(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-[#e8e8ed] overflow-hidden max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className={`p-5 ${detailHedge.type === 'LONG' ? 'bg-gradient-to-r from-[#34C759]/10 to-[#007AFF]/5' : 'bg-gradient-to-r from-[#FF3B30]/10 to-[#FF9500]/5'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      detailHedge.type === 'SHORT' ? 'bg-[#FF3B30]/20' : 'bg-[#34C759]/20'
+                    }`}>
+                      {detailHedge.type === 'SHORT' ? (
+                        <TrendingDown className="w-6 h-6 text-[#FF3B30]" strokeWidth={2.5} />
+                      ) : (
+                        <TrendingUp className="w-6 h-6 text-[#34C759]" strokeWidth={2.5} />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[18px] font-bold text-[#1d1d1f]">{detailHedge.type} {detailHedge.asset}</h3>
+                        <span className="px-2 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-[6px] text-[11px] font-bold">
+                          {detailHedge.leverage}x
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded uppercase">{detailHedge.status}</span>
+                        {detailHedge.zkVerified && (
+                          <span className="px-1.5 py-0.5 bg-[#5856D6] text-white text-[9px] font-bold rounded flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5" />ZK
+                          </span>
+                        )}
+                        {detailHedge.onChain && (
+                          <span className="px-1.5 py-0.5 bg-[#FF9500]/10 text-[#FF9500] text-[9px] font-bold rounded">⛓ ON-CHAIN</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => setDetailHedge(null)} className="p-2 hover:bg-black/5 rounded-lg transition-colors">
+                    <XCircle className="w-5 h-5 text-[#86868b]" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* P&L */}
+                <div className="text-center p-4 bg-[#f5f5f7] rounded-xl">
+                  <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">Unrealized P/L</div>
+                  <div className={`text-[28px] font-bold ${detailHedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                    {detailHedge.pnl >= 0 ? '+' : ''}{detailHedge.pnl.toFixed(2)} USDC
+                  </div>
+                  <div className={`text-[14px] font-medium ${detailHedge.pnlPercent >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                    {detailHedge.pnlPercent >= 0 ? '+' : ''}{detailHedge.pnlPercent.toFixed(2)}%
+                  </div>
+                </div>
+
+                {/* Position Details */}
+                <div className="space-y-2.5">
+                  <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Position Details</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
+                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Entry Price</div>
+                      <div className="text-[15px] font-bold text-[#1d1d1f]">${detailHedge.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</div>
+                    </div>
+                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
+                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Current Price</div>
+                      <div className="text-[15px] font-bold text-[#1d1d1f]">${detailHedge.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</div>
+                    </div>
+                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
+                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Collateral</div>
+                      <div className="text-[15px] font-bold text-[#1d1d1f]">{detailHedge.capitalUsed?.toLocaleString()} USDC</div>
+                    </div>
+                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
+                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Notional Value</div>
+                      <div className="text-[15px] font-bold text-[#1d1d1f]">{((detailHedge.capitalUsed || 0) * detailHedge.leverage).toLocaleString()} USDC</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* On-Chain Info */}
+                {detailHedge.onChain && (
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">On-Chain Details</div>
+                    <div className="p-3 bg-[#f5f5f7] rounded-xl space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#86868b]">Chain</span>
+                        <span className="text-[12px] font-semibold text-[#1d1d1f]">Cronos Testnet (338)</span>
+                      </div>
+                      {detailHedge.hedgeId && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">Hedge ID</span>
+                          <span className="text-[11px] font-mono text-[#1d1d1f]">{detailHedge.hedgeId.slice(0, 10)}...{detailHedge.hedgeId.slice(-8)}</span>
+                        </div>
+                      )}
+                      {detailHedge.contractAddress && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">Contract</span>
+                          <a
+                            href={`https://explorer.cronos.org/testnet3/address/${detailHedge.contractAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
+                          >
+                            <span className="font-mono">{detailHedge.contractAddress.slice(0, 8)}...{detailHedge.contractAddress.slice(-6)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      )}
+                      {detailHedge.txHash && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">Transaction</span>
+                          <a
+                            href={`https://explorer.cronos.org/testnet/tx/${detailHedge.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
+                          >
+                            <span className="font-mono">{detailHedge.txHash.slice(0, 10)}...{detailHedge.txHash.slice(-8)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      )}
+                      {detailHedge.walletAddress && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">Trader Wallet</span>
+                          <a
+                            href={`https://explorer.cronos.org/testnet/address/${detailHedge.walletAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
+                          >
+                            <span className="font-mono">{detailHedge.walletAddress.slice(0, 8)}...{detailHedge.walletAddress.slice(-6)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ZK Privacy */}
+                {detailHedge.zkVerified && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#5856D6]" />
+                      <span className="text-[11px] font-bold text-[#5856D6] uppercase tracking-wider">ZK Privacy Shield</span>
+                    </div>
+                    <div className="p-3 bg-[#5856D6]/5 rounded-xl border border-[#5856D6]/10 space-y-2.5">
+                      {detailHedge.proxyWallet && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">ZK Privacy Address</span>
+                          <a
+                            href={`https://explorer.cronos.org/testnet/address/${detailHedge.proxyWallet}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
+                          >
+                            <span className="font-mono">{detailHedge.proxyWallet.slice(0, 8)}...{detailHedge.proxyWallet.slice(-6)}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      )}
+                      {detailHedge.commitmentHash && detailHedge.commitmentHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-[#86868b]">Commitment Hash</span>
+                          <span className="font-mono text-[10px] text-[#1d1d1f]">{detailHedge.commitmentHash.slice(0, 14)}...{detailHedge.commitmentHash.slice(-8)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#86868b]">Verification</span>
+                        <div className="flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5 text-[#34C759]" />
+                          <span className="text-[12px] font-semibold text-[#34C759]">STARK proof verified</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Timing */}
+                <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Opened {new Date(detailHedge.openedAt).toLocaleString()}</span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  {detailHedge.txHash && (
+                    <a
+                      href={`https://explorer.cronos.org/testnet/tx/${detailHedge.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 px-4 py-3 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-xl text-[13px] font-semibold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      View on Explorer
+                    </a>
+                  )}
+                  {detailHedge.status === 'active' && (
+                    <button
+                      onClick={() => { setDetailHedge(null); handleClosePosition(detailHedge); }}
+                      disabled={closingPosition === detailHedge.id}
+                      className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {detailHedge.onChain ? '⚡ Close & Withdraw' : 'Close Position'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Close Position Modal */}
       <AnimatePresence>

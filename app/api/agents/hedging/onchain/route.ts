@@ -145,9 +145,9 @@ async function fetchTxHashes(
     const contractAddress = await contract.getAddress();
     const latestBlock = await tp.call('blockNumber', () => provider.getBlockNumber(), 15_000);
     
-    // Reduced scan range + smaller chunks for rate-limit friendliness
-    const MAX_SCAN_BLOCKS = 20000;
-    const CHUNK_SIZE = 2000;
+    // Tight scan range + bigger chunks — fast enough for every request
+    const MAX_SCAN_BLOCKS = 5000;
+    const CHUNK_SIZE = 5000;
     const startBlock = Math.max(0, latestBlock - MAX_SCAN_BLOCKS);
     
     // Throttle log queries through the semaphore
@@ -171,7 +171,7 @@ async function fetchTxHashes(
             return [];
           }
         },
-        ttl: 60_000, // Cache log results for 60s
+        ttl: 120_000, // Cache log results for 120s
       }))
     );
 
@@ -256,12 +256,11 @@ export async function GET(request: NextRequest) {
       console.warn('Could not fetch entry prices from MockMoonlander');
     }
 
-    // Tx hashes are fetched lazily only when ?txhashes=true is present
-    // (scanning 20k blocks is expensive — skip by default)
-    const includeTxHashes = searchParams.get('txhashes') === 'true';
-    const txHashMap = includeTxHashes
-      ? await fetchTxHashes(contract, provider, hedgeIds, tp)
-      : {} as Record<string, string>;
+    // Fetch tx hashes (5k block scan, cached 120s — fast enough for default)
+    const skipTxHashes = searchParams.get('txhashes') === 'false';
+    const txHashMap = skipTxHashes
+      ? {} as Record<string, string>
+      : await fetchTxHashes(contract, provider, hedgeIds, tp);
 
     // Second pass: build hedge details with real prices
     const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {
