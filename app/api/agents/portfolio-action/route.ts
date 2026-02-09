@@ -181,7 +181,7 @@ REASON1: [include prediction market insight if available]
 REASON2: [portfolio metric based reason]
 REASON3: [risk/opportunity assessment]`;
 
-    let aiResponse: { content: string; model: string };
+    let aiResponse: { content: string; model?: string };
     try {
       aiResponse = await withTimeout(
         llmProvider.generateDirectResponse(aiPrompt, systemPrompt),
