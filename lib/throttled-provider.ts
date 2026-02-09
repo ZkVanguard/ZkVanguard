@@ -185,7 +185,7 @@ export class ThrottledProvider {
 export function getCronosProvider(rpcUrl: string = 'https://evm-t3.cronos.org'): ThrottledProvider {
   if (!_cachedProvider) {
     _cachedProvider = new ThrottledProvider(rpcUrl, {
-      maxConcurrency: 3,   // Max 3 parallel RPC calls
+      maxConcurrency: 5,   // Max 5 parallel RPC calls
       cacheTTL: 30_000,    // Cache responses for 30s
       maxRetries: 3,       // Retry 429s up to 3 times with backoff
     });

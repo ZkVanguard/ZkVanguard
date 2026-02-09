@@ -14,7 +14,6 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
-import { MarketDataMCPClient } from '@/lib/services/market-data-mcp';
 import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
@@ -49,44 +48,59 @@ const MOONLANDER_ABI = [
   'function mockPrices(uint256) view returns (uint256)',
 ];
 
+// ─── Bulk price cache (single Crypto.com API call, cached 15s) ────────────
+let _priceCache: { prices: Record<number, number>; expiresAt: number } | null = null;
+
 /**
- * Fetch live prices from Crypto.com Exchange API via MCP client
- * Returns a map of pairIndex → current USD price
+ * Fetch live prices from Crypto.com Exchange API in a SINGLE HTTP call.
+ * Results are cached for 15 seconds to avoid duplicate fetches.
  */
 async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, number>> {
+  // Return cached prices if still valid
+  if (_priceCache && Date.now() < _priceCache.expiresAt) {
+    const cached: Record<number, number> = {};
+    for (const idx of pairIndices) {
+      cached[idx] = _priceCache.prices[idx] ?? FALLBACK_PRICES[idx] ?? 1000;
+    }
+    return cached;
+  }
+
   const prices: Record<number, number> = {};
-  const client = MarketDataMCPClient.getInstance();
-  
+
   try {
-    await client.connect();
-    const uniquePairs = [...new Set(pairIndices)];
-    
-    // Fetch all needed prices in parallel
-    const results = await Promise.allSettled(
-      uniquePairs.map(async (idx) => {
-        const symbol = PAIR_SYMBOLS[idx];
-        if (!symbol) return { idx, price: FALLBACK_PRICES[idx] || 1000 };
-        const data = await client.getPrice(symbol);
-        return { idx, price: data.price };
-      })
-    );
-    
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.price > 0) {
-        prices[result.value.idx] = result.value.price;
+    // Single API call — fetch ALL tickers at once
+    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error(`Crypto.com API ${response.status}`);
+
+    const data = await response.json();
+    const tickers: Array<{ i: string; a: string }> = data.result?.data || [];
+
+    const symbolToIndex: Record<string, number> = {
+      'BTC_USDT': 0, 'ETH_USDT': 1, 'CRO_USDT': 2,
+      'ATOM_USDT': 3, 'DOGE_USDT': 4, 'SOL_USDT': 5,
+    };
+
+    for (const t of tickers) {
+      const idx = symbolToIndex[t.i];
+      if (idx !== undefined) {
+        const p = parseFloat(t.a);
+        if (p > 0) prices[idx] = p;
       }
     }
+
+    // Cache the full map for 15s
+    _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
   } catch (err) {
     console.warn('Live price fetch failed, using fallbacks:', err instanceof Error ? err.message : err);
   }
-  
-  // Fill in any missing prices with fallbacks
+
+  // Fill in missing with fallbacks
   for (const idx of pairIndices) {
-    if (!prices[idx]) {
-      prices[idx] = FALLBACK_PRICES[idx] || 1000;
-    }
+    if (!prices[idx]) prices[idx] = FALLBACK_PRICES[idx] || 1000;
   }
-  
+
   return prices;
 }
 
@@ -186,25 +200,28 @@ export async function GET(request: NextRequest) {
     const provider = tp.provider;
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
 
-    // Get all hedge IDs — throttled, cached
-    const [deployerHedges, relayerHedges] = await tp.throttledAll([
-      {
-        key: `hedgeIds-${address}`,
-        fn: async () => [...(await contract.getUserHedges(address))] as string[],
-      },
-      {
-        key: address === DEPLOYER ? `hedgeIds-${RELAYER}` : null,
-        fn: async () => address === DEPLOYER
-          ? [...(await contract.getUserHedges(RELAYER))] as string[]
-          : [] as string[],
-      },
+    // ── Step 1: Fetch hedge IDs + live prices in parallel ──
+    const [hedgeIdsResult, livePrices] = await Promise.all([
+      // Hedge IDs (throttled, cached)
+      tp.throttledAll([
+        {
+          key: `hedgeIds-${address}`,
+          fn: async () => [...(await contract.getUserHedges(address))] as string[],
+        },
+        {
+          key: address === DEPLOYER ? `hedgeIds-${RELAYER}` : null,
+          fn: async () => address === DEPLOYER
+            ? [...(await contract.getUserHedges(RELAYER))] as string[]
+            : [] as string[],
+        },
+      ]),
+      // Live prices — single Crypto.com API call, cached 15s
+      fetchLivePrices([0, 1, 2, 3, 4, 5]),
     ]);
-    const hedgeIds = [...new Set([...deployerHedges, ...relayerHedges])];
 
-    // Fetch tx hashes (throttled, cached log queries)
-    const txHashMap = await fetchTxHashes(contract, provider, hedgeIds, tp);
+    const hedgeIds = [...new Set([...hedgeIdsResult[0], ...hedgeIdsResult[1]])];
 
-    // Read all hedge data — throttled through semaphore
+    // ── Step 2: Read all hedge data (throttled, cached) ──
     const rawHedges = await tp.throttledAll(
       hedgeIds.map((hedgeId, idx) => ({
         key: `hedge-${hedgeId}`,
@@ -215,14 +232,7 @@ export async function GET(request: NextRequest) {
       }))
     );
 
-    // Fetch LIVE prices from Crypto.com API for all active pairs
-    const activePairIndices = rawHedges
-      .filter(h => Number(h.data.status) === 1)
-      .map(h => Number(h.data.pairIndex));
-    const livePrices = await fetchLivePrices(activePairIndices);
-    console.log('📊 Live prices from Crypto.com:', Object.entries(livePrices).map(([k, v]) => `${PAIR_SYMBOLS[Number(k)]}=$${v}`).join(', '));
-
-    // Fetch entry prices from MockMoonlander — throttled
+    // ── Step 3: Fetch entry prices from MockMoonlander in parallel ──
     const entryPriceMap: Record<string, number> = {};
     try {
       const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
@@ -245,6 +255,13 @@ export async function GET(request: NextRequest) {
     } catch {
       console.warn('Could not fetch entry prices from MockMoonlander');
     }
+
+    // Tx hashes are fetched lazily only when ?txhashes=true is present
+    // (scanning 20k blocks is expensive — skip by default)
+    const includeTxHashes = searchParams.get('txhashes') === 'true';
+    const txHashMap = includeTxHashes
+      ? await fetchTxHashes(contract, provider, hedgeIds, tp)
+      : {} as Record<string, string>;
 
     // Second pass: build hedge details with real prices
     const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {
