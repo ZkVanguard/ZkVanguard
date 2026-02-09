@@ -466,74 +466,49 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     return (
       <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4">
         {/* Header skeleton */}
-        <div className="bg-[#f5f5f7] rounded-[14px] sm:rounded-[18px] p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="h-6 w-32 bg-[#e8e8ed] rounded animate-pulse" />
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#007AFF]/10 rounded-full">
-                  <RefreshCw className="w-3 h-3 text-[#007AFF] animate-spin" />
-                  <span className="text-[9px] font-bold text-[#007AFF]">LOADING</span>
+        <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-3 w-20 bg-[#f5f5f7] rounded animate-pulse" />
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#007AFF]/10 rounded-full">
+                  <RefreshCw className="w-2.5 h-2.5 text-[#007AFF] animate-spin" />
+                  <span className="text-[9px] font-bold text-[#007AFF]">SYNCING</span>
                 </span>
               </div>
-              <div className="h-3 w-48 bg-[#e8e8ed] rounded animate-pulse" />
+              <div className="h-9 w-40 bg-[#f5f5f7] rounded animate-pulse mb-2" />
+              <div className="h-3 w-32 bg-[#f5f5f7] rounded animate-pulse" />
             </div>
-            <div className="text-right">
-              <div className="h-8 w-32 bg-[#e8e8ed] rounded animate-pulse mb-1" />
-              <div className="h-3 w-24 bg-[#e8e8ed] rounded animate-pulse" />
-            </div>
+            <div className="w-10 h-10 bg-[#f5f5f7] rounded-xl animate-pulse" />
           </div>
         </div>
 
-        {/* Token skeletons with loading indicators */}
+        {/* Token skeletons */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Loading Positions</h3>
-            <span className="text-[11px] text-[#86868b]">Fetching balances...</span>
+          <div className="flex items-center gap-2 px-1">
+            <Wallet className="w-4 h-4 text-[#86868b]" />
+            <span className="text-[14px] font-medium text-[#86868b]">Loading positions...</span>
           </div>
           
-          {expectedTokens.map((token, index) => (
-            <div
-              key={token}
-              className="bg-white rounded-[14px] p-4 border border-[#e8e8ed] shadow-sm"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="flex items-center justify-between">
+          <div className="bg-white rounded-xl shadow-sm border border-black/5 overflow-hidden">
+            {expectedTokens.map((token, index) => (
+              <div
+                key={token}
+                className={`px-3 sm:px-4 py-3 ${index !== expectedTokens.length - 1 ? 'border-b border-black/5' : ''}`}
+              >
                 <div className="flex items-center gap-3">
-                  {/* Token icon skeleton */}
-                  <div className="w-10 h-10 bg-[#f5f5f7] rounded-full animate-pulse" />
-                  
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[15px] font-semibold text-[#1d1d1f]">{token}</span>
-                      <span className="text-[11px] text-[#86868b] bg-[#f5f5f7] px-2 py-0.5 rounded flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 bg-[#007AFF] rounded-full animate-pulse" />
-                        Loading
-                      </span>
-                    </div>
+                  <div className="w-10 h-10 bg-[#f5f5f7] rounded-lg animate-pulse" />
+                  <div className="flex-1">
+                    <div className="h-4 w-16 bg-[#f5f5f7] rounded animate-pulse mb-1" />
                     <div className="h-3 w-24 bg-[#f5f5f7] rounded animate-pulse" />
                   </div>
-                </div>
-                
-                <div className="text-right">
-                  <div className="h-5 w-20 bg-[#f5f5f7] rounded animate-pulse mb-1" />
-                  <div className="h-3 w-16 bg-[#f5f5f7] rounded animate-pulse" />
+                  <div className="text-right">
+                    <div className="h-5 w-20 bg-[#f5f5f7] rounded animate-pulse mb-1" />
+                    <div className="h-3 w-12 bg-[#f5f5f7] rounded animate-pulse" />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Progress indicator */}
-        <div className="bg-white rounded-[14px] p-4 border border-[#e8e8ed]">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="w-5 h-5 text-[#007AFF] animate-spin flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-[13px] text-[#1d1d1f] font-medium mb-1">Fetching market data</p>
-              <div className="w-full h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
-                <div className="h-full bg-[#007AFF] rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{ width: '60%' }} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -541,123 +516,94 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   }
 
   return (
-    <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-6">
-      {/* Apple Light Theme Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#f5f5f7] p-6 sm:p-8">
-        <div className="relative z-10">
-          {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h2 className="text-[24px] sm:text-[28px] font-bold text-[#1d1d1f] tracking-[-0.02em]">Portfolio Overview</h2>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#34C759]/10 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-[#34C759] rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-[#34C759]">LIVE</span>
-                </span>
-              </div>
-              <p className="text-[13px] text-[#86868b]">
-                {lastUpdated ? `Last synced ${lastUpdated.toLocaleTimeString()}` : 'Syncing...'}
-              </p>
+    <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4">
+      {/* Compact Header */}
+      <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Total Value */}
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Total Value</span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#34C759]/10 rounded-full">
+                <span className="w-1 h-1 bg-[#34C759] rounded-full animate-pulse" />
+                <span className="text-[9px] font-bold text-[#34C759]">LIVE</span>
+              </span>
             </div>
-            
-            {/* Total Value - Prominent Display */}
-            <div className="sm:text-right">
-              <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-[0.05em] mb-1">Total Portfolio Value</div>
-              <div className="text-[32px] sm:text-[42px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">
-                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-[#e8e8ed] rounded-lg text-[12px] text-[#1d1d1f] font-medium transition-all disabled:opacity-50 shadow-sm"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
+            <div className="text-[28px] sm:text-[36px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">
+              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="flex items-center gap-3 mt-1.5 text-[12px] text-[#86868b]">
+              <span className={`font-semibold flex items-center gap-1 ${weighted24hChange >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                {weighted24hChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {weighted24hChange >= 0 ? '+' : ''}{weighted24hChange.toFixed(2)}% 24h
+              </span>
+              <span className="text-[#86868b]/60">•</span>
+              <span>{lastUpdated ? `Synced ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Syncing...'}</span>
             </div>
           </div>
-
-          {/* Stats Cards Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Tokens */}
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-[#FF9500]/10 flex items-center justify-center">
-                  <Coins className="w-4 h-4 text-[#FF9500]" />
-                </div>
-                <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Tokens</span>
+          
+          {/* Right: Refresh + Quick Stats */}
+          <div className="flex items-center gap-3">
+            {/* Quick Stats Pills */}
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f5f5f7] rounded-lg">
+                <Coins className="w-3.5 h-3.5 text-[#FF9500]" />
+                <span className="text-[12px] font-semibold text-[#1d1d1f]">{positions.length}</span>
               </div>
-              <div className="text-[26px] font-bold text-[#1d1d1f]">{positions.length}</div>
-            </div>
-            
-            {/* Portfolios */}
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-[#007AFF]/10 flex items-center justify-center">
-                  <PieChart className="w-4 h-4 text-[#007AFF]" />
-                </div>
-                <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Portfolios</span>
-              </div>
-              <div className="text-[26px] font-bold text-[#007AFF]">{onChainPortfolios.length}</div>
-            </div>
-            
-            {/* 24h Change */}
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-8 h-8 rounded-lg ${weighted24hChange >= 0 ? 'bg-[#34C759]/10' : 'bg-[#FF3B30]/10'} flex items-center justify-center`}>
-                  {weighted24hChange >= 0 ? (
-                    <TrendingUp className="w-4 h-4 text-[#34C759]" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4 text-[#FF3B30]" />
-                  )}
-                </div>
-                <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">24h</span>
-              </div>
-              <div className={`text-[26px] font-bold ${weighted24hChange >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                {weighted24hChange >= 0 ? '+' : ''}{weighted24hChange.toFixed(2)}%
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f5f5f7] rounded-lg">
+                <PieChart className="w-3.5 h-3.5 text-[#007AFF]" />
+                <span className="text-[12px] font-semibold text-[#1d1d1f]">{onChainPortfolios.length}</span>
               </div>
             </div>
             
-            {/* Active Strategies */}
-            <div className="bg-white rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-[#AF52DE]/10 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-[#AF52DE]" />
-                </div>
-                <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Active</span>
-              </div>
-              <div className="text-[26px] font-bold text-[#AF52DE]">
-                {onChainPortfolios.filter(p => parseFloat(p.totalValue) > 0 || p.assets.length > 0).length}
-              </div>
-            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-xl transition-all disabled:opacity-50"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-4 h-4 text-[#1d1d1f] ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+        
+        {/* Mobile Stats Row */}
+        <div className="flex sm:hidden items-center gap-2 mt-3 pt-3 border-t border-black/5">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f5f5f7] rounded-lg">
+            <Coins className="w-3 h-3 text-[#FF9500]" />
+            <span className="text-[11px] font-semibold text-[#1d1d1f]">{positions.length} Tokens</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#f5f5f7] rounded-lg">
+            <PieChart className="w-3 h-3 text-[#007AFF]" />
+            <span className="text-[11px] font-semibold text-[#1d1d1f]">{onChainPortfolios.length} Portfolios</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#AF52DE]/10 rounded-lg">
+            <Activity className="w-3 h-3 text-[#AF52DE]" />
+            <span className="text-[11px] font-semibold text-[#AF52DE]">
+              {onChainPortfolios.filter(p => parseFloat(p.totalValue) > 0 || p.assets.length > 0).length} Active
+            </span>
           </div>
         </div>
       </div>
 
       {/* Portfolio Positions - PRIMARY CONTENT */}
       {onChainPortfolios.length > 0 && (
-        <div className="space-y-4">
-          {/* Portfolio Section Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#007AFF] rounded-xl flex items-center justify-center">
-                <PieChart className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Your Portfolios</h3>
-                <p className="text-[12px] text-[#86868b]">{onChainPortfolios.length} active strategies on-chain</p>
-              </div>
-            </div>
+        <div className="space-y-3">
+          {/* Portfolio Section Header - Compact */}
+          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1.5 bg-[#34C759]/10 text-[#34C759] text-[12px] font-semibold rounded-full">
-                {onChainPortfolios.filter(p => {
-                  const calcValue = p.calculatedValueUSD || 0;
-                  const rawValue = parseFloat(p.totalValue) || 0;
-                  const valueUSD = calcValue > 0 ? calcValue : (rawValue > 1e12 ? rawValue / 1e18 : rawValue / 1e6);
-                  return valueUSD > 0;
-                }).length} Funded
-              </span>
+              <PieChart className="w-4 h-4 text-[#007AFF]" />
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Portfolios</h3>
+              <span className="text-[12px] text-[#86868b]">({onChainPortfolios.length})</span>
             </div>
+            <span className="px-2 py-1 bg-[#34C759]/10 text-[#34C759] text-[11px] font-semibold rounded-full">
+              {onChainPortfolios.filter(p => {
+                const calcValue = p.calculatedValueUSD || 0;
+                const rawValue = parseFloat(p.totalValue) || 0;
+                const valueUSD = calcValue > 0 ? calcValue : (rawValue > 1e12 ? rawValue / 1e18 : rawValue / 1e6);
+                return valueUSD > 0;
+              }).length} Funded
+            </span>
           </div>
 
           {/* Portfolio Cards Grid */}
@@ -1028,28 +974,18 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
 
       {/* Token Holdings - Wallet Balances - REDESIGNED */}
       {positions.length > 0 && parseFloat(positions[0].balanceUSD) > 0 && (
-        <div className="space-y-4">
-          {/* Wallet Section Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#FF9500] rounded-xl flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">Wallet Balances</h3>
-                <p className="text-[12px] text-[#86868b]">{positions.length} tokens available</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wider">Total</div>
-              <div className="text-[18px] font-bold text-[#1d1d1f]">
-                ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
+        <div className="space-y-3">
+          {/* Wallet Section Header - Compact */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-[#FF9500]" />
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Wallet Balances</h3>
+              <span className="text-[12px] text-[#86868b]">({positions.length})</span>
             </div>
           </div>
 
           {/* Token Cards */}
-          <div className="bg-white rounded-2xl shadow-lg border border-black/5 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-black/5 overflow-hidden">
             {positions.map((position, idx) => {
               const positionValue = parseFloat(position.balanceUSD || '0');
               const percentOfTotal = totalValue > 0 ? (positionValue / totalValue) * 100 : 0;
@@ -1057,13 +993,13 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               return (
                 <div 
                   key={`${position.symbol}-${idx}`} 
-                  className={`px-4 sm:px-5 py-4 hover:bg-[#f5f5f7]/50 transition-all ${
+                  className={`px-3 sm:px-4 py-3 hover:bg-[#f5f5f7]/50 transition-all ${
                     idx !== positions.length - 1 ? 'border-b border-black/5' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     {/* Token Icon */}
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       position.symbol === 'CRO' ? 'bg-[#007AFF]' :
                       position.symbol.includes('USD') ? 'bg-[#34C759]' :
                       'bg-[#FF9500]'
@@ -1073,46 +1009,28 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                     
                     {/* Token Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[16px] font-bold text-[#1d1d1f]">{position.symbol}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] sm:text-[15px] font-semibold text-[#1d1d1f]">{position.symbol}</span>
                         {position.change24h !== 0 && (
-                          <span className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            position.change24h >= 0 
-                              ? 'bg-[#34C759]/10 text-[#34C759]' 
-                              : 'bg-[#FF3B30]/10 text-[#FF3B30]'
+                          <span className={`flex items-center gap-0.5 text-[10px] sm:text-[11px] font-semibold ${
+                            position.change24h >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'
                           }`}>
-                            {position.change24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                            {Math.abs(position.change24h).toFixed(1)}%
+                            {position.change24h >= 0 ? '+' : ''}{Math.abs(position.change24h).toFixed(1)}%
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-[12px] text-[#86868b]">
-                        <span>{parseFloat(position.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })} {position.symbol}</span>
-                        <span>@${parseFloat(position.price || '0').toFixed(4)}</span>
-                      </div>
-                      {/* Allocation Bar */}
-                      <div className="mt-2 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-[#f5f5f7] rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all ${
-                              position.symbol === 'CRO' ? 'bg-[#007AFF]' :
-                              position.symbol.includes('USD') ? 'bg-[#34C759]' :
-                              'bg-[#FF9500]'
-                            }`}
-                            style={{ width: `${percentOfTotal}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-semibold text-[#86868b] min-w-[40px] text-right">
-                          {percentOfTotal.toFixed(1)}%
-                        </span>
+                      <div className="flex items-center gap-2 text-[11px] sm:text-[12px] text-[#86868b]">
+                        <span>{parseFloat(position.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                        <span className="text-[#86868b]/50">@${parseFloat(position.price || '0').toFixed(4)}</span>
                       </div>
                     </div>
                     
-                    {/* Value */}
-                    <div className="text-right">
-                      <div className="text-[20px] font-black text-[#1d1d1f]">
+                    {/* Value + Allocation */}
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-[16px] sm:text-[18px] font-bold text-[#1d1d1f]">
                         ${positionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
+                      <div className="text-[10px] font-medium text-[#86868b]">{percentOfTotal.toFixed(1)}%</div>
                     </div>
                   </div>
                 </div>
