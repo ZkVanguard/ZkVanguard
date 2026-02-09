@@ -54,8 +54,9 @@ export async function storeCommitmentTrueGaslessServerSide(
     const { getX402Client } = await import('@/integrations/x402/X402Client.server');
     const x402 = getX402Client();
 
-    // Get provider (Cronos testnet). PublicNode sometimes rejects POST; use core RPC endpoint.
-    const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+    // Get provider (Cronos testnet) — throttled for rate-limit protection
+    const { getCronosProvider } = await import('@/lib/throttled-provider');
+    const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
     
     // Use server wallet for signing x402 transactions
     // In production, this should be an env variable with a funded wallet

@@ -15,6 +15,7 @@
 import { ethers, Signer, Provider } from 'ethers';
 import { ZKProxyVaultClient, OnChainProxyPDA } from '@/lib/crypto/ZKProxyVaultClient';
 import { logger } from '@/lib/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 import * as _crypto from 'crypto';
 
 // Contract addresses on Cronos Testnet (from deployment)
@@ -83,7 +84,7 @@ export class OnChainHedgeService {
     
     // Use provided signer/provider or create default provider
     const providerOrSigner = signerOrProvider || 
-      new ethers.JsonRpcProvider(config.rpc);
+      getCronosProvider(config.rpc).provider;
     
     this.provider = 'provider' in providerOrSigner && providerOrSigner.provider 
       ? providerOrSigner.provider 

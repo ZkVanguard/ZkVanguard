@@ -11,6 +11,7 @@
 
 import { ethers, TypedDataDomain, TypedDataField } from 'ethers';
 import { logger } from '../utils/logger';
+import { getCronosProvider } from '../throttled-provider';
 
 // Contract ABI (minimal for meta-transactions)
 const ZK_PAYMASTER_ABI = [
@@ -67,7 +68,7 @@ export class ZKPaymasterService {
     this.chainId = 338; // Cronos Testnet
 
     // Initialize provider
-    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    this.provider = getCronosProvider(rpcUrl).provider;
 
     // Initialize relayer wallet (our backend pays gas, gets refunded)
     const privateKey = relayerPrivateKey || process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY;

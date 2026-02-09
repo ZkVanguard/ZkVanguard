@@ -8,6 +8,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from './CryptocomExchangeService';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export interface MarketPrice {
   symbol: string;
@@ -50,29 +51,14 @@ class RealMarketDataService {
   private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
 
   constructor() {
-    // OPTIMIZATION 1: Use StaticJsonRpcProvider for better caching (no network detection)
-    // OPTIMIZATION 2: Configure connection pooling and lower polling interval
-    // OPTIMIZATION 3: Use persistent connection with keep-alive
-    // Support both env var names for RPC URL
+    // Use throttled provider for rate-limit protection on Vercel
     const rpcUrl = process.env.CRONOS_RPC_URL || 
                    process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 
                    'https://evm-t3.cronos.org';
     
-    logger.info('[RealMarketData] Using RPC', { data: rpcUrl });
+    logger.info('[RealMarketData] Using throttled RPC', { data: rpcUrl });
     
-    this.provider = new ethers.JsonRpcProvider(
-      rpcUrl,
-      {
-        chainId: 338, // Cronos Testnet
-        name: 'cronos-testnet',
-      },
-      {
-        staticNetwork: true, // Don't detect network on every call
-        batchMaxCount: 10, // Reduced for serverless compatibility
-        batchMaxSize: 512 * 1024, // 512KB max batch size
-        polling: false, // Don't poll for new blocks
-      }
-    );
+    this.provider = getCronosProvider(rpcUrl).provider;
   }
 
   /**

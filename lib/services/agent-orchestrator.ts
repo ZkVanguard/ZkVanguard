@@ -10,6 +10,7 @@ import { SettlementAgent } from '@/agents/specialized/SettlementAgent';
 import { ReportingAgent } from '@/agents/specialized/ReportingAgent';
 import { LeadAgent } from '@/agents/core/LeadAgent';
 import { logger } from '@/lib/utils/logger';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 export interface AgentOrchestrationResult {
   success: boolean;
@@ -38,7 +39,7 @@ export class AgentOrchestrator {
   private constructor() {
     // Initialize provider
     const rpcUrl = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
-    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    this.provider = getCronosProvider(rpcUrl).provider;
 
     // Initialize signer if private key available
     const privateKey = process.env.AGENT_PRIVATE_KEY || process.env.PRIVATE_KEY;
