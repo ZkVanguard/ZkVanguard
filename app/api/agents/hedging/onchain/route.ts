@@ -17,6 +17,7 @@ import { ethers } from 'ethers';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
+import { getHedgesByWallet } from '@/lib/hedge-ownership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -204,7 +205,7 @@ async function fetchTxHashes(
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const address = searchParams.get('address') || DEPLOYER;
+    const address = searchParams.get('address') || searchParams.get('walletAddress');
     const includeStats = searchParams.get('stats') === 'true';
     const forceRpc = searchParams.get('forceRpc') === 'true'; // Debug flag to bypass DB
 
@@ -213,6 +214,10 @@ export async function GET(request: NextRequest) {
     // ═══════════════════════════════════════════════════════════
     if (!forceRpc) {
       const dbStart = Date.now();
+      
+      // Fetch user's owned hedges from hedge_ownership table if filtering by wallet
+      const userOwnedCommitments = address ? await getHedgesByWallet(address) : null;
+      
       const [dbHedges, dbStats, cachedPrices] = await Promise.all([
         getAllOnChainHedges(false), // All hedges (active + closed)
         includeStats ? getOnChainProtocolStats() : Promise.resolve(null),
@@ -220,10 +225,20 @@ export async function GET(request: NextRequest) {
       ]);
 
       if (dbHedges.length > 0) {
-        // Filter by wallet if specified
-        const filteredHedges = address === DEPLOYER
-          ? dbHedges // Show all for deployer
-          : dbHedges.filter(h => h.wallet_address?.toLowerCase() === address.toLowerCase());
+        // Filter by wallet ownership (using hedge_ownership registry for gasless hedges)
+        let filteredHedges = dbHedges;
+        if (address && address !== DEPLOYER) {
+          // Check both: direct wallet_address match OR commitment_hash in user's owned hedges
+          const ownedCommitmentSet = new Set(Object.keys(userOwnedCommitments || {}));
+          
+          filteredHedges = dbHedges.filter(h => {
+            // Direct match (non-gasless hedges)
+            if (h.wallet_address?.toLowerCase() === address.toLowerCase()) return true;
+            // Ownership registry match (gasless hedges) - by commitment_hash
+            if (h.commitment_hash && ownedCommitmentSet.has(h.commitment_hash.toLowerCase())) return true;
+            return false;
+          });
+        }
 
         // Overlay live prices from cache (or DB-stored prices if cache miss)
         const priceMap: Record<string, number> = {};
@@ -255,26 +270,35 @@ export async function GET(request: NextRequest) {
           const currentPrice = priceMap[h.asset] || h.current_price || h.entry_price || 1000;
           const entryPrice = h.entry_price || currentPrice;
           
-          // Calculate unrealized PnL
-          const positionSize = h.size * h.leverage;
+          // Calculate unrealized PnL (with safety checks for NaN)
+          const size = h.size || 0;
+          const leverage = h.leverage || 1;
+          const positionSize = size * leverage;
           const priceChange = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0;
           const unrealizedPnl = h.side === 'LONG'
             ? positionSize * priceChange
             : positionSize * (-priceChange);
-          const pnlPercent = h.size > 0 ? (unrealizedPnl / h.size) * 100 : 0;
+          const pnlPercent = size > 0 ? (unrealizedPnl / size) * 100 : 0;
+          
+          // Get TRUE owner from hedge_ownership registry (for gasless hedges)
+          // Fall back to hedge.wallet_address for non-gasless hedges
+          const commitmentKey = h.commitment_hash?.toLowerCase();
+          const trueOwner = (commitmentKey && userOwnedCommitments?.[commitmentKey]?.walletAddress) 
+            || h.wallet_address 
+            || DEPLOYER;
 
           return {
             hedgeId: h.hedge_id_onchain || h.order_id,
             orderId: h.order_id.slice(0, 18),
-            trader: h.wallet_address || DEPLOYER,
+            trader: trueOwner,
             asset: h.asset,
             pairIndex: Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === h.asset) || 0,
             side: h.side,
             type: h.side,
-            collateral: h.size,
-            size: h.size,
-            capitalUsed: h.size,
-            leverage: h.leverage,
+            collateral: size,
+            size: size,
+            capitalUsed: size,
+            leverage: leverage,
             entryPrice,
             currentPrice: Math.round(currentPrice * 100) / 100,
             unrealizedPnL: h.status === 'active' ? Math.round(unrealizedPnl * 100) / 100 : 0,
