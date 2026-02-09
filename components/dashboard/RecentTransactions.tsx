@@ -64,7 +64,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const { isLoading: loading, error, setError} = useLoading(true);
+  const { isLoading: loading, error, setError, stopLoading } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'swap' | 'deposit' | 'withdraw'>('all');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -434,6 +434,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
       
       logger.debug(`Final transaction count: ${txList.length}`, { component: 'RecentTransactions', data: { types: txList.map(tx => tx.type).join(', '), first3: txList.slice(0, 3) } });
       setTransactions(txList);
+      stopLoading();
     } catch (err) {
       logger.error('Error fetching transactions', err instanceof Error ? err : undefined, { component: 'RecentTransactions' });
       setError('Failed to fetch transactions');

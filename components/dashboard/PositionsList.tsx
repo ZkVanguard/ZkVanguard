@@ -404,6 +404,18 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     }
   }, [positionsData, hasInitiallyLoaded, portfolioLoading]);
 
+  // Safety timeout - force loading off after 10 seconds to prevent infinite loading
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('[PositionsList] Forcing loading=false after timeout');
+        setLoading(false);
+        setHasInitiallyLoaded(true);
+      }
+    }, 10000);
+    return () => clearTimeout(timeoutId);
+  }, [loading]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchPositions(), fetchOnChainPortfolios()]);
