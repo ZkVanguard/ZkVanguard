@@ -64,7 +64,7 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
 export const AgentActivity = memo(function AgentActivity({ address, onTaskComplete: _onTaskComplete }: AgentActivityProps) {
   const { positionsData, derived } = usePositions();
   const [tasks, setTasks] = useState<(AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[]>([]);
-  const { isLoading: loading, error, setError } = useLoading(true);
+  const { isLoading: loading, error, setError, stopLoading } = useLoading(true);
   const [autoRefresh, toggleAutoRefresh] = useToggle(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -170,7 +170,7 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
       );
       
       setTasks(tasksWithProofs);
-      setError(null);
+      stopLoading();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
