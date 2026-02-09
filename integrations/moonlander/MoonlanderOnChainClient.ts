@@ -18,6 +18,7 @@ import { ethers, Contract, Wallet, Provider, Signer, parseUnits, formatUnits, Ab
 import { logger } from '../../shared/utils/logger';
 import { MOONLANDER_CONTRACTS, PAIR_INDEX, INDEX_TO_PAIR, NetworkType, PairSymbol } from './contracts';
 import { ERC20_ABI } from './abis';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MOONLANDER FUNCTION SELECTORS (Diamond proxy)
@@ -108,7 +109,7 @@ export class MoonlanderOnChainClient {
     this.contracts = MOONLANDER_CONTRACTS[network] as typeof MOONLANDER_CONTRACTS[NetworkType];
     
     if (typeof providerOrRpc === 'string') {
-      this.provider = new ethers.JsonRpcProvider(providerOrRpc);
+      this.provider = getCronosProvider(providerOrRpc).provider;
     } else {
       this.provider = providerOrRpc;
     }
