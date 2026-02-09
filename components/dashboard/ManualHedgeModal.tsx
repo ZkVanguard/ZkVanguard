@@ -83,6 +83,9 @@ interface HedgeInitialValues {
   leverage?: number;
   size?: number;
   reason?: string;
+  entryPrice?: number;
+  targetPrice?: number;
+  stopLoss?: number;
 }
 
 interface ManualHedgeModalProps {
@@ -162,11 +165,15 @@ export function ManualHedgeModal({
   // ── Apply initial values from AI recommendation ───────────────
   useEffect(() => {
     if (isOpen && initialValues) {
+      console.log('[ManualHedgeModal] Applying initial values:', initialValues);
       if (initialValues.asset) setAsset(initialValues.asset);
       if (initialValues.side) setHedgeType(initialValues.side);
-      if (initialValues.leverage) setLeverage(initialValues.leverage);
+      if (initialValues.leverage) setLeverage(Math.max(1, Math.round(initialValues.leverage)));
       if (initialValues.size) setCollateralInput(initialValues.size.toString());
       if (initialValues.reason) setReason(initialValues.reason);
+      if (initialValues.entryPrice) setEntryPrice(initialValues.entryPrice.toString());
+      if (initialValues.targetPrice) setTargetPrice(initialValues.targetPrice.toString());
+      if (initialValues.stopLoss) setStopLoss(initialValues.stopLoss.toString());
     }
   }, [isOpen, initialValues]);
 

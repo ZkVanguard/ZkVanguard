@@ -133,6 +133,9 @@ export default function DashboardPage() {
     leverage?: number;
     size?: number;
     reason?: string;
+    entryPrice?: number;
+    targetPrice?: number;
+    stopLoss?: number;
   } | undefined>(undefined);
   
   const displayAddress = address?.toString() || '';

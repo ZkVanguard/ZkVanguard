@@ -57,6 +57,9 @@ interface HedgeInitialValues {
   leverage?: number;
   size?: number;
   reason?: string;
+  entryPrice?: number;
+  targetPrice?: number;
+  stopLoss?: number;
 }
 
 interface PredictionInsightsProps {
@@ -468,13 +471,45 @@ export const PredictionInsights = memo(function PredictionInsights({
                               {onCreateRecommendedHedge && lr.direction !== 'neutral' && (
                                 <button
                                   onClick={() => {
-                                    const leverageNum = parseInt(lr.leverage.replace(/[^\d]/g, '')) || 2;
+                                    // Parse leverage properly (handle decimals like "1.5x")
+                                    const leverageMatch = lr.leverage.match(/([\d.]+)/);
+                                    const leverageNum = leverageMatch ? Math.max(1, Math.round(parseFloat(leverageMatch[1]))) : 2;
+                                    
+                                    // Extract price from rationale (e.g., "Price: $2,092.11")
+                                    const priceMatch = lr.rationale.match(/Price:\s*\$?([\d,]+\.?\d*)/i);
+                                    const entryPrice = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : undefined;
+                                    
+                                    // Calculate target and stop loss based on direction
+                                    let targetPrice: number | undefined;
+                                    let stopLoss: number | undefined;
+                                    if (entryPrice) {
+                                      if (lr.direction === 'long') {
+                                        targetPrice = Math.round(entryPrice * 1.05 * 100) / 100; // +5% target
+                                        stopLoss = Math.round(entryPrice * 0.97 * 100) / 100;    // -3% stop
+                                      } else {
+                                        targetPrice = Math.round(entryPrice * 0.95 * 100) / 100; // -5% target
+                                        stopLoss = Math.round(entryPrice * 1.03 * 100) / 100;    // +3% stop
+                                      }
+                                    }
+                                    
+                                    console.log('[PredictionInsights] Creating hedge:', { 
+                                      asset: lr.symbol, 
+                                      side: lr.direction, 
+                                      leverage: leverageNum, 
+                                      entryPrice,
+                                      targetPrice,
+                                      stopLoss 
+                                    });
+                                    
                                     onCreateRecommendedHedge({
                                       asset: lr.symbol,
                                       side: lr.direction.toUpperCase() as 'LONG' | 'SHORT',
                                       leverage: leverageNum,
                                       size: 100, // Default $100 collateral
                                       reason: `AI Recommendation: ${lr.rationale}`,
+                                      entryPrice,
+                                      targetPrice,
+                                      stopLoss,
                                     });
                                   }}
                                   className={`mt-2 w-full py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
