@@ -42,6 +42,7 @@ export class HedgeExecutorClient {
   private contract: ethers.Contract;
   private collateralToken: ethers.Contract;
   private config: HedgeExecutorConfig;
+  private cachedDecimals: number | null = null; // Token decimals are immutable
 
   constructor(config: HedgeExecutorConfig) {
     this.config = config;

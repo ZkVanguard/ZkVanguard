@@ -100,6 +100,7 @@ export class MoonlanderOnChainClient {
   private contracts: typeof MOONLANDER_CONTRACTS[NetworkType];
   private initialized = false;
   private abiCoder = AbiCoder.defaultAbiCoder();
+  private cachedDecimals: number | null = null; // Token decimals are immutable
 
   constructor(
     providerOrRpc: Provider | string,
@@ -528,8 +529,11 @@ export class MoonlanderOnChainClient {
 
     try {
       const balance = await this.collateralContract!.balanceOf(account);
-      const decimals = await this.collateralContract!.decimals();
-      return formatUnits(balance, decimals);
+      // Cache decimals (immutable — never changes for a given token)
+      if (this.cachedDecimals === null) {
+        this.cachedDecimals = await this.collateralContract!.decimals();
+      }
+      return formatUnits(balance, this.cachedDecimals!);
     } catch (error) {
       logger.error('Failed to get collateral balance', { error });
       return '0';
