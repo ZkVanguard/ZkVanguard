@@ -102,7 +102,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         return null;
       }
       const ethereum = (window as unknown as { ethereum: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum;
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
+      // Use eth_accounts (no popup) since wallet is already connected; fall back to eth_requestAccounts only if needed
+      let accounts = await ethereum.request({ method: 'eth_accounts', params: [] }) as unknown as string[];
+      if (!accounts || accounts.length === 0) {
+        accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
+      }
       if (!accounts || accounts.length === 0) return null;
       const signer = accounts[0];
       const timestamp = Math.floor(Date.now() / 1000);
