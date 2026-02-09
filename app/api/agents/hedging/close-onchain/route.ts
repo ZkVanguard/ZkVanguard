@@ -33,6 +33,7 @@ const HEDGE_EXECUTOR_ABI = [
 
 const USDC_ABI = [
   'function balanceOf(address) view returns (uint256)',
+  'function transfer(address to, uint256 amount) returns (bool)',
 ];
 
 const PAIR_NAMES: Record<number, string> = {
@@ -188,16 +189,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract hedge details from earlier read (hedgeData from STEP 1)
-    const trader = onChainTrader;
+    const onChainTraderAddress = onChainTrader;
     const collateral = Number(ethers.formatUnits(hedgeData[4], 6)); // collateralAmount
     const pairIndex = Number(hedgeData[2]); // pairIndex
     const leverage = Number(hedgeData[5]); // leverage
     const isLong = hedgeData[6] as boolean; // isLong
 
-    // Get trader's USDC balance before close
-    const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trader), 6));
+    // Determine TRUE owner for fund withdrawal:
+    // - For gasless hedges: ownerEntry.walletAddress (from hedge_ownership registry)
+    // - For regular hedges: onChainTrader (from contract)
+    const trueOwner = ownerEntry?.walletAddress || onChainTraderAddress;
+    const isGaslessHedge = ownerEntry && ownerEntry.walletAddress.toLowerCase() !== onChainTraderAddress.toLowerCase();
+    
+    console.log(`🔍 Fund routing: on-chain trader=${onChainTraderAddress.slice(0,10)}..., true owner=${trueOwner.slice(0,10)}..., gasless=${isGaslessHedge}`);
 
-    // Execute gasless closeHedge via x402 relayer — this triggers fund withdrawal back to trader
+    // Get TRUE OWNER's USDC balance before close (for accurate reporting)
+    const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
+
+    // Execute gasless closeHedge via x402 relayer — this triggers fund withdrawal back to on-chain trader
     console.log(`🔐 x402 Gasless closeHedge: ${hedgeId.slice(0, 18)}... | ${PAIR_NAMES[pairIndex]} ${isLong ? 'LONG' : 'SHORT'} | ${collateral} USDC x${leverage}`);
 
     // Use dynamic gas price based on current network conditions (fallback to 1500 gwei)
@@ -229,15 +238,63 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get trader's USDC balance after close
-    const balanceAfter = Number(ethers.formatUnits(await usdc.balanceOf(trader), 6));
-    const fundsReturned = balanceAfter - balanceBefore;
-
     // Read updated hedge for realized PnL
     const closedHedge = await contract.hedges(hedgeId);
     const realizedPnl = Number(ethers.formatUnits(closedHedge.realizedPnl, 6));
     const closedStatus = Number(closedHedge.status);
     const STATUS_NAMES = ['PENDING', 'ACTIVE', 'CLOSED', 'LIQUIDATED', 'CANCELLED'];
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GASLESS FUND FORWARDING: For ZK privacy hedges, funds go to relayer first,
+    // then we forward them to the TRUE owner (verified via EIP-712 signature)
+    // ═══════════════════════════════════════════════════════════════════════════
+    let forwardTxHash: string | null = null;
+    let fundsForwarded = 0;
+    
+    if (isGaslessHedge && trueOwner.toLowerCase() !== onChainTraderAddress.toLowerCase()) {
+      try {
+        // Get the USDC contract with signer for transfer
+        const usdcWithSigner = new ethers.Contract(MOCK_USDC, USDC_ABI, wallet);
+        
+        // Check relayer's USDC balance (funds from closeHedge)
+        const relayerBalance = await usdc.balanceOf(wallet.address);
+        const relayerBalanceNum = Number(ethers.formatUnits(relayerBalance, 6));
+        
+        // Calculate amount to forward: collateral ± realized PnL (but not more than relayer has)
+        const expectedReturn = Math.max(0, collateral + realizedPnl);
+        const amountToForward = Math.min(expectedReturn, relayerBalanceNum);
+        
+        if (amountToForward > 0) {
+          const amountWei = ethers.parseUnits(amountToForward.toFixed(6), 6);
+          
+          console.log(`💸 Forwarding ${amountToForward} USDC to true owner: ${trueOwner}`);
+          
+          // Forward the funds to the true owner
+          const forwardTx = await usdcWithSigner.transfer(trueOwner, amountWei, {
+            gasPrice,
+          });
+          
+          const forwardReceipt = await forwardTx.wait();
+          
+          if (forwardReceipt.status === 1) {
+            forwardTxHash = forwardTx.hash;
+            fundsForwarded = amountToForward;
+            console.log(`✅ Funds forwarded to ${trueOwner.slice(0,10)}...: ${fundsForwarded} USDC | Tx: ${forwardTxHash}`);
+          } else {
+            console.error(`❌ Fund forwarding failed: tx reverted`);
+          }
+        } else {
+          console.log(`⚠️ No funds to forward (liquidated or zero return)`);
+        }
+      } catch (forwardErr) {
+        console.error(`❌ Fund forwarding error:`, forwardErr instanceof Error ? forwardErr.message : forwardErr);
+        // Don't fail the whole request - the hedge is closed, just logging the forwarding issue
+      }
+    }
+
+    // Get TRUE OWNER's USDC balance after close + forwarding
+    const balanceAfter = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
+    const fundsReturned = balanceAfter - balanceBefore;
 
     // Calculate gas savings
     const gasCostCRO = Number(ethers.formatEther(gasPrice * BigInt(Number(receipt.gasUsed))));
@@ -257,15 +314,16 @@ export async function POST(request: NextRequest) {
       console.warn('Failed to update DB (non-critical):', dbErr instanceof Error ? dbErr.message : dbErr);
     }
 
-    console.log(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}`);
+    console.log(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC to ${trueOwner.slice(0,10)}... | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}${forwardTxHash ? ` | Forward: ${forwardTxHash}` : ''}`);
 
     return NextResponse.json({
       success: true,
       message: `Hedge closed and ${fundsReturned > 0 ? fundsReturned.toFixed(2) + ' USDC withdrawn' : 'position liquidated'} to your wallet`,
       hedgeId,
       txHash: tx.hash,
+      forwardTxHash: forwardTxHash || undefined, // Tx for fund forwarding (gasless hedges)
       gasUsed: Number(receipt.gasUsed),
-      trader,
+      trader: trueOwner, // TRUE owner (not proxy/relayer)
       asset: PAIR_NAMES[pairIndex] || `PAIR-${pairIndex}`,
       side: isLong ? 'LONG' : 'SHORT',
       collateral,
@@ -273,10 +331,14 @@ export async function POST(request: NextRequest) {
       realizedPnl: Math.round(realizedPnl * 100) / 100,
       finalStatus: STATUS_NAMES[closedStatus]?.toLowerCase(),
       fundsReturned: Math.round(fundsReturned * 100) / 100,
+      fundsForwarded: fundsForwarded > 0 ? Math.round(fundsForwarded * 100) / 100 : undefined,
       balanceBefore: Math.round(balanceBefore * 100) / 100,
       balanceAfter: Math.round(balanceAfter * 100) / 100,
-      withdrawalDestination: trader,
+      withdrawalDestination: trueOwner, // TRUE owner wallet
+      onChainTrader: onChainTraderAddress, // For transparency: on-chain trader (could be proxy)
+      isGaslessHedge,
       explorerLink: `https://explorer.cronos.org/testnet/tx/${tx.hash}`,
+      forwardExplorerLink: forwardTxHash ? `https://explorer.cronos.org/testnet/tx/${forwardTxHash}` : undefined,
       // x402 Gasless info
       gasless: true,
       x402Powered: true,

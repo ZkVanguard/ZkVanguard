@@ -429,7 +429,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
               explorerLink: '',
               trader: address || '',
               gasless: false,
-              error: 'Signature required. Please sign the message in your wallet to verify ownership and close the hedge.',
+              error: 'Signature required! When MetaMask pops up, click "Sign" (not Reject) to verify you own this wallet. This proves ownership so funds can be withdrawn to you.',
               finalStatus: 'signature_declined',
             });
             setClosingPosition(null);
@@ -1977,6 +1977,14 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-[#86868b]">Gas cost to you</span>
                       <span className="font-semibold text-[#34C759]">$0.00 ✅</span>
+                    </div>
+                    
+                    {/* Signature requirement notice */}
+                    <div className="mt-2 p-2 bg-[#007AFF]/10 rounded-lg border border-[#007AFF]/20">
+                      <p className="text-[10px] text-[#007AFF] font-medium">
+                        📝 MetaMask will ask you to <strong>sign a message</strong> to verify ownership. 
+                        Click <strong>&quot;Sign&quot;</strong> in the popup to proceed.
+                      </p>
                     </div>
                   </div>
                 )}
