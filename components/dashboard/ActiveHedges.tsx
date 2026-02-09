@@ -162,6 +162,11 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const [showCloseConfirm, _toggleCloseConfirm, openCloseConfirm, closeCloseConfirm] = useToggle(false);
   const [selectedHedge, setSelectedHedge] = useState<HedgePosition | null>(null);
   const [showClosedPositions, toggleClosedPositions] = useToggle(false);
+  
+  // DEBUG: Track showCloseConfirm state changes  
+  useEffect(() => {
+    console.log('[DEBUG] showCloseConfirm changed to:', showCloseConfirm);
+  }, [showCloseConfirm]);
   const [closeReceipt, setCloseReceipt] = useState<CloseReceipt | null>(null);
   const [detailHedge, setDetailHedge] = useState<HedgePosition | null>(null);
   const processingRef = useRef(false);
@@ -1943,7 +1948,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeCloseConfirm}
+            onClick={() => { console.log('[DEBUG] Backdrop clicked'); closeCloseConfirm(); }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -2021,7 +2026,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
               <div className="flex gap-3">
                 <button
-                  onClick={closeCloseConfirm}
+                  onClick={() => { console.log('[DEBUG] Cancel clicked, showCloseConfirm before:', showCloseConfirm); closeCloseConfirm(); console.log('[DEBUG] closeCloseConfirm called'); }}
                   className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] rounded-xl text-[15px] font-semibold transition-colors"
                 >
                   Cancel
