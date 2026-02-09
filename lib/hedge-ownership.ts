@@ -22,6 +22,7 @@ export interface HedgeOwnershipEntry {
   openedAt: string;  // ISO timestamp
   txHash: string;
   onChainHedgeId?: string; // bytes32 from HedgeExecutor events, if available
+  commitmentHash?: string; // The commitment used for ZK binding
 }
 
 /**
@@ -80,11 +81,14 @@ export async function registerHedgeOwnership(
 
 /**
  * Look up the wallet that owns a hedge.
+ * Accepts either commitmentHash or hedge_id_onchain (both are valid lookup keys).
  * Returns null if the hedge isn't in the registry.
  */
-export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwnershipEntry | null> {
+export async function getHedgeOwner(hedgeIdOrCommitment: string): Promise<HedgeOwnershipEntry | null> {
   try {
-    // First check hedges table
+    const lookupValue = hedgeIdOrCommitment.toLowerCase();
+
+    // First check hedges table by commitment_hash OR hedge_id_onchain
     const hedge = await queryOne<{
       wallet_address: string;
       asset: string;
@@ -94,11 +98,12 @@ export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwners
       created_at: Date;
       tx_hash: string;
       hedge_id_onchain: string;
+      commitment_hash: string;
     }>(
-      `SELECT wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain
+      `SELECT wallet_address, asset, side, size, leverage, created_at, tx_hash, hedge_id_onchain, commitment_hash
        FROM hedges 
-       WHERE commitment_hash = $1`,
-      [commitmentHash.toLowerCase()]
+       WHERE commitment_hash = $1 OR hedge_id_onchain = $1`,
+      [lookupValue]
     );
 
     if (hedge && hedge.wallet_address) {
@@ -111,7 +116,8 @@ export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwners
         leverage: hedge.leverage,
         openedAt: hedge.created_at.toISOString(),
         txHash: hedge.tx_hash || '',
-        onChainHedgeId: hedge.hedge_id_onchain || undefined
+        onChainHedgeId: hedge.hedge_id_onchain || undefined,
+        commitmentHash: hedge.commitment_hash || undefined
       };
     }
 
@@ -126,11 +132,12 @@ export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwners
       opened_at: string;
       tx_hash: string;
       on_chain_hedge_id: string;
+      commitment_hash: string;
     }>(
-      `SELECT wallet_address, pair_index, asset, side, collateral, leverage, opened_at, tx_hash, on_chain_hedge_id
+      `SELECT wallet_address, pair_index, asset, side, collateral, leverage, opened_at, tx_hash, on_chain_hedge_id, commitment_hash
        FROM hedge_ownership 
-       WHERE commitment_hash = $1`,
-      [commitmentHash.toLowerCase()]
+       WHERE commitment_hash = $1 OR on_chain_hedge_id = $1`,
+      [lookupValue]
     );
 
     if (ownership) {
@@ -143,7 +150,8 @@ export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwners
         leverage: ownership.leverage,
         openedAt: ownership.opened_at,
         txHash: ownership.tx_hash || '',
-        onChainHedgeId: ownership.on_chain_hedge_id || undefined
+        onChainHedgeId: ownership.on_chain_hedge_id || undefined,
+        commitmentHash: ownership.commitment_hash || undefined
       };
     }
 
@@ -156,12 +164,14 @@ export async function getHedgeOwner(commitmentHash: string): Promise<HedgeOwners
 
 /**
  * Remove a hedge from the registry (called after successful close).
+ * Accepts either commitmentHash or hedge_id_onchain as the lookup key.
  */
-export async function removeHedgeOwnership(commitmentHash: string): Promise<void> {
+export async function removeHedgeOwnership(hedgeIdOrCommitment: string): Promise<void> {
   try {
+    const lookupValue = hedgeIdOrCommitment.toLowerCase();
     await query(
-      `DELETE FROM hedge_ownership WHERE commitment_hash = $1`,
-      [commitmentHash.toLowerCase()]
+      `DELETE FROM hedge_ownership WHERE commitment_hash = $1 OR on_chain_hedge_id = $1`,
+      [lookupValue]
     );
   } catch (error) {
     console.error('Failed to remove hedge ownership:', error);

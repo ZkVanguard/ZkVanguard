@@ -196,6 +196,7 @@ export async function POST(request: NextRequest) {
       leverage: Number(leverage),
       openedAt: new Date().toISOString(),
       txHash: tx.hash,
+      onChainHedgeId, // Store the on-chain hedgeId for lookup during close
     });
 
     // Persist to Neon DB — tx hash instantly available on next query (no event scan)
