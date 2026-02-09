@@ -201,7 +201,12 @@ export async function POST(request: NextRequest) {
     const trueOwner = ownerEntry?.walletAddress || onChainTraderAddress;
     const isGaslessHedge = ownerEntry && ownerEntry.walletAddress.toLowerCase() !== onChainTraderAddress.toLowerCase();
     
-    console.log(`🔍 Fund routing: on-chain trader=${onChainTraderAddress.slice(0,10)}..., true owner=${trueOwner.slice(0,10)}..., gasless=${isGaslessHedge}`);
+    console.log(`🔍 DEBUG ownerEntry:`, ownerEntry ? JSON.stringify({
+      walletAddress: ownerEntry.walletAddress,
+      commitmentHash: ownerEntry.commitmentHash?.slice(0, 18),
+      onChainHedgeId: ownerEntry.onChainHedgeId?.slice(0, 18)
+    }) : 'NULL');
+    console.log(`🔍 Fund routing: on-chain trader=${onChainTraderAddress}, true owner=${trueOwner}, gasless=${isGaslessHedge}`);
 
     // Get TRUE OWNER's USDC balance before close (for accurate reporting)
     const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
@@ -251,7 +256,10 @@ export async function POST(request: NextRequest) {
     let forwardTxHash: string | null = null;
     let fundsForwarded = 0;
     
+    console.log(`🔍 DEBUG forwarding check: isGaslessHedge=${isGaslessHedge}, trueOwner=${trueOwner}, onChainTrader=${onChainTraderAddress}`);
+    
     if (isGaslessHedge && trueOwner.toLowerCase() !== onChainTraderAddress.toLowerCase()) {
+      console.log(`✨ FUND FORWARDING TRIGGERED - gasless hedge with different true owner`);
       try {
         // Get the USDC contract with signer for transfer
         const usdcWithSigner = new ethers.Contract(MOCK_USDC, USDC_ABI, wallet);
@@ -290,6 +298,8 @@ export async function POST(request: NextRequest) {
         console.error(`❌ Fund forwarding error:`, forwardErr instanceof Error ? forwardErr.message : forwardErr);
         // Don't fail the whole request - the hedge is closed, just logging the forwarding issue
       }
+    } else {
+      console.log(`⚠️ FUND FORWARDING SKIPPED - isGaslessHedge=${isGaslessHedge}, trueOwner===onChainTrader=${trueOwner.toLowerCase() === onChainTraderAddress.toLowerCase()}`);
     }
 
     // Get TRUE OWNER's USDC balance after close + forwarding
