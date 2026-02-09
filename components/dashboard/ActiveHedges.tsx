@@ -99,15 +99,18 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const { data: walletClient } = useWalletClient();
   
   // EIP-712 signature helper for closing hedges - uses wagmi walletClient for correct wallet
+  // NO fallback to window.ethereum - that causes conflicts with multiple wallets (OKX vs MetaMask)
   const signCloseHedge = async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
     try {
+      // IMPORTANT: Only use wagmi walletClient - no window.ethereum fallback
+      // Multiple wallet extensions conflict over window.ethereum
       if (!walletClient) {
-        logger.warn('No wallet client available, trying fallback', { component: 'ActiveHedges' });
-        // Fallback to window.ethereum if walletClient not available
-        if (typeof window === 'undefined' || !(window as unknown as { ethereum?: unknown }).ethereum) {
-          logger.warn('No wallet provider found', { component: 'ActiveHedges' });
-          return null;
-        }
+        logger.error('❌ No walletClient available - ensure wallet is fully connected via wagmi', { 
+          component: 'ActiveHedges',
+          hint: 'If using OKX, ensure it is selected as the active wallet in the connect modal'
+        });
+        alert('Wallet not connected properly. Please disconnect and reconnect your wallet using the Connect button.');
+        return null;
       }
       
       const timestamp = Math.floor(Date.now() / 1000);
@@ -127,43 +130,20 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       } as const;
       const message = { hedgeId: hedgeId as `0x${string}`, action: 'close', timestamp: BigInt(timestamp) };
 
-      // Use wagmi walletClient (uses the CONNECTED wallet - OKX, MetaMask, etc.)
-      if (walletClient) {
-        logger.info('🔑 Signing with connected wallet via wagmi', { component: 'ActiveHedges', wallet: walletClient.account?.address });
-        
-        const signature = await walletClient.signTypedData({
-          domain,
-          types,
-          primaryType: 'CloseHedge',
-          message,
-        });
-
-        logger.info('🔑 Signed close-hedge message', { component: 'ActiveHedges', signer: walletClient.account?.address });
-        return { signature, timestamp };
-      }
-
-      // Fallback: direct window.ethereum (legacy)
-      const ethereum = (window as unknown as { ethereum: { request: (args: { method: string; params: unknown[] }) => Promise<string> } }).ethereum;
-      let accounts = await ethereum.request({ method: 'eth_accounts', params: [] }) as unknown as string[];
-      if (!accounts || accounts.length === 0) {
-        accounts = await ethereum.request({ method: 'eth_requestAccounts', params: [] }) as unknown as string[];
-      }
-      if (!accounts || accounts.length === 0) return null;
-      const signer = accounts[0];
-
-      const msgParams = JSON.stringify({
-        types: { EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }], ...types },
-        primaryType: 'CloseHedge',
+      logger.info('🔑 Signing with connected wallet via wagmi', { 
+        component: 'ActiveHedges', 
+        wallet: walletClient.account?.address,
+        connector: walletClient.transport?.name || 'unknown'
+      });
+      
+      const signature = await walletClient.signTypedData({
         domain,
-        message: { hedgeId, action: 'close', timestamp: String(timestamp) },
+        types,
+        primaryType: 'CloseHedge',
+        message,
       });
 
-      const signature = await ethereum.request({
-        method: 'eth_signTypedData_v4',
-        params: [signer, msgParams],
-      });
-
-      logger.info('🔑 Signed close-hedge message (fallback)', { component: 'ActiveHedges', signer });
+      logger.info('🔑 Signed close-hedge message', { component: 'ActiveHedges', signer: walletClient.account?.address });
       return { signature, timestamp };
     } catch (err) {
       logger.warn('Wallet signature declined or failed', { component: 'ActiveHedges', error: err });
