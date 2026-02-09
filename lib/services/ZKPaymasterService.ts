@@ -180,19 +180,14 @@ export class ZKPaymasterService {
     signature: string
   ): Promise<GaslessResult> {
     try {
-      const nonce = await this.getNonce(userAddress);
       const deadline = Math.floor(Date.now() / 1000) + 3600;
 
       logger.info('🚀 Executing gasless commitment', {
         user: userAddress,
         proofHash: params.proofHash.substring(0, 18) + '...',
-        nonce: nonce.toString(),
       });
 
-      // Get relayer balance before
-      const balanceBefore = await this.provider.getBalance(this.relayerWallet.address);
-
-      // Execute meta-transaction
+      // Execute meta-transaction (nonce is verified on-chain by the contract)
       const tx = await this.contract.storeCommitmentGasless(
         userAddress,
         params.proofHash,
@@ -207,9 +202,8 @@ export class ZKPaymasterService {
 
       const receipt = await tx.wait();
 
-      // Get relayer balance after (should be same or higher due to refund)
-      const balanceAfter = await this.provider.getBalance(this.relayerWallet.address);
-      const gasCost = balanceBefore - balanceAfter;
+      // Compute gas cost from receipt (avoids 2 extra getBalance RPC calls)
+      const gasCost = receipt.gasUsed * (receipt.gasPrice || 0n);
 
       logger.info('✅ Gasless commitment executed', {
         txHash: receipt.hash,
@@ -221,7 +215,7 @@ export class ZKPaymasterService {
       return {
         success: true,
         txHash: receipt.hash,
-        gasSponsored: ethers.formatEther(receipt.gasUsed * (receipt.gasPrice || 0n)),
+        gasSponsored: ethers.formatEther(gasCost),
         userCost: '$0.00',
       };
     } catch (error) {

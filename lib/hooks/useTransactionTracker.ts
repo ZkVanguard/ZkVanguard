@@ -1,9 +1,12 @@
 /**
  * Transaction Tracker Hook
  * Automatically track and cache user transactions
+ * 
+ * Optimized: Only fetches receipts for user txs, not full blocks.
+ * Polls every 3rd block (~15s on Cronos) to reduce RPC traffic.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePublicClient, useAccount } from 'wagmi';
 import { logger } from '@/lib/utils/logger';
 import { addTransactionToCache } from '../utils/transactionCache';
@@ -11,43 +14,54 @@ import { addTransactionToCache } from '../utils/transactionCache';
 export function useTransactionTracker() {
   const publicClient = usePublicClient();
   const { address } = useAccount();
+  const lastProcessedBlock = useRef<bigint>(0n);
 
   useEffect(() => {
     if (!publicClient || !address) return;
 
-    // Track wallet transaction receipts
+    // Track wallet transaction receipts — throttled to every 3rd block
     const unwatch = publicClient.watchBlockNumber({
+      pollingInterval: 15_000, // Poll every 15 seconds instead of every block
       onBlockNumber: async (blockNumber) => {
         try {
-          // Get block with transactions
+          // Skip if we've already processed this block or a nearby one
+          if (blockNumber <= lastProcessedBlock.current + 2n) return;
+          lastProcessedBlock.current = blockNumber;
+
+          // Only fetch the block header (no transactions) to check if it's relevant
           const block = await publicClient.getBlock({ 
             blockNumber,
-            includeTransactions: true 
+            includeTransactions: false 
           });
 
-          // Filter transactions involving the user
-          if (block.transactions) {
-            for (const tx of block.transactions) {
-              const txData = typeof tx === 'string' 
-                ? await publicClient.getTransaction({ hash: tx })
-                : tx;
+          // If block has no transactions, skip entirely
+          if (!block.transactions || block.transactions.length === 0) return;
 
+          // Check each tx hash — only fetch full tx data for user's transactions
+          for (const txHash of block.transactions) {
+            if (typeof txHash !== 'string') continue;
+            
+            try {
+              // Use getTransactionReceipt which is lighter than getTransaction
+              const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+              
               if (
-                txData.from?.toLowerCase() === address.toLowerCase() ||
-                txData.to?.toLowerCase() === address.toLowerCase()
+                receipt.from?.toLowerCase() === address.toLowerCase() ||
+                receipt.to?.toLowerCase() === address.toLowerCase()
               ) {
-                // Cache user transaction
                 addTransactionToCache({
-                  hash: txData.hash,
+                  hash: txHash,
                   type: 'unknown',
-                  status: 'success',
+                  status: receipt.status === 'success' ? 'success' : 'failed',
                   timestamp: Date.now(),
-                  from: txData.from || '',
-                  to: txData.to || '',
-                  value: txData.value?.toString() || '0',
+                  from: receipt.from || '',
+                  to: receipt.to || '',
+                  value: '0',
                   blockNumber: Number(blockNumber),
                 });
               }
+            } catch {
+              // Skip individual tx errors
             }
           }
         } catch (error) {

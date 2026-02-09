@@ -49,6 +49,8 @@ class RealMarketDataService {
   private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
   private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
   private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
+  private contractCache: Map<string, ethers.Contract> = new Map(); // Cache ERC20 contract instances
+  private vvsRouterContract: ethers.Contract | null = null; // Cached VVS router
 
   constructor() {
     // Use throttled provider for rate-limit protection on Vercel
@@ -501,8 +503,13 @@ class RealMarketDataService {
     tokenAddress: string,
     decimals: number
   ): Promise<string> {
-    const abi = ['function balanceOf(address) view returns (uint256)'];
-    const contract = new ethers.Contract(tokenAddress, abi, this.provider);
+    // Cache contract instances by address (immutable, safe to reuse)
+    let contract = this.contractCache.get(tokenAddress);
+    if (!contract) {
+      const abi = ['function balanceOf(address) view returns (uint256)'];
+      contract = new ethers.Contract(tokenAddress, abi, this.provider);
+      this.contractCache.set(tokenAddress, contract);
+    }
     
     // Add 3s timeout for balance calls
     const timeoutPromise = new Promise<never>((_, reject) => 
@@ -539,7 +546,11 @@ class RealMarketDataService {
       const abi = [
         'function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)',
       ];
-      const router = new ethers.Contract(VVS_ROUTER, abi, this.provider);
+      // Cache VVS router contract instance
+      if (!this.vvsRouterContract) {
+        this.vvsRouterContract = new ethers.Contract(VVS_ROUTER, abi, this.provider);
+      }
+      const router = this.vvsRouterContract;
 
       // Get price in CRO
       const amountIn = ethers.parseUnits('1', 18);

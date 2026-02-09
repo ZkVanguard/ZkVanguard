@@ -3,7 +3,7 @@
  * Real contract interactions on Cronos EVM testnet
  */
 
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, type PublicClient } from 'viem';
 import { CronosTestnet } from '../chains';
 
 // Contract addresses (deployed on testnet)
@@ -14,14 +14,20 @@ export const CONTRACTS = {
   X402_BATCH_SENDER: '0x0000000000000000000000000000000000000000'
 };
 
+// Module-level singleton client (reused across all function calls)
+let _publicClient: PublicClient | null = null;
+
 /**
- * Create public client for reading blockchain data
+ * Create public client for reading blockchain data — cached singleton
  */
-export function getPublicClient() {
-  return createPublicClient({
-    chain: CronosTestnet,
-    transport: http()
-  });
+export function getPublicClient(): PublicClient {
+  if (!_publicClient) {
+    _publicClient = createPublicClient({
+      chain: CronosTestnet,
+      transport: http()
+    });
+  }
+  return _publicClient;
 }
 
 /**
