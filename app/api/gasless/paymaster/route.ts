@@ -29,6 +29,18 @@ const ZK_PAYMASTER_ABI = [
   'function getStats() external view returns (uint256, uint256, uint256, uint256)',
 ];
 
+// Module-level cached contract instances (reused across requests)
+let _readContract: ethers.Contract | null = null;
+function getPaymasterReadContract() {
+  if (!_readContract) {
+    const provider = getCronosProvider(RPC_URL).provider;
+    _readContract = new ethers.Contract(
+      ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider
+    );
+  }
+  return _readContract;
+}
+
 // EIP-712 Domain
 const DOMAIN = {
   name: 'ZKPaymaster',
@@ -64,7 +76,7 @@ export async function GET() {
     }
 
     const provider = getCronosProvider(RPC_URL).provider;
-    const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider);
+    const contract = getPaymasterReadContract();
 
     const [totalCommitments, totalGasSponsored, totalTxRelayed, balance] = await contract.getStats();
 
@@ -146,7 +158,7 @@ async function handlePrepare(body: {
   }
 
   const provider = getCronosProvider(RPC_URL).provider;
-  const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider);
+  const contract = getPaymasterReadContract();
 
   // Get user's nonce
   const nonce = await contract.getNonce(userAddress);
@@ -217,8 +229,7 @@ async function handleExecute(body: {
   const relayer = new ethers.Wallet(relayerPrivateKey, provider);
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, relayer);
 
-  // Get nonce and deadline
-  const _nonce = await contract.getNonce(userAddress);
+  // Use deadline from now (nonce is verified on-chain, no need to fetch it here)
   const deadline = Math.floor(Date.now() / 1000) + 3600;
 
   logger.info('🚀 Relaying gasless transaction', {

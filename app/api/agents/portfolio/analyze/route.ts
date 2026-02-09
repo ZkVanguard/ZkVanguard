@@ -35,24 +35,54 @@ export async function POST(request: NextRequest) {
       totalValue: 0,
     };
 
-    for (const symbol of tokens) {
-      try {
-        const priceData = await mcpClient.getPrice(symbol);
-        // Get balance from blockchain
-        const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
-        const balance = await provider.getBalance(address);
-        const balanceInToken = parseFloat(ethers.formatEther(balance));
-        const value = balanceInToken * priceData.price;
-        
-        portfolioData.tokens.push({
-          symbol,
-          balance: balanceInToken,
-          price: priceData.price,
-          value,
-        });
-        portfolioData.totalValue += value;
-      } catch (error) {
-        console.warn(`Failed to fetch ${symbol} data:`, error);
+    // Known token addresses on Cronos testnet for ERC20 balance lookups
+    const TOKEN_ADDRESSES: Record<string, string> = {
+      USDC: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
+      USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    };
+    const TOKEN_DECIMALS: Record<string, number> = {
+      CRO: 18, BTC: 8, ETH: 18, USDC: 6, USDT: 6,
+    };
+    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+    const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
+
+    // Fetch all token data in parallel
+    const tokenResults = await Promise.allSettled(
+      tokens.map(async (symbol) => {
+        try {
+          const priceData = await mcpClient.getPrice(symbol);
+
+          // Get correct balance per token type
+          let balanceInToken = 0;
+          if (symbol === 'CRO') {
+            const balance = await provider.getBalance(address);
+            balanceInToken = parseFloat(ethers.formatEther(balance));
+          } else if (TOKEN_ADDRESSES[symbol]) {
+            const tokenContract = new ethers.Contract(TOKEN_ADDRESSES[symbol], ERC20_ABI, provider);
+            const balance = await tokenContract.balanceOf(address);
+            balanceInToken = parseFloat(ethers.formatUnits(balance, TOKEN_DECIMALS[symbol] || 18));
+          } else {
+            balanceInToken = 0;
+          }
+          const value = balanceInToken * priceData.price;
+          
+          return {
+            symbol,
+            balance: balanceInToken,
+            price: priceData.price,
+            value,
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch ${symbol} data:`, error);
+          return null;
+        }
+      })
+    );
+
+    for (const result of tokenResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        portfolioData.tokens.push(result.value);
+        portfolioData.totalValue += result.value.value;
       }
     }
 

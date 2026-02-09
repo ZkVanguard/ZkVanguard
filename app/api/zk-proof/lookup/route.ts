@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeByZkProofHash, getHedgeById } from '@/lib/db/hedges';
+import { getCronosProvider } from '@/lib/throttled-provider';
 
 const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const provider = getCronosProvider(RPC_URL).provider;
     
     // Get transaction receipt
     const receipt = await provider.getTransactionReceipt(txHash);
@@ -177,8 +178,11 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            // Get block timestamp
-            const block = await provider.getBlock(receipt.blockNumber);
+            // Get block timestamp and block number in parallel
+            const [block, currentBlockNumber] = await Promise.all([
+              provider.getBlock(receipt.blockNumber),
+              provider.getBlockNumber(),
+            ]);
             
             commitment = {
               proofHash: decoded.args[0],
@@ -189,6 +193,7 @@ export async function POST(request: NextRequest) {
               verified: true,
               txHash,
               blockNumber: receipt.blockNumber,
+              blockConfirmations: currentBlockNumber - receipt.blockNumber,
             };
           }
         } catch (decodeErr) {
@@ -204,10 +209,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // blockConfirmations already computed above when available
+    const blockConfirmations = (commitment as Record<string, unknown>).blockConfirmations 
+      ?? (await provider.getBlockNumber()) - receipt.blockNumber;
+
     return NextResponse.json({
       success: true,
       commitment,
-      blockConfirmations: (await provider.getBlockNumber()) - receipt.blockNumber,
+      blockConfirmations,
     });
 
   } catch (error) {
