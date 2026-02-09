@@ -65,6 +65,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL: walletAddress is REQUIRED for gasless hedges
+    // Without it, we cannot verify ownership during close, and funds cannot be withdrawn
+    if (!walletAddress || typeof walletAddress !== 'string' || !walletAddress.startsWith('0x')) {
+      return NextResponse.json(
+        { success: false, error: 'walletAddress is required for gasless hedges. Connect your wallet before creating a hedge.' },
+        { status: 400 }
+      );
+    }
+
     if (pairIndex < 0 || pairIndex > 5) {
       return NextResponse.json(
         { success: false, error: `Invalid pairIndex ${pairIndex}. Valid: 0-5 (BTC, ETH, CRO, ATOM, DOGE, SOL)` },
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     // PRIVACY: The relayer is the on-chain trader — user's address is NEVER on-chain
     // The user's walletAddress is only stored in the ZK commitment (private binding)
-    const userWallet = walletAddress || 'anonymous';
+    const userWallet = walletAddress; // Now guaranteed to be a valid address
     const collateralRaw = ethers.parseUnits(String(collateralAmount), 6);
 
     // Check RELAYER's USDC pool balance (not the user's — user's wallet stays private)

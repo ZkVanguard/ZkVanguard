@@ -101,6 +101,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Check for legacy 'anonymous' wallet (gasless hedges created without proper wallet binding)
+      if (ownerEntry.walletAddress === 'anonymous' || !ownerEntry.walletAddress.startsWith('0x')) {
+        console.warn(`🚫 Hedge has anonymous/invalid owner: ${ownerEntry.walletAddress}`);
+        return NextResponse.json(
+          { success: false, error: 'This hedge was created without wallet binding and cannot be closed with signature verification. Please contact support for manual closure.' },
+          { status: 403 }
+        );
+      }
+
       // Verify the signature timestamp is recent (5 min window)
       const ts = Number(signatureTimestamp || 0);
       const now = Math.floor(Date.now() / 1000);
@@ -122,8 +131,15 @@ export async function POST(request: NextRequest) {
 
         if (recoveredAddress.toLowerCase() !== ownerEntry.walletAddress.toLowerCase()) {
           console.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${ownerEntry.walletAddress}`);
+          const expectedShort = `${ownerEntry.walletAddress.slice(0, 6)}...${ownerEntry.walletAddress.slice(-4)}`;
+          const signedShort = `${recoveredAddress.slice(0, 6)}...${recoveredAddress.slice(-4)}`;
           return NextResponse.json(
-            { success: false, error: 'Signature does not match hedge owner. You can only close your own hedges.' },
+            { 
+              success: false, 
+              error: `Wallet mismatch: signed with ${signedShort} but hedge belongs to ${expectedShort}. Please switch to the correct wallet.`,
+              expectedOwner: ownerEntry.walletAddress,
+              signedBy: recoveredAddress,
+            },
             { status: 403 }
           );
         }
