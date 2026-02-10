@@ -209,6 +209,21 @@ export async function GET(request: NextRequest) {
     const includeStats = searchParams.get('stats') === 'true';
     const forceRpc = searchParams.get('forceRpc') === 'true'; // Debug flag to bypass DB
 
+    // SECURITY: Require wallet address - users should only see their own hedges
+    if (!address) {
+      return NextResponse.json({
+        success: true,
+        summary: {
+          totalActive: 0,
+          totalCollateral: 0,
+          totalNotional: 0,
+          unrealizedPnL: 0,
+          details: [],
+        },
+        message: 'Connect wallet to view your hedges',
+      });
+    }
+
     // ═══════════════════════════════════════════════════════════
     // DB-FIRST APPROACH: Serve from Neon DB (instant, no RPC)
     // ═══════════════════════════════════════════════════════════
