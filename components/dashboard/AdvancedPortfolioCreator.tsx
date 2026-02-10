@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useSignMessage } from 'wagmi';
+import { useSignMessage } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio } from '../../lib/contracts/hooks';
 import { 
   Loader2, CheckCircle, XCircle, Shield, Sparkles, 
@@ -47,7 +48,7 @@ interface AdvancedPortfolioCreatorProps {
 }
 
 export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = false }: AdvancedPortfolioCreatorProps = {}) {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, evmConnected, isSUI } = useWallet();
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
   const { signMessageAsync } = useSignMessage();
   
@@ -222,7 +223,21 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
     }
   };
 
-  if (!isConnected) {
+  // Show message for SUI users (EVM-only feature)
+  if (isSUI && !evmConnected) {
+    return hideTrigger ? null : (
+      <button
+        className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#4DA2FF]/20 rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-[#4DA2FF] flex items-center gap-2 cursor-not-allowed"
+        disabled
+        title="On-chain portfolios require Cronos (EVM) wallet"
+      >
+        <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
+        EVM Wallet Required
+      </button>
+    );
+  }
+
+  if (!evmConnected) {
     return hideTrigger ? null : (
       <button
         className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#86868b] rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-white flex items-center gap-2 cursor-not-allowed"

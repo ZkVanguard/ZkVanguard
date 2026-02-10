@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
 import { useUserPortfolios } from '@/lib/contracts/hooks';
@@ -45,8 +45,9 @@ interface PositionsContextType {
 const PositionsContext = createContext<PositionsContextType | undefined>(undefined);
 
 export function PositionsProvider({ children }: { children: React.ReactNode }) {
-  const { address } = useAccount();
-  const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(address);
+  const { address, evmAddress } = useWallet();
+  // For EVM contract hooks, use EVM address specifically
+  const { count: userPortfolioCount, isLoading: countLoading } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const [positionsData, setPositionsData] = useState<PositionsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

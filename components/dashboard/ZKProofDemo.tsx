@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronDown, ChevronUp, Lock, Sparkles, Search, Clock, Hash, Database, Wallet } from 'lucide-react';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';
 import { useWalletClient } from 'wagmi';
@@ -37,7 +37,7 @@ interface WalletVerificationResult {
 }
 
 export function ZKProofDemo() {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address } = useWallet();
   const { data: walletClient } = useWalletClient();
   const contractAddresses = useContractAddresses();
   const { isPending, isConfirming, isConfirmed, error, hash } = useVerifyProof();

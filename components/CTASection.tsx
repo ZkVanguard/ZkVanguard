@@ -1,11 +1,11 @@
 'use client';
 
 import { Link } from '../i18n/routing';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { useTranslations } from 'next-intl';
 
 export function CTASection() {
-  useAccount();
+  useWallet();
   const t = useTranslations('cta');
 
   return (

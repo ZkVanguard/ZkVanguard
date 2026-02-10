@@ -9,3 +9,4 @@ export { usePolling } from './usePolling';
 export { useToggle } from './useToggle';
 export { useLoading } from './useLoading';
 export { useDebounce } from './useDebounce';
+export { useWallet, type WalletState } from './useWallet';

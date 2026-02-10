@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus, Zap } from 'lucide-react';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
@@ -158,9 +158,9 @@ const PositionRow = memo(({ position, idx }: { position: Position; idx: number }
 PositionRow.displayName = 'PositionRow';
 
 export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
-  const { isConnected } = useAccount();
-  // Get only portfolios owned by the connected wallet
-  const { data: userPortfolios, count: _userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(address);
+  const { isConnected, evmAddress } = useWallet();
+  // Get only portfolios owned by the connected wallet (EVM-specific)
+  const { data: userPortfolios, count: _userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const { positionsData, derived, error: positionsError, refetch: refetchPositions } = usePositions();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);

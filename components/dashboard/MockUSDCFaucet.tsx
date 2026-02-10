@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
 
 // MockUSDC on Cronos Testnet - has public mint() with no access control
@@ -48,7 +49,8 @@ interface MockUSDCFaucetProps {
 }
 
 export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFaucetProps) {
-  const { address } = useAccount();
+  const { evmAddress, isSUI } = useWallet();
+  const address = evmAddress as `0x${string}` | undefined;
   const publicClient = usePublicClient();
   const [balance, setBalance] = useState<string>('0');
   const [selectedAmount, setSelectedAmount] = useState('10000');
@@ -109,7 +111,20 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 
   const isBusy = isMintPending || isMintConfirming;
 
-  if (!address) return null;
+  // Not connected to EVM
+  if (!address) {
+    // If connected to SUI, show message
+    if (isSUI) {
+      return (
+        <div className="text-center py-6 px-4 bg-[#4DA2FF]/5 border border-[#4DA2FF]/20 rounded-[16px]">
+          <Coins className="w-8 h-8 text-[#4DA2FF] mx-auto mb-2" />
+          <p className="text-sm text-[#4DA2FF] font-medium">SUI Wallet Connected</p>
+          <p className="text-xs text-[#86868B] mt-1">USDC Faucet is available for Cronos (EVM) wallets</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   // Compact mode — small inline button for use inside modals
   if (compact) {

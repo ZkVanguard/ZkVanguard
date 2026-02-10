@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio, useUserPortfolios } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export function CreatePortfolioButton() {
-  const { isConnected, address } = useAccount();
-  // Get only portfolios owned by the connected wallet
-  const { count: userPortfolioCount } = useUserPortfolios(address);
+  const { isConnected, evmAddress, evmConnected, isSUI } = useWallet();
+  // Get only portfolios owned by the connected wallet (EVM only)
+  const { count: userPortfolioCount } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
   
   const [targetYield, setTargetYield] = useState('1000'); // 10% in basis points
@@ -25,10 +25,20 @@ export function CreatePortfolioButton() {
     }
   };
 
-  if (!isConnected) {
+  // Show message for SUI users (EVM-only feature)
+  if (isSUI && !evmConnected) {
+    return (
+      <div className="bg-[#4DA2FF]/5 p-6 rounded-xl border border-[#4DA2FF]/20 shadow-sm">
+        <p className="text-[#4DA2FF] text-center font-medium">SUI Wallet Connected</p>
+        <p className="text-[#86868B] text-center text-sm mt-1">On-chain portfolios require Cronos (EVM) wallet</p>
+      </div>
+    );
+  }
+
+  if (!evmConnected) {
     return (
       <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] shadow-sm">
-        <p className="text-[#86868b] text-center">Connect wallet to create portfolio</p>
+        <p className="text-[#86868b] text-center">Connect Cronos wallet to create portfolio</p>
       </div>
     );
   }

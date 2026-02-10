@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useWallet } from '@/lib/hooks/useWallet';
 import { usePortfolio, usePortfolioAssets } from '../../lib/contracts/hooks';
 import { formatEther } from 'viem';
 import { RefreshCw } from 'lucide-react';
@@ -13,7 +13,7 @@ interface PortfolioCardProps {
 export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
   const { data: portfolio, isLoading, refetch } = usePortfolio(portfolioId);
   const { data: assets } = usePortfolioAssets(portfolioId);
-  const { address } = useAccount();
+  const { evmAddress } = useWallet();
 
   if (isLoading) {
     return (
@@ -36,7 +36,7 @@ export function PortfolioCard({ portfolioId }: PortfolioCardProps) {
     bigint,
     boolean
   ];
-  const isOwner = address?.toLowerCase() === owner.toLowerCase();
+  const isOwner = evmAddress?.toLowerCase() === owner.toLowerCase();
 
   return (
     <div className="bg-white p-6 rounded-xl border border-[#E5E5EA] hover:border-[#007AFF]/30 transition-all duration-300 shadow-sm">
