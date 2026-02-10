@@ -12,6 +12,7 @@ import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
 import { usePositions } from '@/contexts/PositionsContext';
 import { logger } from '@/lib/utils/logger';
+import { useSui } from '@/app/sui-providers';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 
 // Dynamic imports for code splitting
@@ -109,8 +110,21 @@ const navItems: NavItem[] = [
 type NavId = NavItem['id'];
 
 export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
-  const { data: balance } = useBalance({ address });
+  // EVM wallet state
+  const { address: evmAddress, isConnected: evmConnected } = useAccount();
+  const { data: balance } = useBalance({ address: evmAddress });
+  
+  // SUI wallet state
+  const sui = useSui();
+  const suiAddress = sui.address;
+  const suiConnected = sui.isConnected;
+  const suiBalance = sui.balance;
+  
+  // Combined wallet state - prefer SUI if connected, otherwise EVM
+  const isConnected = suiConnected || evmConnected;
+  const address = suiAddress || evmAddress?.toString();
+  const displayBalance = suiConnected ? `${suiBalance} SUI` : (balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : '');
+  
   const contractAddresses = useContractAddresses();
   // Get portfolio count and other data from centralized context - no redundant fetches!
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -138,8 +152,8 @@ export default function DashboardPage() {
     stopLoss?: number;
   } | undefined>(undefined);
   
-  const displayAddress = address?.toString() || '';
-  const portfolioAssets = ['CRO', 'USDC', 'WBTC', 'ETH'];
+  const displayAddress = address || '';
+  const portfolioAssets = suiConnected ? ['SUI', 'USDC'] : ['CRO', 'USDC', 'WBTC', 'ETH'];
   
   // Debug notification state changes
   useEffect(() => {
@@ -366,9 +380,9 @@ export default function DashboardPage() {
           {/* Wallet Info */}
           <div className="p-4 border-b border-black/5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${suiConnected ? 'bg-[#4DA2FF]' : 'bg-gradient-to-br from-blue-500 to-purple-600'}`}>
                 <span className="text-white text-sm font-bold">
-                  {displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK'}
+                  {suiConnected ? 'SUI' : (displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK')}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
@@ -376,7 +390,7 @@ export default function DashboardPage() {
                   {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not Connected'}
                 </p>
                 <p className="text-xs text-[#86868b]">
-                  {balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : 'Connect Wallet'}
+                  {isConnected ? displayBalance : 'Connect Wallet'}
                 </p>
               </div>
             </div>
@@ -435,9 +449,9 @@ export default function DashboardPage() {
           {/* Wallet Section */}
           <div className="p-5 border-b border-black/5">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#007AFF] to-[#5856D6] flex items-center justify-center shadow-[0_4px_12px_rgba(0,122,255,0.3)]">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(0,122,255,0.3)] ${suiConnected ? 'bg-[#4DA2FF]' : 'bg-gradient-to-br from-[#007AFF] to-[#5856D6]'}`}>
                 <span className="text-white text-[15px] font-semibold">
-                  {displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK'}
+                  {suiConnected ? 'SUI' : (displayAddress ? displayAddress.slice(2, 4).toUpperCase() : 'ZK')}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
@@ -445,7 +459,7 @@ export default function DashboardPage() {
                   {displayAddress ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}` : 'Not Connected'}
                 </p>
                 <p className="text-[13px] text-[#86868b] tracking-[-0.003em]">
-                  {balance ? `${parseFloat(balance.formatted).toFixed(4)} ${balance.symbol}` : 'Connect Wallet'}
+                  {isConnected ? displayBalance : 'Connect Wallet'}
                 </p>
               </div>
             </div>
