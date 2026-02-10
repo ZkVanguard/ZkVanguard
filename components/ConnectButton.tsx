@@ -12,7 +12,7 @@ import {
   useCurrentWallet,
 } from '@mysten/dapp-kit';
 import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { useSui } from '@/app/sui-providers';
+import { useSuiSafe } from '@/app/sui-providers';
 
 // Safe hook wrapper for Sui wallet functionality
 function useSuiWalletSafe() {
@@ -76,18 +76,11 @@ export function ConnectButton() {
     isClient: _isClient,
   } = useSuiWalletSafe();
   
-  // Get SUI network status from context (safely)
-  let suiIsWrongNetwork = false;
-  let suiWalletNetwork: string | null = null;
-  let suiExpectedNetwork = 'testnet';
-  try {
-    const suiContext = useSui();
-    suiIsWrongNetwork = suiContext.isWrongNetwork;
-    suiWalletNetwork = suiContext.walletNetwork;
-    suiExpectedNetwork = suiContext.network;
-  } catch {
-    // useSui not available - default to no wrong network
-  }
+  // Get SUI network status from context (safely - returns null if not in provider)
+  const suiContext = useSuiSafe();
+  const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
+  const suiWalletNetwork = suiContext?.walletNetwork ?? null;
+  const suiExpectedNetwork = suiContext?.network ?? 'testnet';
   
   const suiAddress = suiAccount?.address ?? null;
   const isSuiConnected = connectionStatus === 'connected' && !!suiAddress;

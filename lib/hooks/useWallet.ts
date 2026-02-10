@@ -1,7 +1,7 @@
 'use client';
 
 import { useAccount } from 'wagmi';
-import { useSui } from '@/app/sui-providers';
+import { useSuiSafe } from '@/app/sui-providers';
 
 /**
  * Unified wallet hook that works with both EVM (Cronos) and SUI wallets.
@@ -13,21 +13,12 @@ export function useWallet() {
   // EVM wallet state
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
   
-  // SUI wallet state (safely handle if not in provider)
-  let suiAddress: string | null = null;
-  let suiConnected = false;
-  let suiBalance = '0';
-  let suiNetwork = 'testnet';
-  
-  try {
-    const sui = useSui();
-    suiAddress = sui.address;
-    suiConnected = sui.isConnected;
-    suiBalance = sui.balance;
-    suiNetwork = sui.network;
-  } catch {
-    // useSui not available - SUI wallet not in provider tree
-  }
+  // SUI wallet state (safely handle if not in provider - returns null)
+  const sui = useSuiSafe();
+  const suiAddress = sui?.address ?? null;
+  const suiConnected = sui?.isConnected ?? false;
+  const suiBalance = sui?.balance ?? '0';
+  const suiNetwork = sui?.network ?? 'testnet';
   
   // Combined state - SUI takes priority if connected
   const isConnected = suiConnected || evmConnected;

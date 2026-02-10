@@ -84,6 +84,7 @@ const SuiContext = createContext<SuiContextType | null>(null);
 
 /**
  * Hook to use Sui context
+ * @throws Error if used outside SuiWalletProviders
  */
 export function useSui(): SuiContextType {
   const context = useContext(SuiContext);
@@ -91,6 +92,14 @@ export function useSui(): SuiContextType {
     throw new Error('useSui must be used within SuiWalletProviders');
   }
   return context;
+}
+
+/**
+ * Safe hook to use Sui context - returns null if not in provider
+ * Use this for components that may be rendered outside SuiWalletProviders
+ */
+export function useSuiSafe(): SuiContextType | null {
+  return useContext(SuiContext);
 }
 
 // ============================================
