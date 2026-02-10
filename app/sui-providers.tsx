@@ -49,6 +49,8 @@ interface SuiContextType {
   // Network
   network: NetworkType;
   setNetwork: (network: NetworkType) => void;
+  isWrongNetwork: boolean;
+  walletNetwork: string | null;
   
   // Wallet
   address: string | null;
@@ -106,6 +108,8 @@ function SuiContextProvider({
 }) {
   const [balance, setBalance] = useState('0');
   const [balanceRaw, setBalanceRaw] = useState<bigint>(BigInt(0));
+  const [walletNetwork, setWalletNetwork] = useState<string | null>(null);
+  const [isWrongNetwork, setIsWrongNetwork] = useState(false);
   
   const account = useCurrentAccount();
   const { currentWallet: _currentWallet, connectionStatus } = useCurrentWallet();
@@ -117,6 +121,81 @@ function SuiContextProvider({
 
   const address = account?.address ?? null;
   const isConnected = connectionStatus === 'connected' && !!address;
+
+  // Detect wallet network and check for mismatches
+  useEffect(() => {
+    async function detectWalletNetwork() {
+      if (!account || !isConnected) {
+        setWalletNetwork(null);
+        setIsWrongNetwork(false);
+        return;
+      }
+
+      try {
+        // Check the account's chains to detect wallet network
+        // SUI wallet accounts report their chain as 'sui:mainnet', 'sui:testnet', etc.
+        const accountChains = account.chains || [];
+        let detectedNetwork: string | null = null;
+
+        for (const chain of accountChains) {
+          if (chain.includes('mainnet')) {
+            detectedNetwork = 'mainnet';
+            break;
+          } else if (chain.includes('testnet')) {
+            detectedNetwork = 'testnet';
+            break;
+          } else if (chain.includes('devnet')) {
+            detectedNetwork = 'devnet';
+            break;
+          }
+        }
+
+        // If no chains reported, try to detect via RPC by checking chain identifier
+        if (!detectedNetwork && address) {
+          try {
+            const chainId = await suiClient.getChainIdentifier();
+            // Chain identifiers: mainnet = specific hash, testnet & devnet have their own
+            // Use a simple heuristic based on common patterns
+            if (chainId) {
+              // Known chain identifiers (these may change, but pattern remains)
+              // mainnet: "35834a8a", testnet: "4c78adac", devnet changes frequently
+              const mainnetId = '35834a8a';
+              const testnetId = '4c78adac';
+              
+              if (chainId === mainnetId) {
+                detectedNetwork = 'mainnet';
+              } else if (chainId === testnetId) {
+                detectedNetwork = 'testnet';
+              } else {
+                detectedNetwork = 'devnet'; // Assume devnet for unknown
+              }
+            }
+          } catch {
+            // RPC detection failed, fallback to assuming correct network
+            logger.debug('Could not detect SUI chain via RPC', { component: 'SuiProvider' });
+          }
+        }
+
+        setWalletNetwork(detectedNetwork);
+        
+        // Check if wallet network matches app's expected network
+        if (detectedNetwork && detectedNetwork !== network) {
+          logger.warn('SUI wallet network mismatch', { 
+            component: 'SuiProvider', 
+            data: { walletNetwork: detectedNetwork, appNetwork: network } 
+          });
+          setIsWrongNetwork(true);
+        } else {
+          setIsWrongNetwork(false);
+        }
+      } catch (error) {
+        logger.error('Failed to detect wallet network', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
+        setIsWrongNetwork(false);
+      }
+    }
+
+    detectWalletNetwork();
+  }, [account, isConnected, network, address, suiClient]);
 
   // Fetch balance when address changes
   useEffect(() => {
@@ -245,6 +324,8 @@ function SuiContextProvider({
   const contextValue: SuiContextType = useMemo(() => ({
     network,
     setNetwork,
+    isWrongNetwork,
+    walletNetwork,
     address,
     isConnected,
     isConnecting,
@@ -259,6 +340,8 @@ function SuiContextProvider({
   }), [
     network,
     setNetwork,
+    isWrongNetwork,
+    walletNetwork,
     address,
     isConnected,
     isConnecting,
