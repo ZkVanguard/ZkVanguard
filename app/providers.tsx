@@ -9,10 +9,8 @@ import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Sui imports
-import { createNetworkConfig, SuiClientProvider, WalletProvider as SuiWalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui/client';
-import '@mysten/dapp-kit/dist/index.css';
+// Sui - use the complete provider that includes SuiContext
+import { SuiWalletProviders } from './sui-providers';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
 // Trim to remove any accidental whitespace/newlines from env vars
@@ -25,14 +23,6 @@ const config = getDefaultConfig({
   projectId,
   chains: [CronosTestnet, CronosMainnet],
   ssr: true,
-});
-
-// Sui network config
-const { networkConfig: suiNetworkConfig } = createNetworkConfig({
-  localnet: { url: getFullnodeUrl('localnet') },
-  devnet: { url: getFullnodeUrl('devnet') },
-  testnet: { url: getFullnodeUrl('testnet') },
-  mainnet: { url: getFullnodeUrl('mainnet') },
 });
 
 // Singleton QueryClient instance
@@ -70,22 +60,20 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <CustomThemeProvider>
       <QueryClientProvider client={queryClient}>
-        {/* Sui Provider */}
-        <SuiClientProvider networks={suiNetworkConfig} defaultNetwork="testnet">
-          <SuiWalletProvider autoConnect>
-            {/* EVM Provider */}
-            <WagmiProvider config={config}>
-              <RainbowKitProvider
-                modalSize="compact"
-                theme={rainbowKitTheme}
-              >
-                <PositionsProvider>
-                  {children}
-                </PositionsProvider>
-              </RainbowKitProvider>
-            </WagmiProvider>
-          </SuiWalletProvider>
-        </SuiClientProvider>
+        {/* Sui Provider with full context support */}
+        <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
+          {/* EVM Provider */}
+          <WagmiProvider config={config}>
+            <RainbowKitProvider
+              modalSize="compact"
+              theme={rainbowKitTheme}
+            >
+              <PositionsProvider>
+                {children}
+              </PositionsProvider>
+            </RainbowKitProvider>
+          </WagmiProvider>
+        </SuiWalletProviders>
       </QueryClientProvider>
     </CustomThemeProvider>
   );
