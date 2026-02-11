@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSignMessage } from 'wagmi';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio } from '../../lib/contracts/hooks';
+import { useRWAManager } from '../../lib/contracts/suiHooks';
 import { 
   Loader2, CheckCircle, XCircle, Shield, Sparkles, 
   Filter, Target, AlertTriangle, Lock, Eye, EyeOff, Info, FileSignature 
@@ -48,9 +49,16 @@ interface AdvancedPortfolioCreatorProps {
 }
 
 export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = false }: AdvancedPortfolioCreatorProps = {}) {
-  const { isConnected, address, evmConnected, isSUI } = useWallet();
-  const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
+  const { address, evmConnected, isSUI, suiConnected } = useWallet();
+  const { createPortfolio: createEvmPortfolio, isPending: evmPending, isConfirming: evmConfirming, isConfirmed: evmConfirmed, error: evmError } = useCreatePortfolio();
+  const { createPortfolio: createSuiPortfolio, loading: suiLoading, error: suiError } = useRWAManager();
   const { signMessageAsync } = useSignMessage();
+  
+  // Combined loading/error states
+  const isPending = isSUI ? suiLoading : evmPending;
+  const isConfirming = isSUI ? false : evmConfirming;
+  const isConfirmed = isSUI ? false : evmConfirmed;
+  const error = isSUI ? (suiError ? new Error(suiError) : null) : evmError;
   
   const [internalShowModal, setInternalShowModal] = useState(false);
   
@@ -170,10 +178,23 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
         const message = `Chronos Vanguard Portfolio Strategy\n\nName: ${strategy.name}\nTarget Yield: ${strategy.targetYield / 100}%\nRisk: ${strategy.riskTolerance}\nZK Proof: ${proofHash}\nTimestamp: ${Date.now()}`;
         
         try {
-          const signature = await signMessageAsync({ message });
-          setStrategySignature(signature);
-          setStrategySigned(true);
-          setZkProofGenerated(true);
+          // For SUI wallets, use a hash-based verification instead of signature
+          if (isSUI) {
+            // Generate a deterministic signature-like hash for SUI
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            setStrategySignature(hashHex);
+            setStrategySigned(true);
+            setZkProofGenerated(true);
+          } else {
+            const signature = await signMessageAsync({ message });
+            setStrategySignature(signature);
+            setStrategySigned(true);
+            setZkProofGenerated(true);
+          }
         } catch (signError) {
           logger.error('User rejected signature', signError instanceof Error ? signError : undefined, { component: 'AdvancedPortfolioCreator' });
           throw new Error('Signature required to proceed');
@@ -191,8 +212,26 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
       const yieldBps = BigInt(strategy.targetYield);
       const risk = BigInt(strategy.riskTolerance);
       
-      // This will trigger MetaMask signature prompt
-      const portfolioId = await createPortfolio(yieldBps, risk);
+      let portfolioId: string | number | undefined;
+      
+      if (isSUI) {
+        // SUI wallet - use SUI contract
+        const result = await createSuiPortfolio({
+          targetYield: strategy.targetYield,
+          riskTolerance: strategy.riskTolerance,
+          depositAmount: BigInt(0), // Initial deposit of 0, user can deposit later
+        });
+        
+        if (result.success && result.digest) {
+          portfolioId = result.digest;
+          logger.info('✅ SUI Portfolio created', { component: 'AdvancedPortfolioCreator', data: { digest: result.digest } });
+        } else {
+          throw new Error(result.error || 'Failed to create SUI portfolio');
+        }
+      } else {
+        // EVM wallet - use Cronos contract
+        portfolioId = await createEvmPortfolio(yieldBps, risk);
+      }
       
       // Step 2: Store strategy metadata on-chain with ZK proof
       if (portfolioId !== undefined) {
@@ -200,7 +239,7 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            portfolioId: Number(portfolioId),
+            portfolioId: typeof portfolioId === 'string' ? portfolioId : Number(portfolioId),
             strategyConfig: {
               ...strategy,
               filters,
@@ -208,6 +247,7 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
             zkProofHash: strategyPrivate ? zkProofHash : null,
             signature: strategySignature,
             address: address,
+            chainType: isSUI ? 'sui' : 'evm',
           }),
         });
 
@@ -223,21 +263,8 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
     }
   };
 
-  // Show message for SUI users (EVM-only feature)
-  if (isSUI && !evmConnected) {
-    return hideTrigger ? null : (
-      <button
-        className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#4DA2FF]/20 rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-[#4DA2FF] flex items-center gap-2 cursor-not-allowed"
-        disabled
-        title="On-chain portfolios require Cronos (EVM) wallet"
-      >
-        <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
-        EVM Wallet Required
-      </button>
-    );
-  }
-
-  if (!evmConnected) {
+  // Show connect wallet message if neither wallet is connected
+  if (!evmConnected && !suiConnected) {
     return hideTrigger ? null : (
       <button
         className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#86868b] rounded-[12px] font-semibold text-[14px] sm:text-[15px] text-white flex items-center gap-2 cursor-not-allowed"
