@@ -378,25 +378,36 @@ function SuiContextProvider({
 interface SuiWalletProvidersProps {
   children: ReactNode;
   defaultNetwork?: NetworkType;
+  /** Set to true when already inside a QueryClientProvider */
+  skipQueryProvider?: boolean;
 }
 
 export function SuiWalletProviders({ 
   children,
   defaultNetwork = 'testnet',
+  skipQueryProvider = false,
 }: SuiWalletProvidersProps) {
   const [network, setNetwork] = useState<NetworkType>(defaultNetwork);
 
   const suiNetwork = network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet';
 
+  const content = (
+    <SuiClientProvider networks={networkConfig} defaultNetwork={suiNetwork}>
+      <WalletProvider autoConnect>
+        <SuiContextProvider network={network} setNetwork={setNetwork}>
+          {children}
+        </SuiContextProvider>
+      </WalletProvider>
+    </SuiClientProvider>
+  );
+
+  if (skipQueryProvider) {
+    return content;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork={suiNetwork}>
-        <WalletProvider autoConnect>
-          <SuiContextProvider network={network} setNetwork={setNetwork}>
-            {children}
-          </SuiContextProvider>
-        </WalletProvider>
-      </SuiClientProvider>
+      {content}
     </QueryClientProvider>
   );
 }
