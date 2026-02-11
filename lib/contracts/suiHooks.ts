@@ -391,11 +391,11 @@ export function usePaymentRouter() {
   const depositSponsorFund = useCallback(async (
     amount: bigint
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.paymentRouterState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.paymentRouterState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
