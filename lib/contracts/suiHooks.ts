@@ -6,7 +6,7 @@
 
 import { useCallback, useState } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
-import { useSui } from '../../app/sui-providers';
+import { useSuiSafe } from '../../app/sui-providers';
 
 // ============================================
 // TYPES
@@ -53,15 +53,15 @@ export interface TransactionResult {
 
 /**
  * Hook for RWA Manager contract interactions
+ * Safe to call even when SUI wallet isn't connected
  */
 export function useRWAManager() {
-  const { 
-    address, 
-    isConnected, 
-    executeTransaction, 
-    network: _network, 
-    contractAddresses 
-  } = useSui();
+  const suiContext = useSuiSafe();
+  
+  const address = suiContext?.address ?? null;
+  const isConnected = suiContext?.isConnected ?? false;
+  const executeTransaction = suiContext?.executeTransaction;
+  const contractAddresses = suiContext?.contractAddresses;
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,11 +72,11 @@ export function useRWAManager() {
   const createPortfolio = useCallback(async (
     params: PortfolioCreateParams
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.rwaManagerState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.rwaManagerState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
@@ -118,11 +118,11 @@ export function useRWAManager() {
   const deposit = useCallback(async (
     params: DepositParams
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.rwaManagerState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.rwaManagerState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
@@ -161,11 +161,11 @@ export function useRWAManager() {
   const withdraw = useCallback(async (
     params: WithdrawParams
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.rwaManagerState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.rwaManagerState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
@@ -211,14 +211,15 @@ export function useRWAManager() {
 
 /**
  * Hook for ZK Verifier contract interactions
+ * Safe to call even when SUI wallet isn't connected
  */
 export function useZKVerifier() {
-  const { 
-    address, 
-    isConnected, 
-    executeTransaction, 
-    contractAddresses 
-  } = useSui();
+  const suiContext = useSuiSafe();
+  
+  const address = suiContext?.address ?? null;
+  const isConnected = suiContext?.isConnected ?? false;
+  const executeTransaction = suiContext?.executeTransaction;
+  const contractAddresses = suiContext?.contractAddresses;
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -229,11 +230,11 @@ export function useZKVerifier() {
   const verifyProof = useCallback(async (
     params: VerifyProofParams
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.zkVerifierState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.zkVerifierState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
@@ -275,11 +276,11 @@ export function useZKVerifier() {
     strategyType: string,
     riskLevel: number
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.zkVerifierState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.zkVerifierState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 
@@ -326,14 +327,15 @@ export function useZKVerifier() {
 
 /**
  * Hook for Payment Router contract interactions
+ * Safe to call even when SUI wallet isn't connected
  */
 export function usePaymentRouter() {
-  const { 
-    address, 
-    isConnected, 
-    executeTransaction, 
-    contractAddresses 
-  } = useSui();
+  const suiContext = useSuiSafe();
+  
+  const address = suiContext?.address ?? null;
+  const isConnected = suiContext?.isConnected ?? false;
+  const executeTransaction = suiContext?.executeTransaction;
+  const contractAddresses = suiContext?.contractAddresses;
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -344,11 +346,11 @@ export function usePaymentRouter() {
   const routePayment = useCallback(async (
     params: RoutePaymentParams
   ): Promise<TransactionResult> => {
-    if (!isConnected || !address) {
-      return { success: false, error: 'Wallet not connected' };
+    if (!isConnected || !address || !executeTransaction) {
+      return { success: false, error: 'SUI wallet not connected' };
     }
 
-    if (!contractAddresses.packageId || !contractAddresses.paymentRouterState) {
+    if (!contractAddresses?.packageId || !contractAddresses?.paymentRouterState) {
       return { success: false, error: 'Contract addresses not configured' };
     }
 

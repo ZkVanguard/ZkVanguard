@@ -50,7 +50,7 @@ interface AdvancedPortfolioCreatorProps {
 
 export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = false }: AdvancedPortfolioCreatorProps = {}) {
   const { address, evmConnected, isSUI, suiConnected } = useWallet();
-  const { createPortfolio: createEvmPortfolio, isPending: evmPending, isConfirming: evmConfirming, isConfirmed: evmConfirmed, error: evmError } = useCreatePortfolio();
+  const { createPortfolio: createEvmPortfolio, isPending: evmPending, isConfirming: evmConfirming, isConfirmed: evmConfirmed, error: evmError, hash: evmHash } = useCreatePortfolio();
   const { createPortfolio: createSuiPortfolio, loading: suiLoading, error: suiError } = useRWAManager();
   const { signMessageAsync } = useSignMessage();
   
@@ -146,6 +146,14 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
     }
   }, [aiPreset]);
 
+  // Track EVM transaction hash and update state when available
+  useEffect(() => {
+    if (evmHash && !isSUI) {
+      setOnChainTxHash(evmHash);
+      logger.info('✅ EVM Portfolio transaction submitted', { component: 'AdvancedPortfolioCreator', data: { hash: evmHash } });
+    }
+  }, [evmHash, isSUI]);
+
   // Generate ZK proof for private strategy and store on-chain
   const generateZKProof = async () => {
     try {
@@ -212,7 +220,7 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
       const yieldBps = BigInt(strategy.targetYield);
       const risk = BigInt(strategy.riskTolerance);
       
-      let portfolioId: string | number | undefined;
+      let portfolioId: string | undefined;
       
       if (isSUI) {
         // SUI wallet - use SUI contract
@@ -230,16 +238,19 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
         }
       } else {
         // EVM wallet - use Cronos contract
-        portfolioId = await createEvmPortfolio(yieldBps, risk);
+        // This triggers the transaction, hash will be available via evmHash reactively
+        createEvmPortfolio(yieldBps, risk);
+        // Use a placeholder - the actual hash will be tracked via hook state
+        portfolioId = 'pending-evm-tx';
       }
       
       // Step 2: Store strategy metadata on-chain with ZK proof
-      if (portfolioId !== undefined) {
+      if (portfolioId) {
         const strategyResponse = await fetch('/api/portfolio/strategy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            portfolioId: typeof portfolioId === 'string' ? portfolioId : Number(portfolioId),
+            portfolioId: portfolioId,
             strategyConfig: {
               ...strategy,
               filters,
