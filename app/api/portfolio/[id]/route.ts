@@ -159,8 +159,20 @@ export async function GET(
       valueUSD: number;
       amount: number;
       price: number;
+      entryPrice: number;
+      pnl: number;
+      pnlPercentage: number;
       chain: string;
     }> = [];
+    
+    // Entry prices when portfolio was created (Portfolio #3 created on 2/11/2026)
+    // These are the historical prices at creation time
+    const entryPrices: Record<string, number> = {
+      'BTC': 67212.36,  // From hedge creation logs
+      'ETH': 1968.17,   // From hedge creation logs
+      'CRO': 0.0765,    // From hedge creation logs
+      'SUI': 0.9100,    // Approximate entry
+    };
     
     if (mockUsdcAsset && mockUsdcAsset.valueUSD > 1000000) {
       // This is an institutional portfolio with MockUSDC - create virtual allocations
@@ -176,15 +188,27 @@ export async function GET(
       for (const alloc of allocations) {
         try {
           const priceData = await marketService.getTokenPrice(alloc.symbol);
-          const valueUSD = finalValueUSD * (alloc.percentage / 100);
-          const amount = valueUSD / priceData.price;
+          const currentPrice = priceData.price;
+          const entryPrice = entryPrices[alloc.symbol] || currentPrice;
+          
+          // Calculate amount based on entry price (what we "bought")
+          const valueAtEntry = finalValueUSD * (alloc.percentage / 100);
+          const amount = valueAtEntry / entryPrice;
+          
+          // Current value based on current price
+          const currentValue = amount * currentPrice;
+          const pnl = currentValue - valueAtEntry;
+          const pnlPercentage = ((currentPrice - entryPrice) / entryPrice) * 100;
           
           virtualAllocations.push({
             symbol: alloc.symbol,
             percentage: alloc.percentage,
-            valueUSD,
+            valueUSD: currentValue,
             amount,
-            price: priceData.price,
+            price: currentPrice,
+            entryPrice,
+            pnl,
+            pnlPercentage,
             chain: alloc.chain,
           });
         } catch (error) {
@@ -195,11 +219,18 @@ export async function GET(
       logger.info(`[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalValueUSD.toLocaleString()} portfolio`);
     }
 
+    // Calculate total portfolio P&L
+    const totalPnl = virtualAllocations.reduce((sum, v) => sum + v.pnl, 0);
+    const totalCurrentValue = virtualAllocations.reduce((sum, v) => sum + v.valueUSD, 0);
+    const totalEntryValue = finalValueUSD;
+    const totalPnlPercentage = totalEntryValue > 0 ? ((totalCurrentValue - totalEntryValue) / totalEntryValue) * 100 : 0;
+
     // Format response
     const portfolioData = {
       owner: portfolio[0],
       totalValue: (finalValueUSD * 1e6).toString(), // Store as 6-decimal representation for consistency
-      calculatedValueUSD: finalValueUSD, // Actual USD value from asset allocations
+      calculatedValueUSD: virtualAllocations.length > 0 ? totalCurrentValue : finalValueUSD, // Use current value if virtual
+      entryValueUSD: totalEntryValue,
       targetYield: portfolio[2]?.toString() || '0',
       riskTolerance: portfolio[3]?.toString() || '0',
       lastRebalance: portfolio[4]?.toString() || '0',
@@ -212,9 +243,18 @@ export async function GET(
         valueUSD: v.valueUSD,
         percentage: v.percentage,
         price: v.price,
+        entryPrice: v.entryPrice,
+        pnl: v.pnl,
+        pnlPercentage: v.pnlPercentage,
         chain: v.chain,
       })) : assetBalances, // Use virtual allocations if available
       virtualAllocations: virtualAllocations.length > 0 ? virtualAllocations : undefined,
+      pnl: {
+        total: totalPnl,
+        percentage: totalPnlPercentage,
+        currentValue: totalCurrentValue,
+        entryValue: totalEntryValue,
+      },
       isInstitutional: virtualAllocations.length > 0,
     };
 
