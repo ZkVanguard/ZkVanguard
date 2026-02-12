@@ -294,8 +294,8 @@ class InstitutionalPortfolioManager {
         var95: this.calculateVaR95(totalValue, volatility),
         concentrationRisk,
         liquidityScore: this.assessLiquidity(),
-        hedgeEffectiveness: Number(riskAssessment.hedgeEffectiveness || 0),
-        aiRecommendations: (riskAssessment.recommendations as string[]) || [],
+        hedgeEffectiveness: 0, // Calculated separately based on active hedges
+        aiRecommendations: riskAssessment.factors.map(f => `${f.factor}: ${f.description}`),
         lastAssessment: new Date(),
       };
 
