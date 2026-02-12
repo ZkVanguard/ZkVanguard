@@ -2,7 +2,7 @@
  * BlueFin Perpetual DEX Integration for SUI
  * 
  * BlueFin is the leading orderbook-based perpetual exchange on SUI Network.
- * This service provides hedge execution via BlueFin's SDK.
+ * This service provides hedge execution via BlueFin's REST API.
  * 
  * Features:
  * - Open/close perpetual positions programmatically
@@ -10,12 +10,11 @@
  * - ZK-compatible signing via Ed25519
  * 
  * @see https://learn.bluefin.io/bluefin
+ * @see https://bluefin-exchange.readme.io/reference/introduction
  */
 
 import { logger } from '@/lib/utils/logger';
-
-// BlueFin SDK types (dynamically imported to avoid SSR issues)
-type BluefinClientType = typeof import('@bluefin-exchange/bluefin-v2-client').BluefinClient;
+import * as crypto from 'crypto';
 
 // Network configurations
 export const BLUEFIN_NETWORKS = {
@@ -100,14 +99,16 @@ export interface BluefinHedgeResult {
 }
 
 /**
- * BlueFin Service - Handles all interactions with BlueFin DEX
+ * BlueFin Service - Handles all interactions with BlueFin DEX via REST API
  */
 export class BluefinService {
   private static instance: BluefinService;
-  private client: InstanceType<BluefinClientType> | null = null;
   private initialized: boolean = false;
   private network: 'mainnet' | 'testnet' = 'testnet';
   private privateKey: string | null = null;
+  private apiKey: string | null = null;
+  private apiSecret: string | null = null;
+  private walletAddress: string | null = null;
 
   private constructor() {}
 
@@ -119,7 +120,7 @@ export class BluefinService {
   }
 
   /**
-   * Initialize BlueFin client with private key
+   * Initialize BlueFin client with API credentials
    */
   async initialize(privateKey: string, network: 'mainnet' | 'testnet' = 'testnet'): Promise<void> {
     if (this.initialized && this.network === network) {
@@ -127,38 +128,20 @@ export class BluefinService {
     }
 
     try {
-      // Dynamic import to avoid SSR issues
-      const { BluefinClient } = await import('@bluefin-exchange/bluefin-v2-client');
       const networkConfig = BLUEFIN_NETWORKS[network];
 
-      logger.info('🌊 Initializing BlueFin client', { network, apiUrl: networkConfig.apiUrl });
+      logger.info('🌊 Initializing BlueFin REST client', { network, apiUrl: networkConfig.apiUrl });
 
-      // Create client instance
-      this.client = new BluefinClient(
-        true, // Accept terms
-        {
-          apiGateway: networkConfig.apiUrl,
-          socketURL: networkConfig.socketUrl,
-          webSocketURL: networkConfig.socketUrl,
-          onboardingUrl: networkConfig.apiUrl,
-          dmsURL: networkConfig.apiUrl,
-          rpcUrl: networkConfig.rpcUrl,
-        },
-        privateKey,
-        'ED25519'
-      );
-
-      // Initialize the client
-      await this.client.init(true);
+      // Get API credentials from environment
+      this.apiKey = process.env.BLUEFIN_API_KEY || null;
+      this.apiSecret = process.env.BLUEFIN_API_SECRET || null;
+      this.walletAddress = process.env.BLUEFIN_WALLET_ADDRESS || null;
 
       this.privateKey = privateKey;
       this.network = network;
       this.initialized = true;
 
-      logger.info('✅ BlueFin client initialized', {
-        address: this.client.getPublicAddress?.() || 'unknown',
-        network,
-      });
+      logger.info('✅ BlueFin REST client initialized', { network });
 
     } catch (error) {
       logger.error('❌ Failed to initialize BlueFin client', error instanceof Error ? error : undefined);
@@ -167,17 +150,64 @@ export class BluefinService {
   }
 
   /**
+   * Generate HMAC signature for authenticated requests
+   */
+  private generateSignature(timestamp: number, method: string, path: string, body: string = ''): string {
+    if (!this.apiSecret) return '';
+    const message = `${timestamp}${method}${path}${body}`;
+    return crypto.createHmac('sha256', this.apiSecret).update(message).digest('hex');
+  }
+
+  /**
+   * Make authenticated API request
+   */
+  private async apiRequest<T>(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    body?: Record<string, unknown>
+  ): Promise<T> {
+    const networkConfig = BLUEFIN_NETWORKS[this.network];
+    const url = `${networkConfig.apiUrl}${path}`;
+    const timestamp = Date.now();
+    const bodyStr = body ? JSON.stringify(body) : '';
+    const signature = this.generateSignature(timestamp, method, path, bodyStr);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.apiKey) {
+      headers['X-API-KEY'] = this.apiKey;
+      headers['X-TIMESTAMP'] = timestamp.toString();
+      headers['X-SIGNATURE'] = signature;
+    }
+
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: method !== 'GET' ? bodyStr : undefined,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`BlueFin API error: ${response.status} - ${error}`);
+    }
+
+    return response.json();
+  }
+
+  /**
    * Check if client is initialized
    */
   isInitialized(): boolean {
-    return this.initialized && this.client !== null;
+    return this.initialized;
   }
 
   /**
    * Get wallet address
    */
   getAddress(): string | null {
-    return this.client?.getPublicAddress?.() || null;
+    return this.walletAddress;
   }
 
   /**
@@ -187,8 +217,8 @@ export class BluefinService {
     this.ensureInitialized();
 
     try {
-      const balance = await this.client!.getUserAccountData?.();
-      return parseFloat(balance?.freeCollateral || '0');
+      const data = await this.apiRequest<{ freeCollateral: string }>('GET', '/api/v1/account');
+      return parseFloat(data?.freeCollateral || '0');
     } catch (error) {
       logger.error('Failed to get BlueFin balance', error instanceof Error ? error : undefined);
       return 0;
@@ -202,8 +232,8 @@ export class BluefinService {
     this.ensureInitialized();
 
     try {
-      const positions = await this.client!.getUserPosition?.() || [];
-      return positions.map((p: Record<string, unknown>) => ({
+      const positions = await this.apiRequest<Array<Record<string, unknown>>>('GET', '/api/v1/positions');
+      return (positions || []).map((p: Record<string, unknown>) => ({
         symbol: p.symbol as string,
         side: parseFloat(p.quantity as string) > 0 ? 'LONG' : 'SHORT',
         size: Math.abs(parseFloat(p.quantity as string)),
@@ -228,7 +258,10 @@ export class BluefinService {
     this.ensureInitialized();
 
     try {
-      const marketData = await this.client!.getMarketData?.(symbol);
+      const marketData = await this.apiRequest<{ lastPrice: string; fundingRate: string }>(
+        'GET',
+        `/api/v1/ticker?symbol=${encodeURIComponent(symbol)}`
+      );
       return {
         price: parseFloat(marketData?.lastPrice || '0'),
         fundingRate: parseFloat(marketData?.fundingRate || '0'),
@@ -275,7 +308,7 @@ export class BluefinService {
       }
 
       // Set leverage for the symbol
-      await this.client!.adjustLeverage?.({
+      await this.apiRequest('POST', '/api/v1/leverage', {
         symbol: params.symbol,
         leverage: params.leverage,
       });
@@ -283,11 +316,17 @@ export class BluefinService {
       // Place market order
       const orderSide = params.side === 'LONG' ? BluefinSide.BUY : BluefinSide.SELL;
       
-      const orderResponse = await this.client!.postOrder?.({
+      const orderResponse = await this.apiRequest<{
+        orderId: string;
+        txDigest: string;
+        avgFillPrice: string;
+        filledQty: string;
+        fee: string;
+      }>('POST', '/api/v1/orders', {
         symbol: params.symbol,
         side: orderSide,
         orderType: BluefinOrderType.MARKET,
-        quantity: params.size,
+        quantity: params.size.toString(),
         leverage: params.leverage,
         reduceOnly: false,
         postOnly: false,
@@ -350,11 +389,18 @@ export class BluefinService {
       const closeSide = position.side === 'LONG' ? BluefinSide.SELL : BluefinSide.BUY;
 
       // Place market order to close
-      const orderResponse = await this.client!.postOrder?.({
+      const orderResponse = await this.apiRequest<{
+        orderId: string;
+        txDigest: string;
+        avgFillPrice: string;
+        filledQty: string;
+        fee: string;
+        realizedPnl: string;
+      }>('POST', '/api/v1/orders', {
         symbol: params.symbol,
         side: closeSide,
         orderType: BluefinOrderType.MARKET,
-        quantity: closeSize,
+        quantity: closeSize.toString(),
         reduceOnly: true,
         postOnly: false,
         timeInForce: 'IOC',
@@ -399,7 +445,10 @@ export class BluefinService {
     this.ensureInitialized();
 
     try {
-      const orderbook = await this.client!.getOrderbook?.({ symbol, limit: depth });
+      const orderbook = await this.apiRequest<{ bids: [string, string][]; asks: [string, string][] }>(
+        'GET',
+        `/api/v1/orderbook?symbol=${encodeURIComponent(symbol)}&limit=${depth}`
+      );
       return {
         bids: (orderbook?.bids || []).map((b: [string, string]) => ({
           price: parseFloat(b[0]),
@@ -423,7 +472,10 @@ export class BluefinService {
     this.ensureInitialized();
 
     try {
-      const fundingHistory = await this.client!.getFundingRateHistory?.({ symbol });
+      const fundingHistory = await this.apiRequest<Array<{ time: number; fundingRate: string }>>(
+        'GET',
+        `/api/v1/fundingRates?symbol=${encodeURIComponent(symbol)}`
+      );
       return (fundingHistory || []).map((f: { time: number; fundingRate: string }) => ({
         time: f.time,
         rate: parseFloat(f.fundingRate),
@@ -455,7 +507,7 @@ export class BluefinService {
    * Ensure client is initialized
    */
   private ensureInitialized(): void {
-    if (!this.initialized || !this.client) {
+    if (!this.initialized) {
       throw new Error('BlueFin client not initialized. Call initialize() first.');
     }
   }
