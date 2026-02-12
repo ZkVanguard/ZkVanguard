@@ -29,9 +29,49 @@ interface DeploymentConfig {
   MockUSDC: string;
   MockMoonlander: string;
   HedgeExecutor: string;
+  RWAManager: string;
   network: string;
   chainId: number;
 }
+
+// RWAManager ABI for portfolio creation
+const RWA_MANAGER_ABI = [
+  {
+    inputs: [{ name: '_targetYield', type: 'uint256' }, { name: '_riskTolerance', type: 'uint256' }],
+    name: 'createPortfolio',
+    outputs: [{ name: 'portfolioId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: '_portfolioId', type: 'uint256' }, { name: '_asset', type: 'address' }, { name: '_amount', type: 'uint256' }],
+    name: 'depositAsset',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [],
+    name: 'portfolioCount',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: '', type: 'uint256' }],
+    name: 'portfolios',
+    outputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'totalValue', type: 'uint256' },
+      { name: 'targetYield', type: 'uint256' },
+      { name: 'riskTolerance', type: 'uint256' },
+      { name: 'lastRebalance', type: 'uint256' },
+      { name: 'isActive', type: 'bool' }
+    ],
+    stateMutability: 'view',
+    type: 'function'
+  }
+];
 
 // Extended ERC20 ABI with mint function (MockUSDC has this)
 const MOCK_USDC_ABI = [
@@ -164,6 +204,7 @@ class OnChainPortfolioManager {
         MockUSDC: deploymentData.MockUSDC,
         MockMoonlander: deploymentData.MockMoonlander,
         HedgeExecutor: deploymentData.HedgeExecutor || deploymentData.HedgeExecutorV2,
+        RWAManager: deploymentData.RWAManager || '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
         network: deploymentData.network || 'cronos-testnet',
         chainId: deploymentData.chainId || 338,
       };
@@ -174,6 +215,7 @@ class OnChainPortfolioManager {
         MockUSDC: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
         MockMoonlander: '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54',
         HedgeExecutor: '0x090b6221137690EbB37667E4644287487CE462B9',
+        RWAManager: '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
         network: 'cronos-testnet',
         chainId: 338,
       };
@@ -324,6 +366,113 @@ class OnChainPortfolioManager {
     } catch (error) {
       logger.error('Failed to mint MockUSDC', error instanceof Error ? error : undefined);
       return null;
+    }
+  }
+
+  /**
+   * Create a portfolio on RWAManager and deposit MockUSDC
+   * This creates the on-chain portfolio with 4 virtual allocations
+   */
+  async createPortfolioOnRWAManager(depositAmount: number): Promise<{
+    success: boolean;
+    portfolioId?: number;
+    txHashes: { create?: string; approve?: string; deposit?: string };
+    allocations: { symbol: string; amount: number; valueUSD: number; percentage: number }[];
+    error?: string;
+  }> {
+    if (!this.signer) {
+      return { success: false, txHashes: {}, allocations: [], error: 'No signer available - PRIVATE_KEY required' };
+    }
+
+    const txHashes: { create?: string; approve?: string; deposit?: string } = {};
+
+    try {
+      // Connect to RWAManager
+      const rwaManager = new ethers.Contract(
+        this.deployment.RWAManager,
+        RWA_MANAGER_ABI,
+        this.signer
+      );
+
+      logger.info(`📦 Creating portfolio on RWAManager...`, {
+        rwaManager: this.deployment.RWAManager,
+        depositAmount: `$${depositAmount.toLocaleString()}`,
+      });
+
+      // Step 1: Create portfolio (8% target yield, 50/100 medium risk)
+      const createTx = await rwaManager.createPortfolio(
+        800, // 8% target yield (basis points)
+        50   // Medium risk (0-100 scale)
+      );
+      const createReceipt = await createTx.wait();
+      txHashes.create = createReceipt.hash;
+
+      // Get the portfolio ID from the portfolio count
+      const portfolioCount = await rwaManager.portfolioCount();
+      const portfolioId = Number(portfolioCount) - 1;
+
+      logger.info(`✅ Portfolio #${portfolioId} created`, { txHash: txHashes.create });
+
+      // Step 2: Approve MockUSDC for RWAManager
+      const amountWei = ethers.parseUnits(depositAmount.toString(), 6);
+      const approveTx = await this.mockUSDCContract!.approve(this.deployment.RWAManager, amountWei);
+      const approveReceipt = await approveTx.wait();
+      txHashes.approve = approveReceipt.hash;
+
+      logger.info(`✅ MockUSDC approved`, { txHash: txHashes.approve });
+
+      // Step 3: Deposit MockUSDC into portfolio
+      const depositTx = await rwaManager.depositAsset(
+        portfolioId,
+        this.deployment.MockUSDC,
+        amountWei
+      );
+      const depositReceipt = await depositTx.wait();
+      txHashes.deposit = depositReceipt.hash;
+
+      logger.info(`✅ MockUSDC deposited`, { txHash: txHashes.deposit });
+
+      // Calculate virtual allocations based on real prices
+      const marketService = getMarketDataService();
+      const allocations: { symbol: string; amount: number; valueUSD: number; percentage: number }[] = [];
+
+      for (const alloc of this.allocations) {
+        try {
+          const priceData = await marketService.getTokenPrice(alloc.symbol);
+          const valueUSD = depositAmount * (alloc.percentage / 100);
+          const amount = valueUSD / priceData.price;
+
+          allocations.push({
+            symbol: alloc.symbol,
+            amount,
+            valueUSD,
+            percentage: alloc.percentage,
+          });
+
+          logger.info(`📊 ${alloc.symbol}: ${amount.toLocaleString()} @ $${priceData.price.toFixed(2)} = $${valueUSD.toLocaleString()} (${alloc.percentage}%)`);
+        } catch (error) {
+          logger.warn(`Failed to get price for ${alloc.symbol}`);
+        }
+      }
+
+      // Refresh positions
+      await this.calculatePositions();
+
+      return {
+        success: true,
+        portfolioId,
+        txHashes,
+        allocations,
+      };
+
+    } catch (error) {
+      logger.error('Failed to create portfolio', error instanceof Error ? error : undefined);
+      return {
+        success: false,
+        txHashes,
+        allocations: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

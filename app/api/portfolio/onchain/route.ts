@@ -136,9 +136,36 @@ export async function POST(request: NextRequest) {
         result = summary;
         break;
       
+      case 'create-portfolio':
+        // Create portfolio on RWAManager with MockUSDC deposit
+        const depositAmount = body.depositAmount || 150000000; // Default $150M
+        const createResult = await manager.createPortfolioOnRWAManager(depositAmount);
+        
+        if (!createResult.success) {
+          return NextResponse.json(
+            { error: createResult.error || 'Failed to create portfolio' },
+            { status: 400 }
+          );
+        }
+        
+        result = {
+          message: `Portfolio #${createResult.portfolioId} created with $${depositAmount.toLocaleString()} MockUSDC`,
+          portfolioId: createResult.portfolioId,
+          txHashes: createResult.txHashes,
+          allocations: createResult.allocations,
+          totalValue: depositAmount,
+          assets: {
+            BTC: { percentage: 35, value: depositAmount * 0.35 },
+            ETH: { percentage: 30, value: depositAmount * 0.30 },
+            CRO: { percentage: 20, value: depositAmount * 0.20 },
+            SUI: { percentage: 15, value: depositAmount * 0.15 },
+          },
+        };
+        break;
+      
       default:
         return NextResponse.json(
-          { error: 'Invalid action. Valid actions: refresh, assess-risk, mint, full-analysis' },
+          { error: 'Invalid action. Valid actions: refresh, assess-risk, mint, full-analysis, create-portfolio' },
           { status: 400 }
         );
     }

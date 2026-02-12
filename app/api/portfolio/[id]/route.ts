@@ -9,18 +9,21 @@ import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 const TOKEN_PRICES: Record<string, number> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 1.0,  // devUSDC = $1
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 0.10, // WCRO = $0.10
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 1.0,  // MockUSDC = $1
 };
 
 // Token decimals
 const TOKEN_DECIMALS: Record<string, number> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 6,   // devUSDC = 6 decimals
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 18,  // WCRO = 18 decimals
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 6,   // MockUSDC = 6 decimals
 };
 
 // Token symbols
 const TOKEN_SYMBOLS: Record<string, string> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'devUSDC',
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'WCRO',
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'MockUSDC',
 };
 
 // In-memory cache for portfolio data (60s TTL)
