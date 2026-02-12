@@ -7,6 +7,26 @@ import { cache } from '@/lib/utils/cache';
 import { useUserPortfolios } from '@/lib/contracts/hooks';
 import { logger } from '@/lib/utils/logger';
 
+// Performance metrics from on-chain history API
+interface PerformanceMetrics {
+  currentValue: number;
+  initialValue: number;
+  highestValue: number;
+  lowestValue: number;
+  totalPnL: number;
+  totalPnLPercentage: number;
+  dailyPnL: number;
+  dailyPnLPercentage: number;
+  weeklyPnL: number;
+  weeklyPnLPercentage: number;
+  monthlyPnL: number;
+  monthlyPnLPercentage: number;
+  volatility: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  winRate: number;
+}
+
 interface Position {
   symbol: string;
   balance: string;
@@ -32,6 +52,15 @@ interface DerivedData {
   riskScore: number;
   portfolioCount: number;
   activeHedgesCount: number;
+  // PnL metrics
+  pnl: {
+    daily: number;
+    dailyPercentage: number;
+    weekly: number;
+    weeklyPercentage: number;
+    total: number;
+    totalPercentage: number;
+  };
 }
 
 interface PositionsContextType {
@@ -52,6 +81,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeHedgesCount, setActiveHedgesCount] = useState<number>(0);
+  const [pnlMetrics, setPnlMetrics] = useState<PerformanceMetrics | null>(null);
   const lastFetchRef = useRef<number>(0);
   const _fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -122,6 +152,53 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       logger.info(`Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`, { component: 'PositionsContext' });
       logger.debug('Positions detail', { component: 'PositionsContext', data: data.positions?.map((p: Position) => `${p.symbol}: $${p.balanceUSD}`).join(', ') });
       setPositionsData(data);
+      
+      // Record snapshot via API (stores in PostgreSQL with real hedge PnL)
+      if (data.totalValue > 0) {
+        try {
+          const snapshotRes = await fetch('/api/portfolio/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              totalValue: data.totalValue,
+              positions: data.positions || [],
+            }),
+          });
+          
+          if (snapshotRes.ok) {
+            const snapshotData = await snapshotRes.json();
+            if (snapshotData.metrics) {
+              // Update PnL metrics from API response (real on-chain data)
+              setPnlMetrics({
+                currentValue: data.totalValue,
+                initialValue: snapshotData.metrics.initialValue || data.totalValue,
+                highestValue: data.totalValue,
+                lowestValue: data.totalValue,
+                totalPnL: snapshotData.metrics.totalPnL || 0,
+                totalPnLPercentage: snapshotData.metrics.totalPnLPercentage || 0,
+                dailyPnL: snapshotData.metrics.dailyPnL || 0,
+                dailyPnLPercentage: snapshotData.metrics.dailyPnLPercentage || 0,
+                weeklyPnL: 0,
+                weeklyPnLPercentage: 0,
+                monthlyPnL: 0,
+                monthlyPnLPercentage: 0,
+                volatility: 0,
+                sharpeRatio: 0,
+                maxDrawdown: 0,
+                winRate: 50,
+              });
+              
+              // Update active hedges count from real data
+              if (snapshotData.hedgeSummary) {
+                setActiveHedgesCount(snapshotData.hedgeSummary.totalHedges || 0);
+              }
+            }
+          }
+        } catch (historyError) {
+          logger.warn('Failed to record portfolio snapshot', { error: String(historyError) });
+        }
+      }
       
       // Cache for 45 seconds (increased from 30s)
       cache.set(cacheKey, data, 45000);
@@ -283,6 +360,23 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     
     healthScore = Math.max(0, Math.min(100, healthScore));
 
+    // PnL metrics from history service
+    const pnl = pnlMetrics ? {
+      daily: pnlMetrics.dailyPnL,
+      dailyPercentage: pnlMetrics.dailyPnLPercentage,
+      weekly: pnlMetrics.weeklyPnL,
+      weeklyPercentage: pnlMetrics.weeklyPnLPercentage,
+      total: pnlMetrics.totalPnL,
+      totalPercentage: pnlMetrics.totalPnLPercentage,
+    } : {
+      daily: 0,
+      dailyPercentage: 0,
+      weekly: 0,
+      weeklyPercentage: 0,
+      total: 0,
+      totalPercentage: 0,
+    };
+
     return {
       topAssets,
       totalChange24h,
@@ -292,8 +386,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       riskScore,
       portfolioCount: userPortfolioCount,
       activeHedgesCount,
+      pnl,
     };
-  }, [positionsData, userPortfolioCount, activeHedgesCount]);
+  }, [positionsData, userPortfolioCount, activeHedgesCount, pnlMetrics]);
 
   const value: PositionsContextType = {
     positionsData,

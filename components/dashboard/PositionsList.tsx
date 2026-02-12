@@ -1266,6 +1266,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       {portfolioDetailOpen && selectedDetailPortfolio && (
         <PortfolioDetailModal
           portfolio={selectedDetailPortfolio}
+          walletAddress={address}
           onClose={() => {
             setPortfolioDetailOpen(false);
             setSelectedDetailPortfolio(null);

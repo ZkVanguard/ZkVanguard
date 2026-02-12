@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, TrendingUp, PieChart, History, Brain, Settings, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import PerformanceChart from './PerformanceChart';
 
 interface Asset {
   symbol: string;
@@ -43,9 +44,10 @@ interface Portfolio {
 interface PortfolioDetailModalProps {
   portfolio: Portfolio;
   onClose: () => void;
+  walletAddress?: string;
 }
 
-export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDetailModalProps) {
+export default function PortfolioDetailModal({ portfolio, onClose, walletAddress }: PortfolioDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'analysis' | 'settings'>('overview');
   const [riskLevel, setRiskLevel] = useState<'Low' | 'Medium' | 'High'>(portfolio.riskLevel);
   const [targetAPY, setTargetAPY] = useState(portfolio.targetAPY);
@@ -191,17 +193,23 @@ export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDe
                 </div>
               </div>
 
-              {/* Performance Chart Placeholder */}
+              {/* Performance Chart */}
               <div>
                 <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4 flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-[#007AFF]" />
                   Performance
                 </h3>
-                <div className="bg-[#f5f5f7] rounded-xl p-8 text-center">
-                  <TrendingUp className="w-12 h-12 text-[#86868b] mx-auto mb-3" />
-                  <p className="text-[#86868b]">Performance chart coming soon</p>
-                  <p className="text-sm text-[#86868b] mt-1">Track your portfolio value over time</p>
-                </div>
+                {walletAddress ? (
+                  <PerformanceChart 
+                    walletAddress={walletAddress} 
+                    currentValue={portfolio.totalValue}
+                  />
+                ) : (
+                  <div className="bg-[#f5f5f7] rounded-xl p-8 text-center">
+                    <TrendingUp className="w-12 h-12 text-[#86868b] mx-auto mb-3" />
+                    <p className="text-[#86868b]">Connect wallet to view performance</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
