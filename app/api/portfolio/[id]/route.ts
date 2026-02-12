@@ -4,6 +4,7 @@ import { createPublicClient, http } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // Token price estimates (in production, fetch from price oracle)
 const TOKEN_PRICES: Record<string, number> = {
@@ -147,6 +148,53 @@ export async function GET(
     // Use the calculated value from asset allocations (more accurate), fall back to contract value
     const finalValueUSD = calculatedValue > 0 ? calculatedValue : normalizedContractValue;
 
+    // Check if portfolio contains MockUSDC - if so, create virtual allocations for BTC/ETH/CRO/SUI
+    const mockUsdcAsset = assetBalances.find(a => 
+      a.token.toLowerCase() === '0x28217daddc55e3c4831b4a48a00ce04880786967'
+    );
+    
+    let virtualAllocations: Array<{
+      symbol: string;
+      percentage: number;
+      valueUSD: number;
+      amount: number;
+      price: number;
+      chain: string;
+    }> = [];
+    
+    if (mockUsdcAsset && mockUsdcAsset.valueUSD > 1000000) {
+      // This is an institutional portfolio with MockUSDC - create virtual allocations
+      const allocations = [
+        { symbol: 'BTC', percentage: 35, chain: 'cronos' },
+        { symbol: 'ETH', percentage: 30, chain: 'cronos' },
+        { symbol: 'CRO', percentage: 20, chain: 'cronos' },
+        { symbol: 'SUI', percentage: 15, chain: 'sui' },
+      ];
+      
+      const marketService = getMarketDataService();
+      
+      for (const alloc of allocations) {
+        try {
+          const priceData = await marketService.getTokenPrice(alloc.symbol);
+          const valueUSD = finalValueUSD * (alloc.percentage / 100);
+          const amount = valueUSD / priceData.price;
+          
+          virtualAllocations.push({
+            symbol: alloc.symbol,
+            percentage: alloc.percentage,
+            valueUSD,
+            amount,
+            price: priceData.price,
+            chain: alloc.chain,
+          });
+        } catch (error) {
+          logger.warn(`Failed to get price for ${alloc.symbol}`);
+        }
+      }
+      
+      logger.info(`[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalValueUSD.toLocaleString()} portfolio`);
+    }
+
     // Format response
     const portfolioData = {
       owner: portfolio[0],
@@ -157,7 +205,17 @@ export async function GET(
       lastRebalance: portfolio[4]?.toString() || '0',
       isActive: portfolio[5] ?? false,
       assets: assets || [],
-      assetBalances, // Include detailed balance info
+      assetBalances: virtualAllocations.length > 0 ? virtualAllocations.map(v => ({
+        token: v.symbol,
+        symbol: v.symbol,
+        balance: v.amount.toFixed(4),
+        valueUSD: v.valueUSD,
+        percentage: v.percentage,
+        price: v.price,
+        chain: v.chain,
+      })) : assetBalances, // Use virtual allocations if available
+      virtualAllocations: virtualAllocations.length > 0 ? virtualAllocations : undefined,
+      isInstitutional: virtualAllocations.length > 0,
     };
 
     logger.info(`[Portfolio API] Portfolio ${id} final value: $${finalValueUSD.toFixed(2)}, assets: ${assetBalances.length}`);
