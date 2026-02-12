@@ -662,15 +662,22 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               const isActivePortfolio = hasFunds || hasRegisteredAssets;
               
               // Get all registered asset symbols - prefer assetBalances if they have symbols
-              const registeredAssets = portfolio.assetBalances?.length > 0
-                ? portfolio.assetBalances.map(ab => ab.symbol)
-                : portfolio.assets.map(a => {
-                    const addr = a.toLowerCase();
-                    if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'devUSDC';
-                    if (addr === '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4') return 'WCRO';
-                    if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'MockUSDC';
-                    return a.slice(0, 6);
-                  });
+              // For institutional portfolios with MockUSDC, use virtual allocation symbols (BTC, ETH, CRO, SUI)
+              let registeredAssets: string[] = [];
+              if (portfolio.assetBalances && portfolio.assetBalances.length > 0) {
+                registeredAssets = portfolio.assetBalances.map(ab => ab.symbol);
+              } else if (valueUSD > 1000000) {
+                // Large portfolio with MockUSDC - show virtual allocations
+                registeredAssets = ['BTC', 'ETH', 'CRO', 'SUI'];
+              } else {
+                registeredAssets = portfolio.assets.map(a => {
+                  const addr = a.toLowerCase();
+                  if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'devUSDC';
+                  if (addr === '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4') return 'WCRO';
+                  if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'MockUSDC';
+                  return a.slice(0, 6);
+                });
+              }
               
               const lastRebalanceTime = parseInt(portfolio.lastRebalance) * 1000;
               const lastRebalanceDate = lastRebalanceTime > 0 ? new Date(lastRebalanceTime) : null;
@@ -705,24 +712,54 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                     
                     // Calculate real allocation percentages
                     const totalPortfolioValue = portfolio.calculatedValueUSD || valueUSD;
-                    const assetsWithAllocation = portfolio.assetBalances?.map((ab) => {
-                      // Use percentage from API if available (for institutional/virtual allocations)
-                      // Otherwise calculate from value
-                      const assetAllocation = (ab as { percentage?: number }).percentage ?? (
-                        totalPortfolioValue > 0 
-                          ? Math.round((ab.valueUSD / totalPortfolioValue) * 100) 
-                          : 0
-                      );
-                      return {
-                        symbol: ab.symbol,
-                        address: ab.token,
-                        allocation: assetAllocation,
-                        value: ab.valueUSD,
-                        change24h: 0, // TODO: Get real 24h change from price feed
-                        price: (ab as { price?: number }).price,
-                        chain: (ab as { chain?: string }).chain,
-                      };
-                    }) || [];
+                    
+                    // Build assets with allocation from assetBalances
+                    let assetsWithAllocation: Array<{
+                      symbol: string;
+                      address: string;
+                      allocation: number;
+                      value: number;
+                      change24h: number;
+                      price?: number;
+                      chain?: string;
+                    }> = [];
+                    
+                    if (portfolio.assetBalances && portfolio.assetBalances.length > 0) {
+                      // Use virtual allocations from API
+                      assetsWithAllocation = portfolio.assetBalances.map((ab) => {
+                        const assetAllocation = (ab as { percentage?: number }).percentage ?? (
+                          totalPortfolioValue > 0 
+                            ? Math.round((ab.valueUSD / totalPortfolioValue) * 100) 
+                            : 0
+                        );
+                        return {
+                          symbol: ab.symbol,
+                          address: ab.token,
+                          allocation: assetAllocation,
+                          value: ab.valueUSD,
+                          change24h: ((ab as { pnlPercentage?: number }).pnlPercentage ?? 0),
+                          price: (ab as { price?: number }).price,
+                          chain: (ab as { chain?: string }).chain,
+                        };
+                      });
+                    } else if (totalPortfolioValue > 1000000) {
+                      // Institutional portfolio fallback - create virtual allocations
+                      logger.info(`Creating fallback virtual allocations for institutional portfolio #${portfolio.id}`, { component: 'PositionsList' });
+                      const allocations = [
+                        { symbol: 'BTC', percentage: 35, chain: 'cronos' },
+                        { symbol: 'ETH', percentage: 30, chain: 'cronos' },
+                        { symbol: 'CRO', percentage: 20, chain: 'cronos' },
+                        { symbol: 'SUI', percentage: 15, chain: 'sui' },
+                      ];
+                      assetsWithAllocation = allocations.map(alloc => ({
+                        symbol: alloc.symbol,
+                        address: alloc.symbol,
+                        allocation: alloc.percentage,
+                        value: totalPortfolioValue * (alloc.percentage / 100),
+                        change24h: 0,
+                        chain: alloc.chain,
+                      }));
+                    }
 
                     logger.debug(`Assets with allocation for portfolio ${portfolio.id}`, { component: 'PositionsList', data: assetsWithAllocation });
 

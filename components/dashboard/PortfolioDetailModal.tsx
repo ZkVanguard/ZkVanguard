@@ -9,6 +9,8 @@ interface Asset {
   allocation: number;
   value: number;
   change24h: number;
+  price?: number;
+  chain?: string;
 }
 
 interface Transaction {
@@ -169,7 +171,7 @@ export default function PortfolioDetailModal({ portfolio, onClose }: PortfolioDe
                           asset.change24h >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'
                         }`}>
                           {asset.change24h >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                          {Math.abs(asset.change24h)}%
+                          {Math.abs(asset.change24h).toFixed(2)}%
                         </span>
                       </div>
                       {/* Allocation Bar */}
