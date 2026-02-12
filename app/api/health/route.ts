@@ -4,6 +4,10 @@ import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeServic
 import { cryptocomDeveloperPlatform } from '@/lib/services/CryptocomDeveloperPlatformService';
 import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
 
+// Force dynamic rendering - health checks need runtime secrets
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Health Check API for all Crypto.com services
  * GET /api/health
