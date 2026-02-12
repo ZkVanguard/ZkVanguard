@@ -56,6 +56,7 @@ const _COINGECKO_IDS: Record<string, string> = {
   'VVS': 'vvs-finance',
   'WBTC': 'wrapped-bitcoin',
   'WETH': 'weth',
+  'SUI': 'sui',
 };
 
 export class SimulatedPortfolioManager {
