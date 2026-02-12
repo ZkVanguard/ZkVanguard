@@ -77,6 +77,7 @@ class RealMarketDataService {
       USDT: 1,
       VVS: 0.000005,  // VVS typical price
       WCRO: 0.10,     // Same as CRO
+      SUI: 3.50,      // SUI current market price
     };
     return mockPrices[symbol.toUpperCase()] || 1;
   }
@@ -117,7 +118,7 @@ class RealMarketDataService {
     const now = Date.now();
 
     // Handle stablecoins (always $1)
-    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI'].includes(cacheKey)) {
+    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI', 'MOCKUSDC'].includes(cacheKey)) {
       return {
         symbol,
         price: 1,
@@ -171,6 +172,7 @@ class RealMarketDataService {
         VVS: 0.5,
         WBTC: 50000,
         WETH: 3000,
+        SUI: 3.50,
       };
       const base = testPrices[cacheKey] || 1;
       const seconds = Math.floor(Date.now() / 1000);
@@ -350,11 +352,12 @@ class RealMarketDataService {
       const portfolioStart = Date.now();
       logger.info(`[RealMarketData] Fetching portfolio for ${address}`);
       
-      // Define all tokens upfront
+      // Define all tokens upfront (including MockUSDC from Moonlander)
       const testnetTokens = [
         { address: 'native', symbol: 'CRO', decimals: 18 },
         { address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', symbol: 'devUSDC', decimals: 6 },
         { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 },
+        { address: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', symbol: 'MockUSDC', decimals: 6 }, // MockMoonlander USDC
       ];
 
       // PARALLEL: Fetch all balances simultaneously with timeout for serverless
@@ -420,7 +423,7 @@ class RealMarketDataService {
         logger.debug(`[RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
         
         // Map balances to final token data
-        const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
+        const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE', 'MOCKUSDC'];
         for (const tokenBalance of balances) {
           let price = batchPrices[tokenBalance.symbol];
           
