@@ -192,6 +192,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    //=================================================================================
+    // SUI / BLUEFIN ROUTING (For SUI assets, route to BlueFin DEX)
+    //=================================================================================
+    const isSuiAsset = asset.toUpperCase() === 'SUI' || asset.toUpperCase().includes('SUI');
+    
+    if (isSuiAsset) {
+      try {
+        logger.info('🌊 Routing SUI hedge to BlueFin DEX on SUI Network', {
+          asset, side, notionalValue, leverage,
+        });
+
+        // Call BlueFin API endpoint
+        const bluefinResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010'}/api/agents/hedging/bluefin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asset,
+            side,
+            size: notionalValue / leverage, // Collateral
+            leverage,
+            portfolioId: body.portfolioId,
+            walletAddress,
+            reason,
+          }),
+        });
+
+        const bluefinResult = await bluefinResponse.json();
+
+        if (bluefinResult.success) {
+          logger.info('✅ SUI hedge created on BlueFin', {
+            hedgeId: bluefinResult.hedgeId,
+            txDigest: bluefinResult.txDigest,
+            protocol: 'bluefin',
+          });
+
+          return NextResponse.json({
+            success: true,
+            orderId: bluefinResult.hedgeId,
+            market: `SUI-PERP`,
+            side,
+            size: bluefinResult.size?.toString() || (notionalValue / leverage).toString(),
+            entryPrice: bluefinResult.executionPrice?.toString(),
+            stopLoss: stopLoss?.toString(),
+            takeProfit: takeProfit?.toString(),
+            leverage,
+            txHash: bluefinResult.txDigest,
+            simulationMode: bluefinResult.mode === 'mock',
+            privateMode: false,
+            walletAddress,
+            autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
+            onChain: true,
+            chain: 'sui',
+            protocol: 'bluefin',
+            explorerLink: bluefinResult.explorerLink,
+            message: `✅ SUI HEDGE: Created on BlueFin DEX (${bluefinResult.mode === 'mock' ? 'mock' : 'live'})`,
+          });
+        } else {
+          logger.error('❌ BlueFin hedge failed', { error: bluefinResult.error });
+          // Fall through to try other paths
+        }
+      } catch (bluefinError) {
+        logger.error('❌ BlueFin routing error, falling back to simulation', {
+          error: bluefinError instanceof Error ? bluefinError.message : String(bluefinError),
+        });
+        // Fall through to simulation path
+      }
+    }
+
     logger.info('🛡️ Executing hedge on Moonlander', {
       asset: privateMode ? '[PRIVATE]' : asset,
       side: privateMode ? '[PRIVATE]' : side,

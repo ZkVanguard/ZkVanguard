@@ -573,6 +573,11 @@ contract HedgeExecutor is
         moonlanderRouter = _router;
     }
 
+    function setCollateralToken(address _collateralToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_collateralToken != address(0), "Invalid address");
+        collateralToken = IERC20(_collateralToken);
+    }
+
     function setZKCommitment(address _zkCommitment) external onlyRole(DEFAULT_ADMIN_ROLE) {
         zkCommitment = _zkCommitment;
     }
