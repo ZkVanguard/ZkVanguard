@@ -340,6 +340,21 @@ export async function updateHedgePnL(orderId: string, currentPnl: number): Promi
   await query(sql, [currentPnl, orderId]);
 }
 
+export async function updateHedgeStatus(
+  hedgeIdOrOrderId: string,
+  status: 'active' | 'closed' | 'liquidated' | 'cancelled'
+): Promise<void> {
+  // Try to update by order_id first, then by hedge_id_onchain
+  const sql = `
+    UPDATE hedges 
+    SET status = $1, 
+        updated_at = CURRENT_TIMESTAMP,
+        closed_at = CASE WHEN $1 IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END
+    WHERE order_id = $2 OR hedge_id_onchain = $2
+  `;
+  await query(sql, [status, hedgeIdOrOrderId]);
+}
+
 export async function closeHedge(
   orderId: string, 
   realizedPnl: number, 
