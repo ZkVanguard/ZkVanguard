@@ -661,13 +661,16 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               // Show as active if has funds OR has registered assets
               const isActivePortfolio = hasFunds || hasRegisteredAssets;
               
-              // Get all registered asset symbols
-              const registeredAssets = portfolio.assets.map(a => {
-                const addr = a.toLowerCase();
-                if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'devUSDC';
-                if (addr === '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4') return 'WCRO';
-                return a.slice(0, 6);
-              });
+              // Get all registered asset symbols - prefer assetBalances if they have symbols
+              const registeredAssets = portfolio.assetBalances?.length > 0
+                ? portfolio.assetBalances.map(ab => ab.symbol)
+                : portfolio.assets.map(a => {
+                    const addr = a.toLowerCase();
+                    if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'devUSDC';
+                    if (addr === '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4') return 'WCRO';
+                    if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'MockUSDC';
+                    return a.slice(0, 6);
+                  });
               
               const lastRebalanceTime = parseInt(portfolio.lastRebalance) * 1000;
               const lastRebalanceDate = lastRebalanceTime > 0 ? new Date(lastRebalanceTime) : null;
@@ -703,15 +706,21 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                     // Calculate real allocation percentages
                     const totalPortfolioValue = portfolio.calculatedValueUSD || valueUSD;
                     const assetsWithAllocation = portfolio.assetBalances?.map((ab) => {
-                      const assetAllocation = totalPortfolioValue > 0 
-                        ? Math.round((ab.valueUSD / totalPortfolioValue) * 100) 
-                        : 0;
+                      // Use percentage from API if available (for institutional/virtual allocations)
+                      // Otherwise calculate from value
+                      const assetAllocation = (ab as { percentage?: number }).percentage ?? (
+                        totalPortfolioValue > 0 
+                          ? Math.round((ab.valueUSD / totalPortfolioValue) * 100) 
+                          : 0
+                      );
                       return {
                         symbol: ab.symbol,
                         address: ab.token,
                         allocation: assetAllocation,
                         value: ab.valueUSD,
-                        change24h: 0 // TODO: Get real 24h change from price feed
+                        change24h: 0, // TODO: Get real 24h change from price feed
+                        price: (ab as { price?: number }).price,
+                        chain: (ab as { chain?: string }).chain,
                       };
                     }) || [];
 
