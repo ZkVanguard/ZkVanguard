@@ -233,6 +233,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       'BTC': 0.45, 'WBTC': 0.45,
       'ETH': 0.50, 'WETH': 0.50,
       'CRO': 0.55, 'WCRO': 0.55,
+      'SUI': 0.60,
       'USDC': 0.01, 'USDT': 0.01, 'DAI': 0.01,
     };
 

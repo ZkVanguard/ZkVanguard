@@ -69,6 +69,7 @@ class CryptocomExchangeService {
     'POLKADOT': 'DOT_USD',
     'ATOM': 'ATOM_USD',
     'COSMOS': 'ATOM_USD',
+    'SUI': 'SUI_USD',
   };
 
   constructor() {
