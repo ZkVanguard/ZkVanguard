@@ -284,12 +284,12 @@ export async function GET(request: NextRequest) {
 
         // Build response from DB data
         const hedgeDetails = filteredHedges.map(h => {
-          const currentPrice = priceMap[h.asset] || h.current_price || h.entry_price || 1000;
-          const entryPrice = h.entry_price || currentPrice;
+          const currentPrice = Number(priceMap[h.asset] || h.current_price || h.entry_price) || 1000;
+          const entryPrice = Number(h.entry_price) || currentPrice;
           
           // Calculate unrealized PnL (with safety checks for NaN)
-          const size = h.size || 0;
-          const leverage = h.leverage || 1;
+          const size = Number(h.size) || 0;
+          const leverage = Number(h.leverage) || 1;
           const positionSize = size * leverage;
           const priceChange = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0;
           const unrealizedPnl = h.side === 'LONG'
@@ -304,6 +304,9 @@ export async function GET(request: NextRequest) {
             || h.wallet_address 
             || DEPLOYER;
 
+          // Ensure capitalUsed is never NaN
+          const capitalUsed = isNaN(size) ? 0 : size;
+
           return {
             hedgeId: h.hedge_id_onchain || h.order_id,
             orderId: h.order_id.slice(0, 18),
@@ -312,14 +315,14 @@ export async function GET(request: NextRequest) {
             pairIndex: Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === h.asset) || 0,
             side: h.side,
             type: h.side,
-            collateral: size,
-            size: size,
-            capitalUsed: size,
+            collateral: capitalUsed,
+            size: capitalUsed,
+            capitalUsed: capitalUsed,
             leverage: leverage,
             entryPrice,
             currentPrice: Math.round(currentPrice * 100) / 100,
-            unrealizedPnL: h.status === 'active' ? Math.round(unrealizedPnl * 100) / 100 : 0,
-            pnlPercentage: h.status === 'active' ? Math.round(pnlPercent * 100) / 100 : 0,
+            unrealizedPnL: h.status === 'active' ? (isNaN(unrealizedPnl) ? 0 : Math.round(unrealizedPnl * 100) / 100) : 0,
+            pnlPercentage: h.status === 'active' ? (isNaN(pnlPercent) ? 0 : Math.round(pnlPercent * 100) / 100) : 0,
             status: h.status,
             isLong: h.side === 'LONG',
             commitmentHash: h.commitment_hash || ethers.ZeroHash,
@@ -511,9 +514,9 @@ export async function GET(request: NextRequest) {
 
     // Second pass: build hedge details with real prices
     const hedgeDetails = rawHedges.map(({ hedgeId, hedgeIndex, data: h }) => {
-        const pairIndex = Number(h.pairIndex);
-        const collateralAmount = Number(ethers.formatUnits(h.collateralAmount, 6));
-        const leverage = Number(h.leverage);
+        const pairIndex = Number(h.pairIndex) || 0;
+        const collateralAmount = Number(ethers.formatUnits(h.collateralAmount, 6)) || 0;
+        const leverage = Number(h.leverage) || 1;
         const isLong = h.isLong;
         const status = Number(h.status);
 
@@ -521,13 +524,13 @@ export async function GET(request: NextRequest) {
         const entryPrice = entryPriceMap[hedgeId] || livePrices[pairIndex] || FALLBACK_PRICES[pairIndex] || 1000;
         const currentPrice = status === 1 ? (livePrices[pairIndex] || entryPrice) : entryPrice;
 
-        // Calculate unrealized PnL using real price delta
+        // Calculate unrealized PnL using real price delta (with NaN protection)
         const positionSize = collateralAmount * leverage;
-        const priceChange = (currentPrice - entryPrice) / entryPrice;
+        const priceChange = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice : 0;
         const unrealizedPnl = isLong
           ? positionSize * priceChange
           : positionSize * (-priceChange);
-        const pnlPercent = (unrealizedPnl / collateralAmount) * 100;
+        const pnlPercent = collateralAmount > 0 ? (unrealizedPnl / collateralAmount) * 100 : 0;
 
         // Derive ZK proxy wallet address for this hedge
         const proxyWallet = deriveProxyAddress(
@@ -535,6 +538,11 @@ export async function GET(request: NextRequest) {
           hedgeIndex,
           h.commitmentHash
         );
+
+        // Ensure no NaN values
+        const safeCapitalUsed = isNaN(collateralAmount) ? 0 : collateralAmount;
+        const safePnL = isNaN(unrealizedPnl) ? 0 : Math.round(unrealizedPnl * 100) / 100;
+        const safePnLPercent = isNaN(pnlPercent) ? 0 : Math.round(pnlPercent * 100) / 100;
 
         return {
           hedgeId: hedgeId,
@@ -545,14 +553,14 @@ export async function GET(request: NextRequest) {
           tradeIndex: Number(h.tradeIndex),
           side: isLong ? 'LONG' : 'SHORT',
           type: isLong ? 'LONG' as const : 'SHORT' as const,
-          collateral: collateralAmount,
-          size: collateralAmount,
-          capitalUsed: collateralAmount,
+          collateral: safeCapitalUsed,
+          size: safeCapitalUsed,
+          capitalUsed: safeCapitalUsed,
           leverage,
           entryPrice,
           currentPrice: Math.round(currentPrice * 100) / 100,
-          unrealizedPnL: Math.round(unrealizedPnl * 100) / 100,
-          pnlPercentage: Math.round(pnlPercent * 100) / 100,
+          unrealizedPnL: safePnL,
+          pnlPercentage: safePnLPercent,
           status: STATUS_NAMES[status]?.toLowerCase() || 'unknown',
           isLong,
           commitmentHash: h.commitmentHash,

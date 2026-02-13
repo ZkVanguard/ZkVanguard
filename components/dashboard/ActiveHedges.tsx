@@ -1740,8 +1740,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                       <div className="h-px bg-[#e8e8ed]" />
                       <div className="flex items-center justify-between">
                         <span className="text-[12px] font-semibold text-[#1d1d1f]">Estimated Return</span>
-                        <span className={`text-[17px] font-bold ${((detailHedge.capitalUsed || 0) + (detailHedge.pnl || 0)) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                          {Math.max(0, (detailHedge.capitalUsed || 0) + (detailHedge.pnl || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
+                        <span className={`text-[17px] font-bold ${((Number(detailHedge.capitalUsed) || 0) + (Number(detailHedge.pnl) || 0)) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                          {(isNaN(Number(detailHedge.capitalUsed)) || isNaN(Number(detailHedge.pnl))) ? '—' : Math.max(0, (Number(detailHedge.capitalUsed) || 0) + (Number(detailHedge.pnl) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-[#86868b]">
@@ -1975,7 +1975,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-[#86868b]">Estimated return</span>
                       <span className="font-semibold text-[#1d1d1f]">
-                        {Math.max(0, selectedHedge.capitalUsed + selectedHedge.pnl).toLocaleString()} USDC
+                        {(isNaN(Number(selectedHedge.capitalUsed)) || isNaN(Number(selectedHedge.pnl))) ? '—' : Math.max(0, (Number(selectedHedge.capitalUsed) || 0) + (Number(selectedHedge.pnl) || 0)).toLocaleString()} USDC
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[11px]">
