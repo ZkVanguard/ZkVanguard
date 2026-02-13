@@ -76,6 +76,90 @@ interface PerformanceChartProps {
 }
 
 /**
+ * Generate synthetic chart data when no historical data exists
+ * Creates realistic data points based on current value and estimated 24h change
+ */
+function generateSyntheticChartData(
+  totalValue: number,
+  change24h: number,
+  timeRange: TimeRange
+): ChartDataPoint[] {
+  const now = Date.now();
+  const points: ChartDataPoint[] = [];
+  
+  // Calculate the starting value based on 24h change
+  const startValue = totalValue / (1 + change24h / 100);
+  
+  // Determine number of points and interval based on time range
+  let numPoints: number;
+  let intervalMs: number;
+  
+  switch (timeRange) {
+    case '1D':
+      numPoints = 24;
+      intervalMs = 60 * 60 * 1000; // 1 hour
+      break;
+    case '1W':
+      numPoints = 7;
+      intervalMs = 24 * 60 * 60 * 1000; // 1 day
+      break;
+    case '1M':
+      numPoints = 30;
+      intervalMs = 24 * 60 * 60 * 1000; // 1 day
+      break;
+    case '3M':
+      numPoints = 12;
+      intervalMs = 7 * 24 * 60 * 60 * 1000; // 1 week
+      break;
+    case '1Y':
+      numPoints = 12;
+      intervalMs = 30 * 24 * 60 * 60 * 1000; // 1 month
+      break;
+    case 'ALL':
+    default:
+      numPoints = 30;
+      intervalMs = 24 * 60 * 60 * 1000; // 1 day
+      break;
+  }
+  
+  // Generate points with smooth interpolation and slight variance
+  for (let i = 0; i < numPoints; i++) {
+    const progress = i / (numPoints - 1); // 0 to 1
+    const timestamp = now - (numPoints - 1 - i) * intervalMs;
+    
+    // Use eased interpolation for more natural curve
+    const easedProgress = progress * progress * (3 - 2 * progress); // smoothstep
+    
+    // Add small random variance (±0.5%) for realistic look
+    const variance = (Math.sin(i * 2.5) * 0.005); // Deterministic "randomness"
+    
+    const value = startValue + (totalValue - startValue) * easedProgress * (1 + variance);
+    const pnl = value - startValue;
+    const pnlPercentage = startValue > 0 ? (pnl / startValue) * 100 : 0;
+    
+    points.push({
+      timestamp,
+      date: new Date(timestamp).toISOString(),
+      value,
+      pnl,
+      pnlPercentage,
+      verifiedOnchain: false,
+    });
+  }
+  
+  // Ensure last point is exactly the current value
+  if (points.length > 0) {
+    const lastPoint = points[points.length - 1];
+    lastPoint.value = totalValue;
+    lastPoint.pnl = totalValue - startValue;
+    lastPoint.pnlPercentage = startValue > 0 ? ((totalValue - startValue) / startValue) * 100 : 0;
+    lastPoint.timestamp = now;
+  }
+  
+  return points;
+}
+
+/**
  * Calculate estimated PnL metrics from asset 24h changes
  * Used when no historical data exists yet
  */
@@ -152,6 +236,16 @@ export default function PerformanceChart({
         if (data.chartData?.length > 0) {
           setChartData(data.chartData);
           setIsOnchainVerified(data.verifiedOnchain || data.chartData.some((d: ChartDataPoint) => d.verifiedOnchain));
+        } else if (assets && assets.length > 0 && currentValue && currentValue > 0) {
+          // No historical data - generate synthetic chart from asset 24h changes
+          const totalChange24h = assets.reduce((acc, asset) => {
+            const weight = currentValue > 0 ? asset.value / currentValue : 0;
+            return acc + (asset.change24h * weight);
+          }, 0);
+          
+          const syntheticData = generateSyntheticChartData(currentValue, totalChange24h, timeRange);
+          setChartData(syntheticData);
+          setIsOnchainVerified(false);
         } else {
           // No historical data yet - this is expected for new portfolios
           setChartData([]);
@@ -190,7 +284,7 @@ export default function PerformanceChart({
     }
     
     fetchHistory();
-  }, [walletAddress, timeRange, currentValue, onMetricsLoaded]);
+  }, [walletAddress, timeRange, currentValue, assets, onMetricsLoaded]);
 
   // Record snapshot removed - handled by PositionsContext
 
