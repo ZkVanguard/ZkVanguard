@@ -5,6 +5,9 @@ import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCachedTransactions, getLastCachedBlock, insertTransactions } from '@/lib/db/transactions';
 
+// Known token addresses
+const MOCK_USDC_ADDRESS = '0x28217daddc55e3c4831b4a48a00ce04880786967';
+
 // Disable caching for this API route
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -92,9 +95,20 @@ export async function GET(
     
     logger.info(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}${lastCached > 0n ? ' (incremental)' : ' (full)'}`);
 
-    const depositLogs = [];
-    const withdrawLogs = [];
-    const rebalanceLogs = [];
+    // Get wallet address from query param (for ERC20 transfer scanning)
+    const walletAddress = request.nextUrl.searchParams.get('address');
+
+    // Type definitions for event logs
+    type DepositLog = { blockNumber: bigint; transactionHash: string; args: { portfolioId?: bigint; token?: string; amount?: bigint; depositor?: string } };
+    type WithdrawLog = { blockNumber: bigint; transactionHash: string; args: { portfolioId?: bigint; token?: string; amount?: bigint; recipient?: string } };
+    type RebalanceLog = { blockNumber: bigint; transactionHash: string; args: { portfolioId?: bigint } };
+    type TransferLog = { blockNumber: bigint; transactionHash: string; args: { from: string; to: string; value: bigint } };
+
+    const depositLogs: DepositLog[] = [];
+    const withdrawLogs: WithdrawLog[] = [];
+    const rebalanceLogs: RebalanceLog[] = [];
+    const transferInLogs: TransferLog[] = [];
+    const transferOutLogs: TransferLog[] = [];
 
     // Scan in chunks to avoid RPC limits
     let start = fromBlock;
@@ -103,8 +117,8 @@ export async function GET(
       
       logger.debug(`[Transactions API] Chunk: ${start} to ${end}`);
 
-      // Fetch all 3 event types in parallel per chunk
-      const [chunkDeposits, chunkWithdraws, chunkRebalances] = await Promise.all([
+      // Fetch all event types in parallel per chunk
+      const eventPromises: Promise<unknown[]>[] = [
         client.getLogs({
           address: addresses.rwaManager as `0x${string}`,
           event: {
@@ -120,7 +134,7 @@ export async function GET(
           args: { portfolioId },
           fromBlock: start,
           toBlock: end,
-        }),
+        }) as Promise<unknown[]>,
         client.getLogs({
           address: addresses.rwaManager as `0x${string}`,
           event: {
@@ -136,7 +150,7 @@ export async function GET(
           args: { portfolioId },
           fromBlock: start,
           toBlock: end,
-        }),
+        }) as Promise<unknown[]>,
         client.getLogs({
           address: addresses.rwaManager as `0x${string}`,
           event: {
@@ -149,17 +163,67 @@ export async function GET(
           args: { portfolioId },
           fromBlock: start,
           toBlock: end,
-        }),
-      ]);
+        }) as Promise<unknown[]>,
+      ];
 
-      depositLogs.push(...chunkDeposits);
-      withdrawLogs.push(...chunkWithdraws);
-      rebalanceLogs.push(...chunkRebalances);
+      // Also scan for ERC20 Transfer events if we have a wallet address
+      if (walletAddress) {
+        // Transfers TO the wallet (deposits/mints)
+        eventPromises.push(
+          client.getLogs({
+            address: MOCK_USDC_ADDRESS as `0x${string}`,
+            event: {
+              type: 'event',
+              name: 'Transfer',
+              inputs: [
+                { type: 'address', indexed: true, name: 'from' },
+                { type: 'address', indexed: true, name: 'to' },
+                { type: 'uint256', indexed: false, name: 'value' },
+              ],
+            },
+            args: { to: walletAddress as `0x${string}` },
+            fromBlock: start,
+            toBlock: end,
+          }) as Promise<unknown[]>
+        );
+        // Transfers FROM the wallet (withdraws/sends)
+        eventPromises.push(
+          client.getLogs({
+            address: MOCK_USDC_ADDRESS as `0x${string}`,
+            event: {
+              type: 'event',
+              name: 'Transfer',
+              inputs: [
+                { type: 'address', indexed: true, name: 'from' },
+                { type: 'address', indexed: true, name: 'to' },
+                { type: 'uint256', indexed: false, name: 'value' },
+              ],
+            },
+            args: { from: walletAddress as `0x${string}` },
+            fromBlock: start,
+            toBlock: end,
+          }) as Promise<unknown[]>
+        );
+      }
+
+      const results = await Promise.all(eventPromises);
+      const [chunkDeposits, chunkWithdraws, chunkRebalances, chunkTransfersIn, chunkTransfersOut] = results;
+
+      depositLogs.push(...(chunkDeposits as typeof depositLogs));
+      withdrawLogs.push(...(chunkWithdraws as typeof withdrawLogs));
+      rebalanceLogs.push(...(chunkRebalances as typeof rebalanceLogs));
+      
+      if (chunkTransfersIn) {
+        transferInLogs.push(...(chunkTransfersIn as typeof transferInLogs));
+      }
+      if (chunkTransfersOut) {
+        transferOutLogs.push(...(chunkTransfersOut as typeof transferOutLogs));
+      }
       
       start = end + 1n;
     }
 
-    logger.info(`[Transactions API] Found ${depositLogs.length} deposits, ${withdrawLogs.length} withdrawals, ${rebalanceLogs.length} rebalances`);
+    logger.info(`[Transactions API] Found ${depositLogs.length} deposits, ${withdrawLogs.length} withdrawals, ${rebalanceLogs.length} rebalances, ${transferInLogs.length} transfers in, ${transferOutLogs.length} transfers out`);
 
     const transactions: Transaction[] = [];
 
@@ -168,6 +232,8 @@ export async function GET(
       ...depositLogs.map(l => ({ ...l, _type: 'deposit' as const })),
       ...withdrawLogs.map(l => ({ ...l, _type: 'withdraw' as const })),
       ...rebalanceLogs.map(l => ({ ...l, _type: 'rebalance' as const })),
+      ...transferInLogs.map(l => ({ ...l, _type: 'transfer_in' as const })),
+      ...transferOutLogs.map(l => ({ ...l, _type: 'transfer_out' as const })),
     ];
     const uniqueBlockNumbers = [...new Set(allLogs.map(l => l.blockNumber))];
     const blockMap = new Map<bigint, Block>();
@@ -245,6 +311,53 @@ export async function GET(
         });
       } catch (err: unknown) {
         logger.error('Error processing rebalance log', err);
+      }
+    }
+
+    // Process ERC20 transfers IN (mints, receives)
+    const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+    for (const log of transferInLogs) {
+      try {
+        const block = blockMap.get(log.blockNumber);
+        if (!block) continue;
+        
+        const value = log.args.value || 0n;
+        const from = log.args.from?.toLowerCase() || '';
+        const isMint = from === ZERO_ADDRESS;
+        
+        transactions.push({
+          type: 'deposit',
+          timestamp: Number(block.timestamp) * 1000,
+          amount: Number(value) / Math.pow(10, 6), // MockUSDC has 6 decimals
+          token: isMint ? 'MockUSDC (Minted)' : 'MockUSDC',
+          txHash: log.transactionHash || '',
+          blockNumber: Number(log.blockNumber),
+        });
+      } catch (err: unknown) {
+        logger.error('Error processing transfer in log', err);
+      }
+    }
+
+    // Process ERC20 transfers OUT (burns, sends)
+    for (const log of transferOutLogs) {
+      try {
+        const block = blockMap.get(log.blockNumber);
+        if (!block) continue;
+        
+        const value = log.args.value || 0n;
+        const to = log.args.to?.toLowerCase() || '';
+        const isBurn = to === ZERO_ADDRESS;
+        
+        transactions.push({
+          type: 'withdraw',
+          timestamp: Number(block.timestamp) * 1000,
+          amount: Number(value) / Math.pow(10, 6), // MockUSDC has 6 decimals
+          token: isBurn ? 'MockUSDC (Burned)' : 'MockUSDC',
+          txHash: log.transactionHash || '',
+          blockNumber: Number(log.blockNumber),
+        });
+      } catch (err: unknown) {
+        logger.error('Error processing transfer out log', err);
       }
     }
 
