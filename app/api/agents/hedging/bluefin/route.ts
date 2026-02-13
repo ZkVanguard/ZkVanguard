@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         txHash: result.txDigest,
       });
     } catch (dbError) {
-      logger.warn('Failed to record hedge in database', dbError instanceof Error ? dbError : undefined);
+      logger.warn('Failed to record hedge in database', { error: dbError instanceof Error ? dbError.message : String(dbError) });
     }
 
     return NextResponse.json({
@@ -268,7 +268,7 @@ export async function DELETE(request: NextRequest) {
       try {
         await updateHedgeStatus(hedgeId, 'closed');
       } catch (dbError) {
-        logger.warn('Failed to update hedge status', dbError instanceof Error ? dbError : undefined);
+        logger.warn('Failed to update hedge status', { error: dbError instanceof Error ? dbError.message : String(dbError) });
       }
     }
 

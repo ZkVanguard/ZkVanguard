@@ -557,7 +557,7 @@ class PortfolioHistoryService {
         });
       }
     } catch (error) {
-      logger.warn('[PortfolioHistoryService] Failed to load from localStorage', error);
+      logger.warn('[PortfolioHistoryService] Failed to load from localStorage', { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -573,7 +573,7 @@ class PortfolioHistoryService {
       
       localStorage.setItem('portfolioHistory', JSON.stringify(data));
     } catch (error) {
-      logger.warn('[PortfolioHistoryService] Failed to save to localStorage', error);
+      logger.warn('[PortfolioHistoryService] Failed to save to localStorage', { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
