@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, erc20Abi } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
@@ -174,7 +174,37 @@ export async function GET(
       'SUI': 0.9100,    // Approximate entry
     };
     
+    // For institutional portfolios with MockUSDC, use the ACTUAL wallet balance
+    // This ensures the portfolio value matches the wallet balance
+    let actualMockUsdcBalance = 0;
     if (mockUsdcAsset && mockUsdcAsset.valueUSD > 1000000) {
+      try {
+        // Read actual MockUSDC balance from wallet (not from portfolio allocation)
+        const mockUsdcAddress = '0x28217daddc55e3c4831b4a48a00ce04880786967' as `0x${string}`;
+        const walletBalance = await client.readContract({
+          address: mockUsdcAddress,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [portfolio[0] as `0x${string}`], // portfolio owner
+        }) as bigint;
+        
+        actualMockUsdcBalance = Number(walletBalance) / 1e6; // MockUSDC has 6 decimals
+        logger.info(`[Portfolio API] Actual wallet MockUSDC balance: $${actualMockUsdcBalance.toLocaleString()}`);
+        
+        // Use actual wallet balance if it's greater than the on-chain allocation
+        if (actualMockUsdcBalance > finalValueUSD) {
+          logger.info(`[Portfolio API] Using wallet balance ($${actualMockUsdcBalance.toLocaleString()}) instead of allocation ($${finalValueUSD.toLocaleString()})`);
+          calculatedValue = actualMockUsdcBalance;
+        }
+      } catch (error) {
+        logger.warn(`[Portfolio API] Failed to read actual MockUSDC balance`, { error: String(error) });
+      }
+    }
+    
+    // Recalculate finalValueUSD after potential update
+    const finalEntryValue = Math.max(calculatedValue, finalValueUSD);
+    
+    if (mockUsdcAsset && finalEntryValue > 1000000) {
       // This is an institutional portfolio with MockUSDC - create virtual allocations
       const allocations = [
         { symbol: 'BTC', percentage: 35, chain: 'cronos' },
@@ -192,7 +222,7 @@ export async function GET(
           const entryPrice = entryPrices[alloc.symbol] || currentPrice;
           
           // Calculate amount based on entry price (what we "bought")
-          const valueAtEntry = finalValueUSD * (alloc.percentage / 100);
+          const valueAtEntry = finalEntryValue * (alloc.percentage / 100);
           const amount = valueAtEntry / entryPrice;
           
           // Current value based on current price
@@ -216,20 +246,20 @@ export async function GET(
         }
       }
       
-      logger.info(`[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalValueUSD.toLocaleString()} portfolio`);
+      logger.info(`[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalEntryValue.toLocaleString()} portfolio`);
     }
 
     // Calculate total portfolio P&L
     const totalPnl = virtualAllocations.reduce((sum, v) => sum + v.pnl, 0);
     const totalCurrentValue = virtualAllocations.reduce((sum, v) => sum + v.valueUSD, 0);
-    const totalEntryValue = finalValueUSD;
+    const totalEntryValue = finalEntryValue;
     const totalPnlPercentage = totalEntryValue > 0 ? ((totalCurrentValue - totalEntryValue) / totalEntryValue) * 100 : 0;
 
     // Format response
     const portfolioData = {
       owner: portfolio[0],
-      totalValue: (finalValueUSD * 1e6).toString(), // Store as 6-decimal representation for consistency
-      calculatedValueUSD: virtualAllocations.length > 0 ? totalCurrentValue : finalValueUSD, // Use current value if virtual
+      totalValue: (finalEntryValue * 1e6).toString(), // Store as 6-decimal representation for consistency
+      calculatedValueUSD: virtualAllocations.length > 0 ? totalCurrentValue : finalEntryValue, // Use current value if virtual
       entryValueUSD: totalEntryValue,
       targetYield: portfolio[2]?.toString() || '0',
       riskTolerance: portfolio[3]?.toString() || '0',
@@ -258,7 +288,7 @@ export async function GET(
       isInstitutional: virtualAllocations.length > 0,
     };
 
-    logger.info(`[Portfolio API] Portfolio ${id} final value: $${finalValueUSD.toFixed(2)}, assets: ${assetBalances.length}`);
+    logger.info(`[Portfolio API] Portfolio ${id} final value: $${finalEntryValue.toFixed(2)}, assets: ${assetBalances.length}`);
 
     // Cache the response
     portfolioCache.set(cacheKey, { data: portfolioData, timestamp: Date.now() });
