@@ -103,6 +103,33 @@ class AutoHedgingService {
       pnlUpdateInterval: CONFIG.PNL_UPDATE_INTERVAL_MS,
       riskCheckInterval: CONFIG.RISK_CHECK_INTERVAL_MS,
     });
+
+    // Enable auto-hedging for Portfolio #3 by default (institutional portfolio)
+    this.enableDefaultPortfolios();
+  }
+
+  /**
+   * Enable auto-hedging for default portfolios
+   */
+  private enableDefaultPortfolios(): void {
+    // Portfolio #3 - Institutional portfolio with $153M+ allocation
+    // Wallet: 0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c
+    const portfolio3Config: AutoHedgeConfig = {
+      portfolioId: 3,
+      walletAddress: '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c',
+      enabled: true,
+      riskThreshold: 7, // Auto-hedge when risk score >= 7
+      maxLeverage: CONFIG.DEFAULT_LEVERAGE,
+      allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
+    };
+
+    this.autoHedgeConfigs.set(portfolio3Config.portfolioId, portfolio3Config);
+    logger.info('[AutoHedging] Default portfolio enabled', {
+      portfolioId: 3,
+      wallet: portfolio3Config.walletAddress,
+      riskThreshold: portfolio3Config.riskThreshold,
+      allowedAssets: portfolio3Config.allowedAssets,
+    });
   }
 
   /**
