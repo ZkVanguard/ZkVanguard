@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus, Zap } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Coins, DollarSign, RefreshCw, ArrowDownToLine, Sparkles, ExternalLink, Shield, Target, PieChart, Activity, Clock, Plus, Zap, BarChart2 } from 'lucide-react';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useUserPortfolios } from '../../lib/contracts/hooks';
 import { DepositModal } from './DepositModal';
@@ -533,6 +533,17 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="flex items-center gap-3 mt-1.5 text-[12px] text-[#86868b]">
+              {/* Daily PnL (actual profit/loss) */}
+              {derived?.pnl && derived.pnl.daily !== 0 && (
+                <>
+                  <span className={`font-semibold flex items-center gap-1 ${derived.pnl.daily >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                    <BarChart2 className="w-3 h-3" />
+                    {derived.pnl.daily >= 0 ? '+' : ''}
+                    ${Math.abs(derived.pnl.daily).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PnL
+                  </span>
+                  <span className="text-[#86868b]/60">•</span>
+                </>
+              )}
               <span className={`font-semibold flex items-center gap-1 ${weighted24hChange >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
                 {weighted24hChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {weighted24hChange >= 0 ? '+' : ''}{weighted24hChange.toFixed(2)}% 24h
@@ -677,6 +688,33 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                   if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'MockUSDC';
                   return a.slice(0, 6);
                 });
+              }
+              
+              // Calculate weighted PnL from asset balances
+              let portfolioPnL = 0;
+              let portfolioPnLPercent = 0;
+              if (portfolio.assetBalances && portfolio.assetBalances.length > 0 && valueUSD > 0) {
+                // Weighted average of asset PnL percentages
+                portfolioPnLPercent = portfolio.assetBalances.reduce((acc, ab) => {
+                  const weight = ab.valueUSD / valueUSD;
+                  const pnlPct = (ab as { pnlPercentage?: number }).pnlPercentage ?? 0;
+                  return acc + (pnlPct * weight);
+                }, 0);
+                // Estimate dollar PnL from percentage (using initial value estimate)
+                const initialValue = valueUSD / (1 + portfolioPnLPercent / 100);
+                portfolioPnL = valueUSD - initialValue;
+              } else if (hasFunds && positions.length > 0) {
+                // Fallback: use wallet position 24h changes as PnL estimate
+                for (const assetSymbol of depositedAssets) {
+                  const matchingPosition = positions.find(p => 
+                    p.symbol.toUpperCase() === assetSymbol.toUpperCase()
+                  );
+                  if (matchingPosition && matchingPosition.change24h) {
+                    const posValue = parseFloat(matchingPosition.balanceUSD || '0');
+                    portfolioPnL += (posValue * matchingPosition.change24h / 100);
+                    portfolioPnLPercent += (posValue / valueUSD) * matchingPosition.change24h;
+                  }
+                }
               }
               
               const lastRebalanceTime = parseInt(portfolio.lastRebalance) * 1000;
@@ -857,6 +895,16 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                         <div className={`text-[22px] font-black tracking-tight ${hasFunds ? 'text-[#1d1d1f]' : 'text-[#86868b]'}`}>
                           ${valueUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
+                        {/* PnL Display */}
+                        {hasFunds && (portfolioPnL !== 0 || portfolioPnLPercent !== 0) && (
+                          <div className={`text-[12px] font-semibold flex items-center justify-end gap-1 mt-0.5 ${portfolioPnL >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                            {portfolioPnL >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                            {portfolioPnL >= 0 ? '+' : ''}${Math.abs(portfolioPnL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <span className="text-[10px] opacity-75">
+                              ({portfolioPnLPercent >= 0 ? '+' : ''}{portfolioPnLPercent.toFixed(2)}%)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
