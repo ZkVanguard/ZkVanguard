@@ -93,6 +93,75 @@ export interface ChartDataPoint {
 class OnChainPortfolioHistoryService {
   private readonly SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private lastSnapshotTime: Map<string, number> = new Map();
+  private tablesInitialized = false;
+
+  /**
+   * Ensure database tables exist - creates them if needed
+   */
+  private async ensureTables(): Promise<void> {
+    if (this.tablesInitialized) return;
+    
+    try {
+      // Create portfolio_snapshots table if not exists
+      await query(`
+        CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+          id SERIAL PRIMARY KEY,
+          wallet_address VARCHAR(42) NOT NULL,
+          total_value DECIMAL(24, 2) NOT NULL,
+          positions JSONB DEFAULT '[]',
+          hedges_data JSONB DEFAULT '{}',
+          positions_value DECIMAL(24, 2) DEFAULT 0,
+          hedges_value DECIMAL(24, 2) DEFAULT 0,
+          unrealized_pnl DECIMAL(24, 2) DEFAULT 0,
+          realized_pnl DECIMAL(24, 2) DEFAULT 0,
+          chain VARCHAR(30) DEFAULT 'cronos',
+          block_number INTEGER,
+          verified_onchain BOOLEAN DEFAULT FALSE,
+          snapshot_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create portfolio_metrics table if not exists
+      await query(`
+        CREATE TABLE IF NOT EXISTS portfolio_metrics (
+          wallet_address VARCHAR(42) PRIMARY KEY,
+          current_value DECIMAL(24, 2) DEFAULT 0,
+          initial_value DECIMAL(24, 2) DEFAULT 0,
+          highest_value DECIMAL(24, 2) DEFAULT 0,
+          lowest_value DECIMAL(24, 2) DEFAULT 0,
+          total_pnl DECIMAL(24, 2) DEFAULT 0,
+          total_pnl_percentage DECIMAL(10, 4) DEFAULT 0,
+          daily_pnl DECIMAL(24, 2) DEFAULT 0,
+          daily_pnl_percentage DECIMAL(10, 4) DEFAULT 0,
+          weekly_pnl DECIMAL(24, 2) DEFAULT 0,
+          weekly_pnl_percentage DECIMAL(10, 4) DEFAULT 0,
+          monthly_pnl DECIMAL(24, 2) DEFAULT 0,
+          monthly_pnl_percentage DECIMAL(10, 4) DEFAULT 0,
+          volatility DECIMAL(10, 4) DEFAULT 0,
+          sharpe_ratio DECIMAL(10, 4) DEFAULT 0,
+          max_drawdown DECIMAL(10, 4) DEFAULT 0,
+          win_rate DECIMAL(10, 4) DEFAULT 50,
+          active_hedges INTEGER DEFAULT 0,
+          total_hedge_pnl DECIMAL(24, 2) DEFAULT 0,
+          first_snapshot_at TIMESTAMP WITH TIME ZONE,
+          last_snapshot_at TIMESTAMP WITH TIME ZONE,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create indexes
+      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_wallet ON portfolio_snapshots(wallet_address)`);
+      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_time ON portfolio_snapshots(snapshot_time DESC)`);
+      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_wallet_time ON portfolio_snapshots(wallet_address, snapshot_time DESC)`);
+
+      this.tablesInitialized = true;
+      logger.info('Portfolio history tables initialized');
+    } catch (error) {
+      // Log but don't throw - allow graceful degradation
+      logger.warn('Failed to initialize portfolio tables - will return empty data', { error: String(error) });
+    }
+  }
 
   /**
    * Record a portfolio snapshot with REAL on-chain data
@@ -112,6 +181,9 @@ class OnChainPortfolioHistoryService {
     },
     blockNumber?: number
   ): Promise<PortfolioSnapshotData | null> {
+    // Ensure tables exist
+    await this.ensureTables();
+    
     const now = Date.now();
     const lastTime = this.lastSnapshotTime.get(walletAddress) || 0;
 
@@ -236,6 +308,9 @@ class OnChainPortfolioHistoryService {
     walletAddress: string,
     timeRange: '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL' = '1W'
   ): Promise<PortfolioSnapshotData[]> {
+    // Ensure tables exist
+    await this.ensureTables();
+    
     const intervals: Record<string, string> = {
       '1D': '1 day',
       '1W': '7 days',
@@ -247,7 +322,8 @@ class OnChainPortfolioHistoryService {
 
     const interval = intervals[timeRange] || '7 days';
 
-    const rows = await query<{
+    try {
+      const rows = await query<{
       id: number;
       wallet_address: string;
       total_value: string;
@@ -284,6 +360,10 @@ class OnChainPortfolioHistoryService {
       verifiedOnchain: row.verified_onchain,
       snapshotTime: new Date(row.snapshot_time),
     }));
+    } catch (error) {
+      logger.warn('Failed to fetch history - returning empty', { error: String(error) });
+      return [];
+    }
   }
 
   /**
@@ -316,30 +396,34 @@ class OnChainPortfolioHistoryService {
    * Get performance metrics from cached DB data
    */
   async getPerformanceMetrics(walletAddress: string): Promise<PerformanceMetrics> {
-    // Try to get from cached metrics table first
-    const cached = await queryOne<{
-      current_value: string;
-      initial_value: string;
-      highest_value: string;
-      lowest_value: string;
-      total_pnl: string;
-      total_pnl_percentage: string;
-      daily_pnl: string;
-      daily_pnl_percentage: string;
-      weekly_pnl: string;
-      weekly_pnl_percentage: string;
-      monthly_pnl: string;
-      monthly_pnl_percentage: string;
-      volatility: string;
-      sharpe_ratio: string;
-      max_drawdown: string;
-      win_rate: string;
-      active_hedges: number;
-      total_hedge_pnl: string;
-    }>(
-      `SELECT * FROM portfolio_metrics WHERE wallet_address = $1`,
-      [walletAddress.toLowerCase()]
-    );
+    // Ensure tables exist
+    await this.ensureTables();
+    
+    try {
+      // Try to get from cached metrics table first
+      const cached = await queryOne<{
+        current_value: string;
+        initial_value: string;
+        highest_value: string;
+        lowest_value: string;
+        total_pnl: string;
+        total_pnl_percentage: string;
+        daily_pnl: string;
+        daily_pnl_percentage: string;
+        weekly_pnl: string;
+        weekly_pnl_percentage: string;
+        monthly_pnl: string;
+        monthly_pnl_percentage: string;
+        volatility: string;
+        sharpe_ratio: string;
+        max_drawdown: string;
+        win_rate: string;
+        active_hedges: number;
+        total_hedge_pnl: string;
+      }>(
+        `SELECT * FROM portfolio_metrics WHERE wallet_address = $1`,
+        [walletAddress.toLowerCase()]
+      );
 
     if (cached) {
       // Get real-time hedge PnL to ensure freshness
@@ -370,6 +454,10 @@ class OnChainPortfolioHistoryService {
 
     // Calculate from snapshots if no cached metrics
     return this.calculateMetricsFromHistory(walletAddress);
+    } catch (error) {
+      logger.warn('Failed to fetch performance metrics - returning empty', { error: String(error) });
+      return this.emptyMetrics();
+    }
   }
 
   /**
@@ -614,11 +702,18 @@ class OnChainPortfolioHistoryService {
    * Get snapshot count for a wallet
    */
   async getSnapshotCount(walletAddress: string): Promise<number> {
-    const result = await queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM portfolio_snapshots WHERE wallet_address = $1`,
-      [walletAddress.toLowerCase()]
-    );
-    return parseInt(result?.count || '0');
+    await this.ensureTables();
+    
+    try {
+      const result = await queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM portfolio_snapshots WHERE wallet_address = $1`,
+        [walletAddress.toLowerCase()]
+      );
+      return parseInt(result?.count || '0');
+    } catch (error) {
+      logger.warn('Failed to get snapshot count', { error: String(error) });
+      return 0;
+    }
   }
 }
 
