@@ -841,10 +841,13 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
 
                     logger.debug(`Assets with allocation for portfolio ${portfolio.id}`, { component: 'PositionsList', data: assetsWithAllocation });
 
-                    // Fetch real transaction history
+                    // Fetch real transaction history (include wallet address for ERC20 transfer scanning)
                     let transactions: PortfolioTransaction[] = [];
                     try {
-                      const txRes = await fetch(`/api/portfolio/${portfolio.id}/transactions`);
+                      const txUrl = address 
+                        ? `/api/portfolio/${portfolio.id}/transactions?address=${encodeURIComponent(address)}`
+                        : `/api/portfolio/${portfolio.id}/transactions`;
+                      const txRes = await fetch(txUrl);
                       if (txRes.ok) {
                         const txData = await txRes.json();
                         transactions = txData.transactions || [];
