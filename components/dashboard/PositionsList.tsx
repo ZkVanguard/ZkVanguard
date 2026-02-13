@@ -423,7 +423,45 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     setRefreshing(false);
   }, [refetchPositions, fetchOnChainPortfolios]);
 
-  // Memoize weighted 24h change calculation
+  // Calculate display values - use funded portfolio's calculated value if available
+  const displayValues = useMemo(() => {
+    // Find funded portfolio with virtual allocations (institutional portfolio)
+    const fundedPortfolio = onChainPortfolios.find(p => {
+      const calcValue = p.calculatedValueUSD || 0;
+      return calcValue > 1000000 && p.assetBalances && p.assetBalances.length > 0;
+    });
+    
+    if (fundedPortfolio && fundedPortfolio.calculatedValueUSD && fundedPortfolio.calculatedValueUSD > 0) {
+      // Use portfolio's calculated value and PnL
+      const calcValue = fundedPortfolio.calculatedValueUSD;
+      
+      // Calculate weighted PnL from virtual allocations
+      const portfolioPnLPercent = (fundedPortfolio.assetBalances || []).reduce((acc, ab) => {
+        const pnlPct = (ab as { pnlPercentage?: number }).pnlPercentage ?? 0;
+        const percentage = (ab as { percentage?: number }).percentage ?? 25;
+        return acc + (pnlPct * percentage / 100);
+      }, 0);
+      
+      return {
+        totalValue: calcValue,
+        change24h: portfolioPnLPercent,
+        usingPortfolioValue: true,
+      };
+    }
+    
+    // Fallback to wallet balance total
+    return {
+      totalValue: totalValue,
+      change24h: positions.reduce((acc, pos) => {
+        const posValue = parseFloat(pos.balanceUSD || '0');
+        const weight = totalValue > 0 ? posValue / totalValue : 0;
+        return acc + (pos.change24h * weight);
+      }, 0),
+      usingPortfolioValue: false,
+    };
+  }, [onChainPortfolios, totalValue, positions]);
+
+  // Memoize weighted 24h change calculation (used for wallet balances section)
   const weighted24hChange = useMemo(() => {
     if (totalValue === 0 || positions.length === 0) return 0;
     return positions.reduce((acc, pos) => {
@@ -523,14 +561,16 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
           {/* Left: Total Value */}
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Total Value</span>
+              <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">
+                {displayValues.usingPortfolioValue ? 'Portfolio Value' : 'Total Value'}
+              </span>
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#34C759]/10 rounded-full">
                 <span className="w-1 h-1 bg-[#34C759] rounded-full animate-pulse" />
                 <span className="text-[9px] font-bold text-[#34C759]">LIVE</span>
               </span>
             </div>
             <div className="text-[28px] sm:text-[36px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">
-              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${displayValues.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="flex items-center gap-3 mt-1.5 text-[12px] text-[#86868b]">
               {/* Daily PnL (actual profit/loss) */}
@@ -544,9 +584,9 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                   <span className="text-[#86868b]/60">•</span>
                 </>
               )}
-              <span className={`font-semibold flex items-center gap-1 ${weighted24hChange >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                {weighted24hChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {weighted24hChange >= 0 ? '+' : ''}{weighted24hChange.toFixed(2)}% 24h
+              <span className={`font-semibold flex items-center gap-1 ${displayValues.change24h >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
+                {displayValues.change24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {displayValues.change24h >= 0 ? '+' : ''}{displayValues.change24h.toFixed(2)}% 24h
               </span>
               <span className="text-[#86868b]/60">•</span>
               <span>{lastUpdated ? `Synced ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Syncing...'}</span>
