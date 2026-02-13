@@ -59,8 +59,11 @@ export async function GET(
     logger.info(`[Transactions API] Portfolio ID: ${id}`);
     const portfolioId = BigInt(id);
     
+    // Get wallet address from query param (for ERC20 transfer scanning and caching)
+    const walletAddress = request.nextUrl.searchParams.get('address') || undefined;
+    
     // ══════ DB-FIRST: Return cached transactions ══════
-    const cachedTxs = await getCachedTransactions(Number(portfolioId));
+    const cachedTxs = await getCachedTransactions(Number(portfolioId), walletAddress);
     if (cachedTxs.length > 0) {
       logger.info(`[Transactions API] DB cache HIT: ${cachedTxs.length} transactions (no RPC)`);
       const transactions = cachedTxs.map(tx => ({
@@ -85,7 +88,7 @@ export async function GET(
     
     // Get current block number
     const currentBlock = await client.getBlockNumber();
-    const lastCached = BigInt(await getLastCachedBlock(Number(portfolioId)));
+    const lastCached = BigInt(await getLastCachedBlock(Number(portfolioId), walletAddress));
     logger.info(`[Transactions API] Current block: ${currentBlock}, last cached: ${lastCached || 'none'}`);
     
     // Cronos testnet has a max range of 2000 blocks, scan in chunks
@@ -94,9 +97,6 @@ export async function GET(
     const fromBlock = lastCached > 0n ? lastCached + 1n : (currentBlock > lookback ? currentBlock - lookback : 0n);
     
     logger.info(`[Transactions API] Scanning blocks ${fromBlock} to ${currentBlock}${lastCached > 0n ? ' (incremental)' : ' (full)'}`);
-
-    // Get wallet address from query param (for ERC20 transfer scanning)
-    const walletAddress = request.nextUrl.searchParams.get('address');
 
     // Type definitions for event logs
     type DepositLog = { blockNumber: bigint; transactionHash: string; args: { portfolioId?: bigint; token?: string; amount?: bigint; depositor?: string } };
@@ -446,6 +446,7 @@ export async function GET(
         tokenSymbol: tx.token,
         amount: tx.amount,
         contractAddress: addresses.rwaManager,
+        walletAddress: walletAddress || undefined,
       }))).then(inserted => {
         logger.info(`[Transactions API] Persisted ${inserted} new transactions to DB`);
       }).catch(err => {

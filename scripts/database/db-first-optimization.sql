@@ -45,14 +45,19 @@ CREATE TABLE IF NOT EXISTS portfolio_transactions (
   chain VARCHAR(30) DEFAULT 'cronos-testnet',
   chain_id INTEGER DEFAULT 338,
   contract_address VARCHAR(42),
+  wallet_address VARCHAR(42),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(tx_hash, portfolio_id, tx_type)
 );
+
+-- Add wallet_address column if it doesn't exist (migration)
+ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(42);
 
 CREATE INDEX IF NOT EXISTS idx_ptx_portfolio ON portfolio_transactions(portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_ptx_block ON portfolio_transactions(block_number);
 CREATE INDEX IF NOT EXISTS idx_ptx_timestamp ON portfolio_transactions(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ptx_type ON portfolio_transactions(tx_type);
+CREATE INDEX IF NOT EXISTS idx_ptx_wallet ON portfolio_transactions(wallet_address);
 
 COMMENT ON TABLE portfolio_transactions IS 'Cached on-chain portfolio events – only scan new blocks since max(block_number)';
 
