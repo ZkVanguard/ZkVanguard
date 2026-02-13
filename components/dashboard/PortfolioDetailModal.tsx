@@ -203,6 +203,11 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
                   <PerformanceChart 
                     walletAddress={walletAddress} 
                     currentValue={portfolio.totalValue}
+                    assets={portfolio.assets.map(a => ({
+                      symbol: a.symbol,
+                      value: a.value,
+                      change24h: a.change24h,
+                    }))}
                   />
                 ) : (
                   <div className="bg-[#f5f5f7] rounded-xl p-8 text-center">

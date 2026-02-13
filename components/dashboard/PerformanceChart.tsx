@@ -62,10 +62,56 @@ interface PerformanceMetrics {
   verifiedOnchain?: boolean;
 }
 
+interface AssetWithChange {
+  symbol: string;
+  value: number;
+  change24h: number;
+}
+
 interface PerformanceChartProps {
   walletAddress: string;
   currentValue?: number;
+  assets?: AssetWithChange[];
   onMetricsLoaded?: (metrics: PerformanceMetrics) => void;
+}
+
+/**
+ * Calculate estimated PnL metrics from asset 24h changes
+ * Used when no historical data exists yet
+ */
+function calculateEstimatedMetrics(
+  assets: AssetWithChange[],
+  totalValue: number
+): PerformanceMetrics {
+  // Calculate weighted 24h PnL from assets
+  const totalChange24h = assets.reduce((acc, asset) => {
+    const weight = totalValue > 0 ? asset.value / totalValue : 0;
+    return acc + (asset.change24h * weight);
+  }, 0);
+
+  // Estimate the value yesterday based on 24h change
+  const valueYesterday = totalValue / (1 + totalChange24h / 100);
+  const dailyPnL = totalValue - valueYesterday;
+
+  return {
+    currentValue: totalValue,
+    initialValue: valueYesterday,
+    highestValue: totalValue,
+    lowestValue: Math.min(totalValue, valueYesterday),
+    totalPnL: dailyPnL,
+    totalPnLPercentage: totalChange24h,
+    dailyPnL,
+    dailyPnLPercentage: totalChange24h,
+    weeklyPnL: dailyPnL, // Estimate weekly as same (no weekly data)
+    weeklyPnLPercentage: totalChange24h,
+    monthlyPnL: dailyPnL, 
+    monthlyPnLPercentage: totalChange24h,
+    volatility: 0,
+    sharpeRatio: 0,
+    maxDrawdown: 0,
+    winRate: totalChange24h >= 0 ? 100 : 0,
+    verifiedOnchain: false, // Estimated, not verified
+  };
 }
 
 type TimeRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
@@ -73,6 +119,7 @@ type TimeRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
 export default function PerformanceChart({ 
   walletAddress, 
   currentValue,
+  assets,
   onMetricsLoaded 
 }: PerformanceChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
@@ -111,9 +158,26 @@ export default function PerformanceChart({
           setIsOnchainVerified(false);
         }
         
-        if (data.metrics) {
+        // Check if metrics have meaningful data (not all zeros)
+        const hasRealMetrics = data.metrics && (
+          data.metrics.dailyPnL !== 0 ||
+          data.metrics.weeklyPnL !== 0 ||
+          data.metrics.monthlyPnL !== 0 ||
+          data.metrics.totalPnL !== 0
+        );
+        
+        if (hasRealMetrics) {
           setMetrics(data.metrics);
           setIsOnchainVerified(data.metrics.verifiedOnchain || false);
+          onMetricsLoaded?.(data.metrics);
+        } else if (assets && assets.length > 0 && currentValue && currentValue > 0) {
+          // No meaningful metrics from API - calculate estimated PnL from asset 24h changes
+          const estimatedMetrics = calculateEstimatedMetrics(assets, currentValue);
+          setMetrics(estimatedMetrics);
+          onMetricsLoaded?.(estimatedMetrics);
+        } else if (data.metrics) {
+          // Fallback to API metrics even if zeros
+          setMetrics(data.metrics);
           onMetricsLoaded?.(data.metrics);
         }
       } catch (err) {
