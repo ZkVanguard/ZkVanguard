@@ -191,6 +191,15 @@ export class AgentOrchestrator {
         reportingAgent: !!this.reportingAgent,
         leadAgent: !!this.leadAgent,
       });
+
+      // Start auto-hedging PnL tracking (but not auto-execute hedges by default)
+      try {
+        const { autoHedgingService } = await import('./AutoHedgingService');
+        await autoHedgingService.start();
+        logger.info('✅ AutoHedgingService started for PnL tracking');
+      } catch (err) {
+        logger.warn('AutoHedgingService start failed (non-critical)', { error: err });
+      }
     } catch (error) {
       logger.error('Failed to initialize AgentOrchestrator', { 
         error: error instanceof Error ? error.message : 'Unknown error',
