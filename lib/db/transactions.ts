@@ -20,38 +20,59 @@ export interface PortfolioTransaction {
   chain: string;
   chain_id: number;
   contract_address: string | null;
+  wallet_address: string | null;
   created_at: Date;
 }
 
 /**
  * Get cached transactions for a portfolio, sorted by timestamp descending.
  */
-export async function getCachedTransactions(portfolioId: number): Promise<PortfolioTransaction[]> {
+export async function getCachedTransactions(portfolioId: number, walletAddress?: string): Promise<PortfolioTransaction[]> {
   try {
-    const sql = `
-      SELECT * FROM portfolio_transactions 
-      WHERE portfolio_id = $1 
-      ORDER BY timestamp DESC
-    `;
-    return await query<PortfolioTransaction>(sql, [portfolioId]);
+    if (walletAddress) {
+      // Include wallet-specific ERC20 transfer transactions
+      const sql = `
+        SELECT * FROM portfolio_transactions 
+        WHERE portfolio_id = $1 OR wallet_address = $2
+        ORDER BY timestamp DESC
+      `;
+      return await query<PortfolioTransaction>(sql, [portfolioId, walletAddress.toLowerCase()]);
+    } else {
+      const sql = `
+        SELECT * FROM portfolio_transactions 
+        WHERE portfolio_id = $1 
+        ORDER BY timestamp DESC
+      `;
+      return await query<PortfolioTransaction>(sql, [portfolioId]);
+    }
   } catch {
     return [];
   }
 }
 
 /**
- * Get the highest block number we have cached for a portfolio.
+ * Get the highest block number we have cached for a portfolio/wallet.
  * This tells us where to start scanning from.
  */
-export async function getLastCachedBlock(portfolioId: number): Promise<number> {
+export async function getLastCachedBlock(portfolioId: number, walletAddress?: string): Promise<number> {
   try {
-    const sql = `
-      SELECT MAX(block_number) as max_block 
-      FROM portfolio_transactions 
-      WHERE portfolio_id = $1
-    `;
-    const row = await queryOne<{ max_block: number | null }>(sql, [portfolioId]);
-    return row?.max_block ?? 0;
+    if (walletAddress) {
+      const sql = `
+        SELECT MAX(block_number) as max_block 
+        FROM portfolio_transactions 
+        WHERE portfolio_id = $1 OR wallet_address = $2
+      `;
+      const row = await queryOne<{ max_block: number | null }>(sql, [portfolioId, walletAddress.toLowerCase()]);
+      return row?.max_block ?? 0;
+    } else {
+      const sql = `
+        SELECT MAX(block_number) as max_block 
+        FROM portfolio_transactions 
+        WHERE portfolio_id = $1
+      `;
+      const row = await queryOne<{ max_block: number | null }>(sql, [portfolioId]);
+      return row?.max_block ?? 0;
+    }
   } catch {
     return 0;
   }
@@ -74,14 +95,15 @@ export async function insertTransactions(txs: Array<{
   chain?: string;
   chainId?: number;
   contractAddress?: string;
+  walletAddress?: string;
 }>): Promise<number> {
   let inserted = 0;
   for (const tx of txs) {
     try {
       await query(`
         INSERT INTO portfolio_transactions 
-          (portfolio_id, tx_type, tx_hash, block_number, timestamp, token, token_symbol, amount, depositor, recipient, chain, chain_id, contract_address)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          (portfolio_id, tx_type, tx_hash, block_number, timestamp, token, token_symbol, amount, depositor, recipient, chain, chain_id, contract_address, wallet_address)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (tx_hash, portfolio_id, tx_type) DO NOTHING
       `, [
         tx.portfolioId,
@@ -97,6 +119,7 @@ export async function insertTransactions(txs: Array<{
         tx.chain || 'cronos-testnet',
         tx.chainId || 338,
         tx.contractAddress || null,
+        tx.walletAddress?.toLowerCase() || null,
       ]);
       inserted++;
     } catch {
