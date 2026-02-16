@@ -44,10 +44,6 @@ interface PortfolioAssetDetail {
   allocation: number;
   value: number;
   change24h: number;
-  price?: number;
-  entryPrice?: number;
-  pnl?: number;
-  chain?: string;
 }
 
 interface PortfolioTransaction {
@@ -63,9 +59,6 @@ interface PortfolioDetail {
   id: number;
   name: string;
   totalValue: number;
-  entryValue?: number;
-  totalPnl?: number;
-  totalPnlPercentage?: number;
   status: 'FUNDED' | 'EMPTY' | 'NEW';
   targetAPY: number;
   riskLevel: 'Low' | 'Medium' | 'High';
@@ -97,7 +90,6 @@ interface OnChainPortfolio {
   owner: string;
   totalValue: string;  // Store as string to avoid BigInt serialization issues
   calculatedValueUSD?: number; // Actual USD value calculated from asset balances
-  entryValueUSD?: number; // Original entry value (before PnL)
   targetYield: string;
   riskTolerance: string;
   lastRebalance: string;
@@ -807,8 +799,6 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                       value: number;
                       change24h: number;
                       price?: number;
-                      entryPrice?: number;
-                      pnl?: number;
                       chain?: string;
                     }> = [];
                     
@@ -827,8 +817,6 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                           value: ab.valueUSD,
                           change24h: ((ab as { pnlPercentage?: number }).pnlPercentage ?? 0),
                           price: (ab as { price?: number }).price,
-                          entryPrice: (ab as { entryPrice?: number }).entryPrice,
-                          pnl: (ab as { pnl?: number }).pnl,
                           chain: (ab as { chain?: string }).chain,
                         };
                       });
@@ -965,19 +953,11 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                       };
                     }
 
-                    // Calculate total PnL from assets
-                    const totalPnl = assetsWithAllocation.reduce((sum, a) => sum + (a.pnl ?? 0), 0);
-                    const entryValue = portfolio.entryValueUSD || (totalPortfolioValue - totalPnl);
-                    const totalPnlPercentage = entryValue > 0 ? (totalPnl / entryValue) * 100 : 0;
-
                     // Open detail modal with portfolio data
                     setSelectedDetailPortfolio({
                       id: portfolio.id,
                       name: `Portfolio #${portfolio.id}`,
                       totalValue: totalPortfolioValue,
-                      entryValue: entryValue,
-                      totalPnl: totalPnl,
-                      totalPnlPercentage: totalPnlPercentage,
                       status: hasFunds ? 'FUNDED' : hasRegisteredAssets ? 'EMPTY' : 'NEW',
                       targetAPY: yieldPercent,
                       riskLevel,

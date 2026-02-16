@@ -9,10 +9,8 @@ interface Asset {
   address: string;
   allocation: number;
   value: number;
-  change24h: number; // Now represents PnL percentage from entry (not 24h change)
+  change24h: number;
   price?: number;
-  entryPrice?: number;
-  pnl?: number; // Absolute PnL in USD
   chain?: string;
 }
 
@@ -29,9 +27,6 @@ interface Portfolio {
   id: number;
   name: string;
   totalValue: number;
-  entryValue?: number; // Original investment value
-  totalPnl?: number; // Total PnL in USD
-  totalPnlPercentage?: number; // Total PnL as percentage
   status: 'FUNDED' | 'EMPTY' | 'NEW';
   targetAPY: number;
   riskLevel: 'Low' | 'Medium' | 'High';
@@ -128,28 +123,14 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Key Metrics */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Current Value</p>
+                  <p className="text-[#86868b] text-sm mb-1">Total Value</p>
                   <p className="text-2xl font-bold text-[#1d1d1f]">{formatCurrency(portfolio.totalValue)}</p>
-                  {portfolio.entryValue && (
-                    <p className="text-xs text-[#86868b] mt-1">Entry: {formatCurrency(portfolio.entryValue)}</p>
-                  )}
                 </div>
                 <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Total P&L</p>
-                  {portfolio.totalPnl !== undefined ? (
-                    <>
-                      <p className={`text-2xl font-bold ${portfolio.totalPnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                        {portfolio.totalPnl >= 0 ? '+' : ''}{formatCurrency(portfolio.totalPnl)}
-                      </p>
-                      <p className={`text-sm ${portfolio.totalPnlPercentage && portfolio.totalPnlPercentage >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                        {portfolio.totalPnlPercentage && portfolio.totalPnlPercentage >= 0 ? '+' : ''}{(portfolio.totalPnlPercentage ?? 0).toFixed(2)}%
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-2xl font-bold text-[#34C759]">{portfolio.currentYield}%</p>
-                  )}
+                  <p className="text-[#86868b] text-sm mb-1">Current Yield</p>
+                  <p className="text-2xl font-bold text-[#34C759]">{portfolio.currentYield}%</p>
                 </div>
                 <div className="bg-[#f5f5f7] rounded-xl p-4">
                   <p className="text-[#86868b] text-sm mb-1">Target APY</p>
@@ -183,35 +164,16 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
                             'bg-[#FF3B30]'
                           }`} />
                           <span className="font-semibold text-[#1d1d1f]">{asset.symbol}</span>
-                          {asset.chain && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-white rounded text-[#86868b]">{asset.chain}</span>
-                          )}
                         </div>
                         <span className="text-[#86868b] text-sm">{asset.allocation}%</span>
                       </div>
-                      {/* Price info row */}
-                      {asset.price && (
-                        <div className="flex items-center gap-4 text-xs text-[#86868b] mb-2">
-                          <span>Current: ${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: asset.price < 1 ? 4 : 2 })}</span>
-                          {asset.entryPrice && (
-                            <span>Entry: ${asset.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: asset.entryPrice < 1 ? 4 : 2 })}</span>
-                          )}
-                        </div>
-                      )}
                       <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[#1d1d1f] font-medium">{formatCurrency(asset.value)}</span>
-                          {asset.pnl !== undefined && (
-                            <span className={`ml-2 text-sm ${asset.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                              ({asset.pnl >= 0 ? '+' : ''}{formatCurrency(asset.pnl)})
-                            </span>
-                          )}
-                        </div>
-                        <span className={`text-sm font-medium flex items-center gap-1 ${
+                        <span className="text-[#1d1d1f] font-medium">{formatCurrency(asset.value)}</span>
+                        <span className={`text-sm flex items-center gap-1 ${
                           asset.change24h >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'
                         }`}>
                           {asset.change24h >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                          {asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%
+                          {Math.abs(asset.change24h).toFixed(2)}%
                         </span>
                       </div>
                       {/* Allocation Bar */}
