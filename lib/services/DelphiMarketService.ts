@@ -490,6 +490,23 @@ export class DelphiMarketService {
     // Crypto predictions first (more relevant to portfolio), then external markets
     const allPredictions = [...cryptoPredictions, ...realPredictions];
     
+    // 🔥 NEW: Inject 5-minute BTC signal from Polymarket binary markets
+    try {
+      const { Polymarket5MinService } = await import('./Polymarket5MinService');
+      const fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+      if (fiveMinSignal) {
+        const fiveMinPrediction = Polymarket5MinService.signalToPredictionMarket(fiveMinSignal);
+        // Insert at the top — 5-min signals are the most time-sensitive
+        allPredictions.unshift(fiveMinPrediction);
+        logger.info('Injected 5-min BTC signal into predictions', { 
+          component: 'DelphiMarket', 
+          data: { direction: fiveMinSignal.direction, probability: fiveMinSignal.probability, confidence: fiveMinSignal.confidence }
+        });
+      }
+    } catch (error) {
+      logger.warn('5-min BTC signal unavailable, continuing without it', { component: 'DelphiMarket' });
+    }
+    
     // If we have predictions, return them
     if (allPredictions.length > 0) {
       logger.info(`Returning ${allPredictions.length} total predictions (${cryptoPredictions.length} crypto + ${realPredictions.length} ${usedSource})`, { component: 'DelphiMarket' });
