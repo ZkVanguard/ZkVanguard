@@ -64,6 +64,7 @@ function createStrongDownSignal(): FiveMinBTCSignal {
     recommendation: 'HEDGE_SHORT',
     signalStrength: 'STRONG',
     timeRemainingSeconds: 180,
+    windowEndTime: Date.now() + 180_000,
     fetchedAt: Date.now(),
     question: 'Will Bitcoin go Up or Down from $97,500.00?',
     sourceUrl: 'https://polymarket.com/event/test-down-001',

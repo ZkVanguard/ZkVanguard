@@ -18,8 +18,11 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [countdown, setCountdown] = useState<number>(0);
+  const [lastUpdated, setLastUpdated] = useState<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const windowEndRef = useRef<number>(0);
+  const lastMarketIdRef = useRef<string>('');
 
   const fetchSignal = useCallback(async () => {
     try {
@@ -31,7 +34,13 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
       
       if (latestSignal) {
         setSignal(latestSignal);
-        setCountdown(latestSignal.timeRemainingSeconds);
+        setLastUpdated(Date.now());
+        // Only update the window end time when we get a NEW market (different window)
+        // This prevents countdown from jumping back to stale cached timeRemainingSeconds
+        if (latestSignal.marketId !== lastMarketIdRef.current) {
+          windowEndRef.current = latestSignal.windowEndTime || (Date.now() + latestSignal.timeRemainingSeconds * 1000);
+          lastMarketIdRef.current = latestSignal.marketId;
+        }
         setError(null);
       } else {
         setError('No active 5-min market');
@@ -56,18 +65,22 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
     };
   }, [fetchSignal]);
 
-  // Countdown timer (tick every second)
+  // Countdown timer: compute from absolute windowEndTime (no dependency on countdown state)
   useEffect(() => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    if (countdown > 0) {
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    }
+    countdownRef.current = setInterval(() => {
+      if (windowEndRef.current > 0) {
+        const remaining = Math.max(0, Math.floor((windowEndRef.current - Date.now()) / 1000));
+        setCountdown(remaining);
+        // Force immediate re-fetch when window expires to get the next market
+        if (remaining === 0 && lastMarketIdRef.current) {
+          fetchSignal();
+        }
+      }
+    }, 1000);
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [countdown]);
+  }, [fetchSignal]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -107,6 +120,16 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
       ? 'bg-blue-100 text-blue-700 border-blue-300' 
       : 'bg-gray-100 text-gray-500 border-gray-300';
 
+  // Normalize probabilities so they always sum to exactly 100%
+  const rawUp = Math.round(signal.upProbability);
+  const rawDown = Math.round(signal.downProbability);
+  const total = rawUp + rawDown;
+  const displayUp = total !== 100 ? Math.round((signal.upProbability / (signal.upProbability + signal.downProbability)) * 100) : rawUp;
+  const displayDown = 100 - displayUp;
+
+  // "Updated X s ago" for freshness
+  const updatedAgo = lastUpdated > 0 ? Math.floor((Date.now() - lastUpdated) / 1000) : 0;
+
   return (
     <div className={`bg-white/90 backdrop-blur-xl rounded-[20px] border ${isStrong ? (isUp ? 'border-emerald-300 shadow-emerald-100' : 'border-red-300 shadow-red-100') : 'border-gray-200/60'} shadow-sm transition-all duration-300`}>
       {/* Header */}
@@ -122,6 +145,9 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
             </span>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            {updatedAgo > 0 && (
+              <span className="text-[9px] text-gray-400 mr-1">{updatedAgo}s ago</span>
+            )}
             <Clock className="w-3 h-3" />
             <span className={countdown < 60 ? 'text-red-500 font-semibold animate-pulse' : ''}>
               {formatTime(countdown)}
@@ -171,16 +197,16 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
         <div className="mt-3 relative h-2 bg-gray-100 rounded-full overflow-hidden">
           <div
             className="absolute left-0 top-0 h-full bg-emerald-500 rounded-full transition-all duration-500"
-            style={{ width: `${signal.upProbability}%` }}
+            style={{ width: `${displayUp}%` }}
           />
           <div
             className="absolute right-0 top-0 h-full bg-red-500 rounded-full transition-all duration-500"
-            style={{ width: `${signal.downProbability}%` }}
+            style={{ width: `${displayDown}%` }}
           />
         </div>
         <div className="flex justify-between mt-1 text-[10px] text-gray-400">
-          <span>UP {signal.upProbability.toFixed(0)}%</span>
-          <span>DOWN {signal.downProbability.toFixed(0)}%</span>
+          <span>UP {displayUp}%</span>
+          <span>DOWN {displayDown}%</span>
         </div>
       </div>
 

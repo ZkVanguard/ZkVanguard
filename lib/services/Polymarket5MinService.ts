@@ -39,8 +39,10 @@ export interface FiveMinBTCSignal {
   recommendation: 'HEDGE_SHORT' | 'HEDGE_LONG' | 'WAIT';
   /** Signal strength: how strong the directional conviction is */
   signalStrength: 'STRONG' | 'MODERATE' | 'WEAK';
-  /** Seconds remaining in this 5-min window */
+  /** Seconds remaining in this 5-min window (snapshot at fetch time) */
   timeRemainingSeconds: number;
+  /** Absolute timestamp (ms) when this 5-min window ends */
+  windowEndTime: number;
   /** When this signal was fetched */
   fetchedAt: number;
   /** Raw market question from Polymarket */
@@ -283,9 +285,11 @@ export class Polymarket5MinService {
 
       // Calculate time remaining based on market end time
       let timeRemainingSeconds = 300; // Default 5 minutes
+      let windowEndTime = Date.now() + 300_000; // Default: 5 min from now
       const endDateStr = market.endDate as string;
       if (endDateStr) {
         const endTime = new Date(endDateStr).getTime();
+        windowEndTime = endTime;
         timeRemainingSeconds = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
       }
 
@@ -333,6 +337,7 @@ export class Polymarket5MinService {
         recommendation,
         signalStrength,
         timeRemainingSeconds,
+        windowEndTime,
         fetchedAt: Date.now(),
         question,
         sourceUrl: `https://polymarket.com/event/${slug || marketId}`,
@@ -364,6 +369,12 @@ export class Polymarket5MinService {
    * Add signal to history (keep last 30 minutes)
    */
   private static addToHistory(signal: FiveMinBTCSignal): void {
+    // Only add if this is a different market window (deduplicate by marketId)
+    if (this.signalHistory.length > 0 && this.signalHistory[0].marketId === signal.marketId) {
+      // Update the existing entry with fresh data instead of adding a duplicate
+      this.signalHistory[0] = signal;
+      return;
+    }
     this.signalHistory.unshift(signal);
     // Keep max 50 entries (about 4 hours at 5-min intervals)
     if (this.signalHistory.length > 50) {
