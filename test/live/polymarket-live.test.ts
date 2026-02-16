@@ -11,7 +11,7 @@
  * Timeout is generous (30 s) because Polymarket can be slow.
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 
 // ─── Direct API helpers (bypass service layer to test raw APIs) ──────
 
@@ -164,6 +164,12 @@ describe('LIVE: Full Polymarket5MinService (no mocks)', () => {
     // Import the real service (no jest.mock in this file)
     const mod = await import('../../lib/services/Polymarket5MinService');
     Polymarket5MinService = mod.Polymarket5MinService;
+  });
+
+  afterAll(() => {
+    // Stop ticker to prevent open handle warnings
+    if (Polymarket5MinService?.stopTicker) Polymarket5MinService.stopTicker();
+    if (Polymarket5MinService?.resetForTesting) Polymarket5MinService.resetForTesting();
   });
 
   it('should fetch a real 5-min BTC signal end-to-end', async () => {

@@ -130,6 +130,13 @@ describe('Polymarket5MinService', () => {
     mockFetch.mockReset();
     const { cache } = require('../../lib/utils/cache');
     cache.get.mockReturnValue(null);
+    // Reset all static service state (BTC price cache, history, inflight, ticker)
+    Polymarket5MinService.resetForTesting();
+  });
+
+  afterAll(() => {
+    // Ensure the ticker is stopped so Jest can exit cleanly
+    Polymarket5MinService.stopTicker();
   });
 
   // ── Signal Parsing ────────────────────────────────────
