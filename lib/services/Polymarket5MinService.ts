@@ -265,7 +265,7 @@ export class Polymarket5MinService {
     this.boundaryTimeout = setTimeout(async () => {
       logger.info('Window boundary approaching — pre-fetching next signal');
       // Invalidate cache so next fetch is guaranteed fresh
-      cache.del('polymarket-5min-btc-latest');
+      cache.invalidate('polymarket-5min-btc-latest');
       await this.tickOnce();
     }, msUntilBoundary);
   }
