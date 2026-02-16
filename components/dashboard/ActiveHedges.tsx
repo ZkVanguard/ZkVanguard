@@ -151,6 +151,61 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     }
   };
 
+  // EIP-712 signature helper for OPENING hedges — proves user authorized this hedge
+  const signOpenHedge = async (asset: string, side: string, collateral: number, leverage: number): Promise<{ signature: string; timestamp: number } | null> => {
+    try {
+      if (!walletClient) {
+        alert('Wallet not connected. Please connect your wallet first.');
+        return null;
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      const domain = {
+        name: 'Chronos Vanguard',
+        version: '1',
+        chainId: 338,
+        verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`,
+      };
+      const types = {
+        OpenHedge: [
+          { name: 'asset', type: 'string' },
+          { name: 'side', type: 'string' },
+          { name: 'collateral', type: 'uint256' },
+          { name: 'leverage', type: 'uint256' },
+          { name: 'timestamp', type: 'uint256' },
+        ],
+      } as const;
+      const message = {
+        asset,
+        side,
+        collateral: BigInt(Math.round(collateral * 1e6)), // USDC 6 decimals
+        leverage: BigInt(leverage),
+        timestamp: BigInt(timestamp),
+      };
+
+      logger.info('🔑 Requesting wallet signature for hedge execution', {
+        component: 'ActiveHedges',
+        wallet: walletClient.account?.address,
+        asset,
+        side,
+      });
+
+      const signature = await walletClient.signTypedData({
+        domain,
+        types,
+        primaryType: 'OpenHedge',
+        message,
+      });
+
+      logger.info('✅ Hedge execution signed by wallet', { component: 'ActiveHedges', signer: walletClient.account?.address });
+      return { signature, timestamp };
+    } catch (err) {
+      logger.warn('Wallet signature declined or failed for hedge execution', { component: 'ActiveHedges', error: err });
+      return null;
+    }
+  };
+
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
     totalHedges: 0,
@@ -327,48 +382,68 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     if (!rec.actions || rec.actions.length === 0) return;
     
     const action = rec.actions[0];
+    
+    // REQUIRE wallet connection for ZK-private execution
+    if (!address) {
+      alert('Please connect your wallet first to execute hedges.');
+      return;
+    }
+    if (!walletClient) {
+      alert('Wallet not ready. Please disconnect and reconnect your wallet.');
+      return;
+    }
+
+    // Determine collateral and leverage
+    const actionLeverage = action.leverage || 5;
+    const collateral = action.size; // The size IS the collateral amount in USDC
+    
+    // Map asset to pairIndex for on-chain execution
+    const pairIndexMap: Record<string, number> = { BTC: 0, ETH: 1, CRO: 2, ATOM: 3, DOGE: 4, SOL: 5 };
+    const pairIndex = pairIndexMap[action.asset.toUpperCase()] ?? 0;
+    const isLong = action.action === 'LONG';
+    
+    // Step 1: Request EIP-712 wallet signature (user must approve)
+    const signResult = await signOpenHedge(
+      action.asset,
+      action.action,
+      collateral,
+      actionLeverage
+    );
+    
+    if (!signResult) {
+      // User declined the signature
+      return;
+    }
+    
     setExecutingRecommendation(rec.strategy);
     
     try {
-      // Get current price for the asset
-      let currentPrice = 1000;
-      try {
-        const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-        const tickerData = await tickerResponse.json();
-        const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${action.asset}_USDT`);
-        if (ticker) currentPrice = parseFloat(ticker.a);
-      } catch (e) {
-        logger.warn('Failed to fetch price, using fallback', { component: 'ActiveHedges' });
-      }
-
-      const notionalValue = action.size * currentPrice;
-      
-      const response = await fetch('/api/agents/hedging/execute', {
+      // Step 2: Execute via ZK-private gasless endpoint (relayer sends tx, user stays hidden)
+      const response = await fetch('/api/agents/hedging/open-onchain-gasless', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          portfolioId: 1,
-          asset: action.asset,
-          side: action.action,
-          notionalValue,
-          leverage: action.leverage || 5,
+          pairIndex,
+          collateralAmount: collateral,
+          leverage: actionLeverage,
+          isLong,
+          walletAddress: address, // ZK-bound to hedge via commitment (never appears on-chain)
+          signature: signResult.signature,
+          timestamp: signResult.timestamp,
           reason: `AI Recommended: ${rec.description}`,
-          autoApprovalEnabled: true,
-          autoApprovalThreshold: 1000000,
-          walletAddress: address, // Associate hedge with connected wallet
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        logger.info('✅ AI Hedge executed', { component: 'ActiveHedges', data });
+        logger.info('✅ ZK-Private hedge executed via gasless relay', { component: 'ActiveHedges', data });
         
         // Refresh hedges and recommendations
         window.dispatchEvent(new Event('hedgeAdded'));
         loadRecommendations();
       } else {
         const error = await response.json();
-        logger.error('❌ Failed to execute AI hedge', undefined, { component: 'ActiveHedges', data: error });
+        logger.error('❌ Failed to execute ZK hedge', undefined, { component: 'ActiveHedges', data: error });
         alert(`Failed to execute: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
