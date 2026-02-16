@@ -81,6 +81,11 @@ const SettingsModal = nextDynamic(() => import('@/components/dashboard/SettingsM
 const MockUSDCFaucet = nextDynamic(() => import('@/components/dashboard/MockUSDCFaucet').then(mod => ({ default: mod.MockUSDCFaucet })), {
   ssr: false
 });
+
+const FiveMinSignalWidget = nextDynamic(() => import('@/components/dashboard/FiveMinSignalWidget').then(mod => ({ default: mod.FiveMinSignalWidget })), {
+  loading: () => <LoadingSkeleton height="h-28" />,
+  ssr: false
+});
 // Reusable loading skeleton
 function LoadingSkeleton({ height = "h-40" }: { height?: string }) {
   return (
@@ -671,6 +676,18 @@ export default function DashboardPage() {
                 onNavigateToHedges={() => setActiveNav('hedges')}
               />
             </Card>
+
+            {/* Real-time 5-Min BTC Signal */}
+            <FiveMinSignalWidget
+              onQuickHedge={(direction) => {
+                setHedgeInitialValues({
+                  asset: 'BTC',
+                  side: direction,
+                  reason: '5-min Polymarket signal — strong directional confidence',
+                });
+                setHedgeModalOpen(true);
+              }}
+            />
             
             {/* Stats Grid - Stack on mobile, 2 cols on tablet+ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-stretch">
