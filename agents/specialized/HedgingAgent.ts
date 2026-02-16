@@ -11,6 +11,7 @@ import { HedgeExecutorClient, HedgeExecutorConfig, OnChainHedgeResult } from '@i
 import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
+import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/Polymarket5MinService';
 
 /** Extended client interface for duck-typing compatibility with varying implementations */
 interface MoonlanderClientExt {
@@ -67,6 +68,11 @@ export class HedgingAgent extends BaseAgent {
   private onChainHedges: Map<string, OnChainHedgeResult> = new Map();
   private monitoringInterval?: NodeJS.Timeout;
 
+  // ── Proactive 5-min signal (pushed by ticker) ──────────
+  private cachedFiveMinSignal: FiveMinBTCSignal | null = null;
+  private cachedFiveMinHistory: FiveMinSignalHistory | null = null;
+  private fiveMinUnsubscribers: (() => void)[] = [];
+
   constructor(
     agentId: string,
     private provider: ethers.Provider,
@@ -112,6 +118,31 @@ export class HedgingAgent extends BaseAgent {
       await this.moonlanderClient.initialize();
       await this.mcpClient.connect();
 
+      // Subscribe to the proactive 5-min signal ticker — never late
+      try {
+        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+        this.fiveMinUnsubscribers.push(
+          Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
+            this.cachedFiveMinSignal = evt.signal;
+            this.cachedFiveMinHistory = evt.history;
+          }),
+          Polymarket5MinService.on('signal:strong-alert', (evt: SignalEvent) => {
+            logger.info('HedgingAgent: STRONG 5-min signal received — urgent hedge may be needed', {
+              direction: evt.signal.direction,
+              probability: evt.signal.probability,
+              recommendation: evt.signal.recommendation,
+              agentId: this.agentId,
+            });
+          }),
+        );
+        // Seed with current signal
+        this.cachedFiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+        this.cachedFiveMinHistory = Polymarket5MinService.getSignalHistory();
+        logger.info('HedgingAgent subscribed to 5-min signal ticker', { agentId: this.agentId });
+      } catch {
+        logger.debug('HedgingAgent: 5-min signal ticker unavailable at init');
+      }
+
       logger.info('HedgingAgent initialized', { agentId: this.agentId });
     } catch (error) {
       logger.error('Failed to initialize HedgingAgent', { error });
@@ -131,6 +162,11 @@ export class HedgingAgent extends BaseAgent {
    */
   protected async onShutdown(): Promise<void> {
     try {
+      // Unsubscribe from 5-min signal ticker
+      for (const unsub of this.fiveMinUnsubscribers) unsub();
+      this.fiveMinUnsubscribers = [];
+      this.cachedFiveMinSignal = null;
+      this.cachedFiveMinHistory = null;
       await this.mcpClient.disconnect();
       logger.info('HedgingAgent shutdown complete', { agentId: this.agentId });
     } catch (error) {
@@ -222,24 +258,25 @@ export class HedgingAgent extends BaseAgent {
         p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
       );
 
-      // ⚡ NEW: Get Polymarket 5-minute BTC signal for real-time micro-hedging
-      let fiveMinSignal: import('../../lib/services/Polymarket5MinService').FiveMinBTCSignal | null = null;
-      let fiveMinSignalHistory: import('../../lib/services/Polymarket5MinService').FiveMinSignalHistory | null = null;
-      try {
-        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
-        fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
-        fiveMinSignalHistory = Polymarket5MinService.getSignalHistory();
-        if (fiveMinSignal) {
-          logger.info('5-min BTC signal available for hedge analysis', {
-            direction: fiveMinSignal.direction,
-            probability: fiveMinSignal.probability,
-            confidence: fiveMinSignal.confidence,
-            recommendation: fiveMinSignal.recommendation,
-            streak: fiveMinSignalHistory?.streak,
-          });
-        }
-      } catch {
-        logger.debug('5-min signal unavailable for hedge analysis');
+      // ⚡ Proactive 5-min signal — always fresh via ticker subscription (no fetch delay)
+      let fiveMinSignal: FiveMinBTCSignal | null = this.cachedFiveMinSignal;
+      let fiveMinSignalHistory: FiveMinSignalHistory | null = this.cachedFiveMinHistory;
+      
+      // Freshness check: only use if less than 20 s old
+      if (fiveMinSignal && (Date.now() - fiveMinSignal.fetchedAt) > 20_000) {
+        logger.debug('HedgingAgent: 5-min signal too stale, discarding', { ageMs: Date.now() - fiveMinSignal.fetchedAt });
+        fiveMinSignal = null;
+        fiveMinSignalHistory = null;
+      }
+      if (fiveMinSignal) {
+        logger.info('5-min BTC signal available for hedge analysis (via ticker)', {
+          direction: fiveMinSignal.direction,
+          probability: fiveMinSignal.probability,
+          confidence: fiveMinSignal.confidence,
+          recommendation: fiveMinSignal.recommendation,
+          streak: fiveMinSignalHistory?.streak,
+          ageMs: Date.now() - fiveMinSignal.fetchedAt,
+        });
       }
 
       // Determine hedge market (e.g., BTC-USD-PERP for BTC exposure)

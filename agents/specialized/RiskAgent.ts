@@ -7,6 +7,7 @@ import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
 import { AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
 import { ethers } from 'ethers';
+import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
 
 /**
  * Risk Agent specializing in risk analysis and assessment
@@ -15,6 +16,10 @@ export class RiskAgent extends BaseAgent {
   private provider?: ethers.Provider;
   private signer?: ethers.Wallet | ethers.Signer;
   private rwaManagerAddress?: string;
+
+  // ── Proactive 5-min signal (pushed by ticker) ──────────
+  private cachedFiveMinSignal: FiveMinBTCSignal | null = null;
+  private fiveMinUnsubscribers: (() => void)[] = [];
 
   constructor(
     agentId: string,
@@ -33,6 +38,27 @@ export class RiskAgent extends BaseAgent {
     
     // Connect to MCP Server for data feeds
     await this.connectToDataSources();
+
+    // Subscribe to the proactive 5-min signal ticker — never late
+    try {
+      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+      this.fiveMinUnsubscribers.push(
+        Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
+          this.cachedFiveMinSignal = evt.signal;
+        }),
+        Polymarket5MinService.on('signal:direction-flip', (evt: SignalEvent) => {
+          logger.info('RiskAgent: 5-min direction flipped', {
+            from: evt.previous?.direction, to: evt.signal.direction,
+            probability: evt.signal.probability, agentId: this.id,
+          });
+        }),
+      );
+      // Seed with current signal so we're never empty on first assessment
+      this.cachedFiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+      logger.info('RiskAgent subscribed to 5-min signal ticker', { agentId: this.id });
+    } catch {
+      logger.debug('RiskAgent: 5-min signal ticker unavailable at init');
+    }
     
     logger.info('Risk Agent initialized successfully', { agentId: this.id });
   }
@@ -108,6 +134,10 @@ export class RiskAgent extends BaseAgent {
 
   protected async onShutdown(): Promise<void> {
     logger.info('Risk Agent shutting down...', { agentId: this.id });
+    // Unsubscribe from 5-min signal ticker
+    for (const unsub of this.fiveMinUnsubscribers) unsub();
+    this.fiveMinUnsubscribers = [];
+    this.cachedFiveMinSignal = null;
     await this.disconnectFromDataSources();
   }
 
@@ -445,27 +475,28 @@ REC3: [third recommendation]`;
         // Probability 45-55: genuinely uncertain, skip (doesn't skew sentiment)
       }
       
-      // 🔥 NEW: Factor in Polymarket 5-minute BTC signal for real-time micro-sentiment
-      try {
-        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
-        const fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
-        if (fiveMinSignal && fiveMinSignal.signalStrength !== 'WEAK') {
-          // 5-min signals carry extra weight (2x) because they reflect real-time crowd conviction
+      // 🔥 Proactive 5-min signal — always fresh via ticker subscription (no fetch delay)
+      const fiveMinSignal = this.cachedFiveMinSignal;
+      if (fiveMinSignal && fiveMinSignal.signalStrength !== 'WEAK') {
+        // Check freshness: only use signals less than 20 s old
+        const signalAge = Date.now() - fiveMinSignal.fetchedAt;
+        if (signalAge < 20_000) {
           const weight = fiveMinSignal.signalStrength === 'STRONG' ? 3 : 2;
           if (fiveMinSignal.direction === 'DOWN') {
             bearishCount += weight;
           } else {
             bullishCount += weight;
           }
-          logger.info('5-min BTC signal factored into sentiment', {
+          logger.info('5-min BTC signal factored into sentiment (via ticker)', {
             direction: fiveMinSignal.direction,
             probability: fiveMinSignal.probability,
             weight,
             signalStrength: fiveMinSignal.signalStrength,
+            ageMs: signalAge,
           });
+        } else {
+          logger.debug('5-min signal too stale, skipped', { ageMs: signalAge });
         }
-      } catch {
-        // 5-min signal unavailable — continue with standard sentiment
       }
       
       // Determine overall sentiment

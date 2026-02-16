@@ -8,6 +8,7 @@
 import { logger } from '../../lib/utils/logger';
 import { X402FacilitatorService } from '../../lib/services/x402-facilitator';
 import { CronosNetwork } from '@crypto.com/facilitator-client';
+import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
 
 // Price thresholds for different alert levels
 export interface PriceAlert {
@@ -55,6 +56,10 @@ export class PriceMonitorAgent {
   private x402Service: X402FacilitatorService;
   private subscribers: Set<(event: MonitorEvent) => void> = new Set();
 
+  // ── Proactive 5-min signal (pushed by ticker) ──────────
+  private cachedFiveMinSignal: FiveMinBTCSignal | null = null;
+  private fiveMinUnsubscribers: (() => void)[] = [];
+
   constructor(config: Partial<MonitorConfig> = {}) {
     this.config = {
       pollingIntervalMs: config.pollingIntervalMs || 10000, // 10 seconds default
@@ -77,6 +82,25 @@ export class PriceMonitorAgent {
     this.isRunning = true;
     logger.info('Starting price monitor agent');
     this.emit({ type: 'agent_started', timestamp: Date.now() });
+
+    // Subscribe to the proactive 5-min signal ticker — always fresh, zero fetch delay
+    try {
+      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+      this.fiveMinUnsubscribers.push(
+        Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
+          this.cachedFiveMinSignal = evt.signal;
+        }),
+        Polymarket5MinService.on('signal:strong-alert', (evt: SignalEvent) => {
+          // Immediately process strong signals — don't wait for next poll
+          const btcPrice = this.priceHistory.get('BTC')?.at(-1) ?? null;
+          this.handleFiveMinSignal(evt.signal, btcPrice);
+        }),
+      );
+      this.cachedFiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+      logger.info('PriceMonitorAgent subscribed to 5-min signal ticker');
+    } catch {
+      logger.debug('PriceMonitorAgent: 5-min signal ticker unavailable');
+    }
 
     // Initial price fetch
     await this.fetchAllPrices();
@@ -103,6 +127,10 @@ export class PriceMonitorAgent {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
+    // Unsubscribe from 5-min signal ticker
+    for (const unsub of this.fiveMinUnsubscribers) unsub();
+    this.fiveMinUnsubscribers = [];
+    this.cachedFiveMinSignal = null;
     logger.info('Price monitor agent stopped');
     this.emit({ type: 'agent_stopped', timestamp: Date.now() });
   }
@@ -127,48 +155,11 @@ export class PriceMonitorAgent {
       }
     }
 
-    // ⚡ NEW: Check Polymarket 5-minute BTC signal for real-time hedge triggers
-    try {
-      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
-      const fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
-      
-      if (fiveMinSignal && fiveMinSignal.signalStrength === 'STRONG') {
-        const btcPrice = prices.get('BTC');
-        
-        // Emit a special 5-min signal event that the dashboard can subscribe to
-        this.emit({
-          type: 'five_min_signal',
-          signal: fiveMinSignal,
-          price: btcPrice || null,
-          timestamp: Date.now(),
-        } as MonitorEvent);
-
-        // Auto-trigger hedge alert if signal is STRONG DOWN
-        if (fiveMinSignal.recommendation === 'HEDGE_SHORT' && btcPrice) {
-          logger.info('⚡ 5-Min STRONG DOWN signal — triggering auto-hedge alert', {
-            direction: fiveMinSignal.direction,
-            probability: fiveMinSignal.probability,
-            confidence: fiveMinSignal.confidence,
-            btcPrice: btcPrice.price,
-          });
-          
-          // Create a synthetic alert for the hedge action
-          await this.handleAlertTriggered(
-            {
-              id: `5min-auto-${Date.now()}`,
-              symbol: 'BTC',
-              type: 'change_percent',
-              threshold: 0,
-              action: 'hedge',
-              active: true,
-              createdAt: Date.now(),
-            },
-            btcPrice
-          );
-        }
-      }
-    } catch {
-      // 5-min signal unavailable — continue with standard monitoring
+    // ⚡ 5-min signal from ticker (no fetch — already cached and fresh)
+    const fiveMinSignal = this.cachedFiveMinSignal;
+    if (fiveMinSignal && fiveMinSignal.signalStrength === 'STRONG') {
+      const btcPrice = prices.get('BTC') || null;
+      this.handleFiveMinSignal(fiveMinSignal, btcPrice);
     }
 
     // Emit price update event
@@ -177,6 +168,43 @@ export class PriceMonitorAgent {
       prices: Object.fromEntries(prices),
       timestamp: Date.now(),
     });
+  }
+
+  /**
+   * Process a STRONG 5-min signal — emit event + auto-hedge on STRONG DOWN.
+   * Called both from the monitoring loop and from the ticker's strong-alert event.
+   */
+  private async handleFiveMinSignal(signal: FiveMinBTCSignal, btcPrice: PriceData | null): Promise<void> {
+    // Emit a special 5-min signal event that the dashboard can subscribe to
+    this.emit({
+      type: 'five_min_signal',
+      signal,
+      price: btcPrice,
+      timestamp: Date.now(),
+    } as MonitorEvent);
+
+    // Auto-trigger hedge alert if signal is STRONG DOWN
+    if (signal.recommendation === 'HEDGE_SHORT' && btcPrice) {
+      logger.info('⚡ 5-Min STRONG DOWN signal — triggering auto-hedge alert', {
+        direction: signal.direction,
+        probability: signal.probability,
+        confidence: signal.confidence,
+        btcPrice: btcPrice.price,
+      });
+      
+      await this.handleAlertTriggered(
+        {
+          id: `5min-auto-${Date.now()}`,
+          symbol: 'BTC',
+          type: 'change_percent',
+          threshold: 0,
+          action: 'hedge',
+          active: true,
+          createdAt: Date.now(),
+        },
+        btcPrice
+      );
+    }
   }
 
   /**

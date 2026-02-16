@@ -1,5 +1,5 @@
 /**
- * Polymarket 5-Minute BTC Signal Service (High-Performance)
+ * Polymarket 5-Minute BTC Signal Service (High-Performance + Proactive Ticker)
  *
  * Fetches real-time "Bitcoin Up or Down" 5-minute binary markets from Polymarket.
  * Markets resolve via Chainlink BTC/USD data stream.
@@ -12,11 +12,18 @@
  *   - Signal history managed as a bounded ring buffer (no slice/filter per call)
  *   - Cached history snapshot invalidated only when buffer mutates
  *
+ * Proactive Ticker:
+ *   - Background 10 s polling loop pushes updates to all subscribed agents
+ *   - Emits typed events: signal:update, signal:direction-flip, signal:new-window, signal:strong-alert
+ *   - Agents never poll individually — they subscribe once and always have fresh data
+ *   - Automatically aligns to 5-min window boundaries for zero-delay transitions
+ *
  * Signal Flow:
  *   Polymarket 5-min market → parse UP/DOWN probabilities → generate signal
- *   → consumed by RiskAgent, HedgingAgent, PriceMonitorAgent
+ *   → ticker broadcasts → RiskAgent, HedgingAgent, PriceMonitorAgent react instantly
  */
 
+import { EventEmitter } from 'events';
 import { logger } from '@/lib/utils/logger';
 import { cache } from '../utils/cache';
 
@@ -79,6 +86,24 @@ const HISTORY_MAX = 50;
 const HISTORY_WINDOW_MS = 30 * 60 * 1000;
 const SLUG_TIMEOUT_MS = 5_000;
 const BTC_TIMEOUT_MS = 3_000;
+const TICKER_INTERVAL_MS = 10_000;    // Proactive background poll
+const WINDOW_BOUNDARY_LEAD_MS = 2_000; // Pre-fetch 2 s before window boundary
+
+// ─── Ticker Event Types ──────────────────────────────────────────────
+
+export type SignalEventType =
+  | 'signal:update'          // Every tick — latest signal (may be cached)
+  | 'signal:direction-flip'  // Direction changed from previous signal
+  | 'signal:new-window'      // New 5-min market window started
+  | 'signal:strong-alert';   // STRONG signal detected — agents should act NOW
+
+export interface SignalEvent {
+  type: SignalEventType;
+  signal: FiveMinBTCSignal;
+  previous: FiveMinBTCSignal | null;
+  history: FiveMinSignalHistory;
+  timestamp: number;
+}
 
 /** Pre-compiled regex — avoids re-compilation on every parse */
 const TIME_WINDOW_RE = /(\d{1,2}(?::\d{2})?(?:AM|PM)?)\s*[-–]\s*(\d{1,2}:\d{2}(?:AM|PM))\s*(ET|EST|UTC)?/i;
@@ -106,6 +131,144 @@ export class Polymarket5MinService {
 
   // ── Cached BTC price ──────────────────────────────────
   private static btcPriceCache: { price: number; ts: number } = { price: 0, ts: 0 };
+
+  // ── Proactive Ticker ──────────────────────────────────
+  private static emitter = new EventEmitter();
+  private static tickerInterval: ReturnType<typeof setInterval> | null = null;
+  private static boundaryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private static tickerRunning = false;
+  private static lastTickSignal: FiveMinBTCSignal | null = null;
+
+  /**
+   * Subscribe to real-time signal events.
+   * @param event Event type (or '*' is not supported — use specific types)
+   * @param listener Callback invoked with SignalEvent
+   * @returns Unsubscribe function for cleanup
+   *
+   * @example
+   *   const unsub = Polymarket5MinService.on('signal:update', (evt) => {
+   *     console.log(evt.signal.direction, evt.signal.probability);
+   *   });
+   *   // later: unsub();
+   */
+  static on(event: SignalEventType, listener: (evt: SignalEvent) => void): () => void {
+    this.emitter.on(event, listener);
+    // Auto-start ticker on first subscriber
+    if (!this.tickerRunning) this.startTicker();
+    return () => { this.off(event, listener); };
+  }
+
+  /** Remove a specific listener. Auto-stops ticker when last subscriber leaves. */
+  static off(event: SignalEventType, listener: (evt: SignalEvent) => void): void {
+    this.emitter.removeListener(event, listener);
+    // Auto-stop ticker when no subscribers remain
+    if (this.tickerRunning && this.subscriberCount() === 0) {
+      logger.info('Last subscriber removed — auto-stopping ticker');
+      this.stopTicker();
+    }
+  }
+
+  /**
+   * Start the proactive background ticker.
+   * Polls every 10 s and emits typed events. Also schedules a boundary-aligned
+   * fetch 2 s before the current 5-min window ends so agents react instantly
+   * when a new window opens.
+   */
+  static startTicker(): void {
+    if (this.tickerRunning) return;
+    this.tickerRunning = true;
+    logger.info('Polymarket 5-min signal ticker started', { intervalMs: TICKER_INTERVAL_MS });
+
+    // Fire immediately, then every 10 s
+    this.tickOnce();
+    this.tickerInterval = setInterval(() => this.tickOnce(), TICKER_INTERVAL_MS);
+    this.scheduleWindowBoundary();
+  }
+
+  /** Stop the background ticker and release resources */
+  static stopTicker(): void {
+    if (!this.tickerRunning) return;
+    this.tickerRunning = false;
+    if (this.tickerInterval) { clearInterval(this.tickerInterval); this.tickerInterval = null; }
+    if (this.boundaryTimeout) { clearTimeout(this.boundaryTimeout); this.boundaryTimeout = null; }
+    logger.info('Polymarket 5-min signal ticker stopped');
+  }
+
+  /** Whether the background ticker is currently running */
+  static isTickerRunning(): boolean { return this.tickerRunning; }
+
+  /** How many listeners are subscribed across all event types */
+  static subscriberCount(): number {
+    return (['signal:update', 'signal:direction-flip', 'signal:new-window', 'signal:strong-alert'] as const)
+      .reduce((n, ev) => n + this.emitter.listenerCount(ev), 0);
+  }
+
+  /**
+   * Single tick — fetch latest signal, diff against previous, emit events.
+   * Called by the interval and by the boundary scheduler.
+   */
+  private static async tickOnce(): Promise<void> {
+    try {
+      const signal = await this.getLatest5MinSignal();
+      if (!signal) return;
+
+      const prev = this.lastTickSignal;
+      const history = this.getSignalHistory();
+      const base: Omit<SignalEvent, 'type'> = { signal, previous: prev, history, timestamp: Date.now() };
+
+      // Always emit update
+      this.emitter.emit('signal:update', { ...base, type: 'signal:update' } as SignalEvent);
+
+      // Direction flip
+      if (prev && prev.direction !== signal.direction) {
+        logger.info('5-min signal direction FLIPPED', {
+          from: prev.direction, to: signal.direction,
+          probability: signal.probability,
+        });
+        this.emitter.emit('signal:direction-flip', { ...base, type: 'signal:direction-flip' } as SignalEvent);
+      }
+
+      // New window (different marketId)
+      if (prev && prev.marketId !== signal.marketId) {
+        logger.info('New 5-min market window opened', {
+          oldMarketId: prev.marketId, newMarketId: signal.marketId,
+          windowLabel: signal.windowLabel,
+        });
+        this.emitter.emit('signal:new-window', { ...base, type: 'signal:new-window' } as SignalEvent);
+        // Re-schedule boundary for the new window
+        this.scheduleWindowBoundary();
+      }
+
+      // Strong alert
+      if (signal.signalStrength === 'STRONG') {
+        this.emitter.emit('signal:strong-alert', { ...base, type: 'signal:strong-alert' } as SignalEvent);
+      }
+
+      this.lastTickSignal = signal;
+    } catch (err) {
+      logger.warn('Ticker tick failed', { error: err });
+    }
+  }
+
+  /**
+   * Schedule a high-priority fetch 2 s before the current 5-min window ends.
+   * This ensures agents have the new-window signal ≤2 s after it opens.
+   */
+  private static scheduleWindowBoundary(): void {
+    if (this.boundaryTimeout) { clearTimeout(this.boundaryTimeout); this.boundaryTimeout = null; }
+    const sig = this.lastTickSignal;
+    if (!sig || !sig.windowEndTime) return;
+
+    const msUntilBoundary = sig.windowEndTime - Date.now() - WINDOW_BOUNDARY_LEAD_MS;
+    if (msUntilBoundary <= 0) return; // Already past boundary
+
+    this.boundaryTimeout = setTimeout(async () => {
+      logger.info('Window boundary approaching — pre-fetching next signal');
+      // Invalidate cache so next fetch is guaranteed fresh
+      cache.del('polymarket-5min-btc-latest');
+      await this.tickOnce();
+    }, msUntilBoundary);
+  }
 
   /**
    * Get the latest 5-minute BTC UP/DOWN signal from Polymarket.
@@ -491,5 +654,21 @@ export class Polymarket5MinService {
       source: 'polymarket',
       aiSummary: `Polymarket 5-min binary: ${signal.upProbability}% UP / ${signal.downProbability}% DOWN. Volume: $${signal.volume.toFixed(0)}. Signal: ${signal.signalStrength}. ${signal.recommendation === 'WAIT' ? 'No clear directional edge.' : `${signal.recommendation} recommended (${signal.confidence}% confidence).`}`,
     };
+  }
+
+  /**
+   * Reset all internal state — used by tests to avoid cross-test leakage.
+   * @internal
+   */
+  static resetForTesting(): void {
+    this.signalHistory = [];
+    this.historyVersion = 0;
+    this.cachedHistoryVersion = -1;
+    this.cachedHistorySnapshot = null;
+    this.inflight = null;
+    this.btcPriceCache = { price: 0, ts: 0 };
+    this.lastTickSignal = null;
+    this.stopTicker();
+    this.emitter.removeAllListeners();
   }
 }
