@@ -727,7 +727,7 @@ describe('Polymarket5MinService', () => {
 
       const signal = await Polymarket5MinService.getLatest5MinSignal();
       expect(signal).not.toBeNull();
-      expect(signal!.upProbability).toBe(51); // rounded 50.5 → 51
+      expect(signal!.upProbability).toBe(50.5); // 0.505 → 50.5 (1-decimal precision)
     });
   });
 });

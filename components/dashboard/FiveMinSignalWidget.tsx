@@ -62,8 +62,8 @@ const ProbabilityBar = memo(function ProbabilityBar({
         />
       </div>
       <div className="flex justify-between mt-1 text-[10px] text-gray-400">
-        <span>UP {displayUp}%</span>
-        <span>DOWN {displayDown}%</span>
+        <span>UP {displayUp.toFixed(1)}%</span>
+        <span>DOWN {displayDown.toFixed(1)}%</span>
       </div>
     </>
   );
@@ -173,12 +173,12 @@ function formatTime(seconds: number): string {
 }
 
 function normalizeProbs(up: number, down: number): [number, number] {
-  const rUp = Math.round(up);
-  const rDown = Math.round(down);
-  if (rUp + rDown === 100) return [rUp, rDown];
   const sum = up + down;
-  const nUp = Math.round((up / sum) * 100);
-  return [nUp, 100 - nUp];
+  if (sum === 0) return [50, 50];
+  // Keep 1-decimal precision so small shifts are visible (e.g. 50.5 vs 49.5)
+  const nUp = Math.round((up / sum) * 1000) / 10;
+  const nDown = Math.round((100 - nUp) * 10) / 10;
+  return [nUp, nDown];
 }
 
 // ─── Main widget ─────────────────────────────────────────────────────
