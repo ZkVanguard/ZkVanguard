@@ -576,9 +576,19 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
         $20, 'active'
       )
       ON CONFLICT (order_id) DO UPDATE SET
+        asset = CASE WHEN EXCLUDED.asset IS NOT NULL AND EXCLUDED.asset != '' THEN EXCLUDED.asset ELSE hedges.asset END,
+        market = CASE WHEN EXCLUDED.market IS NOT NULL AND EXCLUDED.market != '' THEN EXCLUDED.market ELSE hedges.market END,
+        side = EXCLUDED.side,
+        size = CASE WHEN EXCLUDED.size > 0 THEN EXCLUDED.size ELSE hedges.size END,
+        notional_value = CASE WHEN EXCLUDED.notional_value > 0 THEN EXCLUDED.notional_value ELSE hedges.notional_value END,
+        leverage = CASE WHEN EXCLUDED.leverage > 0 THEN EXCLUDED.leverage ELSE hedges.leverage END,
+        entry_price = COALESCE(EXCLUDED.entry_price, hedges.entry_price),
         tx_hash = COALESCE(EXCLUDED.tx_hash, hedges.tx_hash),
         block_number = COALESCE(EXCLUDED.block_number, hedges.block_number),
         explorer_link = COALESCE(EXCLUDED.explorer_link, hedges.explorer_link),
+        commitment_hash = COALESCE(EXCLUDED.commitment_hash, hedges.commitment_hash),
+        nullifier = COALESCE(EXCLUDED.nullifier, hedges.nullifier),
+        proxy_wallet = COALESCE(EXCLUDED.proxy_wallet, hedges.proxy_wallet),
         on_chain = true,
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
@@ -610,6 +620,55 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
     // If on-chain columns don't exist yet, log and return null (non-fatal)
     console.warn('upsertOnChainHedge failed (migration may not be run yet):', error instanceof Error ? error.message : error);
     return null;
+  }
+}
+
+/**
+ * Resync a hedge's key fields from actual on-chain data.
+ * Fixes stale DB entries that were stored with incorrect values.
+ * Only updates fields that have valid new values (never overwrites with 0/null).
+ */
+export async function resyncOnChainHedge(hedgeIdOnchain: string, data: {
+  asset: string;
+  side: 'LONG' | 'SHORT';
+  collateral: number;
+  leverage: number;
+  entryPrice: number;
+  status?: string;
+  commitmentHash?: string;
+  nullifier?: string;
+}): Promise<void> {
+  try {
+    const notional = data.collateral * data.leverage;
+    const sql = `
+      UPDATE hedges SET
+        asset = CASE WHEN $1 != '' AND $1 != 'UNKNOWN' THEN $1 ELSE asset END,
+        market = CASE WHEN $1 != '' AND $1 != 'UNKNOWN' THEN $1 || '/USD' ELSE market END,
+        side = $2,
+        size = CASE WHEN $3 > 0 THEN $3 ELSE size END,
+        notional_value = CASE WHEN $4 > 0 THEN $4 ELSE notional_value END,
+        leverage = CASE WHEN $5 > 0 THEN $5 ELSE leverage END,
+        entry_price = CASE WHEN $6 > 0 THEN $6 ELSE entry_price END,
+        status = CASE WHEN $7 IS NOT NULL AND $7 != '' THEN $7 ELSE status END,
+        commitment_hash = COALESCE($8, commitment_hash),
+        nullifier = COALESCE($9, nullifier),
+        updated_at = NOW()
+      WHERE hedge_id_onchain = $10 OR order_id = $10
+    `;
+    await query(sql, [
+      data.asset,
+      data.side,
+      data.collateral,
+      notional,
+      data.leverage,
+      data.entryPrice,
+      data.status || null,
+      data.commitmentHash || null,
+      data.nullifier || null,
+      hedgeIdOnchain,
+    ]);
+  } catch (err) {
+    console.warn('resyncOnChainHedge failed:', err instanceof Error ? err.message : err);
   }
 }
 
