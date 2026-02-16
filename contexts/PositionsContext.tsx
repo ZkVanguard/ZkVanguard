@@ -189,10 +189,8 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
                 winRate: 50,
               });
               
-              // Update active hedges count from real data
-              if (snapshotData.hedgeSummary) {
-                setActiveHedgesCount(snapshotData.hedgeSummary.totalHedges || 0);
-              }
+              // Note: hedge count is now sourced from on-chain API only (see fetchHedgeCount)
+              // Do NOT override from snapshot DB data — it may be stale
             }
           }
         } catch (historyError) {
@@ -250,35 +248,74 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [address, fetchPositions]);
 
-  // Fetch active hedge count from DB-backed list API (no RPC calls)
+  // Fetch active hedge count from on-chain ZK hedge API
+  // Architecture: DB-first (Neon cache) → RPC fallback (HedgeExecutor contract)
+  // The /api/agents/hedging/onchain endpoint serves from DB cache (instant, no RPC)
+  // and only falls back to on-chain RPC when the DB is empty.
+  // ZK proxy wallet ownership is resolved via hedge_ownership table,
+  // so gasless ZK hedges are correctly attributed to the user's wallet.
   useEffect(() => {
-    let isMounted = true;
+    if (!address) {
+      setActiveHedgesCount(0);
+      return;
+    }
 
-    const fetchHedgeCount = async () => {
+    let isMounted = true;
+    let lastHedgeFetch = 0;
+
+    const fetchHedgeCount = async (force = false) => {
+      // Client-side debounce: skip if fetched within last 5s (unless forced by hedgeAdded event)
+      const now = Date.now();
+      if (!force && now - lastHedgeFetch < 5000) return;
+
+      // Client-side cache: show cached count immediately, refresh in background
+      const hedgeCacheKey = `hedge-count-${address}`;
+      const cachedCount = cache.get<number>(hedgeCacheKey);
+      if (cachedCount !== null && cachedCount !== undefined && !force) {
+        setActiveHedgesCount(cachedCount);
+        // If cache is fresh (< 30s), skip network call
+        if (now - lastHedgeFetch < 30000) return;
+      }
+
       try {
-        // Use DB-backed /api/agents/hedging/list for instant count (no RPC)
-        const response = await fetch('/api/agents/hedging/list?status=active&includeStats=true');
+        lastHedgeFetch = now;
+        // DB-first on-chain endpoint — same source as ActiveHedges component
+        const response = await dedupedFetch(`/api/agents/hedging/onchain?stats=true&walletAddress=${address}`);
         if (response.ok && isMounted) {
           const data = await response.json();
-          if (data.success) {
-            setActiveHedgesCount(data.count || 0);
+          if (data.success && data.summary) {
+            const count = data.summary.activeCount ?? data.summary.details?.length ?? 0;
+            setActiveHedgesCount(count);
+            // Cache for 30s (matches server-side DB cache TTL)
+            cache.set(hedgeCacheKey, count, 30000);
+          } else {
+            setActiveHedgesCount(0);
+            cache.set(hedgeCacheKey, 0, 30000);
           }
         }
       } catch (err) {
-        logger.error('Error counting hedges from DB', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
+        logger.error('Error counting on-chain ZK hedges', err instanceof Error ? err : undefined, { component: 'PositionsContext' });
       }
     };
 
     fetchHedgeCount();
     
-    // Refresh hedge count every 30 seconds
-    const interval = setInterval(fetchHedgeCount, 30000);
+    // Refresh hedge count every 30 seconds (aligned with server-side DB cache TTL)
+    const interval = setInterval(() => fetchHedgeCount(), 30000);
+
+    // Listen for hedgeAdded events — force refresh bypassing client cache
+    const handleHedgeAdded = () => {
+      logger.debug('🔄 Hedge added event received, refreshing count...', { component: 'PositionsContext' });
+      fetchHedgeCount(true);
+    };
+    window.addEventListener('hedgeAdded', handleHedgeAdded);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      window.removeEventListener('hedgeAdded', handleHedgeAdded);
     };
-  }, []);
+  }, [address]);
 
   // Memoized derived data - calculated once when positions change
   const derived = useMemo<DerivedData | null>(() => {
