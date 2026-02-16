@@ -14,7 +14,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { createHedge } from '@/lib/db/hedges';
+import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
+import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
 import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
@@ -365,6 +366,52 @@ export async function POST(request: NextRequest) {
           const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
           if (ticker) currentPrice = parseFloat(ticker.a);
         } catch { /* use 0 */ }
+
+        // ═══ Save to DB (DB-first cache) so the on-chain API returns it immediately ═══
+        const pairIndexMap: Record<string, number> = { BTC: 0, ETH: 1, CRO: 2, ATOM: 3, DOGE: 4, SOL: 5 };
+        const pairIndex = pairIndexMap[asset.toUpperCase()] ?? 0;
+        const proxyWallet = proxyPDA?.proxyAddress || onChainVaultResult?.proxyAddress || undefined;
+
+        try {
+          await upsertOnChainHedge({
+            hedgeIdOnchain: result.hedgeId,
+            txHash: result.txHash,
+            trader: walletAddress || signer.address,
+            asset: asset.toUpperCase(),
+            side,
+            collateral: parseFloat(collateralAmount),
+            leverage,
+            entryPrice: currentPrice > 0 ? currentPrice : undefined,
+            chain: 'cronos-testnet',
+            chainId: 338,
+            contractAddress: hedgeExecutorAddress,
+            commitmentHash: result.commitmentHash,
+            proxyWallet,
+            walletAddress: walletAddress || signer.address,
+          });
+          logger.info('💾 On-chain hedge saved to DB (DB-first cache)', { hedgeId: result.hedgeId.slice(0, 18) });
+        } catch (dbErr) {
+          logger.error('⚠️ Failed to save on-chain hedge to DB', { error: String(dbErr) });
+        }
+
+        // Register ownership for ZK privacy resolution
+        try {
+          await registerHedgeOwnership(result.commitmentHash, {
+            walletAddress: walletAddress || signer.address,
+            pairIndex,
+            asset: asset.toUpperCase(),
+            side,
+            collateral: parseFloat(collateralAmount),
+            leverage,
+            openedAt: new Date().toISOString(),
+            txHash: result.txHash,
+            onChainHedgeId: result.hedgeId,
+            commitmentHash: result.commitmentHash,
+          });
+          logger.info('🔑 Hedge ownership registered', { hedgeId: result.hedgeId.slice(0, 18) });
+        } catch (ownerErr) {
+          logger.error('⚠️ Failed to register hedge ownership', { error: String(ownerErr) });
+        }
 
         return NextResponse.json({
           success: true,
