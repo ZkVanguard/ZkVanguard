@@ -209,6 +209,7 @@ describe('Polymarket5MinService', () => {
         recommendation: 'HEDGE_LONG',
         signalStrength: 'STRONG',
         timeRemainingSeconds: 200,
+        windowEndTime: Date.now() + 200_000,
         fetchedAt: Date.now() - 5000, // 5s ago — within 15s TTL
         question:
           'Bitcoin Up or Down - February 15, 10:00PM-10:05PM ET',
@@ -424,6 +425,18 @@ describe('Polymarket5MinService', () => {
       expect(signal!.timeRemainingSeconds).toBeLessThanOrEqual(120);
     });
 
+    it('should set windowEndTime as absolute timestamp', async () => {
+      const futureEnd = new Date(Date.now() + 120_000).toISOString();
+      const market = createMockMarket({ endDate: futureEnd });
+      setupFetchMocks(market);
+
+      const signal = await Polymarket5MinService.getLatest5MinSignal();
+      expect(signal!.windowEndTime).toBeDefined();
+      // windowEndTime should be close to the endDate timestamp
+      expect(signal!.windowEndTime).toBeGreaterThan(Date.now() + 100_000);
+      expect(signal!.windowEndTime).toBeLessThanOrEqual(Date.now() + 121_000);
+    });
+
     it('should return very low time remaining for market about to close', async () => {
       const barelyFuture = new Date(Date.now() + 1500).toISOString();
       const market = createMockMarket({ endDate: barelyFuture });
@@ -476,6 +489,41 @@ describe('Polymarket5MinService', () => {
       expect(history).toBeDefined();
       expect(typeof history.avgConfidence).toBe('number');
       expect(history.streak).toBeDefined();
+    });
+
+    it('should deduplicate history entries for the same market window', async () => {
+      // Fetch the same market twice — history should update-in-place, not add duplicates
+      const market = createMockMarket({
+        id: 'dedup-test-market',
+        outcomePrices: '["0.55", "0.45"]',
+        volume: '100',
+      });
+      const { cache } = require('../../lib/utils/cache');
+
+      // First fetch
+      cache.get.mockReturnValue(null);
+      mockFetch.mockReset();
+      setupFetchMocks(market);
+      await Polymarket5MinService.getLatest5MinSignal();
+
+      const historyAfterFirst = Polymarket5MinService.getSignalHistory();
+      const countAfterFirst = historyAfterFirst.signals.filter(
+        (s: FiveMinBTCSignal) => s.marketId === 'dedup-test-market',
+      ).length;
+
+      // Second fetch of the same market
+      cache.get.mockReturnValue(null);
+      mockFetch.mockReset();
+      setupFetchMocks(market);
+      await Polymarket5MinService.getLatest5MinSignal();
+
+      const historyAfterSecond = Polymarket5MinService.getSignalHistory();
+      const countAfterSecond = historyAfterSecond.signals.filter(
+        (s: FiveMinBTCSignal) => s.marketId === 'dedup-test-market',
+      ).length;
+
+      // Should be the same count (updated in place, not duplicated)
+      expect(countAfterSecond).toBe(countAfterFirst);
     });
   });
 
