@@ -649,5 +649,30 @@ describe('Polymarket5MinService', () => {
       const signal = await Polymarket5MinService.getLatest5MinSignal();
       expect(signal).toBeNull();
     });
+
+    it('should skip fully-resolved markets (outcomePrices ["1","0"])', async () => {
+      // A resolved market has prices exactly ["1","0"] or ["0","1"]
+      const resolved = createMockMarket({
+        outcomePrices: '["1", "0"]',
+        closed: true,
+      });
+      setupFetchMocks(resolved);
+
+      const signal = await Polymarket5MinService.getLatest5MinSignal();
+      expect(signal).toBeNull();
+    });
+
+    it('should accept closed-but-unresolved markets with real prices', async () => {
+      // Market is closed for trading but NOT resolved — still has useful data
+      const closedUnresolved = createMockMarket({
+        outcomePrices: '["0.505", "0.495"]',
+        closed: true,
+      });
+      setupFetchMocks(closedUnresolved);
+
+      const signal = await Polymarket5MinService.getLatest5MinSignal();
+      expect(signal).not.toBeNull();
+      expect(signal!.upProbability).toBe(51); // rounded 50.5 → 51
+    });
   });
 });

@@ -138,17 +138,37 @@ export class Polymarket5MinService {
    * `btc-updown-5m-{epoch}` where epoch aligns to 5-min (300s) boundaries.
    * We compute the current + upcoming windows and fetch by slug directly.
    */
+  /**
+   * Check whether a market has useful (non-resolved) outcome prices.
+   * Resolved markets have exactly ["1", "0"] or ["0", "1"].
+   */
+  private static isResolved(market: Record<string, unknown>): boolean {
+    try {
+      const raw = market.outcomePrices as string;
+      if (!raw) return false;
+      const prices = JSON.parse(raw) as string[];
+      if (!Array.isArray(prices) || prices.length < 2) return false;
+      const p0 = parseFloat(prices[0]);
+      const p1 = parseFloat(prices[1]);
+      return (p0 === 1 && p1 === 0) || (p0 === 0 && p1 === 1);
+    } catch {
+      return false;
+    }
+  }
+
   private static async fetchLatest5MinMarket(): Promise<FiveMinBTCSignal | null> {
     const baseUrl = typeof window !== 'undefined'
       ? '/api/polymarket'
       : `${this.POLYMARKET_API}/markets`;
 
     const nowEpoch = Math.floor(Date.now() / 1000);
-    // Round down to nearest 5-min boundary
     const currentWindowStart = Math.floor(nowEpoch / 300) * 300;
 
-    // Try the current window, next 2 upcoming, and 1 previous (in case current just closed)
-    const offsets = [0, 300, 600, -300];
+    // Scan the current window plus up to 12 future windows (1 hour ahead).
+    // During batch-resolution periods the nearest windows can all be
+    // closed=true, so we look further out to find the first open/unresolved one.
+    // Also check 1 past window in case the current just closed.
+    const offsets = [-300, 0, 300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3300, 3600];
     const slugs = offsets.map(off => this.buildSlug(currentWindowStart + off));
 
     let bestMarket: Record<string, unknown> | null = null;
@@ -167,9 +187,8 @@ export class Polymarket5MinService {
         if (!res.ok) return null;
         const data = await res.json();
         const markets = Array.isArray(data) ? data : [data];
-        // Return the first non-closed market
         return markets.find(
-          (m: Record<string, unknown>) => m && m.slug === slug && !m.closed
+          (m: Record<string, unknown>) => m && m.slug === slug
         ) || null;
       } catch {
         return null;
@@ -183,8 +202,10 @@ export class Polymarket5MinService {
       const endStr = market.endDate as string;
       if (!endStr) continue;
       const endMs = new Date(endStr).getTime();
-      // Must end in the future (still active)
+      // Must end in the future
       if (endMs <= Date.now()) continue;
+      // Skip fully resolved markets (prices are [1,0] or [0,1])
+      if (this.isResolved(market)) continue;
       // Prefer the soonest-ending active market (current window)
       if (endMs < bestEndTime) {
         bestEndTime = endMs;
