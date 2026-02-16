@@ -45,25 +45,41 @@ const ConfidenceMeter = memo(function ConfidenceMeter({
   );
 });
 
-/** Probability bar — only re-renders when percentages change */
+/** Probability bar — amplified visual so 49-51% shifts are clearly visible.
+ *  The bar "zooms" the 40-60% range to fill the full width,
+ *  so a real 51% vs 49% renders as 55% vs 45% visually.
+ *  Delta arrows show change since previous fetch. */
 const ProbabilityBar = memo(function ProbabilityBar({
-  displayUp, displayDown,
-}: { displayUp: number; displayDown: number }) {
+  displayUp, displayDown, deltaUp,
+}: { displayUp: number; displayDown: number; deltaUp: number | null }) {
+  // Amplify: map 40-60% → 0-100% so small shifts fill the bar
+  const amplified = Math.min(100, Math.max(0, ((displayUp - 40) / 20) * 100));
+  const ampDown = 100 - amplified;
+  const deltaStr = deltaUp !== null && Math.abs(deltaUp) >= 0.01
+    ? (deltaUp > 0 ? `▲+${deltaUp.toFixed(2)}` : `▼${deltaUp.toFixed(2)}`)
+    : null;
+  const deltaColor = deltaUp !== null && deltaUp > 0 ? 'text-emerald-500' : 'text-red-400';
+
   return (
     <>
-      <div className="mt-3 relative h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className="mt-3 relative h-2.5 bg-gray-100 rounded-full overflow-hidden">
         <div
-          className="absolute left-0 top-0 h-full bg-emerald-500 rounded-full transition-all duration-500"
-          style={{ width: `${displayUp}%` }}
+          className="absolute left-0 top-0 h-full bg-emerald-500 rounded-full transition-all duration-700"
+          style={{ width: `${amplified}%` }}
         />
         <div
-          className="absolute right-0 top-0 h-full bg-red-500 rounded-full transition-all duration-500"
-          style={{ width: `${displayDown}%` }}
+          className="absolute right-0 top-0 h-full bg-red-500 rounded-full transition-all duration-700"
+          style={{ width: `${ampDown}%` }}
         />
+        {/* Center tick mark at 50/50 */}
+        <div className="absolute left-1/2 top-0 w-px h-full bg-gray-300/60" />
       </div>
       <div className="flex justify-between mt-1 text-[10px] text-gray-400">
-        <span>UP {displayUp.toFixed(1)}%</span>
-        <span>DOWN {displayDown.toFixed(1)}%</span>
+        <span className="flex items-center gap-1">
+          UP {displayUp.toFixed(2)}%
+          {deltaStr && <span className={`font-semibold ${deltaColor}`}>{deltaStr}</span>}
+        </span>
+        <span>DOWN {displayDown.toFixed(2)}%</span>
       </div>
     </>
   );
@@ -175,9 +191,9 @@ function formatTime(seconds: number): string {
 function normalizeProbs(up: number, down: number): [number, number] {
   const sum = up + down;
   if (sum === 0) return [50, 50];
-  // Keep 1-decimal precision so small shifts are visible (e.g. 50.5 vs 49.5)
-  const nUp = Math.round((up / sum) * 1000) / 10;
-  const nDown = Math.round((100 - nUp) * 10) / 10;
+  // Keep 2-decimal precision so micro-shifts are visible (e.g. 50.53 vs 49.47)
+  const nUp = Math.round((up / sum) * 10000) / 100;
+  const nDown = Math.round((100 - nUp) * 100) / 100;
   return [nUp, nDown];
 }
 
@@ -195,6 +211,7 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
   const [expanded, setExpanded] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(0);
+  const [deltaUp, setDeltaUp] = useState<number | null>(null);
 
   // Refs for stable interval control & request dedup
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -219,12 +236,19 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
       if (!mountedRef.current) return;
 
       if (latestSignal) {
-        setSignal(latestSignal);
+        // Compute delta (change since last fetch) for the probability bar
+        setSignal(prev => {
+          if (prev) {
+            setDeltaUp(latestSignal.upProbability - prev.upProbability);
+          }
+          return latestSignal;
+        });
         setLastUpdated(Date.now());
         if (latestSignal.marketId !== lastMarketIdRef.current) {
           windowEndRef.current = latestSignal.windowEndTime
             || (Date.now() + latestSignal.timeRemainingSeconds * 1000);
           lastMarketIdRef.current = latestSignal.marketId;
+          setDeltaUp(null); // reset delta on new window
         }
         setError(null);
       } else {
@@ -357,7 +381,7 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
                 BTC {signal.direction}
               </div>
               <div className="text-xs text-gray-500">
-                {signal.probability.toFixed(1)}% probability
+                {signal.probability.toFixed(2)}% probability
               </div>
             </div>
           </div>
@@ -365,7 +389,7 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
           <ConfidenceMeter level={confidenceLevel} isUp={isUp} />
         </div>
 
-        <ProbabilityBar displayUp={displayUp} displayDown={displayDown} />
+        <ProbabilityBar displayUp={displayUp} displayDown={displayDown} deltaUp={deltaUp} />
       </div>
 
       {/* Quick Hedge Action */}
