@@ -395,7 +395,31 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
     // Determine collateral and leverage
     const actionLeverage = action.leverage || 5;
-    const collateral = action.size; // The size IS the collateral amount in USDC
+    
+    // action.size is in ASSET units (e.g. 0.125 BTC), but the gasless endpoint
+    // expects collateralAmount in USDC. Convert: collateral = size * price / leverage
+    let currentPrice = 1000;
+    try {
+      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
+      const tickerData = await tickerResponse.json();
+      const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${action.asset}_USDT`);
+      if (ticker) currentPrice = parseFloat(ticker.a);
+    } catch {
+      logger.warn('Failed to fetch price for collateral calc, using fallback', { component: 'ActiveHedges' });
+    }
+    
+    // Notional value = asset_qty * price, collateral = notional / leverage
+    const notionalValue = action.size * currentPrice;
+    const collateral = Math.round((notionalValue / actionLeverage) * 100) / 100; // USDC (2dp)
+    
+    logger.info('💰 Hedge collateral calculation', {
+      component: 'ActiveHedges',
+      assetSize: action.size,
+      price: currentPrice,
+      notional: notionalValue,
+      collateral,
+      leverage: actionLeverage,
+    });
     
     // Map asset to pairIndex for on-chain execution
     const pairIndexMap: Record<string, number> = { BTC: 0, ETH: 1, CRO: 2, ATOM: 3, DOGE: 4, SOL: 5 };
