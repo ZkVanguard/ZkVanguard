@@ -496,6 +496,7 @@ export class Polymarket5MinService {
       const volume = parseFloat((market.volume as string) || (market.volumeNum as string) || '0');
 
       // Parse outcome prices: ["0.505", "0.495"] → Up=50.5%, Down=49.5%
+      // Keep 1-decimal precision so small probability shifts are visible
       let upProb = 50;
       let downProb = 50;
       try {
@@ -503,8 +504,8 @@ export class Polymarket5MinService {
         if (pricesStr) {
           const prices = typeof pricesStr === 'string' ? JSON.parse(pricesStr) : pricesStr;
           if (Array.isArray(prices) && prices.length >= 2) {
-            upProb = Math.round(parseFloat(prices[0]) * 100);
-            downProb = Math.round(parseFloat(prices[1]) * 100);
+            upProb = Math.round(parseFloat(prices[0]) * 1000) / 10;   // e.g. 0.505 → 50.5
+            downProb = Math.round(parseFloat(prices[1]) * 1000) / 10; // e.g. 0.495 → 49.5
           }
         }
       } catch {
