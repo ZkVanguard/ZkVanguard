@@ -124,66 +124,103 @@ export class Polymarket5MinService {
   }
 
   /**
-   * Fetch the latest active 5-min BTC market from Polymarket
+   * Build slug for a 5-min BTC market from an epoch timestamp.
+   * Polymarket uses: btc-updown-5m-{epoch} where epoch is the start of the 5-min window.
+   */
+  private static buildSlug(epochSeconds: number): string {
+    return `btc-updown-5m-${epochSeconds}`;
+  }
+
+  /**
+   * Fetch the latest active 5-min BTC market from Polymarket.
+   * 
+   * Discovery strategy: these markets follow a predictable slug pattern
+   * `btc-updown-5m-{epoch}` where epoch aligns to 5-min (300s) boundaries.
+   * We compute the current + upcoming windows and fetch by slug directly.
    */
   private static async fetchLatest5MinMarket(): Promise<FiveMinBTCSignal | null> {
-    // Use the browser proxy or direct API based on environment
     const baseUrl = typeof window !== 'undefined'
       ? '/api/polymarket'
       : `${this.POLYMARKET_API}/markets`;
 
-    // Search for active 5-min BTC markets
-    const response = await fetch(
-      `${baseUrl}?limit=10&closed=false&order=startDate&ascending=false&tag=bitcoin-5-minute`,
-      {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(8000),
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    // Round down to nearest 5-min boundary
+    const currentWindowStart = Math.floor(nowEpoch / 300) * 300;
+
+    // Try the current window, next 2 upcoming, and 1 previous (in case current just closed)
+    const offsets = [0, 300, 600, -300];
+    const slugs = offsets.map(off => this.buildSlug(currentWindowStart + off));
+
+    let bestMarket: Record<string, unknown> | null = null;
+    let bestEndTime = Infinity;
+
+    // Fetch all candidate windows in parallel
+    const fetches = slugs.map(async (slug) => {
+      try {
+        const res = await fetch(
+          `${baseUrl}?slug=${slug}`,
+          {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(6000),
+          }
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        const markets = Array.isArray(data) ? data : [data];
+        // Return the first non-closed market
+        return markets.find(
+          (m: Record<string, unknown>) => m && m.slug === slug && !m.closed
+        ) || null;
+      } catch {
+        return null;
       }
-    );
+    });
 
-    let markets: Record<string, unknown>[] = [];
+    const results = await Promise.all(fetches);
 
-    if (response.ok) {
-      markets = await response.json();
+    for (const market of results) {
+      if (!market) continue;
+      const endStr = market.endDate as string;
+      if (!endStr) continue;
+      const endMs = new Date(endStr).getTime();
+      // Must end in the future (still active)
+      if (endMs <= Date.now()) continue;
+      // Prefer the soonest-ending active market (current window)
+      if (endMs < bestEndTime) {
+        bestEndTime = endMs;
+        bestMarket = market;
+      }
     }
 
-    // If tag-based search returns nothing, try keyword search
-    if (!markets || markets.length === 0) {
-      const fallbackResponse = await fetch(
-        `${baseUrl}?limit=50&closed=false`,
-        {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(8000),
-        }
-      );
-      if (fallbackResponse.ok) {
-        const allMarkets = await fallbackResponse.json();
-        // Filter for 5-min BTC markets
-        markets = (allMarkets as Record<string, unknown>[]).filter((m) => {
-          const q = ((m.question as string) || '').toLowerCase();
-          return (
-            q.includes('bitcoin') &&
-            (q.includes('5 min') || q.includes('5-min') || q.includes('five min')) &&
-            (q.includes('up or down') || q.includes('up down'))
-          );
-        });
-      }
-    }
-
-    if (!markets || markets.length === 0) {
-      logger.warn('No active 5-min BTC markets found on Polymarket', { component: 'Polymarket5Min' });
+    if (!bestMarket) {
+      logger.warn('No active 5-min BTC markets found via slug lookup', { component: 'Polymarket5Min' });
       return null;
     }
 
-    // Pick the most recent/active market
-    const market = markets[0];
-    return this.parseMarketToSignal(market);
+    // Fetch current BTC price from Crypto.com public ticker (free, no key)
+    let btcPrice = 0;
+    try {
+      const priceRes = await fetch(
+        'https://api.crypto.com/v2/public/get-ticker?instrument_name=BTC_USDT',
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (priceRes.ok) {
+        const priceData = await priceRes.json();
+        btcPrice = parseFloat(priceData?.result?.data?.[0]?.a ?? '0') || 0;
+      }
+    } catch {
+      // Price fetch optional — degrade gracefully
+    }
+
+    return this.parseMarketToSignal(bestMarket, btcPrice);
   }
 
   /**
    * Parse a Polymarket market object into our FiveMinBTCSignal format
+   * @param market - raw market data from gamma-api
+   * @param btcPrice - current BTC/USD price (fetched externally)
    */
-  private static parseMarketToSignal(market: Record<string, unknown>): FiveMinBTCSignal | null {
+  private static parseMarketToSignal(market: Record<string, unknown>, btcPrice: number = 0): FiveMinBTCSignal | null {
     try {
       const question = (market.question as string) || '';
       const marketId = (market.id as string) || (market.conditionId as string) || '';
@@ -191,8 +228,8 @@ export class Polymarket5MinService {
       const volume = parseFloat((market.volume as string) || (market.volumeNum as string) || '0');
       const description = (market.description as string) || '';
 
-      // Parse outcome prices: "[\"0.62\", \"0.38\"]" → [0.62, 0.38]
-      // First outcome = UP (or "Yes"), Second = DOWN (or "No")
+      // Parse outcome prices: ["0.505", "0.495"] → Up=50.5%, Down=49.5%
+      // Outcomes are ["Up", "Down"] — first = Up probability, second = Down
       let upProb = 50;
       let downProb = 50;
 
@@ -209,25 +246,21 @@ export class Polymarket5MinService {
         logger.warn('Failed to parse 5-min market outcome prices', { component: 'Polymarket5Min' });
       }
 
-      // Extract "price to beat" from description or question
-      // Pattern: "price to beat $68,386.96" or "price at the beginning"
-      let priceToBeat = 0;
-      const priceMatch = question.match(/\$([\d,]+(?:\.\d+)?)/);
-      if (priceMatch) {
-        priceToBeat = parseFloat(priceMatch[1].replace(/,/g, ''));
-      }
-      if (!priceToBeat) {
-        const descPriceMatch = description.match(/\$([\d,]+(?:\.\d+)?)/);
-        if (descPriceMatch) {
-          priceToBeat = parseFloat(descPriceMatch[1].replace(/,/g, ''));
-        }
-      }
+      // Price to beat: use externally-fetched BTC price since the question
+      // format "Bitcoin Up or Down - Feb 15, 11:30PM-11:35PM ET" has no $price.
+      // Chainlink resolves based on price at window start vs end.
+      const priceToBeat = btcPrice;
 
-      // Extract time window from question: "11-11:05PM ET"
+      // Extract time window label from question
+      // Format: "Bitcoin Up or Down - February 15, 11:30PM-11:35PM ET"
       const timeMatch = question.match(/(\d{1,2}(?::\d{2})?(?:AM|PM)?)\s*[-–]\s*(\d{1,2}:\d{2}(?:AM|PM))\s*(ET|EST|UTC)?/i);
-      const windowLabel = timeMatch ? timeMatch[0] : 'Current Window';
+      const windowLabel = timeMatch ? timeMatch[0] : (() => {
+        // Fallback: extract date/time portion from "Bitcoin Up or Down - February 15, ..."
+        const dashSplit = question.split(' - ');
+        return dashSplit.length > 1 ? dashSplit[1].trim() : 'Current Window';
+      })();
 
-      // Calculate time remaining (approximate — based on market end time)
+      // Calculate time remaining based on market end time
       let timeRemainingSeconds = 300; // Default 5 minutes
       const endDateStr = market.endDate as string;
       if (endDateStr) {
@@ -240,14 +273,18 @@ export class Polymarket5MinService {
       const maxProb = Math.max(upProb, downProb);
       const probSkew = Math.abs(upProb - downProb);
 
+      // Signal strength thresholds calibrated for real Polymarket 5-min markets:
+      // - Typical volume: $7-$500 per window
+      // - Typical probabilities: 48%-55% (tight spreads, market-made)
+      // - A >5% skew with any meaningful volume is a real directional signal
       let signalStrength: 'STRONG' | 'MODERATE' | 'WEAK';
-      if (probSkew >= 30 && volume >= 200) signalStrength = 'STRONG';
-      else if (probSkew >= 15 || volume >= 100) signalStrength = 'MODERATE';
+      if (probSkew >= 10 && volume >= 20) signalStrength = 'STRONG';
+      else if (probSkew >= 4 || volume >= 50) signalStrength = 'MODERATE';
       else signalStrength = 'WEAK';
 
-      // Calculate confidence: combination of probability skew + volume
-      const volumeConfidence = Math.min(30, Math.log10(Math.max(volume, 1)) * 10);
-      const probConfidence = Math.min(50, probSkew * 1.5);
+      // Calculate confidence: weighted combination of probability skew + volume + time
+      const volumeConfidence = Math.min(30, volume > 0 ? Math.log10(Math.max(volume, 1)) * 15 : 0);
+      const probConfidence = Math.min(50, probSkew * 4); // 5% skew → 20 confidence
       const timeConfidence = timeRemainingSeconds > 60 ? 20 : Math.max(5, timeRemainingSeconds / 3);
       const confidence = Math.min(95, Math.round(volumeConfidence + probConfidence + timeConfidence));
 
@@ -255,7 +292,7 @@ export class Polymarket5MinService {
       let recommendation: 'HEDGE_SHORT' | 'HEDGE_LONG' | 'WAIT';
       if (signalStrength === 'STRONG') {
         recommendation = direction === 'DOWN' ? 'HEDGE_SHORT' : 'HEDGE_LONG';
-      } else if (signalStrength === 'MODERATE' && maxProb >= 65) {
+      } else if (signalStrength === 'MODERATE' && maxProb >= 54) {
         recommendation = direction === 'DOWN' ? 'HEDGE_SHORT' : 'HEDGE_LONG';
       } else {
         recommendation = 'WAIT';
@@ -269,7 +306,7 @@ export class Polymarket5MinService {
         upProbability: upProb,
         downProbability: downProb,
         priceToBeat,
-        currentPrice: priceToBeat, // Will be updated by agents with real price
+        currentPrice: btcPrice,
         volume,
         confidence,
         recommendation,
@@ -289,6 +326,9 @@ export class Polymarket5MinService {
           recommendation: signal.recommendation,
           volume: signal.volume,
           timeRemaining: signal.timeRemainingSeconds,
+          priceToBeat: signal.priceToBeat,
+          windowLabel: signal.windowLabel,
+          slug,
         },
       });
 
@@ -333,9 +373,12 @@ export class Polymarket5MinService {
    * This allows seamless integration with existing DelphiMarketService pipeline
    */
   static signalToPredictionMarket(signal: FiveMinBTCSignal): import('./DelphiMarketService').PredictionMarket {
+    const priceDisplay = signal.priceToBeat > 0
+      ? `$${signal.priceToBeat.toLocaleString('en-US')}`
+      : 'live';
     return {
       id: `polymarket-5min-${signal.marketId}`,
-      question: `⚡ 5-Min BTC Signal: ${signal.direction} (${signal.windowLabel}) — Price to beat: $${signal.priceToBeat.toLocaleString('en-US')}`,
+      question: `⚡ 5-Min BTC Signal: ${signal.direction} (${signal.windowLabel}) — BTC @ ${priceDisplay}`,
       category: 'price',
       probability: signal.probability,
       volume: signal.volume > 1000 ? `$${(signal.volume / 1000).toFixed(1)}K` : `$${signal.volume.toFixed(0)}`,
