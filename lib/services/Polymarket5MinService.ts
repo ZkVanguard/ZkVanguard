@@ -48,7 +48,9 @@ export interface FiveMinBTCSignal {
   currentPrice: number;
   /** Total volume on this 5-min market ($) */
   volume: number;
-  /** Confidence score (0-100) based on volume + probability skew */
+  /** Current liquidity (order-book depth) on this 5-min market ($) */
+  liquidity: number;
+  /** Confidence score (0-100) based on volume + probability skew + liquidity */
   confidence: number;
   /** Actionable recommendation for agents */
   recommendation: 'HEDGE_SHORT' | 'HEDGE_LONG' | 'WAIT';
@@ -494,6 +496,7 @@ export class Polymarket5MinService {
       const marketId = (market.id as string) || (market.conditionId as string) || '';
       const slug = (market.slug as string) || '';
       const volume = parseFloat((market.volume as string) || (market.volumeNum as string) || '0');
+      const liquidity = parseFloat((market.liquidity as string) || (market.liquidityNum as string) || '0');
 
       // Parse outcome prices: ["0.5053", "0.4947"] → Up=50.53%, Down=49.47%
       // Keep 2-decimal precision so even tiny market shifts are visible
@@ -538,14 +541,15 @@ export class Polymarket5MinService {
 
       let signalStrength: 'STRONG' | 'MODERATE' | 'WEAK';
       if (probSkew >= 10 && volume >= 20) signalStrength = 'STRONG';
-      else if (probSkew >= 4 || volume >= 50) signalStrength = 'MODERATE';
+      else if (probSkew >= 4 || volume >= 50 || (liquidity >= 3000 && probSkew >= 2)) signalStrength = 'MODERATE';
       else signalStrength = 'WEAK';
 
-      // Confidence: weighted combo of skew + volume + time
+      // Confidence: weighted combo of skew + volume + liquidity + time
       const volumeConfidence = Math.min(30, volume > 0 ? Math.log10(Math.max(volume, 1)) * 15 : 0);
+      const liquidityConfidence = Math.min(15, liquidity > 0 ? Math.log10(Math.max(liquidity, 1)) * 4 : 0);
       const probConfidence = Math.min(50, probSkew * 4);
       const timeConfidence = timeRemainingSeconds > 60 ? 20 : Math.max(5, timeRemainingSeconds / 3);
-      const confidence = Math.min(95, Math.round(volumeConfidence + probConfidence + timeConfidence));
+      const confidence = Math.min(95, Math.round(volumeConfidence + liquidityConfidence + probConfidence + timeConfidence));
 
       // Recommendation
       let recommendation: 'HEDGE_SHORT' | 'HEDGE_LONG' | 'WAIT';
@@ -567,6 +571,7 @@ export class Polymarket5MinService {
         priceToBeat,
         currentPrice: btcPrice,
         volume,
+        liquidity,
         confidence,
         recommendation,
         signalStrength,
@@ -585,6 +590,7 @@ export class Polymarket5MinService {
           confidence: signal.confidence,
           recommendation: signal.recommendation,
           volume: signal.volume,
+          liquidity: signal.liquidity,
           timeRemaining: signal.timeRemainingSeconds,
           priceToBeat: signal.priceToBeat,
           windowLabel: signal.windowLabel,
@@ -646,14 +652,14 @@ export class Polymarket5MinService {
       question: `⚡ 5-Min BTC Signal: ${signal.direction} (${signal.windowLabel}) — BTC @ ${priceDisplay}`,
       category: 'price',
       probability: signal.probability,
-      volume: signal.volume > 1000 ? `$${(signal.volume / 1000).toFixed(1)}K` : `$${signal.volume.toFixed(0)}`,
+      volume: signal.volume > 1000 ? `$${(signal.volume / 1000).toFixed(1)}K` : `$${signal.volume.toFixed(0)}` + (signal.liquidity > 0 ? ` (liq: $${signal.liquidity > 1000 ? (signal.liquidity / 1000).toFixed(1) + 'K' : signal.liquidity.toFixed(0)})` : ''),
       impact: signal.signalStrength === 'STRONG' ? 'HIGH' : signal.signalStrength === 'MODERATE' ? 'MODERATE' : 'LOW',
       relatedAssets: ['BTC'],
       lastUpdate: signal.fetchedAt,
       confidence: signal.confidence,
       recommendation: signal.recommendation === 'HEDGE_SHORT' ? 'HEDGE' : 'MONITOR',
       source: 'polymarket',
-      aiSummary: `Polymarket 5-min binary: ${signal.upProbability}% UP / ${signal.downProbability}% DOWN. Volume: $${signal.volume.toFixed(0)}. Signal: ${signal.signalStrength}. ${signal.recommendation === 'WAIT' ? 'No clear directional edge.' : `${signal.recommendation} recommended (${signal.confidence}% confidence).`}`,
+      aiSummary: `Polymarket 5-min binary: ${signal.upProbability}% UP / ${signal.downProbability}% DOWN. Volume: $${signal.volume.toFixed(0)}. Liquidity: $${signal.liquidity.toFixed(0)}. Signal: ${signal.signalStrength}. ${signal.recommendation === 'WAIT' ? 'No clear directional edge.' : `${signal.recommendation} recommended (${signal.confidence}% confidence).`}`,
     };
   }
 

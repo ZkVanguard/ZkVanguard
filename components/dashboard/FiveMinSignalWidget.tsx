@@ -95,8 +95,14 @@ const SignalDetails = memo(function SignalDetails({
   onQuickHedge?: (dir: 'LONG' | 'SHORT') => void;
 }) {
   const volumeDisplay = useMemo(
-    () => signal.volume ? `$${signal.volume.toLocaleString()}` : 'N/A',
+    () => signal.volume >= 0 ? `$${signal.volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : 'N/A',
     [signal.volume],
+  );
+  const liquidityDisplay = useMemo(
+    () => signal.liquidity > 0
+      ? (signal.liquidity >= 1000 ? `$${(signal.liquidity / 1000).toFixed(1)}K` : `$${signal.liquidity.toFixed(0)}`)
+      : null,
+    [signal.liquidity],
   );
   const priceDisplay = useMemo(
     () => signal.priceToBeat ? `$${signal.priceToBeat.toLocaleString()}` : null,
@@ -120,6 +126,10 @@ const SignalDetails = memo(function SignalDetails({
           <div className="font-semibold text-gray-700">{volumeDisplay}</div>
         </div>
         <div className="bg-gray-50 rounded-lg p-2">
+          <div className="text-gray-400 mb-0.5">Liquidity</div>
+          <div className="font-semibold text-gray-700">{liquidityDisplay ?? 'N/A'}</div>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-2 col-span-2">
           <div className="text-gray-400 mb-0.5">Recommendation</div>
           <div className="font-semibold text-gray-700">{recLabel}</div>
         </div>
