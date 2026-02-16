@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes } from '@/lib/db/hedges';
+import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes, resyncOnChainHedge } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
 
@@ -105,6 +105,70 @@ async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, nu
   }
 
   return prices;
+}
+
+// ─── Background resync: validate DB hedges against on-chain RPC ──────────────
+let _lastResyncAt = 0;
+const RESYNC_INTERVAL_MS = 5 * 60_000; // Resync every 5 minutes max
+let _resyncInProgress = false;
+
+/**
+ * Background resync: read actual on-chain data for the given hedge IDs
+ * and update the DB with correct values. This fixes stale/buggy DB entries.
+ */
+async function backgroundResyncHedges(hedgeIdOnchains: string[]): Promise<void> {
+  if (_resyncInProgress || hedgeIdOnchains.length === 0) return;
+  _resyncInProgress = true;
+
+  try {
+    const tp = getCronosProvider(RPC_URL);
+    const provider = tp.provider;
+    const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
+    const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
+
+    let synced = 0;
+    for (const hedgeId of hedgeIdOnchains) {
+      try {
+        const h = await contract.hedges(hedgeId);
+        const pairIndex = Number(h.pairIndex) || 0;
+        const collateral = Number(ethers.formatUnits(h.collateralAmount, 6)) || 0;
+        const leverage = Number(h.leverage) || 1;
+        const isLong = h.isLong;
+        const status = Number(h.status);
+
+        // Get actual entry price from MockMoonlander
+        let entryPrice = 0;
+        try {
+          const trade = await moonlander.getTrade(HEDGE_EXECUTOR, pairIndex, Number(h.tradeIndex));
+          if (trade && trade.openPrice > 0n) entryPrice = Number(trade.openPrice) / 1e10;
+        } catch { /* entry price unavailable */ }
+
+        const statusName = ['pending', 'active', 'closed', 'liquidated', 'cancelled'][status] || 'unknown';
+        const asset = PAIR_SYMBOLS[pairIndex] || `PAIR-${pairIndex}`;
+
+        await resyncOnChainHedge(hedgeId, {
+          asset,
+          side: isLong ? 'LONG' : 'SHORT',
+          collateral,
+          leverage,
+          entryPrice: entryPrice || FALLBACK_PRICES[pairIndex] || 1000,
+          status: statusName,
+          commitmentHash: h.commitmentHash !== ethers.ZeroHash ? h.commitmentHash : undefined,
+          nullifier: h.nullifier !== ethers.ZeroHash ? h.nullifier : undefined,
+        });
+        synced++;
+      } catch (err) {
+        console.warn(`⚠️ Resync failed for hedge ${hedgeId.slice(0, 10)}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    _lastResyncAt = Date.now();
+    console.log(`🔄 Background resync: updated ${synced}/${hedgeIdOnchains.length} hedges from RPC`);
+  } catch (err) {
+    console.warn('Background resync error:', err instanceof Error ? err.message : err);
+  } finally {
+    _resyncInProgress = false;
+  }
 }
 
 // Minimal ABI for reading hedge data
@@ -208,6 +272,7 @@ export async function GET(request: NextRequest) {
     const address = searchParams.get('address') || searchParams.get('walletAddress');
     const includeStats = searchParams.get('stats') === 'true';
     const forceRpc = searchParams.get('forceRpc') === 'true'; // Debug flag to bypass DB
+    const forceResync = searchParams.get('resync') === 'true'; // Force RPC resync + DB update
 
     // SECURITY: Require wallet address - users should only see their own hedges
     if (!address) {
@@ -222,6 +287,21 @@ export async function GET(request: NextRequest) {
         },
         message: 'Connect wallet to view your hedges',
       });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RESYNC: If forced or stale (>5 min), sync DB from on-chain RPC
+    // ═══════════════════════════════════════════════════════════
+    if (forceResync) {
+      // Immediate resync: read ALL DB hedges, update from RPC, then serve fresh DB data
+      const allDbHedges = await getAllOnChainHedges(false);
+      const hedgeIdsToSync = allDbHedges
+        .filter(h => h.hedge_id_onchain)
+        .map(h => h.hedge_id_onchain!);
+      if (hedgeIdsToSync.length > 0) {
+        await backgroundResyncHedges(hedgeIdsToSync);
+      }
+      // Fall through to DB-first path which will now serve corrected data
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -360,6 +440,17 @@ export async function GET(request: NextRequest) {
         }
 
         console.log(`⚡ DB-first onchain: ${hedgeDetails.length} hedges in ${Date.now() - dbStart}ms (NO RPC calls)`);
+
+        // ── Background resync: validate DB against chain every 5 min (fire-and-forget) ──
+        const timeSinceResync = Date.now() - _lastResyncAt;
+        if (timeSinceResync > RESYNC_INTERVAL_MS && !_resyncInProgress) {
+          const hedgeIdsToSync = filteredHedges
+            .filter(h => h.hedge_id_onchain && h.status === 'active')
+            .map(h => h.hedge_id_onchain!);
+          if (hedgeIdsToSync.length > 0) {
+            backgroundResyncHedges(hedgeIdsToSync).catch(() => {});
+          }
+        }
 
         return NextResponse.json({
           success: true,
@@ -583,6 +674,21 @@ export async function GET(request: NextRequest) {
     // Filter active hedges for summary
     const activeHedges = hedgeDetails.filter(h => h.status === 'active');
     const closedHedges = hedgeDetails.filter(h => h.status === 'closed' || h.status === 'liquidated');
+
+    // ── Sync RPC data back to DB (fire-and-forget) so DB-first path stays fresh ──
+    for (const h of hedgeDetails) {
+      resyncOnChainHedge(h.hedgeId, {
+        asset: h.asset,
+        side: h.side as 'LONG' | 'SHORT',
+        collateral: h.collateral,
+        leverage: h.leverage,
+        entryPrice: h.entryPrice,
+        status: h.status,
+        commitmentHash: h.commitmentHash !== ethers.ZeroHash ? h.commitmentHash : undefined,
+        nullifier: h.nullifier !== ethers.ZeroHash ? h.nullifier : undefined,
+      }).catch(() => {});
+    }
+    _lastResyncAt = Date.now();
 
     // Build summary matching existing API format
     const totalUnrealizedPnL = activeHedges.reduce((sum, h) => sum + h.unrealizedPnL, 0);
