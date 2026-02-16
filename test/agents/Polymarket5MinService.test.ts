@@ -65,6 +65,8 @@ function createMockMarket(
     outcomePrices: '["0.62", "0.38"]', // 62% UP, 38% DOWN → 24% skew
     volume: '52',
     volumeNum: '52',
+    liquidity: '3200',
+    liquidityNum: '3200',
     endDate: new Date(Date.now() + 180_000).toISOString(), // 3 min remaining
     closed: false,
     ...overrides,
@@ -212,6 +214,7 @@ describe('Polymarket5MinService', () => {
         priceToBeat: 97000,
         currentPrice: 97000,
         volume: 300,
+        liquidity: 5000,
         confidence: 75,
         recommendation: 'HEDGE_LONG',
         signalStrength: 'STRONG',
@@ -273,6 +276,7 @@ describe('Polymarket5MinService', () => {
       const market = createMockMarket({
         outcomePrices: '["0.51", "0.49"]', // 2% skew (< 4)
         volume: '10', // < 50
+        liquidity: '500', // < 3000 — prevents liquidity-based MODERATE
       });
       setupFetchMocks(market);
 
