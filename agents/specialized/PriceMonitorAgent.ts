@@ -127,6 +127,50 @@ export class PriceMonitorAgent {
       }
     }
 
+    // ⚡ NEW: Check Polymarket 5-minute BTC signal for real-time hedge triggers
+    try {
+      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+      const fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+      
+      if (fiveMinSignal && fiveMinSignal.signalStrength === 'STRONG') {
+        const btcPrice = prices.get('BTC');
+        
+        // Emit a special 5-min signal event that the dashboard can subscribe to
+        this.emit({
+          type: 'five_min_signal',
+          signal: fiveMinSignal,
+          price: btcPrice || null,
+          timestamp: Date.now(),
+        } as MonitorEvent);
+
+        // Auto-trigger hedge alert if signal is STRONG DOWN
+        if (fiveMinSignal.recommendation === 'HEDGE_SHORT' && btcPrice) {
+          logger.info('⚡ 5-Min STRONG DOWN signal — triggering auto-hedge alert', {
+            direction: fiveMinSignal.direction,
+            probability: fiveMinSignal.probability,
+            confidence: fiveMinSignal.confidence,
+            btcPrice: btcPrice.price,
+          });
+          
+          // Create a synthetic alert for the hedge action
+          await this.handleAlertTriggered(
+            {
+              id: `5min-auto-${Date.now()}`,
+              symbol: 'BTC',
+              type: 'change_percent',
+              threshold: 0,
+              action: 'hedge',
+              active: true,
+              createdAt: Date.now(),
+            },
+            btcPrice
+          );
+        }
+      }
+    } catch {
+      // 5-min signal unavailable — continue with standard monitoring
+    }
+
     // Emit price update event
     this.emit({
       type: 'price_update',
@@ -406,6 +450,7 @@ export type MonitorEvent =
   | { type: 'alert_triggered'; alert: PriceAlert; price: PriceData; timestamp: number }
   | { type: 'hedge_initiated'; alert: PriceAlert; price: PriceData; challenge: unknown; timestamp: number }
   | { type: 'rebalance_initiated'; alert: PriceAlert; price: PriceData; timestamp: number }
+  | { type: 'five_min_signal'; signal: import('../../lib/services/Polymarket5MinService').FiveMinBTCSignal; price: PriceData | null; timestamp: number }
   | { type: 'error'; error: string; timestamp: number };
 
 export interface AgentStatus {

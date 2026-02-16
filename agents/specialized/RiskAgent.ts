@@ -402,7 +402,7 @@ REC3: [third recommendation]`;
   }
 
   /**
-   * Internal sentiment assessment using Delphi prediction markets
+   * Internal sentiment assessment using Delphi prediction markets + 5-min BTC signals
    */
   private async assessMarketSentimentInternal(): Promise<'bullish' | 'bearish' | 'neutral'> {
     try {
@@ -443,6 +443,29 @@ REC3: [third recommendation]`;
           }
         }
         // Probability 45-55: genuinely uncertain, skip (doesn't skew sentiment)
+      }
+      
+      // 🔥 NEW: Factor in Polymarket 5-minute BTC signal for real-time micro-sentiment
+      try {
+        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+        const fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+        if (fiveMinSignal && fiveMinSignal.signalStrength !== 'WEAK') {
+          // 5-min signals carry extra weight (2x) because they reflect real-time crowd conviction
+          const weight = fiveMinSignal.signalStrength === 'STRONG' ? 3 : 2;
+          if (fiveMinSignal.direction === 'DOWN') {
+            bearishCount += weight;
+          } else {
+            bullishCount += weight;
+          }
+          logger.info('5-min BTC signal factored into sentiment', {
+            direction: fiveMinSignal.direction,
+            probability: fiveMinSignal.probability,
+            weight,
+            signalStrength: fiveMinSignal.signalStrength,
+          });
+        }
+      } catch {
+        // 5-min signal unavailable — continue with standard sentiment
       }
       
       // Determine overall sentiment

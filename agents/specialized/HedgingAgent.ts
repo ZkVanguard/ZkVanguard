@@ -222,6 +222,26 @@ export class HedgingAgent extends BaseAgent {
         p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
       );
 
+      // ⚡ NEW: Get Polymarket 5-minute BTC signal for real-time micro-hedging
+      let fiveMinSignal: import('../../lib/services/Polymarket5MinService').FiveMinBTCSignal | null = null;
+      let fiveMinSignalHistory: import('../../lib/services/Polymarket5MinService').FiveMinSignalHistory | null = null;
+      try {
+        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+        fiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+        fiveMinSignalHistory = Polymarket5MinService.getSignalHistory();
+        if (fiveMinSignal) {
+          logger.info('5-min BTC signal available for hedge analysis', {
+            direction: fiveMinSignal.direction,
+            probability: fiveMinSignal.probability,
+            confidence: fiveMinSignal.confidence,
+            recommendation: fiveMinSignal.recommendation,
+            streak: fiveMinSignalHistory?.streak,
+          });
+        }
+      } catch {
+        logger.debug('5-min signal unavailable for hedge analysis');
+      }
+
       // Determine hedge market (e.g., BTC-USD-PERP for BTC exposure)
       const hedgeMarket = `${assetSymbol}-USD-PERP`;
       let marketInfo;
@@ -252,6 +272,30 @@ export class HedgingAgent extends BaseAgent {
         });
       }
 
+      // ⚡ NEW: Further adjust hedge ratio based on 5-min BTC signal
+      // Strong DOWN signals in real-time = increase urgency of hedge
+      // Strong UP signals = can slightly relax hedge ratio
+      if (fiveMinSignal && assetSymbol === 'BTC' && fiveMinSignal.signalStrength !== 'WEAK') {
+        const fiveMinMultiplier = fiveMinSignal.direction === 'DOWN'
+          ? 1 + (fiveMinSignal.probability - 50) / 200  // DOWN: 70% prob → 1.1x boost
+          : 1 - (fiveMinSignal.probability - 50) / 400; // UP: 70% prob → 0.95x slight relaxation
+        
+        // If there's a streak, amplify the signal
+        const streakAmplifier = fiveMinSignalHistory?.streak?.direction === fiveMinSignal.direction
+          && (fiveMinSignalHistory?.streak?.count ?? 0) >= 3
+          ? 1.05 : 1.0;
+        
+        hedgeRatio = Math.min(Math.max(hedgeRatio * fiveMinMultiplier * streakAmplifier, 0.1), 1.0);
+        
+        logger.info('Hedge ratio adjusted by 5-min BTC signal', {
+          direction: fiveMinSignal.direction,
+          probability: fiveMinSignal.probability,
+          fiveMinMultiplier: (fiveMinMultiplier * streakAmplifier).toFixed(3),
+          adjustedHedgeRatio: hedgeRatio.toFixed(4),
+          streak: fiveMinSignalHistory?.streak,
+        });
+      }
+
       // Get funding rate (cost of holding perpetual) — may fail for assets without perps
       let avgFundingRate = 0;
       try {
@@ -266,14 +310,20 @@ export class HedgingAgent extends BaseAgent {
       const hedgeEffectiveness = Math.pow(spotFutureCorrelation, 2) * 100;
 
       // Determine recommendation
-      // 🔮 NEW: Factor in Delphi predictions
+      // 🔮 NEW: Factor in Delphi predictions + 5-min signals
       const delphiRecommendHedge = delphiInsights.overallRisk === 'HIGH' || highRiskPredictions.length >= 2;
-      const shouldHedge = (volatility > 0.3 || delphiRecommendHedge) && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
+      const fiveMinRecommendHedge = fiveMinSignal?.recommendation === 'HEDGE_SHORT' && fiveMinSignal.signalStrength === 'STRONG';
+      const shouldHedge = (volatility > 0.3 || delphiRecommendHedge || fiveMinRecommendHedge) && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
       
-      // Build reason with Delphi insights and AI analysis
+      // Build reason with Delphi insights + 5-min signal and AI analysis
       let reason = shouldHedge
         ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
         : 'Volatility acceptable, no immediate hedge needed';
+      
+      // ⚡ Append 5-min signal context when available
+      if (fiveMinSignal && assetSymbol === 'BTC' && fiveMinSignal.signalStrength !== 'WEAK') {
+        reason += ` | ⚡ 5-Min Signal: ${fiveMinSignal.direction} (${fiveMinSignal.probability}% prob, ${fiveMinSignal.signalStrength})`;
+      }
       
       // 🤖 NEW: Use AI to enhance hedge reasoning
       try {
