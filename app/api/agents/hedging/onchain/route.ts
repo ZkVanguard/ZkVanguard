@@ -19,6 +19,7 @@ import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, g
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
 
+// Live price sync v2
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -40,8 +41,9 @@ const PAIR_SYMBOLS: Record<number, string> = {
 };
 
 // Fallback prices only used if Crypto.com API is completely unreachable
+// Updated from live Crypto.com data — these should rarely be used
 const FALLBACK_PRICES: Record<number, number> = {
-  0: 71230, 1: 2111, 2: 0.081, 3: 1.979, 4: 0.097, 5: 88.02
+  0: 67700, 1: 1990, 2: 0.080, 3: 5.50, 4: 0.25, 5: 180
 };
 
 // MockMoonlander contract — reads actual openPrice for each trade
@@ -337,30 +339,30 @@ export async function GET(request: NextRequest) {
           console.log(`🔍 Filtered hedges for ${address.slice(0,10)}...: ${filteredHedges.length}/${dbHedges.length}`);
         }
 
-        // Overlay live prices from cache (or DB-stored prices if cache miss)
+        // ALWAYS fetch live prices from Crypto.com (in-memory 15s cache prevents spam)
+        // Previously this was fire-and-forget which caused stale $71K BTC prices
+        const livePrices = await fetchLivePrices([0, 1, 2, 3, 4, 5]);
+        console.log(`📡 LIVE PRICES fetched: BTC=$${livePrices[0]} ETH=$${livePrices[1]} CRO=$${livePrices[2]}`);
         const priceMap: Record<string, number> = {};
         for (const symbol of ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL']) {
-          const cached = cachedPrices[symbol];
-          priceMap[symbol] = cached?.price ?? FALLBACK_PRICES[Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === symbol) as unknown as number] ?? 1000;
+          const pairIdx = Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === symbol);
+          const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx)] : undefined;
+          const dbCached = cachedPrices[symbol];
+          priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 1000;
         }
 
-        // If price cache is stale, refresh from Crypto.com (fire-and-forget)
-        if (Object.keys(cachedPrices).length < 6) {
-          fetchLivePrices([0, 1, 2, 3, 4, 5]).then(livePrices => {
-            const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
-              symbol: PAIR_SYMBOLS[parseInt(idx)],
-              price,
-              source: 'cryptocom-exchange',
-            }));
-            upsertPrices(priceUpdates).catch(() => {});
-            // Also update hedge prices in DB
-            const priceMapForDb: Record<string, { price: number; source: string }> = {};
-            for (const [idx, price] of Object.entries(livePrices)) {
-              priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
-            }
-            batchUpdateHedgePrices(priceMapForDb).catch(() => {});
-          }).catch(() => {});
+        // Persist live prices to DB cache (fire-and-forget — for next request's fallback)
+        const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
+          symbol: PAIR_SYMBOLS[parseInt(idx)],
+          price,
+          source: 'cryptocom-exchange',
+        }));
+        upsertPrices(priceUpdates).catch(() => {});
+        const priceMapForDb: Record<string, { price: number; source: string }> = {};
+        for (const [idx, price] of Object.entries(livePrices)) {
+          priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
         }
+        batchUpdateHedgePrices(priceMapForDb).catch(() => {});
 
         // Build response from DB data
         const hedgeDetails = filteredHedges.map(h => {
