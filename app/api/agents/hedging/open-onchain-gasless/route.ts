@@ -23,6 +23,7 @@ import { ethers } from 'ethers';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { upsertOnChainHedge } from '@/lib/db/hedges';
+import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,9 @@ const RPC_URL = 'https://evm-t3.cronos.org';
 // PRIVACY: Dedicated relayer wallet — user's address NEVER touches the chain
 // The relayer holds its own USDC pool and pays gas, acting as a privacy shield
 const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
+
+// Deployer wallet — OWNER of MockMoonlander (needed for setMockPrice calls)
+const DEPLOYER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
 
 const PAIR_NAMES: Record<number, string> = {
   0: 'BTC', 1: 'ETH', 2: 'CRO', 3: 'ATOM', 4: 'DOGE', 5: 'SOL'
@@ -154,6 +158,25 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} | relayer: ${relayer.address} (user hidden)`);
+
+    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN ═══
+    // Without this, the mock contract uses stale hardcoded prices for PnL calculation
+    if (DEPLOYER_PK) {
+      try {
+        const deployerWallet = new ethers.Wallet(DEPLOYER_PK, provider);
+        // 1) Sync the live price so MockMoonlander records the correct openPrice
+        const syncedPrice = await syncSinglePriceToChain(deployerWallet, pairIndex);
+        if (syncedPrice > 0) {
+          console.log(`📈 On-chain price synced: ${asset} → $${syncedPrice} (was stale)`);
+        }
+        // 2) Ensure MockMoonlander has enough USDC to settle this trade later
+        await ensureMoonlanderLiquidity(deployerWallet, collateralRaw * BigInt(leverage));
+      } catch (syncErr) {
+        console.warn('⚠️ Price sync failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
+      }
+    } else {
+      console.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to MockMoonlander');
+    }
 
     // Use dynamic gas price with gas estimation
     const feeData = await provider.getFeeData();

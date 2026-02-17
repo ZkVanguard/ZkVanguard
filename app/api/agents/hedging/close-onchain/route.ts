@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TYPES } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,9 @@ const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const RPC_URL = 'https://evm-t3.cronos.org';
 const DEPLOYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
+
+// Deployer/Owner wallet — required for setMockPrice calls on MockMoonlander
+const OWNER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
 
 const HEDGE_EXECUTOR_ABI = [
   'function closeHedge(bytes32 hedgeId) external',
@@ -210,6 +214,26 @@ export async function POST(request: NextRequest) {
 
     // Get TRUE OWNER's USDC balance before close (for accurate reporting)
     const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
+
+    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN ═══
+    // CRITICAL: Without this, closeTrade() uses stale mock prices for PnL → fake liquidations
+    if (OWNER_PK) {
+      try {
+        const ownerWallet = new ethers.Wallet(OWNER_PK, provider);
+        // 1) Sync the live current price so PnL is computed against real market data
+        const syncedPrice = await syncSinglePriceToChain(ownerWallet, pairIndex);
+        if (syncedPrice > 0) {
+          console.log(`📈 Close: On-chain price synced: ${PAIR_NAMES[pairIndex]} → $${syncedPrice}`);
+        }
+        // 2) Ensure MockMoonlander has enough USDC to return collateral ± PnL
+        const collateralRaw = ethers.parseUnits(String(collateral), 6);
+        await ensureMoonlanderLiquidity(ownerWallet, collateralRaw * BigInt(leverage));
+      } catch (syncErr) {
+        console.warn('⚠️ Price sync before close failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
+      }
+    } else {
+      console.warn('⚠️ OWNER_PK not set — cannot sync live prices before close');
+    }
 
     // Execute gasless closeHedge via x402 relayer — this triggers fund withdrawal back to on-chain trader
     console.log(`🔐 x402 Gasless closeHedge: ${hedgeId.slice(0, 18)}... | ${PAIR_NAMES[pairIndex]} ${isLong ? 'LONG' : 'SHORT'} | ${collateral} USDC x${leverage}`);
