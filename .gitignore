@@ -336,3 +336,7 @@ docs/pitch-deck/slide-05-market-opportunity.md
 docs/pitch-deck/glossary.md
 docs/FOUNDER_VIDEO_SCRIPT.md
 docs/PROJECT_DESCRIPTION.md
+docs/MAINNET_MIGRATION_GUIDE.md
+scripts/check-prices.mts
+scripts/close-1550m.ts
+scripts/mint-and-prepare.ts

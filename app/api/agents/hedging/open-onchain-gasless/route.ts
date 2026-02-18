@@ -1,19 +1,30 @@
 /**
- * x402 Gasless Open Hedge API — ZK Privacy-Preserving
- * Server-relayed gasless hedge opening — user pays $0.00 gas
+ * TRUE GASLESS Hedge Opening — User Pays $0.00
+ * 
+ * Uses agentOpenHedge() with AGENT_ROLE relayer for zero gas cost to users
+ * 
+ * Architecture:
+ * - Relayer has AGENT_ROLE on HedgeExecutor contract
+ * - HedgeExecutor contract pre-funded with USDC pool (via scripts/mint-and-prepare.ts)
+ * - Relayer calls agentOpenHedge(userAddress, ...) paying only gas
+ * - User's address set as hedge trader/beneficiary but NEVER sends transaction
+ * - ZK commitment privately binds user wallet to hedge for ownership verification
+ * 
+ * Setup Required:
+ * 1. Grant AGENT_ROLE: npx hardhat run scripts/grant-agent-role.ts --network cronos-testnet
+ * 2. Fund contract: npm run mint:prepare (mints 200M USDC to HedgeExecutor)
+ * 3. Relayer pays gas, user pays $0.00
  * 
  * Privacy Model:
- * - A DEDICATED RELAYER wallet (not the user) sends all on-chain transactions
- * - User's real wallet address NEVER appears on-chain
- * - On-chain shows: Relayer → HedgeExecutor (user address is hidden)
- * - ZK commitment privately binds user ↔ hedge (verifiable but not publicly visible)
- * - User can prove ownership via ZK proof without revealing their address
+ * - User's wallet address stored as hedge.trader (beneficiary for PnL settlement)
+ * - User NEVER appears as transaction sender (relayer sends all txns)
+ * - ZK commitment hash binds user to hedge for close/withdrawal verification
+ * - On-chain: Relayer → HedgeExecutor.agentOpenHedge(userAddress, ...)
  * 
- * Flow:
- * 1. User submits hedge request to this API
- * 2. Relayer opens hedge on-chain using ITS OWN funds (user address hidden)
- * 3. ZK commitment stores private user↔hedge binding
- * 4. User can later close/withdraw by proving ZK ownership
+ * Cost:
+ * - User: $0.00 (just HTTP request)
+ * - Relayer: ~0.3 CRO gas (~$0.03)
+ * - Contract: Pulls from pre-funded USDC pool
  * 
  * POST /api/agents/hedging/open-onchain-gasless
  * Body: { pairIndex, collateralAmount, leverage, isLong, walletAddress }
@@ -44,7 +55,7 @@ const PAIR_NAMES: Record<number, string> = {
 };
 
 const HEDGE_EXECUTOR_ABI = [
-  'function openHedge(uint256 pairIndex, uint256 collateralAmount, uint256 leverage, bool isLong, bytes32 commitmentHash, bytes32 nullifier, bytes32 merkleRoot) payable returns (bytes32)',
+  'function agentOpenHedge(address trader, uint256 pairIndex, uint256 collateralAmount, uint256 leverage, bool isLong, bytes32 commitmentHash, bytes32 nullifier, bytes32 merkleRoot) payable returns (bytes32)',
   'function totalHedgesOpened() view returns (uint256)',
 ];
 
@@ -103,22 +114,13 @@ export async function POST(request: NextRequest) {
     const userWallet = walletAddress; // Now guaranteed to be a valid address
     const collateralRaw = ethers.parseUnits(String(collateralAmount), 6);
 
-    // Check RELAYER's USDC pool balance (not the user's — user's wallet stays private)
-    const relayerBalance = await usdc.balanceOf(relayer.address);
-    if (relayerBalance < collateralRaw) {
+    // Check HedgeExecutor contract's USDC balance (for agentOpenHedge, funds must be PRE-FUNDED to contract)
+    const contractBalance = await usdc.balanceOf(HEDGE_EXECUTOR);
+    if (contractBalance < collateralRaw) {
       return NextResponse.json({
         success: false,
-        error: `Relayer pool insufficient. Pool has ${ethers.formatUnits(relayerBalance, 6)} USDC, need ${collateralAmount}`,
+        error: `Contract pool insufficient. Contract has ${ethers.formatUnits(contractBalance, 6)} USDC, need ${collateralAmount}. Run: node scripts/mint-and-prepare.ts`,
       }, { status: 400 });
-    }
-
-    // Check relayer's allowance to HedgeExecutor
-    const allowance = await usdc.allowance(relayer.address, HEDGE_EXECUTOR);
-    if (allowance < collateralRaw) {
-      return NextResponse.json({
-        success: false,
-        error: 'Relayer pool not approved. Admin action required.',
-      }, { status: 500 });
     }
 
     // Generate ZK parameters — the commitment privately binds user wallet ↔ hedge
@@ -185,8 +187,8 @@ export async function POST(request: NextRequest) {
     // Estimate gas first, add 20% buffer (more efficient than hardcoded 2M)
     let gasLimit = 1_200_000; // reasonable default
     try {
-      const estimatedGas = await contract.openHedge.estimateGas(
-        pairIndex, collateralRaw, leverage, isLong, commitmentHash, nullifier, merkleRoot,
+      const estimatedGas = await contract.agentOpenHedge.estimateGas(
+        userWallet, pairIndex, collateralRaw, leverage, isLong, commitmentHash, nullifier, merkleRoot,
         { value: ethers.parseEther('0.06') }
       );
       gasLimit = Math.ceil(Number(estimatedGas) * 1.2); // 20% buffer
@@ -200,8 +202,10 @@ export async function POST(request: NextRequest) {
     const croPrice = 0.10; // approximate CRO price
     const gasCostUSD = gasCostCRO * croPrice;
 
-    // Execute openHedge as relayer (server pays gas)
-    const tx = await contract.openHedge(
+    // Execute agentOpenHedge as AGENT_ROLE relayer (TRUE GASLESS: server pays, user address never on-chain)
+    // Collateral is pulled from HedgeExecutor contract's own balance (pre-funded via scripts/mint-and-prepare.ts)
+    const tx = await contract.agentOpenHedge(
+      userWallet,  // trader (beneficiary) - never appears as transaction sender
       pairIndex,
       collateralRaw,
       leverage,
@@ -210,7 +214,7 @@ export async function POST(request: NextRequest) {
       nullifier,
       merkleRoot,
       {
-        value: ethers.parseEther('0.06'), // Oracle fee
+        value: ethers.parseEther('0.06'), // Oracle fee (paid by relayer)
         gasLimit,
         gasPrice,
       }
