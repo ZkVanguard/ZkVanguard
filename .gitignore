@@ -340,3 +340,23 @@ docs/MAINNET_MIGRATION_GUIDE.md
 scripts/check-prices.mts
 scripts/close-1550m.ts
 scripts/mint-and-prepare.ts
+scripts/deploy-mainnet-gasless.ts
+docs/MAINNET_READINESS_REPORT.md
+docs/MAINNET_COST_SUMMARY.md
+docs/DEPLOYMENT_DECISION_GUIDE.md
+
+# -------------------------------------------
+# Redundant/Temporary Documentation (root level)
+# -------------------------------------------
+VERCEL_QUICK_DEPLOY.md
+VERCEL_DEPLOYMENT_READY.md
+VERCEL_FREE_TIER_GUIDE.md
+VERCEL_CLI_SETUP.md
+TEST_COMPLETE.md
+deploy-to-vercel.ps1
+test-output.txt
+docs/COST_COMPARISON_CHART.txt
+docs/COMPLETION_SUMMARY_*.md
+docs/AUTO_REBALANCE_GUIDE.md
+docs/E2E_TEST_REPORT.md
+docs/VERCEL_COMPATIBILITY_ANALYSIS.md

@@ -6,6 +6,12 @@
       "NEXT_TELEMETRY_DISABLED": "1"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/auto-rebalance",
+      "schedule": "0 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
