@@ -9,7 +9,7 @@
   "crons": [
     {
       "path": "/api/cron/auto-rebalance",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "headers": [
