@@ -80,12 +80,14 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
   const prices: Record<number, number> = {};
   let isLive = false;
 
+  // Try Exchange API first (all tickers in one call), then App API as fallback
   try {
     // Single API call — fetch ALL tickers at once
     const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(8000), // 8s timeout (Vercel Singapore can be slow)
+      signal: AbortSignal.timeout(8000),
+      cache: 'no-store', // bypass any CDN/edge caching
     });
-    if (!response.ok) throw new Error(`Crypto.com API ${response.status}`);
+    if (!response.ok) throw new Error(`Crypto.com Exchange API ${response.status}`);
 
     const data = await response.json();
     const tickers: Array<{ i: string; a: string }> = data.result?.data || [];
@@ -106,11 +108,43 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
     // Only mark as live if we got at least BTC price
     if (prices[0] && prices[0] > 0) {
       isLive = true;
-      // Cache the full map for 15s
       _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
     }
   } catch (err) {
-    console.warn('⚠️ Live price fetch failed:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Exchange API failed, trying App API:', err instanceof Error ? err.message : err);
+  }
+
+  // Fallback: Crypto.com App API (v2) — separate calls per pair but different CDN
+  if (!isLive) {
+    try {
+      const pairToTicker: Record<number, string> = {
+        0: 'BTC_USDT', 1: 'ETH_USDT', 2: 'CRO_USDT',
+        3: 'ATOM_USDT', 4: 'DOGE_USDT', 5: 'SOL_USDT',
+      };
+      // Fetch BTC first (most important), then others in parallel
+      const fetches = pairIndices.map(async (idx) => {
+        try {
+          const ticker = pairToTicker[idx];
+          if (!ticker) return;
+          const r = await fetch(`https://api.crypto.com/v2/public/get-ticker?instrument_name=${ticker}`, {
+            signal: AbortSignal.timeout(5000),
+            cache: 'no-store',
+          });
+          if (r.ok) {
+            const d = await r.json();
+            const p = parseFloat(d.result?.data?.[0]?.a ?? d.result?.data?.a ?? '0');
+            if (p > 0) prices[idx] = p;
+          }
+        } catch { /* individual pair failed */ }
+      });
+      await Promise.all(fetches);
+      if (prices[0] && prices[0] > 0) {
+        isLive = true;
+        _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
+      }
+    } catch (err) {
+      console.warn('⚠️ App API also failed:', err instanceof Error ? err.message : err);
+    }
   }
 
   // Fill in missing with fallbacks (only when API failed)
