@@ -56,26 +56,34 @@ const MOONLANDER_ABI = [
 // ─── Bulk price cache (single Crypto.com API call, cached 15s) ────────────
 let _priceCache: { prices: Record<number, number>; expiresAt: number } | null = null;
 
+interface LivePriceResult {
+  prices: Record<number, number>;
+  /** true when prices came from a successful Crypto.com API call */
+  isLive: boolean;
+}
+
 /**
  * Fetch live prices from Crypto.com Exchange API in a SINGLE HTTP call.
  * Results are cached for 15 seconds to avoid duplicate fetches.
+ * Returns { prices, isLive } so callers know whether data is truly fresh.
  */
-async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, number>> {
+async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> {
   // Return cached prices if still valid
   if (_priceCache && Date.now() < _priceCache.expiresAt) {
     const cached: Record<number, number> = {};
     for (const idx of pairIndices) {
       cached[idx] = _priceCache.prices[idx] ?? FALLBACK_PRICES[idx] ?? 1000;
     }
-    return cached;
+    return { prices: cached, isLive: true }; // cache was live within 15s
   }
 
   const prices: Record<number, number> = {};
+  let isLive = false;
 
   try {
     // Single API call — fetch ALL tickers at once
     const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(8000), // 8s timeout (Vercel Singapore can be slow)
     });
     if (!response.ok) throw new Error(`Crypto.com API ${response.status}`);
 
@@ -95,18 +103,22 @@ async function fetchLivePrices(pairIndices: number[]): Promise<Record<number, nu
       }
     }
 
-    // Cache the full map for 15s
-    _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
+    // Only mark as live if we got at least BTC price
+    if (prices[0] && prices[0] > 0) {
+      isLive = true;
+      // Cache the full map for 15s
+      _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
+    }
   } catch (err) {
-    console.warn('Live price fetch failed, using fallbacks:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Live price fetch failed:', err instanceof Error ? err.message : err);
   }
 
-  // Fill in missing with fallbacks
+  // Fill in missing with fallbacks (only when API failed)
   for (const idx of pairIndices) {
     if (!prices[idx]) prices[idx] = FALLBACK_PRICES[idx] || 1000;
   }
 
-  return prices;
+  return { prices, isLive };
 }
 
 // ─── Background resync: validate DB hedges against on-chain RPC ──────────────
@@ -340,29 +352,39 @@ export async function GET(request: NextRequest) {
         }
 
         // ALWAYS fetch live prices from Crypto.com (in-memory 15s cache prevents spam)
-        // Previously this was fire-and-forget which caused stale $71K BTC prices
-        const livePrices = await fetchLivePrices([0, 1, 2, 3, 4, 5]);
-        console.log(`📡 LIVE PRICES fetched: BTC=$${livePrices[0]} ETH=$${livePrices[1]} CRO=$${livePrices[2]}`);
+        const { prices: livePrices, isLive: pricesAreLive } = await fetchLivePrices([0, 1, 2, 3, 4, 5]);
+        console.log(`📡 Prices: BTC=$${livePrices[0]} ETH=$${livePrices[1]} CRO=$${livePrices[2]} live=${pricesAreLive}`);
         const priceMap: Record<string, number> = {};
+        let actualPriceSource: 'crypto.com' | 'db-cache' | 'fallback' = 'fallback';
         for (const symbol of ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL']) {
           const pairIdx = Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === symbol);
-          const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx)] : undefined;
-          const dbCached = cachedPrices[symbol];
-          priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 1000;
+          if (pricesAreLive && pairIdx !== undefined) {
+            // Live price from Crypto.com — always preferred
+            priceMap[symbol] = livePrices[parseInt(pairIdx)];
+            actualPriceSource = 'crypto.com';
+          } else {
+            // Fallback chain: live (possibly fallback) → DB cache → hardcoded fallback
+            const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx)] : undefined;
+            const dbCached = cachedPrices[symbol];
+            priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 1000;
+            if (dbCached?.price) actualPriceSource = 'db-cache';
+          }
         }
 
-        // Persist live prices to DB cache (fire-and-forget — for next request's fallback)
-        const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
-          symbol: PAIR_SYMBOLS[parseInt(idx)],
-          price,
-          source: 'cryptocom-exchange',
-        }));
-        upsertPrices(priceUpdates).catch(() => {});
-        const priceMapForDb: Record<string, { price: number; source: string }> = {};
-        for (const [idx, price] of Object.entries(livePrices)) {
-          priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
+        // ONLY persist to DB when prices are truly live (prevents stale data loop)
+        if (pricesAreLive) {
+          const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
+            symbol: PAIR_SYMBOLS[parseInt(idx)],
+            price,
+            source: 'cryptocom-exchange',
+          }));
+          upsertPrices(priceUpdates).catch(() => {});
+          const priceMapForDb: Record<string, { price: number; source: string }> = {};
+          for (const [idx, price] of Object.entries(livePrices)) {
+            priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
+          }
+          batchUpdateHedgePrices(priceMapForDb).catch(() => {});
         }
-        batchUpdateHedgePrices(priceMapForDb).catch(() => {});
 
         // Build response from DB data
         const hedgeDetails = filteredHedges.map(h => {
@@ -420,7 +442,7 @@ export async function GET(request: NextRequest) {
             onChain: true,
             chain: h.chain || 'cronos-testnet',
             contractAddress: h.contract_address || HEDGE_EXECUTOR,
-            priceSource: h.status === 'active' ? (cachedPrices[h.asset] ? 'db-cache' : 'db-stored') : 'closed',
+            priceSource: h.status === 'active' ? actualPriceSource : 'closed',
           };
         });
 
@@ -522,7 +544,7 @@ export async function GET(request: NextRequest) {
         },
       ]),
       // Live prices — single Crypto.com API call, cached 15s
-      fetchLivePrices([0, 1, 2, 3, 4, 5]),
+      fetchLivePrices([0, 1, 2, 3, 4, 5]).then(r => r.prices),
     ]);
 
     const hedgeIds = [...new Set([...hedgeIdsResult[0], ...hedgeIdsResult[1]])];
