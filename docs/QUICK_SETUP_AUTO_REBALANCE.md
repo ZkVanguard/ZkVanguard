@@ -7,6 +7,14 @@
 **Days Since Last Rebalance:** 7 days
 **Auto-Management Status:** ❌ DISABLED
 
+> **🆓 Want to run this 24/7 in production for FREE?**  
+> See [docs/FREE_SERVICES_GUIDE.md](FREE_SERVICES_GUIDE.md) for:
+> - ✅ FREE hosting (Vercel)
+> - ✅ FREE automated cron jobs
+> - ✅ FREE gasless relayer (Gelato/Biconomy)
+> - ✅ FREE notifications (Discord/Telegram)
+> - ✅ Total cost: **$0/month** for up to 100 portfolios!
+
 ---
 
 ## ✅ Enable in 3 Steps (2 minutes)
@@ -373,5 +381,7 @@ curl -X POST http://localhost:3000/api/agents/auto-rebalance?action=trigger_asse
   -d '{"portfolioId": 3, "walletAddress": "0x..."}'
 ```
 
-**Read full guide:**
-[docs/AUTO_REBALANCE_GUIDE.md](AUTO_REBALANCE_GUIDE.md)
+**Read more guides:**
+- [docs/AUTO_REBALANCE_GUIDE.md](AUTO_REBALANCE_GUIDE.md) - Full implementation guide
+- [docs/FREE_SERVICES_GUIDE.md](FREE_SERVICES_GUIDE.md) - 🆓 Deploy for FREE in production
+- [docs/SCALABILITY_ANALYSIS.md](SCALABILITY_ANALYSIS.md) - Scaling from 1 to 500K users
