@@ -53,6 +53,7 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
   const [targetAPY, setTargetAPY] = useState(portfolio.targetAPY);
   const [autoRebalance, setAutoRebalance] = useState(true);
   const [rebalanceThreshold, setRebalanceThreshold] = useState(5);
+  const [saving, setSaving] = useState(false);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: PieChart },
@@ -411,13 +412,49 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
               {/* Save Button */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    // TODO: Implement save functionality
-                    alert('Settings saved successfully!');
+                  onClick={async () => {
+                    if (!walletAddress) {
+                      alert('Please connect your wallet first');
+                      return;
+                    }
+
+                    setSaving(true);
+                    try {
+                      // Enable/disable auto-rebalancing based on toggle
+                      const action = autoRebalance ? 'enable' : 'disable';
+                      const response = await fetch(`/api/agents/auto-rebalance?action=${action}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          portfolioId: portfolio.id,
+                          walletAddress,
+                          config: {
+                            threshold: rebalanceThreshold,
+                            frequency: 'DAILY',
+                            autoApprovalEnabled: true,
+                            autoApprovalThreshold: 50000, // $50K default
+                          },
+                        }),
+                      });
+
+                      const result = await response.json();
+
+                      if (result.success) {
+                        alert(`Settings saved! Auto-rebalancing ${autoRebalance ? 'enabled' : 'disabled'} for this portfolio.`);
+                      } else {
+                        throw new Error(result.error || 'Failed to save settings');
+                      }
+                    } catch (error) {
+                      console.error('Failed to save settings:', error);
+                      alert(`Error: ${error instanceof Error ? error.message : 'Failed to save settings'}`);
+                    } finally {
+                      setSaving(false);
+                    }
                   }}
-                  className="flex-1 bg-[#007AFF] text-white py-3 px-6 rounded-xl font-medium hover:bg-[#0051D5] transition-colors"
+                  disabled={saving}
+                  className="flex-1 bg-[#007AFF] text-white py-3 px-6 rounded-xl font-medium hover:bg-[#0051D5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {saving ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
                   onClick={() => {
