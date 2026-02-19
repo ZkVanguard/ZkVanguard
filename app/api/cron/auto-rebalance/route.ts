@@ -141,6 +141,7 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
   const assessment = await assessPortfolio(portfolioId, config.walletAddress);
   
   if (!assessment) {
+    logger.warn(`[AutoRebalance Cron] Unable to fetch portfolio data for portfolio ${portfolioId}`);
     return {
       portfolioId,
       status: 'skipped',
@@ -148,21 +149,29 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
     };
   }
   
-  // Check if rebalancing needed
-  const maxDrift = Math.max(...assessment.drifts.map(d => Math.abs(d.driftPercent)));
+  // Check if rebalancing needed - use absolute drift % (e.g., 35% → 37% = 2% drift)
+  const maxAbsoluteDrift = Math.max(...assessment.drifts.map(d => Math.abs(d.drift)));
   
-  if (maxDrift < threshold) {
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} within threshold (drift: ${maxDrift.toFixed(2)}%)`);
+  if (maxAbsoluteDrift < threshold) {
+    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} within threshold (max drift: ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%)`);
     return {
       portfolioId,
       status: 'checked',
-      drift: maxDrift,
-      reason: `Drift ${maxDrift.toFixed(2)}% < threshold ${threshold}%`,
+      drift: maxAbsoluteDrift,
+      reason: `Max drift ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%`,
     };
   }
   
   // Drift detected
-  logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} requires rebalancing (drift: ${maxDrift.toFixed(2)}%)`);
+  logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} requires rebalancing (max drift: ${maxAbsoluteDrift.toFixed(2)}% > threshold ${threshold}%)`);
+  logger.info(`[AutoRebalance Cron] Drift details:`, {
+    drifts: assessment.drifts.map(d => ({
+      asset: d.asset,
+      target: `${d.target}%`,
+      current: `${d.current.toFixed(1)}%`,
+      drift: `${d.drift > 0 ? '+' : ''}${d.drift.toFixed(1)}%`,
+    })),
+  });
   
   // Check auto-approval
   if (!autoApprovalEnabled) {
@@ -171,18 +180,18 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
     return {
       portfolioId,
       status: 'skipped',
-      drift: maxDrift,
+      drift: maxAbsoluteDrift,
       reason: 'Manual approval required',
     };
   }
   
   if (autoApprovalThreshold && assessment.totalValue > autoApprovalThreshold) {
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} exceeds auto-approval threshold ($${assessment.totalValue.toLocaleString()})`);
+    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} exceeds auto-approval threshold ($${assessment.totalValue.toLocaleString()} > $${autoApprovalThreshold.toLocaleString()})`);
     // TODO: Send notification to user
     return {
       portfolioId,
       status: 'skipped',
-      drift: maxDrift,
+      drift: maxAbsoluteDrift,
       reason: `Value $${assessment.totalValue.toLocaleString()} > threshold $${autoApprovalThreshold.toLocaleString()}`,
     };
   }
@@ -201,17 +210,17 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
     return {
       portfolioId,
       status: 'rebalanced',
-      drift: maxDrift,
+      drift: maxAbsoluteDrift,
       txHash: result.txHash,
-      reason: `Rebalanced (drift: ${maxDrift.toFixed(2)}%)`,
+      reason: `Rebalanced (max drift: ${maxAbsoluteDrift.toFixed(2)}%)`,
     };
     
   } catch (error: any) {
-    logger.error(`[AutoRebalance Cron] Failed to rebalance portfolio ${portfolioId}:`, error);
+    logger.error(`[Auto Rebalance Cron] Failed to rebalance portfolio ${portfolioId}:`, error);
     return {
       portfolioId,
       status: 'error',
-      drift: maxDrift,
+      drift: maxAbsoluteDrift,
       error: error.message,
     };
   }
