@@ -49,37 +49,57 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
   try {
     logger.info(`[RebalanceExecutor] Assessing portfolio ${portfolioId}`);
     
-    // Fetch portfolio data from API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/portfolio/${portfolioId}`, {
+    // Fetch portfolio data from blockchain via API
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
+                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+                    'http://localhost:3000';
+    
+    const response = await fetch(`${baseUrl}/api/portfolio/${portfolioId}?refresh=true`, {
       method: 'GET',
       headers: {
-        'x-wallet-address': walletAddress,
+        'Content-Type': 'application/json',
       },
     });
     
     if (!response.ok) {
-      logger.error(`[RebalanceExecutor] Failed to fetch portfolio ${portfolioId}: ${response.status}`);
+      logger.error(`[RebalanceExecutor] Failed to fetch portfolio ${portfolioId}: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      logger.error(`[RebalanceExecutor] Error response: ${errorText}`);
       return null;
     }
     
     const portfolio = await response.json();
     
-    if (!portfolio.data) {
-      logger.error(`[RebalanceExecutor] No data for portfolio ${portfolioId}`);
+    if (!portfolio || !portfolio.assetBalances) {
+      logger.error(`[RebalanceExecutor] Invalid portfolio data structure for portfolio ${portfolioId}`);
       return null;
     }
     
-    const { assets, targetAllocations, totalValue } = portfolio.data;
+    const totalValue = portfolio.calculatedValueUSD || portfolio.entryValueUSD || 0;
+    const assets = portfolio.assetBalances || [];
+    
+    // For institutional portfolios, target allocations are: BTC 35%, ETH 30%, CRO 20%, SUI 15%
+    const targetAllocations: Record<string, number> = portfolio.isInstitutional ? {
+      'BTC': 35,
+      'ETH': 30,
+      'CRO': 20,
+      'SUI': 15,
+    } : {};
     
     // Calculate drifts
     const drifts: AllocationDrift[] = [];
     const proposedActions: any[] = [];
     
+    if (!portfolio.isInstitutional || assets.length === 0) {
+      logger.info(`[RebalanceExecutor] Portfolio ${portfolioId} is not institutional or has no assets, skipping`);
+      return null;
+    }
+    
     for (const asset of assets) {
       const target = targetAllocations[asset.symbol] || 0;
-      const current = (asset.value / totalValue) * 100;
+      const current = asset.percentage || ((asset.valueUSD / totalValue) * 100);
       const drift = current - target;
-      const driftPercent = Math.abs((drift / target) * 100);
+      const driftPercent = target > 0 ? Math.abs((drift / target) * 100) : 0;
       
       drifts.push({
         asset: asset.symbol,
@@ -87,28 +107,30 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
         current,
         drift,
         driftPercent,
-        shouldRebalance: driftPercent > 5, // Will be compared to config threshold by caller
+        shouldRebalance: Math.abs(drift) > 1, // Check if drift is more than 1% absolute
       });
       
       // Generate proposed actions
-      if (drift > 0) {
-        // Over-allocated, need to sell
-        const amountToSell = ((drift / 100) * totalValue);
-        proposedActions.push({
-          asset: asset.symbol,
-          action: 'SELL' as const,
-          amount: amountToSell,
-          reason: `Reduce from ${current.toFixed(1)}% to ${target}% (drift: +${drift.toFixed(1)}%)`,
-        });
-      } else if (drift < 0) {
-        // Under-allocated, need to buy
-        const amountToBuy = ((Math.abs(drift) / 100) * totalValue);
-        proposedActions.push({
-          asset: asset.symbol,
-          action: 'BUY' as const,
-          amount: amountToBuy,
-          reason: `Increase from ${current.toFixed(1)}% to ${target}% (drift: ${drift.toFixed(1)}%)`,
-        });
+      if (Math.abs(drift) > 1) { // Only act on drifts > 1%
+        if (drift > 0) {
+          // Over-allocated, need to sell
+          const amountToSell = ((drift / 100) * totalValue);
+          proposedActions.push({
+            asset: asset.symbol,
+            action: 'SELL' as const,
+            amount: amountToSell,
+            reason: `Reduce from ${current.toFixed(1)}% to ${target}% (drift: +${drift.toFixed(1)}%)`,
+          });
+        } else if (drift < 0) {
+          // Under-allocated, need to buy
+          const amountToBuy = ((Math.abs(drift) / 100) * totalValue);
+          proposedActions.push({
+            asset: asset.symbol,
+            action: 'BUY' as const,
+            amount: amountToBuy,
+            reason: `Increase from ${current.toFixed(1)}% to ${target}% (drift: ${drift.toFixed(1)}%)`,
+          });
+        }
       }
     }
     
@@ -117,12 +139,20 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     const estimatedSlippage = proposedActions.reduce((sum, action) => sum + (action.amount * 0.001), 0); // 0.1% slippage
     const estimatedCost = estimatedGas + estimatedSlippage;
     
-    const maxDriftPercent = Math.max(...drifts.map(d => Math.abs(d.driftPercent)));
+    // Check max absolute drift (not percentage)
+    const maxAbsoluteDrift = Math.max(...drifts.map(d => Math.abs(d.drift)));
+    
+    logger.info(`[RebalanceExecutor] Portfolio ${portfolioId} assessment complete:`, {
+      totalValue: totalValue.toFixed(2),
+      maxAbsoluteDrift: maxAbsoluteDrift.toFixed(2),
+      proposedActions: proposedActions.length,
+      drifts: drifts.map(d => `${d.asset}: ${d.current.toFixed(1)}% (target ${d.target}%, drift ${d.drift.toFixed(1)}%)`),
+    });
     
     return {
       portfolioId,
       totalValue,
-      requiresRebalance: maxDriftPercent > 5, // Will be refined by caller based on config
+      requiresRebalance: maxAbsoluteDrift > 1, // True if any asset drifts more than 1% absolute
       drifts,
       proposedActions,
       estimatedCost,
