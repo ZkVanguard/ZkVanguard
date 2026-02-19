@@ -683,11 +683,6 @@ class AutoHedgingService {
     // Sort by confidence (highest first)
     return recommendations.sort((a, b) => b.confidence - a.confidence);
   }
-      riskScore,
-      recommendations,
-      timestamp: Date.now(),
-    };
-  }
 
   /**
    * Execute an auto-hedge recommendation
