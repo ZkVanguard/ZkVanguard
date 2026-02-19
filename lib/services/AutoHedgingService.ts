@@ -192,38 +192,26 @@ class AutoHedgingService {
    */
   private async loadPortfolioSettings(config: AutoHedgeConfig): Promise<AutoHedgeConfig> {
     try {
-      // Query portfolio data from database
-      const result = await query(
-        `SELECT target_yield, risk_tolerance, portfolio_id
-         FROM portfolio_snapshots 
-         WHERE wallet_address = $1 
-         ORDER BY snapshot_time DESC 
-         LIMIT 1`,
-        [config.walletAddress.toLowerCase()]
-      );
-
-      if (result.length > 0) {
-        const portfolio = result[0];
-        const riskTolerance = parseInt(portfolio.risk_tolerance as string) || 50;
-        
-        // Map risk tolerance (0-100) to risk threshold (1-10)
-        // Lower tolerance = lower threshold = more aggressive hedging
-        // Higher tolerance = higher threshold = less hedging
-        const riskThreshold = Math.max(2, Math.min(10, Math.floor((riskTolerance / 10) * 0.8 + 2)));
-        
-        logger.info('[AutoHedging] Loaded portfolio settings', {
-          portfolioId: config.portfolioId,
-          riskTolerance,
-          calculatedThreshold: riskThreshold,
-        });
-
-        return {
-          ...config,
-          riskThreshold,
-        };
-      }
+      // Use risk tolerance from on-chain contract data
+      // Risk tolerance will be fetched from RWAManager in fetchPortfolioData
+      // For now, use the config's default or set a reasonable default
+      const riskTolerance = config.riskThreshold || 50; // Default medium risk
       
-      return config;
+      // Map risk tolerance (0-100) to risk threshold (1-10)
+      // Lower tolerance = lower threshold = more aggressive hedging
+      // Higher tolerance = higher threshold = less hedging
+      const calculatedThreshold = Math.max(2, Math.min(10, Math.floor((riskTolerance / 10) * 0.8 + 2)));
+      
+      logger.info('[AutoHedging] Using portfolio settings', {
+        portfolioId: config.portfolioId,
+        riskTolerance,
+        calculatedThreshold,
+      });
+
+      return {
+        ...config,
+        riskThreshold: calculatedThreshold,
+      };
     } catch (error) {
       logger.error('[AutoHedging] Error loading portfolio settings', { error });
       return config;
