@@ -51,7 +51,7 @@
     "agents:dev": "bun --watch run agents/core/LeadAgent.ts",
     "dev:next": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "build:next": "cross-env NODE_OPTIONS=--no-deprecation next build",
-    "start:next": "next start",
+    "start:next": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "frontend:dev": "bun run dev:next",
     "frontend:build": "bun run build:next",
     "frontend:preview": "bun run start:next",
@@ -61,7 +61,7 @@
     "translate": "bun run scripts/translate-whitepaper.ts",
     "translate:whitepaper": "bun run scripts/translate-whitepaper.ts",
     "dev": "bun run dev:next",
-    "build": "next build",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
     "build:full": "bun run compile && bun run frontend:build",
     "start": "bun run agents:start"
   },
