@@ -13,11 +13,18 @@ import { logger } from '@/lib/utils/logger';
 
 export async function GET(request: NextRequest) {
   try {
+    // Ensure service is running
+    const status = autoHedgingService.getStatus();
+    if (!status.isRunning) {
+      logger.info('[AutoHedge API] Service not running, starting...');
+      await autoHedgingService.start();
+    }
+    
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
     
     // Get service status
-    const status = autoHedgingService.getStatus();
+    const currentStatus = autoHedgingService.getStatus();
     
     // If portfolio specified, get its last risk assessment
     let riskAssessment = null;
@@ -27,10 +34,10 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({
       success: true,
-      isRunning: status.isRunning,
-      enabledPortfolios: status.enabledPortfolios,
-      lastUpdate: status.lastUpdate,
-      config: status.config,
+      isRunning: currentStatus.isRunning,
+      enabledPortfolios: currentStatus.enabledPortfolios,
+      lastUpdate: currentStatus.lastUpdate,
+      config: currentStatus.config,
       riskAssessment,
     });
   } catch (error) {
