@@ -66,7 +66,6 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "https://zkvanguard.vercel.app",
-        "https://chronos-vanguard.vercel.app",
         "https://*.vercel.app",
         "https://starknova.xyz",
         "https://*.starknova.xyz",

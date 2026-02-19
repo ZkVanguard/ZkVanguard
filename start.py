@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Chronos-Vanguard — Start ZKP Server + Cloudflare Tunnel
+ZkVanguard — Start ZKP Server + Cloudflare Tunnel
 Cross-platform launcher (Windows / macOS / Linux)
 
 Usage:  python start.py
@@ -83,7 +83,7 @@ def main():
 
     cloudflared = find_cloudflared()
 
-    print(f"\n{CYAN}  Starting Chronos-Vanguard services...{RESET}\n")
+    print(f"\n{CYAN}  Starting ZkVanguard services...{RESET}\n")
 
     # Python executable — use the same interpreter running this script
     python = sys.executable

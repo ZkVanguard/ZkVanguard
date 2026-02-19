@@ -457,7 +457,7 @@ async function testX402GaslessPayments() {
 async function runAllTests() {
   console.log('\n');
   log('╔══════════════════════════════════════════════════════════╗', COLORS.cyan);
-  log('║     CHRONOS VANGUARD - FULL SYSTEM INTEGRATION TEST      ║', COLORS.cyan);
+  log('║      ZKVANGUARD - FULL SYSTEM INTEGRATION TEST           ║', COLORS.cyan);
   log('║          SafeGuard + ZK + Contracts + Agents             ║', COLORS.cyan);
   log('╚══════════════════════════════════════════════════════════╝', COLORS.cyan);
 

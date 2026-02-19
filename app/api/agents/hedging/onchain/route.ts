@@ -240,7 +240,7 @@ const STATUS_NAMES = ['PENDING', 'ACTIVE', 'CLOSED', 'LIQUIDATED', 'CANCELLED'];
 function deriveProxyAddress(owner: string, nonce: number, zkBindingHash: string): string {
   const packed = ethers.solidityPacked(
     ['string', 'address', 'uint256', 'bytes32'],
-    ['CHRONOS_PDA_V1', owner, nonce, zkBindingHash]
+    ['ZKVANGUARD_PDA_V1', owner, nonce, zkBindingHash]
   );
   const hash = ethers.keccak256(packed);
   // Take last 20 bytes as address

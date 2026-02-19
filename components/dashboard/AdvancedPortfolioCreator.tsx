@@ -183,7 +183,7 @@ export function AdvancedPortfolioCreator({ isOpen, onOpenChange, hideTrigger = f
         setZkProofHash(proofHash);
         
         // Step 2: Sign the strategy configuration
-        const message = `Chronos Vanguard Portfolio Strategy\n\nName: ${strategy.name}\nTarget Yield: ${strategy.targetYield / 100}%\nRisk: ${strategy.riskTolerance}\nZK Proof: ${proofHash}\nTimestamp: ${Date.now()}`;
+        const message = `ZkVanguard Portfolio Strategy\n\nName: ${strategy.name}\nTarget Yield: ${strategy.targetYield / 100}%\nRisk: ${strategy.riskTolerance}\nZK Proof: ${proofHash}\nTimestamp: ${Date.now()}`;
         
         try {
           // For SUI wallets, use a hash-based verification instead of signature

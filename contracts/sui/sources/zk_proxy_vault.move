@@ -37,7 +37,7 @@ module zkvanguard::zk_proxy_vault {
     // ============ Constants ============
     const DEFAULT_TIME_LOCK_THRESHOLD: u64 = 100_000_000_000; // 100 SUI in MIST
     const DEFAULT_TIME_LOCK_DURATION: u64 = 86400000; // 24 hours in milliseconds
-    const PDA_SEED: vector<u8> = b"CHRONOS_PDA_V1";
+    const PDA_SEED: vector<u8> = b"ZKVANGUARD_PDA_V1";
 
     // ============ Structs ============
 

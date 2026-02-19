@@ -116,7 +116,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       const timestamp = Math.floor(Date.now() / 1000);
 
       const domain = {
-        name: 'Chronos Vanguard',
+        name: 'ZkVanguard',
         version: '1',
         chainId: 338,
         verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`,
@@ -162,7 +162,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       const timestamp = Math.floor(Date.now() / 1000);
 
       const domain = {
-        name: 'Chronos Vanguard',
+        name: 'ZkVanguard',
         version: '1',
         chainId: 338,
         verifyingContract: '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`,
