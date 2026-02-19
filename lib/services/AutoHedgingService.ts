@@ -13,6 +13,10 @@ import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { cryptocomExchangeService } from './CryptocomExchangeService';
 import { getAgentOrchestrator } from './agent-orchestrator';
+import { ethers } from 'ethers';
+import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
+import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getMarketDataService } from './RealMarketDataService';
 
 // Configuration
 const CONFIG = {
@@ -437,7 +441,8 @@ class AutoHedgingService {
   }
 
   /**
-   * Fetch comprehensive portfolio data from database and on-chain
+   * Fetch comprehensive portfolio data from on-chain sources (blockchain)
+   * Uses RWAManager contract for trustless data retrieval
    */
   private async fetchPortfolioData(portfolioId: number, walletAddress: string): Promise<{
     totalValue: number;
@@ -446,73 +451,145 @@ class AutoHedgingService {
     riskMetrics: { volatility: number; sharpeRatio: number; maxDrawdown: number };
     activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }>;
   }> {
-    // Fetch latest portfolio snapshot
-    const snapshotResult = await query(
-      `SELECT total_value, positions, volatility, sharpe_ratio, max_drawdown
-       FROM portfolio_snapshots
-       WHERE wallet_address = $1
-       ORDER BY snapshot_time DESC
-       LIMIT 1`,
-      [walletAddress.toLowerCase()]
-    );
+    try {
+      // Setup on-chain connection
+      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+      const addresses = getContractAddresses(338); // Cronos Testnet
+      const rwaManager = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
+      const marketDataService = getMarketDataService();
 
-    // Fetch active hedges
+      // Read portfolio data from blockchain
+      const portfolioData = await rwaManager.portfolios(portfolioId);
+      const [owner, totalValueBN, targetYield, riskTolerance, lastRebalance, isActive] = portfolioData;
+      
+      if (!isActive) {
+        logger.warn('[AutoHedging] Portfolio inactive on-chain', { portfolioId });
+        return this.emptyPortfolioData(portfolioId);
+      }
+
+      // Get portfolio assets from contract
+      const assetAddresses = await rwaManager.getPortfolioAssets(portfolioId);
+      
+      let totalValue = 0;
+      let positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+
+      // Read asset allocations from contract
+      for (const assetAddress of assetAddresses) {
+        const allocation = await rwaManager.getAssetAllocation(portfolioId, assetAddress);
+        const addr = assetAddress.toLowerCase();
+        
+        // MockUSDC = institutional portfolio with virtual allocations
+        if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') {
+          const mockUsdcValue = Number(allocation) / 1e6; // 6 decimals
+          
+          // Large portfolio? Create virtual BTC/ETH/CRO/SUI allocations
+          if (mockUsdcValue > 1000000) {
+            totalValue = mockUsdcValue;
+            const virtualAllocations = [
+              { symbol: 'BTC', percentage: 35 },
+              { symbol: 'ETH', percentage: 30 },
+              { symbol: 'CRO', percentage: 20 },
+              { symbol: 'SUI', percentage: 15 },
+            ];
+            
+            // Fetch live prices and calculate positions
+            for (const alloc of virtualAllocations) {
+              try {
+                const price = await marketDataService.getPrice(alloc.symbol);
+                const value = mockUsdcValue * (alloc.percentage / 100);
+                const balance = value / price;
+                
+                // Get 24h price change
+                const priceData = await marketDataService.getPriceWithChange(alloc.symbol);
+                const change24h = priceData.change24h || 0;
+                
+                positions.push({
+                  symbol: alloc.symbol,
+                  value,
+                  change24h,
+                  balance,
+                });
+              } catch (error) {
+                logger.warn(`[AutoHedging] Failed to fetch price for ${alloc.symbol}`, { error });
+              }
+            }
+          }
+        }
+      }
+
+      // Calculate allocations
+      const allocations: Record<string, number> = {};
+      positions.forEach(p => {
+        allocations[p.symbol] = (p.value / totalValue) * 100;
+      });
+
+      // Calculate on-chain risk metrics from positions
+      const volatility = this.calculateVolatility(positions);
+      const maxDrawdown = this.calculateDrawdown(positions, totalValue);
+      const riskMetrics = {
+        volatility,
+        sharpeRatio: 0, // Not calculable from on-chain data alone
+        maxDrawdown,
+      };
+
+      // Fetch active hedges (kept in database for internal tracking)
+      const hedgesResult = await query(
+        `SELECT asset, side, size, notional_value
+         FROM hedges
+         WHERE portfolio_id = $1 AND status = 'active'`,
+        [portfolioId]
+      );
+      
+      const activeHedges = hedgesResult.rows.map(h => ({
+        asset: h.asset,
+        side: h.side,
+        size: parseFloat(h.size) || 0,
+        notionalValue: parseFloat(h.notional_value) || 0,
+      }));
+
+      logger.info('[AutoHedging] Fetched on-chain portfolio data', {
+        portfolioId,
+        totalValue: `$${totalValue.toLocaleString()}`,
+        positions: positions.length,
+        activeHedges: activeHedges.length,
+      });
+
+      return {
+        totalValue,
+        positions,
+        allocations,
+        riskMetrics,
+        activeHedges,
+      };
+    } catch (error) {
+      logger.error('[AutoHedging] Failed to fetch on-chain portfolio data', { error, portfolioId });
+      return this.emptyPortfolioData(portfolioId);
+    }
+  }
+
+  /**
+   * Return empty portfolio data structure
+   */
+  private async emptyPortfolioData(portfolioId: number) {
+    // Still fetch hedges from DB
     const hedgesResult = await query(
       `SELECT asset, side, size, notional_value
        FROM hedges
        WHERE portfolio_id = $1 AND status = 'active'`,
       [portfolioId]
     );
-
-    let totalValue = 0;
-    let positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
-    let riskMetrics = { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 };
-
-    if (snapshotResult.rows.length > 0) {
-      const snapshot = snapshotResult.rows[0];
-      totalValue = parseFloat(snapshot.total_value) || 0;
-      riskMetrics = {
-        volatility: parseFloat(snapshot.volatility) || 0,
-        sharpeRatio: parseFloat(snapshot.sharpe_ratio) || 0,
-        maxDrawdown: parseFloat(snapshot.max_drawdown) || 0,
-      };
-
-      // Parse positions JSON
-      const positionsData = typeof snapshot.positions === 'string' 
-        ? JSON.parse(snapshot.positions)
-        : snapshot.positions;
-      
-      if (Array.isArray(positionsData)) {
-        positions = positionsData.map((p: any) => ({
-          symbol: p.symbol || p.asset,
-          value: parseFloat(p.value || p.valueUSD) || 0,
-          change24h: parseFloat(p.change24h || p.change_24h) || 0,
-          balance: parseFloat(p.balance || p.amount) || 0,
-        }));
-      }
-    }
-
-    // Calculate target allocations
-    const allocations: Record<string, number> = {};
-    if (positions.length > 0) {
-      positions.forEach(p => {
-        allocations[p.symbol] = (p.value / totalValue) * 100;
-      });
-    }
-
-    const activeHedges = hedgesResult.rows.map(h => ({
-      asset: h.asset,
-      side: h.side,
-      size: parseFloat(h.size) || 0,
-      notionalValue: parseFloat(h.notional_value) || 0,
-    }));
-
+    
     return {
-      totalValue,
-      positions,
-      allocations,
-      riskMetrics,
-      activeHedges,
+      totalValue: 0,
+      positions: [],
+      allocations: {},
+      riskMetrics: { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 },
+      activeHedges: hedgesResult.rows.map(h => ({
+        asset: h.asset,
+        side: h.side,
+        size: parseFloat(h.size) || 0,
+        notionalValue: parseFloat(h.notional_value) || 0,
+      })),
     };
   }
 
