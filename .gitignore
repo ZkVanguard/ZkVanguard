@@ -360,3 +360,5 @@ docs/COMPLETION_SUMMARY_*.md
 docs/AUTO_REBALANCE_GUIDE.md
 docs/E2E_TEST_REPORT.md
 docs/VERCEL_COMPATIBILITY_ANALYSIS.md
+scripts/test-auto-hedging-e2e.ts
+scripts/test-vercel-auto-rebalance.ts

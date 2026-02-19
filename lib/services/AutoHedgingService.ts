@@ -360,11 +360,13 @@ class AutoHedgingService {
       const orchestrator = getAgentOrchestrator();
       const analysisResult = await orchestrator.analyzePortfolio({
         address: walletAddress,
-        portfolioId,
-        positions: portfolioData.positions,
-        allocations: portfolioData.allocations,
-        riskMetrics: portfolioData.riskMetrics,
-        activeHedges: portfolioData.activeHedges,
+        portfolioData: {
+          portfolioId,
+          positions: portfolioData.positions,
+          allocations: portfolioData.allocations,
+          riskMetrics: portfolioData.riskMetrics,
+          activeHedges: portfolioData.activeHedges,
+        },
       });
 
       const aiAnalysis = analysisResult.data as {
@@ -539,10 +541,10 @@ class AutoHedgingService {
       );
       
       const activeHedges = hedgesResult.map(h => ({
-        asset: h.asset,
-        side: h.side,
-        size: parseFloat(h.size) || 0,
-        notionalValue: parseFloat(h.notional_value) || 0,
+        asset: String(h.asset || ''),
+        side: String(h.side || ''),
+        size: parseFloat(String(h.size)) || 0,
+        notionalValue: parseFloat(String(h.notional_value)) || 0,
       }));
 
       logger.info('[AutoHedging] Fetched on-chain portfolio data', {
@@ -583,10 +585,10 @@ class AutoHedgingService {
       allocations: {},
       riskMetrics: { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 },
       activeHedges: hedgesResult.map(h => ({
-        asset: h.asset,
-        side: h.side,
-        size: parseFloat(h.size) || 0,
-        notionalValue: parseFloat(h.notional_value) || 0,
+        asset: String(h.asset || ''),
+        side: String(h.side || ''),
+        size: parseFloat(String(h.size)) || 0,
+        notionalValue: parseFloat(String(h.notional_value)) || 0,
       })),
     };
   }
