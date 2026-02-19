@@ -114,21 +114,14 @@ class AutoHedgingService {
   private enableDefaultPortfolios(): void {
     // Portfolio #3 - Institutional portfolio with $153M+ allocation
     // Wallet: 0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c
-    const portfolio3Config: AutoHedgeConfig = {
+    // Note: Risk threshold will be loaded from portfolio settings
+    this.enableForPortfolio({
       portfolioId: 3,
       walletAddress: '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c',
       enabled: true,
-      riskThreshold: 4, // Auto-hedge when risk score >= 4 (more aggressive for large volatile portfolio)
+      riskThreshold: 5, // Default, will be overridden by portfolio settings
       maxLeverage: CONFIG.DEFAULT_LEVERAGE,
       allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
-    };
-
-    this.autoHedgeConfigs.set(portfolio3Config.portfolioId, portfolio3Config);
-    logger.info('[AutoHedging] Default portfolio enabled', {
-      portfolioId: 3,
-      wallet: portfolio3Config.walletAddress,
-      riskThreshold: portfolio3Config.riskThreshold,
-      allowedAssets: portfolio3Config.allowedAssets,
     });
   }
 
@@ -154,10 +147,26 @@ class AutoHedgingService {
 
   /**
    * Enable auto-hedging for a portfolio
+   * Fetches portfolio settings from on-chain data to use configured risk tolerance
    */
   enableForPortfolio(config: AutoHedgeConfig): void {
-    this.autoHedgeConfigs.set(config.portfolioId, config);
-    logger.info('[AutoHedging] Enabled for portfolio', { portfolioId: config.portfolioId });
+    // Fetch and apply portfolio settings asynchronously
+    this.loadPortfolioSettings(config).then(updatedConfig => {
+      this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
+      logger.info('[AutoHedging] Portfolio enabled with settings', {
+        portfolioId: updatedConfig.portfolioId,
+        riskThreshold: updatedConfig.riskThreshold,
+        riskTolerance: updatedConfig.riskThreshold, // Will be fetched from portfolio
+        allowedAssets: updatedConfig.allowedAssets,
+      });
+    }).catch(error => {
+      // Fallback to provided config if fetch fails
+      this.autoHedgeConfigs.set(config.portfolioId, config);
+      logger.warn('[AutoHedging] Failed to load portfolio settings, using defaults', {
+        portfolioId: config.portfolioId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /**
@@ -166,6 +175,55 @@ class AutoHedgingService {
   disableForPortfolio(portfolioId: number): void {
     this.autoHedgeConfigs.delete(portfolioId);
     logger.info('[AutoHedging] Disabled for portfolio', { portfolioId });
+  }
+
+  /**
+   * Load portfolio settings and map risk tolerance to hedging threshold
+   * Risk tolerance (0-100) → Risk threshold (1-10) mapping:
+   * - 0-20: Very Conservative → threshold 2 (hedge at slightest risk)
+   * - 21-40: Conservative → threshold 4
+   * - 41-60: Moderate → threshold 5-6
+   * - 61-80: Aggressive → threshold 7-8
+   * - 81-100: Very Aggressive → threshold 9-10 (only hedge at high risk)
+   */
+  private async loadPortfolioSettings(config: AutoHedgeConfig): Promise<AutoHedgeConfig> {
+    try {
+      // Query portfolio data from database
+      const result = await query(
+        `SELECT target_yield, risk_tolerance, portfolio_id
+         FROM portfolio_snapshots 
+         WHERE wallet_address = $1 
+         ORDER BY snapshot_time DESC 
+         LIMIT 1`,
+        [config.walletAddress.toLowerCase()]
+      );
+
+      if (result.rows.length > 0) {
+        const portfolio = result.rows[0];
+        const riskTolerance = parseInt(portfolio.risk_tolerance) || 50;
+        
+        // Map risk tolerance (0-100) to risk threshold (1-10)
+        // Lower tolerance = lower threshold = more aggressive hedging
+        // Higher tolerance = higher threshold = less hedging
+        const riskThreshold = Math.max(2, Math.min(10, Math.floor((riskTolerance / 10) * 0.8 + 2)));
+        
+        logger.info('[AutoHedging] Loaded portfolio settings', {
+          portfolioId: config.portfolioId,
+          riskTolerance,
+          calculatedThreshold: riskThreshold,
+        });
+
+        return {
+          ...config,
+          riskThreshold,
+        };
+      }
+      
+      return config;
+    } catch (error) {
+      logger.error('[AutoHedging] Error loading portfolio settings', { error });
+      return config;
+    }
   }
 
   /**
