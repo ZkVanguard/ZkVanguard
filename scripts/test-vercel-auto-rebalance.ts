@@ -19,7 +19,7 @@ import { ethers } from 'ethers';
 const BASE_URL = 'http://localhost:3000';
 const TEST_PORTFOLIO_ID = 3;
 const TEST_WALLET_ADDRESS = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
-const CRON_SECRET = process.env.CRON_SECRET || 'test-secret-12345';
+const CRON_SECRET = process.env.CRON_SECRET?.trim() || 'test-secret-12345';
 
 // ANSI colors
 const colors = {

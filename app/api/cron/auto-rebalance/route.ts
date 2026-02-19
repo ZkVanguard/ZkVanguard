@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   
   // Security: Verify request is from Vercel Cron
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET?.trim();
   
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     logger.warn('[AutoRebalance Cron] Unauthorized request');
