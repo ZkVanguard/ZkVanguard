@@ -3,7 +3,7 @@ neonConfig.webSocketConstructor = require('ws');
 
 async function main() {
   const pool = new Pool({
-    connectionString: 'postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require'
+    connectionString: 'postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=verify-full'
   });
 
   // Get active hedges

@@ -1,6 +1,6 @@
 // Fix ownership for existing gasless hedges that are missing from hedge_ownership table
 const { neon } = require('@neondatabase/serverless');
-const sql = neon('postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require');
+const sql = neon('postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=verify-full');
 
 // Your wallet address
 const USER_WALLET = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';

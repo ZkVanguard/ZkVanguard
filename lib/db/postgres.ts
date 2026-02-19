@@ -12,11 +12,19 @@ export function getPool(): Pool {
     // Remove channel_binding parameter if present (not supported by pg module)
     connectionString = connectionString.replace(/&?channel_binding=[^&]*/g, '').replace('?&', '?');
     
+    // Ensure sslmode=verify-full for security (replaces require/prefer modes)
+    if (connectionString.includes('neon.tech')) {
+      connectionString = connectionString.replace(/sslmode=require|sslmode=prefer/g, 'sslmode=verify-full');
+      if (!connectionString.includes('sslmode=')) {
+        connectionString += (connectionString.includes('?') ? '&' : '?') + 'sslmode=verify-full';
+      }
+    }
+    
     const isNeon = connectionString.includes('neon.tech');
     
     pool = new Pool({
       connectionString,
-      ssl: isNeon ? { rejectUnauthorized: false } : undefined,
+      ssl: isNeon ? { rejectUnauthorized: true } : undefined,
       max: isNeon ? 10 : 20, // Neon free tier has connection limits
       idleTimeoutMillis: isNeon ? 10000 : 30000,
       connectionTimeoutMillis: isNeon ? 5000 : 2000,
