@@ -50,15 +50,27 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     logger.info(`[RebalanceExecutor] Assessing portfolio ${portfolioId}`);
     
     // Fetch portfolio data from blockchain via API
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 
-                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                    'http://localhost:3000';
+    // Use different URLs depending on environment to avoid deployment protection
+    let baseUrl: string;
+    let headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (process.env.VERCEL) {
+      // Running on Vercel - use production domain (zkvanguard.vercel.app has no protection)
+      baseUrl = 'https://zkvanguard.vercel.app';
+    } else if (process.env.NEXT_PUBLIC_API_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_API_URL;
+    } else {
+      // Local development
+      baseUrl = 'http://localhost:3000';
+    }
+    
+    logger.info(`[RebalanceExecutor] Fetching from: ${baseUrl}/api/portfolio/${portfolioId}`);
     
     const response = await fetch(`${baseUrl}/api/portfolio/${portfolioId}?refresh=true`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
     
     if (!response.ok) {
