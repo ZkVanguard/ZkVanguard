@@ -495,13 +495,11 @@ class AutoHedgingService {
             // Fetch live prices and calculate positions
             for (const alloc of virtualAllocations) {
               try {
-                const price = await marketDataService.getPrice(alloc.symbol);
+                const priceData = await marketDataService.getTokenPrice(alloc.symbol);
+                const price = priceData.price;
+                const change24h = priceData.change24h || 0;
                 const value = mockUsdcValue * (alloc.percentage / 100);
                 const balance = value / price;
-                
-                // Get 24h price change
-                const priceData = await marketDataService.getPriceWithChange(alloc.symbol);
-                const change24h = priceData.change24h || 0;
                 
                 positions.push({
                   symbol: alloc.symbol,
