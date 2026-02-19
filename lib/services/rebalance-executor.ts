@@ -156,9 +156,11 @@ export async function executeRebalance(
     // Generate ZK proof
     logger.info(`[RebalanceExecutor] Generating ZK proof for portfolio ${portfolioId}`);
     const zkProof = await generateRebalanceProof(
-      portfolioId,
-      allocationChanges,
-      walletAddress
+      {
+        old_allocations: [], // TODO: fetch current allocations
+        new_allocations: [], // TODO: compute new allocations
+      },
+      portfolioId
     );
     
     // Call rebalance API
