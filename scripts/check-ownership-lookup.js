@@ -1,6 +1,6 @@
 // Quick debug to check hedge ownership lookup
 const { neon } = require('@neondatabase/serverless');
-const sql = neon('postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require');
+const sql = neon('postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=verify-full');
 
 (async () => {
   console.log('=== CHECKING HEDGE OWNERSHIP LOOKUP ===\n');
