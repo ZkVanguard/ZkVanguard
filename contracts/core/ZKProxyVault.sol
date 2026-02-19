@@ -385,7 +385,7 @@ contract ZKProxyVault is
         bytes32 zkBindingHash
     ) internal pure returns (address) {
         bytes32 hash = keccak256(abi.encodePacked(
-            "CHRONOS_PDA_V1",
+            "ZKVANGUARD_PDA_V1",
             owner,
             nonce,
             zkBindingHash

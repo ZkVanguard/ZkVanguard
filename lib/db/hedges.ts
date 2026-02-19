@@ -80,7 +80,7 @@ export interface CreateHedgeParams {
  * This hash cryptographically binds a hedge to a wallet without revealing the wallet address
  */
 export function generateWalletBindingHash(walletAddress: string, hedgeId: string, secret?: string): string {
-  const data = `zk-binding:${walletAddress.toLowerCase()}:${hedgeId}:${secret || 'chronos-vanguard'}`;
+  const data = `zk-binding:${walletAddress.toLowerCase()}:${hedgeId}:${secret || 'zkvanguard'}`;
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 

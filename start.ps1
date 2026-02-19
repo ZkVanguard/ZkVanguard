@@ -1,10 +1,10 @@
-# Chronos-Vanguard — Start ZKP Server + Cloudflare Tunnel
+# ZkVanguard — Start ZKP Server + Cloudflare Tunnel
 # Usage: .\start.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
-Write-Host "`n  Starting Chronos-Vanguard services...`n" -ForegroundColor Cyan
+Write-Host "`n  Starting ZkVanguard services...`n" -ForegroundColor Cyan
 
 # --- 1. ZKP API Server (background job) ---
 $serverJob = Start-Job -Name "ZKP-Server" -ScriptBlock {

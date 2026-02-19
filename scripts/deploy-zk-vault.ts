@@ -34,7 +34,7 @@ async function main() {
   const network = await ethers.provider.getNetwork();
   
   console.log('\n' + '='.repeat(60));
-  console.log('   CHRONOS VANGUARD - ZK Proxy Vault Deployment');
+  console.log('   ZKVANGUARD - ZK Proxy Vault Deployment');
   console.log('='.repeat(60));
   console.log(`Network: ${network.name} (Chain ID: ${network.chainId})`);
   console.log(`Deployer: ${deployer.address}`);

@@ -33,7 +33,7 @@ export interface ProxyPDAVerification {
 }
 
 // Domain separator for our PDA derivation (prevents cross-protocol attacks)
-const CHRONOS_PDA_DOMAIN = 'CHRONOS_VANGUARD_PROXY_PDA_V1';
+const ZKVANGUARD_PDA_DOMAIN = 'ZKVANGUARD_PROXY_PDA_V1';
 
 /**
  * Derive a deterministic proxy address from owner wallet
@@ -52,7 +52,7 @@ export function deriveProxyPDA(
   const normalizedOwner = ownerAddress.toLowerCase();
   
   // Create derivation path: DOMAIN + owner + seed + nonce
-  const derivationPath = `${CHRONOS_PDA_DOMAIN}:${normalizedOwner}:${seed}:${nonce}`;
+  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:${normalizedOwner}:${seed}:${nonce}`;
   
   // Generate deterministic proxy address using keccak256 (same as EVM)
   // This mirrors how CREATE2 and Solana PDAs work

@@ -81,10 +81,10 @@ contract ZKSTARKVerifier is IZKVerifier {
         
         // Initialize default verification key
         // In production, this would be generated from the ZK circuit
-        vk.alpha = keccak256("CHRONOS_VK_ALPHA_V1");
-        vk.beta = keccak256("CHRONOS_VK_BETA_V1");
-        vk.gamma = keccak256("CHRONOS_VK_GAMMA_V1");
-        vk.delta = keccak256("CHRONOS_VK_DELTA_V1");
+        vk.alpha = keccak256("ZKVANGUARD_VK_ALPHA_V1");
+        vk.beta = keccak256("ZKVANGUARD_VK_BETA_V1");
+        vk.gamma = keccak256("ZKVANGUARD_VK_GAMMA_V1");
+        vk.delta = keccak256("ZKVANGUARD_VK_DELTA_V1");
     }
 
     // ============ Core Verification ============

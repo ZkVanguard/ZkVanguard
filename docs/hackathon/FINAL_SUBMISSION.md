@@ -1,4 +1,4 @@
-# 🚀 FINAL SUBMISSION SUMMARY - Chronos x402 Paytech Hackathon
+# 🚀 FINAL SUBMISSION SUMMARY - ZkVanguard x402 Paytech Hackathon
 
 ## 📋 Executive Summary
 
