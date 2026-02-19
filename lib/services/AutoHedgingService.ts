@@ -202,9 +202,9 @@ class AutoHedgingService {
         [config.walletAddress.toLowerCase()]
       );
 
-      if (result.rows.length > 0) {
-        const portfolio = result.rows[0];
-        const riskTolerance = parseInt(portfolio.risk_tolerance) || 50;
+      if (result.length > 0) {
+        const portfolio = result[0];
+        const riskTolerance = parseInt(portfolio.risk_tolerance as string) || 50;
         
         // Map risk tolerance (0-100) to risk threshold (1-10)
         // Lower tolerance = lower threshold = more aggressive hedging
@@ -538,7 +538,7 @@ class AutoHedgingService {
         [portfolioId]
       );
       
-      const activeHedges = hedgesResult.rows.map(h => ({
+      const activeHedges = hedgesResult.map(h => ({
         asset: h.asset,
         side: h.side,
         size: parseFloat(h.size) || 0,
@@ -582,7 +582,7 @@ class AutoHedgingService {
       positions: [],
       allocations: {},
       riskMetrics: { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 },
-      activeHedges: hedgesResult.rows.map(h => ({
+      activeHedges: hedgesResult.map(h => ({
         asset: h.asset,
         side: h.side,
         size: parseFloat(h.size) || 0,

@@ -24,17 +24,11 @@ const STORAGE_DIR = path.join(process.cwd(), 'deployments');
 const CONFIG_FILE = path.join(STORAGE_DIR, 'auto-rebalance-configs.json');
 const REBALANCE_HISTORY_FILE = path.join(STORAGE_DIR, 'rebalance-history.json');
 
-// Vercel KV client (if available)
+// Vercel KV client (disabled - using file-based storage for free tier)
 let kv: any = null;
 
-try {
-  // Try to import Vercel KV if installed
-  const { kv: kvClient } = require('@vercel/kv');
-  kv = kvClient;
-  logger.info('[Storage] Vercel KV available');
-} catch (error) {
-  logger.info('[Storage] Using file-based storage (Vercel KV not available)');
-}
+// File-based storage is sufficient for auto-rebalance configs
+logger.info('[Storage] Using file-based storage (optimized for free tier)');
 
 // Types
 export interface AutoRebalanceConfig {
