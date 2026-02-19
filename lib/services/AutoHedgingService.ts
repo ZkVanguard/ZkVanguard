@@ -344,80 +344,270 @@ class AutoHedgingService {
   }
 
   /**
-   * Assess risk for a portfolio
+   * Assess risk for a portfolio using comprehensive data
+   * Fetches positions, allocations, risk metrics, and active hedges
    */
   async assessPortfolioRisk(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
-    const orchestrator = getAgentOrchestrator();
-    
-    // Get portfolio analysis from agent orchestrator
-    const analysisResult = await orchestrator.analyzePortfolio({
-      address: walletAddress,
-    });
+    try {
+      // Fetch comprehensive portfolio data from database
+      const portfolioData = await this.fetchPortfolioData(portfolioId, walletAddress);
+      
+      // Get AI agent analysis with full context
+      const orchestrator = getAgentOrchestrator();
+      const analysisResult = await orchestrator.analyzePortfolio({
+        address: walletAddress,
+        portfolioId,
+        positions: portfolioData.positions,
+        allocations: portfolioData.allocations,
+        riskMetrics: portfolioData.riskMetrics,
+        activeHedges: portfolioData.activeHedges,
+      });
 
-    const portfolioData = analysisResult.data as {
-      totalValue?: number;
-      positions?: Array<{ symbol: string; value: number; change24h: number }>;
-      riskMetrics?: { volatility?: number; drawdown?: number };
-    } | null;
+      const aiAnalysis = analysisResult.data as {
+        totalValue?: number;
+        positions?: Array<{ symbol: string; value: number; change24h: number }>;
+        riskMetrics?: { volatility?: number; drawdown?: number };
+      } | null;
 
-    const totalValue = portfolioData?.totalValue || 0;
-    const positions = portfolioData?.positions || [];
-    const riskMetrics = portfolioData?.riskMetrics || {};
+      // Combine database data with AI analysis
+      const totalValue = portfolioData.totalValue || aiAnalysis?.totalValue || 0;
+      const positions = portfolioData.positions.length > 0 
+        ? portfolioData.positions 
+        : (aiAnalysis?.positions || []);
 
-    // Calculate drawdown from positions
-    const drawdownPercent = positions.reduce((acc, pos) => {
+      // Calculate risk metrics
+      const drawdownPercent = this.calculateDrawdown(positions, totalValue);
+      const volatility = this.calculateVolatility(positions);
+      const concentrationRisk = this.calculateConcentrationRisk(positions, totalValue);
+      
+      // Calculate comprehensive risk score (1-10)
+      let riskScore = 1;
+      if (drawdownPercent > 2) riskScore += 1;
+      if (drawdownPercent > 5) riskScore += 2;
+      if (drawdownPercent > 10) riskScore += 2;
+      if (volatility > 3) riskScore += 1;
+      if (volatility > 5) riskScore += 1;
+      if (concentrationRisk > 40) riskScore += 2; // Single asset >40%
+      if (concentrationRisk > 60) riskScore += 1; // Single asset >60%
+      riskScore = Math.min(riskScore, 10);
+
+      logger.info('[AutoHedging] Portfolio risk assessment', {
+        portfolioId,
+        totalValue,
+        positionsCount: positions.length,
+        drawdownPercent: drawdownPercent.toFixed(2),
+        volatility: volatility.toFixed(2),
+        concentrationRisk: concentrationRisk.toFixed(1),
+        riskScore,
+        activeHedges: portfolioData.activeHedges.length,
+      });
+
+      // Generate hedge recommendations based on comprehensive data
+      const recommendations = this.generateHedgeRecommendations(
+        positions,
+        totalValue,
+        portfolioData.allocations,
+        portfolioData.activeHedges,
+        drawdownPercent,
+        concentrationRisk
+      );
+
+      return {
+        portfolioId,
+        totalValue,
+        drawdownPercent,
+        volatility,
+        riskScore,
+        recommendations,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      logger.error('[AutoHedging] Risk assessment error', { portfolioId, error });
+      // Return safe default
+      return {
+        portfolioId,
+        totalValue: 0,
+        drawdownPercent: 0,
+        volatility: 0,
+        riskScore: 1,
+        recommendations: [],
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Fetch comprehensive portfolio data from database and on-chain
+   */
+  private async fetchPortfolioData(portfolioId: number, walletAddress: string): Promise<{
+    totalValue: number;
+    positions: Array<{ symbol: string; value: number; change24h: number; balance: number }>;
+    allocations: Record<string, number>;
+    riskMetrics: { volatility: number; sharpeRatio: number; maxDrawdown: number };
+    activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }>;
+  }> {
+    // Fetch latest portfolio snapshot
+    const snapshotResult = await query(
+      `SELECT total_value, positions, volatility, sharpe_ratio, max_drawdown
+       FROM portfolio_snapshots
+       WHERE wallet_address = $1
+       ORDER BY snapshot_time DESC
+       LIMIT 1`,
+      [walletAddress.toLowerCase()]
+    );
+
+    // Fetch active hedges
+    const hedgesResult = await query(
+      `SELECT asset, side, size, notional_value
+       FROM hedges
+       WHERE portfolio_id = $1 AND status = 'active'`,
+      [portfolioId]
+    );
+
+    let totalValue = 0;
+    let positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+    let riskMetrics = { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 };
+
+    if (snapshotResult.rows.length > 0) {
+      const snapshot = snapshotResult.rows[0];
+      totalValue = parseFloat(snapshot.total_value) || 0;
+      riskMetrics = {
+        volatility: parseFloat(snapshot.volatility) || 0,
+        sharpeRatio: parseFloat(snapshot.sharpe_ratio) || 0,
+        maxDrawdown: parseFloat(snapshot.max_drawdown) || 0,
+      };
+
+      // Parse positions JSON
+      const positionsData = typeof snapshot.positions === 'string' 
+        ? JSON.parse(snapshot.positions)
+        : snapshot.positions;
+      
+      if (Array.isArray(positionsData)) {
+        positions = positionsData.map((p: any) => ({
+          symbol: p.symbol || p.asset,
+          value: parseFloat(p.value || p.valueUSD) || 0,
+          change24h: parseFloat(p.change24h || p.change_24h) || 0,
+          balance: parseFloat(p.balance || p.amount) || 0,
+        }));
+      }
+    }
+
+    // Calculate target allocations
+    const allocations: Record<string, number> = {};
+    if (positions.length > 0) {
+      positions.forEach(p => {
+        allocations[p.symbol] = (p.value / totalValue) * 100;
+      });
+    }
+
+    const activeHedges = hedgesResult.rows.map(h => ({
+      asset: h.asset,
+      side: h.side,
+      size: parseFloat(h.size) || 0,
+      notionalValue: parseFloat(h.notional_value) || 0,
+    }));
+
+    return {
+      totalValue,
+      positions,
+      allocations,
+      riskMetrics,
+      activeHedges,
+    };
+  }
+
+  /**
+   * Calculate drawdown from position changes
+   */
+  private calculateDrawdown(positions: Array<{ value: number; change24h: number }>, totalValue: number): number {
+    if (!positions.length || totalValue === 0) return 0;
+    return positions.reduce((acc, pos) => {
       return acc + (pos.change24h < 0 ? Math.abs(pos.change24h) * (pos.value / totalValue) : 0);
     }, 0);
+  }
 
-    // Calculate volatility (simplified - use 24h changes)
-    const volatility = Math.sqrt(
+  /**
+   * Calculate volatility from position changes
+   */
+  private calculateVolatility(positions: Array<{ change24h: number }>): number {
+    if (!positions.length) return 0;
+    return Math.sqrt(
       positions.reduce((acc, pos) => acc + Math.pow(pos.change24h / 100, 2), 0) / positions.length
-    ) * 100 || 0;
+    ) * 100;
+  }
 
-    // Calculate risk score (1-10)
-    let riskScore = 1;
-    if (drawdownPercent > 2) riskScore += 2;
-    if (drawdownPercent > 5) riskScore += 2;
-    if (volatility > 3) riskScore += 2;
-    if (volatility > 5) riskScore += 2;
-    riskScore = Math.min(riskScore, 10);
+  /**
+   * Calculate concentration risk (largest position percentage)
+   */
+  private calculateConcentrationRisk(positions: Array<{ value: number }>, totalValue: number): number {
+    if (!positions.length || totalValue === 0) return 0;
+    const maxPosition = Math.max(...positions.map(p => p.value));
+    return (maxPosition / totalValue) * 100;
+  }
 
-    // Generate recommendations
+  /**
+   * Generate hedge recommendations based on comprehensive portfolio data
+   */
+  private generateHedgeRecommendations(
+    positions: Array<{ symbol: string; value: number; change24h: number }>,
+    totalValue: number,
+    allocations: Record<string, number>,
+    activeHedges: Array<{ asset: string }>,
+    drawdownPercent: number,
+    concentrationRisk: number
+  ): HedgeRecommendation[] {
     const recommendations: HedgeRecommendation[] = [];
+    const hedgedAssets = new Set(activeHedges.map(h => h.asset));
 
-    // Check for assets that need hedging
+    // Check each position for hedging needs
     for (const pos of positions) {
-      // Hedge assets that are down significantly
-      if (pos.change24h < -3 && pos.value > CONFIG.MIN_HEDGE_SIZE_USD) {
+      // Skip if already hedged
+      if (hedgedAssets.has(pos.symbol)) continue;
+
+      // Skip if position too small
+      if (pos.value < CONFIG.MIN_HEDGE_SIZE_USD) continue;
+
+      // Hedge assets with significant losses
+      if (pos.change24h < -3) {
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
-          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}%, hedge to protect against further losses`,
-          suggestedSize: pos.value * 0.3, // 30% of position
+          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}% (24h) - protect against further losses`,
+          suggestedSize: pos.value * Math.min(0.5, Math.abs(pos.change24h) / 10), // Scale with loss
           leverage: CONFIG.DEFAULT_LEVERAGE,
-          confidence: Math.min(0.5 + Math.abs(pos.change24h) / 20, 0.95),
+          confidence: Math.min(0.6 + Math.abs(pos.change24h) / 20, 0.95),
         });
       }
 
-      // Check concentration risk
+      // Hedge concentrated positions
       const concentration = (pos.value / totalValue) * 100;
       if (concentration > CONFIG.MAX_ASSET_CONCENTRATION_PERCENT) {
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
-          reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}%, reduce exposure`,
-          suggestedSize: pos.value * (concentration - 30) / 100,
+          reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}% - reduce exposure`,
+          suggestedSize: pos.value * ((concentration - 30) / 100),
           leverage: 2,
+          confidence: 0.75,
+        });
+      }
+
+      // Hedge volatile assets during high portfolio drawdown
+      if (drawdownPercent > 5 && Math.abs(pos.change24h) > 5) {
+        recommendations.push({
+          asset: pos.symbol,
+          side: pos.change24h < 0 ? 'SHORT' : 'SHORT', // Always hedge with short
+          reason: `High portfolio drawdown (${drawdownPercent.toFixed(1)}%) + ${pos.symbol} volatility`,
+          suggestedSize: pos.value * 0.25,
+          leverage: CONFIG.DEFAULT_LEVERAGE,
           confidence: 0.7,
         });
       }
     }
 
-    return {
-      portfolioId,
-      totalValue,
-      drawdownPercent,
-      volatility,
+    // Sort by confidence (highest first)
+    return recommendations.sort((a, b) => b.confidence - a.confidence);
+  }
       riskScore,
       recommendations,
       timestamp: Date.now(),
