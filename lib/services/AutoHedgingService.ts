@@ -118,7 +118,7 @@ class AutoHedgingService {
       portfolioId: 3,
       walletAddress: '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c',
       enabled: true,
-      riskThreshold: 7, // Auto-hedge when risk score >= 7
+      riskThreshold: 4, // Auto-hedge when risk score >= 4 (more aggressive for large volatile portfolio)
       maxLeverage: CONFIG.DEFAULT_LEVERAGE,
       allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
     };
@@ -445,16 +445,58 @@ class AutoHedgingService {
 
   /**
    * Manual trigger for risk assessment
+   * When triggered (e.g., after rebalancing), also executes hedges if needed
    */
   async triggerRiskAssessment(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
     const assessment = await this.assessPortfolioRisk(portfolioId, walletAddress);
     this.lastRiskAssessments.set(portfolioId, assessment);
+    
+    // Get portfolio config
+    const config = this.autoHedgeConfigs.get(portfolioId);
+    
+    // If auto-hedging is enabled for this portfolio and risk threshold exceeded, execute hedges
+    if (config && config.enabled && assessment.riskScore >= config.riskThreshold) {
+      logger.info('[AutoHedging] Risk threshold exceeded in triggered assessment', {
+        portfolioId,
+        riskScore: assessment.riskScore,
+        threshold: config.riskThreshold,
+        recommendations: assessment.recommendations.length,
+      });
+      
+      // Execute recommended hedges with high confidence
+      for (const recommendation of assessment.recommendations) {
+        if (recommendation.confidence >= 0.7) {
+          logger.info('[AutoHedging] Executing high-confidence hedge recommendation', {
+            asset: recommendation.asset,
+            side: recommendation.side,
+            confidence: recommendation.confidence,
+          });
+          await this.executeAutoHedge(portfolioId, config, recommendation);
+        }
+      }
+    } else if (config && config.enabled) {
+      logger.info('[AutoHedging] Risk within acceptable range', {
+        portfolioId,
+        riskScore: assessment.riskScore,
+        threshold: config.riskThreshold,
+      });
+    }
+    
     return assessment;
   }
 }
 
 // Singleton instance
 export const autoHedgingService = new AutoHedgingService();
+
+// Auto-start the service (fire and forget)
+// This ensures hedging is active as soon as the app starts
+if (typeof window === 'undefined') {
+  // Server-side only
+  autoHedgingService.start().catch(error => {
+    logger.error('[AutoHedging] Failed to auto-start service:', error);
+  });
+}
 
 // Export for API routes
 export { AutoHedgingService, CONFIG as AUTO_HEDGE_CONFIG };

@@ -190,6 +190,11 @@ export async function executeRebalance(
     
     logger.info(`[RebalanceExecutor] Rebalance successful for portfolio ${portfolioId}: ${result.txHash}`);
     
+    // Trigger risk assessment after rebalancing (fire and forget)
+    triggerPostRebalanceRiskAssessment(portfolioId, walletAddress).catch(error => {
+      logger.error(`[RebalanceExecutor] Failed to trigger post-rebalance risk assessment:`, error);
+    });
+    
     return {
       txHash: result.txHash,
       zkProof: result.zkProof,
@@ -200,6 +205,41 @@ export async function executeRebalance(
   } catch (error: any) {
     logger.error(`[RebalanceExecutor] Error executing rebalance for portfolio ${portfolioId}:`, error);
     throw error;
+  }
+}
+
+/**
+ * Trigger risk assessment and auto-hedging after rebalancing
+ * This ensures the portfolio is automatically hedged after allocation changes
+ */
+async function triggerPostRebalanceRiskAssessment(portfolioId: number, walletAddress: string): Promise<void> {
+  try {
+    logger.info(`[RebalanceExecutor] Triggering post-rebalance risk assessment for portfolio ${portfolioId}`);
+    
+    // Call auto-hedging service to assess risk
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/auto-hedge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'trigger_assessment',
+        portfolioId,
+        walletAddress,
+      }),
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      logger.info(`[RebalanceExecutor] Risk assessment triggered for portfolio ${portfolioId}`, {
+        riskScore: result.assessment?.riskScore,
+        recommendations: result.assessment?.recommendations?.length || 0,
+      });
+    } else {
+      logger.warn(`[RebalanceExecutor] Failed to trigger risk assessment: ${response.status}`);
+    }
+  } catch (error: any) {
+    logger.error(`[RebalanceExecutor] Error triggering risk assessment:`, error);
   }
 }
 
