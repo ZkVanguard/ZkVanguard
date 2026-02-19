@@ -10,7 +10,7 @@ const { ethers } = require('ethers');
 // Enable WebSocket for Neon serverless
 neonConfig.webSocketConstructor = ws;
 
-const DATABASE_URL = 'postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require';
+const DATABASE_URL = 'postgresql://neondb_owner:npg_Kt7IEjubwA2V@ep-fancy-frost-ahtb29ry-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=verify-full';
 const RPC_URL = 'https://evm-t3.cronos.org/';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
