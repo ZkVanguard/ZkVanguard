@@ -1,13 +1,14 @@
 import { Metadata } from 'next';
 import { PricingSection } from '@/components/PricingSection';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 
 export const metadata: Metadata = {
   title: 'Pricing | ZkVanguard',
   description: 'Simple, transparent pricing for AI-powered RWA risk management. Choose the plan that fits your portfolio size.',
 };
 
-export default function PricingPage() {
+export default async function PricingPage() {
   return (
     <div className="min-h-screen bg-[#fbfbfd]">
       {/* Simple navbar for pricing page */}
@@ -47,6 +48,16 @@ export default function PricingPage() {
               <p className="text-[15px] text-[#86868b] leading-[1.6]">
                 The 0.1% platform fee on hedge operations covers execution, monitoring, 
                 and settlement. Gasless transactions are included - you never pay gas fees.
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-[16px] p-6 border border-black/5">
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">
+                What is the performance fee?
+              </h3>
+              <p className="text-[15px] text-[#86868b] leading-[1.6]">
+                We charge a 20% performance fee only on profitable hedges. If your hedge 
+                doesn&apos;t profit, you pay nothing extra. This aligns our incentives with yours.
               </p>
             </div>
             
