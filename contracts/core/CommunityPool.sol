@@ -45,31 +45,37 @@ interface IVVSRouter {
 }
 
 /**
- * @title AggregatorV3Interface
- * @notice Chainlink Price Feed Interface (Free Tier - no API key required)
- * @dev Standard interface for reading from Chainlink price feeds on any chain
- *      These are free to read from deployed contracts on-chain
+ * @title IPyth
+ * @notice Pyth Network Price Feed Interface (Available on Cronos)
+ * @dev Pyth is the standard oracle on Cronos used by Moonlander and other DeFi
+ *      Free to read prices, costs ~0.06 CRO to update price feeds
+ *      Cronos Mainnet: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B
  */
-interface AggregatorV3Interface {
-    function decimals() external view returns (uint8);
-    function description() external view returns (string memory);
-    function version() external view returns (uint256);
+interface IPyth {
+    struct Price {
+        int64 price;        // Price in base units
+        uint64 conf;        // Confidence interval
+        int32 expo;         // Exponent (negative = decimals)
+        uint publishTime;   // Unix timestamp
+    }
 
-    function latestRoundData() external view returns (
-        uint80 roundId,
-        int256 answer,
-        uint256 startedAt,
-        uint256 updatedAt,
-        uint80 answeredInRound
-    );
+    /// @notice Get price no older than `age` seconds, reverts if stale
+    function getPriceNoOlderThan(
+        bytes32 id,
+        uint age
+    ) external view returns (Price memory price);
 
-    function getRoundData(uint80 _roundId) external view returns (
-        uint80 roundId,
-        int256 answer,
-        uint256 startedAt,
-        uint256 updatedAt,
-        uint80 answeredInRound
-    );
+    /// @notice Get latest price (may be stale)
+    function getPrice(bytes32 id) external view returns (Price memory price);
+
+    /// @notice Update price feeds (requires payment)
+    function updatePriceFeeds(bytes[] calldata updateData) external payable;
+
+    /// @notice Get update fee for price data
+    function getUpdateFee(bytes[] calldata updateData) external view returns (uint feeAmount);
+
+    /// @notice Check if price feed exists
+    function priceFeedExists(bytes32 id) external view returns (bool);
 }
 
 /**
@@ -231,10 +237,13 @@ contract CommunityPool is
     /// @notice DEX router for swaps (VVS Finance on Cronos)
     address public dexRouter;
 
-    /// @notice Chainlink price feeds for each asset (USD denominated)
-    /// @dev Free to read from deployed contracts - no API key required
-    ///      Index: 0=BTC/USD, 1=ETH/USD, 2=SUI/USD (if available), 3=CRO/USD
-    AggregatorV3Interface[NUM_ASSETS] public priceFeedsUSD;
+    /// @notice Pyth Network oracle contract (Cronos: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B)
+    IPyth public pythOracle;
+
+    /// @notice Pyth price IDs for each asset (USD denominated)
+    /// @dev Universal across all Pyth-supported chains
+    ///      Index: 0=BTC/USD, 1=ETH/USD, 2=SUI/USD, 3=CRO/USD
+    bytes32[NUM_ASSETS] public pythPriceIds;
 
     /// @notice Maximum age of price data before considered stale (default: 1 hour)
     uint256 public priceStaleThreshold;
@@ -684,7 +693,7 @@ contract CommunityPool is
         
         // CRITICAL: Must have price feed configured before acquiring assets
         // Otherwise we cannot accurately value the portfolio (billions at stake)
-        if (address(priceFeedsUSD[assetIndex]) == address(0)) {
+        if (pythPriceIds[assetIndex] == bytes32(0)) {
             revert PriceFeedNotConfigured(assetIndex);
         }
 
@@ -870,7 +879,7 @@ contract CommunityPool is
 
     /**
      * @notice Calculate total NAV of the pool in USDC terms
-     * @dev Uses Chainlink price feeds for accurate multi-asset valuation
+     * @dev Uses Pyth Network price feeds for accurate multi-asset valuation
      *      CRITICAL: Reverts if any asset with balance lacks a price feed
      * @return nav Total NAV in USDC (6 decimals)
      */
@@ -878,33 +887,34 @@ contract CommunityPool is
         // Start with USDC balance (6 decimals)
         nav = depositToken.balanceOf(address(this));
 
-        // Add value of each asset using Chainlink price feeds
+        // Add value of each asset using Pyth price feeds
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
             if (assetBalances[i] == 0) continue;
             
             // CRITICAL: Asset has balance - MUST have price feed
             // Cannot skip - would undervalue portfolio and harm depositors
-            if (address(priceFeedsUSD[i]) == address(0)) {
+            if (pythPriceIds[i] == bytes32(0)) {
                 revert AssetWithoutPriceFeed(i, assetBalances[i]);
             }
             
-            // Get price from Chainlink feed
-            (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+            // Get price from Pyth oracle
+            (bool success, int64 price, int32 expo, uint publishTime) = _getPythPrice(i);
             if (!success) revert OracleCallFailed(i);
             
             // Verify price is valid and not stale
-            if (price <= 0) revert NegativePrice(i, price);
-            if (block.timestamp - updatedAt > priceStaleThreshold) {
-                revert StalePriceData(i, updatedAt, priceStaleThreshold);
+            if (price <= 0) revert NegativePrice(i, int256(price));
+            if (block.timestamp - publishTime > priceStaleThreshold) {
+                revert StalePriceData(i, publishTime, priceStaleThreshold);
             }
             
-            // Chainlink feeds return 8 decimals for USD pairs
-            // Asset value = assetBalance * price / 10^(assetDecimals + priceDecimals - usdcDecimals)
-            uint8 priceDecimals = priceFeedsUSD[i].decimals();
-            uint256 assetValue = assetBalances[i].mulDiv(
-                uint256(price),
-                10 ** (assetDecimals[i] + priceDecimals - 6), // Normalize to USDC 6 decimals
-                Math.Rounding.Floor
+            // Pyth prices have variable exponents (typically -8 for USD pairs)
+            // Convert to USDC (6 decimals) value
+            // assetValue = assetBalance * price * 10^6 / 10^(assetDecimals - expo)
+            uint256 assetValue = _calculateAssetValue(
+                assetBalances[i],
+                uint256(uint64(price)),
+                assetDecimals[i],
+                expo
             );
             nav += assetValue;
         }
@@ -913,23 +923,59 @@ contract CommunityPool is
     }
     
     /**
-     * @notice Safely get price from Chainlink oracle with error handling
+     * @notice Calculate asset value in USDC terms
+     * @param balance Asset balance
+     * @param price Price from Pyth (positive)
+     * @param decimals Asset decimals
+     * @param expo Pyth price exponent (negative = decimals)
+     */
+    function _calculateAssetValue(
+        uint256 balance,
+        uint256 price,
+        uint8 decimals,
+        int32 expo
+    ) internal pure returns (uint256) {
+        // Pyth expo is typically -8, meaning price has 8 decimals
+        // We want result in USDC (6 decimals)
+        // value = balance * price / 10^decimals * 10^(-expo) / 10^6
+        // Simplified: value = balance * price / 10^(decimals + (-expo) - 6)
+        
+        uint256 scaleFactor;
+        int256 totalDecimals = int256(uint256(decimals)) - int256(expo) - 6;
+        
+        if (totalDecimals >= 0) {
+            scaleFactor = 10 ** uint256(totalDecimals);
+            return balance.mulDiv(price, scaleFactor, Math.Rounding.Floor);
+        } else {
+            scaleFactor = 10 ** uint256(-totalDecimals);
+            return balance.mulDiv(price * scaleFactor, 1, Math.Rounding.Floor);
+        }
+    }
+    
+    /**
+     * @notice Safely get price from Pyth oracle with error handling
      * @param assetIndex Index of the asset
      * @return success Whether the oracle call succeeded
-     * @return price The price (8 decimals typically)
-     * @return updatedAt Timestamp of last update
+     * @return price The price
+     * @return expo Price exponent
+     * @return publishTime Timestamp of price
      */
-    function _getOraclePrice(uint8 assetIndex) internal view returns (bool success, int256 price, uint256 updatedAt) {
-        try priceFeedsUSD[assetIndex].latestRoundData() returns (
-            uint80 /* roundId */,
-            int256 _price,
-            uint256 /* startedAt */,
-            uint256 _updatedAt,
-            uint80 /* answeredInRound */
+    function _getPythPrice(uint8 assetIndex) internal view returns (
+        bool success,
+        int64 price,
+        int32 expo,
+        uint publishTime
+    ) {
+        if (address(pythOracle) == address(0)) {
+            return (false, 0, 0, 0);
+        }
+        
+        try pythOracle.getPriceNoOlderThan(pythPriceIds[assetIndex], priceStaleThreshold) returns (
+            IPyth.Price memory priceData
         ) {
-            return (true, _price, _updatedAt);
+            return (true, priceData.price, priceData.expo, priceData.publishTime);
         } catch {
-            return (false, 0, 0);
+            return (false, 0, 0, 0);
         }
     }
 
@@ -1032,12 +1078,12 @@ contract CommunityPool is
         healthy = true;
         
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            configured[i] = address(priceFeedsUSD[i]) != address(0);
+            configured[i] = pythPriceIds[i] != bytes32(0);
             
             if (configured[i]) {
-                (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+                (bool success, int64 price, , uint publishTime) = _getPythPrice(i);
                 working[i] = success && price > 0;
-                fresh[i] = success && (block.timestamp - updatedAt <= priceStaleThreshold);
+                fresh[i] = success && (block.timestamp - publishTime <= priceStaleThreshold);
                 
                 // If asset has balance, oracle MUST be working and fresh
                 if (assetBalances[i] > 0) {
@@ -1051,7 +1097,7 @@ contract CommunityPool is
 
     /**
      * @notice Get current prices from all configured oracles
-     * @return prices Array of prices (8 decimals), 0 if not configured/failed
+     * @return prices Array of prices, 0 if not configured/failed
      * @return timestamps Array of last update timestamps
      */
     function getOraclePrices() external view returns (
@@ -1059,11 +1105,11 @@ contract CommunityPool is
         uint256[NUM_ASSETS] memory timestamps
     ) {
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            if (address(priceFeedsUSD[i]) != address(0)) {
-                (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+            if (pythPriceIds[i] != bytes32(0)) {
+                (bool success, int64 price, , uint publishTime) = _getPythPrice(i);
                 if (success && price > 0) {
-                    prices[i] = uint256(price);
-                    timestamps[i] = updatedAt;
+                    prices[i] = uint256(uint64(price));
+                    timestamps[i] = publishTime;
                 }
             }
         }
@@ -1097,25 +1143,34 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Set Chainlink price feed for an asset
-     * @param assetIndex Index of asset (0=BTC, 1=ETH, 2=SUI, 3=CRO)
-     * @param priceFeed Address of Chainlink AggregatorV3Interface
+     * @notice Set Pyth Network oracle contract address
+     * @param _pythOracle Address of Pyth oracle (Cronos: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B)
      */
-    function setPriceFeed(uint8 assetIndex, address priceFeed) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(assetIndex < NUM_ASSETS, "Invalid asset index");
-        priceFeedsUSD[assetIndex] = AggregatorV3Interface(priceFeed);
-        emit PriceFeedSet(assetIndex, priceFeed);
+    function setPythOracle(address _pythOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_pythOracle != address(0), "Invalid oracle");
+        pythOracle = IPyth(_pythOracle);
     }
 
     /**
-     * @notice Set all price feeds at once
-     * @param priceFeeds Array of 4 Chainlink price feed addresses
+     * @notice Set Pyth price ID for an asset
+     * @param assetIndex Index of asset (0=BTC, 1=ETH, 2=SUI, 3=CRO)
+     * @param priceId Pyth price feed ID (bytes32)
      */
-    function setAllPriceFeeds(address[NUM_ASSETS] calldata priceFeeds) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPriceId(uint8 assetIndex, bytes32 priceId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(assetIndex < NUM_ASSETS, "Invalid asset index");
+        pythPriceIds[assetIndex] = priceId;
+        emit PriceFeedSet(assetIndex, address(0)); // Event for tracking
+    }
+
+    /**
+     * @notice Set all Pyth price IDs at once
+     * @param priceIds Array of 4 Pyth price feed IDs
+     */
+    function setAllPriceIds(bytes32[NUM_ASSETS] calldata priceIds) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            if (priceFeeds[i] != address(0)) {
-                priceFeedsUSD[i] = AggregatorV3Interface(priceFeeds[i]);
-                emit PriceFeedSet(i, priceFeeds[i]);
+            if (priceIds[i] != bytes32(0)) {
+                pythPriceIds[i] = priceIds[i];
+                emit PriceFeedSet(i, address(0));
             }
         }
     }
