@@ -141,9 +141,9 @@ export async function GET() {
     const currentAllocations = poolSummary.allocations;
     const changes = SUPPORTED_ASSETS.map(asset => ({
       asset,
-      currentPercent: currentAllocations[asset],
+      currentPercent: currentAllocations[asset].percentage,
       proposedPercent: allocations[asset],
-      change: allocations[asset] - currentAllocations[asset],
+      change: allocations[asset] - currentAllocations[asset].percentage,
     }));
     
     return NextResponse.json({
@@ -199,9 +199,9 @@ export async function POST(request: NextRequest) {
       const poolSummary = await getPoolSummary();
       const changes = SUPPORTED_ASSETS.map(asset => ({
         asset,
-        currentPercent: poolSummary.allocations[asset],
+        currentPercent: poolSummary.allocations[asset].percentage,
         proposedPercent: allocations[asset],
-        change: allocations[asset] - poolSummary.allocations[asset],
+        change: allocations[asset] - poolSummary.allocations[asset].percentage,
       }));
       
       return NextResponse.json({
@@ -228,6 +228,14 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Calculate changes from previous and new allocations
+    const changes = SUPPORTED_ASSETS.map(asset => ({
+      asset,
+      previousPercent: result.previousAllocations[asset],
+      newPercent: result.newAllocations[asset],
+      change: result.newAllocations[asset] - result.previousAllocations[asset],
+    }));
+    
     return NextResponse.json({
       success: true,
       applied: true,
@@ -235,8 +243,8 @@ export async function POST(request: NextRequest) {
       result: {
         previousAllocations: result.previousAllocations,
         newAllocations: result.newAllocations,
-        changes: result.changes,
-        totalValueUSD: result.totalValueUSD,
+        trades: result.trades,
+        changes,
       },
       reasoning,
       confidence: Math.round(confidence),

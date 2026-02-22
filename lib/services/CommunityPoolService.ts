@@ -76,7 +76,7 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
     logger.info(`[CommunityPool] Prices updated: BTC=$${priceCache.BTC}, ETH=$${priceCache.ETH}`);
     
   } catch (error) {
-    logger.warn('[CommunityPool] Price fetch failed, using cached:', error);
+    logger.warn('[CommunityPool] Price fetch failed, using cached:', { error: String(error) });
   }
   
   return priceCache;
