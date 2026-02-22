@@ -6,7 +6,7 @@ import { useAccount, useBalance } from 'wagmi';
 import { 
   Bot, Shield, Briefcase, TrendingUp, History, 
   BarChart3, Zap, MessageSquare, ChevronRight, 
-  Menu, X, Settings, ArrowLeftRight
+  Menu, X, Settings, ArrowLeftRight, Users
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
@@ -86,6 +86,12 @@ const FiveMinSignalWidget = nextDynamic(() => import('@/components/dashboard/Fiv
   loading: () => <LoadingSkeleton height="h-28" />,
   ssr: false
 });
+
+const CommunityPool = nextDynamic(() => import('@/components/dashboard/CommunityPool').then(mod => ({ default: mod.CommunityPool })), {
+  loading: () => <LoadingSkeleton />,
+  ssr: false
+});
+
 // Reusable loading skeleton
 function LoadingSkeleton({ height = "h-40" }: { height?: string }) {
   return (
@@ -105,6 +111,7 @@ const navItems: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'positions', label: 'Positions', icon: Briefcase },
   { id: 'hedges', label: 'Hedges', icon: Shield },
+  { id: 'community', label: 'Community Pool', icon: Users, badge: 'New' },
   { id: 'swap', label: 'Swap', icon: ArrowLeftRight },
   { id: 'agents', label: 'AI Agents', icon: Bot, badge: 'Live' },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
@@ -826,6 +833,18 @@ export default function DashboardPage() {
         
       case 'zk-proofs':
         return <ZKProofDemo />;
+        
+      case 'community':
+        return (
+          <Card>
+            <CardHeader 
+              title="Community Pool" 
+              subtitle="AI-managed collective investment fund"
+              badge={<Badge color="purple">AI DRIVEN</Badge>}
+            />
+            <CommunityPool address={displayAddress} />
+          </Card>
+        );
         
       default:
         return null;
