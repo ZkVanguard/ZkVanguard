@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, ArrowDownToLine, ExternalLink } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
+import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 
 // Token info map
 const TOKEN_INFO: Record<string, { symbol: string; decimals: number }> = {
@@ -33,13 +34,15 @@ export function WithdrawModal({
 }: WithdrawModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const chainId = useChainId();
+  const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[338];
   const [selectedAsset, setSelectedAsset] = useState<string>(assets[0] || '');
   const [amount, setAmount] = useState('');
   const [assetBalance, setAssetBalance] = useState<string>('0');
   const [step, setStep] = useState<'input' | 'withdraw' | 'success' | 'error'>('input');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const addresses = getContractAddresses(338);
+  const addresses = getContractAddresses(chainId);
   const rwaManagerAddress = addresses.rwaManager as `0x${string}`;
 
   // Get token info
@@ -279,7 +282,7 @@ export function WithdrawModal({
               </p>
               {withdrawHash && (
                 <a
-                  href={`https://explorer.cronos.org/testnet/tx/${withdrawHash}`}
+                  href={`${explorerUrl}/tx/${withdrawHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-[#007AFF] hover:text-[#0066CC]"
