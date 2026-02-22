@@ -5,7 +5,8 @@
   "contracts": {
     "CommunityPool": {
       "proxy": "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30",
-      "implementation": "0xdaB548422FF13e0F3c9249B87a37145974C44aFa"
+      "implementation": "0x69cB31a63fdD23bd34E307Db985551b5ce28F8D8",
+      "previousImplementation": "0x69cB31a63fdD23bd34E307Db985551b5ce28F8D8"
     }
   },
   "config": {
@@ -20,5 +21,7 @@
     "managementFeeBps": 50,
     "performanceFeeBps": 1000
   },
-  "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c"
+  "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
+  "lastUpgrade": "2026-02-22T23:34:46.890Z",
+  "upgradeReason": "Lower MIN_FIRST_DEPOSIT from $1000 to $100"
 }
