@@ -12,6 +12,39 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
+ * @title IVVSRouter
+ * @notice Interface for VVS Finance Router on Cronos
+ * @dev Standard Uniswap V2 compatible router interface
+ */
+interface IVVSRouter {
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+
+    function swapTokensForExactTokens(
+        uint amountOut,
+        uint amountInMax,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+
+    function getAmountsOut(
+        uint amountIn,
+        address[] memory path
+    ) external view returns (uint[] memory amounts);
+
+    function getAmountsIn(
+        uint amountOut,
+        address[] memory path
+    ) external view returns (uint[] memory amounts);
+}
+
+/**
  * @title CommunityPool
  * @notice AI-managed community investment pool with share-based ownership
  * @dev ERC-4626-inspired vault for collective investment in BTC, ETH, SUI, CRO
@@ -210,6 +243,14 @@ contract CommunityPool is
         uint256 timestamp
     );
 
+    event RebalanceTradeExecuted(
+        uint8 indexed assetIndex,
+        uint256 amountIn,
+        uint256 amountOut,
+        bool isBuy,
+        uint256 timestamp
+    );
+
     event FeesCollected(
         uint256 managementFee,
         uint256 performanceFee,
@@ -253,6 +294,9 @@ contract CommunityPool is
     error InsufficientLiquidity(uint256 requested, uint256 available);
     error SlippageExceeded(uint256 amountOut, uint256 minAmountOut);
     error FirstDepositTooSmall(uint256 amount, uint256 minimum);
+    error DexRouterNotSet();
+    error InvalidSwapPath();
+    error SwapSlippageExceeded(uint256 expected, uint256 received);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -572,16 +616,18 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Execute trades to rebalance towards target allocation
-     * @dev In production, would use DEX aggregator for best execution
+     * @notice Execute trades to rebalance towards target allocation via VVS Finance
+     * @dev Uses VVS Finance DEX Router for on-chain swaps with slippage protection
      * @param assetIndex Which asset to buy/sell
-     * @param amount Amount of USDC to use / receive
-     * @param isBuy True if buying asset, false if selling
+     * @param amount Amount of USDC to use (if buying) or asset to sell
+     * @param isBuy True if buying asset with USDC, false if selling asset for USDC
+     * @param minAmountOut Minimum amount to receive (slippage protection)
      */
     function executeRebalanceTrade(
         uint8 assetIndex,
         uint256 amount,
-        bool isBuy
+        bool isBuy,
+        uint256 minAmountOut
     )
         external
         onlyRole(REBALANCER_ROLE)
@@ -590,16 +636,105 @@ contract CommunityPool is
     {
         if (assetIndex >= NUM_ASSETS) revert ZeroAmount();
         if (amount == 0) revert ZeroAmount();
+        if (dexRouter == address(0)) revert DexRouterNotSet();
+        if (address(assetTokens[assetIndex]) == address(0)) revert InvalidSwapPath();
 
-        // SECURITY: Actual DEX integration required before mainnet
-        // This function is intentionally disabled until DEX router is properly integrated
-        // DO NOT enable in production without full DEX swap implementation
-        revert("Rebalancing disabled until DEX integration complete");
-        
-        // TODO: Implement proper DEX router integration
-        // if (isBuy) {
-        //     IDEXRouter(dexRouter).swapExactTokensForTokens(...);
-        // }
+        IVVSRouter router = IVVSRouter(dexRouter);
+        address[] memory path = new address[](2);
+        uint256 deadline = block.timestamp + 300; // 5 minute deadline
+        uint256 amountReceived;
+
+        if (isBuy) {
+            // Buy asset with USDC
+            path[0] = address(depositToken);
+            path[1] = address(assetTokens[assetIndex]);
+            
+            // Approve router to spend USDC
+            depositToken.safeIncreaseAllowance(dexRouter, amount);
+            
+            // Execute swap
+            uint256[] memory amounts = router.swapExactTokensForTokens(
+                amount,
+                minAmountOut,
+                path,
+                address(this),
+                deadline
+            );
+            
+            amountReceived = amounts[amounts.length - 1];
+            if (amountReceived < minAmountOut) {
+                revert SwapSlippageExceeded(minAmountOut, amountReceived);
+            }
+            
+            // Update asset balance
+            assetBalances[assetIndex] += amountReceived;
+            
+            emit RebalanceTradeExecuted(assetIndex, amount, amountReceived, true, block.timestamp);
+        } else {
+            // Sell asset for USDC
+            path[0] = address(assetTokens[assetIndex]);
+            path[1] = address(depositToken);
+            
+            // Check we have enough of the asset
+            if (assetBalances[assetIndex] < amount) {
+                revert InsufficientLiquidity(amount, assetBalances[assetIndex]);
+            }
+            
+            // Approve router to spend asset
+            assetTokens[assetIndex].safeIncreaseAllowance(dexRouter, amount);
+            
+            // Execute swap
+            uint256[] memory amounts = router.swapExactTokensForTokens(
+                amount,
+                minAmountOut,
+                path,
+                address(this),
+                deadline
+            );
+            
+            amountReceived = amounts[amounts.length - 1];
+            if (amountReceived < minAmountOut) {
+                revert SwapSlippageExceeded(minAmountOut, amountReceived);
+            }
+            
+            // Update asset balance
+            assetBalances[assetIndex] -= amount;
+            
+            emit RebalanceTradeExecuted(assetIndex, amount, amountReceived, false, block.timestamp);
+        }
+    }
+
+    /**
+     * @notice Get expected output amount for a swap (quote)
+     * @param assetIndex Asset to trade
+     * @param amount Amount to swap
+     * @param isBuy True if buying with USDC, false if selling for USDC
+     * @return expectedOut Expected output amount
+     */
+    function getSwapQuote(
+        uint8 assetIndex,
+        uint256 amount,
+        bool isBuy
+    ) external view returns (uint256 expectedOut) {
+        if (dexRouter == address(0)) return 0;
+        if (address(assetTokens[assetIndex]) == address(0)) return 0;
+
+        IVVSRouter router = IVVSRouter(dexRouter);
+        address[] memory path = new address[](2);
+
+        if (isBuy) {
+            path[0] = address(depositToken);
+            path[1] = address(assetTokens[assetIndex]);
+        } else {
+            path[0] = address(assetTokens[assetIndex]);
+            path[1] = address(depositToken);
+        }
+
+        try router.getAmountsOut(amount, path) returns (uint256[] memory amounts) {
+            expectedOut = amounts[amounts.length - 1];
+        } catch {
+            expectedOut = 0;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
