@@ -16,11 +16,14 @@ import {
   Sparkles,
   BarChart3,
   ArrowRightLeft,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
+import { parseUnits, erc20Abi } from 'viem';
 
 interface PoolAllocation {
   BTC: number;
@@ -83,6 +86,10 @@ const ASSET_ICONS: Record<string, string> = {
   CRO: 'C',
 };
 
+// Contract addresses - Cronos Testnet
+const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as const; // MockUSDC on Cronos Testnet
+const POOL_TREASURY = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c' as const; // Treasury address
+
 export const CommunityPool = memo(function CommunityPool({ address, compact = false }: CommunityPoolProps) {
   const [poolData, setPoolData] = useState<PoolSummary | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
@@ -97,7 +104,15 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const [showAI, setShowAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'depositing' | 'confirming'>('idle');
   const mountedRef = useRef(true);
+  
+  // wagmi hooks for on-chain deposits
+  const chainId = useChainId();
+  const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
 
   // Fetch pool data
   const fetchPoolData = useCallback(async () => {
@@ -165,7 +180,61 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   // Polling
   usePolling(fetchPoolData, 30000);
   
-  // Handle deposit
+  // Handle confirmed transaction - record deposit in backend
+  useEffect(() => {
+    if (isConfirmed && txHash && txStatus === 'confirming') {
+      // Transaction confirmed - record in backend
+      const recordDeposit = async () => {
+        try {
+          const amount = parseFloat(depositAmount);
+          const res = await fetch('/api/community-pool?action=deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: address,
+              amount,
+              txHash,
+            }),
+          });
+          
+          const json = await res.json();
+          
+          if (json.success) {
+            setSuccessMessage(`Deposited $${amount.toFixed(2)} successfully!`);
+            setDepositAmount('');
+            setShowDeposit(false);
+            setTxStatus('idle');
+            resetWrite();
+            fetchPoolData();
+            
+            setTimeout(() => setSuccessMessage(null), 5000);
+          } else {
+            setError(json.error);
+            setTxStatus('idle');
+          }
+        } catch (err: any) {
+          setError(err.message);
+          setTxStatus('idle');
+        } finally {
+          setActionLoading(false);
+        }
+      };
+      recordDeposit();
+    }
+  }, [isConfirmed, txHash, txStatus, depositAmount, address, fetchPoolData, resetWrite]);
+  
+  // Handle write errors
+  useEffect(() => {
+    if (writeError) {
+      setError(writeError.message.includes('User rejected') 
+        ? 'Transaction rejected by user' 
+        : writeError.message);
+      setActionLoading(false);
+      setTxStatus('idle');
+    }
+  }, [writeError]);
+  
+  // Handle deposit - prompts wallet signature
   const handleDeposit = async () => {
     if (!address || !depositAmount) return;
     
@@ -175,37 +244,33 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
       return;
     }
     
+    // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
+    if (chainId !== 338 && chainId !== 25) {
+      setError('Please switch to Cronos network');
+      return;
+    }
+    
     setActionLoading(true);
     setError(null);
+    setTxStatus('depositing');
     
     try {
-      // In production, this would trigger an on-chain transaction first
-      const res = await fetch('/api/community-pool?action=deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: address,
-          amount,
-          txHash: `0x${Math.random().toString(16).slice(2)}`, // Mock tx hash
-        }),
+      // Convert to USDC units (6 decimals)
+      const amountInUnits = parseUnits(amount.toString(), 6);
+      
+      // Initiate USDC transfer to treasury
+      writeContract({
+        address: USDC_ADDRESS,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [POOL_TREASURY, amountInUnits],
       });
       
-      const json = await res.json();
-      
-      if (json.success) {
-        setSuccessMessage(json.message);
-        setDepositAmount('');
-        setShowDeposit(false);
-        fetchPoolData();
-        
-        setTimeout(() => setSuccessMessage(null), 5000);
-      } else {
-        setError(json.error);
-      }
+      setTxStatus('confirming');
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setActionLoading(false);
+      setTxStatus('idle');
     }
   };
   
@@ -469,14 +534,18 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="Amount in USD (min $10)"
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  disabled={actionLoading}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                 />
                 <button
                   onClick={handleDeposit}
-                  disabled={actionLoading || !depositAmount || !address}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                  disabled={actionLoading || !depositAmount || !address || isPending || isConfirming}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
                 >
-                  {actionLoading ? 'Processing...' : 'Confirm'}
+                  {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {txStatus === 'depositing' ? 'Sign in Wallet...' : 
+                   txStatus === 'confirming' ? 'Confirming...' : 
+                   'Deposit USDC'}
                 </button>
               </div>
               {poolData && (
@@ -484,6 +553,9 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                   Current share price: ${poolData.sharePrice.toFixed(4)} — You'll receive ~{depositAmount ? (parseFloat(depositAmount) / poolData.sharePrice).toFixed(4) : '0'} shares
                 </p>
               )}
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                Requires USDC on Cronos network. Transaction will prompt wallet signature.
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -561,7 +633,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             Top Shareholders
           </h3>
           <div className="space-y-2">
-            {leaderboard.map((user, index) => (
+            {leaderboard.filter(user => user?.walletAddress).map((user, index) => (
               <div
                 key={user.walletAddress}
                 className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
@@ -576,7 +648,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                     {index + 1}
                   </span>
                   <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">
-                    {user.walletAddress.slice(0, 6)}...{user.walletAddress.slice(-4)}
+                    {user.walletAddress?.slice(0, 6)}...{user.walletAddress?.slice(-4)}
                   </span>
                 </div>
                 <div className="text-right">
