@@ -17,7 +17,7 @@ import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 
 // Configuration
-const DRIFT_THRESHOLD_DEFAULT = 5; // 5%
+const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface ProcessingResult {
