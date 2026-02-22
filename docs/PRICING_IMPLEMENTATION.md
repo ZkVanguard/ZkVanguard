@@ -56,7 +56,29 @@ This document describes the pricing model implementation for ZkVanguard, based o
 
 ## On-Chain Fees
 
-### HedgeExecutor (Cronos EVM)
+### Performance Fee (20% of Profits) - Industry Standard
+
+**This fee is enforced on-chain via HedgeExecutorV2 smart contract.**
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| **Fee Rate** | 20% | Industry standard "2 and 20" model |
+| **Applied To** | Profits only | Never charged on losses |
+| **High-Water Mark** | Yes | Users never pay twice on same gains |
+| **Payout** | Contract admin | Deployer/treasury receives fees |
+
+**How it works:**
+1. User opens hedge with $1,000 collateral
+2. Hedge closes with $200 profit (20% gain)
+3. Platform takes 20% of profit: $40
+4. User receives: $1,000 + $160 = $1,160 (net 16% gain)
+
+**Smart Contract:** `contracts/core/HedgeExecutorV2.sol`
+- `performanceFeeBps`: 2000 (20%)
+- `accumulatedPerformanceFees`: Tracks fees for withdrawal
+- `withdrawPerformanceFees(address)`: Admin function to claim
+
+### Execution Fee (HedgeExecutor)
 - **Fee Rate**: 10 bps (0.1%)
 - **Max Fee Rate**: 100 bps (1%)
 - **Minimum Collateral**: 1 USDC
