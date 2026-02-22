@@ -1,10 +1,78 @@
 /**
  * Community Pool Database Operations
  * Uses Neon PostgreSQL for persistent storage
+ * 
+ * Security Features:
+ * - Parameterized queries (SQL injection protection)
+ * - SSL/TLS with certificate verification
+ * - Input validation (wallet addresses, amounts)
+ * - Numeric bounds checking
+ * - Audit logging
  */
 
 import { query, queryOne } from './postgres';
 import { logger } from '@/lib/utils/logger';
+import crypto from 'crypto';
+
+// ============ Security Validation ============
+
+/**
+ * Validate EVM wallet address format
+ * Must be 42 characters starting with 0x, containing only hex characters
+ */
+function isValidWalletAddress(address: string): boolean {
+  if (!address || typeof address !== 'string') return false;
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+/**
+ * Validate positive number within reasonable bounds
+ */
+function isValidAmount(amount: number, maxValue = 1e15): boolean {
+  return typeof amount === 'number' && 
+         Number.isFinite(amount) && 
+         amount >= 0 && 
+         amount <= maxValue;
+}
+
+/**
+ * Validate percentage (0-100)
+ */
+function isValidPercentage(value: number): boolean {
+  return typeof value === 'number' && 
+         Number.isFinite(value) && 
+         value >= 0 && 
+         value <= 100;
+}
+
+/**
+ * Validate transaction type
+ */
+function isValidTransactionType(type: string): type is 'DEPOSIT' | 'WITHDRAWAL' | 'REBALANCE' | 'AI_DECISION' {
+  return ['DEPOSIT', 'WITHDRAWAL', 'REBALANCE', 'AI_DECISION'].includes(type);
+}
+
+/**
+ * Sanitize string input (prevent XSS in stored data)
+ */
+function sanitizeString(input: string, maxLength = 1000): string {
+  if (!input || typeof input !== 'string') return '';
+  return input
+    .slice(0, maxLength)
+    .replace(/[<>]/g, '') // Remove potential HTML tags
+    .trim();
+}
+
+/**
+ * Generate audit hash for integrity verification
+ */
+function generateAuditHash(data: Record<string, unknown>): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(data) + Date.now())
+    .digest('hex')
+    .slice(0, 16);
+}
 
 // ============ Types ============
 
@@ -70,6 +138,7 @@ export async function getPoolStateFromDb(): Promise<DbPoolState | null> {
 
 /**
  * Upsert pool state (insert or update)
+ * Security: Validates all numeric inputs before storage
  */
 export async function savePoolStateToDb(state: {
   totalValueUSD: number;
@@ -79,6 +148,24 @@ export async function savePoolStateToDb(state: {
   lastRebalance: number;
   lastAIDecision: { timestamp: number; reasoning: string; allocations: Record<string, number> } | null;
 }): Promise<void> {
+  // Security: Validate all numeric inputs
+  if (!isValidAmount(state.totalValueUSD)) {
+    throw new Error('Invalid totalValueUSD: must be a positive number');
+  }
+  if (!isValidAmount(state.totalShares)) {
+    throw new Error('Invalid totalShares: must be a positive number');
+  }
+  if (!isValidAmount(state.sharePrice, 1e12)) {
+    throw new Error('Invalid sharePrice: must be a positive number');
+  }
+  
+  // Validate allocations
+  for (const [asset, alloc] of Object.entries(state.allocations)) {
+    if (!isValidPercentage(alloc.percentage)) {
+      throw new Error(`Invalid allocation percentage for ${asset}`);
+    }
+  }
+
   try {
     // Upsert - update if exists, insert if not
     await query(
@@ -126,8 +213,15 @@ export async function getAllUserSharesFromDb(): Promise<DbUserShares[]> {
 
 /**
  * Get user shares by wallet address
+ * Security: Validates wallet address format
  */
 export async function getUserSharesFromDb(walletAddress: string): Promise<DbUserShares | null> {
+  // Security: Validate wallet address format
+  if (!isValidWalletAddress(walletAddress)) {
+    logger.warn('[CommunityPool DB] Invalid wallet address format', { wallet: walletAddress?.slice(0, 10) });
+    return null;
+  }
+
   try {
     return await queryOne<DbUserShares>(
       `SELECT * FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
@@ -141,12 +235,25 @@ export async function getUserSharesFromDb(walletAddress: string): Promise<DbUser
 
 /**
  * Upsert user shares
+ * Security: Validates wallet address and numeric inputs
  */
 export async function saveUserSharesToDb(userShares: {
   walletAddress: string;
   shares: number;
   costBasisUSD: number;
 }): Promise<void> {
+  // Security: Validate wallet address
+  if (!isValidWalletAddress(userShares.walletAddress)) {
+    throw new Error('Invalid wallet address format');
+  }
+  // Security: Validate numeric inputs
+  if (!isValidAmount(userShares.shares)) {
+    throw new Error('Invalid shares amount: must be a positive number');
+  }
+  if (!isValidAmount(userShares.costBasisUSD)) {
+    throw new Error('Invalid cost basis: must be a positive number');
+  }
+
   try {
     await query(
       `INSERT INTO community_pool_shares (wallet_address, shares, cost_basis_usd, joined_at, last_action_at)
@@ -166,8 +273,14 @@ export async function saveUserSharesToDb(userShares: {
 
 /**
  * Delete user shares (when fully withdrawn)
+ * Security: Validates wallet address format
  */
 export async function deleteUserSharesFromDb(walletAddress: string): Promise<void> {
+  // Security: Validate wallet address
+  if (!isValidWalletAddress(walletAddress)) {
+    throw new Error('Invalid wallet address format');
+  }
+
   try {
     await query(
       `DELETE FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
@@ -184,12 +297,16 @@ export async function deleteUserSharesFromDb(walletAddress: string): Promise<voi
 
 /**
  * Get pool transaction history
+ * Security: Limits query size to prevent resource exhaustion
  */
 export async function getPoolHistoryFromDb(limit = 100): Promise<DbPoolTransaction[]> {
+  // Security: Cap limit to prevent resource exhaustion attacks
+  const safeLimit = Math.min(Math.max(1, limit), 500);
+  
   try {
     return await query<DbPoolTransaction>(
       `SELECT * FROM community_pool_transactions ORDER BY created_at DESC LIMIT $1`,
-      [limit]
+      [safeLimit]
     );
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get pool history', error);
@@ -199,6 +316,7 @@ export async function getPoolHistoryFromDb(limit = 100): Promise<DbPoolTransacti
 
 /**
  * Add transaction to history
+ * Security: Validates transaction type, wallet address, and amounts
  */
 export async function addPoolTransactionToDb(transaction: {
   id: string;
@@ -210,6 +328,35 @@ export async function addPoolTransactionToDb(transaction: {
   details?: Record<string, unknown>;
   txHash?: string;
 }): Promise<void> {
+  // Security: Validate transaction type
+  if (!isValidTransactionType(transaction.type)) {
+    throw new Error('Invalid transaction type');
+  }
+  
+  // Security: Validate wallet address if provided
+  if (transaction.walletAddress && !isValidWalletAddress(transaction.walletAddress)) {
+    throw new Error('Invalid wallet address format');
+  }
+  
+  // Security: Validate numeric amounts if provided
+  if (transaction.amountUSD !== undefined && !isValidAmount(transaction.amountUSD)) {
+    throw new Error('Invalid amount: must be a positive number');
+  }
+  if (transaction.shares !== undefined && !isValidAmount(transaction.shares)) {
+    throw new Error('Invalid shares: must be a positive number');
+  }
+  if (transaction.sharePrice !== undefined && !isValidAmount(transaction.sharePrice, 1e12)) {
+    throw new Error('Invalid share price: must be a positive number');
+  }
+  
+  // Security: Generate audit hash for integrity
+  const auditHash = generateAuditHash({
+    id: transaction.id,
+    type: transaction.type,
+    wallet: transaction.walletAddress,
+    amount: transaction.amountUSD,
+  });
+
   try {
     await query(
       `INSERT INTO community_pool_transactions 
@@ -222,11 +369,15 @@ export async function addPoolTransactionToDb(transaction: {
         transaction.amountUSD || null,
         transaction.shares || null,
         transaction.sharePrice || null,
-        transaction.details ? JSON.stringify(transaction.details) : null,
+        transaction.details ? JSON.stringify({ ...transaction.details, _audit: auditHash }) : JSON.stringify({ _audit: auditHash }),
         transaction.txHash || null,
       ]
     );
-    logger.info('[CommunityPool DB] Transaction added', { id: transaction.id, type: transaction.type });
+    logger.info('[CommunityPool DB] Transaction added', { 
+      id: transaction.id, 
+      type: transaction.type,
+      audit: auditHash,
+    });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to add transaction', error);
     throw error;
