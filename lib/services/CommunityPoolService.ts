@@ -40,7 +40,7 @@ import {
 
 // Minimum deposits to prevent dust/inflation attacks
 const MIN_DEPOSIT_USD = 10;           // $10 minimum subsequent deposits
-const MIN_FIRST_DEPOSIT_USD = 1000;   // $1,000 minimum FIRST deposit (anti-inflation attack)
+const MIN_FIRST_DEPOSIT_USD = 10;     // $10 minimum FIRST deposit (virtual shares provide inflation attack protection)
 const MIN_WITHDRAWAL_SHARES = 0.01;
 
 // Virtual shares/assets offset (ERC-4626 inflation attack protection)
