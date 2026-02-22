@@ -406,10 +406,12 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     // expects collateralAmount in USDC. Convert: collateral = size * price / leverage
     let currentPrice = 1000;
     try {
-      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-      const tickerData = await tickerResponse.json();
-      const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${action.asset}_USDT`);
-      if (ticker) currentPrice = parseFloat(ticker.a);
+      // Use server-side API to avoid CORS issues
+      const priceResponse = await fetch(`/api/prices?symbol=${action.asset}`);
+      const priceData = await priceResponse.json();
+      if (priceData.success && priceData.data?.price) {
+        currentPrice = priceData.data.price;
+      }
     } catch {
       logger.warn('Failed to fetch price for collateral calc, using fallback', { component: 'ActiveHedges' });
     }
