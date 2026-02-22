@@ -1,6 +1,8 @@
 /**
  * Smart Contract Addresses
  * Multi-chain deployment addresses for Cronos (EVM) and SUI (Move)
+ * 
+ * MAINNET READY: Set NEXT_PUBLIC_CHAIN_ID=25 and configure mainnet addresses via env vars
  */
 
 // ============================================
@@ -21,15 +23,26 @@ export const CRONOS_CONTRACT_ADDRESSES = {
     x402GaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x44098d0dE36e157b4C1700B48d615285C76fdE47').trim()) as `0x${string}`,
     // DevUSDCe token on Cronos Testnet (for x402 payments)
     usdcToken: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`,
+    // HedgeExecutor on testnet
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9').trim()) as `0x${string}`,
+    // Moonlander Diamond (same address works on both testnet/mainnet)
+    moonlanderRouter: '0xE6F6351fb66f3a35313fEEFF9116698665FBEeC9' as `0x${string}`,
   },
   mainnet: {
-    zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    universalRelayer: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    gaslessZKVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    x402GaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    // All mainnet addresses use env vars - set these after deploying to mainnet
+    // Empty address (0x0...0) indicates "not yet deployed" - check at runtime
+    zkVerifier: ((process.env.NEXT_PUBLIC_MAINNET_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    rwaManager: ((process.env.NEXT_PUBLIC_MAINNET_RWAMANAGER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    paymentRouter: ((process.env.NEXT_PUBLIC_MAINNET_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    universalRelayer: ((process.env.NEXT_PUBLIC_MAINNET_RELAYER_CONTRACT || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    gaslessZKVerifier: ((process.env.NEXT_PUBLIC_MAINNET_GASLESS_ZK_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    x402GaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_MAINNET_X402_GASLESS_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    // Real USDC on Cronos Mainnet
+    usdcToken: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59' as `0x${string}`,
+    // Real Moonlander Diamond on Cronos Mainnet (verified)
+    moonlanderRouter: '0xE6F6351fb66f3a35313fEEFF9116698665FBEeC9' as `0x${string}`,
   },
 } as const;
 
@@ -137,4 +150,35 @@ export function getMultiChainAddresses(chainType: ChainType, network: NetworkTyp
     return SUI_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet'];
   }
   return CRONOS_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
+}
+
+/**
+ * Zero address constant for checking if contract is deployed
+ */
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+/**
+ * Check if a contract address is configured (not zero address)
+ */
+export function isAddressConfigured(address: string): boolean {
+  return address !== ZERO_ADDRESS && address !== '' && address !== undefined;
+}
+
+/**
+ * Check if mainnet contracts are properly configured
+ * Returns list of missing contract names
+ */
+export function checkMainnetConfiguration(): { configured: boolean; missing: string[] } {
+  const addresses = CRONOS_CONTRACT_ADDRESSES.mainnet;
+  const missing: string[] = [];
+  
+  if (!isAddressConfigured(addresses.zkVerifier)) missing.push('zkVerifier');
+  if (!isAddressConfigured(addresses.rwaManager)) missing.push('rwaManager');
+  if (!isAddressConfigured(addresses.hedgeExecutor)) missing.push('hedgeExecutor');
+  if (!isAddressConfigured(addresses.paymentRouter)) missing.push('paymentRouter');
+  
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
 }
