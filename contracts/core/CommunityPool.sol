@@ -9,6 +9,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title CommunityPool
@@ -42,6 +43,7 @@ contract CommunityPool is
     UUPSUpgradeable
 {
     using SafeERC20 for IERC20;
+    using Math for uint256;
 
     // ═══════════════════════════════════════════════════════════════
     // ROLES
@@ -60,6 +62,12 @@ contract CommunityPool is
     uint256 public constant SECONDS_PER_YEAR = 365 days;
     uint256 public constant MIN_DEPOSIT = 10e6; // $10 USDC (6 decimals)
     uint256 public constant MIN_SHARES_FOR_WITHDRAWAL = 1e15; // 0.001 shares
+    
+    // Precision constants for safe math
+    uint256 public constant SHARE_DECIMALS = 18;
+    uint256 public constant USDC_DECIMALS = 6;
+    uint256 public constant PRECISION_FACTOR = 1e12; // 18 - 6 = 12
+    uint256 public constant WAD = 1e18; // Standard 18 decimal precision
 
     // Asset indices
     uint8 public constant ASSET_BTC = 0;
@@ -327,17 +335,23 @@ contract CommunityPool is
         // Collect any pending fees first
         _collectFees();
 
-        // Calculate shares based on current NAV
+        // Calculate shares based on current NAV using overflow-safe math
         uint256 currentNav = calculateTotalNAV();
         
         if (totalShares == 0 || currentNav == 0) {
             // First deposit: 1 share = $1 (USDC is 6 decimals, shares are 18)
-            shares = amount * 1e12; // Convert 6 decimals to 18
+            // shares = amount * PRECISION_FACTOR to convert 6 dec → 18 dec
+            shares = amount * PRECISION_FACTOR;
         } else {
-            // Subsequent deposits: proportional to NAV
-            // shares (18 dec) = amount (6 dec) * totalShares (18 dec) / currentNav (6 dec)
-            shares = (amount * totalShares) / currentNav;
+            // Subsequent deposits: proportional to current NAV
+            // Formula: shares = (depositAmount / poolNAV) * totalShares
+            // Using mulDiv for overflow safety: shares = amount * totalShares / currentNav
+            // This scales infinitely as both numerator and denominator grow together
+            shares = amount.mulDiv(totalShares, currentNav, Math.Rounding.Floor);
         }
+        
+        // Ensure minimum shares to prevent dust attacks
+        require(shares >= MIN_SHARES_FOR_WITHDRAWAL, "Shares too small");
 
         // Transfer USDC from user
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -363,7 +377,7 @@ contract CommunityPool is
         // Add to cash balance (will be deployed by rebalancer)
         // For now, USDC stays in contract until rebalanced
 
-        uint256 sharePrice = totalShares > 0 ? (calculateTotalNAV() * 1e18) / totalShares : 1e18;
+        uint256 sharePrice = _calculateNavPerShare();
 
         emit Deposited(msg.sender, amount, shares, sharePrice, block.timestamp);
 
@@ -391,10 +405,12 @@ contract CommunityPool is
         // Collect any pending fees first
         _collectFees();
 
-        // Calculate USD value of shares
-        // amountUSD (6 dec) = sharesToBurn (18 dec) * currentNav (6 dec) / totalShares (18 dec)
+        // Calculate USD value of shares using overflow-safe math
+        // Formula: amountUSD = (sharesToBurn / totalShares) * poolNAV
+        // Using mulDiv: amountUSD = sharesToBurn * currentNav / totalShares
+        // This ensures fair proportional withdrawal regardless of pool size
         uint256 currentNav = calculateTotalNAV();
-        amountUSD = (sharesToBurn * currentNav) / totalShares;
+        amountUSD = sharesToBurn.mulDiv(currentNav, totalShares, Math.Rounding.Floor);
 
         // Check we have enough USDC liquidity
         uint256 usdcBalance = depositToken.balanceOf(address(this));
@@ -419,7 +435,7 @@ contract CommunityPool is
         // Transfer USDC to user
         depositToken.safeTransfer(msg.sender, amountUSD);
 
-        uint256 sharePrice = totalShares > 0 ? (calculateTotalNAV() * 1e18) / totalShares : 1e18;
+        uint256 sharePrice = _calculateNavPerShare();
 
         emit Withdrawn(msg.sender, sharesToBurn, amountUSD, sharePrice, block.timestamp);
 
@@ -641,8 +657,13 @@ contract CommunityPool is
     }
 
     function _calculateNavPerShare() internal view returns (uint256) {
-        if (totalShares == 0) return 1e18;
-        return (calculateTotalNAV() * 1e30) / totalShares; // 18 decimals result
+        if (totalShares == 0) return WAD; // 1e18 = $1 per share initially
+        // Using mulDiv for overflow safety
+        // Result is in 18 decimals: (NAV_6dec * 1e18 * PRECISION_FACTOR) / totalShares_18dec
+        // Simplified: (NAV * 1e18 * 1e12) / totalShares = NAV * 1e30 / totalShares
+        // But using mulDiv to prevent overflow
+        uint256 nav = calculateTotalNAV();
+        return nav.mulDiv(WAD * PRECISION_FACTOR, totalShares, Math.Rounding.Floor);
     }
 
     /**
@@ -661,9 +682,11 @@ contract CommunityPool is
         shares = m.shares;
         
         if (totalShares > 0 && shares > 0) {
+            // Using mulDiv for overflow safety as pool grows
             // valueUSD (6 dec) = shares (18 dec) * NAV (6 dec) / totalShares (18 dec)
-            valueUSD = (shares * calculateTotalNAV()) / totalShares;
-            percentage = (shares * BPS_DENOMINATOR) / totalShares;
+            valueUSD = shares.mulDiv(calculateTotalNAV(), totalShares, Math.Rounding.Floor);
+            // percentage in basis points (0-10000)
+            percentage = shares.mulDiv(BPS_DENOMINATOR, totalShares, Math.Rounding.Floor);
         }
     }
 
