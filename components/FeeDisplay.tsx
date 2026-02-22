@@ -185,4 +185,54 @@ export function TierFeeSummary({ tierName, feeRateBps, monthlyVolume }: TierFeeS
   );
 }
 
+// ============================================================================
+// Performance Fee Display (20% of profits)
+// ============================================================================
+
+interface PerformanceFeeDisplayProps {
+  grossProfitUsdc: number;
+}
+
+export function PerformanceFeeDisplay({ grossProfitUsdc }: PerformanceFeeDisplayProps) {
+  const feePercent = ON_CHAIN_FEES.performanceFee.feeRatePercent;
+  const feeUsdc = grossProfitUsdc * (feePercent / 100);
+  const netProfit = grossProfitUsdc - feeUsdc;
+  
+  return (
+    <div className="bg-gradient-to-br from-[#34C759]/5 to-[#007AFF]/5 rounded-[16px] p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-[15px] font-semibold text-[#1d1d1f]">Performance Fee</h4>
+        <span className="bg-[#34C759]/10 text-[#34C759] text-[12px] font-medium px-2 py-1 rounded-full">
+          {feePercent}% of profits
+        </span>
+      </div>
+      
+      <p className="text-[13px] text-[#86868b] mb-4">
+        Industry standard: We only profit when you profit. High-water mark ensures 
+        you&apos;re never charged twice on the same gains.
+      </p>
+      
+      <div className="space-y-2 text-[14px]">
+        <div className="flex justify-between">
+          <span className="text-[#1d1d1f]">Gross Profit</span>
+          <span className="text-[#34C759] font-medium">+{formatUsdc(grossProfitUsdc)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#86868b]">Performance Fee ({feePercent}%)</span>
+          <span className="text-[#FF9500]">-{formatUsdc(feeUsdc)}</span>
+        </div>
+        <div className="border-t border-[#d2d2d7] my-2" />
+        <div className="flex justify-between">
+          <span className="text-[#1d1d1f] font-medium">Your Net Profit</span>
+          <span className="text-[#34C759] font-semibold">+{formatUsdc(netProfit)}</span>
+        </div>
+        <div className="flex justify-between text-[12px]">
+          <span className="text-[#86868b]">You keep</span>
+          <span className="text-[#86868b]">{100 - feePercent}% of all profits</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default FeeDisplay;

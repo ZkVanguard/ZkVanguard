@@ -246,6 +246,13 @@ export interface OnChainFees {
     description: string;
   };
   
+  // Performance fee (profit sharing)
+  performanceFee: {
+    feeRatePercent: number; // 20% = industry standard
+    highWaterMark: boolean; // Only charge on new highs
+    description: string;
+  };
+  
   // x402 Gasless fees
   x402Gasless: {
     feePerTransaction: string; // In USDC (6 decimals) - "10000" = 0.01 USDC
@@ -273,6 +280,12 @@ export const ON_CHAIN_FEES: OnChainFees = {
     maxFeeRateBps: 100, // 1% max as per contract
     minCollateralUsdc: 1_000_000, // 1 USDC (6 decimals)
     description: 'Platform fee charged on hedge executions',
+  },
+  
+  performanceFee: {
+    feeRatePercent: 20, // 20% of profits (industry standard)
+    highWaterMark: true, // Only charge on profits above previous high
+    description: 'Performance fee on profitable hedges (industry standard 20%)',
   },
   
   x402Gasless: {
@@ -322,6 +335,30 @@ export function calculateHedgeFee(collateralUsdc: number): number {
 export function calculateSuiProtocolFee(amountUsdc: number): number {
   const feeBps = ON_CHAIN_FEES.suiProtocol.feeRateBps;
   return (amountUsdc * feeBps) / 10000;
+}
+
+/**
+ * Calculate performance fee on profits (20% industry standard)
+ * Only applies to profits above high-water mark
+ */
+export function calculatePerformanceFee(
+  profitUsdc: number,
+  highWaterMark: number = 0
+): { fee: number; netProfit: number; feePercent: number } {
+  const feePercent = ON_CHAIN_FEES.performanceFee.feeRatePercent;
+  
+  // Only charge on profits above high-water mark
+  const chargeableProfit = ON_CHAIN_FEES.performanceFee.highWaterMark
+    ? Math.max(0, profitUsdc - highWaterMark)
+    : profitUsdc;
+  
+  const fee = chargeableProfit > 0 ? (chargeableProfit * feePercent) / 100 : 0;
+  
+  return {
+    fee,
+    netProfit: profitUsdc - fee,
+    feePercent,
+  };
 }
 
 /**

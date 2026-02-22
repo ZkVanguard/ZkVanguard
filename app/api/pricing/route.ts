@@ -75,6 +75,17 @@ export async function GET() {
           net: 1000 - calculateHedgeFee(1000),
         },
       },
+      performance: {
+        ratePercent: ON_CHAIN_FEES.performanceFee.feeRatePercent,
+        highWaterMark: ON_CHAIN_FEES.performanceFee.highWaterMark,
+        description: ON_CHAIN_FEES.performanceFee.description,
+        note: 'Industry standard - platform only profits when you profit',
+        example: {
+          profit: 1000,
+          fee: 1000 * (ON_CHAIN_FEES.performanceFee.feeRatePercent / 100),
+          userKeeps: 1000 * (1 - ON_CHAIN_FEES.performanceFee.feeRatePercent / 100),
+        },
+      },
       gasless: {
         feePerTransaction: ON_CHAIN_FEES.x402Gasless.feePerTransactionUsdc,
         description: ON_CHAIN_FEES.x402Gasless.description,
