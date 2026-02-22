@@ -7,6 +7,7 @@
 import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
 import { addTransactionToCache } from '../utils/transactionCache';
+import { ON_CHAIN_FEES } from '@/lib/config/pricing';
 
 export interface X402Config {
   contractAddress: string;
@@ -43,7 +44,8 @@ export interface GaslessResult {
 export class X402GaslessService {
   private static readonly X402_CONTRACT = '0x44098d0dE36e157b4C1700B48d615285C76fdE47'; // Cronos testnet
   private static readonly USDC_ADDRESS = '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0'; // DevUSDCe
-  private static readonly FEE_PER_TX = '10000'; // 0.01 USDC (6 decimals)
+  // Use centralized pricing config for fee
+  private static readonly FEE_PER_TX = ON_CHAIN_FEES.x402Gasless.feePerTransaction;
   
   private static config: X402Config = {
     contractAddress: this.X402_CONTRACT,
