@@ -82,7 +82,7 @@ export default async function LocaleLayout({
           }}
         />
       </head>
-      <body className="antialiased bg-[#fbfbfd] min-h-screen">
+      <body className="antialiased bg-[#fbfbfd] min-h-screen" suppressHydrationWarning>
         <IntlProvider locale={locale}>
           <Providers>
             <div className="flex flex-col min-h-screen">

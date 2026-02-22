@@ -108,7 +108,7 @@ export default async function PricingPage() {
       {/* Simple footer */}
       <footer className="bg-white border-t border-black/5 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-[14px] text-[#86868b]">
+          <p className="text-[14px] text-[#86868b]" suppressHydrationWarning>
             © {new Date().getFullYear()} ZkVanguard. All rights reserved.
           </p>
         </div>
