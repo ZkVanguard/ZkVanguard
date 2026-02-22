@@ -840,7 +840,7 @@ export default function DashboardPage() {
             <CardHeader 
               title="Community Pool" 
               subtitle="AI-managed collective investment fund"
-              badge={<Badge color="purple">AI DRIVEN</Badge>}
+              badge={<Badge color="blue">AI DRIVEN</Badge>}
             />
             <CommunityPool address={displayAddress} />
           </Card>
