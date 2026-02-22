@@ -125,7 +125,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const [showAI, setShowAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'complete'>('idle');
+  const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete'>('idle');
   const mountedRef = useRef(true);
   
   // wagmi hooks for on-chain deposits
@@ -261,8 +261,49 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
         }
       };
       recordDeposit();
+      return;
     }
-  }, [isConfirmed, txHash, txStatus, depositAmount, address, fetchPoolData, resetWrite, writeContract]);
+    
+    // Withdrawal confirmed - record in backend and cleanup
+    if (txStatus === 'withdrawing') {
+      const recordWithdrawal = async () => {
+        try {
+          const shares = parseFloat(withdrawShares);
+          const res = await fetch('/api/community-pool?action=withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: address,
+              shares,
+              txHash,
+            }),
+          });
+          
+          const json = await res.json();
+          
+          if (json.success) {
+            setSuccessMessage(`Withdrew ${shares.toFixed(2)} shares successfully!`);
+            setWithdrawShares('');
+            setShowWithdraw(false);
+            setTxStatus('idle');
+            resetWrite();
+            fetchPoolData();
+            
+            setTimeout(() => setSuccessMessage(null), 5000);
+          } else {
+            setError(json.error);
+            setTxStatus('idle');
+          }
+        } catch (err: any) {
+          setError(err.message);
+          setTxStatus('idle');
+        } finally {
+          setActionLoading(false);
+        }
+      };
+      recordWithdrawal();
+    }
+  }, [isConfirmed, txHash, txStatus, depositAmount, withdrawShares, address, fetchPoolData, resetWrite, writeContract]);
   
   // Handle write errors
   useEffect(() => {
@@ -314,7 +355,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     }
   };
   
-  // Handle withdraw
+  // Handle withdraw - calls on-chain contract
   const handleWithdraw = async () => {
     if (!address || !withdrawShares) return;
     
@@ -329,36 +370,31 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
       return;
     }
     
+    // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
+    if (chainId !== 338 && chainId !== 25) {
+      setError('Please switch to Cronos network');
+      return;
+    }
+    
     setActionLoading(true);
     setError(null);
+    setTxStatus('withdrawing');
     
     try {
-      const res = await fetch('/api/community-pool?action=withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: address,
-          shares,
-          txHash: `0x${Math.random().toString(16).slice(2)}`,
-        }),
+      // Convert shares to wei (18 decimals)
+      const sharesInWei = parseUnits(shares.toString(), 18);
+      
+      // Call withdraw on CommunityPool contract (minAmountOut = 0 for no slippage check)
+      writeContract({
+        address: COMMUNITY_POOL_ADDRESS,
+        abi: COMMUNITY_POOL_ABI,
+        functionName: 'withdraw',
+        args: [sharesInWei, BigInt(0)],
       });
-      
-      const json = await res.json();
-      
-      if (json.success) {
-        setSuccessMessage(json.message);
-        setWithdrawShares('');
-        setShowWithdraw(false);
-        fetchPoolData();
-        
-        setTimeout(() => setSuccessMessage(null), 5000);
-      } else {
-        setError(json.error);
-      }
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setActionLoading(false);
+      setTxStatus('idle');
     }
   };
   
@@ -625,10 +661,10 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                 </button>
                 <button
                   onClick={handleWithdraw}
-                  disabled={actionLoading || !withdrawShares}
+                  disabled={actionLoading || !withdrawShares || txStatus === 'withdrawing'}
                   className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
                 >
-                  {actionLoading ? 'Processing...' : 'Confirm'}
+                  {txStatus === 'withdrawing' ? 'Withdrawing...' : actionLoading ? 'Processing...' : 'Confirm'}
                 </button>
               </div>
               {poolData && withdrawShares && (
