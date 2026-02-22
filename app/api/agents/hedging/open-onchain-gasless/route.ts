@@ -35,13 +35,23 @@ import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { upsertOnChainHedge } from '@/lib/db/hedges';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
+import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getCurrentChainId, getUsdcAddress, getRpcUrl, isMainnet, isTestnet } from '@/lib/utils/network';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
-const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
-const RPC_URL = 'https://evm-t3.cronos.org';
+// Dynamic address resolution based on NEXT_PUBLIC_CHAIN_ID
+const getAddresses = () => {
+  const chainId = getCurrentChainId();
+  const contracts = getContractAddresses(chainId);
+  return {
+    hedgeExecutor: contracts.hedgeExecutor,
+    usdc: getUsdcAddress(chainId),
+    rpcUrl: getRpcUrl(chainId),
+    chainId,
+  };
+};
 
 // PRIVACY: Dedicated relayer wallet — user's address NEVER touches the chain
 // The relayer holds its own USDC pool and pays gas, acting as a privacy shield
@@ -103,11 +113,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tp = getCronosProvider(RPC_URL);
+    // Dynamic address resolution
+    const { hedgeExecutor, usdc: usdcAddress, rpcUrl, chainId } = getAddresses();
+    
+    // Validate mainnet contracts are configured
+    if (hedgeExecutor === '0x0000000000000000000000000000000000000000') {
+      return NextResponse.json({
+        success: false,
+        error: 'HedgeExecutor not deployed for this network. Please deploy contracts first.',
+      }, { status: 503 });
+    }
+
+    const tp = getCronosProvider(rpcUrl);
     const provider = tp.provider;
     const relayer = new ethers.Wallet(RELAYER_PK, provider);
-    const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, relayer);
-    const usdc = new ethers.Contract(MOCK_USDC, ERC20_ABI, relayer);
+    const contract = new ethers.Contract(hedgeExecutor, HEDGE_EXECUTOR_ABI, relayer);
+    const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, relayer);
 
     // PRIVACY: The relayer is the on-chain trader — user's address is NEVER on-chain
     // The user's walletAddress is only stored in the ZK commitment (private binding)
@@ -115,7 +136,7 @@ export async function POST(request: NextRequest) {
     const collateralRaw = ethers.parseUnits(String(collateralAmount), 6);
 
     // Check HedgeExecutor contract's USDC balance (for agentOpenHedge, funds must be PRE-FUNDED to contract)
-    const contractBalance = await usdc.balanceOf(HEDGE_EXECUTOR);
+    const contractBalance = await usdc.balanceOf(hedgeExecutor);
     if (contractBalance < collateralRaw) {
       return NextResponse.json({
         success: false,
@@ -161,9 +182,10 @@ export async function POST(request: NextRequest) {
     
     console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} | relayer: ${relayer.address} (user hidden)`);
 
-    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN ═══
-    // Without this, the mock contract uses stale hardcoded prices for PnL calculation
-    if (DEPLOYER_PK) {
+    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN (TESTNET ONLY) ═══
+    // On mainnet, Moonlander has real oracle - no price sync needed
+    // On testnet, sync mock prices so PnL calculation works correctly
+    if (isTestnet() && DEPLOYER_PK) {
       try {
         const deployerWallet = new ethers.Wallet(DEPLOYER_PK, provider);
         // 1) Sync the live price so MockMoonlander records the correct openPrice
@@ -176,9 +198,10 @@ export async function POST(request: NextRequest) {
       } catch (syncErr) {
         console.warn('⚠️ Price sync failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
       }
-    } else {
+    } else if (isTestnet() && !DEPLOYER_PK) {
       console.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to MockMoonlander');
     }
+    // On mainnet, skip price sync entirely - real Moonlander oracle handles it
 
     // Use dynamic gas price with gas estimation
     const feeData = await provider.getFeeData();
@@ -272,14 +295,14 @@ export async function POST(request: NextRequest) {
       collateral: Number(collateralAmount),
       leverage: Number(leverage),
       entryPrice: entryPrice, // CRITICAL: Store entry price for PnL calculation!
-      chain: 'cronos-testnet',
-      chainId: 338,
-      contractAddress: HEDGE_EXECUTOR,
+      chain: chainId === 25 ? 'cronos-mainnet' : 'cronos-testnet',
+      chainId: chainId,
+      contractAddress: hedgeExecutor,
       commitmentHash,
       nullifier,
       proxyWallet: relayer.address,
       blockNumber: receipt.blockNumber,
-      explorerLink: `https://explorer.cronos.org/testnet/tx/${tx.hash}`,
+      explorerLink: `https://explorer.cronos.org/${chainId === 25 ? '' : 'testnet/'}tx/${tx.hash}`,
       walletAddress: userWallet !== 'anonymous' ? userWallet : undefined,
       metadata: { gasless: true, x402: true },
     }).catch(err => console.warn('DB persist skipped:', err instanceof Error ? err.message : err));
@@ -307,7 +330,7 @@ export async function POST(request: NextRequest) {
       leverage: Number(leverage),
       entryPrice: entryPrice, // Entry price for PnL calculation
       totalHedges: Number(totalHedges),
-      explorerLink: `https://explorer.cronos.org/testnet/tx/${tx.hash}`,
+      explorerLink: `https://explorer.cronos.org/${chainId === 25 ? '' : 'testnet/'}tx/${tx.hash}`,
       // x402 Gasless info
       gasless: true,
       x402Powered: true,

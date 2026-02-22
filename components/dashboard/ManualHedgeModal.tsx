@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from 'wagmi';
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
-import { MOCK_USDC_ADDRESS, MOCK_USDC_ABI } from './MockUSDCFaucet';
+import { MOCK_USDC_ABI } from './MockUSDCFaucet';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
+import { getUsdcAddress, getExplorerUrl, CHAIN_IDS } from '@/lib/utils/network';
 
 // ── Asset → pairIndex mapping (must match HedgeExecutor) ────────
 const PAIR_INDEX: Record<string, number> = {
@@ -180,9 +181,10 @@ export function ManualHedgeModal({
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const chainId = useChainId();
-  const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[338];
+  const explorerUrl = useMemo(() => getExplorerUrl(chainId), [chainId]);
   const addresses = getContractAddresses(chainId);
   const hedgeExecutorAddress = addresses.hedgeExecutor as `0x${string}`;
+  const usdcAddress = useMemo(() => getUsdcAddress(chainId), [chainId]);
   const [usdcBalance, setUsdcBalance] = useState<string>('0');
   const [currentAllowance, setCurrentAllowance] = useState<bigint>(0n);
 
@@ -249,13 +251,13 @@ export function ManualHedgeModal({
     try {
       const [bal, allow] = await Promise.all([
         publicClient.readContract({
-          address: MOCK_USDC_ADDRESS,
+          address: usdcAddress,
           abi: ERC20_ABI,
           functionName: 'balanceOf',
           args: [address],
         }),
         publicClient.readContract({
-          address: MOCK_USDC_ADDRESS,
+          address: usdcAddress,
           abi: ERC20_ABI,
           functionName: 'allowance',
           args: [address, hedgeExecutorAddress],
@@ -420,7 +422,7 @@ export function ManualHedgeModal({
     if (currentAllowance < requiredAmount) {
       setTxStep('approving');
       writeApprove({
-        address: MOCK_USDC_ADDRESS,
+        address: usdcAddress,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [hedgeExecutorAddress, requiredAmount],
@@ -580,7 +582,7 @@ export function ManualHedgeModal({
       });
       setTxStep('approving');
       writeApprove({
-        address: MOCK_USDC_ADDRESS,
+        address: usdcAddress,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [hedgeExecutorAddress, requiredAmount],
@@ -598,7 +600,7 @@ export function ManualHedgeModal({
     if (!address) return;
     resetMintTracked();
     writeMintTracked({
-      address: MOCK_USDC_ADDRESS,
+      address: usdcAddress,
       abi: MOCK_USDC_ABI,
       functionName: 'mint',
       args: [address, parseUnits(amount, 6)],
@@ -689,7 +691,7 @@ export function ManualHedgeModal({
                       {success ? 'Hedge Created On-Chain' : 'Create On-Chain Hedge'}
                     </h2>
                     <p className="text-[13px] text-[#86868b]">
-                      {success ? (gaslessSavings ? 'x402 Gasless — Confirmed on Cronos' : 'Confirmed on Cronos Testnet') : (useGasless ? 'x402 Gasless — zero gas fees' : 'Sign with your wallet — on-chain execution')}
+                      {success ? (gaslessSavings ? 'x402 Gasless — Confirmed on Cronos' : `Confirmed on Cronos ${chainId === CHAIN_IDS.CRONOS_MAINNET ? 'Mainnet' : 'Testnet'}`) : (useGasless ? 'x402 Gasless — zero gas fees' : 'Sign with your wallet — on-chain execution')}
                     </p>
                   </div>
                 </div>
