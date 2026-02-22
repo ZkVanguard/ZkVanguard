@@ -26,6 +26,7 @@ export function Navbar() {
     { href: '/dashboard', label: t('dashboard') },
     { href: '/agents', label: t('agents') },
     { href: '/simulator', label: t('simulator') },
+    { href: '/pricing', label: 'Pricing' },
   ];
 
   return (
