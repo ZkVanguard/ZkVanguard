@@ -231,9 +231,6 @@ contract CommunityPool is
     /// @notice DEX router for swaps (VVS Finance on Cronos)
     address public dexRouter;
 
-    /// @notice Price oracle for NAV calculation (deprecated - use priceFeedsUSD)
-    address public priceOracle;
-
     /// @notice Chainlink price feeds for each asset (USD denominated)
     /// @dev Free to read from deployed contracts - no API key required
     ///      Index: 0=BTC/USD, 1=ETH/USD, 2=SUI/USD (if available), 3=CRO/USD
@@ -241,9 +238,6 @@ contract CommunityPool is
 
     /// @notice Maximum age of price data before considered stale (default: 1 hour)
     uint256 public priceStaleThreshold;
-
-    /// @notice Whether to enable fallback price via DEX quote
-    bool public useDexFallbackPrice;
 
     /// @notice Minimum time between rebalances (anti-churn)
     uint256 public rebalanceCooldown;
@@ -343,6 +337,9 @@ contract CommunityPool is
     error SwapSlippageExceeded(uint256 expected, uint256 received);
     error StalePriceData(uint8 assetIndex, uint256 lastUpdate, uint256 threshold);
     error NegativePrice(uint8 assetIndex, int256 price);
+    error PriceFeedNotConfigured(uint8 assetIndex);
+    error OracleCallFailed(uint8 assetIndex);
+    error AssetWithoutPriceFeed(uint8 assetIndex, uint256 balance);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -684,6 +681,12 @@ contract CommunityPool is
         if (amount == 0) revert ZeroAmount();
         if (dexRouter == address(0)) revert DexRouterNotSet();
         if (address(assetTokens[assetIndex]) == address(0)) revert InvalidSwapPath();
+        
+        // CRITICAL: Must have price feed configured before acquiring assets
+        // Otherwise we cannot accurately value the portfolio (billions at stake)
+        if (address(priceFeedsUSD[assetIndex]) == address(0)) {
+            revert PriceFeedNotConfigured(assetIndex);
+        }
 
         IVVSRouter router = IVVSRouter(dexRouter);
         address[] memory path = new address[](2);
@@ -868,6 +871,7 @@ contract CommunityPool is
     /**
      * @notice Calculate total NAV of the pool in USDC terms
      * @dev Uses Chainlink price feeds for accurate multi-asset valuation
+     *      CRITICAL: Reverts if any asset with balance lacks a price feed
      * @return nav Total NAV in USDC (6 decimals)
      */
     function calculateTotalNAV() public view returns (uint256 nav) {
@@ -878,38 +882,55 @@ contract CommunityPool is
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
             if (assetBalances[i] == 0) continue;
             
-            // Get price from Chainlink feed if configured
-            if (address(priceFeedsUSD[i]) != address(0)) {
-                (
-                    /* uint80 roundId */,
-                    int256 price,
-                    /* uint256 startedAt */,
-                    uint256 updatedAt,
-                    /* uint80 answeredInRound */
-                ) = priceFeedsUSD[i].latestRoundData();
-                
-                // Verify price is valid and not stale
-                if (price <= 0) revert NegativePrice(i, price);
-                if (block.timestamp - updatedAt > priceStaleThreshold) {
-                    revert StalePriceData(i, updatedAt, priceStaleThreshold);
-                }
-                
-                // Chainlink feeds return 8 decimals for USD pairs
-                // Asset value = assetBalance * price / 10^(assetDecimals + priceDecimals - usdcDecimals)
-                // = assetBalance * price / 10^(assetDecimals + 8 - 6)
-                // = assetBalance * price / 10^(assetDecimals + 2)
-                uint8 priceDecimals = priceFeedsUSD[i].decimals();
-                uint256 assetValue = assetBalances[i].mulDiv(
-                    uint256(price),
-                    10 ** (assetDecimals[i] + priceDecimals - 6), // Normalize to USDC 6 decimals
-                    Math.Rounding.Floor
-                );
-                nav += assetValue;
+            // CRITICAL: Asset has balance - MUST have price feed
+            // Cannot skip - would undervalue portfolio and harm depositors
+            if (address(priceFeedsUSD[i]) == address(0)) {
+                revert AssetWithoutPriceFeed(i, assetBalances[i]);
             }
-            // If no price feed configured, asset value is NOT counted (conservative)
+            
+            // Get price from Chainlink feed
+            (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+            if (!success) revert OracleCallFailed(i);
+            
+            // Verify price is valid and not stale
+            if (price <= 0) revert NegativePrice(i, price);
+            if (block.timestamp - updatedAt > priceStaleThreshold) {
+                revert StalePriceData(i, updatedAt, priceStaleThreshold);
+            }
+            
+            // Chainlink feeds return 8 decimals for USD pairs
+            // Asset value = assetBalance * price / 10^(assetDecimals + priceDecimals - usdcDecimals)
+            uint8 priceDecimals = priceFeedsUSD[i].decimals();
+            uint256 assetValue = assetBalances[i].mulDiv(
+                uint256(price),
+                10 ** (assetDecimals[i] + priceDecimals - 6), // Normalize to USDC 6 decimals
+                Math.Rounding.Floor
+            );
+            nav += assetValue;
         }
 
         return nav;
+    }
+    
+    /**
+     * @notice Safely get price from Chainlink oracle with error handling
+     * @param assetIndex Index of the asset
+     * @return success Whether the oracle call succeeded
+     * @return price The price (8 decimals typically)
+     * @return updatedAt Timestamp of last update
+     */
+    function _getOraclePrice(uint8 assetIndex) internal view returns (bool success, int256 price, uint256 updatedAt) {
+        try priceFeedsUSD[assetIndex].latestRoundData() returns (
+            uint80 /* roundId */,
+            int256 _price,
+            uint256 /* startedAt */,
+            uint256 _updatedAt,
+            uint80 /* answeredInRound */
+        ) {
+            return (true, _price, _updatedAt);
+        } catch {
+            return (false, 0, 0);
+        }
     }
 
     /**
@@ -995,6 +1016,59 @@ contract CommunityPool is
         return memberList.length;
     }
 
+    /**
+     * @notice Check if all configured oracles are healthy (fresh prices, no errors)
+     * @return healthy True if all oracles are working correctly
+     * @return configured Per-asset configuration status
+     * @return working Per-asset oracle working status
+     * @return fresh Per-asset price freshness status
+     */
+    function checkOracleHealth() external view returns (
+        bool healthy,
+        bool[NUM_ASSETS] memory configured,
+        bool[NUM_ASSETS] memory working,
+        bool[NUM_ASSETS] memory fresh
+    ) {
+        healthy = true;
+        
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            configured[i] = address(priceFeedsUSD[i]) != address(0);
+            
+            if (configured[i]) {
+                (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+                working[i] = success && price > 0;
+                fresh[i] = success && (block.timestamp - updatedAt <= priceStaleThreshold);
+                
+                // If asset has balance, oracle MUST be working and fresh
+                if (assetBalances[i] > 0) {
+                    if (!working[i] || !fresh[i]) {
+                        healthy = false;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @notice Get current prices from all configured oracles
+     * @return prices Array of prices (8 decimals), 0 if not configured/failed
+     * @return timestamps Array of last update timestamps
+     */
+    function getOraclePrices() external view returns (
+        uint256[NUM_ASSETS] memory prices,
+        uint256[NUM_ASSETS] memory timestamps
+    ) {
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            if (address(priceFeedsUSD[i]) != address(0)) {
+                (bool success, int256 price, uint256 updatedAt) = _getOraclePrice(i);
+                if (success && price > 0) {
+                    prices[i] = uint256(price);
+                    timestamps[i] = updatedAt;
+                }
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // ADMIN FUNCTIONS
     // ═══════════════════════════════════════════════════════════════
@@ -1054,10 +1128,6 @@ contract CommunityPool is
         require(threshold >= 60, "Threshold too low"); // Minimum 1 minute
         require(threshold <= 86400, "Threshold too high"); // Maximum 24 hours
         priceStaleThreshold = threshold;
-    }
-
-    function setPriceOracle(address _oracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        priceOracle = _oracle;
     }
 
     function setEmergencyWithdraw(bool _enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
