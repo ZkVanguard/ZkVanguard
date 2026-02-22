@@ -492,15 +492,27 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       ).to.be.revertedWithCustomError(communityPool, 'SlippageExceeded');
     });
 
-    it('should disable rebalance trades until DEX integration', async function () {
+    it('should require DEX router to be set for rebalancing', async function () {
       // Grant rebalancer role
       const REBALANCER_ROLE = await communityPool.REBALANCER_ROLE();
       await communityPool.grantRole(REBALANCER_ROLE, owner.address);
 
-      // Try to execute rebalance trade - should revert
+      // Try to execute rebalance trade without DEX router set - should revert
       await expect(
-        communityPool.executeRebalanceTrade(0, ethers.parseUnits('100', USDC_DECIMALS), true)
-      ).to.be.revertedWith('Rebalancing disabled until DEX integration complete');
+        communityPool.executeRebalanceTrade(0, ethers.parseUnits('100', USDC_DECIMALS), true, 0)
+      ).to.be.revertedWithCustomError(communityPool, 'DexRouterNotSet');
+    });
+
+    it('should require valid asset for rebalancing', async function () {
+      // Grant rebalancer role and set a mock DEX router
+      const REBALANCER_ROLE = await communityPool.REBALANCER_ROLE();
+      await communityPool.grantRole(REBALANCER_ROLE, owner.address);
+      await communityPool.setDexRouter(owner.address); // Use any address for test
+      
+      // Try to execute rebalance trade with asset that has zero address - should revert
+      await expect(
+        communityPool.executeRebalanceTrade(0, ethers.parseUnits('100', USDC_DECIMALS), true, 0)
+      ).to.be.revertedWithCustomError(communityPool, 'InvalidSwapPath');
     });
   });
 
