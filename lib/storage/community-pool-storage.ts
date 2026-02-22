@@ -1,21 +1,42 @@
 /**
  * Community Pool Storage Layer
  * 
- * Provides persistent storage for community pool data
+ * Provides persistent storage for community pool data using Neon PostgreSQL
  * - Pool state (total assets, share price, allocations)
  * - User shares (deposits, withdrawals, ownership)
  * - Transaction history
  */
 
 import { logger } from '../utils/logger';
-import fs from 'fs/promises';
-import path from 'path';
+import {
+  getPoolStateFromDb,
+  savePoolStateToDb,
+  getAllUserSharesFromDb,
+  getUserSharesFromDb,
+  saveUserSharesToDb,
+  deleteUserSharesFromDb,
+  getPoolHistoryFromDb,
+  addPoolTransactionToDb,
+  initCommunityPoolTables,
+  DbPoolState,
+  DbUserShares,
+  DbPoolTransaction,
+} from '../db/community-pool';
 
-// Storage paths
-const STORAGE_DIR = path.join(process.cwd(), 'deployments');
-const POOL_STATE_FILE = path.join(STORAGE_DIR, 'community-pool-state.json');
-const POOL_SHARES_FILE = path.join(STORAGE_DIR, 'community-pool-shares.json');
-const POOL_HISTORY_FILE = path.join(STORAGE_DIR, 'community-pool-history.json');
+// Initialize tables on first import
+let tablesInitialized = false;
+async function ensureTablesInitialized() {
+  if (!tablesInitialized) {
+    try {
+      await initCommunityPoolTables();
+      tablesInitialized = true;
+    } catch (error) {
+      logger.error('[CommunityPool] Failed to initialize tables', error);
+      // Continue anyway - tables might already exist
+      tablesInitialized = true;
+    }
+  }
+}
 
 // Supported assets
 export const SUPPORTED_ASSETS = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
@@ -78,35 +99,6 @@ export interface PoolTransaction {
 }
 
 /**
- * Initialize storage directory
- * Note: On Vercel serverless, filesystem is read-only - use in-memory fallback
- */
-let inMemoryPoolState: PoolState | null = null;
-let inMemoryShares: UserShares[] = [];
-let inMemoryHistory: PoolTransaction[] = [];
-
-// Detect serverless environment (Vercel, AWS Lambda, etc.)
-const isServerless = !!(
-  process.env.VERCEL ||
-  process.env.AWS_LAMBDA_FUNCTION_NAME ||
-  process.env.NETLIFY
-);
-
-if (isServerless) {
-  logger.info('[CommunityPool] Serverless environment detected - using in-memory storage');
-}
-
-async function ensureStorageDir() {
-  if (isServerless) return; // Skip filesystem operations
-  
-  try {
-    await fs.mkdir(STORAGE_DIR, { recursive: true });
-  } catch (error: any) {
-    // Ignore errors - will use in-memory if file operations fail
-  }
-}
-
-/**
  * Get initial pool state
  */
 function getInitialPoolState(): PoolState {
@@ -129,63 +121,83 @@ function getInitialPoolState(): PoolState {
 }
 
 /**
- * Get pool state
+ * Convert DB row to PoolState
+ */
+function dbToPoolState(db: DbPoolState): PoolState {
+  return {
+    totalValueUSD: Number(db.total_value_usd),
+    totalShares: Number(db.total_shares),
+    sharePrice: Number(db.share_price),
+    allocations: db.allocations as PoolState['allocations'],
+    lastRebalance: new Date(db.last_rebalance).getTime(),
+    lastAIDecision: db.last_ai_decision,
+    createdAt: new Date(db.created_at).getTime(),
+    updatedAt: new Date(db.updated_at).getTime(),
+  };
+}
+
+/**
+ * Get pool state from Neon PostgreSQL
  */
 export async function getPoolState(): Promise<PoolState> {
-  await ensureStorageDir();
-  
-  // Use in-memory on serverless
-  if (isServerless) {
-    if (!inMemoryPoolState) {
-      inMemoryPoolState = getInitialPoolState();
-    }
-    return inMemoryPoolState;
-  }
+  await ensureTablesInitialized();
   
   try {
-    const data = await fs.readFile(POOL_STATE_FILE, 'utf-8');
-    return JSON.parse(data);
+    const dbState = await getPoolStateFromDb();
+    if (dbState) {
+      return dbToPoolState(dbState);
+    }
+    return getInitialPoolState();
   } catch (error) {
-    // Return initial state if file doesn't exist
-    const initialState = getInitialPoolState();
-    await savePoolState(initialState);
-    return initialState;
+    logger.error('[CommunityPool] Failed to get pool state from DB', error);
+    return getInitialPoolState();
   }
 }
 
 /**
- * Save pool state
+ * Save pool state to Neon PostgreSQL
  */
 export async function savePoolState(state: PoolState): Promise<void> {
+  await ensureTablesInitialized();
   state.updatedAt = Date.now();
   
-  // Use in-memory on serverless
-  if (isServerless) {
-    inMemoryPoolState = state;
-    logger.info('[CommunityPool] Pool state saved (in-memory)');
-    return;
+  try {
+    await savePoolStateToDb({
+      totalValueUSD: state.totalValueUSD,
+      totalShares: state.totalShares,
+      sharePrice: state.sharePrice,
+      allocations: state.allocations,
+      lastRebalance: state.lastRebalance,
+      lastAIDecision: state.lastAIDecision,
+    });
+  } catch (error) {
+    logger.error('[CommunityPool] Failed to save pool state to DB', error);
+    throw error;
   }
-  
-  await ensureStorageDir();
-  await fs.writeFile(POOL_STATE_FILE, JSON.stringify(state, null, 2));
-  logger.info('[CommunityPool] Pool state saved');
 }
 
 /**
- * Get all user shares
+ * Get all user shares from Neon PostgreSQL
  */
 export async function getAllUserShares(): Promise<UserShares[]> {
-  // Use in-memory on serverless
-  if (isServerless) {
-    return inMemoryShares;
-  }
-  
-  await ensureStorageDir();
+  await ensureTablesInitialized();
   
   try {
-    const data = await fs.readFile(POOL_SHARES_FILE, 'utf-8');
-    return JSON.parse(data);
+    const dbShares = await getAllUserSharesFromDb();
+    const poolState = await getPoolState();
+    
+    return dbShares.map(db => ({
+      walletAddress: db.wallet_address,
+      shares: Number(db.shares),
+      valueUSD: Number(db.shares) * poolState.sharePrice,
+      percentage: poolState.totalShares > 0 ? (Number(db.shares) / poolState.totalShares) * 100 : 0,
+      deposits: [], // Historical deposits not stored in simplified schema
+      withdrawals: [], // Historical withdrawals not stored in simplified schema
+      joinedAt: new Date(db.joined_at).getTime(),
+      updatedAt: new Date(db.last_action_at).getTime(),
+    }));
   } catch (error) {
+    logger.error('[CommunityPool] Failed to get all user shares from DB', error);
     return [];
   }
 }
@@ -194,91 +206,108 @@ export async function getAllUserShares(): Promise<UserShares[]> {
  * Get user shares by wallet address
  */
 export async function getUserShares(walletAddress: string): Promise<UserShares | null> {
-  const allShares = await getAllUserShares();
-  return allShares.find(s => s.walletAddress.toLowerCase() === walletAddress.toLowerCase()) || null;
-}
-
-/**
- * Save user shares
- */
-export async function saveUserShares(userShares: UserShares): Promise<void> {
-  const allShares = await getAllUserShares();
-  const existingIndex = allShares.findIndex(
-    s => s.walletAddress.toLowerCase() === userShares.walletAddress.toLowerCase()
-  );
-  
-  userShares.updatedAt = Date.now();
-  
-  if (existingIndex >= 0) {
-    allShares[existingIndex] = userShares;
-  } else {
-    allShares.push(userShares);
-  }
-  
-  // Use in-memory on serverless
-  if (isServerless) {
-    inMemoryShares = allShares;
-    logger.info(`[CommunityPool] User shares saved (in-memory) for ${userShares.walletAddress}`);
-    return;
-  }
-  
-  await ensureStorageDir();
-  await fs.writeFile(POOL_SHARES_FILE, JSON.stringify(allShares, null, 2));
-  logger.info(`[CommunityPool] User shares saved for ${userShares.walletAddress}`);
-}
-
-/**
- * Get pool transaction history
- */
-export async function getPoolHistory(limit: number = 50): Promise<PoolTransaction[]> {
-  // Use in-memory on serverless
-  if (isServerless) {
-    return inMemoryHistory.slice(-limit).reverse();
-  }
-  
-  await ensureStorageDir();
+  await ensureTablesInitialized();
   
   try {
-    const data = await fs.readFile(POOL_HISTORY_FILE, 'utf-8');
-    const history: PoolTransaction[] = JSON.parse(data);
-    return history.slice(-limit).reverse(); // Most recent first
+    const dbShares = await getUserSharesFromDb(walletAddress);
+    if (!dbShares) return null;
+    
+    const poolState = await getPoolState();
+    return {
+      walletAddress: dbShares.wallet_address,
+      shares: Number(dbShares.shares),
+      valueUSD: Number(dbShares.shares) * poolState.sharePrice,
+      percentage: poolState.totalShares > 0 ? (Number(dbShares.shares) / poolState.totalShares) * 100 : 0,
+      deposits: [],
+      withdrawals: [],
+      joinedAt: new Date(dbShares.joined_at).getTime(),
+      updatedAt: new Date(dbShares.last_action_at).getTime(),
+    };
   } catch (error) {
+    logger.error('[CommunityPool] Failed to get user shares from DB', error);
+    return null;
+  }
+}
+
+/**
+ * Save user shares to Neon PostgreSQL
+ */
+export async function saveUserShares(userShares: UserShares): Promise<void> {
+  await ensureTablesInitialized();
+  
+  try {
+    // Calculate cost basis from deposits
+    const costBasis = userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0) -
+                      userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0);
+    
+    if (userShares.shares <= 0) {
+      // Delete user if no shares remaining
+      await deleteUserSharesFromDb(userShares.walletAddress);
+    } else {
+      await saveUserSharesToDb({
+        walletAddress: userShares.walletAddress,
+        shares: userShares.shares,
+        costBasisUSD: Math.max(0, costBasis),
+      });
+    }
+  } catch (error) {
+    logger.error('[CommunityPool] Failed to save user shares to DB', error);
+    throw error;
+  }
+}
+
+/**
+ * Get pool transaction history from Neon PostgreSQL
+ */
+export async function getPoolHistory(limit: number = 50): Promise<PoolTransaction[]> {
+  await ensureTablesInitialized();
+  
+  try {
+    const dbHistory = await getPoolHistoryFromDb(limit);
+    return dbHistory.map(db => ({
+      id: db.transaction_id,
+      type: db.type,
+      walletAddress: db.wallet_address || undefined,
+      amountUSD: db.amount_usd ? Number(db.amount_usd) : undefined,
+      shares: db.shares ? Number(db.shares) : undefined,
+      sharePrice: db.share_price ? Number(db.share_price) : undefined,
+      details: db.details || undefined,
+      timestamp: new Date(db.created_at).getTime(),
+      txHash: db.tx_hash || undefined,
+    }));
+  } catch (error) {
+    logger.error('[CommunityPool] Failed to get pool history from DB', error);
     return [];
   }
 }
 
 /**
- * Add transaction to pool history
+ * Add transaction to pool history in Neon PostgreSQL
  */
 export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>): Promise<PoolTransaction> {
+  await ensureTablesInitialized();
+  
   const transaction: PoolTransaction = {
     ...tx,
     id: `pool-tx-${Date.now()}-${Math.random().toString(36).substring(7)}`,
   };
-  
-  // Use in-memory on serverless
-  if (isServerless) {
-    inMemoryHistory.push(transaction);
-    // Keep last 1000 transactions
-    if (inMemoryHistory.length > 1000) {
-      inMemoryHistory = inMemoryHistory.slice(-1000);
-    }
-    logger.info(`[CommunityPool] Transaction recorded (in-memory): ${transaction.type}`);
+
+  try {
+    await addPoolTransactionToDb({
+      id: transaction.id,
+      type: transaction.type,
+      walletAddress: transaction.walletAddress,
+      amountUSD: transaction.amountUSD,
+      shares: transaction.shares,
+      sharePrice: transaction.sharePrice,
+      details: transaction.details,
+      txHash: transaction.txHash,
+    });
     return transaction;
+  } catch (error) {
+    logger.error('[CommunityPool] Failed to add transaction to DB', error);
+    throw error;
   }
-  
-  await ensureStorageDir();
-  
-  const history = await getPoolHistory(1000); // Get all history
-  history.reverse(); // Back to chronological order
-  history.push(transaction);
-  
-  // Keep last 1000 transactions
-  const trimmed = history.slice(-1000);
-  await fs.writeFile(POOL_HISTORY_FILE, JSON.stringify(trimmed, null, 2));
-  
-  logger.info(`[CommunityPool] Transaction recorded: ${transaction.type}`);
-  return transaction;
 }
 
 /**
