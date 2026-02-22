@@ -557,7 +557,10 @@ export interface OnChainHedgeParams {
 export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<Hedge | null> {
   try {
     const orderId = params.hedgeIdOnchain; // Use on-chain hedgeId as order_id
-    const explorerLink = params.explorerLink || `https://explorer.cronos.org/testnet/tx/${params.txHash}`;
+    // Dynamic explorer URL based on chain ID (mainnet-ready)
+    const chainId = params.chainId || parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '338', 10);
+    const explorerBase = chainId === 25 ? 'https://explorer.cronos.org' : 'https://explorer.cronos.org/testnet';
+    const explorerLink = params.explorerLink || `${explorerBase}/tx/${params.txHash}`;
 
     const sql = `
       INSERT INTO hedges (
@@ -723,8 +726,12 @@ export async function cacheTxHashes(entries: Array<{ hedgeId: string; txHash: st
   if (entries.length === 0) return;
 
   try {
+    // Dynamic explorer URL based on chain ID (mainnet-ready)
+    const chainId = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '338', 10);
+    const explorerBase = chainId === 25 ? 'https://explorer.cronos.org' : 'https://explorer.cronos.org/testnet';
+    
     for (const { hedgeId, txHash, blockNumber } of entries) {
-      const explorerLink = `https://explorer.cronos.org/testnet/tx/${txHash}`;
+      const explorerLink = `${explorerBase}/tx/${txHash}`;
       await query(`
         INSERT INTO hedges (order_id, hedge_id_onchain, tx_hash, block_number, explorer_link, on_chain, simulation_mode, asset, market, side, size, notional_value, leverage, status)
         VALUES ($1, $2, $3, $4, $5, true, false, 'UNKNOWN', 'UNKNOWN', 'LONG', 0, 0, 1, 'active')

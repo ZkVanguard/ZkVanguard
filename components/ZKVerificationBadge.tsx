@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Shield, CheckCircle, Loader2, Lock, Eye, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useExplorerUrl } from '@/lib/hooks/useNetwork';
 
 export interface ZKProofData {
   proofHash: string;
@@ -35,6 +36,7 @@ export function ZKVerificationBadge({
   className = '',
 }: ZKVerificationBadgeProps) {
   const [expanded, setExpanded] = useState(false);
+  const explorerUrl = useExplorerUrl();
 
   const sizeClasses = {
     sm: 'text-xs px-2 py-1',
@@ -161,7 +163,7 @@ export function ZKVerificationBadge({
                 <div className="flex justify-between items-center">
                   <span className="text-[#6E6E73]">On-Chain:</span>
                   <a
-                    href={`https://explorer.cronos.org/testnet/tx/${proof.txHash}`}
+                    href={`${explorerUrl}/tx/${proof.txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[#007AFF] hover:text-[#0051D5] text-xs font-mono flex items-center gap-1"

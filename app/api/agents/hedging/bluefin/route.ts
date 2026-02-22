@@ -24,6 +24,8 @@ export const dynamic = 'force-dynamic';
 // Use mock service in development/testnet
 const USE_MOCK = process.env.BLUEFIN_USE_MOCK !== 'false';
 const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY;
+// Network from env - defaults to testnet, set BLUEFIN_NETWORK=mainnet for production
+const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'testnet') as 'mainnet' | 'testnet';
 
 /**
  * GET - Get BlueFin account info and positions
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         mode: 'mock',
-        network: 'sui-testnet',
+        network: `sui-${BLUEFIN_NETWORK}`,
         positions,
         supportedPairs: Object.keys(BLUEFIN_PAIRS),
         message: 'Using mock BlueFin service (set BLUEFIN_PRIVATE_KEY for live trading)',
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Initialize real client
-    await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, 'testnet');
+    await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
 
     if (action === 'status') {
       const balance = await bluefinService.getBalance();
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         mode: 'live',
-        network: 'sui-testnet',
+        network: `sui-${BLUEFIN_NETWORK}`,
         address: bluefinService.getAddress(),
         balance,
         positions,
@@ -157,7 +159,7 @@ export async function POST(request: NextRequest) {
         leverage: parseInt(leverage),
       });
     } else {
-      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, 'testnet');
+      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
       result = await bluefinService.openHedge({
         symbol,
         side: side.toUpperCase() as 'LONG' | 'SHORT',
@@ -249,7 +251,7 @@ export async function DELETE(request: NextRequest) {
     if (USE_MOCK || !BLUEFIN_PRIVATE_KEY) {
       result = await mockBluefinService.closeHedge({ symbol });
     } else {
-      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, 'testnet');
+      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
       result = await bluefinService.closeHedge({
         symbol,
         size: size ? parseFloat(size) : undefined,

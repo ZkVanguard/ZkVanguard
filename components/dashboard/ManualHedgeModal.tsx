@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from 'wagmi';
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
 import { MOCK_USDC_ADDRESS, MOCK_USDC_ABI } from './MockUSDCFaucet';
-
-// ── Contract Addresses ──────────────────────────────────────────
-const HEDGE_EXECUTOR_ADDRESS = '0x090b6221137690EbB37667E4644287487CE462B9' as `0x${string}`;
+import { getContractAddresses } from '@/lib/contracts/addresses';
+import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 
 // ── Asset → pairIndex mapping (must match HedgeExecutor) ────────
 const PAIR_INDEX: Record<string, number> = {
@@ -180,6 +179,10 @@ export function ManualHedgeModal({
   // ── Wallet / chain state ──────────────────────────────────────
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const chainId = useChainId();
+  const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[338];
+  const addresses = getContractAddresses(chainId);
+  const hedgeExecutorAddress = addresses.hedgeExecutor as `0x${string}`;
   const [usdcBalance, setUsdcBalance] = useState<string>('0');
   const [currentAllowance, setCurrentAllowance] = useState<bigint>(0n);
 
@@ -255,7 +258,7 @@ export function ManualHedgeModal({
           address: MOCK_USDC_ADDRESS,
           abi: ERC20_ABI,
           functionName: 'allowance',
-          args: [address, HEDGE_EXECUTOR_ADDRESS],
+          args: [address, hedgeExecutorAddress],
         }),
       ]);
       setUsdcBalance(formatUnits(bal, 6));
@@ -308,7 +311,7 @@ export function ManualHedgeModal({
     });
 
     writeOpenHedge({
-      address: HEDGE_EXECUTOR_ADDRESS,
+      address: hedgeExecutorAddress,
       abi: HEDGE_EXECUTOR_ABI,
       functionName: 'openHedge',
       args: [
@@ -359,7 +362,7 @@ export function ManualHedgeModal({
         hash: openHedgeHash,
         type: 'hedge',
         from: address || 'unknown',
-        to: HEDGE_EXECUTOR_ADDRESS,
+        to: hedgeExecutorAddress,
         value: collateralAmount.toFixed(2),
         tokenSymbol: 'USDC',
         description: `${hedgeType} ${asset} hedge — ${collateralAmount} USDC × ${leverage}x`,
@@ -420,7 +423,7 @@ export function ManualHedgeModal({
         address: MOCK_USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [HEDGE_EXECUTOR_ADDRESS, requiredAmount],
+        args: [hedgeExecutorAddress, requiredAmount],
       });
       setTxStep('approve-confirming');
       // After approval confirms, the useEffect will call handleGaslessOpen
@@ -480,7 +483,7 @@ export function ManualHedgeModal({
         hash: data.txHash,
         type: 'hedge',
         from: address || 'unknown',
-        to: HEDGE_EXECUTOR_ADDRESS,
+        to: hedgeExecutorAddress,
         value: parseFloat(pendingCollateral).toFixed(2),
         tokenSymbol: 'USDC',
         description: `⚡ x402 Gasless ${hedgeType} ${asset} hedge — ${pendingCollateral} USDC × ${leverage}x`,
@@ -580,7 +583,7 @@ export function ManualHedgeModal({
         address: MOCK_USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: 'approve',
-        args: [HEDGE_EXECUTOR_ADDRESS, requiredAmount],
+        args: [hedgeExecutorAddress, requiredAmount],
       });
       setTxStep('approve-confirming');
     } else {
@@ -722,7 +725,7 @@ export function ManualHedgeModal({
                     </div>
                     <TxHashDisplay hash={success.txHash} label="Transaction" />
                     <a
-                      href={`https://explorer.cronos.org/testnet/tx/${success.txHash}`}
+                      href={`${explorerUrl}/tx/${success.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-[8px] text-[12px] font-medium transition-colors"

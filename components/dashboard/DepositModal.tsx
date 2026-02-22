@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, ExternalLink, Coins } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useChainId } from 'wagmi';
 import { parseUnits, formatUnits, parseEther } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
+import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 
 // WCRO contract address for wrapping native CRO
 const WCRO_ADDRESS = '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`;
@@ -100,6 +101,8 @@ export function DepositModal({
 }: DepositModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const chainId = useChainId();
+  const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[338];
   const [selectedToken, setSelectedToken] = useState(TESTNET_TOKENS[0]);
   const [amount, setAmount] = useState('');
   const [tokenBalance, setTokenBalance] = useState<string>('0');
@@ -108,7 +111,7 @@ export function DepositModal({
   const [step, setStep] = useState<'input' | 'wrapping' | 'approve' | 'deposit' | 'success' | 'error'>('input');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const addresses = getContractAddresses(338);
+  const addresses = getContractAddresses(chainId);
   const rwaManagerAddress = addresses.rwaManager as `0x${string}`;
 
   // Get native balance using wagmi hook
@@ -523,7 +526,7 @@ export function DepositModal({
               </p>
               {depositHash && (
                 <a
-                  href={`https://explorer.cronos.org/testnet/tx/${depositHash}`}
+                  href={`${explorerUrl}/tx/${depositHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-[#007AFF] hover:text-[#0066CC]"
