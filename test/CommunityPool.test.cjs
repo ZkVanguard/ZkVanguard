@@ -528,3 +528,152 @@ describe('CommunityPool - Stress Tests', function () {
     expect(statsAfterWithdrawals._memberCount).to.equal(BigInt(NUM_USERS));
   });
 });
+
+// Extreme scale tests - verifying overflow-safe math
+describe('CommunityPool - Extreme Scale Tests', function () {
+  let communityPool;
+  let mockUSDC;
+  let owner, agent, whale1, whale2, smallDepositor;
+
+  const USDC_DECIMALS = 6;
+
+  beforeEach(async function () {
+    [owner, agent, whale1, whale2, smallDepositor] = await ethers.getSigners();
+
+    // Deploy MockUSDC with very large supply
+    const MockERC20 = await ethers.getContractFactory('MockERC20');
+    mockUSDC = await MockERC20.deploy('Mock USDC', 'USDC', 6);
+    await mockUSDC.waitForDeployment();
+
+    // Mint massive amounts to whales ($10 billion each)
+    const tenBillion = ethers.parseUnits('10000000000', USDC_DECIMALS);
+    await mockUSDC.mint(whale1.address, tenBillion);
+    await mockUSDC.mint(whale2.address, tenBillion);
+    await mockUSDC.mint(smallDepositor.address, ethers.parseUnits('100', USDC_DECIMALS));
+
+    // Deploy CommunityPool
+    const CommunityPool = await ethers.getContractFactory('CommunityPool');
+    const assetTokens = Array(4).fill(ethers.ZeroAddress);
+
+    communityPool = await upgrades.deployProxy(
+      CommunityPool,
+      [await mockUSDC.getAddress(), assetTokens, owner.address, agent.address],
+      { initializer: 'initialize', kind: 'uups' }
+    );
+    await communityPool.waitForDeployment();
+  });
+
+  it('should handle billion-dollar deposits without overflow', async function () {
+    // Whale deposits $1 billion
+    const oneBillion = ethers.parseUnits('1000000000', USDC_DECIMALS);
+    await mockUSDC.connect(whale1).approve(await communityPool.getAddress(), oneBillion);
+    await communityPool.connect(whale1).deposit(oneBillion);
+
+    const stats = await communityPool.getPoolStats();
+    expect(stats._totalNAV).to.equal(oneBillion);
+    
+    // Verify shares were minted correctly  
+    const member = await communityPool.members(whale1.address);
+    expect(member.shares).to.be.gt(0);
+    
+    // For the first depositor, value should equal deposit (NAV per share = $1)
+    const position = await communityPool.getMemberPosition(whale1.address);
+    expect(position.valueUSD).to.equal(oneBillion);
+    expect(position.percentage).to.equal(10000); // 100% ownership
+  });
+
+  it('should maintain proportional fairness at massive scale', async function () {
+    // First whale deposits $5 billion
+    const fiveBillion = ethers.parseUnits('5000000000', USDC_DECIMALS);
+    await mockUSDC.connect(whale1).approve(await communityPool.getAddress(), fiveBillion);
+    await communityPool.connect(whale1).deposit(fiveBillion);
+
+    // Second whale deposits $3 billion  
+    const threeBillion = ethers.parseUnits('3000000000', USDC_DECIMALS);
+    await mockUSDC.connect(whale2).approve(await communityPool.getAddress(), threeBillion);
+    await communityPool.connect(whale2).deposit(threeBillion);
+
+    // Check proportions - whale1 should have 5/8 = 62.5%, whale2 should have 3/8 = 37.5%
+    const pos1 = await communityPool.getMemberPosition(whale1.address);
+    const pos2 = await communityPool.getMemberPosition(whale2.address);
+
+    // 6250 basis points = 62.5%
+    expect(pos1.percentage).to.be.closeTo(BigInt(6250), BigInt(10));
+    // 3750 basis points = 37.5%
+    expect(pos2.percentage).to.be.closeTo(BigInt(3750), BigInt(10));
+  });
+
+  it('should handle small deposit in massive pool fairly', async function () {
+    // Whale deposits $5 billion
+    const fiveBillion = ethers.parseUnits('5000000000', USDC_DECIMALS);
+    await mockUSDC.connect(whale1).approve(await communityPool.getAddress(), fiveBillion);
+    await communityPool.connect(whale1).deposit(fiveBillion);
+
+    // Small depositor adds $100 to a $5B pool
+    const smallAmount = ethers.parseUnits('100', USDC_DECIMALS);
+    await mockUSDC.connect(smallDepositor).approve(await communityPool.getAddress(), smallAmount);
+    await communityPool.connect(smallDepositor).deposit(smallAmount);
+
+    // Small depositor should get proportional shares
+    const position = await communityPool.getMemberPosition(smallDepositor.address);
+    
+    // Value should equal their deposit
+    expect(position.valueUSD).to.be.closeTo(smallAmount, ethers.parseUnits('1', USDC_DECIMALS));
+    
+    // Percentage should be 100 / 5B = 0.000002% = 0.0002 bps (effectively 0 due to integer math)
+    // But shares should be > 0
+    const member = await communityPool.members(smallDepositor.address);
+    expect(member.shares).to.be.gt(0);
+  });
+
+  it('should handle withdrawal from massive pool correctly', async function () {
+    // Whale deposits $3 billion
+    const threeBillion = ethers.parseUnits('3000000000', USDC_DECIMALS);
+    await mockUSDC.connect(whale1).approve(await communityPool.getAddress(), threeBillion);
+    await communityPool.connect(whale1).deposit(threeBillion);
+
+    // Withdraw $1 billion worth
+    const member = await communityPool.members(whale1.address);
+    const sharesToWithdraw = member.shares / BigInt(3); // ~1/3 of shares = $1B
+
+    const balanceBefore = await mockUSDC.balanceOf(whale1.address);
+    await communityPool.connect(whale1).withdraw(sharesToWithdraw);
+    const balanceAfter = await mockUSDC.balanceOf(whale1.address);
+
+    const withdrawn = balanceAfter - balanceBefore;
+    const oneBillion = ethers.parseUnits('1000000000', USDC_DECIMALS);
+    
+    // Should receive approximately $1B (within 1%)
+    expect(withdrawn).to.be.closeTo(oneBillion, oneBillion / BigInt(100));
+  });
+
+  it('should calculate NAV per share consistently at scale', async function () {
+    // Sequential deposits to stress test precision
+    const amounts = [
+      ethers.parseUnits('100000000', USDC_DECIMALS),   // $100M
+      ethers.parseUnits('500000000', USDC_DECIMALS),   // $500M
+      ethers.parseUnits('1000000000', USDC_DECIMALS),  // $1B
+    ];
+
+    for (const amount of amounts) {
+      await mockUSDC.connect(whale1).approve(await communityPool.getAddress(), amount);
+      await communityPool.connect(whale1).deposit(amount);
+    }
+
+    const totalDeposited = amounts.reduce((a, b) => a + b, BigInt(0));
+    const stats = await communityPool.getPoolStats();
+    
+    // Total NAV should equal total deposits (no gains/losses yet)
+    expect(stats._totalNAV).to.equal(totalDeposited);
+
+    // Full withdrawal should return approximately original amount
+    const member = await communityPool.members(whale1.address);
+    const balanceBefore = await mockUSDC.balanceOf(whale1.address);
+    await communityPool.connect(whale1).withdraw(member.shares);
+    const balanceAfter = await mockUSDC.balanceOf(whale1.address);
+
+    const received = balanceAfter - balanceBefore;
+    // Should receive full amount back (minus any withdrawal fees if any)
+    expect(received).to.be.closeTo(totalDeposited, totalDeposited / BigInt(100));
+  });
+});
