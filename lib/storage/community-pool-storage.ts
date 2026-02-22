@@ -79,12 +79,30 @@ export interface PoolTransaction {
 
 /**
  * Initialize storage directory
+ * Note: On Vercel serverless, filesystem is read-only - use in-memory fallback
  */
+let inMemoryPoolState: PoolState | null = null;
+let inMemoryShares: UserShares[] = [];
+let inMemoryHistory: PoolTransaction[] = [];
+
+// Detect serverless environment (Vercel, AWS Lambda, etc.)
+const isServerless = !!(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.NETLIFY
+);
+
+if (isServerless) {
+  logger.info('[CommunityPool] Serverless environment detected - using in-memory storage');
+}
+
 async function ensureStorageDir() {
+  if (isServerless) return; // Skip filesystem operations
+  
   try {
     await fs.mkdir(STORAGE_DIR, { recursive: true });
-  } catch (error) {
-    // Directory might already exist
+  } catch (error: any) {
+    // Ignore errors - will use in-memory if file operations fail
   }
 }
 
@@ -116,6 +134,14 @@ function getInitialPoolState(): PoolState {
 export async function getPoolState(): Promise<PoolState> {
   await ensureStorageDir();
   
+  // Use in-memory on serverless
+  if (isServerless) {
+    if (!inMemoryPoolState) {
+      inMemoryPoolState = getInitialPoolState();
+    }
+    return inMemoryPoolState;
+  }
+  
   try {
     const data = await fs.readFile(POOL_STATE_FILE, 'utf-8');
     return JSON.parse(data);
@@ -131,8 +157,16 @@ export async function getPoolState(): Promise<PoolState> {
  * Save pool state
  */
 export async function savePoolState(state: PoolState): Promise<void> {
-  await ensureStorageDir();
   state.updatedAt = Date.now();
+  
+  // Use in-memory on serverless
+  if (isServerless) {
+    inMemoryPoolState = state;
+    logger.info('[CommunityPool] Pool state saved (in-memory)');
+    return;
+  }
+  
+  await ensureStorageDir();
   await fs.writeFile(POOL_STATE_FILE, JSON.stringify(state, null, 2));
   logger.info('[CommunityPool] Pool state saved');
 }
@@ -141,6 +175,11 @@ export async function savePoolState(state: PoolState): Promise<void> {
  * Get all user shares
  */
 export async function getAllUserShares(): Promise<UserShares[]> {
+  // Use in-memory on serverless
+  if (isServerless) {
+    return inMemoryShares;
+  }
+  
   await ensureStorageDir();
   
   try {
@@ -163,8 +202,6 @@ export async function getUserShares(walletAddress: string): Promise<UserShares |
  * Save user shares
  */
 export async function saveUserShares(userShares: UserShares): Promise<void> {
-  await ensureStorageDir();
-  
   const allShares = await getAllUserShares();
   const existingIndex = allShares.findIndex(
     s => s.walletAddress.toLowerCase() === userShares.walletAddress.toLowerCase()
@@ -178,6 +215,14 @@ export async function saveUserShares(userShares: UserShares): Promise<void> {
     allShares.push(userShares);
   }
   
+  // Use in-memory on serverless
+  if (isServerless) {
+    inMemoryShares = allShares;
+    logger.info(`[CommunityPool] User shares saved (in-memory) for ${userShares.walletAddress}`);
+    return;
+  }
+  
+  await ensureStorageDir();
   await fs.writeFile(POOL_SHARES_FILE, JSON.stringify(allShares, null, 2));
   logger.info(`[CommunityPool] User shares saved for ${userShares.walletAddress}`);
 }
@@ -186,6 +231,11 @@ export async function saveUserShares(userShares: UserShares): Promise<void> {
  * Get pool transaction history
  */
 export async function getPoolHistory(limit: number = 50): Promise<PoolTransaction[]> {
+  // Use in-memory on serverless
+  if (isServerless) {
+    return inMemoryHistory.slice(-limit).reverse();
+  }
+  
   await ensureStorageDir();
   
   try {
@@ -201,16 +251,26 @@ export async function getPoolHistory(limit: number = 50): Promise<PoolTransactio
  * Add transaction to pool history
  */
 export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>): Promise<PoolTransaction> {
-  await ensureStorageDir();
-  
-  const history = await getPoolHistory(1000); // Get all history
-  history.reverse(); // Back to chronological order
-  
   const transaction: PoolTransaction = {
     ...tx,
     id: `pool-tx-${Date.now()}-${Math.random().toString(36).substring(7)}`,
   };
   
+  // Use in-memory on serverless
+  if (isServerless) {
+    inMemoryHistory.push(transaction);
+    // Keep last 1000 transactions
+    if (inMemoryHistory.length > 1000) {
+      inMemoryHistory = inMemoryHistory.slice(-1000);
+    }
+    logger.info(`[CommunityPool] Transaction recorded (in-memory): ${transaction.type}`);
+    return transaction;
+  }
+  
+  await ensureStorageDir();
+  
+  const history = await getPoolHistory(1000); // Get all history
+  history.reverse(); // Back to chronological order
   history.push(transaction);
   
   // Keep last 1000 transactions
