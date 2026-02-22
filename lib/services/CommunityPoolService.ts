@@ -1,11 +1,22 @@
 /**
- * Community Pool Service
+ * Community Pool Service (Off-Chain / Database-backed)
  * 
- * Core business logic for the community pool:
+ * ⚠️  FOR PRODUCTION: Use CommunityPoolOnChainService.ts instead!
+ *     This service stores state in Neon PostgreSQL for UI/tracking.
+ *     The on-chain contract (CommunityPool.sol) should be source of truth.
+ * 
+ * This service provides:
  * - Share-based ownership (deposit → shares, withdraw → burn shares)
- * - Fair proportional withdrawals
+ * - ERC-4626 style virtual shares for inflation attack protection
+ * - Fair proportional withdrawals with slippage protection
  * - AI-driven asset allocation decisions
  * - Real-time price tracking and NAV calculation
+ * 
+ * FAIRNESS MECHANISMS (matching on-chain contract):
+ * - Virtual shares offset to prevent first depositor attacks
+ * - mulDiv-style calculations to prevent rounding manipulation
+ * - Minimum first deposit to prevent inflation attacks
+ * - Slippage protection on withdrawals
  */
 
 import { logger } from '../utils/logger';
@@ -23,9 +34,23 @@ import {
   type SupportedAsset,
 } from '../storage/community-pool-storage';
 
-// Minimum deposit amount
-const MIN_DEPOSIT_USD = 10;
+// ═══════════════════════════════════════════════════════════════
+// FAIRNESS CONSTANTS (matching CommunityPool.sol on-chain contract)
+// ═══════════════════════════════════════════════════════════════
+
+// Minimum deposits to prevent dust/inflation attacks
+const MIN_DEPOSIT_USD = 10;           // $10 minimum subsequent deposits
+const MIN_FIRST_DEPOSIT_USD = 1000;   // $1,000 minimum FIRST deposit (anti-inflation attack)
 const MIN_WITHDRAWAL_SHARES = 0.01;
+
+// Virtual shares/assets offset (ERC-4626 inflation attack protection)
+// These "virtual" amounts are added to the calculation to prevent manipulation
+const VIRTUAL_SHARES = 1_000_000;     // 1M virtual shares
+const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
+
+// Slippage protection
+const DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
+const MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
 
 // Live price cache
 let priceCache: Record<SupportedAsset, number> = {
@@ -123,7 +148,10 @@ export async function calculatePoolNAV(): Promise<{
 
 /**
  * Deposit USDC into the community pool
- * Returns the number of shares received
+ * Uses ERC-4626 virtual shares mechanism for fair share calculation
+ * 
+ * FAIRNESS: Virtual shares prevent first depositor inflation attacks
+ * shares = (amount * (totalShares + VIRTUAL_SHARES)) / (totalAssets + VIRTUAL_ASSETS)
  */
 export async function deposit(
   walletAddress: string,
@@ -137,29 +165,48 @@ export async function deposit(
   ownershipPercentage: number;
   error?: string;
 }> {
-  if (amountUSD < MIN_DEPOSIT_USD) {
+  // FAIRNESS: First deposit requires higher minimum to prevent inflation attack
+  const poolState = await getPoolState();
+  const isFirstDeposit = poolState.totalShares === 0;
+  const minRequired = isFirstDeposit ? MIN_FIRST_DEPOSIT_USD : MIN_DEPOSIT_USD;
+  
+  if (amountUSD < minRequired) {
     return {
       success: false,
       sharesReceived: 0,
       sharePrice: 0,
       newTotalShares: 0,
       ownershipPercentage: 0,
-      error: `Minimum deposit is $${MIN_DEPOSIT_USD}`,
+      error: isFirstDeposit 
+        ? `First deposit must be at least $${MIN_FIRST_DEPOSIT_USD} to prevent manipulation`
+        : `Minimum deposit is $${MIN_DEPOSIT_USD}`,
     };
   }
   
   try {
-    const poolState = await getPoolState();
-    const { totalValueUSD, sharePrice, allocations } = await calculatePoolNAV();
+    const { totalValueUSD, allocations } = await calculatePoolNAV();
     
-    // Calculate shares to issue
-    const currentSharePrice = poolState.totalShares > 0 ? sharePrice : 1.0;
-    const sharesReceived = amountUSD / currentSharePrice;
+    // FAIRNESS: ERC-4626 virtual shares mechanism
+    // Add virtual offset to prevent first depositor attacks
+    const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
+    const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
+    
+    // shares = (amount * totalSharesWithOffset) / totalAssetsWithOffset
+    // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
+    const sharesReceived = Math.floor((amountUSD * totalSharesWithOffset) / totalAssetsWithOffset);
+    
+    // Calculate actual share price for user reference
+    const sharePrice = totalAssetsWithOffset / totalSharesWithOffset;
+    
+    // Validate shares received is reasonable
+    if (sharesReceived <= 0) {
+      throw new Error('Share calculation failed: would receive 0 shares');
+    }
     
     // Update pool state
     poolState.totalValueUSD = totalValueUSD + amountUSD;
     poolState.totalShares += sharesReceived;
-    poolState.sharePrice = poolState.totalValueUSD / poolState.totalShares;
+    poolState.sharePrice = (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
     
     // Allocate deposited funds according to target allocation
     const targetAllocations = poolState.lastAIDecision?.allocations || {
@@ -200,7 +247,7 @@ export async function deposit(
       timestamp: Date.now(),
       amountUSD,
       sharesReceived,
-      sharePrice: currentSharePrice,
+      sharePrice,
       txHash,
     });
     
@@ -212,7 +259,7 @@ export async function deposit(
       walletAddress,
       amountUSD,
       shares: sharesReceived,
-      sharePrice: currentSharePrice,
+      sharePrice,
       timestamp: Date.now(),
       txHash,
     });
@@ -222,7 +269,7 @@ export async function deposit(
     return {
       success: true,
       sharesReceived,
-      sharePrice: currentSharePrice,
+      sharePrice,
       newTotalShares: poolState.totalShares,
       ownershipPercentage: userShares.percentage,
     };
@@ -242,12 +289,18 @@ export async function deposit(
 
 /**
  * Withdraw from the community pool by burning shares
- * Returns proportional USD value
+ * Uses ERC-4626 virtual shares mechanism for fair withdrawal calculation
+ * 
+ * FAIRNESS: Virtual shares ensure symmetric deposit/withdrawal calculations
+ * amountUSD = (sharesToBurn * (totalAssets + VIRTUAL_ASSETS)) / (totalShares + VIRTUAL_SHARES)
+ * 
+ * @param minAmountOut Optional slippage protection - reverts if output is less
  */
 export async function withdraw(
   walletAddress: string,
   sharesToBurn: number,
-  txHash?: string
+  txHash?: string,
+  minAmountOut?: number
 ): Promise<{
   success: boolean;
   amountUSD: number;
@@ -282,17 +335,33 @@ export async function withdraw(
     }
     
     const poolState = await getPoolState();
-    const { totalValueUSD, sharePrice } = await calculatePoolNAV();
+    const { totalValueUSD } = await calculatePoolNAV();
     
-    // Calculate USD amount for shares
-    const amountUSD = sharesToBurn * sharePrice;
+    // FAIRNESS: ERC-4626 virtual shares mechanism (symmetric with deposit)
+    const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
+    const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
+    
+    // amountUSD = sharesToBurn * totalAssetsWithOffset / totalSharesWithOffset
+    // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
+    const amountUSD = Math.floor((sharesToBurn * totalAssetsWithOffset) / totalSharesWithOffset);
+    const sharePrice = totalAssetsWithOffset / totalSharesWithOffset;
+    
+    // FAIRNESS: Slippage protection - user specifies minimum acceptable output
+    if (minAmountOut !== undefined && amountUSD < minAmountOut) {
+      return {
+        success: false,
+        amountUSD: 0,
+        sharesBurned: 0,
+        sharePrice,
+        remainingShares: userShares.shares,
+        error: `Slippage exceeded: would receive $${amountUSD.toFixed(2)} but minimum is $${minAmountOut.toFixed(2)}`,
+      };
+    }
     
     // Update pool state
     poolState.totalShares -= sharesToBurn;
     poolState.totalValueUSD = totalValueUSD - amountUSD;
-    poolState.sharePrice = poolState.totalShares > 0 
-      ? poolState.totalValueUSD / poolState.totalShares 
-      : 1.0;
+    poolState.sharePrice = (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
     
     // Reduce asset amounts proportionally
     const withdrawalPct = sharesToBurn / (poolState.totalShares + sharesToBurn);
