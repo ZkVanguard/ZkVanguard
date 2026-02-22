@@ -62,6 +62,9 @@ contract CommunityPool is
     uint256 public constant SECONDS_PER_YEAR = 365 days;
     uint256 public constant MIN_DEPOSIT = 10e6; // $10 USDC (6 decimals)
     uint256 public constant MIN_SHARES_FOR_WITHDRAWAL = 1e15; // 0.001 shares
+    uint256 public constant MIN_FIRST_DEPOSIT = 1000e6; // $1,000 USDC minimum first deposit (anti-inflation attack)
+    uint256 public constant VIRTUAL_SHARES = 1e18; // Virtual offset to prevent inflation attack
+    uint256 public constant VIRTUAL_ASSETS = 1e6; // Virtual offset ($1 USDC)
     
     // Precision constants for safe math
     uint256 public constant SHARE_DECIMALS = 18;
@@ -247,6 +250,9 @@ contract CommunityPool is
     error TransferFailed();
     error NotAMember();
     error EmergencyWithdrawDisabled();
+    error InsufficientLiquidity(uint256 requested, uint256 available);
+    error SlippageExceeded(uint256 amountOut, uint256 minAmountOut);
+    error FirstDepositTooSmall(uint256 amount, uint256 minimum);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -330,25 +336,25 @@ contract CommunityPool is
         whenNotPaused 
         returns (uint256 shares) 
     {
+        // First deposit requires higher minimum to prevent inflation attack
+        if (totalShares == 0 && amount < MIN_FIRST_DEPOSIT) {
+            revert FirstDepositTooSmall(amount, MIN_FIRST_DEPOSIT);
+        }
         if (amount < MIN_DEPOSIT) revert DepositTooSmall(amount, MIN_DEPOSIT);
 
         // Collect any pending fees first
         _collectFees();
 
-        // Calculate shares based on current NAV using overflow-safe math
+        // Calculate shares using virtual offset to prevent first depositor attack
+        // This is the standard ERC-4626 defense against share inflation attacks
+        // Virtual shares/assets are added to prevent manipulation
         uint256 currentNav = calculateTotalNAV();
+        uint256 totalAssetsWithOffset = currentNav + VIRTUAL_ASSETS;
+        uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
         
-        if (totalShares == 0 || currentNav == 0) {
-            // First deposit: 1 share = $1 (USDC is 6 decimals, shares are 18)
-            // shares = amount * PRECISION_FACTOR to convert 6 dec → 18 dec
-            shares = amount * PRECISION_FACTOR;
-        } else {
-            // Subsequent deposits: proportional to current NAV
-            // Formula: shares = (depositAmount / poolNAV) * totalShares
-            // Using mulDiv for overflow safety: shares = amount * totalShares / currentNav
-            // This scales infinitely as both numerator and denominator grow together
-            shares = amount.mulDiv(totalShares, currentNav, Math.Rounding.Floor);
-        }
+        // shares = (amount * totalSharesWithOffset) / totalAssetsWithOffset
+        // Using mulDiv for overflow safety
+        shares = amount.mulDiv(totalSharesWithOffset, totalAssetsWithOffset, Math.Rounding.Floor);
         
         // Ensure minimum shares to prevent dust attacks
         require(shares >= MIN_SHARES_FOR_WITHDRAWAL, "Shares too small");
@@ -385,7 +391,23 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Withdraw by burning shares
+     * @notice Withdraw by burning shares with slippage protection
+     * @param sharesToBurn Number of shares to burn
+     * @param minAmountOut Minimum USDC to receive (slippage protection)
+     * @return amountUSD Amount of USDC returned
+     */
+    function withdraw(uint256 sharesToBurn, uint256 minAmountOut)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 amountUSD)
+    {
+        return _withdrawInternal(sharesToBurn, minAmountOut);
+    }
+
+    /**
+     * @notice Convenience withdraw without slippage protection  
+     * @dev WARNING: No slippage protection - not recommended for production
      * @param sharesToBurn Number of shares to burn
      * @return amountUSD Amount of USDC returned
      */
@@ -393,6 +415,13 @@ contract CommunityPool is
         external
         nonReentrant
         whenNotPaused
+        returns (uint256 amountUSD)
+    {
+        return _withdrawInternal(sharesToBurn, 0);
+    }
+
+    function _withdrawInternal(uint256 sharesToBurn, uint256 minAmountOut)
+        internal
         returns (uint256 amountUSD)
     {
         if (sharesToBurn < MIN_SHARES_FOR_WITHDRAWAL) revert ZeroAmount();
@@ -405,19 +434,24 @@ contract CommunityPool is
         // Collect any pending fees first
         _collectFees();
 
-        // Calculate USD value of shares using overflow-safe math
-        // Formula: amountUSD = (sharesToBurn / totalShares) * poolNAV
-        // Using mulDiv: amountUSD = sharesToBurn * currentNav / totalShares
-        // This ensures fair proportional withdrawal regardless of pool size
+        // Calculate USD value of shares using virtual offset for consistency with deposits
+        // This ensures symmetry between deposit and withdrawal calculations
         uint256 currentNav = calculateTotalNAV();
-        amountUSD = sharesToBurn.mulDiv(currentNav, totalShares, Math.Rounding.Floor);
+        uint256 totalAssetsWithOffset = currentNav + VIRTUAL_ASSETS;
+        uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
+        
+        // amountUSD = sharesToBurn * totalAssetsWithOffset / totalSharesWithOffset
+        amountUSD = sharesToBurn.mulDiv(totalAssetsWithOffset, totalSharesWithOffset, Math.Rounding.Floor);
 
-        // Check we have enough USDC liquidity
+        // Slippage protection - user specifies minimum acceptable output
+        if (amountUSD < minAmountOut) {
+            revert SlippageExceeded(amountUSD, minAmountOut);
+        }
+
+        // STRICT LIQUIDITY CHECK - REVERT if insufficient funds (don't silently give less)
         uint256 usdcBalance = depositToken.balanceOf(address(this));
         if (usdcBalance < amountUSD) {
-            // Need to sell assets - for now just use available
-            // In production, would trigger auto-liquidation
-            amountUSD = usdcBalance;
+            revert InsufficientLiquidity(amountUSD, usdcBalance);
         }
 
         // Burn shares
@@ -455,18 +489,20 @@ contract CommunityPool is
         Member storage member = members[msg.sender];
         if (member.shares == 0) revert NotAMember();
 
-        uint256 shareRatio = (member.shares * 1e18) / totalShares;
+        // Using mulDiv for overflow safety at any scale
+        uint256 memberShares = member.shares;
+        uint256 currentTotalShares = totalShares;
 
-        // Return proportional USDC
-        uint256 usdcShare = (depositToken.balanceOf(address(this)) * shareRatio) / 1e18;
+        // Return proportional USDC using overflow-safe math
+        uint256 usdcShare = memberShares.mulDiv(depositToken.balanceOf(address(this)), currentTotalShares, Math.Rounding.Floor);
         if (usdcShare > 0) {
             depositToken.safeTransfer(msg.sender, usdcShare);
         }
 
-        // Return proportional assets
+        // Return proportional assets using overflow-safe math
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
             if (address(assetTokens[i]) != address(0)) {
-                uint256 assetShare = (assetBalances[i] * shareRatio) / 1e18;
+                uint256 assetShare = memberShares.mulDiv(assetBalances[i], currentTotalShares, Math.Rounding.Floor);
                 if (assetShare > 0) {
                     assetTokens[i].safeTransfer(msg.sender, assetShare);
                     assetBalances[i] -= assetShare;
@@ -555,17 +591,15 @@ contract CommunityPool is
         if (assetIndex >= NUM_ASSETS) revert ZeroAmount();
         if (amount == 0) revert ZeroAmount();
 
-        if (isBuy) {
-            // Buy asset with USDC
-            // In production: call DEX router
-            // For now: just track the intent
-            depositToken.safeTransfer(treasury, amount); // Simulate swap
-        } else {
-            // Sell asset for USDC
-            // In production: call DEX router
-        }
-
-        // Note: Real implementation would integrate with VVS Finance or similar
+        // SECURITY: Actual DEX integration required before mainnet
+        // This function is intentionally disabled until DEX router is properly integrated
+        // DO NOT enable in production without full DEX swap implementation
+        revert("Rebalancing disabled until DEX integration complete");
+        
+        // TODO: Implement proper DEX router integration
+        // if (isBuy) {
+        //     IDEXRouter(dexRouter).swapExactTokensForTokens(...);
+        // }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -612,16 +646,34 @@ contract CommunityPool is
 
     /**
      * @notice Withdraw accumulated fees to treasury
+     * @dev Protected: only withdraws accumulated fees, never more than available
+     *      and reserves enough for user withdrawals
      */
     function withdrawFees() external onlyRole(FEE_MANAGER_ROLE) nonReentrant {
         uint256 totalFees = accumulatedManagementFees + accumulatedPerformanceFees;
         if (totalFees == 0) return;
 
         uint256 usdcBalance = depositToken.balanceOf(address(this));
-        uint256 toWithdraw = totalFees > usdcBalance ? usdcBalance : totalFees;
+        
+        // SECURITY: Never withdraw more than accumulated fees
+        // AND ensure minimum reserve for user withdrawals (10% of NAV)
+        uint256 minReserve = calculateTotalNAV() / 10; // Keep 10% reserve
+        uint256 availableForFees = usdcBalance > minReserve ? usdcBalance - minReserve : 0;
+        uint256 toWithdraw = totalFees > availableForFees ? availableForFees : totalFees;
+        
+        if (toWithdraw == 0) return;
 
-        accumulatedManagementFees = 0;
-        accumulatedPerformanceFees = 0;
+        // Only clear the amount actually withdrawn
+        if (toWithdraw >= accumulatedManagementFees) {
+            toWithdraw = accumulatedManagementFees;
+            accumulatedManagementFees = 0;
+        } else {
+            accumulatedManagementFees -= toWithdraw;
+        }
+        // Performance fees withdrawn separately if management fully cleared
+        if (toWithdraw == totalFees) {
+            accumulatedPerformanceFees = 0;
+        }
 
         depositToken.safeTransfer(treasury, toWithdraw);
 
@@ -657,13 +709,15 @@ contract CommunityPool is
     }
 
     function _calculateNavPerShare() internal view returns (uint256) {
-        if (totalShares == 0) return WAD; // 1e18 = $1 per share initially
-        // Using mulDiv for overflow safety
-        // Result is in 18 decimals: (NAV_6dec * 1e18 * PRECISION_FACTOR) / totalShares_18dec
-        // Simplified: (NAV * 1e18 * 1e12) / totalShares = NAV * 1e30 / totalShares
-        // But using mulDiv to prevent overflow
+        // Using virtual offset for consistency with deposit/withdraw calculations
+        // This prevents share price manipulation attacks
         uint256 nav = calculateTotalNAV();
-        return nav.mulDiv(WAD * PRECISION_FACTOR, totalShares, Math.Rounding.Floor);
+        uint256 totalAssetsWithOffset = nav + VIRTUAL_ASSETS;
+        uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
+        
+        // Result in WAD (1e18 = $1 per share)
+        // navPerShare = totalAssets * WAD / totalShares
+        return totalAssetsWithOffset.mulDiv(WAD, totalSharesWithOffset, Math.Rounding.Floor);
     }
 
     /**
@@ -682,10 +736,14 @@ contract CommunityPool is
         shares = m.shares;
         
         if (totalShares > 0 && shares > 0) {
-            // Using mulDiv for overflow safety as pool grows
-            // valueUSD (6 dec) = shares (18 dec) * NAV (6 dec) / totalShares (18 dec)
-            valueUSD = shares.mulDiv(calculateTotalNAV(), totalShares, Math.Rounding.Floor);
-            // percentage in basis points (0-10000)
+            // Using virtual offset for consistency with deposit/withdraw
+            uint256 nav = calculateTotalNAV();
+            uint256 totalAssetsWithOffset = nav + VIRTUAL_ASSETS;
+            uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
+            
+            // valueUSD (6 dec) = shares (18 dec) * totalAssets (6 dec) / totalShares (18 dec)
+            valueUSD = shares.mulDiv(totalAssetsWithOffset, totalSharesWithOffset, Math.Rounding.Floor);
+            // percentage in basis points of actual shares (excluding virtual)
             percentage = shares.mulDiv(BPS_DENOMINATOR, totalShares, Math.Rounding.Floor);
         }
     }
