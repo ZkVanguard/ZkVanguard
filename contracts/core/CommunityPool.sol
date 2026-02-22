@@ -129,7 +129,7 @@ contract CommunityPool is
     uint256 public constant SECONDS_PER_YEAR = 365 days;
     uint256 public constant MIN_DEPOSIT = 10e6; // $10 USDC (6 decimals)
     uint256 public constant MIN_SHARES_FOR_WITHDRAWAL = 1e15; // 0.001 shares
-    uint256 public constant MIN_FIRST_DEPOSIT = 1000e6; // $1,000 USDC minimum first deposit (anti-inflation attack)
+    uint256 public constant MIN_FIRST_DEPOSIT = 100e6; // $100 USDC minimum first deposit (virtual shares protect against inflation)
     uint256 public constant VIRTUAL_SHARES = 1e18; // Virtual offset to prevent inflation attack
     uint256 public constant VIRTUAL_ASSETS = 1e6; // Virtual offset ($1 USDC)
     
