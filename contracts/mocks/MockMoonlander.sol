@@ -153,7 +153,8 @@ contract MockMoonlander {
         if (currentPrice == 0) currentPrice = 1000 * 10**10; // Default
         
         // Store trade
-        bool isLong = direction == 2;
+        // Direction: 0 = long, 1 = short (matching HedgeExecutor)
+        bool isLong = direction == 0;
         trades[msg.sender][pairIndex][tradeIndex] = Trade({
             trader: msg.sender,
             pairIndex: pairIndex,
