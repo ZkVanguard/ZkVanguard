@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
           portfolioId: parseInt(portfolioId),
           walletAddress,
           enabled: true,
-          threshold: config?.threshold || 5, // Default: 5% drift
+          threshold: config?.threshold || 2, // Default: 2% drift (lowered for active rebalancing)
           frequency: (config?.frequency || 'DAILY') as RebalanceFrequency,
           autoApprovalEnabled: config?.autoApprovalEnabled !== false, // Default: enabled
-          autoApprovalThreshold: config?.autoApprovalThreshold || 50000, // Default: $50K
+          autoApprovalThreshold: config?.autoApprovalThreshold || 200000000, // Default: $200M
           targetAllocations: config?.targetAllocations,
         };
 
