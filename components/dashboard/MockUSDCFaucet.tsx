@@ -1,13 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
-import { useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
+import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink, AlertTriangle } from 'lucide-react';
+import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from 'wagmi';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
+import { CHAIN_IDS, getUsdcAddress, isTestnet as checkIsTestnet, getExplorerUrl } from '@/lib/utils/network';
 
-// MockUSDC on Cronos Testnet - has public mint() with no access control
-const MOCK_USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as `0x${string}`;
+// ⚠️ TESTNET ONLY - MockUSDC with public mint() function
+// This component should ONLY be rendered on testnet (chainId 338)
+// On mainnet, users must acquire real USDC through exchanges
+
+// Testnet MockUSDC address (has permissionless mint function)
+const TESTNET_MOCK_USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as `0x${string}`;
+
+// Legacy export for backward compatibility (use getUsdcAddress from network.ts instead)
+export const MOCK_USDC_ADDRESS = TESTNET_MOCK_USDC_ADDRESS;
 
 const MOCK_USDC_ABI = [
   {
@@ -52,9 +60,40 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
   const { evmAddress, isSUI } = useWallet();
   const address = evmAddress as `0x${string}` | undefined;
   const publicClient = usePublicClient();
+  const chainId = useChainId();
+  const isTestnet = chainId === CHAIN_IDS.CRONOS_TESTNET;
+  const explorerUrl = getExplorerUrl(chainId);
+  
   const [balance, setBalance] = useState<string>('0');
   const [selectedAmount, setSelectedAmount] = useState('10000');
   const [mintSuccess, setMintSuccess] = useState(false);
+
+  // ⚠️ MAINNET GUARD - This faucet only works on testnet
+  if (!isTestnet) {
+    return (
+      <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 shadow-sm">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 rounded-xl bg-amber-100">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-amber-800">Mainnet Mode</h3>
+            <p className="text-sm text-amber-600">USDC Faucet is disabled on mainnet</p>
+          </div>
+        </div>
+        <p className="text-xs text-amber-700 mt-2">
+          To acquire USDC on Cronos mainnet, use a{' '}
+          <a href="https://crypto.com/exchange" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+            cryptocurrency exchange
+          </a>{' '}
+          or{' '}
+          <a href="https://vvs.finance" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+            VVS Finance DEX
+          </a>.
+        </p>
+      </div>
+    );
+  }
 
   const {
     writeContract: writeMint,
@@ -73,7 +112,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
       if (!address || !publicClient) return;
       try {
         const bal = await publicClient.readContract({
-          address: MOCK_USDC_ADDRESS,
+          address: TESTNET_MOCK_USDC_ADDRESS,
           abi: MOCK_USDC_ABI,
           functionName: 'balanceOf',
           args: [address],
@@ -102,7 +141,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 
     const amountInWei = parseUnits(selectedAmount, 6);
     writeMint({
-      address: MOCK_USDC_ADDRESS,
+      address: TESTNET_MOCK_USDC_ADDRESS,
       abi: MOCK_USDC_ABI,
       functionName: 'mint',
       args: [address, amountInWei],
@@ -249,11 +288,12 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 
       {/* Contract Info */}
       <div className="text-[10px] text-[#86868b] text-center space-y-0.5">
-        <p>MockUSDC: {MOCK_USDC_ADDRESS.substring(0, 10)}...{MOCK_USDC_ADDRESS.substring(38)}</p>
+        <p>MockUSDC: {TESTNET_MOCK_USDC_ADDRESS.substring(0, 10)}...{TESTNET_MOCK_USDC_ADDRESS.substring(38)}</p>
         <p>Cronos Testnet (Chain ID: 338) &bull; 6 decimals</p>
       </div>
     </div>
   );
 }
 
-export { MOCK_USDC_ADDRESS, MOCK_USDC_ABI };
+// Re-export ABI for backward compatibility (address is exported above)
+export { MOCK_USDC_ABI };

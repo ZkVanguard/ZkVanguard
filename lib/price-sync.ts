@@ -1,6 +1,9 @@
 /**
  * Sync live Crypto.com prices to MockMoonlander on-chain.
  * 
+ * ⚠️ TESTNET ONLY - This module is for syncing mock prices during development.
+ * On mainnet, Moonlander has its own oracle and this module should not be used.
+ * 
  * Called before every open/close to ensure the contract uses real market data
  * instead of stale hardcoded prices.
  * 
@@ -8,9 +11,27 @@
  * (mints if needed — this is a test contract).
  */
 import { ethers } from 'ethers';
+import { getCurrentChainId, CHAIN_IDS, isMainnet, getRpcUrl } from '@/lib/utils/network';
 
-const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
-const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+// ⚠️ TESTNET-ONLY ADDRESSES
+// On mainnet, use real Moonlander oracle (no price sync needed)
+const MOCK_MOONLANDER_TESTNET = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
+const MOCK_USDC_TESTNET = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+
+// Dynamic getters that throw on mainnet to prevent accidental usage
+function getMockMoonlanderAddress(): string {
+  if (isMainnet()) {
+    throw new Error('MockMoonlander price sync is testnet-only. Mainnet uses real Moonlander oracle.');
+  }
+  return MOCK_MOONLANDER_TESTNET;
+}
+
+function getMockUsdcAddress(): string {
+  if (isMainnet()) {
+    throw new Error('MockUSDC is testnet-only. Mainnet uses real USDC.');
+  }
+  return MOCK_USDC_TESTNET;
+}
 
 const MOONLANDER_ABI = [
   'function setMockPrice(uint256 pairIndex, uint256 price) external',
@@ -97,7 +118,7 @@ export async function syncPricesToChain(
     return {};
   }
 
-  const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, ownerSigner);
+  const moonlander = new ethers.Contract(getMockMoonlanderAddress(), MOONLANDER_ABI, ownerSigner);
   const feeData = await ownerSigner.provider!.getFeeData();
   const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
 
@@ -152,7 +173,7 @@ export async function syncSinglePriceToChain(
     return 0;
   }
 
-  const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, ownerSigner);
+  const moonlander = new ethers.Contract(getMockMoonlanderAddress(), MOONLANDER_ABI, ownerSigner);
   const scaledPrice = BigInt(Math.round(usdPrice * 1e10));
 
   try {
@@ -176,8 +197,8 @@ export async function ensureMoonlanderLiquidity(
   signer: ethers.Wallet,
   requiredAmount: bigint
 ): Promise<void> {
-  const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, signer);
-  const moonBalance = await usdc.balanceOf(MOCK_MOONLANDER);
+  const usdc = new ethers.Contract(getMockUsdcAddress(), USDC_ABI, signer);
+  const moonBalance = await usdc.balanceOf(getMockMoonlanderAddress());
 
   // Need at least 2x the trade amount to cover potential PnL returns
   const cushion = requiredAmount * 3n;
@@ -189,13 +210,14 @@ export async function ensureMoonlanderLiquidity(
   try {
     const feeData = await signer.provider!.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
-    const tx = await usdc.mint(MOCK_MOONLANDER, deficit, { gasPrice });
+    const tx = await usdc.mint(getMockMoonlanderAddress(), deficit, { gasPrice });
     await tx.wait();
-    const newBal = await usdc.balanceOf(MOCK_MOONLANDER);
+    const newBal = await usdc.balanceOf(getMockMoonlanderAddress());
     console.log(`  ✅ Minted ${ethers.formatUnits(deficit, 6)} USDC to MockMoonlander (new balance: ${ethers.formatUnits(newBal, 6)})`);
   } catch (err) {
     console.warn('⚠️ Failed to mint USDC to MockMoonlander:', err instanceof Error ? err.message : err);
   }
 }
 
-export { MOCK_MOONLANDER, MOCK_USDC, PAIR_NAMES, PAIR_TO_TICKER };
+// Export getter functions for testnet addresses (throws on mainnet)
+export { getMockMoonlanderAddress, getMockUsdcAddress, PAIR_NAMES, PAIR_TO_TICKER };
