@@ -198,6 +198,75 @@ export function calculateSuiProtocolFee(amountUsdc: number): SuiProtocolFeeBreak
 }
 
 // ============================================================================
+// Performance Fee Calculations (20% of profits - industry standard)
+// ============================================================================
+
+export interface PerformanceFeeBreakdown {
+  grossProfitUsdc: number;
+  highWaterMark: number;
+  chargeableProfitUsdc: number;
+  feePercent: number;
+  feeUsdc: number;
+  netProfitUsdc: number;
+  userKeepsPercent: number;
+}
+
+/**
+ * Calculate performance fee on hedge profits
+ * Uses high-water mark: only charges on profits above previous peak
+ */
+export function calculatePerformanceFeeBreakdown(
+  grossProfitUsdc: number,
+  highWaterMark: number = 0
+): PerformanceFeeBreakdown {
+  const feePercent = ON_CHAIN_FEES.performanceFee.feeRatePercent;
+  
+  // Only charge on profits above high-water mark
+  const chargeableProfitUsdc = ON_CHAIN_FEES.performanceFee.highWaterMark
+    ? Math.max(0, grossProfitUsdc - highWaterMark)
+    : Math.max(0, grossProfitUsdc);
+  
+  const feeUsdc = chargeableProfitUsdc > 0 ? (chargeableProfitUsdc * feePercent) / 100 : 0;
+  const netProfitUsdc = grossProfitUsdc - feeUsdc;
+
+  return {
+    grossProfitUsdc,
+    highWaterMark,
+    chargeableProfitUsdc,
+    feePercent,
+    feeUsdc,
+    netProfitUsdc,
+    userKeepsPercent: 100 - feePercent,
+  };
+}
+
+/**
+ * Estimate platform earnings from a profitable hedge
+ */
+export function estimatePlatformEarnings(
+  collateralUsdc: number,
+  profitPercent: number
+): {
+  grossProfit: number;
+  performanceFee: number;
+  hedgeExecutionFee: number;
+  totalPlatformEarnings: number;
+  userNetProfit: number;
+} {
+  const grossProfit = collateralUsdc * (profitPercent / 100);
+  const perfFee = calculatePerformanceFeeBreakdown(grossProfit);
+  const hedgeFee = calculateHedgeFeeBreakdown(collateralUsdc);
+  
+  return {
+    grossProfit,
+    performanceFee: perfFee.feeUsdc,
+    hedgeExecutionFee: hedgeFee.feeUsdc,
+    totalPlatformEarnings: perfFee.feeUsdc + hedgeFee.feeUsdc,
+    userNetProfit: perfFee.netProfitUsdc,
+  };
+}
+
+// ============================================================================
 // Total Cost Estimation
 // ============================================================================
 
