@@ -465,19 +465,21 @@ export class Polymarket5MinService {
 
   /**
    * Fetch BTC/USD price with its own 30 s cache to avoid redundant calls.
+   * Uses server-side API route to avoid CORS issues.
    */
   private static async fetchBTCPrice(): Promise<number> {
     if (this.btcPriceCache.price > 0 && (Date.now() - this.btcPriceCache.ts) < BTC_PRICE_TTL_MS) {
       return this.btcPriceCache.price;
     }
     try {
+      // Use server-side API route to avoid CORS blocking from crypto.com
       const res = await fetch(
-        'https://api.crypto.com/v2/public/get-ticker?instrument_name=BTC_USDT',
+        '/api/prices?symbol=BTC',
         { signal: AbortSignal.timeout(BTC_TIMEOUT_MS) },
       );
       if (res.ok) {
         const data = await res.json();
-        const price = parseFloat(data?.result?.data?.[0]?.a ?? '0') || 0;
+        const price = parseFloat(data?.price ?? '0') || 0;
         if (price > 0) {
           this.btcPriceCache = { price, ts: Date.now() };
         }
