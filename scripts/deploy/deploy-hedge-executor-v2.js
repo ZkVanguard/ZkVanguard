@@ -43,18 +43,32 @@ async function main() {
   } else if (chainId === 338) {
     // Cronos Testnet
     console.log("🧪 Network: Cronos Testnet (Chain ID: 338)\n");
+    
+    // Load from existing deployment if available
+    let existingDeployment;
+    try {
+      existingDeployment = require("../../deployments/cronos-testnet.json");
+    } catch (e) {
+      // Use fallback addresses
+    }
+    
     config = {
-      // DevUSDCe on Testnet
-      collateralToken: "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
-      // MockMoonlander on Testnet
-      moonlanderRouter: "0xAc232e53c71891B5FfA2Da55b7A6E20df8C9fD16",
-      // ZKHedgeCommitment on Testnet
-      zkCommitment: "0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8",
+      // Use MockUSDC from existing deployment, or DevUSDCe as fallback
+      collateralToken: existingDeployment?.MockUSDC || "0x28217daddC55e3C4831b4A48A00Ce04880786967",
+      // MockMoonlander from existing deployment
+      moonlanderRouter: existingDeployment?.MockMoonlander || "0xab4946d7bd583a74f5e5051b22332fa674d7be54",
+      // ZKHedgeCommitment from existing deployment
+      zkCommitment: existingDeployment?.ZKHedgeCommitment || "0xa1ff9dfeb4ff9d815fde34d5f3c61a893806a93e",
       networkName: "Cronos Testnet",
     };
   } else {
     throw new Error(`Unsupported chain ID: ${chainId}`);
   }
+
+  // Ensure proper checksummed addresses
+  config.collateralToken = ethers.getAddress(config.collateralToken);
+  config.moonlanderRouter = ethers.getAddress(config.moonlanderRouter);
+  config.zkCommitment = ethers.getAddress(config.zkCommitment);
 
   console.log("Configuration:");
   console.log("  Collateral Token (USDC):", config.collateralToken);
