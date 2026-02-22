@@ -88,7 +88,28 @@ const ASSET_ICONS: Record<string, string> = {
 
 // Contract addresses - Cronos Testnet
 const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as const; // MockUSDC on Cronos Testnet
-const POOL_TREASURY = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c' as const; // Treasury address
+const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30' as const; // CommunityPool contract
+
+// CommunityPool ABI (subset for deposit/withdraw)
+const COMMUNITY_POOL_ABI = [
+  {
+    name: 'deposit',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: [{ name: 'shares', type: 'uint256' }],
+  },
+  {
+    name: 'withdraw',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'minAmountOut', type: 'uint256' },
+    ],
+    outputs: [{ name: 'amount', type: 'uint256' }],
+  },
+] as const;
 
 export const CommunityPool = memo(function CommunityPool({ address, compact = false }: CommunityPoolProps) {
   const [poolData, setPoolData] = useState<PoolSummary | null>(null);
@@ -104,7 +125,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const [showAI, setShowAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'depositing' | 'confirming'>('idle');
+  const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'complete'>('idle');
   const mountedRef = useRef(true);
   
   // wagmi hooks for on-chain deposits
@@ -180,10 +201,30 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   // Polling
   usePolling(fetchPoolData, 30000);
   
-  // Handle confirmed transaction - record deposit in backend
+  // Handle transaction confirmation based on current status
   useEffect(() => {
-    if (isConfirmed && txHash && txStatus === 'confirming') {
-      // Transaction confirmed - record in backend
+    if (!isConfirmed || !txHash) return;
+    
+    // Approval confirmed - now trigger deposit
+    if (txStatus === 'approving' && depositAmount) {
+      const amount = parseFloat(depositAmount);
+      const amountInUnits = parseUnits(amount.toString(), 6);
+      
+      setTxStatus('depositing');
+      resetWrite();
+      
+      // Call deposit on CommunityPool contract
+      writeContract({
+        address: COMMUNITY_POOL_ADDRESS,
+        abi: COMMUNITY_POOL_ABI,
+        functionName: 'deposit',
+        args: [amountInUnits],
+      });
+      return;
+    }
+    
+    // Deposit confirmed - record in backend and cleanup
+    if (txStatus === 'depositing') {
       const recordDeposit = async () => {
         try {
           const amount = parseFloat(depositAmount);
@@ -221,7 +262,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
       };
       recordDeposit();
     }
-  }, [isConfirmed, txHash, txStatus, depositAmount, address, fetchPoolData, resetWrite]);
+  }, [isConfirmed, txHash, txStatus, depositAmount, address, fetchPoolData, resetWrite, writeContract]);
   
   // Handle write errors
   useEffect(() => {
@@ -252,21 +293,20 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     
     setActionLoading(true);
     setError(null);
-    setTxStatus('depositing');
+    setTxStatus('approving');
     
     try {
       // Convert to USDC units (6 decimals)
       const amountInUnits = parseUnits(amount.toString(), 6);
       
-      // Initiate USDC transfer to treasury
+      // Step 1: Approve CommunityPool contract to spend USDC
+      // Step 2 (deposit) is triggered by the effect watching isConfirmed
       writeContract({
         address: USDC_ADDRESS,
         abi: erc20Abi,
-        functionName: 'transfer',
-        args: [POOL_TREASURY, amountInUnits],
+        functionName: 'approve',
+        args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
       });
-      
-      setTxStatus('confirming');
     } catch (err: any) {
       setError(err.message);
       setActionLoading(false);
@@ -543,8 +583,8 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                   className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
                 >
                   {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {txStatus === 'depositing' ? 'Sign in Wallet...' : 
-                   txStatus === 'confirming' ? 'Confirming...' : 
+                  {txStatus === 'approving' ? 'Approve USDC...' : 
+                   txStatus === 'depositing' ? 'Deposit to Pool...' : 
                    'Deposit USDC'}
                 </button>
               </div>
@@ -554,7 +594,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
                 </p>
               )}
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                Requires USDC on Cronos network. Transaction will prompt wallet signature.
+                Deposits to on-chain CommunityPool contract. Requires 2 signatures: approve + deposit.
               </p>
             </motion.div>
           )}
