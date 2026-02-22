@@ -361,27 +361,33 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
         
         {/* Allocation Bar */}
         <div className="h-6 rounded-full overflow-hidden flex mb-3">
-          {Object.entries(poolData.allocations).map(([asset, percent]) => (
-            <div
-              key={asset}
-              className={`${ASSET_COLORS[asset]} flex items-center justify-center text-xs text-white font-semibold transition-all duration-500`}
-              style={{ width: `${percent}%` }}
-            >
-              {percent >= 10 && `${asset} ${percent}%`}
-            </div>
-          ))}
+          {Object.entries(poolData.allocations).map(([asset, alloc]) => {
+            const percent = typeof alloc === 'number' ? alloc : alloc.percentage;
+            return (
+              <div
+                key={asset}
+                className={`${ASSET_COLORS[asset]} flex items-center justify-center text-xs text-white font-semibold transition-all duration-500`}
+                style={{ width: `${percent}%` }}
+              >
+                {percent >= 10 && `${asset} ${Math.round(percent)}%`}
+              </div>
+            );
+          })}
         </div>
         
         {/* Legend */}
         <div className="flex flex-wrap gap-4">
-          {Object.entries(poolData.allocations).map(([asset, percent]) => (
-            <div key={asset} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${ASSET_COLORS[asset]}`}></div>
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                <span className="font-medium">{asset}</span> {percent}%
-              </span>
-            </div>
-          ))}
+          {Object.entries(poolData.allocations).map(([asset, alloc]) => {
+            const percent = typeof alloc === 'number' ? alloc : alloc.percentage;
+            return (
+              <div key={asset} className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${ASSET_COLORS[asset]}`}></div>
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  <span className="font-medium">{asset}</span> {Math.round(percent)}%
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
       
