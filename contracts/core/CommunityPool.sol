@@ -45,6 +45,34 @@ interface IVVSRouter {
 }
 
 /**
+ * @title AggregatorV3Interface
+ * @notice Chainlink Price Feed Interface (Free Tier - no API key required)
+ * @dev Standard interface for reading from Chainlink price feeds on any chain
+ *      These are free to read from deployed contracts on-chain
+ */
+interface AggregatorV3Interface {
+    function decimals() external view returns (uint8);
+    function description() external view returns (string memory);
+    function version() external view returns (uint256);
+
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+
+    function getRoundData(uint80 _roundId) external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+}
+
+/**
  * @title CommunityPool
  * @notice AI-managed community investment pool with share-based ownership
  * @dev ERC-4626-inspired vault for collective investment in BTC, ETH, SUI, CRO
@@ -203,8 +231,19 @@ contract CommunityPool is
     /// @notice DEX router for swaps (VVS Finance on Cronos)
     address public dexRouter;
 
-    /// @notice Price oracle for NAV calculation
+    /// @notice Price oracle for NAV calculation (deprecated - use priceFeedsUSD)
     address public priceOracle;
+
+    /// @notice Chainlink price feeds for each asset (USD denominated)
+    /// @dev Free to read from deployed contracts - no API key required
+    ///      Index: 0=BTC/USD, 1=ETH/USD, 2=SUI/USD (if available), 3=CRO/USD
+    AggregatorV3Interface[NUM_ASSETS] public priceFeedsUSD;
+
+    /// @notice Maximum age of price data before considered stale (default: 1 hour)
+    uint256 public priceStaleThreshold;
+
+    /// @notice Whether to enable fallback price via DEX quote
+    bool public useDexFallbackPrice;
 
     /// @notice Minimum time between rebalances (anti-churn)
     uint256 public rebalanceCooldown;
@@ -275,6 +314,11 @@ contract CommunityPool is
         uint256 newPrice
     );
 
+    event PriceFeedSet(
+        uint8 indexed assetIndex,
+        address indexed priceFeed
+    );
+
     event MemberJoined(address indexed member, uint256 timestamp);
     event MemberExited(address indexed member, uint256 timestamp);
 
@@ -297,6 +341,8 @@ contract CommunityPool is
     error DexRouterNotSet();
     error InvalidSwapPath();
     error SwapSlippageExceeded(uint256 expected, uint256 received);
+    error StalePriceData(uint8 assetIndex, uint256 lastUpdate, uint256 threshold);
+    error NegativePrice(uint8 assetIndex, int256 price);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -821,16 +867,47 @@ contract CommunityPool is
 
     /**
      * @notice Calculate total NAV of the pool in USDC terms
-     * @dev In production, would use Chainlink price feeds
+     * @dev Uses Chainlink price feeds for accurate multi-asset valuation
      * @return nav Total NAV in USDC (6 decimals)
      */
     function calculateTotalNAV() public view returns (uint256 nav) {
-        // USDC balance
+        // Start with USDC balance (6 decimals)
         nav = depositToken.balanceOf(address(this));
 
-        // Add value of each asset (simplified - real impl uses oracle)
-        // For now, just count USDC balance
-        // In production: nav += assetBalances[i] * getAssetPrice(i) / 10**assetDecimals[i]
+        // Add value of each asset using Chainlink price feeds
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            if (assetBalances[i] == 0) continue;
+            
+            // Get price from Chainlink feed if configured
+            if (address(priceFeedsUSD[i]) != address(0)) {
+                (
+                    /* uint80 roundId */,
+                    int256 price,
+                    /* uint256 startedAt */,
+                    uint256 updatedAt,
+                    /* uint80 answeredInRound */
+                ) = priceFeedsUSD[i].latestRoundData();
+                
+                // Verify price is valid and not stale
+                if (price <= 0) revert NegativePrice(i, price);
+                if (block.timestamp - updatedAt > priceStaleThreshold) {
+                    revert StalePriceData(i, updatedAt, priceStaleThreshold);
+                }
+                
+                // Chainlink feeds return 8 decimals for USD pairs
+                // Asset value = assetBalance * price / 10^(assetDecimals + priceDecimals - usdcDecimals)
+                // = assetBalance * price / 10^(assetDecimals + 8 - 6)
+                // = assetBalance * price / 10^(assetDecimals + 2)
+                uint8 priceDecimals = priceFeedsUSD[i].decimals();
+                uint256 assetValue = assetBalances[i].mulDiv(
+                    uint256(price),
+                    10 ** (assetDecimals[i] + priceDecimals - 6), // Normalize to USDC 6 decimals
+                    Math.Rounding.Floor
+                );
+                nav += assetValue;
+            }
+            // If no price feed configured, asset value is NOT counted (conservative)
+        }
 
         return nav;
     }
@@ -943,6 +1020,40 @@ contract CommunityPool is
 
     function setDexRouter(address _router) external onlyRole(DEFAULT_ADMIN_ROLE) {
         dexRouter = _router;
+    }
+
+    /**
+     * @notice Set Chainlink price feed for an asset
+     * @param assetIndex Index of asset (0=BTC, 1=ETH, 2=SUI, 3=CRO)
+     * @param priceFeed Address of Chainlink AggregatorV3Interface
+     */
+    function setPriceFeed(uint8 assetIndex, address priceFeed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(assetIndex < NUM_ASSETS, "Invalid asset index");
+        priceFeedsUSD[assetIndex] = AggregatorV3Interface(priceFeed);
+        emit PriceFeedSet(assetIndex, priceFeed);
+    }
+
+    /**
+     * @notice Set all price feeds at once
+     * @param priceFeeds Array of 4 Chainlink price feed addresses
+     */
+    function setAllPriceFeeds(address[NUM_ASSETS] calldata priceFeeds) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            if (priceFeeds[i] != address(0)) {
+                priceFeedsUSD[i] = AggregatorV3Interface(priceFeeds[i]);
+                emit PriceFeedSet(i, priceFeeds[i]);
+            }
+        }
+    }
+
+    /**
+     * @notice Set price staleness threshold
+     * @param threshold Maximum age of price data in seconds (default: 1 hour)
+     */
+    function setPriceStaleThreshold(uint256 threshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(threshold >= 60, "Threshold too low"); // Minimum 1 minute
+        require(threshold <= 86400, "Threshold too high"); // Maximum 24 hours
+        priceStaleThreshold = threshold;
     }
 
     function setPriceOracle(address _oracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
