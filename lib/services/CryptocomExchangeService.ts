@@ -72,13 +72,18 @@ class CryptocomExchangeService {
     'SUI': 'SUI_USD',
   };
 
+  // Testnet/mock tokens that should return $1 without API call
+  private readonly MOCK_STABLECOINS = new Set([
+    'MOCKUSDC', 'DEVUSDC', 'DEVUSDCE', 'TESTUSDC', 'MOCKWETH', 'MOCKCRO',
+  ]);
+
   constructor() {
     this.client = axios.create({
       baseURL: this.BASE_URL,
       timeout: 2000, // Reduced from 3s to 2s for faster failures
       headers: {
         'Content-Type': 'application/json',
-        'Connection': 'keep-alive', // Reuse TCP connections
+        // Note: Connection header removed - browsers don't allow setting it
       },
       maxRedirects: 0, // Don't follow redirects
       validateStatus: (status) => status === 200, // Only accept 200
@@ -107,6 +112,21 @@ class CryptocomExchangeService {
    */
   async getMarketData(symbol: string): Promise<MarketPrice> {
     const normalizedSymbol = symbol.toUpperCase();
+    
+    // Handle testnet/mock tokens - return $1 without API call
+    if (this.MOCK_STABLECOINS.has(normalizedSymbol)) {
+      const now = Date.now();
+      return {
+        symbol: normalizedSymbol,
+        price: 1,
+        change24h: 0,
+        volume24h: 0,
+        high24h: 1,
+        low24h: 1,
+        timestamp: now,
+        source: 'cryptocom-exchange',
+      };
+    }
     
     // Check cache first
     const cached = this.priceCache.get(normalizedSymbol);
@@ -152,8 +172,8 @@ class CryptocomExchangeService {
   async getBatchPrices(symbols: string[]): Promise<Record<string, number>> {
     const prices: Record<string, number> = {};
     
-    // Handle stablecoins directly (always $1)
-    const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
+    // Handle stablecoins and testnet tokens directly (always $1)
+    const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE', 'MOCKUSDC', 'TESTUSDC'];
     
     // Separate stablecoins from market tokens
     const stablecoins = symbols.filter(s => STABLECOINS.includes(s.toUpperCase()));
