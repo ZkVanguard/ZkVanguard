@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
+import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Sui - use the complete provider that includes SuiContext
@@ -69,7 +70,9 @@ export function Providers({ children }: { children: ReactNode }) {
               theme={rainbowKitTheme}
             >
               <PositionsProvider>
-                {children}
+                <AIDecisionsProvider>
+                  {children}
+                </AIDecisionsProvider>
               </PositionsProvider>
             </RainbowKitProvider>
           </WagmiProvider>
