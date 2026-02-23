@@ -164,6 +164,64 @@ export async function GET(request: NextRequest) {
       });
     }
     
+    // Sync local storage with on-chain data for a specific user
+    if (action === 'sync' && userAddress) {
+      const onChainUser = await getOnChainUserPosition(userAddress);
+      const onChainPool = await getOnChainPoolData();
+      
+      if (!onChainUser || !onChainPool) {
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to fetch on-chain data',
+        }, { status: 500 });
+      }
+      
+      // Update local storage to match on-chain
+      // This is a recovery mechanism - on-chain is always authoritative
+      const { saveUserShares, savePoolState, getPoolState, getUserShares } = await import('@/lib/storage/community-pool-storage');
+      
+      // Sync user position
+      let localUser = await getUserShares(userAddress);
+      if (!localUser && onChainUser.shares > 0) {
+        // User exists on-chain but not locally - create record
+        localUser = {
+          walletAddress: userAddress,
+          shares: onChainUser.shares,
+          valueUSD: onChainUser.valueUSD,
+          percentage: onChainUser.percentage,
+          joinedAt: Date.now(),
+          updatedAt: Date.now(),
+          deposits: [],
+          withdrawals: [],
+        };
+      } else if (localUser) {
+        // Sync shares from on-chain (authoritative)
+        localUser.shares = onChainUser.shares;
+        localUser.valueUSD = onChainUser.valueUSD;
+        localUser.percentage = onChainUser.percentage;
+        localUser.updatedAt = Date.now();
+      }
+      
+      if (localUser) {
+        await saveUserShares(localUser);
+      }
+      
+      // Sync pool state
+      const localPool = await getPoolState();
+      localPool.totalShares = onChainPool.totalShares;
+      localPool.totalValueUSD = onChainPool.totalValueUSD;
+      localPool.sharePrice = onChainPool.sharePrice;
+      await savePoolState(localPool);
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Synced local storage with on-chain data',
+        user: onChainUser,
+        pool: onChainPool,
+        source: 'onchain',
+      });
+    }
+    
     // Get transaction history
     if (action === 'history') {
       const limit = parseInt(searchParams.get('limit') || '50');

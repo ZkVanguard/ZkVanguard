@@ -28,6 +28,7 @@ import {
   addPoolTransaction,
   getAllUserShares,
   calculateOwnership,
+  txHashExists,
   SUPPORTED_ASSETS,
   type PoolState,
   type UserShares,
@@ -165,6 +166,19 @@ export async function deposit(
   ownershipPercentage: number;
   error?: string;
 }> {
+  // IDEMPOTENCY: If txHash provided, check if already recorded
+  if (txHash && await txHashExists(txHash)) {
+    logger.info(`[CommunityPool] Duplicate deposit txHash ignored: ${txHash}`);
+    return {
+      success: true, // Already recorded, return success
+      sharesReceived: 0,
+      sharePrice: 0,
+      newTotalShares: 0,
+      ownershipPercentage: 0,
+      error: 'Transaction already recorded',
+    };
+  }
+
   // FAIRNESS: First deposit requires higher minimum to prevent inflation attack
   const poolState = await getPoolState();
   const isFirstDeposit = poolState.totalShares === 0;
@@ -310,6 +324,19 @@ export async function withdraw(
   error?: string;
 }> {
   try {
+    // IDEMPOTENCY: If txHash provided, check if already recorded
+    if (txHash && await txHashExists(txHash)) {
+      logger.info(`[CommunityPool] Duplicate withdrawal txHash ignored: ${txHash}`);
+      return {
+        success: true, // Already recorded, return success
+        amountUSD: 0,
+        sharesBurned: 0,
+        sharePrice: 0,
+        remainingShares: 0,
+        error: 'Transaction already recorded',
+      };
+    }
+
     let userShares = await getUserShares(walletAddress);
     
     // If txHash is provided, the on-chain tx already succeeded

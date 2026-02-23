@@ -248,6 +248,9 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             setShowDeposit(false);
             setTxStatus('idle');
             resetWrite();
+            
+            // Sync local storage with on-chain (ensures consistency)
+            await fetch(`/api/community-pool?action=sync&user=${address}`);
             fetchPoolData();
             
             setTimeout(() => { setSuccessMessage(null); setLastTxHash(null); }, 10000);
@@ -290,6 +293,9 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             setShowWithdraw(false);
             setTxStatus('idle');
             resetWrite();
+            
+            // Sync local storage with on-chain (ensures consistency)
+            await fetch(`/api/community-pool?action=sync&user=${address}`);
             fetchPoolData();
             
             setTimeout(() => { setSuccessMessage(null); setLastTxHash(null); }, 10000);
