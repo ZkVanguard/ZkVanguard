@@ -324,6 +324,7 @@ export async function withdraw(
         valueUSD: 0,
         percentage: 0,
         joinedAt: Date.now(),
+        updatedAt: Date.now(),
         deposits: [],
         withdrawals: [],
       };
