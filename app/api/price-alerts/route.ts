@@ -11,6 +11,7 @@ import {
   manualTriggerHedgeCheck,
   forceHeartbeat,
   triggerPoolNavUpdate,
+  forceCommunityPoolCheck,
 } from '@/lib/services/PriceAlertWebhook';
 import { logger } from '@/lib/utils/logger';
 
@@ -34,6 +35,7 @@ export async function GET() {
         emergency: '10% move → Emergency liquidation guard',
       },
       heartbeat: 'Every 4h or 100 price requests → Full monitoring cycle',
+      communityPool: 'Every 15min or 20 price requests → Auto-rebalance/hedge (always on)',
       ...status,
     },
     timestamp: new Date().toISOString(),
@@ -70,9 +72,15 @@ export async function POST(request: NextRequest) {
         message = 'Pool NAV monitoring triggered';
         break;
         
+      case 'pool-hedge':
+        logger.info('[PriceAlerts API] Manual community pool hedge check triggered');
+        await forceCommunityPoolCheck();
+        message = 'Community pool auto-hedge check triggered';
+        break;
+        
       default:
         return NextResponse.json(
-          { success: false, error: `Unknown action: ${action}. Use: hedge, heartbeat, or pool-nav` },
+          { success: false, error: `Unknown action: ${action}. Use: hedge, heartbeat, pool-nav, or pool-hedge` },
           { status: 400 }
         );
     }
