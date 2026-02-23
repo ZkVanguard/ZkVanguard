@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { realMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // Import the multi-agent system
 import { LeadAgent } from '@/agents/core/LeadAgent';
@@ -135,59 +136,61 @@ export async function POST(request: NextRequest) {
     });
 
     // ========================================================================
-    // STEP 2: Gather Portfolio Data via MCP
+    // STEP 2: Gather REAL Portfolio Data from On-Chain
     // ========================================================================
-    const mcpClient = new MCPClient();
-    await mcpClient.connect();
+    logger.info('📊 Fetching real portfolio data for', { address });
     
-    const tokens = ['CRO', 'BTC', 'ETH', 'USDC', 'USDT'];
+    // Get real wallet balances using RealMarketDataService
+    const realPortfolio = await realMarketDataService.getPortfolioData(address);
+    
     const portfolioData: PortfolioData = {
       address,
-      tokens: [],
-      totalValue: 0,
+      tokens: realPortfolio.tokens.map(t => ({
+        symbol: t.symbol,
+        balance: parseFloat(t.balance),
+        price: t.usdValue / parseFloat(t.balance),
+        value: t.usdValue,
+      })),
+      totalValue: realPortfolio.totalValue,
     };
 
-    // Fetch real prices from Crypto.com API
-    const priceMap: Record<string, number> = {};
-    try {
-      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-      const tickerData = await tickerResponse.json();
-      for (const token of tokens) {
-        const ticker = tickerData.result?.data?.find((t: { i: string; a: string }) => t.i === `${token}_USDT`);
-        if (ticker) {
-          priceMap[token] = parseFloat(ticker.a);
-        }
-      }
-    } catch {
-      logger.warn('Failed to fetch prices from Crypto.com API, using MCP fallback');
+    // If wallet has no tokens, provide helpful message
+    if (portfolioData.tokens.length === 0) {
+      logger.warn('No tokens found in wallet', { address });
+      return NextResponse.json({
+        recommendations: [{
+          strategy: 'Connect & Fund Wallet',
+          confidence: 1.0,
+          expectedReduction: 0,
+          description: 'No tokens detected in this wallet. Deposit CRO, BTC, ETH or mint MockUSDC to enable AI-powered hedge recommendations.',
+          agentSource: 'system',
+          actions: [],
+        }],
+        portfolioAnalysis: {
+          totalValue: 0,
+          tokens: 0,
+          dominantAsset: null,
+        },
+        hackathonAPIs: {
+          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+          marketData: 'Crypto.com MCP (FREE)',
+          perpetuals: 'Moonlander (hackathon integrated)',
+          zkProofs: 'ZK-STARK verification',
+        },
+        totalExecutionTime: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    // Fetch remaining prices in parallel via MCP fallback
-    const missingTokens = tokens.filter(t => !priceMap[t]);
-    if (missingTokens.length > 0) {
-      const mcpResults = await Promise.allSettled(
-        missingTokens.map(sym => mcpClient.getPrice(sym).then(r => ({ sym, price: r.price })))
-      );
-      for (const result of mcpResults) {
-        if (result.status === 'fulfilled') {
-          priceMap[result.value.sym] = result.value.price;
-        }
-      }
-    }
-
-    for (const symbol of tokens) {
-      const price = priceMap[symbol];
-      if (!price) { logger.warn(`No price for ${symbol}, skipping`); continue; }
-      const simulatedBalance = symbol === 'BTC' ? 0.5 : symbol === 'ETH' ? 5 : symbol === 'CRO' ? 10000 : 1000;
-      const value = simulatedBalance * price;
-      portfolioData.tokens.push({ symbol, balance: simulatedBalance, price, value });
-      portfolioData.totalValue += value;
-    }
-
-    logger.info('📊 Portfolio data gathered', { 
+    logger.info('📊 Real portfolio data gathered', { 
       totalValue: portfolioData.totalValue,
-      tokens: portfolioData.tokens.length 
+      tokens: portfolioData.tokens.length,
+      assets: portfolioData.tokens.map(t => `${t.symbol}: $${t.value.toFixed(2)}`),
     });
+
+    // Initialize MCP for price enhancement
+    const mcpClient = new MCPClient();
+    await mcpClient.connect();
 
     // ========================================================================
     // STEP 3: LeadAgent Orchestrates Multi-Agent Analysis
