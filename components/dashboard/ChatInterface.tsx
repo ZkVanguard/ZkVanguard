@@ -332,10 +332,10 @@ export function ChatInterface({ address: _address }: { address: string }) {
           const riskData = await assessPortfolioRisk(_address);
           response = {
             content: `📊 **Portfolio Analysis** (ZK-Verified)\n\n` +
-              `**Value at Risk (95%):** ${(riskData.var * 100).toFixed(1)}%\n` +
+              `**Value at Risk (95%):** ${(riskData.var95 * 100).toFixed(1)}%\n` +
               `**Volatility:** ${(riskData.volatility * 100).toFixed(1)}%\n` +
               `**Sharpe Ratio:** ${riskData.sharpeRatio.toFixed(2)}\n` +
-              `**Liquidation Risk:** ${riskData.liquidationRisk}\n\n` +
+              `**Market Sentiment:** ${riskData.marketSentiment}\n\n` +
               `**Recommendations:**\n${riskData.recommendations?.map((r: string) => `• ${r}`).join('\n') || '• Portfolio is well-balanced'}`,
             agent: 'Risk Agent',
           };
@@ -345,15 +345,15 @@ export function ChatInterface({ address: _address }: { address: string }) {
         case 'assess_risk': {
           setActiveAgent('Lead Agent → Risk Agent');
           const risk = await assessPortfolioRisk(_address);
-          const riskLevel = risk.var < 0.1 ? 'LOW' : risk.var < 0.2 ? 'MEDIUM' : 'HIGH';
+          const riskLevel = risk.var95 < 0.1 ? 'LOW' : risk.var95 < 0.2 ? 'MEDIUM' : 'HIGH';
           response = {
             content: `⚠️ **Risk Assessment** (AI-Powered)\n\n` +
               `**Overall Risk Level:** ${riskLevel}\n` +
-              `**Value at Risk (95%):** ${(risk.var * 100).toFixed(1)}% potential loss\n` +
+              `**Value at Risk (95%):** ${(risk.var95 * 100).toFixed(1)}% potential loss\n` +
               `**Portfolio Volatility:** ${(risk.volatility * 100).toFixed(1)}%\n` +
               `**Sharpe Ratio:** ${risk.sharpeRatio.toFixed(2)} (${risk.sharpeRatio > 1 ? 'Good' : 'Needs improvement'})\n` +
               `**Max Drawdown:** ${(risk.maxDrawdown * 100).toFixed(1)}%\n\n` +
-              `**Risk Factors:**\n• Market correlation: ${(risk.correlation * 100).toFixed(0)}%\n• Concentration risk: ${risk.concentrationRisk || 'Moderate'}`,
+              `**Risk Factors:**\n• Total Risk Score: ${risk.totalRisk}/100\n• Market Sentiment: ${risk.marketSentiment}`,
             agent: 'Risk Agent',
           };
           break;
@@ -399,24 +399,24 @@ export function ChatInterface({ address: _address }: { address: string }) {
           
           // Extract real portfolio data from recommendations
           const topHedge = hedgeRecs[0];
-          const realPortfolioValue = topHedge?.capitalRequired ? topHedge.capitalRequired * 2 : 30; // $30 USDC
-          const realLeverage = 20; // 20x leverage
-          const realExposure = realPortfolioValue * realLeverage; // $600 exposure
+          const realPortfolioValue = topHedge?.size ? topHedge.size * 2 : 30; // $30 USDC estimate
+          const realLeverage = topHedge?.leverage || 20; // Use recommended leverage or default 20x
+          const realExposure = realPortfolioValue * realLeverage;
           
           // Step 2: Show recommendations to user
           const recommendationText = `🛡️ **Hedge Strategy Recommended** (via Moonlander)\n\n` +
             `**Your Portfolio:**\n` +
-            `• Capital: $${realPortfolioValue} USDC\n` +
+            `• Capital: $${realPortfolioValue.toFixed(2)} USDC\n` +
             `• Leverage: ${realLeverage}x\n` +
-            `• Total Exposure: $${realExposure}\n` +
+            `• Total Exposure: $${realExposure.toFixed(2)}\n` +
             `• Target Yield: ${targetYield}%\n\n` +
             `**AI-Recommended Hedges:**\n` +
-            hedgeRecs.map((s: { action: string; asset: string; size: number; leverage: number; reason: string; capitalRequired?: number; targetPrice?: number; stopLoss?: number }, i: number) => 
-              `${i + 1}. **${s.action}** on ${s.asset}\n` +
-              `   • Size: ${s.size}${typeof s.size === 'number' && s.size < 1 ? ' BTC' : ''}\n` +
+            hedgeRecs.map((s, i: number) => 
+              `${i + 1}. **${s.side}** on ${s.asset}\n` +
+              `   • Size: ${s.size || 'TBD'}${typeof s.size === 'number' && s.size < 1 ? ' BTC' : ''}\n` +
               `   • Leverage: ${s.leverage}x\n` +
               `   • Reason: ${s.reason}\n` +
-              (s.capitalRequired ? `   • Capital Needed: $${s.capitalRequired} USDC\n` : '') +
+              `   • Confidence: ${s.confidence}%\n` +
               (s.targetPrice ? `   • Target: $${s.targetPrice} | Stop Loss: $${s.stopLoss}\n` : '')
             ).join('\n') +
             `\n💡 **Review and approve to execute. No action taken without your signature.**`;
@@ -430,23 +430,23 @@ export function ChatInterface({ address: _address }: { address: string }) {
             // Create action preview
             const actionPreview: ActionPreview = {
               title: 'Execute Hedge Strategy',
-              description: `${topHedge.action} position on ${topHedge.asset} to protect portfolio`,
+              description: `${topHedge.side} position on ${topHedge.asset} to protect portfolio`,
               type: 'hedge',
               details: [
                 { label: 'Asset', value: topHedge.asset, highlight: true },
-                { label: 'Action', value: topHedge.action },
+                { label: 'Action', value: topHedge.side },
                 { label: 'Leverage', value: `${topHedge.leverage}x` },
-                { label: 'Position Size', value: String(topHedge.size) },
-                { label: 'Your Capital', value: `$${realPortfolioValue} USDC`, highlight: true },
-                { label: 'Total Exposure', value: `$${realExposure}` },
-                { label: 'Hedge Capital', value: `$${topHedge.capitalRequired || 0} USDC` },
+                { label: 'Position Size', value: String(topHedge.size || 'TBD') },
+                { label: 'Your Capital', value: `$${realPortfolioValue.toFixed(2)} USDC`, highlight: true },
+                { label: 'Total Exposure', value: `$${realExposure.toFixed(2)}` },
+                { label: 'Confidence', value: `${topHedge.confidence}%` },
                 { label: 'Gas Cost', value: '$0.00 (x402 gasless)', highlight: true },
               ],
               risks: [
                 'Leverage amplifies both gains and losses',
                 'Market volatility may trigger liquidation',
                 'Counterparty risk on derivatives platform',
-                `Current exposure: $${realExposure} on $${realPortfolioValue} capital (${realLeverage}x leverage)`,
+                `Current exposure: $${realExposure.toFixed(2)} on $${realPortfolioValue.toFixed(2)} capital (${realLeverage}x leverage)`,
               ],
               expectedOutcome: `${topHedge.reason}. Target yield: ${targetYield}%`,
             };
@@ -472,14 +472,14 @@ export function ChatInterface({ address: _address }: { address: string }) {
                     // Add success message
                     // Save hedge details to localStorage for dashboard tracking
                     const hedgeDetails = {
-                      type: 'SHORT',
-                      asset: 'BTC-PERP',
+                      type: topHedge.side || 'SHORT',
+                      asset: topHedge.asset || 'BTC-PERP',
                       size: topHedge.size || 0.007,
                       leverage: topHedge.leverage || 10,
-                      entryPrice: 43500, // Would come from live price feed
+                      entryPrice: topHedge.entryPrice || 43500, // Use entry price from recommendation or fallback
                       targetPrice: topHedge.targetPrice || 42800,
                       stopLoss: topHedge.stopLoss || 45200,
-                      capitalUsed: topHedge.capitalRequired || 15,
+                      capitalUsed: topHedge.size ? topHedge.size * (topHedge.entryPrice || 43500) / topHedge.leverage : 15,
                       reason: topHedge.reason || 'Portfolio protection',
                     };
                     

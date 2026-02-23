@@ -334,8 +334,9 @@ class AIManagerService {
       return;
     }
 
-    if (data.result?.channel?.startsWith('ticker.')) {
-      const ticker = data.result.data as Array<{
+    const result = data.result as { channel?: string; data?: unknown } | undefined;
+    if (result?.channel?.startsWith('ticker.')) {
+      const ticker = result.data as Array<{
         i: string;
         a: string;
         c: string;
@@ -443,7 +444,7 @@ class AIManagerService {
 
       // Check if service is healthy enough to run
       const serviceStatus = this.state.services.get(task.serviceType);
-      if (serviceStatus?.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      if ((serviceStatus?.consecutiveFailures ?? 0) >= MAX_CONSECUTIVE_FAILURES) {
         // Skip but reschedule with backoff
         task.nextRun = now + (task.intervalMs * Math.pow(2, task.failures));
         return;

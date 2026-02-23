@@ -11,7 +11,7 @@ interface CachedInsight {
   hash: string;
   timestamp: number;
 }
-const insightCache: CachedInsight | null = { data: null, hash: '', timestamp: 0 };
+let insightCache: CachedInsight = { data: null, hash: '', timestamp: 0 };
 const INSIGHT_CACHE_TTL = 45000; // 45 second cache
 
 function createPredictionHash(predictions: PredictionMarket[]): string {

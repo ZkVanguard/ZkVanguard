@@ -282,7 +282,7 @@ export default function DashboardPage() {
           question: market.question,
           probability: market.probability,
           impact: market.impact,
-          recommendation: market.recommendation,
+          recommendation: market.recommendation || 'HOLD',
           source: market.source
         }],
         realMetrics: {
@@ -301,11 +301,12 @@ export default function DashboardPage() {
       }
       
       // Format the AI response
-      const agentName = data.agentAnalysis?.leadAgent || 'AI Agent';
-      const reasoning = data.reasoning?.slice(0, 3).join('\n• ') || 'Analysis complete';
-      const recommendations = data.recommendations?.slice(0, 2).join('\n• ') || '';
+      const agentName = 'AI Agent';
+      const reasoning = typeof data.reasoning === 'string' 
+        ? data.reasoning.slice(0, 200) 
+        : 'Analysis complete';
       
-      const msg = `🤖 ${agentName}\n\nAction: ${data.action}\nConfidence: ${Math.round(data.confidence * 100)}%\nRisk Score: ${data.riskScore}/100\n\n• ${reasoning}${recommendations ? '\n\n• ' + recommendations : ''}`;
+      const msg = `🤖 ${agentName}\n\nAction: ${data.action}\nConfidence: ${Math.round(data.confidence * 100)}%\nUrgency: ${data.urgency}\n\n• ${reasoning}`;
       
       setAgentMessage(msg);
       logger.info('✅ AI Analysis Complete', { action: data.action, confidence: data.confidence });
