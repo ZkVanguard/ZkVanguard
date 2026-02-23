@@ -1,8 +1,12 @@
 /**
  * Community Pool AI Decision Route
  * 
- * Uses AI to analyze market conditions and decide on optimal allocation
+ * Uses AI to analyze REAL market conditions and decide on optimal allocation
  * between BTC, ETH, SUI, and CRO for the community pool.
+ * 
+ * Data Sources:
+ * - Crypto.com Exchange API for live prices and 24h change
+ * - Real market indicators, NOT simulated
  * 
  * Endpoints:
  * - GET  /api/community-pool/ai-decision          - Get current AI recommendation
@@ -25,19 +29,132 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Simulated market sentiment indicators
+// Real market indicators from Crypto.com API
 interface MarketIndicators {
   asset: SupportedAsset;
   price: number;
   change24h: number;
+  volume24h: number;
+  high24h: number;
+  low24h: number;
   volatility: 'low' | 'medium' | 'high';
   trend: 'bullish' | 'bearish' | 'neutral';
   score: number;
 }
 
 /**
- * Simple AI-based allocation decision
- * Uses price momentum, relative strength, and diversification principles
+ * Fetch real market data from Crypto.com Exchange API
+ */
+async function fetchRealMarketIndicators(): Promise<MarketIndicators[]> {
+  const tickerMap: Record<string, SupportedAsset> = {
+    'BTC_USDT': 'BTC',
+    'ETH_USDT': 'ETH',
+    'SUI_USDT': 'SUI',
+    'CRO_USDT': 'CRO',
+  };
+  
+  try {
+    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+      signal: AbortSignal.timeout(10000),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Crypto.com API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const tickers = data.result?.data || [];
+    
+    const indicators: MarketIndicators[] = [];
+    
+    for (const ticker of tickers) {
+      const asset = tickerMap[ticker.i];
+      if (!asset) continue;
+      
+      // Real data from API:
+      // a = last trade price
+      // c = 24h price change percentage
+      // v = 24h volume (in base currency)
+      // h = 24h high
+      // l = 24h low
+      const price = parseFloat(ticker.a) || 0;
+      const change24h = parseFloat(ticker.c) || 0; // Already percentage
+      const volume24h = parseFloat(ticker.v) || 0;
+      const high24h = parseFloat(ticker.h) || price;
+      const low24h = parseFloat(ticker.l) || price;
+      
+      // Calculate real volatility from 24h range
+      const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
+      let volatility: 'low' | 'medium' | 'high';
+      if (rangePercent < 3) volatility = 'low';
+      else if (rangePercent < 7) volatility = 'medium';
+      else volatility = 'high';
+      
+      // Determine trend based on real 24h change
+      let trend: 'bullish' | 'bearish' | 'neutral';
+      if (change24h > 2) trend = 'bullish';
+      else if (change24h < -2) trend = 'bearish';
+      else trend = 'neutral';
+      
+      // Calculate score (0-100) based on real factors
+      let score = 50; // Base score
+      score += change24h * 2; // Momentum weight (real 24h change)
+      if (volatility === 'low') score += 10;
+      else if (volatility === 'high') score -= 5;
+      if (trend === 'bullish') score += 10;
+      else if (trend === 'bearish') score -= 10;
+      
+      // Volume factor - higher volume = higher confidence
+      // Normalize volume across assets (rough approximation)
+      const volumeUSD = volume24h * price;
+      if (volumeUSD > 100_000_000) score += 5; // >$100M daily volume
+      
+      // Clamp score
+      score = Math.max(0, Math.min(100, score));
+      
+      indicators.push({
+        asset,
+        price,
+        change24h,
+        volume24h,
+        high24h,
+        low24h,
+        volatility,
+        trend,
+        score,
+      });
+      
+      logger.debug(`[AI Decision] ${asset} indicators:`, {
+        price,
+        change24h,
+        volatility,
+        trend,
+        score,
+      });
+    }
+    
+    // Ensure all supported assets are included
+    for (const asset of SUPPORTED_ASSETS) {
+      if (!indicators.find(i => i.asset === asset)) {
+        throw new Error(`Missing market data for ${asset}`);
+      }
+    }
+    
+    logger.info('[AI Decision] Fetched real market indicators from Crypto.com', {
+      assets: indicators.map(i => i.asset),
+    });
+    
+    return indicators;
+    
+  } catch (error) {
+    logger.error('[AI Decision] Failed to fetch real market data:', error);
+    throw new Error('Unable to fetch real market data. AI decisions require live market data.');
+  }
+}
+
+/**
+ * AI-based allocation decision using REAL market data
+ * Uses live 24h price changes, volatility, and diversification principles
  */
 async function generateAIAllocation(marketConditions?: {
   riskScore?: number;
@@ -51,57 +168,21 @@ async function generateAIAllocation(marketConditions?: {
   indicators: MarketIndicators[];
   shouldRebalance: boolean;
 }> {
-  const prices = await fetchLivePrices();
-  const poolState = await getPoolState();
+  // Fetch REAL market indicators from Crypto.com
+  const indicators = await fetchRealMarketIndicators();
   
-  // Generate mock market indicators based on current prices
-  // In production, this would use real market data APIs
-  const indicators: MarketIndicators[] = SUPPORTED_ASSETS.map(asset => {
-    // Simulate 24h change (-10% to +10%)
-    const change24h = (Math.random() - 0.5) * 20;
-    
-    // Determine volatility based on asset
-    let volatility: 'low' | 'medium' | 'high';
-    if (asset === 'BTC') volatility = 'low';
-    else if (asset === 'ETH') volatility = 'medium';
-    else volatility = 'high';
-    
-    // Determine trend based on 24h change
-    let trend: 'bullish' | 'bearish' | 'neutral';
-    if (change24h > 3) trend = 'bullish';
-    else if (change24h < -3) trend = 'bearish';
-    else trend = 'neutral';
-    
-    // Calculate score (0-100) based on multiple factors
-    let score = 50; // Base score
-    score += change24h * 2; // Momentum weight
-    if (volatility === 'low') score += 10;
-    else if (volatility === 'high') score -= 5;
-    if (trend === 'bullish') score += 10;
-    else if (trend === 'bearish') score -= 10;
-    
-    // Clamp score
-    score = Math.max(0, Math.min(100, score));
-    
-    return {
-      asset,
-      price: prices[asset],
-      change24h,
-      volatility,
-      trend,
-      score,
-    };
-  });
-  
-  // Calculate allocations based on scores
+  // Calculate allocations based on real scores
   const totalScore = indicators.reduce((sum, i) => sum + i.score, 0);
+  
+  // Sort by score for deterministic allocation
+  const sortedIndicators = [...indicators].sort((a, b) => b.score - a.score);
   
   let allocations: Record<SupportedAsset, number> = {} as any;
   let remainingPercentage = 100;
   
-  for (let i = 0; i < indicators.length; i++) {
-    const indicator = indicators[i];
-    if (i === indicators.length - 1) {
+  for (let i = 0; i < sortedIndicators.length; i++) {
+    const indicator = sortedIndicators[i];
+    if (i === sortedIndicators.length - 1) {
       // Last asset gets remaining percentage
       allocations[indicator.asset] = remainingPercentage;
     } else {
@@ -113,24 +194,30 @@ async function generateAIAllocation(marketConditions?: {
     }
   }
   
-  // Generate reasoning
-  const topAsset = indicators.reduce((a, b) => a.score > b.score ? a : b);
-  const bottomAsset = indicators.reduce((a, b) => a.score < b.score ? a : b);
+  // Generate reasoning with real data
+  const topAsset = sortedIndicators[0];
+  const bottomAsset = sortedIndicators[sortedIndicators.length - 1];
+  
+  // Calculate confidence based on real data quality
+  // Higher confidence when assets show clear trends (not neutral) and lower volatility
+  const clearTrends = indicators.filter(i => i.trend !== 'neutral').length;
+  const avgVolatility = indicators.filter(i => i.volatility === 'high').length;
+  let confidence = 60 + (clearTrends * 8) - (avgVolatility * 5);
+  confidence = Math.max(50, Math.min(95, confidence));
   
   const reasoning = `AI Allocation Decision (${new Date().toISOString().split('T')[0]}):
 
-**Market Analysis:**
-${indicators.map(i => `- ${i.asset}: $${i.price.toLocaleString()} (${i.change24h > 0 ? '+' : ''}${i.change24h.toFixed(2)}% 24h) - ${i.trend} trend, ${i.volatility} volatility`).join('\n')}
+**LIVE Market Analysis (Crypto.com):**
+${indicators.map(i => `- ${i.asset}: $${i.price.toLocaleString()} (${i.change24h > 0 ? '+' : ''}${i.change24h.toFixed(2)}% 24h) - ${i.trend} trend, ${i.volatility} volatility [HIGH: $${i.high24h.toLocaleString()} / LOW: $${i.low24h.toLocaleString()}]`).join('\n')}
 
 **Recommendation:**
-- Overweight ${topAsset.asset} (${allocations[topAsset.asset]}%) due to ${topAsset.trend} momentum and ${topAsset.volatility} volatility profile
-- Underweight ${bottomAsset.asset} (${allocations[bottomAsset.asset]}%) showing ${bottomAsset.trend} signals
+- Overweight ${topAsset.asset} (${allocations[topAsset.asset]}%) due to ${topAsset.trend} momentum and ${topAsset.volatility} volatility profile (score: ${topAsset.score.toFixed(1)})
+- Underweight ${bottomAsset.asset} (${allocations[bottomAsset.asset]}%) showing ${bottomAsset.trend} signals (score: ${bottomAsset.score.toFixed(1)})
 - Maintain diversification across all 4 assets to reduce portfolio risk
 
 **Risk Assessment:** ${topAsset.volatility === 'high' ? 'Elevated' : 'Moderate'} risk environment
-**Confidence Level:** ${Math.round(70 + Math.random() * 20)}%`;
-
-  const confidence = 70 + Math.random() * 20;
+**Confidence Level:** ${Math.round(confidence)}% (based on trend clarity and market conditions)
+**Data Source:** Real-time Crypto.com Exchange API`;
   
   // Determine if rebalancing should occur
   // Check if current allocations exist and calculate drift

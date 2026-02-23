@@ -64,25 +64,6 @@ class RealMarketDataService {
   }
 
   /**
-   * Get mock price for a token (fallback during rate limits)
-   */
-  private getMockPrice(symbol: string): number {
-    const mockPrices: Record<string, number> = {
-      CRO: 0.10,      // Updated to current CRO price ~$0.10
-      BTC: 50000,
-      WBTC: 50000,
-      ETH: 3000,
-      WETH: 3000,
-      USDC: 1,
-      USDT: 1,
-      VVS: 0.000005,  // VVS typical price
-      WCRO: 0.10,     // Same as CRO
-      SUI: 3.50,      // SUI current market price
-    };
-    return mockPrices[symbol.toUpperCase()] || 1;
-  }
-
-  /**
    * Get real-time price for a token with multi-source fallback
    * 1. Crypto.com Exchange API (100 req/s)
    * 2. Crypto.com MCP Server (free, no rate limits)

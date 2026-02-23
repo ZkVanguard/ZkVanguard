@@ -204,6 +204,7 @@ export class MarketDataMCPClient {
 
   /**
    * Get OHLCV data
+   * ⚠️ NOTE: MCP integration not yet implemented - returns empty array for safety
    */
   public async getOHLCV(
     symbol: string,
@@ -214,38 +215,31 @@ export class MarketDataMCPClient {
       await this.connect();
     }
 
-    try {
-      if (!this.apiKey) {
-        return this.getDemoOHLCV(symbol, limit);
-      }
-
-      // TODO: Implement real MCP API call
-      return this.getDemoOHLCV(symbol, limit);
-    } catch (error) {
-      logger.error('Failed to fetch OHLCV', { symbol, timeframe, error });
-      return this.getDemoOHLCV(symbol, limit);
-    }
+    // FAIL SAFE: MCP integration not implemented
+    // Do NOT return demo data that could be mistaken for real market data
+    logger.warn('MarketDataMCPClient.getOHLCV: MCP not implemented, returning empty array', { symbol, timeframe });
+    return [];
   }
 
   /**
    * Get ticker data (bid/ask)
+   * ⚠️ NOTE: MCP integration not yet implemented - returns zero values for safety
    */
   public async getTicker(symbol: string): Promise<MarketDataTicker> {
     if (!this.connected) {
       await this.connect();
     }
 
-    try {
-      if (!this.apiKey) {
-        return this.getDemoTicker(symbol);
-      }
-
-      // TODO: Implement real MCP API call
-      return this.getDemoTicker(symbol);
-    } catch (error) {
-      logger.error('Failed to fetch ticker', { symbol, error });
-      return this.getDemoTicker(symbol);
-    }
+    // FAIL SAFE: MCP integration not implemented
+    // Do NOT return demo data that could be mistaken for real market data
+    logger.warn('MarketDataMCPClient.getTicker: MCP not implemented, returning zero values', { symbol });
+    return {
+      symbol,
+      bid: 0,
+      ask: 0,
+      spread: 0,
+      timestamp: Date.now(),
+    };
   }
 
   /**
@@ -263,82 +257,11 @@ export class MarketDataMCPClient {
   }
 
   /**
-   * Check if using demo mode
+   * Check if using demo mode (no API key configured)
+   * When true, OHLCV and Ticker data are not available
    */
   public isDemoMode(): boolean {
     return !this.apiKey;
-  }
-
-  // ============= Demo Data Generators =============
-
-  private getDemoPrice(symbol: string): MarketDataPrice {
-    const basePrice = this.getBasePrice(symbol);
-    const variance = basePrice * 0.02; // 2% variance
-
-    return {
-      symbol,
-      price: basePrice + (Math.random() - 0.5) * variance,
-      change24h: (Math.random() - 0.5) * 10, // -5% to +5%
-      volume24h: Math.random() * 1000000000,
-      high24h: basePrice * (1 + Math.random() * 0.05),
-      low24h: basePrice * (1 - Math.random() * 0.05),
-      timestamp: Date.now(),
-    };
-  }
-
-  private getDemoOHLCV(symbol: string, limit: number): MarketDataOHLCV[] {
-    const basePrice = this.getBasePrice(symbol);
-    const data: MarketDataOHLCV[] = [];
-    const now = Date.now();
-
-    for (let i = 0; i < limit; i++) {
-      const timestamp = now - (limit - i) * 3600000; // 1 hour intervals
-      const open = basePrice * (1 + (Math.random() - 0.5) * 0.05);
-      const close = basePrice * (1 + (Math.random() - 0.5) * 0.05);
-      const high = Math.max(open, close) * (1 + Math.random() * 0.02);
-      const low = Math.min(open, close) * (1 - Math.random() * 0.02);
-
-      data.push({
-        symbol,
-        timeframe: '1h',
-        open,
-        high,
-        low,
-        close,
-        volume: Math.random() * 10000000,
-        timestamp,
-      });
-    }
-
-    return data;
-  }
-
-  private getDemoTicker(symbol: string): MarketDataTicker {
-    const basePrice = this.getBasePrice(symbol);
-    const spread = basePrice * 0.001; // 0.1% spread
-
-    return {
-      symbol,
-      bid: basePrice - spread / 2,
-      ask: basePrice + spread / 2,
-      spread: spread,
-      timestamp: Date.now(),
-    };
-  }
-
-  private getBasePrice(symbol: string): number {
-    const prices: Record<string, number> = {
-      'BTC': 42850,
-      'ETH': 2245,
-      'CRO': 0.0876,
-      'USDT': 1.0,
-      'USDC': 1.0,
-      'BTC-USD': 42850,
-      'ETH-USD': 2245,
-      'CRO-USD': 0.0876,
-    };
-
-    return prices[symbol] || prices[symbol.split('-')[0]] || 100;
   }
 }
 

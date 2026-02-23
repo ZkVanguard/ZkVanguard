@@ -120,22 +120,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
   }
 }
 
-// Mock prices for fallback when VVS API fails or returns unrealistic values
-// Note: These are approximate prices for demo purposes on testnet
-const MOCK_PRICES: Record<string, number> = {
-  CRO: 0.10,  // CRO ~$0.10 as of 2024
-  WCRO: 0.10,
-  USDC: 1.0,
-  DEVUSDC: 1.0,
-  VVS: 0.000002, // VVS token price
-  BTC: 95000,    // Bitcoin ~$95k
-  WBTC: 95000,
-  ETH: 3300,     // Ethereum ~$3.3k
-  WETH: 3300,
-  USDT: 1.0,
-  DAI: 1.0,
-};
-
 /**
  * GET /api/x402/swap - Get swap quote from VVS Finance SDK
  * Uses MAINNET for accurate pricing since testnet has no stablecoin liquidity
@@ -246,20 +230,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         });
       } catch (fallbackError) {
-        logger.error('[x402/swap] RealMarketDataService fallback failed, using mock prices:', fallbackError);
+        logger.error('[x402/swap] Both VVS API and Crypto.com Exchange unavailable:', fallbackError);
         
-        // Final fallback: Use mock prices for demo
-        const mockQuote = getMockQuote(tokenIn, tokenOut, humanAmount);
-        
-        return NextResponse.json({
-          success: true,
-          data: {
-            ...mockQuote,
-            x402Fee: 0.01,
-            source: 'mock-prices-testnet',
-            warning: 'Using approximate prices - VVS API and Crypto.com Exchange unavailable',
+        // FAIL SAFE: Do NOT use mock prices for billion-dollar fund
+        // Real money requires real prices - no fallbacks
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Unable to get real-time price data. Both VVS Finance and Crypto.com Exchange APIs are unavailable. Cannot proceed with swap without verified pricing.',
+            code: 'PRICE_DATA_UNAVAILABLE'
           },
-        });
+          { status: 503 }
+        );
       }
     }
   } catch (error) {
@@ -278,32 +260,6 @@ function resolveToken(token: string): string {
   if (upper === 'CRO' || upper === 'TCRO' || upper === 'NATIVE') return 'NATIVE';
   // Use mainnet token addresses for accurate pricing
   return MAINNET_TOKENS[upper] || token;
-}
-
-/**
- * Get mock quote when VVS API is unavailable
- */
-function getMockQuote(tokenIn: string, tokenOut: string, amount: string) {
-  const inSymbol = getTokenSymbol(tokenIn);
-  const outSymbol = getTokenSymbol(tokenOut);
-  
-  const inPrice = MOCK_PRICES[inSymbol] || 1;
-  const outPrice = MOCK_PRICES[outSymbol] || 1;
-  
-  const amountNum = parseFloat(amount);
-  const inValue = amountNum * inPrice;
-  // Apply 0.3% swap fee
-  const outAmount = (inValue / outPrice) * 0.997;
-  
-  return {
-    tokenIn: resolveToken(tokenIn),
-    tokenOut: resolveToken(tokenOut),
-    amountIn: amount,
-    amountOut: outAmount.toFixed(6),
-    priceImpact: 0.08,
-    route: [inSymbol, outSymbol],
-    formattedTrade: `${amount} ${inSymbol} → ${outAmount.toFixed(6)} ${outSymbol}`,
-  };
 }
 
 function getTokenSymbol(token: string): string {
