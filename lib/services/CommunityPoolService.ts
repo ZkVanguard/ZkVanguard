@@ -310,9 +310,27 @@ export async function withdraw(
   error?: string;
 }> {
   try {
-    const userShares = await getUserShares(walletAddress);
+    let userShares = await getUserShares(walletAddress);
     
-    if (!userShares || userShares.shares < sharesToBurn) {
+    // If txHash is provided, the on-chain tx already succeeded
+    // The smart contract verified ownership - just record the withdrawal
+    const onChainVerified = !!txHash;
+    
+    // If no local record but on-chain succeeded, create a record to track
+    if (!userShares && onChainVerified) {
+      userShares = {
+        walletAddress,
+        shares: sharesToBurn, // Will be subtracted below
+        valueUSD: 0,
+        percentage: 0,
+        joinedAt: Date.now(),
+        deposits: [],
+        withdrawals: [],
+      };
+    }
+    
+    // Only validate shares if NOT on-chain verified (pre-flight check)
+    if (!onChainVerified && (!userShares || userShares.shares < sharesToBurn)) {
       return {
         success: false,
         amountUSD: 0,
@@ -320,6 +338,17 @@ export async function withdraw(
         sharePrice: 0,
         remainingShares: userShares?.shares || 0,
         error: `Insufficient shares. You have ${userShares?.shares.toFixed(4) || 0} shares`,
+      };
+    }
+    
+    if (!userShares) {
+      return {
+        success: false,
+        amountUSD: 0,
+        sharesBurned: 0,
+        sharePrice: 0,
+        remainingShares: 0,
+        error: 'No user shares found',
       };
     }
     
@@ -358,9 +387,9 @@ export async function withdraw(
       };
     }
     
-    // Update pool state
-    poolState.totalShares -= sharesToBurn;
-    poolState.totalValueUSD = totalValueUSD - amountUSD;
+    // Update pool state (ensure non-negative in case local storage was out of sync)
+    poolState.totalShares = Math.max(0, poolState.totalShares - sharesToBurn);
+    poolState.totalValueUSD = Math.max(0, totalValueUSD - amountUSD);
     poolState.sharePrice = (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
     
     // Reduce asset amounts proportionally
@@ -373,8 +402,8 @@ export async function withdraw(
     
     await savePoolState(poolState);
     
-    // Update user shares
-    userShares.shares -= sharesToBurn;
+    // Update user shares (ensure non-negative in case local storage was out of sync)
+    userShares.shares = Math.max(0, userShares.shares - sharesToBurn);
     userShares.valueUSD = userShares.shares * poolState.sharePrice;
     userShares.percentage = calculateOwnership(userShares.shares, poolState.totalShares);
     userShares.withdrawals.push({
