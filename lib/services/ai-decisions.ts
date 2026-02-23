@@ -342,6 +342,7 @@ export async function fetchHedgeRecommendations(
     
     const recommendations: HedgeRecommendation[] = (data.recommendations || []).map((rec: {
       id?: string;
+      strategy?: string;
       asset?: string;
       symbol?: string;
       side?: string;
@@ -356,21 +357,38 @@ export async function fetchHedgeRecommendations(
       stopLoss?: number;
       riskLevel?: string;
       agentSource?: string;
-    }, idx: number) => ({
-      id: rec.id || `rec-${Date.now()}-${idx}`,
-      asset: rec.asset || rec.symbol || 'UNKNOWN',
-      side: (rec.side || rec.direction?.toUpperCase() || 'SHORT') as 'LONG' | 'SHORT',
-      leverage: rec.leverage || 1,
-      size: rec.size,
-      reason: rec.reason || rec.description || 'AI recommendation',
-      confidence: rec.confidence || 75,
-      entryPrice: rec.entryPrice,
-      targetPrice: rec.targetPrice,
-      stopLoss: rec.stopLoss,
-      riskLevel: (rec.riskLevel || 'moderate') as 'conservative' | 'moderate' | 'aggressive',
-      source: (rec.agentSource?.includes('Risk') ? 'risk-agent' : 'hedging-agent') as HedgeRecommendation['source'],
-      generatedAt: Date.now(),
-    }));
+      actions?: Array<{ action?: string; asset?: string; size?: number; leverage?: number }>;
+    }, idx: number) => {
+      // Extract asset from actions array or parse from strategy name
+      const actionAsset = rec.actions?.[0]?.asset;
+      const strategyAsset = rec.strategy?.match(/(?:SHORT|LONG)\s+(\w+)/i)?.[1];
+      const asset = rec.asset || rec.symbol || actionAsset || strategyAsset || 'BTC';
+      
+      // Extract side from actions or strategy
+      const actionSide = rec.actions?.[0]?.action?.toUpperCase();
+      const strategySide = rec.strategy?.startsWith('SHORT') ? 'SHORT' : rec.strategy?.startsWith('LONG') ? 'LONG' : undefined;
+      const side = (rec.side || rec.direction?.toUpperCase() || actionSide || strategySide || 'SHORT') as 'LONG' | 'SHORT';
+      
+      // Extract leverage and size from actions
+      const leverage = rec.leverage || rec.actions?.[0]?.leverage || 1;
+      const size = rec.size || rec.actions?.[0]?.size;
+      
+      return {
+        id: rec.id || `rec-${Date.now()}-${idx}`,
+        asset,
+        side,
+        leverage,
+        size,
+        reason: rec.reason || rec.description || 'AI recommendation',
+        confidence: rec.confidence ? (rec.confidence > 1 ? rec.confidence : rec.confidence * 100) : 75,
+        entryPrice: rec.entryPrice,
+        targetPrice: rec.targetPrice,
+        stopLoss: rec.stopLoss,
+        riskLevel: (rec.riskLevel || 'moderate') as 'conservative' | 'moderate' | 'aggressive',
+        source: (rec.agentSource?.includes('Risk') ? 'risk-agent' : 'hedging-agent') as HedgeRecommendation['source'],
+        generatedAt: Date.now(),
+      };
+    });
 
     cache.hedges = { data: recommendations, timestamp: Date.now(), hash };
     emitAIEvent('ai:hedges:updated', recommendations);
