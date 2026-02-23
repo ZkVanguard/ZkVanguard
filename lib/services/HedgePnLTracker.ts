@@ -5,7 +5,7 @@
  */
 
 import { getActiveHedges, updateHedgePnL, getOwnedHedges, verifyZKOwnership, type Hedge } from '@/lib/db/hedges';
-import { cryptocomExchangeService } from './CryptocomExchangeService';
+import { getMarketDataService } from './RealMarketDataService';
 import { logger } from '@/lib/utils/logger';
 
 export interface HedgePnLUpdate {
@@ -106,13 +106,14 @@ export class HedgePnLTracker {
       // Get unique assets to minimize API calls
       const uniqueAssets = [...new Set(activeHedges.map(h => h.asset))];
       
-      // Batch fetch all prices
+      // Batch fetch all prices from central proactive cache (instant, non-blocking)
+      const marketDataService = getMarketDataService();
       const pricePromises = uniqueAssets.map(async asset => {
         try {
-          // Strip -PERP suffix for Crypto.com API
+          // Strip -PERP suffix for price lookup
           const baseAsset = asset.replace('-PERP', '').replace('-USD-PERP', '');
-          const price = await cryptocomExchangeService.getPrice(baseAsset);
-          return { asset, price };
+          const priceData = await marketDataService.getTokenPrice(baseAsset);
+          return { asset, price: priceData.price };
         } catch (err) {
           logger.error(`Failed to get price for ${asset}`, { error: err });
           return { asset, price: null };
@@ -222,10 +223,10 @@ export class HedgePnLTracker {
    * Get real-time PnL for a specific hedge without updating database
    */
   async getHedgePnL(hedge: Hedge): Promise<HedgePnLUpdate> {
-    // Strip -PERP suffix for Crypto.com API
+    // Strip -PERP suffix for price lookup
     const baseAsset = hedge.asset.replace('-PERP', '').replace('-USD-PERP', '');
-    const currentPrice = await cryptocomExchangeService.getPrice(baseAsset);
-    return this.calculatePnL(hedge, currentPrice);
+    const priceData = await getMarketDataService().getTokenPrice(baseAsset);
+    return this.calculatePnL(hedge, priceData.price);
   }
 
   /**

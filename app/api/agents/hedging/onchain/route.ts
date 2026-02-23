@@ -18,6 +18,7 @@ import { getCronosProvider } from '@/lib/throttled-provider';
 import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes, resyncOnChainHedge } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // Live price sync v2
 export const runtime = 'nodejs';
@@ -63,7 +64,7 @@ interface LivePriceResult {
 }
 
 /**
- * Fetch live prices from Crypto.com Exchange API in a SINGLE HTTP call.
+ * Fetch live prices from central proactive price feed.
  * Results are cached for 15 seconds to avoid duplicate fetches.
  * Returns { prices, isLive } so callers know whether data is truly fresh.
  */
@@ -80,28 +81,17 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
   const prices: Record<number, number> = {};
   let isLive = false;
 
-  // Try Exchange API first (all tickers in one call), then App API as fallback
   try {
-    // Single API call — fetch ALL tickers at once
-    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(8000),
-      cache: 'no-store', // bypass any CDN/edge caching
-    });
-    if (!response.ok) throw new Error(`Crypto.com Exchange API ${response.status}`);
-
-    const data = await response.json();
-    const tickers: Array<{ i: string; a: string }> = data.result?.data || [];
-
-    const symbolToIndex: Record<string, number> = {
-      'BTC_USDT': 0, 'ETH_USDT': 1, 'CRO_USDT': 2,
-      'ATOM_USDT': 3, 'DOGE_USDT': 4, 'SOL_USDT': 5,
-    };
-
-    for (const t of tickers) {
-      const idx = symbolToIndex[t.i];
-      if (idx !== undefined) {
-        const p = parseFloat(t.a);
-        if (p > 0) prices[idx] = p;
+    // Use central RealMarketDataService (proactive cache - instant, non-blocking)
+    const marketDataService = getMarketDataService();
+    const symbols = pairIndices.map(idx => PAIR_SYMBOLS[idx]).filter(Boolean);
+    const priceMap = await marketDataService.getTokenPrices(symbols);
+    
+    for (const [symbol, priceData] of priceMap) {
+      // Find pair index for this symbol
+      const idx = Object.entries(PAIR_SYMBOLS).find(([, s]) => s === symbol)?.[0];
+      if (idx !== undefined && priceData.price > 0) {
+        prices[parseInt(idx)] = priceData.price;
       }
     }
 
@@ -111,43 +101,10 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
       _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
     }
   } catch (err) {
-    console.warn('⚠️ Exchange API failed, trying App API:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Central price service failed:', err instanceof Error ? err.message : err);
   }
 
-  // Fallback: Crypto.com App API (v2) — separate calls per pair but different CDN
-  if (!isLive) {
-    try {
-      const pairToTicker: Record<number, string> = {
-        0: 'BTC_USDT', 1: 'ETH_USDT', 2: 'CRO_USDT',
-        3: 'ATOM_USDT', 4: 'DOGE_USDT', 5: 'SOL_USDT',
-      };
-      // Fetch BTC first (most important), then others in parallel
-      const fetches = pairIndices.map(async (idx) => {
-        try {
-          const ticker = pairToTicker[idx];
-          if (!ticker) return;
-          const r = await fetch(`https://api.crypto.com/v2/public/get-ticker?instrument_name=${ticker}`, {
-            signal: AbortSignal.timeout(5000),
-            cache: 'no-store',
-          });
-          if (r.ok) {
-            const d = await r.json();
-            const p = parseFloat(d.result?.data?.[0]?.a ?? d.result?.data?.a ?? '0');
-            if (p > 0) prices[idx] = p;
-          }
-        } catch { /* individual pair failed */ }
-      });
-      await Promise.all(fetches);
-      if (prices[0] && prices[0] > 0) {
-        isLive = true;
-        _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
-      }
-    } catch (err) {
-      console.warn('⚠️ App API also failed:', err instanceof Error ? err.message : err);
-    }
-  }
-
-  // Fill in missing with fallbacks (only when API failed)
+  // Fill in missing with fallbacks (only when central service failed)
   for (const idx of pairIndices) {
     if (!prices[idx]) prices[idx] = FALLBACK_PRICES[idx] || 1000;
   }

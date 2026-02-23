@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { getMarketDataService } from './RealMarketDataService';
 
 export interface MarketDataPrice {
   symbol: string;
@@ -96,7 +97,7 @@ export class MarketDataMCPClient {
   }
 
   /**
-   * Get real-time price for symbol - uses REAL Crypto.com API
+   * Get real-time price for symbol - uses central proactive price feed
    */
   public async getPrice(symbol: string): Promise<MarketDataPrice> {
     if (!this.connected) {
@@ -104,51 +105,21 @@ export class MarketDataMCPClient {
     }
 
     try {
-      // Fetch REAL price data from Crypto.com Exchange API
-      const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-        signal: AbortSignal.timeout(5000),
-      });
+      // Use central RealMarketDataService (proactive cache - instant, non-blocking)
+      const marketDataService = getMarketDataService();
+      const priceData = await marketDataService.getTokenPrice(symbol);
       
-      if (!response.ok) throw new Error('Crypto.com API unavailable');
-      
-      const data = await response.json();
-      const tickers = data.result?.data || [];
-      
-      // Map common symbols to Crypto.com format
-      const symbolMap: Record<string, string> = {
-        'BTC': 'BTC_USDT',
-        'ETH': 'ETH_USDT',
-        'CRO': 'CRO_USDT',
-        'BTCUSDT': 'BTC_USDT',
-        'ETHUSDT': 'ETH_USDT',
-        'CROUSDT': 'CRO_USDT',
+      return {
+        symbol,
+        price: priceData.price,
+        change24h: priceData.change24h || 0,
+        volume24h: priceData.volume24h || 0,
+        high24h: priceData.price, // Proactive cache doesn't track high/low
+        low24h: priceData.price,
+        timestamp: priceData.timestamp || Date.now(),
       };
-      
-      const cryptoSymbol = symbolMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}_USDT`;
-      const ticker = tickers.find((t: Record<string, string>) => t.i === cryptoSymbol);
-      
-      if (ticker) {
-        const price = parseFloat(ticker.a || '0');
-        const change24h = parseFloat(ticker.c || '0') * 100;
-        const high24h = parseFloat(ticker.h || price.toString());
-        const low24h = parseFloat(ticker.l || price.toString());
-        const volume24h = parseFloat(ticker.v || '0') * price;
-        
-        return {
-          symbol,
-          price,
-          change24h,
-          volume24h,
-          high24h,
-          low24h,
-          timestamp: Date.now(),
-        };
-      }
-      
-      // Fallback to CoinGecko for symbols not on Crypto.com
-      return await this.getRealPriceFromCoinGecko(symbol);
     } catch (error) {
-      logger.warn('Failed to fetch real price, trying CoinGecko', { symbol, error });
+      logger.warn('Failed to fetch price from central service, trying CoinGecko', { symbol, error });
       return await this.getRealPriceFromCoinGecko(symbol);
     }
   }
