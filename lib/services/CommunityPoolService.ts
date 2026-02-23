@@ -55,24 +55,25 @@ const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
 const DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
 const MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
 
-// Live price cache
-let priceCache: Record<SupportedAsset, number> = {
-  BTC: 67400,
-  ETH: 1942,
-  SUI: 0.92,
-  CRO: 0.076,
-};
+// Live price cache - initialized empty to force fresh fetch
+// ⚠️ WARNING: If API fails and cache is empty, operations requiring prices will fail safely
+// This is intentional for billion-dollar fund security - never use stale/hardcoded prices
+let priceCache: Record<SupportedAsset, number> | null = null;
 let priceCacheTime = 0;
 const PRICE_CACHE_TTL = 30000; // 30 seconds
 
 /**
  * Fetch live prices from Crypto.com API
+ * 
+ * ⚠️ SECURITY: For billion-dollar fund, NEVER use hardcoded fallback prices.
+ * If price fetch fails and cache is empty, throw error to prevent operations
+ * from proceeding with stale/incorrect pricing.
  */
 export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>> {
   const now = Date.now();
   
-  // Return cached prices if fresh
-  if (now - priceCacheTime < PRICE_CACHE_TTL) {
+  // Return cached prices if fresh and valid
+  if (priceCache && now - priceCacheTime < PRICE_CACHE_TTL) {
     return priceCache;
   }
   
@@ -93,21 +94,39 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
       'CRO_USDT': 'CRO',
     };
     
+    // Build new price cache
+    const newPrices: Partial<Record<SupportedAsset, number>> = {};
     for (const ticker of tickers) {
       const asset = tickerMap[ticker.i];
       if (asset && ticker.a) {
-        priceCache[asset] = parseFloat(ticker.a);
+        newPrices[asset] = parseFloat(ticker.a);
       }
     }
     
+    // Validate we got all required prices
+    const missingAssets = SUPPORTED_ASSETS.filter(a => !newPrices[a]);
+    if (missingAssets.length > 0) {
+      throw new Error(`Missing prices for: ${missingAssets.join(', ')}`);
+    }
+    
+    priceCache = newPrices as Record<SupportedAsset, number>;
     priceCacheTime = now;
     logger.info(`[CommunityPool] Prices updated: BTC=$${priceCache.BTC}, ETH=$${priceCache.ETH}`);
     
+    return priceCache;
+    
   } catch (error) {
-    logger.warn('[CommunityPool] Price fetch failed, using cached:', { error: String(error) });
+    logger.error('[CommunityPool] Price fetch failed:', { error: String(error) });
+    
+    // If we have recently cached prices (< 5 min old), use them with warning
+    if (priceCache && (now - priceCacheTime) < 5 * 60 * 1000) {
+      logger.warn('[CommunityPool] Using stale cache (<5min) due to API failure');
+      return priceCache;
+    }
+    
+    // No valid cache - fail safely rather than use dangerous hardcoded prices
+    throw new Error('Unable to fetch live prices and no valid cache available. Operations halted for fund security.');
   }
-  
-  return priceCache;
 }
 
 /**
@@ -600,11 +619,13 @@ export async function getPoolSummary(): Promise<{
   
   const activeMembers = allUsers.filter(u => u.shares > 0).length;
   
-  // Performance calculation (simplified - would need historical data)
+  // Performance is calculated from real NAV history via RiskMetricsService
+  // We return null here to indicate "use RiskMetrics API for real performance data"
+  // ⚠️ NEVER use hardcoded placeholder performance for billion-dollar fund
   const performance = {
-    day: 0.5, // Placeholder
-    week: 2.1,
-    month: 8.3,
+    day: null as number | null,     // Use /api/community-pool/risk-metrics for real data
+    week: null as number | null,
+    month: null as number | null,
   };
   
   return {

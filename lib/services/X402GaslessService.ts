@@ -371,6 +371,7 @@ export class X402GaslessService {
 
   /**
    * Estimate savings from using gasless transaction
+   * Uses live CRO price from Crypto.com API
    */
   static async estimateGasSavings(
     provider: ethers.Provider,
@@ -387,9 +388,23 @@ export class X402GaslessService {
       const gasPrice = 5000000000000n; // 5000 gwei on Cronos
       const regularGasCost = gasPrice * BigInt(gasLimit);
 
-      // Get CRO price (mock for now, should integrate with price service)
-      const croPrice = 0.15; // $0.15 per CRO
-      const usdcPrice = 1.0; // $1 per USDC
+      // Fetch live CRO price from Crypto.com API
+      let croPrice = 0.10; // Conservative fallback only if API fails
+      try {
+        const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const croTicker = data.result?.data?.find((t: any) => t.i === 'CRO_USDT');
+          if (croTicker?.a) {
+            croPrice = parseFloat(croTicker.a);
+          }
+        }
+      } catch (e) {
+        logger.warn('[X402] Using fallback CRO price for gas estimation');
+      }
+      const usdcPrice = 1.0; // USDC is always ~$1
 
       const regularGasCostUSD = parseFloat(ethers.formatEther(regularGasCost)) * croPrice;
 
