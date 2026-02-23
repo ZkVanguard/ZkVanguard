@@ -125,6 +125,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const [showAI, setShowAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete'>('idle');
   const mountedRef = useRef(true);
   
@@ -241,6 +242,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
           const json = await res.json();
           
           if (json.success) {
+            setLastTxHash(txHash);
             setSuccessMessage(`Deposited $${amount.toFixed(2)} successfully!`);
             setDepositAmount('');
             setShowDeposit(false);
@@ -248,7 +250,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             resetWrite();
             fetchPoolData();
             
-            setTimeout(() => setSuccessMessage(null), 5000);
+            setTimeout(() => { setSuccessMessage(null); setLastTxHash(null); }, 10000);
           } else {
             setError(json.error);
             setTxStatus('idle');
@@ -282,6 +284,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
           const json = await res.json();
           
           if (json.success) {
+            setLastTxHash(txHash);
             setSuccessMessage(`Withdrew ${shares.toFixed(2)} shares successfully!`);
             setWithdrawShares('');
             setShowWithdraw(false);
@@ -289,7 +292,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             resetWrite();
             fetchPoolData();
             
-            setTimeout(() => setSuccessMessage(null), 5000);
+            setTimeout(() => { setSuccessMessage(null); setLastTxHash(null); }, 10000);
           } else {
             setError(json.error);
             setTxStatus('idle');
@@ -687,6 +690,18 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
             className="mx-4 mt-4 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg"
           >
             <p className="text-green-700 dark:text-green-300 text-sm">✓ {successMessage}</p>
+            {lastTxHash && (
+              <p className="text-green-600 dark:text-green-400 text-xs mt-1">
+                Tx: <a 
+                  href={`https://explorer.cronos.org/testnet/tx/${lastTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-green-500"
+                >
+                  {lastTxHash.slice(0, 10)}...{lastTxHash.slice(-8)}
+                </a>
+              </p>
+            )}
           </motion.div>
         )}
         {error && (
