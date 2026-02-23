@@ -16,6 +16,10 @@ import {
   fetchCustomPortfolioAction,
   CustomActionPayload,
 } from '@/lib/services/ai-decisions';
+import { 
+  AIPriceIntegration,
+  onPriceUpdate,
+} from '@/lib/services/ai-price-integration';
 
 export type { CustomActionPayload };
 
@@ -386,6 +390,47 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     
     return unsubscribe;
   }, [address, refreshAll]);
+  
+  // ============================================================================
+  // Smart Price Monitoring - refresh AI when prices change significantly
+  // ============================================================================
+  
+  useEffect(() => {
+    // Extract asset symbols from portfolio positions
+    const assets = positionsData?.positions
+      ?.map(p => p.symbol?.toUpperCase())
+      .filter((s): s is string => !!s) || ['BTC', 'ETH', 'CRO'];
+    
+    // Ensure we track common assets
+    const trackedAssets = [...new Set([...assets, 'BTC', 'ETH'])];
+    
+    // Start price monitoring with 15s interval
+    AIPriceIntegration.startPriceMonitoring(trackedAssets, 15000);
+    
+    // Listen for price updates and check for cache invalidation
+    const unsubscribe = onPriceUpdate((snapshot) => {
+      // Check each service type for price-based invalidation
+      const shouldRefreshHedges = AIPriceIntegration.shouldInvalidateCache('hedges');
+      const shouldRefreshRisk = AIPriceIntegration.shouldInvalidateCache('risk');
+      
+      // Hedges are most price-sensitive - refresh if needed
+      if (shouldRefreshHedges && address && !state.hedgesLoading) {
+        logger.info('[AIDecisionsContext] Price change triggered hedge refresh');
+        refreshHedges(true);
+      }
+      
+      // Risk is important but less frequent
+      if (shouldRefreshRisk && address && !state.riskLoading) {
+        logger.info('[AIDecisionsContext] Price change triggered risk refresh');
+        refreshRisk(true);
+      }
+    });
+    
+    return () => {
+      unsubscribe();
+      AIPriceIntegration.stopPriceMonitoring();
+    };
+  }, [address, positionsData?.positions, state.hedgesLoading, state.riskLoading, refreshHedges, refreshRisk]);
   
   // ============================================================================
   // Computed Values
