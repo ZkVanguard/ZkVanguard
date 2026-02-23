@@ -85,7 +85,7 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
   
   // Use central RealMarketDataService
   const marketService = getMarketDataService();
-  const extendedData = await marketService.getExtendedPrices(SUPPORTED_ASSETS);
+  const extendedData = await marketService.getExtendedPrices([...SUPPORTED_ASSETS]);
   
   // Validate we got all required prices
   const prices: Partial<Record<SupportedAsset, number>> = {};
@@ -125,7 +125,7 @@ export async function fetchExtendedMarketData(): Promise<Map<string, ExtendedMar
   }
   
   const marketService = getMarketDataService();
-  const extendedData = await marketService.getExtendedPrices(SUPPORTED_ASSETS);
+  const extendedData = await marketService.getExtendedPrices([...SUPPORTED_ASSETS]);
   
   extendedDataCache = extendedData;
   dataCacheTime = now;
@@ -612,9 +612,9 @@ export async function getPoolSummary(): Promise<{
   allocations: PoolState['allocations'];
   lastAIDecision: PoolState['lastAIDecision'];
   performance: {
-    day: number;
-    week: number;
-    month: number;
+    day: number | null;
+    week: number | null;
+    month: number | null;
   };
 }> {
   const poolState = await getPoolState();

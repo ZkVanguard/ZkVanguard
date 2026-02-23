@@ -73,6 +73,8 @@ class RealMarketDataService {
   
   // Proactive refresh configuration
   private readonly REFRESH_INTERVAL = 5000; // 5 seconds - always fresh
+  private readonly CACHE_TTL = 10000; // 10 seconds - consider fresh
+  private readonly STALE_TTL = 60000; // 60 seconds - usable but should refresh
   private readonly TRACKED_SYMBOLS = ['BTC', 'ETH', 'SUI', 'CRO']; // Core symbols to always track
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private isRefreshing: boolean = false;
