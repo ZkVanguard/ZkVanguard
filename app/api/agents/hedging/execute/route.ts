@@ -8,6 +8,7 @@
  * - Simulation mode when no private key is configured
  * - ZK-STARK proof generation for all hedges
  * - ON-CHAIN ZK PROXY VAULT for bulletproof fund escrow (optional)
+ * - Unified real-time price validation before execution
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +25,7 @@ import { HedgeExecutorClient } from '@/integrations/hedge-executor/HedgeExecutor
 import { generateRebalanceProof, generateWalletOwnershipProof } from '@/lib/api/zk';
 import { deriveProxyPDA, type ProxyPDA } from '@/lib/crypto/ProxyPDA';
 import { getOnChainHedgeService } from '@/lib/services/OnChainHedgeService';
+import { getHedgeExecutionPrice, type HedgePriceContext } from '@/lib/services/unified-price-provider';
 import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -355,16 +357,24 @@ export async function POST(request: NextRequest) {
           status: result.status,
         });
 
-        // Get current price for response
+        // Get current price using unified price provider (real-time, validated)
         let currentPrice = 0;
+        let priceContext: HedgePriceContext | null = null;
         try {
-          let baseAsset = asset.toUpperCase().replace('-PERP', '');
-          if (baseAsset === 'WBTC') baseAsset = 'BTC';
-          if (baseAsset === 'WETH') baseAsset = 'ETH';
-          const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-          const tickerData = await tickerResponse.json();
-          const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
-          if (ticker) currentPrice = parseFloat(ticker.a);
+          priceContext = await getHedgeExecutionPrice(asset, side);
+          if (priceContext.validation.isValid) {
+            currentPrice = priceContext.effectivePrice;
+            logger.info('📊 Using validated price from unified provider', {
+              asset,
+              price: currentPrice,
+              source: priceContext.validation.priceSource,
+              slippage: `${priceContext.slippageEstimate.toFixed(3)}%`,
+            });
+          } else {
+            logger.warn('⚠️ Price validation failed, using entry price', {
+              warnings: priceContext.validation.warnings,
+            });
+          }
         } catch { /* use 0 */ }
 
         // ═══ Save to DB (DB-first cache) so the on-chain API returns it immediately ═══
@@ -456,28 +466,30 @@ export async function POST(request: NextRequest) {
     if (!privateKey) {
       logger.warn('⚠️ No private key configured - running in simulation mode');
       
-      // Get REAL current price from Crypto.com Exchange API
-      let baseAsset = asset.toUpperCase().replace('-PERP', '');
-      
-      // Map wrapped tokens to their base equivalents
-      if (baseAsset === 'WBTC') baseAsset = 'BTC';  // WBTC = Wrapped BTC (1:1)
-      if (baseAsset === 'WETH') baseAsset = 'ETH';  // WETH = Wrapped ETH (1:1)
-      
+      // Get REAL price from unified price provider (WebSocket or REST fallback)
       let mockPrice = 1000; // Fallback
+      let simPriceContext: HedgePriceContext | null = null;
       
       try {
-        const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-        const tickerData = await tickerResponse.json();
-        const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
+        simPriceContext = await getHedgeExecutionPrice(asset, side);
         
-        if (ticker) {
-          mockPrice = parseFloat(ticker.a); // Ask price (current price)
-          logger.info(`📊 Using real ${baseAsset} price: $${mockPrice}`);
+        if (simPriceContext.validation.isValid) {
+          mockPrice = simPriceContext.effectivePrice;
+          logger.info(`📊 Using validated ${asset} price: $${mockPrice}`, {
+            source: simPriceContext.validation.priceSource,
+            staleness: `${simPriceContext.validation.staleness}ms`,
+            slippage: `${simPriceContext.slippageEstimate.toFixed(3)}%`,
+          });
         } else {
-          logger.warn(`⚠️ Ticker not found for ${baseAsset}, using fallback price`);
+          // Fallback: try cached entry price
+          mockPrice = simPriceContext.entryPrice > 0 ? simPriceContext.entryPrice : mockPrice;
+          logger.warn(`⚠️ Price validation warnings for ${asset}`, {
+            warnings: simPriceContext.validation.warnings,
+            usingPrice: mockPrice,
+          });
         }
       } catch (priceError) {
-        logger.error('❌ Failed to fetch real price, using fallback', { error: priceError });
+        logger.error('❌ Failed to fetch price from unified provider, using fallback', { error: priceError });
       }
       
       // Return simulated hedge execution with REAL price
@@ -704,19 +716,21 @@ export async function POST(request: NextRequest) {
       pairIndex = 0;
     }
     
-    // Get current price for position sizing
+    // Get validated price from unified provider for position sizing
     let currentPrice = 1000;
+    let moonlanderPriceContext: HedgePriceContext | null = null;
     try {
-      let baseAsset = asset.toUpperCase().replace('-PERP', '');
-      if (baseAsset === 'WBTC') baseAsset = 'BTC';
-      if (baseAsset === 'WETH') baseAsset = 'ETH';
-      
-      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
-      const tickerData = await tickerResponse.json();
-      const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
-      if (ticker) currentPrice = parseFloat(ticker.a);
+      moonlanderPriceContext = await getHedgeExecutionPrice(asset, side);
+      if (moonlanderPriceContext.validation.isValid) {
+        currentPrice = moonlanderPriceContext.effectivePrice;
+        logger.info('📊 Using validated price for Moonlander hedge', {
+          asset,
+          price: currentPrice,
+          source: moonlanderPriceContext.validation.priceSource,
+        });
+      }
     } catch {
-      logger.warn('Failed to fetch price, using fallback');
+      logger.warn('Failed to fetch price from unified provider, using fallback');
     }
 
     // Calculate collateral needed (notionalValue / leverage)

@@ -16,6 +16,7 @@ import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getMarketDataService } from './RealMarketDataService';
+import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
 
 // Configuration
 const CONFIG = {
@@ -264,6 +265,7 @@ class AutoHedgingService {
 
   /**
    * Update PnL for all active hedges
+   * Uses unified price provider for real-time prices
    */
   async updateAllHedgePnL(): Promise<{ updated: number; errors: number }> {
     const activeHedges = await getActiveHedges();
@@ -275,14 +277,24 @@ class AutoHedgingService {
     // Get unique assets
     const uniqueAssets = [...new Set(activeHedges.map(h => h.asset))];
     
-    // Fetch all prices from central proactive cache (instant, non-blocking)
-    const marketDataService = getMarketDataService();
+    // Use unified price provider for real-time prices
+    const priceProvider = getUnifiedPriceProvider();
+    await priceProvider.initialize();
+    
+    // Fetch all prices from unified provider (instant, non-blocking)
     const priceMap = new Map<string, number>();
     for (const asset of uniqueAssets) {
       try {
         const baseAsset = asset.replace('-PERP', '').replace('-USD-PERP', '');
-        const priceData = await marketDataService.getTokenPrice(baseAsset);
-        if (priceData.price) priceMap.set(asset, priceData.price);
+        const priceData = priceProvider.getPrice(baseAsset);
+        if (priceData?.price) {
+          priceMap.set(asset, priceData.price);
+        } else {
+          // Fallback to market data service if unified provider doesn't have it
+          const marketDataService = getMarketDataService();
+          const fallbackPrice = await marketDataService.getTokenPrice(baseAsset);
+          if (fallbackPrice.price) priceMap.set(asset, fallbackPrice.price);
+        }
       } catch (err) {
         logger.warn(`[AutoHedging] Failed to get price for ${asset}`);
       }
@@ -827,6 +839,7 @@ class AutoHedgingService {
 
   /**
    * Execute an auto-hedge recommendation
+   * Validates real-time prices before execution
    */
   async executeAutoHedge(
     portfolioId: number,
@@ -842,21 +855,44 @@ class AutoHedgingService {
     // Validate leverage
     const leverage = Math.min(recommendation.leverage, config.maxLeverage);
 
+    // ═══ VALIDATE REAL-TIME PRICE BEFORE EXECUTION ═══
+    const priceContext = await getHedgeExecutionPrice(recommendation.asset, recommendation.side);
+    
+    if (!priceContext.validation.isValid) {
+      logger.warn('[AutoHedging] Invalid price, skipping hedge', {
+        asset: recommendation.asset,
+        warnings: priceContext.validation.warnings,
+      });
+      return false;
+    }
+
+    // Log price validation details
+    logger.info('[AutoHedging] Price validated for hedge execution', {
+      asset: recommendation.asset,
+      entryPrice: priceContext.entryPrice,
+      effectivePrice: priceContext.effectivePrice,
+      slippage: `${priceContext.slippageEstimate.toFixed(3)}%`,
+      source: priceContext.validation.priceSource,
+      staleness: `${priceContext.validation.staleness}ms`,
+    });
+
     // Convert asset to market format (e.g., BTC -> BTC-USD-PERP)
     const market = `${recommendation.asset}-USD-PERP`;
 
     try {
-      // Create hedge via orchestrator
+      // Create hedge via orchestrator with validated price context
       const orchestrator = getAgentOrchestrator();
       const result = await orchestrator.executeHedge({
         market,
         side: recommendation.side,
         leverage,
         notionalValue: recommendation.suggestedSize.toString(),
+        // Pass validated entry price to orchestrator
+        entryPriceHint: priceContext.effectivePrice,
       });
 
       if (result.success) {
-        // Also record in our hedges table for tracking
+        // Also record in our hedges table for tracking with real price
         const orderId = `auto-hedge-${portfolioId}-${Date.now()}`;
         await createHedge({
           orderId,
@@ -867,11 +903,18 @@ class AutoHedgingService {
           size: recommendation.suggestedSize / 1000, // Convert to contract size
           notionalValue: recommendation.suggestedSize,
           leverage,
+          entryPrice: priceContext.effectivePrice, // Use validated price
           simulationMode: false, // Real hedge
           reason: `[AUTO] ${recommendation.reason}`,
           metadata: {
             confidence: recommendation.confidence,
             orchestratorResult: result.data,
+            priceValidation: {
+              source: priceContext.validation.priceSource,
+              entryPrice: priceContext.entryPrice,
+              effectivePrice: priceContext.effectivePrice,
+              slippage: priceContext.slippageEstimate,
+            },
           },
         });
 
@@ -880,6 +923,7 @@ class AutoHedgingService {
           asset: recommendation.asset,
           side: recommendation.side,
           size: recommendation.suggestedSize,
+          entryPrice: priceContext.effectivePrice,
         });
         return true;
       } else {
