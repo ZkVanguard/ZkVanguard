@@ -58,14 +58,17 @@ export interface PortfolioData {
 
 class RealMarketDataService {
   private provider: ethers.JsonRpcProvider;
-  private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 45000; // 45 seconds (reduced from 60s for faster updates)
+  private priceCache: Map<string, { price: number; change24h: number; high24h: number; low24h: number; volume24h: number; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 10000; // 10 seconds - fresh prices always
+  private readonly STALE_TTL = 60000; // 60 seconds - stale-while-revalidate window
   private testSequence: number = 0;
   private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
   private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
   private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
+  private pendingBatchRequest: Promise<void> | null = null; // Batch request deduplication
   private contractCache: Map<string, ethers.Contract> = new Map(); // Cache ERC20 contract instances
   private vvsRouterContract: ethers.Contract | null = null; // Cached VVS router
+  private lastBatchFetch: number = 0;
 
   constructor() {
     // Use throttled provider for rate-limit protection on Vercel
@@ -125,36 +128,33 @@ class RealMarketDataService {
       };
     }
 
-    // OPTIMIZATION: Return cached if fresh (< 45s)
+    // FRESH CACHE: Return immediately if < 10s old
     if (cached && now - cached.timestamp < this.CACHE_TTL) {
       return {
         symbol,
         price: cached.price,
-        change24h: 0,
-        volume24h: 0,
+        change24h: cached.change24h || 0,
+        volume24h: cached.volume24h || 0,
         timestamp: cached.timestamp,
         source: 'cache',
       };
     }
 
-    // OPTIMIZATION: If we have stale cache, return it immediately and refresh in background
-    if (cached && now - cached.timestamp < 300000) { // 5 minutes stale cache
-      logger.debug('[RealMarketData] Using stale cache, refreshing in background', { data: symbol });
+    // STALE-WHILE-REVALIDATE: Return stale immediately, refresh in background
+    if (cached && now - cached.timestamp < this.STALE_TTL) {
+      logger.debug('[RealMarketData] Stale cache, background refresh', { data: symbol });
       
-      // Return stale data immediately
-      const staleResult = {
+      // Trigger background refresh (don't block)
+      this._refreshPriceInBackground(symbol, cacheKey).catch(() => {});
+      
+      return {
         symbol,
         price: cached.price,
-        change24h: 0,
-        volume24h: 0,
+        change24h: cached.change24h || 0,
+        volume24h: cached.volume24h || 0,
         timestamp: cached.timestamp,
         source: 'stale_cache',
       };
-      
-      // Refresh in background (don't await)
-      this._refreshPriceInBackground(symbol, cacheKey).catch(() => {});
-      
-      return staleResult;
     }
 
     // Fast deterministic fallback for tests/CI
@@ -175,7 +175,7 @@ class RealMarketDataService {
       const driftFactor = 1 + (0.001 * (seconds % 5));
       const tp = Number((base * driftFactor).toFixed(6));
       const now = Date.now();
-      this.priceCache.set(cacheKey, { price: tp, timestamp: now });
+      this.priceCache.set(cacheKey, { price: tp, change24h: 0, high24h: tp, low24h: tp, volume24h: 0, timestamp: now });
       return {
         symbol,
         price: tp,
@@ -197,7 +197,14 @@ class RealMarketDataService {
         timeoutPromise
       ]);
       
-      this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
+      this.priceCache.set(cacheKey, { 
+        price: exchangeData.price, 
+        change24h: exchangeData.change24h || 0,
+        high24h: exchangeData.price,
+        low24h: exchangeData.price,
+        volume24h: exchangeData.volume24h || 0,
+        timestamp: Date.now() 
+      });
       logger.info('[RealMarketData] Got price from Exchange API', { data: `${symbol}: $${exchangeData.price}` });
       
       return {
@@ -224,7 +231,14 @@ class RealMarketDataService {
       ]);
       
       if (mcpData) {
-        this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
+        this.priceCache.set(cacheKey, { 
+          price: mcpData.price,
+          change24h: mcpData.change24h || 0,
+          high24h: mcpData.price,
+          low24h: mcpData.price,
+          volume24h: 0,
+          timestamp: Date.now() 
+        });
         logger.info('[RealMarketData] Got price from MCP Server', { data: `${symbol}: $${mcpData.price}` });
         
         return {
@@ -269,14 +283,28 @@ class RealMarketDataService {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
       ]);
       
-      this.priceCache.set(cacheKey, { price: exchangeData.price, timestamp: Date.now() });
+      this.priceCache.set(cacheKey, { 
+        price: exchangeData.price, 
+        change24h: exchangeData.change24h || 0,
+        high24h: exchangeData.price,
+        low24h: exchangeData.price,
+        volume24h: exchangeData.volume24h || 0,
+        timestamp: Date.now() 
+      });
       logger.debug(`[RealMarketData] Background refresh: ${symbol} = $${exchangeData.price}`);
     } catch (error) {
       // Try MCP as fallback
       try {
         const mcpData = await this.getMCPServerPrice(symbol);
         if (mcpData) {
-          this.priceCache.set(cacheKey, { price: mcpData.price, timestamp: Date.now() });
+          this.priceCache.set(cacheKey, { 
+            price: mcpData.price, 
+            change24h: mcpData.change24h || 0,
+            high24h: mcpData.price,
+            low24h: mcpData.price,
+            volume24h: 0,
+            timestamp: Date.now() 
+          });
           logger.debug(`[RealMarketData] Background refresh (MCP): ${symbol} = $${mcpData.price}`);
         }
       } catch {
@@ -604,17 +632,18 @@ class RealMarketDataService {
 
   /**
    * Get extended market data for multiple symbols in a single API call
+   * Uses stale-while-revalidate: returns cached data immediately while refreshing in background
    * Includes: price, 24h change, 24h high/low, 24h volume
-   * Used by: AI decisions, CommunityPool, risk analysis
    */
   async getExtendedPrices(symbols: string[]): Promise<Map<string, ExtendedMarketData>> {
     const results = new Map<string, ExtendedMarketData>();
     const now = Date.now();
+    const needsFetch: string[] = [];
     
-    // Map symbols to Crypto.com format
-    const symbolMap: Record<string, string> = {};
+    // Check cache first for all symbols
     for (const symbol of symbols) {
       const upper = symbol.toUpperCase();
+      
       // Handle stablecoins
       if (['USDC', 'USDT', 'DEVUSDC', 'DAI'].includes(upper)) {
         results.set(upper, {
@@ -627,19 +656,60 @@ class RealMarketDataService {
           timestamp: now,
           source: 'stablecoin',
         });
+        continue;
+      }
+      
+      // Check cache
+      const cached = this.priceCache.get(upper);
+      if (cached && now - cached.timestamp < this.CACHE_TTL) {
+        // Fresh cache - use it
+        results.set(upper, {
+          symbol: upper,
+          price: cached.price,
+          change24h: cached.change24h || 0,
+          volume24h: cached.volume24h || 0,
+          high24h: cached.high24h || cached.price,
+          low24h: cached.low24h || cached.price,
+          timestamp: cached.timestamp,
+          source: 'cache',
+        });
+      } else if (cached && now - cached.timestamp < this.STALE_TTL) {
+        // Stale cache - use it but mark for refresh
+        results.set(upper, {
+          symbol: upper,
+          price: cached.price,
+          change24h: cached.change24h || 0,
+          volume24h: cached.volume24h || 0,
+          high24h: cached.high24h || cached.price,
+          low24h: cached.low24h || cached.price,
+          timestamp: cached.timestamp,
+          source: 'stale_cache',
+        });
+        needsFetch.push(upper);
       } else {
-        symbolMap[`${upper}_USDT`] = upper;
+        // No cache - must fetch
+        needsFetch.push(upper);
       }
     }
     
-    // If only stablecoins, return early
-    if (Object.keys(symbolMap).length === 0) {
+    // If all cached, return immediately
+    if (needsFetch.length === 0 || (results.size === symbols.length)) {
+      // Trigger background refresh if any were stale
+      if (needsFetch.length > 0) {
+        this._batchRefreshInBackground(needsFetch).catch(() => {});
+      }
       return results;
+    }
+    
+    // Fetch missing symbols from API
+    const symbolMap: Record<string, string> = {};
+    for (const s of needsFetch) {
+      symbolMap[`${s}_USDT`] = s;
     }
     
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(5000), // Reduced timeout for faster response
       });
       
       if (!response.ok) {
@@ -670,8 +740,15 @@ class RealMarketDataService {
           source: 'cryptocom-exchange',
         });
         
-        // Update local cache too
-        this.priceCache.set(symbol, { price, timestamp: now });
+        // Update cache with full data
+        this.priceCache.set(symbol, { 
+          price, 
+          change24h, 
+          high24h, 
+          low24h, 
+          volume24h, 
+          timestamp: now 
+        });
       }
       
       // Check for missing symbols
@@ -682,6 +759,7 @@ class RealMarketDataService {
         }
       }
       
+      this.lastBatchFetch = now;
       logger.info(`[RealMarketData] Extended prices fetched for ${results.size} symbols`);
       return results;
       
@@ -689,8 +767,86 @@ class RealMarketDataService {
       logger.error('[RealMarketData] Failed to fetch extended prices:', { 
         error: error instanceof Error ? error.message : String(error) 
       });
-      throw new Error('Unable to fetch extended market data from Crypto.com');
+      
+      // Return whatever we have in cache
+      for (const symbol of needsFetch) {
+        const cached = this.priceCache.get(symbol);
+        if (cached && !results.has(symbol)) {
+          results.set(symbol, {
+            symbol,
+            price: cached.price,
+            change24h: cached.change24h || 0,
+            volume24h: cached.volume24h || 0,
+            high24h: cached.high24h || cached.price,
+            low24h: cached.low24h || cached.price,
+            timestamp: cached.timestamp,
+            source: 'fallback_cache',
+          });
+        }
+      }
+      
+      if (results.size < symbols.length) {
+        throw new Error('Unable to fetch extended market data from Crypto.com');
+      }
+      return results;
     }
+  }
+
+  /**
+   * Background batch refresh for stale prices
+   */
+  private async _batchRefreshInBackground(symbols: string[]): Promise<void> {
+    // Deduplicate concurrent batch requests
+    if (this.pendingBatchRequest) {
+      return this.pendingBatchRequest;
+    }
+    
+    this.pendingBatchRequest = (async () => {
+      try {
+        const symbolMap: Record<string, string> = {};
+        for (const s of symbols) {
+          symbolMap[`${s}_USDT`] = s;
+        }
+        
+        const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+          signal: AbortSignal.timeout(5000),
+        });
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const tickers = data.result?.data || [];
+        const now = Date.now();
+        
+        for (const ticker of tickers) {
+          const symbol = symbolMap[ticker.i];
+          if (!symbol) continue;
+          
+          const price = parseFloat(ticker.a) || 0;
+          const change24h = parseFloat(ticker.c) || 0;
+          const volume24h = parseFloat(ticker.v) || 0;
+          const high24h = parseFloat(ticker.h) || price;
+          const low24h = parseFloat(ticker.l) || price;
+          
+          this.priceCache.set(symbol, { 
+            price, 
+            change24h, 
+            high24h, 
+            low24h, 
+            volume24h, 
+            timestamp: now 
+          });
+        }
+        
+        logger.debug(`[RealMarketData] Background refresh completed for ${symbols.join(', ')}`);
+      } catch (error) {
+        logger.debug('[RealMarketData] Background refresh failed', { error });
+      } finally {
+        this.pendingBatchRequest = null;
+      }
+    })();
+    
+    return this.pendingBatchRequest;
   }
 }
 

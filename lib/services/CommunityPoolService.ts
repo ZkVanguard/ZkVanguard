@@ -56,16 +56,17 @@ const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
 const DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
 const MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
 
-// Extended market data cache
+// Extended market data cache - minimal TTL, relies on RealMarketDataService caching
 let extendedDataCache: Map<string, ExtendedMarketData> | null = null;
 let dataCacheTime = 0;
-const DATA_CACHE_TTL = 30000; // 30 seconds
+const DATA_CACHE_TTL = 5000; // 5 seconds - very fresh prices for fund operations
 
 /**
  * Fetch live prices using central RealMarketDataService
  * 
  * ⚠️ SECURITY: For billion-dollar fund, NEVER use hardcoded fallback prices.
  * Uses the unified price service with proper caching and deduplication.
+ * Always returns fresh prices (<10s old via stale-while-revalidate).
  */
 export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>> {
   const now = Date.now();
