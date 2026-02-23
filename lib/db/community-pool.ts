@@ -402,6 +402,116 @@ export async function addPoolTransactionToDb(transaction: {
   }
 }
 
+// ============ NAV History Operations ============
+
+export interface DbNavSnapshot {
+  id: number;
+  timestamp: Date;
+  share_price: number;
+  total_nav: number;
+  total_shares: number;
+  member_count: number;
+  allocations: Record<string, number> | null;
+  source: string;
+  created_at: Date;
+}
+
+/**
+ * Record a NAV snapshot (called periodically by cron job)
+ * Security: Validates numeric values
+ */
+export async function recordNavSnapshot(snapshot: {
+  sharePrice: number;
+  totalNav: number;
+  totalShares: number;
+  memberCount: number;
+  allocations?: Record<string, number>;
+  source?: string;
+}): Promise<void> {
+  // Validate inputs
+  if (!isValidAmount(snapshot.sharePrice, 1e9)) {
+    throw new Error('Invalid share price');
+  }
+  if (!isValidAmount(snapshot.totalNav, 1e18)) {
+    throw new Error('Invalid total NAV');
+  }
+
+  try {
+    await query(
+      `INSERT INTO community_pool_nav_history 
+       (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
+       VALUES (NOW(), $1, $2, $3, $4, $5, $6)`,
+      [
+        snapshot.sharePrice,
+        snapshot.totalNav,
+        snapshot.totalShares,
+        snapshot.memberCount,
+        snapshot.allocations ? JSON.stringify(snapshot.allocations) : null,
+        snapshot.source || 'on-chain',
+      ]
+    );
+    logger.debug('[CommunityPool DB] NAV snapshot recorded', { 
+      sharePrice: snapshot.sharePrice,
+      totalNav: snapshot.totalNav,
+    });
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to record NAV snapshot', error);
+    throw error;
+  }
+}
+
+/**
+ * Get NAV history for risk metrics calculation
+ * Returns snapshots ordered by timestamp ascending (oldest first)
+ */
+export async function getNavHistory(daysBack = 365): Promise<DbNavSnapshot[]> {
+  const safeDays = Math.min(Math.max(1, daysBack), 730); // Max 2 years
+  
+  try {
+    return await query<DbNavSnapshot>(
+      `SELECT * FROM community_pool_nav_history 
+       WHERE timestamp >= NOW() - INTERVAL '${safeDays} days'
+       ORDER BY timestamp ASC`,
+      []
+    );
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to get NAV history', error);
+    return [];
+  }
+}
+
+/**
+ * Get latest NAV snapshot
+ */
+export async function getLatestNavSnapshot(): Promise<DbNavSnapshot | null> {
+  try {
+    return await queryOne<DbNavSnapshot>(
+      `SELECT * FROM community_pool_nav_history ORDER BY timestamp DESC LIMIT 1`,
+      []
+    );
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to get latest NAV snapshot', error);
+    return null;
+  }
+}
+
+/**
+ * Delete old NAV snapshots (cleanup, keep last N days)
+ */
+export async function cleanupOldNavSnapshots(keepDays = 365): Promise<number> {
+  try {
+    const result = await query(
+      `DELETE FROM community_pool_nav_history WHERE timestamp < NOW() - INTERVAL '${keepDays} days' RETURNING id`,
+      []
+    );
+    logger.info('[CommunityPool DB] Cleaned up old NAV snapshots', { deleted: result.length });
+    return result.length;
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to cleanup NAV snapshots', error);
+    return 0;
+  }
+}
+
 // ============ Table Initialization ============
 
 /**
@@ -453,6 +563,21 @@ export async function initCommunityPoolTables(): Promise<void> {
       )
     `);
 
+    // NAV history table for risk metrics (hourly snapshots from on-chain)
+    await query(`
+      CREATE TABLE IF NOT EXISTS community_pool_nav_history (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        share_price DECIMAL(20, 8) NOT NULL,
+        total_nav DECIMAL(20, 2) NOT NULL,
+        total_shares DECIMAL(20, 8) NOT NULL,
+        member_count INTEGER NOT NULL DEFAULT 0,
+        allocations JSONB,
+        source VARCHAR(50) DEFAULT 'on-chain',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
     // Create indexes (including txHash uniqueness for idempotency)
     await query(`
       CREATE INDEX IF NOT EXISTS idx_pool_shares_wallet ON community_pool_shares(wallet_address);
@@ -460,6 +585,7 @@ export async function initCommunityPoolTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_pool_tx_wallet ON community_pool_transactions(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_created ON community_pool_transactions(created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_tx_hash ON community_pool_transactions(tx_hash) WHERE tx_hash IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_pool_nav_timestamp ON community_pool_nav_history(timestamp DESC);
     `);
 
     // Insert initial state if not exists
