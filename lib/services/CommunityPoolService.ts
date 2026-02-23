@@ -45,8 +45,10 @@ const MIN_FIRST_DEPOSIT_USD = 10;     // $10 minimum FIRST deposit (virtual shar
 const MIN_WITHDRAWAL_SHARES = 0.01;
 
 // Virtual shares/assets offset (ERC-4626 inflation attack protection)
-// These "virtual" amounts are added to the calculation to prevent manipulation
-const VIRTUAL_SHARES = 1_000_000;     // 1M virtual shares
+// MUST MATCH ON-CHAIN CONTRACT VALUES (in human-readable format):
+// Contract: VIRTUAL_SHARES = 1e18 (1 share), VIRTUAL_ASSETS = 1e6 ($1 USDC)
+// Off-chain (human-readable): 1 share, $1
+const VIRTUAL_SHARES = 1;             // 1 virtual share
 const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
 
 // Slippage protection
