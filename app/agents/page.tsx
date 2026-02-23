@@ -1,5 +1,8 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 
 export default function AgentsRedirect() {
-  redirect('/en/agents');
+  permanentRedirect('/en/agents');
 }
+
+// Ensure the redirect works for RSC prefetch
+export const dynamic = 'force-dynamic';
