@@ -101,7 +101,12 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    return NextResponse.json(response);
+    // Return with SWR cache headers for smooth UI
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60',
+      },
+    });
   } catch (error) {
     logger.error('[Portfolio History API] GET error', error);
     return NextResponse.json(

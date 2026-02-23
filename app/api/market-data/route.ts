@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
         mcpPowered: true,
         demoMode: mcpClient.isDemoMode(),
         timestamp: new Date().toISOString(),
+      }, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+        },
       });
     } else {
       // Single symbol
@@ -35,6 +39,10 @@ export async function GET(request: NextRequest) {
         mcpPowered: true,
         demoMode: mcpClient.isDemoMode(),
         timestamp: new Date().toISOString(),
+      }, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+        },
       });
     }
   } catch (error) {
