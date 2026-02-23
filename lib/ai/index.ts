@@ -91,3 +91,32 @@ export type {
   InsightPriceContext,
   ActionPriceContext,
 } from '@/lib/services/ai-price-integration';
+
+// ============================================================================
+// Continuous Management - Production-grade AI operations manager
+// ============================================================================
+export {
+  AIManager,
+} from '@/lib/services/ai-manager';
+
+export type {
+  AIServiceType,
+  TaskPriority,
+  ServiceHealth,
+  ScheduledTask,
+  ServiceStatus,
+  AIManagerState,
+  QueuedRequest,
+  ManagerMetrics,
+} from '@/lib/services/ai-manager';
+
+// ============================================================================
+// React Hooks - For components that need AI management
+// ============================================================================
+export {
+  useAIManager,
+} from '@/lib/hooks/useAIManager';
+
+export type {
+  UseAIManagerReturn,
+} from '@/lib/hooks/useAIManager';
