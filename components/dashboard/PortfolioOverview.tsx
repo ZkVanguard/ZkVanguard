@@ -15,7 +15,8 @@ interface PortfolioOverviewProps {
 
 export function PortfolioOverview({ address, onNavigateToPositions, onNavigateToHedges }: PortfolioOverviewProps) {
   // Get ALL data from centralized context - zero redundant fetching!
-  const { positionsData, derived, loading, refetch } = usePositions();
+  // isPending provides smooth visual feedback during background data transitions
+  const { positionsData, derived, loading, refetch, isPending } = usePositions();
   
   const [_aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
   const [_aiLoading, setAiLoading] = useState(false);
@@ -90,7 +91,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
   };
 
   return (
-    <div className="bg-white rounded-[16px] sm:rounded-[24px] shadow-sm border border-black/5">
+    <div className={`bg-white rounded-[16px] sm:rounded-[24px] shadow-sm border border-black/5 transition-opacity duration-200 ${isPending ? 'opacity-70' : 'opacity-100'}`}>
       {/* Main Content - Single Card Layout */}
       <div className="p-4 sm:p-6">
         {/* Header Row - Stack on mobile */}
@@ -141,16 +142,18 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
               onClick={() => refetch()}
               className="sm:hidden w-9 h-9 flex items-center justify-center bg-[#f5f5f7] active:bg-[#e8e8ed] rounded-full transition-all active:scale-95"
               title="Refresh"
+              disabled={isPending}
             >
-              <RefreshCw className="w-4 h-4 text-[#86868b]" strokeWidth={2} />
+              <RefreshCw className={`w-4 h-4 text-[#86868b] ${isPending ? 'animate-spin' : ''}`} strokeWidth={2} />
             </button>
           </div>
           <button
             onClick={() => refetch()}
             className="hidden sm:flex w-10 h-10 items-center justify-center bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-full transition-all active:scale-95"
             title="Refresh"
+            disabled={isPending}
           >
-            <RefreshCw className="w-[18px] h-[18px] text-[#86868b]" strokeWidth={2} />
+            <RefreshCw className={`w-[18px] h-[18px] text-[#86868b] ${isPending ? 'animate-spin' : ''}`} strokeWidth={2} />
           </button>
         </div>
 
