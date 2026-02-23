@@ -71,12 +71,22 @@ export const TESTNET_TOKENS = {
   USDC: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0', // Alias
 } as const;
 
-// VVS Router on Cronos zkEVM Testnet
-const VVS_ROUTER_ADDRESS = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
+// Token addresses on Cronos Mainnet (Chain ID: 25) - lowercase for ethers v6 compatibility
+export const MAINNET_TOKENS = {
+  USDC: '0xc21223249ca28397b4b6541dffaecc539bff0c59', // Real USDC on Cronos
+  WCRO: '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23', // Wrapped CRO
+  WETH: '0xe44fd7fcb2b1581822d0c862b68222998a0c299a', // Wrapped ETH on Cronos
+  WBTC: '0x062e66477faf219f25d27dced647bf57c3107d52', // Wrapped BTC on Cronos
+} as const;
+
+// VVS Router addresses
+const VVS_ROUTER_TESTNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
+const VVS_ROUTER_MAINNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae'; // Same on mainnet
 
 // RPC endpoints
 const CRONOS_ZKEVM_TESTNET_RPC = 'https://rpc-zkevm-t0.cronos.org';
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
+const CRONOS_MAINNET_RPC = 'https://evm.cronos.org';
 
 export interface SwapQuote {
   tokenIn: string;
@@ -122,23 +132,27 @@ export interface SwapExecutionPlan {
 
 /**
  * X402SwapService - Real DEX swaps with x402 gasless settlement
+ * 
+ * Uses VVS Finance on Cronos for real on-chain quotes and swaps.
+ * Default: Mainnet for production accuracy
  */
 export class X402SwapService {
   private facilitatorService: X402FacilitatorService;
   private isTestnet: boolean;
   
-  constructor(isTestnet: boolean = true) {
+  constructor(isTestnet: boolean = false) { // Default to mainnet for production
     this.isTestnet = isTestnet;
     // Use the default network from X402FacilitatorService
     this.facilitatorService = new X402FacilitatorService();
-    logger.info('X402SwapService initialized', { isTestnet });
+    logger.info('X402SwapService initialized', { isTestnet, network: isTestnet ? 'cronos-testnet' : 'cronos-mainnet' });
   }
 
   /**
    * Get RPC provider for Cronos
+   * Uses mainnet by default for accurate quotes
    */
   private getProvider(): ethers.JsonRpcProvider {
-    const rpcUrl = this.isTestnet ? CRONOS_ZKEVM_TESTNET_RPC : CRONOS_TESTNET_RPC;
+    const rpcUrl = this.isTestnet ? CRONOS_TESTNET_RPC : CRONOS_MAINNET_RPC;
     return new ethers.JsonRpcProvider(rpcUrl);
   }
 
@@ -146,7 +160,15 @@ export class X402SwapService {
    * Get VVS Router contract instance
    */
   private getRouterContract(): ethers.Contract {
-    return new ethers.Contract(VVS_ROUTER_ADDRESS, VVS_ROUTER_ABI, this.getProvider());
+    const routerAddress = this.isTestnet ? VVS_ROUTER_TESTNET : VVS_ROUTER_MAINNET;
+    return new ethers.Contract(routerAddress, VVS_ROUTER_ABI, this.getProvider());
+  }
+
+  /**
+   * Get token addresses based on network
+   */
+  private getTokens() {
+    return this.isTestnet ? TESTNET_TOKENS : MAINNET_TOKENS;
   }
 
   /**
@@ -472,23 +494,24 @@ export class X402SwapService {
    * Get router address
    */
   getRouterAddress(): string {
-    return VVS_ROUTER_ADDRESS;
+    return this.isTestnet ? VVS_ROUTER_TESTNET : VVS_ROUTER_MAINNET;
   }
 
   /**
    * Get supported tokens
    */
   getSupportedTokens(): Record<string, string> {
-    return TESTNET_TOKENS;
+    return this.isTestnet ? TESTNET_TOKENS : MAINNET_TOKENS;
   }
 }
 
 // Lazy singleton - only instantiate when first accessed
+// Default to mainnet for production accuracy
 let _x402SwapService: X402SwapService | null = null;
 
 export function getX402SwapService(): X402SwapService {
   if (!_x402SwapService) {
-    _x402SwapService = new X402SwapService(true);
+    _x402SwapService = new X402SwapService(false); // mainnet by default
   }
   return _x402SwapService;
 }
