@@ -295,23 +295,31 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
     const navHistory = await getNavHistory(365);
     
     if (navHistory.length >= 2) {
-      // Check for real price variation
-      const uniquePrices = new Set(navHistory.map(h => h.share_price));
+      // Check for real price variation (convert to numbers for comparison)
+      const prices = navHistory.map(h => Number(h.share_price));
+      const uniquePrices = new Set(prices);
+      // Has real data if: multiple different prices, OR single price that isn't ~1.0
       const hasRealPriceData = uniquePrices.size > 1 || 
-        (uniquePrices.size === 1 && !uniquePrices.has(1));
+        (uniquePrices.size === 1 && Math.abs([...uniquePrices][0] - 1.0) > 0.001);
       
       if (hasRealPriceData) {
         logger.info('[RiskMetrics] Using database NAV history', {
           dataPoints: navHistory.length,
           uniquePrices: uniquePrices.size,
+          priceRange: `${Math.min(...prices).toFixed(4)} - ${Math.max(...prices).toFixed(4)}`,
         });
         
         const baseNAV = 10000; // Normalize to $10k base
         return navHistory.map(h => ({
           timestamp: h.timestamp.getTime(),
-          nav: baseNAV * h.share_price,
-          sharePrice: h.share_price,
+          nav: baseNAV * Number(h.share_price),
+          sharePrice: Number(h.share_price),
         }));
+      } else {
+        logger.info('[RiskMetrics] NAV history has no price variation, falling back to transactions', {
+          dataPoints: navHistory.length,
+          price: [...uniquePrices][0],
+        });
       }
     }
   } catch (err) {
@@ -331,18 +339,19 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
   
   const sortedHistory = [...history].sort((a, b) => a.timestamp - b.timestamp);
   
-  // Get unique share prices (if all are 1.0 or undefined, there's no real performance data)
-  const uniquePrices = new Set(
-    sortedHistory
-      .map(tx => tx.sharePrice)
-      .filter(p => p !== undefined && p !== null)
-  );
+  // Get unique share prices (convert to numbers for comparison)
+  const prices = sortedHistory
+    .map(tx => tx.sharePrice)
+    .filter(p => p !== undefined && p !== null)
+    .map(p => Number(p));
+  const uniquePrices = new Set(prices);
   
+  // Has real data if: multiple different prices, OR single price that isn't ~1.0
   const hasRealPriceData = uniquePrices.size > 1 || 
-    (uniquePrices.size === 1 && !uniquePrices.has(1));
+    (uniquePrices.size === 1 && Math.abs([...uniquePrices][0] - 1.0) > 0.001);
   
   if (!hasRealPriceData) {
-    logger.info('[RiskMetrics] No share price variation detected (all prices are 1.0)', {
+    logger.info('[RiskMetrics] No share price variation detected (all prices are ~1.0)', {
       transactions: history.length,
       uniquePrices: uniquePrices.size,
     });
