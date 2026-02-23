@@ -887,8 +887,6 @@ class AutoHedgingService {
         side: recommendation.side,
         leverage,
         notionalValue: recommendation.suggestedSize.toString(),
-        // Pass validated entry price to orchestrator
-        entryPriceHint: priceContext.effectivePrice,
       });
 
       if (result.success) {

@@ -294,7 +294,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
           question: p.question,
           probability: p.probability,
           impact: p.impact,
-          recommendation: p.recommendation,
+          recommendation: p.recommendation || 'MONITOR',
           source: p.source || 'polymarket',
         })),
       };
@@ -302,7 +302,26 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       const result = await requestCustomAction(actionPayload, true);
 
       if (result) {
-        setAgentRecommendation(result);
+        // Map PortfolioAction to AgentRecommendation
+        const mappedAction = result.action === 'SELL' || result.action === 'REBALANCE' ? 'WITHDRAW' 
+          : result.action === 'BUY' ? 'ADD_FUNDS'
+          : result.action === 'HEDGE' ? 'HEDGE'
+          : 'HOLD';
+        
+        const recommendation: AgentRecommendation = {
+          action: mappedAction as AgentRecommendation['action'],
+          confidence: result.confidence,
+          reasoning: Array.isArray(result.reasoning) ? result.reasoning : [result.reasoning],
+          riskScore: result.urgency === 'high' ? 75 : result.urgency === 'medium' ? 50 : 25,
+          agentAnalysis: {
+            riskAgent: `Risk assessment: ${result.urgency} urgency`,
+            hedgingAgent: result.suggestedAssets?.length ? `Consider hedging: ${result.suggestedAssets.join(', ')}` : 'No hedge recommended',
+            leadAgent: result.reasoning,
+          },
+          recommendations: result.suggestedAssets || [],
+        };
+        
+        setAgentRecommendation(recommendation);
         setShowRecommendationModal(true);
       } else {
         logger.error('Failed to get agent recommendation', undefined, { component: 'PositionsList' });
