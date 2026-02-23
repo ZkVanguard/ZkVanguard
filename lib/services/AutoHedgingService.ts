@@ -127,6 +127,34 @@ class AutoHedgingService {
       maxLeverage: CONFIG.DEFAULT_LEVERAGE,
       allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
     });
+
+    // CommunityPool - Enable auto-hedging for TVL protection
+    // Uses special portfolioId: 0 to indicate community pool
+    // Contract: 0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30
+    this.enableForCommunityPool();
+  }
+
+  /**
+   * Enable auto-hedging specifically for CommunityPool TVL
+   */
+  private async enableForCommunityPool(): Promise<void> {
+    const COMMUNITY_POOL_ID = 0; // Special ID for community pool
+    const COMMUNITY_POOL_CONTRACT = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+    
+    this.autoHedgeConfigs.set(COMMUNITY_POOL_ID, {
+      portfolioId: COMMUNITY_POOL_ID,
+      walletAddress: COMMUNITY_POOL_CONTRACT,
+      enabled: true,
+      riskThreshold: 4, // More conservative for community funds
+      maxLeverage: 2, // Lower leverage for safety
+      allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
+    });
+    
+    logger.info('[AutoHedging] CommunityPool enabled for auto-hedging', {
+      contractAddress: COMMUNITY_POOL_CONTRACT,
+      riskThreshold: 4,
+      maxLeverage: 2,
+    });
   }
 
   /**
@@ -340,6 +368,11 @@ class AutoHedgingService {
    * Fetches positions, allocations, risk metrics, and active hedges
    */
   async assessPortfolioRisk(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
+    // Special handling for CommunityPool (portfolioId = 0)
+    if (portfolioId === 0) {
+      return this.assessCommunityPoolRisk();
+    }
+
     try {
       // Fetch comprehensive portfolio data from database
       const portfolioData = await this.fetchPortfolioData(portfolioId, walletAddress);
@@ -420,6 +453,124 @@ class AutoHedgingService {
       // Return safe default
       return {
         portfolioId,
+        totalValue: 0,
+        drawdownPercent: 0,
+        volatility: 0,
+        riskScore: 1,
+        recommendations: [],
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Assess risk specifically for CommunityPool TVL
+   * Fetches on-chain data from CommunityPool contract
+   */
+  private async assessCommunityPoolRisk(): Promise<RiskAssessment> {
+    const COMMUNITY_POOL_CONTRACT = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+    const COMMUNITY_POOL_ABI = [
+      'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
+    ];
+
+    try {
+      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+      const poolContract = new ethers.Contract(COMMUNITY_POOL_CONTRACT, COMMUNITY_POOL_ABI, provider);
+      const marketDataService = getMarketDataService();
+
+      // Fetch on-chain pool stats
+      const stats = await poolContract.getPoolStats();
+      const totalNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
+      const allocations = {
+        BTC: Number(stats._allocations[0]) / 100,
+        ETH: Number(stats._allocations[1]) / 100,
+        SUI: Number(stats._allocations[2]) / 100,
+        CRO: Number(stats._allocations[3]) / 100,
+      };
+
+      // Build positions from allocations
+      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+      
+      for (const [symbol, percentage] of Object.entries(allocations)) {
+        if (percentage > 0) {
+          try {
+            const priceData = await marketDataService.getTokenPrice(symbol);
+            const value = totalNAV * (percentage / 100);
+            positions.push({
+              symbol,
+              value,
+              change24h: priceData.change24h || 0,
+              balance: value / priceData.price,
+            });
+          } catch (err) {
+            logger.warn(`[AutoHedging] Failed to fetch price for ${symbol}`, { error: err });
+          }
+        }
+      }
+
+      // Calculate risk metrics
+      const drawdownPercent = this.calculateDrawdown(positions, totalNAV);
+      const volatility = this.calculateVolatility(positions);
+      const concentrationRisk = this.calculateConcentrationRisk(positions, totalNAV);
+
+      // Calculate risk score (more conservative thresholds for community funds)
+      let riskScore = 1;
+      if (drawdownPercent > 1) riskScore += 1;
+      if (drawdownPercent > 3) riskScore += 2;
+      if (drawdownPercent > 7) riskScore += 2;
+      if (volatility > 2) riskScore += 1;
+      if (volatility > 4) riskScore += 1;
+      if (concentrationRisk > 35) riskScore += 2;
+      if (concentrationRisk > 50) riskScore += 1;
+      riskScore = Math.min(riskScore, 10);
+
+      // Fetch active hedges for community pool
+      const hedgesResult = await query(
+        `SELECT asset, side, size, notional_value
+         FROM hedges
+         WHERE portfolio_id = 0 AND status = 'active'`,
+        []
+      );
+
+      const activeHedges = hedgesResult.map(h => ({
+        asset: String(h.asset || ''),
+        side: String(h.side || ''),
+        size: parseFloat(String(h.size)) || 0,
+        notionalValue: parseFloat(String(h.notional_value)) || 0,
+      }));
+
+      // Generate recommendations
+      const recommendations = this.generateHedgeRecommendations(
+        positions,
+        totalNAV,
+        allocations as Record<string, number>,
+        activeHedges,
+        drawdownPercent,
+        concentrationRisk
+      );
+
+      logger.info('[AutoHedging] CommunityPool risk assessment', {
+        totalNAV: `$${totalNAV.toLocaleString()}`,
+        positions: positions.length,
+        drawdownPercent: drawdownPercent.toFixed(2),
+        volatility: volatility.toFixed(2),
+        riskScore,
+        recommendations: recommendations.length,
+      });
+
+      return {
+        portfolioId: 0,
+        totalValue: totalNAV,
+        drawdownPercent,
+        volatility,
+        riskScore,
+        recommendations,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      logger.error('[AutoHedging] CommunityPool risk assessment failed', { error });
+      return {
+        portfolioId: 0,
         totalValue: 0,
         drawdownPercent: 0,
         volatility: 0,
