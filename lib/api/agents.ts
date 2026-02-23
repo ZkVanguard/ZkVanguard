@@ -1,36 +1,37 @@
 /**
  * Agent API Integration
  * Frontend interface to AI agents
+ * 
+ * NOTE: For new code, prefer using the centralized AI service:
+ * import { AIDecisions } from '@/lib/ai';
+ * 
+ * These functions are maintained for backwards compatibility but
+ * now delegate to the centralized AIDecisions service with caching.
  */
 
 import { AgentTask as SharedAgentTask } from '../../shared/types/agent';
 import { logger } from '@/lib/utils/logger';
+import { fetchRiskAnalysis, fetchHedgeRecommendations } from '@/lib/services/ai-decisions';
 
 // Re-export for backward compatibility
 export type AgentTask = SharedAgentTask;
 
 /**
  * Get portfolio risk assessment - REAL AI ANALYSIS
+ * @deprecated Use AIDecisions.fetchRisk() or useRiskAnalysis() hook instead
  */
 export async function assessPortfolioRisk(address: string) {
-  const response = await fetch(`/api/agents/risk/assess`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address })
-  });
-  return response.json();
+  // Delegate to centralized service with caching
+  return fetchRiskAnalysis(address);
 }
 
 /**
  * Get hedging recommendations
+ * @deprecated Use AIDecisions.fetchHedges() or useHedgeRecommendations() hook instead
  */
-export async function getHedgingRecommendations(address: string, positions: unknown[]) {
-  const response = await fetch(`/api/agents/hedging/recommend`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, positions })
-  });
-  return response.json();
+export async function getHedgingRecommendations(address: string, _positions: unknown[]) {
+  // Delegate to centralized service with caching
+  return fetchHedgeRecommendations(address);
 }
 
 /**
