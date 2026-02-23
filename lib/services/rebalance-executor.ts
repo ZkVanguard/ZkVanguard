@@ -20,6 +20,8 @@ export interface AllocationDrift {
 export interface RebalanceAssessment {
   portfolioId: number;
   totalValue: number;
+  entryValue: number;
+  pnlPercent: number; // Positive = profit, negative = loss
   requiresRebalance: boolean;
   drifts: AllocationDrift[];
   proposedActions: {
@@ -88,6 +90,8 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     }
     
     const totalValue = portfolio.calculatedValueUSD || portfolio.entryValueUSD || 0;
+    const entryValue = portfolio.entryValueUSD || totalValue; // If no entry value, use current (0% P&L)
+    const pnlPercent = entryValue > 0 ? ((totalValue - entryValue) / entryValue) * 100 : 0;
     const assets = portfolio.assetBalances || [];
     
     // For institutional portfolios, target allocations are: BTC 35%, ETH 30%, CRO 20%, SUI 15%
@@ -156,6 +160,8 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     
     logger.info(`[RebalanceExecutor] Portfolio ${portfolioId} assessment complete:`, {
       totalValue: totalValue.toFixed(2),
+      entryValue: entryValue.toFixed(2),
+      pnlPercent: pnlPercent.toFixed(2),
       maxAbsoluteDrift: maxAbsoluteDrift.toFixed(2),
       proposedActions: proposedActions.length,
       drifts: drifts.map(d => `${d.asset}: ${d.current.toFixed(1)}% (target ${d.target}%, drift ${d.drift.toFixed(1)}%)`),
@@ -164,6 +170,8 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     return {
       portfolioId,
       totalValue,
+      entryValue,
+      pnlPercent,
       requiresRebalance: maxAbsoluteDrift > 1, // True if any asset drifts more than 1% absolute
       drifts,
       proposedActions,

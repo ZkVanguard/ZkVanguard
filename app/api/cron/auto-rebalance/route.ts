@@ -1,9 +1,9 @@
 /**
- * Vercel Cron Job: Auto-Rebalance Portfolios
+ * Vercel Cron Job: Auto-Rebalance & Loss Protection
  * 
- * This endpoint is invoked by Vercel Cron Jobs every hour to check
- * and rebalance portfolios. It replaces the setInterval-based approach
- * which doesn't work in serverless environments.
+ * This endpoint is invoked by Vercel Cron Jobs every hour to:
+ * 1. Check and rebalance portfolios based on allocation drift
+ * 2. Monitor P&L and trigger protective hedges on significant losses
  * 
  * Schedule: Every hour (0 * * * *)
  * Configured in: vercel.json
@@ -19,12 +19,26 @@ import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-exec
 // Configuration
 const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
+
+// Track last hedge for loss protection
+const lastHedgeTime = new Map<number, number>();
+
+interface LossProtectionConfig {
+  enabled: boolean;
+  lossThresholdPercent: number;
+  action: 'hedge' | 'sell_to_stable';
+  hedgeRatio: number;
+  maxHedgeLeverage: number;
+  cooldownHours?: number;
+}
 
 interface ProcessingResult {
   portfolioId: number;
-  status: 'checked' | 'rebalanced' | 'skipped' | 'error';
+  status: 'checked' | 'rebalanced' | 'hedged' | 'skipped' | 'error';
   reason?: string;
   drift?: number;
+  pnlPercent?: number;
   txHash?: string;
   error?: string;
 }
@@ -117,24 +131,11 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Process a single portfolio
+ * Process a single portfolio - handles both rebalancing AND loss protection
  */
 async function processPortfolio(config: any): Promise<ProcessingResult> {
-  const { portfolioId, threshold = DRIFT_THRESHOLD_DEFAULT, autoApprovalEnabled, autoApprovalThreshold } = config;
-  
-  // Check cooldown period
-  const lastRebalance = await getLastRebalance(portfolioId);
+  const { portfolioId, threshold = DRIFT_THRESHOLD_DEFAULT, autoApprovalEnabled, autoApprovalThreshold, lossProtection } = config;
   const now = Date.now();
-  
-  if (lastRebalance && (now - lastRebalance) < COOLDOWN_PERIOD_MS) {
-    const hoursRemaining = ((COOLDOWN_PERIOD_MS - (now - lastRebalance)) / (1000 * 60 * 60)).toFixed(1);
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} in cooldown (${hoursRemaining}h remaining)`);
-    return {
-      portfolioId,
-      status: 'skipped',
-      reason: `Cooldown active (${hoursRemaining}h remaining)`,
-    };
-  }
   
   // Assess portfolio
   logger.info(`[AutoRebalance Cron] Assessing portfolio ${portfolioId}`);
@@ -148,6 +149,73 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
       reason: 'Unable to fetch portfolio data',
     };
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // LOSS PROTECTION CHECK (runs before rebalancing)
+  // ════════════════════════════════════════════════════════════════════════
+  if (lossProtection?.enabled && assessment.pnlPercent !== undefined) {
+    const lossConfig = lossProtection as LossProtectionConfig;
+    const cooldownMs = (lossConfig.cooldownHours || 4) * 60 * 60 * 1000;
+    const lastHedge = lastHedgeTime.get(portfolioId) || 0;
+    
+    // Check if loss exceeds threshold (pnlPercent is negative for losses)
+    if (assessment.pnlPercent < -lossConfig.lossThresholdPercent) {
+      logger.warn(`[LossProtection] Portfolio ${portfolioId} P&L ${assessment.pnlPercent.toFixed(2)}% breached -${lossConfig.lossThresholdPercent}% threshold!`);
+      
+      // Check hedge cooldown
+      if (now - lastHedge < cooldownMs) {
+        const hoursRemaining = ((cooldownMs - (now - lastHedge)) / (1000 * 60 * 60)).toFixed(1);
+        logger.info(`[LossProtection] Hedge cooldown active (${hoursRemaining}h remaining)`);
+      } else {
+        // Execute protective hedge
+        logger.info(`[LossProtection] Executing protective hedge for portfolio ${portfolioId}`);
+        
+        try {
+          const hedgeResult = await executeProtectiveHedge(
+            portfolioId,
+            config.walletAddress,
+            assessment,
+            lossConfig
+          );
+          
+          lastHedgeTime.set(portfolioId, now);
+          
+          return {
+            portfolioId,
+            status: 'hedged',
+            pnlPercent: assessment.pnlPercent,
+            txHash: hedgeResult.txHash,
+            reason: `Loss protection triggered at ${assessment.pnlPercent.toFixed(2)}% → hedged ${(lossConfig.hedgeRatio * 100).toFixed(0)}% of portfolio`,
+          };
+        } catch (error: any) {
+          logger.error(`[LossProtection] Failed to execute hedge for portfolio ${portfolioId}:`, error);
+          return {
+            portfolioId,
+            status: 'error',
+            pnlPercent: assessment.pnlPercent,
+            error: `Hedge failed: ${error.message}`,
+          };
+        }
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // REBALANCING CHECK (allocation drift)
+  // ════════════════════════════════════════════════════════════════════════
+  
+  // Check cooldown period
+  const lastRebalance = await getLastRebalance(portfolioId);
+  
+  if (lastRebalance && (now - lastRebalance) < COOLDOWN_PERIOD_MS) {
+    const hoursRemaining = ((COOLDOWN_PERIOD_MS - (now - lastRebalance)) / (1000 * 60 * 60)).toFixed(1);
+    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} in cooldown (${hoursRemaining}h remaining)`);
+    return {
+      portfolioId,
+      status: 'skipped',
+      reason: `Cooldown active (${hoursRemaining}h remaining)`,
+    };
+  }
   
   // Check if rebalancing needed - use absolute drift % (e.g., 35% → 37% = 2% drift)
   const maxAbsoluteDrift = Math.max(...assessment.drifts.map(d => Math.abs(d.drift)));
@@ -158,6 +226,7 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
       portfolioId,
       status: 'checked',
       drift: maxAbsoluteDrift,
+      pnlPercent: assessment.pnlPercent,
       reason: `Max drift ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%`,
     };
   }
@@ -176,7 +245,6 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
   // Check auto-approval
   if (!autoApprovalEnabled) {
     logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} requires manual approval`);
-    // TODO: Send notification to user
     return {
       portfolioId,
       status: 'skipped',
@@ -187,7 +255,6 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
   
   if (autoApprovalThreshold && assessment.totalValue > autoApprovalThreshold) {
     logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} exceeds auto-approval threshold ($${assessment.totalValue.toLocaleString()} > $${autoApprovalThreshold.toLocaleString()})`);
-    // TODO: Send notification to user
     return {
       portfolioId,
       status: 'skipped',
@@ -224,6 +291,66 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
       error: error.message,
     };
   }
+}
+
+/**
+ * Execute a protective hedge when loss threshold is breached
+ */
+async function executeProtectiveHedge(
+  portfolioId: number,
+  walletAddress: string,
+  assessment: any,
+  lossConfig: LossProtectionConfig
+): Promise<{ txHash: string }> {
+  // Find the largest losing asset to hedge
+  const losers = assessment.drifts
+    .filter((d: any) => d.pnlPercent < 0)
+    .sort((a: any, b: any) => a.pnlPercent - b.pnlPercent);
+  
+  const assetToHedge = losers[0]?.asset || 'BTC';
+  const hedgeSize = assessment.totalValue * lossConfig.hedgeRatio;
+  const leverage = Math.min(lossConfig.maxHedgeLeverage, 5);
+  
+  logger.info(`[LossProtection] Creating SHORT ${assetToHedge} hedge`, {
+    portfolioId,
+    hedgeSize: `$${hedgeSize.toLocaleString()}`,
+    leverage: `${leverage}x`,
+    portfolioLoss: `${assessment.pnlPercent.toFixed(2)}%`,
+  });
+  
+  // Call the hedge execution API
+  const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/agents/hedging/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      asset: assetToHedge,
+      side: 'SHORT',
+      notionalValue: hedgeSize / leverage, // Collateral amount
+      leverage,
+      reason: `Auto loss protection: portfolio down ${Math.abs(assessment.pnlPercent).toFixed(2)}%`,
+      walletAddress,
+      autoApprovalEnabled: true,
+      source: 'loss-protection-cron',
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Hedge API failed: ${error}`);
+  }
+  
+  const result = await response.json();
+  
+  if (!result.success) {
+    throw new Error(result.error || 'Hedge execution failed');
+  }
+  
+  logger.info(`[LossProtection] Hedge executed successfully`, {
+    txHash: result.txHash,
+    hedgeId: result.hedgeId,
+  });
+  
+  return { txHash: result.txHash || result.hedgeId };
 }
 
 /**
