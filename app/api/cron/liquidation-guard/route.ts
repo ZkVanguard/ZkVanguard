@@ -175,28 +175,15 @@ async function addCollateral(position: LeveragedPosition, amount: number): Promi
       ? 'https://zkvanguard.vercel.app' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
-    const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'ADD_COLLATERAL',
-        positionId: position.id,
-        amount,
-        walletAddress: position.walletAddress,
-        autoApprovalEnabled: true,
-        source: 'liquidation-guard-cron',
-      }),
-    });
+    // For adding collateral, call the collateral management endpoint
+    // Not the hedge execute endpoint (which is for opening/closing positions)
+    logger.info(`[LiquidationGuard] Adding collateral to ${position.id}: $${amount}`);
     
-    if (!response.ok) {
-      logger.error(`[LiquidationGuard] Failed to add collateral to ${position.id}`);
-      return { success: false };
-    }
-    
-    const result = await response.json();
-    return { success: true, txHash: result.txHash };
+    // Simulate collateral addition (in production this would call a real endpoint)
+    // The hedge execute endpoint is for trades, not collateral management
+    return { success: false }; // Not implemented - needs dedicated collateral endpoint
   } catch (error) {
-    logger.error(`[LiquidationGuard] Error adding collateral:`, error);
+    logger.error(`[LiquidationGuard] Error adding collateral:`, { error: (error as Error)?.message || String(error) });
     return { success: false };
   }
 }
@@ -210,32 +197,35 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
       ? 'https://zkvanguard.vercel.app' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
-    const reduceSize = position.size * (reductionPercent / 100);
+    // Calculate reduction value
+    const notionalReduction = position.notionalValue * (reductionPercent / 100);
     
+    // For reducing a position, we close part of it by taking the opposite side
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'REDUCE_SIZE',
-        positionId: position.id,
+        portfolioId: position.portfolioId || 1,
         asset: position.asset,
-        side: position.side === 'LONG' ? 'SELL' : 'BUY',
-        size: reduceSize,
+        side: position.side === 'LONG' ? 'SHORT' : 'LONG', // Opposite to reduce
+        notionalValue: notionalReduction,
+        leverage: position.leverage,
         reason: `Reduce position size by ${reductionPercent}% to improve margin`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
-        source: 'liquidation-guard-cron',
       }),
     });
     
     if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(`[LiquidationGuard] Failed to reduce position ${position.id}:`, { error: errorText });
       return { success: false };
     }
     
     const result = await response.json();
-    return { success: true, txHash: result.txHash };
+    return { success: result.success, txHash: result.txHash };
   } catch (error) {
-    logger.error(`[LiquidationGuard] Error reducing position:`, error);
+    logger.error(`[LiquidationGuard] Error reducing position:`, { error: (error as Error)?.message || String(error) });
     return { success: false };
   }
 }
@@ -249,31 +239,32 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
       ? 'https://zkvanguard.vercel.app' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
+    // Close entire position by taking opposite side
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'CLOSE',
-        positionId: position.id,
+        portfolioId: position.portfolioId || 1,
         asset: position.asset,
-        side: position.side === 'LONG' ? 'SELL' : 'BUY',
-        size: position.size,
-        reason,
+        side: position.side === 'LONG' ? 'SHORT' : 'LONG', // Opposite to close
+        notionalValue: position.notionalValue, // Close full value
+        leverage: position.leverage,
+        reason: `EMERGENCY CLOSE: ${reason}`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
-        source: 'liquidation-guard-cron',
-        priority: 'EMERGENCY',
       }),
     });
     
     if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(`[LiquidationGuard] Emergency close failed for ${position.id}:`, { error: errorText });
       return { success: false };
     }
     
     const result = await response.json();
-    return { success: true, txHash: result.txHash };
+    return { success: result.success, txHash: result.txHash };
   } catch (error) {
-    logger.error(`[LiquidationGuard] Error in emergency close:`, error);
+    logger.error(`[LiquidationGuard] Error in emergency close:`, { error: (error as Error)?.message || String(error) });
     return { success: false };
   }
 }
