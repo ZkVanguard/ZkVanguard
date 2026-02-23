@@ -86,8 +86,8 @@ async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
     
     const data = await response.json();
     return data.positions || getMockPositions();
-  } catch (error) {
-    logger.warn('[LiquidationGuard] Error fetching positions:', error);
+  } catch (error: any) {
+    logger.warn('[LiquidationGuard] Error fetching positions:', { error: error?.message || String(error) });
     return getMockPositions();
   }
 }
