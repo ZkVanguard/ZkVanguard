@@ -71,6 +71,10 @@ export interface RiskMetrics {
   lastCalculated: string;
   periodStart: string | null;
   periodEnd: string | null;
+  
+  // Data availability
+  insufficientData: boolean;
+  insufficientDataReason?: string;
 }
 
 export interface NAVSnapshot {
@@ -278,90 +282,132 @@ function calculateTradingMetrics(returns: number[]): { winRate: number; profitFa
  * NAV changes when users deposit/withdraw - that's not investment performance.
  * Share price changes reflect actual portfolio performance.
  * 
- * If share price is constant (no actual performance data), use realistic mock data.
+ * Returns empty array if no real performance data is available.
  */
 async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
   const history = await getPoolHistory(365);
   
-  // Extract unique share prices to see if there's actual price variation
-  if (history.length >= 2) {
-    const sortedHistory = [...history].sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Get unique share prices (if all are 1.0, there's no real performance data)
-    const uniquePrices = new Set(sortedHistory.map(tx => tx.sharePrice || 1));
-    const hasRealPriceData = uniquePrices.size > 1 || !uniquePrices.has(1);
-    
-    if (hasRealPriceData) {
-      // Use actual share price progression for risk metrics
-      const navSeries: NAVSnapshot[] = [];
-      let baseNAV = 10000; // Normalize to $10k base for consistent calculations
-      
-      for (const tx of sortedHistory) {
-        const sharePrice = tx.sharePrice || 1;
-        // Scale NAV proportionally to share price (normalized)
-        const normalizedNAV = baseNAV * sharePrice;
-        
-        navSeries.push({
-          timestamp: tx.timestamp,
-          nav: normalizedNAV,
-          sharePrice,
-        });
-      }
-      
-      if (navSeries.length >= 5) {
-        return navSeries;
-      }
-    }
-    
-    // If we have transactions but no price variation, log it
-    logger.info('[RiskMetrics] Insufficient share price variation, using simulated data', {
+  // Need at least 2 data points to calculate returns
+  if (history.length < 2) {
+    logger.info('[RiskMetrics] Insufficient transaction history', {
+      transactions: history.length,
+    });
+    return [];
+  }
+  
+  const sortedHistory = [...history].sort((a, b) => a.timestamp - b.timestamp);
+  
+  // Get unique share prices (if all are 1.0 or undefined, there's no real performance data)
+  const uniquePrices = new Set(
+    sortedHistory
+      .map(tx => tx.sharePrice)
+      .filter(p => p !== undefined && p !== null)
+  );
+  
+  const hasRealPriceData = uniquePrices.size > 1 || 
+    (uniquePrices.size === 1 && !uniquePrices.has(1));
+  
+  if (!hasRealPriceData) {
+    logger.info('[RiskMetrics] No share price variation detected (all prices are 1.0)', {
       transactions: history.length,
       uniquePrices: uniquePrices.size,
     });
+    return [];
   }
   
-  // Generate realistic mock data for demonstration (90 days)
-  // This represents a typical crypto hedge fund performance profile
-  const now = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
-  const mockSeries: NAVSnapshot[] = [];
+  // Use actual share price progression for risk metrics
+  const navSeries: NAVSnapshot[] = [];
+  const baseNAV = 10000; // Normalize to $10k base for consistent calculations
   
-  let nav = 10000; // Starting NAV
-  let sharePrice = 1.0;
-  
-  for (let i = 90; i >= 0; i--) {
-    // Simulate realistic crypto fund returns
-    // Mean: 0.05% daily (~18% annualized), StdDev: 1.5% daily
-    // This matches a moderate-risk crypto strategy
-    const dailyReturn = (Math.random() - 0.48) * 0.03; // Slight positive bias
-    nav = nav * (1 + dailyReturn);
-    sharePrice = sharePrice * (1 + dailyReturn);
+  for (const tx of sortedHistory) {
+    const sharePrice = tx.sharePrice || 1;
+    // Scale NAV proportionally to share price (normalized)
+    const normalizedNAV = baseNAV * sharePrice;
     
-    mockSeries.push({
-      timestamp: now - (i * dayMs),
-      nav: Math.max(0, nav),
-      sharePrice: Math.max(0.01, sharePrice),
+    navSeries.push({
+      timestamp: tx.timestamp,
+      nav: normalizedNAV,
+      sharePrice,
     });
   }
   
-  return mockSeries;
+  return navSeries;
 }
 
 /**
- * Generate mock BTC benchmark returns for beta calculation
+ * Generate BTC benchmark returns for beta calculation
+ * Uses actual BTC price data if available, otherwise returns empty
  */
 function generateBenchmarkReturns(length: number): number[] {
-  // Simulate BTC with higher volatility: Mean 0.15% daily, StdDev 4%
-  return Array.from({ length }, () => (Math.random() - 0.45) * 0.08);
+  // TODO: In production, fetch actual BTC price history
+  // For now, return zeros to indicate no benchmark comparison available
+  return Array.from({ length }, () => 0);
 }
 
 /**
  * Calculate comprehensive risk metrics
  */
 export async function calculateRiskMetrics(): Promise<RiskMetrics> {
+  const emptyMetrics: RiskMetrics = {
+    sharpeRatio: 0,
+    sortinoRatio: 0,
+    maxDrawdown: 0,
+    maxDrawdownDate: null,
+    currentDrawdown: 0,
+    volatilityDaily: 0,
+    volatilityAnnualized: 0,
+    downsideVolatility: 0,
+    var95Daily: 0,
+    var95Weekly: 0,
+    cvar95: 0,
+    beta: 0,
+    alpha: 0,
+    treynorRatio: 0,
+    informationRatio: 0,
+    calmarRatio: 0,
+    winRate: 0,
+    profitFactor: 0,
+    avgWin: 0,
+    avgLoss: 0,
+    returns7d: 0,
+    returns30d: 0,
+    returns90d: 0,
+    returnsYTD: 0,
+    returnsSinceInception: 0,
+    dataPoints: 0,
+    lastCalculated: new Date().toISOString(),
+    periodStart: null,
+    periodEnd: null,
+    insufficientData: true,
+    insufficientDataReason: 'No share price history available',
+  };
+
   try {
     const navSeries = await getHistoricalNAV();
+    
+    // Check for insufficient data
+    if (navSeries.length < 2) {
+      logger.info('[RiskMetrics] Insufficient data for risk calculation', {
+        dataPoints: navSeries.length,
+      });
+      return {
+        ...emptyMetrics,
+        insufficientDataReason: navSeries.length === 0 
+          ? 'No share price history available. Risk metrics require actual portfolio performance data.'
+          : 'Only 1 data point available. Risk metrics require at least 2 data points.',
+      };
+    }
+    
     const returns = calculateReturns(navSeries);
+    
+    // Need at least 1 return to calculate anything meaningful
+    if (returns.length < 1) {
+      return {
+        ...emptyMetrics,
+        dataPoints: navSeries.length,
+        insufficientDataReason: 'Unable to calculate returns from available data.',
+      };
+    }
     
     // Daily stats
     const dailyMean = mean(returns);
@@ -464,6 +510,9 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
       lastCalculated: new Date().toISOString(),
       periodStart: navSeries.length > 0 ? new Date(navSeries[0].timestamp).toISOString() : null,
       periodEnd: navSeries.length > 0 ? new Date(navSeries[navSeries.length - 1].timestamp).toISOString() : null,
+      
+      // Data is sufficient
+      insufficientData: false,
     };
     
     logger.info('[RiskMetrics] Calculated risk metrics', { sharpeRatio, maxDrawdown: maxDD, beta });
@@ -474,7 +523,11 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     logger.error('[RiskMetrics] Failed to calculate metrics', error);
     
     // Return default metrics on error
-    return getDefaultMetrics();
+    return {
+      ...getDefaultMetrics(),
+      insufficientData: true,
+      insufficientDataReason: 'Error calculating metrics: ' + (error instanceof Error ? error.message : 'Unknown error'),
+    };
   }
 }
 
@@ -494,7 +547,7 @@ function getDefaultMetrics(): RiskMetrics {
     var95Daily: 0,
     var95Weekly: 0,
     cvar95: 0,
-    beta: 1,
+    beta: 0,
     alpha: 0,
     treynorRatio: 0,
     informationRatio: 0,
@@ -512,6 +565,8 @@ function getDefaultMetrics(): RiskMetrics {
     lastCalculated: new Date().toISOString(),
     periodStart: null,
     periodEnd: null,
+    insufficientData: true,
+    insufficientDataReason: 'No performance data available',
   };
 }
 

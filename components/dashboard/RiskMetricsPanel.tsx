@@ -47,6 +47,8 @@ interface RiskMetrics {
   returnsSinceInception: number;
   dataPoints: number;
   lastCalculated: string;
+  insufficientData?: boolean;
+  insufficientDataReason?: string;
 }
 
 interface RiskRating {
@@ -183,6 +185,37 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">
         <p className="text-red-500 text-sm">Failed to load risk metrics</p>
+      </div>
+    );
+  }
+  
+  // Show message when insufficient data
+  if (metrics.insufficientData) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-700 to-slate-900 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6 text-white" />
+              <div>
+                <h3 className="text-white font-semibold">Risk Analytics</h3>
+                <p className="text-slate-300 text-xs">Institutional-grade risk metrics</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="p-6 text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+          <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+            Insufficient Performance Data
+          </h4>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+            {metrics.insufficientDataReason || 'Risk metrics require historical share price data to calculate.'}
+          </p>
+          <div className="text-xs text-gray-500 dark:text-gray-500">
+            Risk metrics will become available as the pool accumulates performance history with actual share price changes.
+          </div>
+        </div>
       </div>
     );
   }
