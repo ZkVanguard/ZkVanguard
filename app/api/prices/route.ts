@@ -3,6 +3,7 @@ import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
+import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,12 @@ export async function GET(request: NextRequest) {
       if (source === 'exchange') {
         // Direct from Exchange API
         const prices = await cryptocomExchangeService.getBatchPrices(symbols);
+        
+        // ═══ WEBHOOK TRIGGER: Check each asset for significant moves ═══
+        Object.entries(prices).forEach(([sym, price]) => {
+          recordPriceUpdate(sym, price);
+        });
+        
         return NextResponse.json({
           success: true,
           data: Object.entries(prices).map(([sym, price]) => ({
@@ -42,6 +49,11 @@ export async function GET(request: NextRequest) {
         const marketData = getMarketDataService();
         const pricePromises = symbols.map(sym => marketData.getTokenPrice(sym));
         const prices = await Promise.all(pricePromises);
+        
+        // ═══ WEBHOOK TRIGGER: Check each asset for significant moves ═══
+        prices.forEach(p => {
+          recordPriceUpdate(p.symbol, p.price);
+        });
         
         return NextResponse.json({
           success: true,
@@ -104,6 +116,10 @@ export async function GET(request: NextRequest) {
         volume24h: marketData.volume24h,
         source: marketData.source,
       }]).catch(() => {});
+      
+      // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
+      recordPriceUpdate(marketData.symbol, marketData.price);
+      
       return NextResponse.json({
         success: true,
         data: {
@@ -130,6 +146,9 @@ export async function GET(request: NextRequest) {
         volume24h: price.volume24h,
         source: price.source,
       }]).catch(() => {});
+      
+      // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
+      recordPriceUpdate(price.symbol, price.price);
       
       return NextResponse.json({
         success: true,
