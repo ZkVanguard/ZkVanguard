@@ -10,6 +10,7 @@ import PortfolioDetailModal from './PortfolioDetailModal';
 import { AdvancedPortfolioCreator } from './AdvancedPortfolioCreator';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
+import { usePortfolioAction, type CustomActionPayload } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 
 interface Position {
@@ -162,6 +163,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   // Get only portfolios owned by the connected wallet (EVM-specific)
   const { data: userPortfolios, count: _userPortfolioCount, isLoading: portfolioLoading } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const { positionsData, derived, error: positionsError, refetch: refetchPositions } = usePositions();
+  const { requestCustomAction } = usePortfolioAction();
   const [onChainPortfolios, setOnChainPortfolios] = useState<OnChainPortfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -272,37 +274,35 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       );
       logger.info(`High risk predictions: ${highRiskPredictions.length}`, { component: 'PositionsList', data: highRiskPredictions.map(p => ({ q: p.question.slice(0, 40), prob: p.probability })) });
 
-      const response = await fetch('/api/agents/portfolio-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portfolioId: portfolio.id,
-          currentValue: parseFloat(portfolio.totalValue) / 1e6, // Assuming USDC 6 decimals
-          targetYield: parseFloat(portfolio.targetYield) / 100,
-          riskTolerance: parseFloat(portfolio.riskTolerance),
-          assets: portfolioAssets,
-          // Pass real calculated metrics
-          realMetrics: {
-            riskScore,
-            volatility: realMetrics?.volatility || 0.3,
-            sharpeRatio: realMetrics?.sharpeRatio || 0,
-            hedgeSignals: hedgeSignals + highRiskPredictions.length, // Include prediction signals
-            totalValue: positionsData?.totalValue || 0,
-          },
-          // Pass REAL predictions from Polymarket/Delphi
-          predictions: predictions.map(p => ({
-            question: p.question,
-            probability: p.probability,
-            impact: p.impact,
-            recommendation: p.recommendation,
-            source: p.source || 'polymarket',
-          })),
-        }),
-      });
+      // Use centralized AI service with caching
+      const actionPayload: CustomActionPayload = {
+        portfolioId: portfolio.id,
+        currentValue: parseFloat(portfolio.totalValue) / 1e6, // Assuming USDC 6 decimals
+        targetYield: parseFloat(portfolio.targetYield) / 100,
+        riskTolerance: parseFloat(portfolio.riskTolerance),
+        assets: portfolioAssets,
+        // Pass real calculated metrics
+        realMetrics: {
+          riskScore,
+          volatility: realMetrics?.volatility || 0.3,
+          sharpeRatio: realMetrics?.sharpeRatio || 0,
+          hedgeSignals: hedgeSignals + highRiskPredictions.length, // Include prediction signals
+          totalValue: positionsData?.totalValue || 0,
+        },
+        // Pass REAL predictions from Polymarket/Delphi
+        predictions: predictions.map(p => ({
+          question: p.question,
+          probability: p.probability,
+          impact: p.impact,
+          recommendation: p.recommendation,
+          source: p.source || 'polymarket',
+        })),
+      };
 
-      if (response.ok) {
-        const data = await response.json();
-        setAgentRecommendation(data);
+      const result = await requestCustomAction(actionPayload, true);
+
+      if (result) {
+        setAgentRecommendation(result);
         setShowRecommendationModal(true);
       } else {
         logger.error('Failed to get agent recommendation', undefined, { component: 'PositionsList' });

@@ -11,6 +11,7 @@ import {
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
 import { usePositions } from '@/contexts/PositionsContext';
+import { usePortfolioAction, type CustomActionPayload } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 import { useSui } from '@/app/sui-providers';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
@@ -141,6 +142,8 @@ export default function DashboardPage() {
   // Get portfolio count and other data from centralized context - no redundant fetches!
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { derived } = usePositions();
+  // Use centralized AI service for portfolio actions
+  const { requestCustomAction } = usePortfolioAction();
   // Portfolio count available via derived?.portfolioCount if needed
   
   const [activeNav, setActiveNav] = useState<NavId>('overview');
@@ -268,38 +271,34 @@ export default function DashboardPage() {
     setAgentMessage('🤖 AI Agents Analyzing...\n\nRisk Agent, Hedging Agent, and Settlement Agent are evaluating your portfolio...');
     
     try {
-      // Call the portfolio action API
-      const response = await fetch('/api/agents/portfolio-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          portfolioId: 1,
-          currentValue: 50000,
-          targetYield: 12,
-          riskTolerance: 50,
-          assets: market.relatedAssets,
-          predictions: [{
-            question: market.question,
-            probability: market.probability,
-            impact: market.impact,
-            recommendation: market.recommendation,
-            source: market.source
-          }],
-          realMetrics: {
-            riskScore: market.probability,
-            volatility: 0.35,
-            sharpeRatio: 1.2,
-            hedgeSignals: market.recommendation === 'HEDGE' ? 1 : 0,
-            totalValue: 50000
-          }
-        })
-      });
+      // Use centralized AI service with caching
+      const actionPayload: CustomActionPayload = {
+        portfolioId: 1,
+        currentValue: 50000,
+        targetYield: 12,
+        riskTolerance: 50,
+        assets: market.relatedAssets,
+        predictions: [{
+          question: market.question,
+          probability: market.probability,
+          impact: market.impact,
+          recommendation: market.recommendation,
+          source: market.source
+        }],
+        realMetrics: {
+          riskScore: market.probability,
+          volatility: 0.35,
+          sharpeRatio: 1.2,
+          hedgeSignals: market.recommendation === 'HEDGE' ? 1 : 0,
+          totalValue: 50000
+        }
+      };
 
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+      const data = await requestCustomAction(actionPayload, true);
+
+      if (!data) {
+        throw new Error('AI analysis returned no data');
       }
-
-      const data = await response.json();
       
       // Format the AI response
       const agentName = data.agentAnalysis?.leadAgent || 'AI Agent';
