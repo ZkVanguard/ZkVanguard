@@ -39,11 +39,17 @@ interface MarketIndicators {
  * Simple AI-based allocation decision
  * Uses price momentum, relative strength, and diversification principles
  */
-async function generateAIAllocation(): Promise<{
+async function generateAIAllocation(marketConditions?: {
+  riskScore?: number;
+  drawdownPercent?: number;
+  volatility?: number;
+  currentAllocations?: Record<string, number>;
+}): Promise<{
   allocations: Record<SupportedAsset, number>;
   reasoning: string;
   confidence: number;
   indicators: MarketIndicators[];
+  shouldRebalance: boolean;
 }> {
   const prices = await fetchLivePrices();
   const poolState = await getPoolState();
@@ -126,7 +132,24 @@ ${indicators.map(i => `- ${i.asset}: $${i.price.toLocaleString()} (${i.change24h
 
   const confidence = 70 + Math.random() * 20;
   
-  return { allocations, reasoning, confidence, indicators };
+  // Determine if rebalancing should occur
+  // Check if current allocations exist and calculate drift
+  let shouldRebalance = false;
+  if (marketConditions?.currentAllocations) {
+    const drifts = SUPPORTED_ASSETS.map(asset => {
+      const current = marketConditions.currentAllocations![asset] || 0;
+      const proposed = allocations[asset] || 0;
+      return Math.abs(proposed - current);
+    });
+    const maxDrift = Math.max(...drifts);
+    // Rebalance if max drift > 5% OR risk score >= 6
+    shouldRebalance = maxDrift > 5 || (marketConditions.riskScore ?? 0) >= 6;
+  } else {
+    // Default: suggest rebalance if confidence is high
+    shouldRebalance = confidence >= 75;
+  }
+  
+  return { allocations, reasoning, confidence, indicators, shouldRebalance };
 }
 
 /**
@@ -135,7 +158,7 @@ ${indicators.map(i => `- ${i.asset}: $${i.price.toLocaleString()} (${i.change24h
 export async function GET() {
   try {
     const poolSummary = await getPoolSummary();
-    const { allocations, reasoning, confidence, indicators } = await generateAIAllocation();
+    const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation();
     
     // Calculate what would change
     const currentAllocations = poolSummary.allocations;
@@ -150,6 +173,7 @@ export async function GET() {
       success: true,
       recommendation: {
         allocations,
+        shouldRebalance,
         reasoning,
         confidence: Math.round(confidence),
         indicators,
@@ -175,7 +199,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { apply = false, cronSecret } = body;
+    const { apply = false, cronSecret, marketConditions } = body;
     
     // If applying changes, verify authorization
     if (apply) {
@@ -192,7 +216,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const { allocations, reasoning, confidence, indicators } = await generateAIAllocation();
+    const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation(marketConditions);
     
     if (!apply) {
       // Just return the recommendation
@@ -208,6 +232,7 @@ export async function POST(request: NextRequest) {
         success: true,
         recommendation: {
           allocations,
+          shouldRebalance,
           reasoning,
           confidence: Math.round(confidence),
           indicators,

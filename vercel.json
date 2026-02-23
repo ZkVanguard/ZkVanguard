@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/auto-rebalance",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/community-pool",
+      "schedule": "0 */4 * * *"
     }
   ],
   "headers": [
