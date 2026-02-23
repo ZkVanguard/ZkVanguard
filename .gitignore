@@ -363,3 +363,4 @@ docs/VERCEL_COMPATIBILITY_ANALYSIS.md
 scripts/test-auto-hedging-e2e.ts
 scripts/test-vercel-auto-rebalance.ts
 scripts/test/debug-pool-state.js
+scripts/test-production-services.cjs
