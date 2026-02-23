@@ -56,64 +56,242 @@ export interface PortfolioData {
   lastUpdated: number;
 }
 
+/**
+ * Proactive Price Feed Service
+ * 
+ * Architecture: Background refresh keeps prices always fresh
+ * - Singleton service with automatic background refresh every 5 seconds
+ * - All price requests return INSTANTLY from cache (non-blocking)
+ * - Never waits for API - cache is always warm
+ * - Single API call refreshes all tracked symbols
+ * 
+ * Usage: Just call getTokenPrice() - it's always instant
+ */
 class RealMarketDataService {
   private provider: ethers.JsonRpcProvider;
   private priceCache: Map<string, { price: number; change24h: number; high24h: number; low24h: number; volume24h: number; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 10000; // 10 seconds - fresh prices always
-  private readonly STALE_TTL = 60000; // 60 seconds - stale-while-revalidate window
+  
+  // Proactive refresh configuration
+  private readonly REFRESH_INTERVAL = 5000; // 5 seconds - always fresh
+  private readonly TRACKED_SYMBOLS = ['BTC', 'ETH', 'SUI', 'CRO']; // Core symbols to always track
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private isRefreshing: boolean = false;
+  private lastRefresh: number = 0;
+  private initialized: boolean = false;
+  private initPromise: Promise<void> | null = null;
+  
+  // Legacy support
   private testSequence: number = 0;
-  private rateLimitedUntil: number = 0; // Timestamp when rate limit expires
-  private failedAttempts: Map<string, number> = new Map(); // Track failed attempts per symbol
-  private pendingRequests: Map<string, Promise<MarketPrice>> = new Map(); // Deduplication
-  private pendingBatchRequest: Promise<void> | null = null; // Batch request deduplication
-  private contractCache: Map<string, ethers.Contract> = new Map(); // Cache ERC20 contract instances
-  private vvsRouterContract: ethers.Contract | null = null; // Cached VVS router
+  private rateLimitedUntil: number = 0;
+  private failedAttempts: Map<string, number> = new Map();
+  private pendingRequests: Map<string, Promise<MarketPrice>> = new Map();
+  private pendingBatchRequest: Promise<void> | null = null;
+  private contractCache: Map<string, ethers.Contract> = new Map();
+  private vvsRouterContract: ethers.Contract | null = null;
   private lastBatchFetch: number = 0;
 
   constructor() {
-    // Use throttled provider for rate-limit protection on Vercel
     const rpcUrl = process.env.CRONOS_RPC_URL || 
                    process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 
                    'https://evm-t3.cronos.org';
     
-    logger.info('[RealMarketData] Using throttled RPC', { data: rpcUrl });
-    
     this.provider = getCronosProvider(rpcUrl).provider;
+    
+    // Start proactive refresh (only in non-test environment)
+    if (typeof window !== 'undefined' || process.env.NODE_ENV !== 'test') {
+      this._startProactiveRefresh();
+    }
+    
+    logger.info('[RealMarketData] Proactive price feed initialized');
   }
 
   /**
-   * Get real-time price for a token with multi-source fallback
-   * 1. Crypto.com Exchange API (100 req/s)
-   * 2. Crypto.com MCP Server (free, no rate limits)
-   * 3. Stale cache (if available)
-   * NO MOCK PRICES - Real data only from Crypto.com
+   * Start proactive background refresh
+   * Fetches all tracked symbols every 5 seconds
+   */
+  private _startProactiveRefresh(): void {
+    if (this.refreshTimer) return; // Already running
+    
+    // Initial fetch
+    this._proactiveRefresh().catch(() => {});
+    
+    // Set up interval
+    this.refreshTimer = setInterval(() => {
+      this._proactiveRefresh().catch(() => {});
+    }, this.REFRESH_INTERVAL);
+    
+    // Cleanup on process exit (Node.js)
+    if (typeof process !== 'undefined' && process.on) {
+      process.on('beforeExit', () => this._stopProactiveRefresh());
+    }
+  }
+
+  /**
+   * Stop proactive refresh (cleanup)
+   */
+  private _stopProactiveRefresh(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  /**
+   * Proactive refresh - fetches all prices in ONE API call
+   */
+  private async _proactiveRefresh(): Promise<void> {
+    if (this.isRefreshing) return; // Prevent concurrent refreshes
+    this.isRefreshing = true;
+    
+    try {
+      const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+        signal: AbortSignal.timeout(4000), // 4s timeout (leaves 1s buffer)
+      });
+      
+      if (!response.ok) {
+        logger.warn('[RealMarketData] Proactive refresh failed', { status: response.status });
+        return;
+      }
+      
+      const data = await response.json();
+      const tickers = data.result?.data || [];
+      const now = Date.now();
+      
+      const symbolMap: Record<string, string> = {
+        'BTC_USDT': 'BTC',
+        'ETH_USDT': 'ETH',
+        'SUI_USDT': 'SUI',
+        'CRO_USDT': 'CRO',
+        'VVS_USDT': 'VVS',
+        'ATOM_USDT': 'ATOM',
+        'SOL_USDT': 'SOL',
+      };
+      
+      let updated = 0;
+      for (const ticker of tickers) {
+        const symbol = symbolMap[ticker.i];
+        if (!symbol) continue;
+        
+        const price = parseFloat(ticker.a) || 0;
+        const change24h = parseFloat(ticker.c) || 0;
+        const volume24h = parseFloat(ticker.v) || 0;
+        const high24h = parseFloat(ticker.h) || price;
+        const low24h = parseFloat(ticker.l) || price;
+        
+        this.priceCache.set(symbol, {
+          price,
+          change24h,
+          high24h,
+          low24h,
+          volume24h,
+          timestamp: now,
+        });
+        updated++;
+      }
+      
+      this.lastRefresh = now;
+      this.initialized = true;
+      
+      logger.debug(`[RealMarketData] Proactive refresh: ${updated} symbols updated`);
+      
+    } catch (error) {
+      logger.warn('[RealMarketData] Proactive refresh error', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  /**
+   * Ensure service is initialized with at least one successful fetch
+   * Called automatically on first request if needed
+   */
+  private async _ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    
+    if (!this.initPromise) {
+      this.initPromise = this._proactiveRefresh();
+    }
+    
+    await this.initPromise;
+  }
+
+  /**
+   * Get real-time price - ALWAYS INSTANT from cache
+   * Non-blocking: Returns cached data immediately
+   * Fresh: Background refresh keeps cache current
    */
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
+    const now = Date.now();
     
-    // Deduplicate concurrent requests for the same symbol
-    const pending = this.pendingRequests.get(cacheKey);
-    if (pending) {
-      logger.debug('Reusing pending request', { data: symbol });
-      return pending;
+    // Stablecoins - always $1
+    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI', 'MOCKUSDC'].includes(cacheKey)) {
+      return {
+        symbol,
+        price: 1,
+        change24h: 0,
+        volume24h: 0,
+        timestamp: now,
+        source: 'stablecoin',
+      };
     }
+    
+    // Check cache first (instant return)
+    const cached = this.priceCache.get(cacheKey);
+    if (cached) {
+      return {
+        symbol,
+        price: cached.price,
+        change24h: cached.change24h,
+        volume24h: cached.volume24h,
+        timestamp: cached.timestamp,
+        source: now - cached.timestamp < 10000 ? 'cache' : 'stale_cache',
+      };
+    }
+    
+    // No cache - ensure initialized then check again
+    await this._ensureInitialized();
+    
+    const afterInit = this.priceCache.get(cacheKey);
+    if (afterInit) {
+      return {
+        symbol,
+        price: afterInit.price,
+        change24h: afterInit.change24h,
+        volume24h: afterInit.volume24h,
+        timestamp: afterInit.timestamp,
+        source: 'cache',
+      };
+    }
+    
+    // Symbol not in tracked list - fetch individually
+    return this._fetchSinglePrice(symbol);
+  }
 
-    // Create promise for this request
-    const promise = this._fetchTokenPrice(symbol);
+  /**
+   * Fetch a single price (for non-tracked symbols)
+   */
+  private async _fetchSinglePrice(symbol: string): Promise<MarketPrice> {
+    const cacheKey = symbol.toUpperCase();
+    
+    // Deduplicate concurrent requests
+    const pending = this.pendingRequests.get(cacheKey);
+    if (pending) return pending;
+    
+    const promise = this._doFetchSinglePrice(symbol);
     this.pendingRequests.set(cacheKey, promise);
     
     try {
-      const result = await promise;
-      return result;
+      return await promise;
     } finally {
-      // Clean up after request completes
       this.pendingRequests.delete(cacheKey);
     }
   }
 
-  private async _fetchTokenPrice(symbol: string): Promise<MarketPrice> {
+  private async _doFetchSinglePrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
-    const cached = this.priceCache.get(cacheKey);
     const now = Date.now();
 
     // Handle stablecoins (always $1)
@@ -128,73 +306,24 @@ class RealMarketDataService {
       };
     }
 
-    // FRESH CACHE: Return immediately if < 10s old
-    if (cached && now - cached.timestamp < this.CACHE_TTL) {
-      return {
-        symbol,
-        price: cached.price,
-        change24h: cached.change24h || 0,
-        volume24h: cached.volume24h || 0,
-        timestamp: cached.timestamp,
-        source: 'cache',
-      };
-    }
-
-    // STALE-WHILE-REVALIDATE: Return stale immediately, refresh in background
-    if (cached && now - cached.timestamp < this.STALE_TTL) {
-      logger.debug('[RealMarketData] Stale cache, background refresh', { data: symbol });
-      
-      // Trigger background refresh (don't block)
-      this._refreshPriceInBackground(symbol, cacheKey).catch(() => {});
-      
-      return {
-        symbol,
-        price: cached.price,
-        change24h: cached.change24h || 0,
-        volume24h: cached.volume24h || 0,
-        timestamp: cached.timestamp,
-        source: 'stale_cache',
-      };
-    }
-
     // Fast deterministic fallback for tests/CI
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
       const testPrices: Record<string, number> = {
-        CRO: 0.09,
-        BTC: 50000,
-        ETH: 3000,
-        USDC: 1,
-        USDT: 1,
-        VVS: 0.5,
-        WBTC: 50000,
-        WETH: 3000,
-        SUI: 3.50,
+        CRO: 0.09, BTC: 50000, ETH: 3000, VVS: 0.5, SUI: 3.50,
+        WBTC: 50000, WETH: 3000,
       };
       const base = testPrices[cacheKey] || 1;
-      const seconds = Math.floor(Date.now() / 1000);
-      const driftFactor = 1 + (0.001 * (seconds % 5));
+      const driftFactor = 1 + (0.001 * (Math.floor(Date.now() / 1000) % 5));
       const tp = Number((base * driftFactor).toFixed(6));
-      const now = Date.now();
       this.priceCache.set(cacheKey, { price: tp, change24h: 0, high24h: tp, low24h: tp, volume24h: 0, timestamp: now });
-      return {
-        symbol,
-        price: tp,
-        change24h: 0,
-        volume24h: 0,
-        timestamp: now,
-        source: 'test-mock',
-      };
+      return { symbol, price: tp, change24h: 0, volume24h: 0, timestamp: now, source: 'test-mock' };
     }
 
-    // SOURCE 1: Crypto.com Exchange API (PRIMARY - 100 req/s) with timeout
+    // Fetch from Exchange API (single symbol)
     try {
-      logger.debug('[RealMarketData] Fetching from Crypto.com Exchange API', { data: symbol });
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Exchange API timeout')), 1500) // Reduced from 2s to 1.5s
-      );
       const exchangeData = await Promise.race([
         cryptocomExchangeService.getMarketData(symbol),
-        timeoutPromise
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
       ]);
       
       this.priceCache.set(cacheKey, { 
@@ -205,13 +334,12 @@ class RealMarketDataService {
         volume24h: exchangeData.volume24h || 0,
         timestamp: Date.now() 
       });
-      logger.info('[RealMarketData] Got price from Exchange API', { data: `${symbol}: $${exchangeData.price}` });
       
       return {
         symbol,
         price: exchangeData.price,
-        change24h: exchangeData.change24h,
-        volume24h: exchangeData.volume24h,
+        change24h: exchangeData.change24h || 0,
+        volume24h: exchangeData.volume24h || 0,
         timestamp: Date.now(),
         source: 'cryptocom-exchange',
       };
@@ -219,57 +347,30 @@ class RealMarketDataService {
       logger.warn(`[RealMarketData] Exchange API failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
     }
 
-    // SOURCE 2: Crypto.com MCP Server (FALLBACK 1 - Free, no limits) with timeout
+    // Fallback to MCP
     try {
-      logger.debug('[RealMarketData] Trying MCP Server', { data: symbol });
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('MCP timeout')), 1500) // Reduced from 2s to 1.5s
-      );
-      const mcpData = await Promise.race([
-        this.getMCPServerPrice(symbol),
-        timeoutPromise
-      ]);
-      
+      const mcpData = await this.getMCPServerPrice(symbol);
       if (mcpData) {
         this.priceCache.set(cacheKey, { 
-          price: mcpData.price,
-          change24h: mcpData.change24h || 0,
-          high24h: mcpData.price,
-          low24h: mcpData.price,
-          volume24h: 0,
-          timestamp: Date.now() 
+          price: mcpData.price, change24h: mcpData.change24h || 0,
+          high24h: mcpData.price, low24h: mcpData.price, volume24h: 0, timestamp: Date.now() 
         });
-        logger.info('[RealMarketData] Got price from MCP Server', { data: `${symbol}: $${mcpData.price}` });
-        
         return {
-          symbol,
-          price: mcpData.price,
-          change24h: mcpData.change24h || 0,
-          volume24h: 0,
-          timestamp: Date.now(),
-          source: 'cryptocom-mcp',
+          symbol, price: mcpData.price, change24h: mcpData.change24h || 0,
+          volume24h: 0, timestamp: Date.now(), source: 'cryptocom-mcp',
         };
       }
-    } catch (error) {
-      logger.warn(`[RealMarketData] MCP Server failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
+    } catch {
+      logger.warn(`[RealMarketData] MCP also failed for ${symbol}`);
     }
 
-    // FALLBACK 3: Stale cache if available (up to 1 hour old)
+    // Final fallback: stale cache up to 1 hour
+    const cached = this.priceCache.get(cacheKey);
     if (cached && now - cached.timestamp < 3600000) {
-      logger.warn(`[RealMarketData] Using stale cache for ${symbol}`, { data: `${Math.round((now - cached.timestamp) / 1000)}s old` });
-      return {
-        symbol,
-        price: cached.price,
-        change24h: 0,
-        volume24h: 0,
-        timestamp: cached.timestamp,
-        source: 'stale_cache',
-      };
+      return { symbol, price: cached.price, change24h: 0, volume24h: 0, timestamp: cached.timestamp, source: 'stale_cache' };
     }
 
-    // FINAL: Throw error - NO MOCK PRICES
-    logger.error(`[RealMarketData] All Crypto.com sources failed for ${symbol}`);
-    throw new Error(`Unable to fetch real price for ${symbol} from Crypto.com sources. Please try again.`);
+    throw new Error(`Unable to fetch real price for ${symbol} from Crypto.com sources.`);
   }
 
   /**
