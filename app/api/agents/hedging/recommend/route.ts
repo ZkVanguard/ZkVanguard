@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { realMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // Import the multi-agent system
 import { LeadAgent } from '@/agents/core/LeadAgent';
@@ -141,7 +141,8 @@ export async function POST(request: NextRequest) {
     logger.info('📊 Fetching real portfolio data for', { address });
     
     // Get real wallet balances using RealMarketDataService
-    const realPortfolio = await realMarketDataService.getPortfolioData(address);
+    const marketDataService = getMarketDataService();
+    const realPortfolio = await marketDataService.getPortfolioData(address);
     
     const portfolioData: PortfolioData = {
       address,
