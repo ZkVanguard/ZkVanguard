@@ -3,6 +3,32 @@ import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
 
+// ============================================================================
+// Response Cache - prevents redundant AI processing for same predictions
+// ============================================================================
+interface CachedInsight {
+  data: unknown;
+  hash: string;
+  timestamp: number;
+}
+const insightCache: CachedInsight | null = { data: null, hash: '', timestamp: 0 };
+const INSIGHT_CACHE_TTL = 45000; // 45 second cache
+
+function createPredictionHash(predictions: PredictionMarket[]): string {
+  return predictions.slice(0, 5).map(p => `${p.id}:${p.probability}`).join('|');
+}
+
+function getCachedInsight(hash: string): unknown | null {
+  if (!insightCache.data) return null;
+  if (Date.now() - insightCache.timestamp > INSIGHT_CACHE_TTL) return null;
+  if (insightCache.hash !== hash) return null;
+  return insightCache.data;
+}
+
+function setCachedInsight(hash: string, data: unknown): void {
+  Object.assign(insightCache, { data, hash, timestamp: Date.now() });
+}
+
 /**
  * Insight Summary API Route
  * Generates ONE unified AI summary across all prediction insights,
@@ -68,6 +94,14 @@ export async function POST(request: NextRequest) {
         { error: 'predictions array is required' },
         { status: 400 }
       );
+    }
+
+    // Check cache first
+    const predictionHash = createPredictionHash(predictions);
+    const cached = getCachedInsight(predictionHash);
+    if (cached) {
+      console.log('[InsightSummary] Returning cached response');
+      return NextResponse.json(cached);
     }
 
     // ====================================================================
@@ -706,6 +740,10 @@ Return ONLY valid JSON.`,
       ],
       agentsPipeline,
     };
+
+    // Cache the response for future requests
+    setCachedInsight(predictionHash, response);
+    console.log('[InsightSummary] Cached response');
 
     return NextResponse.json(response);
   } catch (error) {

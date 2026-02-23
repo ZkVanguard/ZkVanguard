@@ -20,6 +20,37 @@ let _cachedLeadAgent: LeadAgent | null = null;
 let _cachedRegistry: AgentRegistry | null = null;
 let _agentInitPromise: Promise<void> | null = null;
 
+// ============================================================================
+// Response Cache - prevents redundant AI processing for same address
+// ============================================================================
+interface CachedResponse {
+  data: unknown;
+  timestamp: number;
+}
+const responseCache = new Map<string, CachedResponse>();
+const CACHE_TTL_MS = 30000; // 30 second cache TTL
+
+function getCachedResponse(address: string): CachedResponse | null {
+  const cached = responseCache.get(address.toLowerCase());
+  if (!cached) return null;
+  
+  // Check if cache is still valid
+  if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
+    responseCache.delete(address.toLowerCase());
+    return null;
+  }
+  return cached;
+}
+
+function setCachedResponse(address: string, data: unknown): void {
+  // Limit cache size to prevent memory leaks
+  if (responseCache.size > 100) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) responseCache.delete(oldestKey);
+  }
+  responseCache.set(address.toLowerCase(), { data, timestamp: Date.now() });
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -51,6 +82,16 @@ export async function POST(request: NextRequest) {
         { error: 'Address is required' },
         { status: 400 }
       );
+    }
+
+    // Check cache first (unless force refresh requested)
+    const forceRefresh = body.force === true;
+    if (!forceRefresh) {
+      const cached = getCachedResponse(address);
+      if (cached) {
+        logger.info('🚀 Returning cached recommendation', { address, age: Date.now() - cached.timestamp });
+        return NextResponse.json(cached.data);
+      }
     }
 
     logger.info('🤖 Multi-Agent Hedge Recommendation requested', { address });
@@ -300,7 +341,7 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     const totalExecutionTime = Date.now() - startTime;
     
-    return NextResponse.json({
+    const responseData = {
       recommendations,
       multiAgentExecution: {
         executionId: executionReport.executionId,
@@ -333,7 +374,13 @@ export async function POST(request: NextRequest) {
       },
       totalExecutionTime,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    // Cache the response for future requests
+    setCachedResponse(address, responseData);
+    logger.info('💾 Cached recommendation response', { address, executionTime: totalExecutionTime });
+
+    return NextResponse.json(responseData);
   } catch (error) {
     logger.error('Multi-Agent hedge recommendation failed', { error });
     return NextResponse.json(
