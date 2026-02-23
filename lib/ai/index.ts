@@ -64,3 +64,30 @@ export {
 export type {
   AIDecisionsContextType,
 } from '@/contexts/AIDecisionsContext';
+
+// ============================================================================
+// Price Integration - Live price context for AI services
+// ============================================================================
+export {
+  AIPriceIntegration,
+  getCurrentPrices,
+  getPrice,
+  getPriceChange,
+  refreshPrices,
+  startPriceMonitoring,
+  stopPriceMonitoring,
+  onPriceUpdate,
+  getRiskPriceContext,
+  getHedgePriceContext,
+  getInsightPriceContext,
+  getActionPriceContext,
+  SERVICE_CONFIGS,
+} from '@/lib/services/ai-price-integration';
+
+export type {
+  ServiceConfig,
+  RiskPriceContext,
+  HedgePriceContext,
+  InsightPriceContext,
+  ActionPriceContext,
+} from '@/lib/services/ai-price-integration';
