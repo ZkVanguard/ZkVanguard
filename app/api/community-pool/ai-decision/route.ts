@@ -5,7 +5,7 @@
  * between BTC, ETH, SUI, and CRO for the community pool.
  * 
  * Data Sources:
- * - Crypto.com Exchange API for live prices and 24h change
+ * - Central RealMarketDataService (Crypto.com Exchange API)
  * - Real market indicators, NOT simulated
  * 
  * Endpoints:
@@ -18,7 +18,7 @@ import { logger } from '@/lib/utils/logger';
 import {
   applyAIDecision,
   getPoolSummary,
-  fetchLivePrices,
+  fetchExtendedMarketData,
 } from '@/lib/services/CommunityPoolService';
 import {
   getPoolState,
@@ -29,7 +29,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Real market indicators from Crypto.com API
+// Real market indicators from central RealMarketDataService
 interface MarketIndicators {
   asset: SupportedAsset;
   price: number;
@@ -43,113 +43,75 @@ interface MarketIndicators {
 }
 
 /**
- * Fetch real market data from Crypto.com Exchange API
+ * Fetch market indicators using central RealMarketDataService
+ * Converts extended market data to AI-ready indicators with trend/volatility analysis
  */
 async function fetchRealMarketIndicators(): Promise<MarketIndicators[]> {
-  const tickerMap: Record<string, SupportedAsset> = {
-    'BTC_USDT': 'BTC',
-    'ETH_USDT': 'ETH',
-    'SUI_USDT': 'SUI',
-    'CRO_USDT': 'CRO',
-  };
+  const extendedData = await fetchExtendedMarketData();
+  const indicators: MarketIndicators[] = [];
   
-  try {
-    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(10000),
+  for (const asset of SUPPORTED_ASSETS) {
+    const data = extendedData.get(asset);
+    if (!data) {
+      throw new Error(`Missing market data for ${asset}`);
+    }
+    
+    const { price, change24h, volume24h, high24h, low24h } = data;
+    
+    // Calculate real volatility from 24h range
+    const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
+    let volatility: 'low' | 'medium' | 'high';
+    if (rangePercent < 3) volatility = 'low';
+    else if (rangePercent < 7) volatility = 'medium';
+    else volatility = 'high';
+    
+    // Determine trend based on real 24h change
+    let trend: 'bullish' | 'bearish' | 'neutral';
+    if (change24h > 2) trend = 'bullish';
+    else if (change24h < -2) trend = 'bearish';
+    else trend = 'neutral';
+    
+    // Calculate score (0-100) based on real factors
+    let score = 50; // Base score
+    score += change24h * 2; // Momentum weight
+    if (volatility === 'low') score += 10;
+    else if (volatility === 'high') score -= 5;
+    if (trend === 'bullish') score += 10;
+    else if (trend === 'bearish') score -= 10;
+    
+    // Volume factor
+    const volumeUSD = volume24h * price;
+    if (volumeUSD > 100_000_000) score += 5;
+    
+    // Clamp score
+    score = Math.max(0, Math.min(100, score));
+    
+    indicators.push({
+      asset,
+      price,
+      change24h,
+      volume24h,
+      high24h,
+      low24h,
+      volatility,
+      trend,
+      score,
     });
     
-    if (!response.ok) {
-      throw new Error(`Crypto.com API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    const tickers = data.result?.data || [];
-    
-    const indicators: MarketIndicators[] = [];
-    
-    for (const ticker of tickers) {
-      const asset = tickerMap[ticker.i];
-      if (!asset) continue;
-      
-      // Real data from API:
-      // a = last trade price
-      // c = 24h price change percentage
-      // v = 24h volume (in base currency)
-      // h = 24h high
-      // l = 24h low
-      const price = parseFloat(ticker.a) || 0;
-      const change24h = parseFloat(ticker.c) || 0; // Already percentage
-      const volume24h = parseFloat(ticker.v) || 0;
-      const high24h = parseFloat(ticker.h) || price;
-      const low24h = parseFloat(ticker.l) || price;
-      
-      // Calculate real volatility from 24h range
-      const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
-      let volatility: 'low' | 'medium' | 'high';
-      if (rangePercent < 3) volatility = 'low';
-      else if (rangePercent < 7) volatility = 'medium';
-      else volatility = 'high';
-      
-      // Determine trend based on real 24h change
-      let trend: 'bullish' | 'bearish' | 'neutral';
-      if (change24h > 2) trend = 'bullish';
-      else if (change24h < -2) trend = 'bearish';
-      else trend = 'neutral';
-      
-      // Calculate score (0-100) based on real factors
-      let score = 50; // Base score
-      score += change24h * 2; // Momentum weight (real 24h change)
-      if (volatility === 'low') score += 10;
-      else if (volatility === 'high') score -= 5;
-      if (trend === 'bullish') score += 10;
-      else if (trend === 'bearish') score -= 10;
-      
-      // Volume factor - higher volume = higher confidence
-      // Normalize volume across assets (rough approximation)
-      const volumeUSD = volume24h * price;
-      if (volumeUSD > 100_000_000) score += 5; // >$100M daily volume
-      
-      // Clamp score
-      score = Math.max(0, Math.min(100, score));
-      
-      indicators.push({
-        asset,
-        price,
-        change24h,
-        volume24h,
-        high24h,
-        low24h,
-        volatility,
-        trend,
-        score,
-      });
-      
-      logger.debug(`[AI Decision] ${asset} indicators:`, {
-        price,
-        change24h,
-        volatility,
-        trend,
-        score,
-      });
-    }
-    
-    // Ensure all supported assets are included
-    for (const asset of SUPPORTED_ASSETS) {
-      if (!indicators.find(i => i.asset === asset)) {
-        throw new Error(`Missing market data for ${asset}`);
-      }
-    }
-    
-    logger.info('[AI Decision] Fetched real market indicators from Crypto.com', {
-      assets: indicators.map(i => i.asset),
+    logger.debug(`[AI Decision] ${asset} indicators via central service:`, {
+      price,
+      change24h,
+      volatility,
+      trend,
+      score,
     });
-    
-    return indicators;
-    
-  } catch (error) {
-    logger.error('[AI Decision] Failed to fetch real market data:', error);
-    throw new Error('Unable to fetch real market data. AI decisions require live market data.');
   }
+  
+  logger.info('[AI Decision] Market indicators via RealMarketDataService', {
+    assets: indicators.map(i => i.asset),
+  });
+  
+  return indicators;
 }
 
 /**
