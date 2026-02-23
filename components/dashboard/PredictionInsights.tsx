@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { DelphiMarketService, PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePolling, useLoading } from '@/lib/hooks';
+import { useMarketInsights } from '@/contexts/AIDecisionsContext';
 import { 
   TrendingUp, 
   TrendingDown,
@@ -77,6 +78,9 @@ export const PredictionInsights = memo(function PredictionInsights({
   onTriggerAgentAnalysis,
   onCreateRecommendedHedge,
 }: PredictionInsightsProps) {
+  // Use centralized AI context for insights
+  const { insights: contextInsights, loading: contextLoading, refresh: refreshInsights } = useMarketInsights();
+  
   const [predictions, setPredictions] = useState<PredictionMarket[]>([]);
   const { isLoading: loading, error, setError, startLoading: _startLoading, stopLoading } = useLoading(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,10 +89,21 @@ export const PredictionInsights = memo(function PredictionInsights({
   const [actionFeedback, setActionFeedback] = useState<{ id: string; action: string } | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showAllPredictions, setShowAllPredictions] = useState(false);
-  const [agentSummary, setAgentSummary] = useState<UnifiedSummary | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const summaryFetchedRef = useRef(false);
+
+  // Use context insights with UnifiedSummary type mapping
+  const agentSummary: UnifiedSummary | null = contextInsights ? {
+    overview: contextInsights.overview,
+    riskAgent: contextInsights.riskAgent,
+    hedgingAgent: contextInsights.hedgingAgent,
+    sentiment: contextInsights.sentiment,
+    tokenDirections: contextInsights.tokenDirections,
+    leverageRecommendations: contextInsights.leverageRecommendations,
+    hedgeAlerts: contextInsights.hedgeAlerts,
+    leadAgentApproved: contextInsights.leadAgentApproved,
+    analyzedAt: contextInsights.analyzedAt,
+  } : null;
+  const summaryLoading = contextLoading;
 
   const fetchPredictions = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setRefreshing(true);
@@ -110,36 +125,31 @@ export const PredictionInsights = memo(function PredictionInsights({
 
   usePolling(fetchPredictions, 60000);
 
-  // Fetch unified AI summary from agents when predictions load
-  const fetchAgentSummary = useCallback(async (preds: PredictionMarket[]) => {
-    if (summaryFetchedRef.current || preds.length === 0) return;
+  // Trigger AI context refresh when predictions change
+  const triggerInsightsRefresh = useCallback((preds: PredictionMarket[], force = false) => {
+    if (preds.length === 0) return;
+    
+    // Convert to the format expected by the context
+    const predictionData = preds.map(p => ({
+      id: p.id,
+      probability: p.probability,
+      question: p.question,
+      relatedAssets: p.relatedAssets,
+      impact: p.impact,
+      recommendation: p.recommendation,
+      source: p.source,
+    }));
+    
+    console.log('[PredictionInsights] Refreshing insights via context');
+    refreshInsights(predictionData, force);
+  }, [refreshInsights]);
 
-    setSummaryLoading(true);
-    try {
-      const res = await fetch('/api/agents/insight-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ predictions: preds }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.summary) {
-          setAgentSummary(data.summary);
-          summaryFetchedRef.current = true;
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to fetch agent summary:', err);
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, []);
-
+  // Trigger refresh when predictions change
   useEffect(() => {
     if (predictions.length > 0) {
-      fetchAgentSummary(predictions);
+      triggerInsightsRefresh(predictions);
     }
-  }, [predictions, fetchAgentSummary]);
+  }, [predictions, triggerInsightsRefresh]);
 
   const filteredPredictions = predictions.filter(p => {
     if (filter === 'all') return true;
@@ -242,14 +252,18 @@ export const PredictionInsights = memo(function PredictionInsights({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              fetchPredictions(true);
+              await fetchPredictions(true);
+              // Force refresh AI insights via context
+              if (predictions.length > 0) {
+                triggerInsightsRefresh(predictions, true);
+              }
             }}
-            disabled={refreshing}
+            disabled={refreshing || summaryLoading}
             className="w-8 h-8 flex items-center justify-center bg-[#f5f5f7] rounded-full"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#86868b] ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#86868b] ${refreshing || summaryLoading ? 'animate-spin' : ''}`} />
           </button>
           {isCollapsed ? (
             <ChevronDown className="w-5 h-5 text-[#86868b]" />

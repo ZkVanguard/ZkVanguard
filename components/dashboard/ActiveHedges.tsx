@@ -4,6 +4,7 @@ import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw, Wallet, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
+import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 import { useWalletClient, useChainId } from 'wagmi';
 import { getContractAddresses } from '@/lib/contracts/addresses';
@@ -232,10 +233,29 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   const processingRef = useRef(false);
   const _lastProcessedRef = useRef<string>('');
   
-  // AI Recommendations state
-  const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  // AI Recommendations from centralized context
+  const { hedges: contextHedges, loading: contextHedgesLoading, refresh: refreshContextHedges } = useHedgeRecommendations();
   const [executingRecommendation, setExecutingRecommendation] = useState<string | null>(null);
+
+  // Map context recommendations to AIRecommendation interface
+  const recommendations: AIRecommendation[] = useMemo(() => {
+    return contextHedges.map(h => ({
+      strategy: `${h.side} ${h.asset} Hedge`,
+      confidence: h.confidence / 100,
+      expectedReduction: 0.3,
+      description: h.reason,
+      actions: [{
+        action: h.side,
+        asset: h.asset,
+        size: h.size || 100,
+        leverage: h.leverage,
+        protocol: 'Moonlander',
+        reason: h.reason,
+      }],
+      agentSource: h.source,
+    }));
+  }, [contextHedges]);
+  const loadingRecommendations = contextHedgesLoading;
 
   const activeHedges = useMemo(() => hedges.filter(h => h.status === 'active' || h.status === 'pending'), [hedges]);
   const closedHedges = useMemo(() => hedges.filter(h => h.status === 'closed' || h.status === 'liquidated' || h.status === 'cancelled'), [hedges]);
@@ -350,38 +370,8 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     return () => window.removeEventListener('hedgeAdded', handleHedgeAdded);
   }, [loadHedges]);
 
-  // Load AI recommendations
-  const loadRecommendations = useCallback(async () => {
-    if (!address) return;
-    
-    setLoadingRecommendations(true);
-    try {
-      const response = await fetch('/api/agents/hedging/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        logger.debug('🤖 AI Recommendations', { component: 'ActiveHedges', data });
-        if (data.recommendations) {
-          setRecommendations(data.recommendations);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load AI recommendations', error instanceof Error ? error : undefined, { component: 'ActiveHedges' });
-    } finally {
-      setLoadingRecommendations(false);
-    }
-  }, [address]);
-
-  // Load recommendations on mount and when address changes
-  useEffect(() => {
-    if (address) {
-      loadRecommendations();
-    }
-  }, [address, loadRecommendations]);
+  // AI Recommendations now come from the context (AIDecisionsContext)
+  // No need for local fetch - context handles caching and sync
 
   // Execute AI recommendation
   const executeRecommendation = async (rec: AIRecommendation) => {
@@ -472,7 +462,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         
         // Refresh hedges and recommendations
         window.dispatchEvent(new Event('hedgeAdded'));
-        loadRecommendations();
+        refreshContextHedges();
       } else {
         const error = await response.json();
         logger.error('❌ Failed to execute ZK hedge', undefined, { component: 'ActiveHedges', data: error });
@@ -949,7 +939,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   </div>
                 </div>
                 <button
-                  onClick={loadRecommendations}
+                  onClick={() => refreshContextHedges(true)}
                   disabled={loadingRecommendations}
                   className="p-2 hover:bg-white/50 rounded-lg transition-colors"
                 >
@@ -1060,7 +1050,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   Let our AI analyze your portfolio and suggest optimal hedging strategies
                 </p>
                 <button
-                  onClick={loadRecommendations}
+                  onClick={() => refreshContextHedges(true)}
                   className="px-4 py-2 bg-gradient-to-r from-[#5856D6] to-[#007AFF] text-white rounded-[10px] text-[12px] sm:text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
                 >
                   <Sparkles className="w-4 h-4" />
@@ -1596,7 +1586,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                   </div>
                 </div>
                 <button
-                  onClick={loadRecommendations}
+                  onClick={() => refreshContextHedges(true)}
                   disabled={loadingRecommendations}
                   className="p-2 rounded-[10px] hover:bg-[#007AFF]/10 transition-colors disabled:opacity-50"
                   title="Refresh recommendations"
@@ -1701,7 +1691,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     No recommendations yet. Click refresh to run multi-agent analysis.
                   </p>
                   <button
-                    onClick={loadRecommendations}
+                    onClick={() => refreshContextHedges(true)}
                     className="px-4 py-2 bg-[#007AFF] text-white rounded-[10px] text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
                   >
                     Run AI Analysis
