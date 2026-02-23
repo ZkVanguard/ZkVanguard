@@ -325,7 +325,7 @@ export function calculateOwnership(userShares: number, totalShares: number): num
 /**
  * Get top shareholders
  */
-export async function getTopShareholders(limit: number = 10): Promise<{ address: string; shares: number; percentage: number }[]> {
+export async function getTopShareholders(limit: number = 10): Promise<{ walletAddress: string; shares: number; percentage: number }[]> {
   const allShares = await getAllUserShares();
   const poolState = await getPoolState();
   
@@ -334,7 +334,7 @@ export async function getTopShareholders(limit: number = 10): Promise<{ address:
     .sort((a, b) => b.shares - a.shares)
     .slice(0, limit)
     .map(u => ({
-      address: u.walletAddress,
+      walletAddress: u.walletAddress,
       shares: u.shares,
       percentage: calculateOwnership(u.shares, poolState.totalShares),
     }));
