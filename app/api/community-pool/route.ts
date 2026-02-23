@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import {
   deposit,
@@ -28,6 +29,78 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// On-chain contract addresses
+const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
+
+// Minimal ABI for reading pool stats
+const POOL_ABI = [
+  'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
+  'function getMemberPosition(address member) view returns (uint256 shares, uint256 valueUSD, uint256 percentage)',
+  'function calculateTotalNAV() view returns (uint256)',
+  'function totalShares() view returns (uint256)',
+];
+
+/**
+ * Fetch on-chain pool data
+ */
+async function getOnChainPoolData() {
+  try {
+    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+    
+    const stats = await pool.getPoolStats();
+    
+    // Format values (shares are 18 decimals, NAV/price are 6 decimals USDC)
+    const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+    const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
+    const memberCount = Number(stats._memberCount);
+    const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
+    
+    return {
+      totalValueUSD: totalNAV,
+      totalShares,
+      sharePrice,
+      totalMembers: memberCount,
+      allocations: {
+        BTC: { percentage: Number(stats._allocations[0]) / 100 },
+        ETH: { percentage: Number(stats._allocations[1]) / 100 },
+        CRO: { percentage: Number(stats._allocations[2]) / 100 },
+        SUI: { percentage: Number(stats._allocations[3]) / 100 },
+      },
+      onChain: true,
+    };
+  } catch (err) {
+    logger.error('[CommunityPool API] On-chain fetch error:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch on-chain user position
+ */
+async function getOnChainUserPosition(userAddress: string) {
+  try {
+    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+    
+    const pos = await pool.getMemberPosition(userAddress);
+    
+    return {
+      walletAddress: userAddress,
+      shares: parseFloat(ethers.formatUnits(pos.shares, 18)),
+      valueUSD: parseFloat(ethers.formatUnits(pos.valueUSD, 6)),
+      percentage: parseFloat(ethers.formatUnits(pos.percentage, 2)),
+      isMember: pos.shares > 0n,
+      onChain: true,
+    };
+  } catch (err) {
+    logger.error('[CommunityPool API] On-chain user fetch error:', err);
+    return null;
+  }
+}
+
+
 /**
  * GET - Fetch pool info
  */
@@ -35,10 +108,25 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
   const userAddress = searchParams.get('user');
+  const source = searchParams.get('source'); // 'onchain' to force on-chain
   
   try {
     // Get user's position
     if (userAddress) {
+      // Try on-chain first
+      const onChainUser = await getOnChainUserPosition(userAddress);
+      const onChainPool = await getOnChainPoolData();
+      
+      if (onChainUser && onChainPool) {
+        return NextResponse.json({
+          success: true,
+          user: onChainUser,
+          pool: onChainPool,
+          source: 'onchain',
+        });
+      }
+      
+      // Fallback to local storage
       const userShares = await getUserShares(userAddress);
       const poolSummary = await getPoolSummary();
       
@@ -53,6 +141,7 @@ export async function GET(request: NextRequest) {
             isMember: false,
           },
           pool: poolSummary,
+          source: 'local',
         });
       }
       
@@ -71,6 +160,7 @@ export async function GET(request: NextRequest) {
           withdrawalCount: userShares.withdrawals.length,
         },
         pool: poolSummary,
+        source: 'local',
       });
     }
     
@@ -108,7 +198,20 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Default: Get pool summary
+    // Default: Get pool summary (try on-chain first)
+    const onChainPool = await getOnChainPoolData();
+    
+    if (onChainPool) {
+      return NextResponse.json({
+        success: true,
+        pool: onChainPool,
+        supportedAssets: SUPPORTED_ASSETS,
+        timestamp: Date.now(),
+        source: 'onchain',
+      });
+    }
+    
+    // Fallback to local storage
     const summary = await getPoolSummary();
     
     return NextResponse.json({
@@ -116,6 +219,7 @@ export async function GET(request: NextRequest) {
       pool: summary,
       supportedAssets: SUPPORTED_ASSETS,
       timestamp: Date.now(),
+      source: 'local',
     });
     
   } catch (error: any) {
