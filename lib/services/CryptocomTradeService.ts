@@ -1,7 +1,12 @@
 /**
  * Crypto.com Exchange Trading Service
  * 
- * Integrates with Crypto.com Exchange API for real buy/sell orders
+ * ⚠️ WARNING: NOT PRODUCTION READY
+ * This service is a SKELETON for future Crypto.com Exchange API integration.
+ * Currently FAILS SAFE if called without proper API credentials.
+ * 
+ * DO NOT USE FOR REAL TRADING until full implementation is complete.
+ * 
  * Docs: https://exchange-docs.crypto.com/exchange/v1/rest-ws/index.html
  */
 
@@ -37,90 +42,44 @@ export class CryptocomTradeService {
 
   /**
    * Execute a buy order on Crypto.com Exchange
+   * ⚠️ NOT IMPLEMENTED - FAILS SAFE
    */
   async buyAsset(asset: string, amount: number, orderType: 'MARKET' | 'LIMIT' = 'MARKET'): Promise<TradeResult> {
-    try {
-      if (!this.apiKey || !this.apiSecret) {
-        logger.warn('Crypto.com API credentials not configured');
-        return {
-          success: false,
-          error: 'API_NOT_CONFIGURED',
-        };
-      }
-
-      // Convert asset to Crypto.com trading pair format
-      const symbol = this.formatTradingPair(asset);
-
-      const order: TradeOrder = {
-        symbol,
-        side: 'BUY',
-        quantity: amount,
-        type: orderType,
-      };
-
-      logger.info('Placing BUY order on Crypto.com Exchange', { order });
-
-      // In production, this would make actual API call:
-      // const result = await this.placeOrder(order);
-
-      // For now, return simulated success
-      return {
-        success: true,
-        orderId: `CDC-${Date.now()}`,
-        executedQty: amount,
-        executedPrice: 0, // Would be filled by exchange
-        status: 'PENDING_API_INTEGRATION',
-      };
-    } catch (error) {
-      logger.error('Buy order failed', { error });
+    if (!this.apiKey || !this.apiSecret) {
+      logger.error('CryptocomTradeService.buyAsset: NOT IMPLEMENTED - API not configured');
       return {
         success: false,
-        error: String(error),
+        error: 'NOT_IMPLEMENTED: Crypto.com Exchange API integration is not complete. Configure API credentials.',
       };
     }
+
+    // FAIL SAFE: Until implementation is complete, always fail
+    logger.error('CryptocomTradeService.buyAsset: Trade execution not implemented', { asset, amount });
+    return {
+      success: false,
+      error: 'NOT_IMPLEMENTED: Crypto.com Exchange trade execution requires full API integration.',
+    };
   }
 
   /**
    * Execute a sell order on Crypto.com Exchange
+   * ⚠️ NOT IMPLEMENTED - FAILS SAFE
    */
   async sellAsset(asset: string, amount: number, orderType: 'MARKET' | 'LIMIT' = 'MARKET'): Promise<TradeResult> {
-    try {
-      if (!this.apiKey || !this.apiSecret) {
-        logger.warn('Crypto.com API credentials not configured');
-        return {
-          success: false,
-          error: 'API_NOT_CONFIGURED',
-        };
-      }
-
-      const symbol = this.formatTradingPair(asset);
-
-      const order: TradeOrder = {
-        symbol,
-        side: 'SELL',
-        quantity: amount,
-        type: orderType,
-      };
-
-      logger.info('Placing SELL order on Crypto.com Exchange', { order });
-
-      // In production, this would make actual API call:
-      // const result = await this.placeOrder(order);
-
-      return {
-        success: true,
-        orderId: `CDC-${Date.now()}`,
-        executedQty: amount,
-        executedPrice: 0,
-        status: 'PENDING_API_INTEGRATION',
-      };
-    } catch (error) {
-      logger.error('Sell order failed', { error });
+    if (!this.apiKey || !this.apiSecret) {
+      logger.error('CryptocomTradeService.sellAsset: NOT IMPLEMENTED - API not configured');
       return {
         success: false,
-        error: String(error),
+        error: 'NOT_IMPLEMENTED: Crypto.com Exchange API integration is not complete. Configure API credentials.',
       };
     }
+
+    // FAIL SAFE: Until implementation is complete, always fail
+    logger.error('CryptocomTradeService.sellAsset: Trade execution not implemented', { asset, amount });
+    return {
+      success: false,
+      error: 'NOT_IMPLEMENTED: Crypto.com Exchange trade execution requires full API integration.',
+    };
   }
 
   /**
@@ -141,11 +100,16 @@ export class CryptocomTradeService {
 
   /**
    * Get available balance for an asset
+   * ⚠️ NOT IMPLEMENTED - Returns 0
    */
   async getBalance(asset: string): Promise<number> {
-    // In production, query Crypto.com Exchange API
-    logger.info('Getting balance from Crypto.com Exchange', { asset });
-    return 0; // Placeholder
+    if (!this.apiKey || !this.apiSecret) {
+      logger.warn('CryptocomTradeService.getBalance: API not configured');
+      return 0;
+    }
+    // NOT IMPLEMENTED
+    logger.warn('CryptocomTradeService.getBalance: Not implemented', { asset });
+    return 0;
   }
 
   /**
