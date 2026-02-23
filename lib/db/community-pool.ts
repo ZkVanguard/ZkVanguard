@@ -315,6 +315,24 @@ export async function getPoolHistoryFromDb(limit = 100): Promise<DbPoolTransacti
 }
 
 /**
+ * Check if a transaction with this txHash already exists (idempotency check)
+ * @returns true if txHash already recorded, false otherwise
+ */
+export async function txHashExists(txHash: string): Promise<boolean> {
+  if (!txHash) return false;
+  try {
+    const result = await queryOne(
+      `SELECT 1 FROM community_pool_transactions WHERE tx_hash = $1`,
+      [txHash.toLowerCase()]
+    );
+    return !!result;
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to check txHash', error);
+    return false; // Err on the side of allowing (on-chain is authoritative anyway)
+  }
+}
+
+/**
  * Add transaction to history
  * Security: Validates transaction type, wallet address, and amounts
  */
@@ -435,12 +453,13 @@ export async function initCommunityPoolTables(): Promise<void> {
       )
     `);
 
-    // Create indexes
+    // Create indexes (including txHash uniqueness for idempotency)
     await query(`
       CREATE INDEX IF NOT EXISTS idx_pool_shares_wallet ON community_pool_shares(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_type ON community_pool_transactions(type);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_wallet ON community_pool_transactions(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_created ON community_pool_transactions(created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_tx_hash ON community_pool_transactions(tx_hash) WHERE tx_hash IS NOT NULL;
     `);
 
     // Insert initial state if not exists
