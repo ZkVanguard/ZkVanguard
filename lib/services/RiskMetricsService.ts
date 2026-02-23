@@ -358,23 +358,52 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
     return [];
   }
   
-  // Use actual share price progression for risk metrics
-  const navSeries: NAVSnapshot[] = [];
+  // Aggregate transactions to daily closing prices for cleaner risk metrics
+  // This prevents intraday transaction noise from inflating volatility
+  const dailyPrices = aggregateToDailyPrices(sortedHistory);
+  
+  logger.info('[RiskMetrics] Using daily-aggregated transaction data', {
+    rawTransactions: sortedHistory.length,
+    dailyDataPoints: dailyPrices.length,
+  });
+  
   const baseNAV = 10000; // Normalize to $10k base for consistent calculations
   
-  for (const tx of sortedHistory) {
-    const sharePrice = tx.sharePrice || 1;
-    // Scale NAV proportionally to share price (normalized)
-    const normalizedNAV = baseNAV * sharePrice;
+  return dailyPrices.map(dp => ({
+    timestamp: dp.timestamp,
+    nav: baseNAV * dp.sharePrice,
+    sharePrice: dp.sharePrice,
+  }));
+}
+
+/**
+ * Aggregate transactions to daily closing prices
+ * Takes the last (closing) price of each day to avoid intraday noise
+ */
+function aggregateToDailyPrices(
+  transactions: Array<{ timestamp: number; sharePrice?: number }>
+): Array<{ timestamp: number; sharePrice: number }> {
+  // Group by date (YYYY-MM-DD)
+  const dailyMap = new Map<string, { timestamp: number; sharePrice: number }>();
+  
+  for (const tx of transactions) {
+    if (!tx.sharePrice) continue;
     
-    navSeries.push({
-      timestamp: tx.timestamp,
-      nav: normalizedNAV,
-      sharePrice,
-    });
+    const date = new Date(tx.timestamp);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    
+    // Keep the latest transaction of each day (closing price)
+    const existing = dailyMap.get(dateKey);
+    if (!existing || tx.timestamp > existing.timestamp) {
+      dailyMap.set(dateKey, {
+        timestamp: tx.timestamp,
+        sharePrice: Number(tx.sharePrice),
+      });
+    }
   }
   
-  return navSeries;
+  // Sort by date and return
+  return Array.from(dailyMap.values()).sort((a, b) => a.timestamp - b.timestamp);
 }
 
 /**
