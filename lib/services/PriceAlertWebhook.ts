@@ -48,12 +48,22 @@ const HEARTBEAT_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 let requestCounter = 0;
 const HEARTBEAT_CHECK_EVERY_N_REQUESTS = 100; // Check every 100 price requests
 
+// Community pool continuous monitoring (more frequent than general heartbeat)
+let lastPoolCheck = 0;
+const POOL_CHECK_INTERVAL_MS = 15 * 60 * 1000; // Every 15 minutes for pools
+const POOL_CHECK_EVERY_N_REQUESTS = 20; // Or every 20 price requests
+
 /**
  * Record a price update and check for significant moves
  */
 export function recordPriceUpdate(asset: string, price: number): PriceAlert | null {
   const now = Date.now();
   requestCounter++;
+  
+  // Community pool continuous monitoring (every 20 requests or 15 min)
+  if (requestCounter % POOL_CHECK_EVERY_N_REQUESTS === 0 || now - lastPoolCheck > POOL_CHECK_INTERVAL_MS) {
+    checkCommunityPools();
+  }
   
   // Periodic heartbeat check - ensures monitoring even without price moves
   if (requestCounter % HEARTBEAT_CHECK_EVERY_N_REQUESTS === 0) {
@@ -331,6 +341,49 @@ export async function triggerPoolNavUpdate(): Promise<void> {
   } catch (error: any) {
     logger.error('[PriceAlert] Pool NAV trigger failed:', { error: error?.message || String(error) });
   }
+}
+
+/**
+ * Check community pools continuously (more frequent than heartbeat)
+ * This enables "always on" auto-hedging for community pools
+ */
+async function checkCommunityPools(): Promise<void> {
+  const now = Date.now();
+  
+  // Check if pool check is due
+  if (now - lastPoolCheck < POOL_CHECK_INTERVAL_MS) {
+    return;
+  }
+  
+  lastPoolCheck = now;
+  logger.info('[PriceAlert] Community pool check - running auto-rebalance/hedging');
+  
+  const baseUrl = process.env.VERCEL 
+    ? 'https://zkvanguard.vercel.app' 
+    : process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  
+  try {
+    // Run auto-rebalance (includes loss protection hedging)
+    await fetch(`${baseUrl}/api/cron/auto-rebalance`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+        'X-Pool-Trigger': 'true',
+      },
+    });
+    
+    logger.info('[PriceAlert] Community pool auto-hedge check completed');
+  } catch (error: any) {
+    logger.error('[PriceAlert] Community pool check error:', { error: error?.message || String(error) });
+  }
+}
+
+/**
+ * Force community pool check - for testing/admin
+ */
+export async function forceCommunityPoolCheck(): Promise<void> {
+  lastPoolCheck = 0; // Reset to force trigger
+  await checkCommunityPools();
 }
 
 /**
