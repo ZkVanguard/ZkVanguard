@@ -122,6 +122,28 @@ export async function POST(request: NextRequest) {
       useOnChainVault = false, ownerSecret, depositAmount
     } = body;
 
+    // Validate required fields
+    if (!asset || typeof asset !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Missing or invalid asset parameter' },
+        { status: 400 }
+      );
+    }
+    
+    if (!side || !['LONG', 'SHORT', 'BUY', 'SELL'].includes(side.toUpperCase())) {
+      return NextResponse.json(
+        { success: false, error: 'Missing or invalid side parameter (LONG/SHORT)' },
+        { status: 400 }
+      );
+    }
+    
+    if (notionalValue === undefined || notionalValue === null || isNaN(Number(notionalValue))) {
+      return NextResponse.json(
+        { success: false, error: 'Missing or invalid notionalValue parameter' },
+        { status: 400 }
+      );
+    }
+
     // On-chain vault result (if enabled)
     let onChainVaultResult: HedgeExecutionResponse['onChainVault'] = undefined;
 
