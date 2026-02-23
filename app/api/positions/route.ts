@@ -95,7 +95,13 @@ export async function GET(request: NextRequest) {
     logger.info(`[Positions API] Cached positions for ${address}`);
     logger.info(`[Positions API] Total request time: ${Date.now() - startTime}ms`);
     
-    return NextResponse.json(response);
+    // Return with SWR cache headers for smooth UI
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60',
+        'Vary': 'Accept-Encoding',
+      },
+    });
   } catch (error: unknown) {
     logger.error('[Positions API] Error', error);
     return NextResponse.json(
