@@ -213,6 +213,7 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
         reason: `Reduce position size by ${reductionPercent}% to improve margin`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
+        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     
@@ -252,6 +253,7 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
         reason: `EMERGENCY CLOSE: ${reason}`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
+        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     

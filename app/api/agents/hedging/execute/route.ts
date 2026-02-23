@@ -46,6 +46,8 @@ export interface HedgeExecutionRequest {
   autoApprovalEnabled?: boolean;
   autoApprovalThreshold?: number;
   signature?: string; // Manager signature (optional if auto-approved)
+  // System/Internal Call Authentication (for cron jobs, liquidation guard, etc.)
+  systemSecret?: string; // CRON_SECRET for internal automated calls
   // Wallet Connection
   walletAddress?: string; // Connected wallet address for hedge ownership (owner)
   // Proxy Wallet Support (for privacy)
@@ -119,8 +121,13 @@ export async function POST(request: NextRequest) {
       privateMode = false, privacyLevel = 'standard',
       autoApprovalEnabled = false, autoApprovalThreshold = 10000, signature,
       walletAddress, useProxyWallet = false,
-      useOnChainVault = false, ownerSecret, depositAmount
+      useOnChainVault = false, ownerSecret, depositAmount,
+      systemSecret
     } = body;
+
+    // Check for system/internal authentication (cron jobs, liquidation guard, etc.)
+    const isSystemCall = systemSecret === process.env.CRON_SECRET && process.env.CRON_SECRET;
+    const systemAutoApprovalThreshold = 1_000_000; // $1M limit for system calls
 
     // Validate required fields
     if (!asset || typeof asset !== 'string') {
@@ -204,7 +211,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if signature is required
-    const requiresSignature = !autoApprovalEnabled || notionalValue > autoApprovalThreshold;
+    // System calls (cron jobs, liquidation guard) bypass normal signature requirements
+    const effectiveThreshold = isSystemCall ? systemAutoApprovalThreshold : autoApprovalThreshold;
+    const requiresSignature = !isSystemCall && (!autoApprovalEnabled || notionalValue > effectiveThreshold);
     
     if (requiresSignature && !signature) {
       return NextResponse.json(
@@ -215,6 +224,12 @@ export async function POST(request: NextRequest) {
         },
         { status: 403 }
       );
+    }
+    
+    if (isSystemCall) {
+      logger.info('🤖 System call authenticated - auto-approving hedge', {
+        asset, side, notionalValue, source: reason?.includes('EMERGENCY') ? 'emergency' : 'automated'
+      });
     }
 
     //=================================================================================
