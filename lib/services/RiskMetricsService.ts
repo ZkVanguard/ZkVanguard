@@ -358,52 +358,95 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
     return [];
   }
   
-  // Aggregate transactions to daily closing prices for cleaner risk metrics
-  // This prevents intraday transaction noise from inflating volatility
-  const dailyPrices = aggregateToDailyPrices(sortedHistory);
+  // Smart aggregation: use the finest granularity that shows price variation
+  // 1. Try daily aggregation first (best for mature funds)
+  // 2. Fall back to hourly if daily has no variation (early stage)
+  // 3. Fall back to transaction-level if needed (demo/testing)
   
-  logger.info('[RiskMetrics] Using daily-aggregated transaction data', {
+  const dailyPrices = aggregateToTimePeriod(sortedHistory, 'daily');
+  const dailyUnique = new Set(dailyPrices.map(p => p.sharePrice.toFixed(4)));
+  
+  if (dailyPrices.length >= 2 && dailyUnique.size > 1) {
+    logger.info('[RiskMetrics] Using daily-aggregated data', {
+      rawTransactions: sortedHistory.length,
+      dailyDataPoints: dailyPrices.length,
+      priceRange: `${Math.min(...dailyPrices.map(p => p.sharePrice)).toFixed(4)} - ${Math.max(...dailyPrices.map(p => p.sharePrice)).toFixed(4)}`,
+    });
+    return dailyPrices.map(dp => ({
+      timestamp: dp.timestamp,
+      nav: 10000 * dp.sharePrice,
+      sharePrice: dp.sharePrice,
+    }));
+  }
+  
+  // Try hourly aggregation for early-stage funds
+  const hourlyPrices = aggregateToTimePeriod(sortedHistory, 'hourly');
+  const hourlyUnique = new Set(hourlyPrices.map(p => p.sharePrice.toFixed(4)));
+  
+  if (hourlyPrices.length >= 2 && hourlyUnique.size > 1) {
+    logger.info('[RiskMetrics] Using hourly-aggregated data (early stage)', {
+      rawTransactions: sortedHistory.length,
+      hourlyDataPoints: hourlyPrices.length,
+      priceRange: `${Math.min(...hourlyPrices.map(p => p.sharePrice)).toFixed(4)} - ${Math.max(...hourlyPrices.map(p => p.sharePrice)).toFixed(4)}`,
+    });
+    return hourlyPrices.map(dp => ({
+      timestamp: dp.timestamp,
+      nav: 10000 * dp.sharePrice,
+      sharePrice: dp.sharePrice,
+    }));
+  }
+  
+  // Fall back to transaction-level with sampling (demo/testing)
+  // Sample every Nth transaction to reduce noise while preserving price journey
+  const sampleRate = Math.max(1, Math.floor(sortedHistory.length / 20)); // Max ~20 data points
+  const sampledTx = sortedHistory.filter((_, i) => i % sampleRate === 0 || i === sortedHistory.length - 1);
+  
+  logger.info('[RiskMetrics] Using sampled transaction data (demo mode)', {
     rawTransactions: sortedHistory.length,
-    dailyDataPoints: dailyPrices.length,
+    sampledDataPoints: sampledTx.length,
+    sampleRate,
   });
   
-  const baseNAV = 10000; // Normalize to $10k base for consistent calculations
-  
-  return dailyPrices.map(dp => ({
-    timestamp: dp.timestamp,
-    nav: baseNAV * dp.sharePrice,
-    sharePrice: dp.sharePrice,
+  return sampledTx.map(tx => ({
+    timestamp: tx.timestamp,
+    nav: 10000 * Number(tx.sharePrice || 1),
+    sharePrice: Number(tx.sharePrice || 1),
   }));
 }
 
 /**
- * Aggregate transactions to daily closing prices
- * Takes the last (closing) price of each day to avoid intraday noise
+ * Aggregate transactions to time periods (daily or hourly)
+ * Takes the closing price of each period
  */
-function aggregateToDailyPrices(
-  transactions: Array<{ timestamp: number; sharePrice?: number }>
+function aggregateToTimePeriod(
+  transactions: Array<{ timestamp: number; sharePrice?: number }>,
+  period: 'daily' | 'hourly'
 ): Array<{ timestamp: number; sharePrice: number }> {
-  // Group by date (YYYY-MM-DD)
-  const dailyMap = new Map<string, { timestamp: number; sharePrice: number }>();
+  const periodMap = new Map<string, { timestamp: number; sharePrice: number }>();
   
   for (const tx of transactions) {
     if (!tx.sharePrice) continue;
     
     const date = new Date(tx.timestamp);
-    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    let periodKey: string;
     
-    // Keep the latest transaction of each day (closing price)
-    const existing = dailyMap.get(dateKey);
+    if (period === 'daily') {
+      periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    } else {
+      periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}`;
+    }
+    
+    // Keep the latest transaction of each period (closing price)
+    const existing = periodMap.get(periodKey);
     if (!existing || tx.timestamp > existing.timestamp) {
-      dailyMap.set(dateKey, {
+      periodMap.set(periodKey, {
         timestamp: tx.timestamp,
         sharePrice: Number(tx.sharePrice),
       });
     }
   }
   
-  // Sort by date and return
-  return Array.from(dailyMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+  return Array.from(periodMap.values()).sort((a, b) => a.timestamp - b.timestamp);
 }
 
 /**
