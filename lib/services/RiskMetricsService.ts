@@ -105,6 +105,14 @@ function mean(arr: number[]): number {
 }
 
 /**
+ * Clamp value to range
+ */
+function clamp(value: number, min: number, max: number): number {
+  if (!isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
  * Calculate standard deviation
  */
 function stdDev(arr: number[], avg?: number): number {
@@ -264,34 +272,45 @@ function calculateTradingMetrics(returns: number[]): { winRate: number; profitFa
 }
 
 /**
- * Generate mock NAV history for demonstration
- * In production, this would pull from actual historical data
+ * Generate NAV history from transaction data
+ * Fixed: Use share price progression instead of deposit/withdrawal sums
+ * NAV = Total Shares * Share Price (not cumulative cash flow)
  */
 async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
   const history = await getPoolHistory(365);
   
-  // If we have transaction history, reconstruct NAV series
-  if (history.length > 0) {
+  // If we have transaction history, extract share price progression
+  if (history.length >= 2) {
     const navSeries: NAVSnapshot[] = [];
-    let runningNAV = 0;
+    let totalShares = 0;
     
-    for (const tx of history.reverse()) {
-      const amount = tx.amountUSD || 0;
+    // Sort by timestamp ascending
+    const sortedHistory = [...history].sort((a, b) => a.timestamp - b.timestamp);
+    
+    for (const tx of sortedHistory) {
+      const shares = tx.shares || 0;
+      const sharePrice = tx.sharePrice || 1;
+      
       if (tx.type === 'DEPOSIT') {
-        runningNAV += amount;
+        totalShares += shares;
       } else if (tx.type === 'WITHDRAWAL') {
-        runningNAV -= amount;
+        totalShares = Math.max(0, totalShares - shares);
       }
+      
+      // NAV = shares * price (with minimum floor to avoid division issues)
+      const nav = Math.max(1, totalShares * sharePrice);
       
       navSeries.push({
         timestamp: tx.timestamp,
-        nav: Math.max(0, runningNAV),
-        sharePrice: tx.sharePrice || 1,
+        nav,
+        sharePrice: Math.max(0.01, sharePrice),
       });
     }
     
-    if (navSeries.length > 10) {
-      return navSeries;
+    // Only use real data if we have enough points and NAV isn't degenerate
+    const validSeries = navSeries.filter(s => s.nav > 0 && s.sharePrice > 0);
+    if (validSeries.length >= 5) {
+      return validSeries;
     }
   }
   
@@ -395,42 +414,42 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
       : 0;
     
     const metrics: RiskMetrics = {
-      // Core
-      sharpeRatio: parseFloat(sharpeRatio.toFixed(2)),
-      sortinoRatio: parseFloat(sortinoRatio.toFixed(2)),
-      maxDrawdown: parseFloat((maxDD * 100).toFixed(2)),
+      // Core - clamp to reasonable ranges
+      sharpeRatio: parseFloat(clamp(sharpeRatio, -10, 10).toFixed(2)),
+      sortinoRatio: parseFloat(clamp(sortinoRatio, -10, 10).toFixed(2)),
+      maxDrawdown: parseFloat(clamp(maxDD * 100, 0, 99.9).toFixed(2)),
       maxDrawdownDate: maxDDDate,
-      currentDrawdown: parseFloat((currentDD * 100).toFixed(2)),
+      currentDrawdown: parseFloat(clamp(currentDD * 100, 0, 99.9).toFixed(2)),
       
-      // Volatility
-      volatilityDaily: parseFloat((dailyStdDev * 100).toFixed(2)),
-      volatilityAnnualized: parseFloat((annualizedVol * 100).toFixed(2)),
-      downsideVolatility: parseFloat((annualizedDownsideVol * 100).toFixed(2)),
+      // Volatility - clamp to reasonable daily max
+      volatilityDaily: parseFloat(clamp(dailyStdDev * 100, 0, 50).toFixed(2)),
+      volatilityAnnualized: parseFloat(clamp(annualizedVol * 100, 0, 500).toFixed(2)),
+      downsideVolatility: parseFloat(clamp(annualizedDownsideVol * 100, 0, 500).toFixed(2)),
       
-      // VaR
-      var95Daily: parseFloat((var95Daily * 100).toFixed(2)),
-      var95Weekly: parseFloat((var95Weekly * 100).toFixed(2)),
-      cvar95: parseFloat((cvar95 * 100).toFixed(2)),
+      // VaR - clamp to reasonable loss limits
+      var95Daily: parseFloat(clamp(var95Daily * 100, 0, 50).toFixed(2)),
+      var95Weekly: parseFloat(clamp(var95Weekly * 100, 0, 75).toFixed(2)),
+      cvar95: parseFloat(clamp(cvar95 * 100, 0, 75).toFixed(2)),
       
-      // Attribution
-      beta: parseFloat(beta.toFixed(2)),
-      alpha: parseFloat((alpha * 100).toFixed(2)),
-      treynorRatio: parseFloat(treynorRatio.toFixed(2)),
-      informationRatio: parseFloat(informationRatio.toFixed(2)),
+      // Attribution - clamp beta/alpha
+      beta: parseFloat(clamp(beta, -5, 5).toFixed(2)),
+      alpha: parseFloat(clamp(alpha * 100, -500, 500).toFixed(2)),
+      treynorRatio: parseFloat(clamp(treynorRatio, -100, 100).toFixed(2)),
+      informationRatio: parseFloat(clamp(informationRatio, -10, 10).toFixed(2)),
       
-      // Returns
-      calmarRatio: parseFloat(calmarRatio.toFixed(2)),
-      winRate: parseFloat(tradingMetrics.winRate.toFixed(1)),
-      profitFactor: parseFloat(Math.min(tradingMetrics.profitFactor, 99.99).toFixed(2)),
-      avgWin: parseFloat(tradingMetrics.avgWin.toFixed(2)),
-      avgLoss: parseFloat(tradingMetrics.avgLoss.toFixed(2)),
+      // Returns - clamp to reasonable bounds
+      calmarRatio: parseFloat(clamp(calmarRatio, -100, 100).toFixed(2)),
+      winRate: parseFloat(clamp(tradingMetrics.winRate, 0, 100).toFixed(1)),
+      profitFactor: parseFloat(clamp(tradingMetrics.profitFactor, 0, 99.99).toFixed(2)),
+      avgWin: parseFloat(clamp(tradingMetrics.avgWin, 0, 100).toFixed(2)),
+      avgLoss: parseFloat(clamp(tradingMetrics.avgLoss, 0, 100).toFixed(2)),
       
-      // Time Series
-      returns7d: parseFloat((returns7d * 100).toFixed(2)),
-      returns30d: parseFloat((returns30d * 100).toFixed(2)),
-      returns90d: parseFloat((returns90d * 100).toFixed(2)),
-      returnsYTD: parseFloat((returnsYTD * 100).toFixed(2)),
-      returnsSinceInception: parseFloat((returnsSinceInception * 100).toFixed(2)),
+      // Time Series - clamp extreme returns
+      returns7d: parseFloat(clamp(returns7d * 100, -99, 1000).toFixed(2)),
+      returns30d: parseFloat(clamp(returns30d * 100, -99, 1000).toFixed(2)),
+      returns90d: parseFloat(clamp(returns90d * 100, -99, 5000).toFixed(2)),
+      returnsYTD: parseFloat(clamp(returnsYTD * 100, -99, 10000).toFixed(2)),
+      returnsSinceInception: parseFloat(clamp(returnsSinceInception * 100, -99, 10000).toFixed(2)),
       
       // Meta
       dataPoints: returns.length,
