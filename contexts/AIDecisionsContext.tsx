@@ -20,6 +20,7 @@ import {
   AIPriceIntegration,
   onPriceUpdate,
 } from '@/lib/services/ai-price-integration';
+import { AIManager } from '@/lib/services/ai-manager';
 
 export type { CustomActionPayload };
 
@@ -392,11 +393,43 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
   }, [address, refreshAll]);
   
   // ============================================================================
-  // Smart Price Monitoring - refresh AI when prices change significantly
+  // AI Manager Integration - Continuous management with WebSocket + scheduling
   // ============================================================================
   
   useEffect(() => {
-    // Extract asset symbols from portfolio positions
+    // Start the AI Manager if not already running
+    const status = AIManager.getStatus();
+    if (!status.isRunning) {
+      logger.info('[AIDecisionsContext] Starting AI Manager for continuous operation');
+      AIManager.start({
+        enableWebSocket: true,
+        enableScheduler: true,
+        enableHealthCheck: true,
+      });
+    }
+    
+    // AI Manager handles all service scheduling, price monitoring, and recovery automatically
+    // No need to manually manage price monitoring here anymore
+    
+    return () => {
+      // Don't stop AIManager on context unmount - let it run in background
+      // Other components may still need it
+    };
+  }, []);
+  
+  // ============================================================================
+  // Smart Price Monitoring - Legacy fallback (AIManager takes priority)
+  // ============================================================================
+  
+  useEffect(() => {
+    // Only run manual price monitoring if AIManager WebSocket is not connected
+    const status = AIManager.getStatus();
+    if (status.websocketConnected) {
+      // AIManager handles price streaming via WebSocket
+      return;
+    }
+    
+    // Fallback: Extract asset symbols from portfolio positions
     const assets = positionsData?.positions
       ?.map(p => p.symbol?.toUpperCase())
       .filter((s): s is string => !!s) || ['BTC', 'ETH', 'CRO'];
@@ -404,25 +437,22 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     // Ensure we track common assets
     const trackedAssets = [...new Set([...assets, 'BTC', 'ETH'])];
     
-    // Start price monitoring with 15s interval
+    // Start price monitoring with 15s interval (fallback only)
     AIPriceIntegration.startPriceMonitoring(trackedAssets, 15000);
     
     // Listen for price updates and check for cache invalidation
-    const unsubscribe = onPriceUpdate((snapshot) => {
+    const unsubscribe = onPriceUpdate(() => {
       // Check each service type for price-based invalidation
       const shouldRefreshHedges = AIPriceIntegration.shouldInvalidateCache('hedges');
       const shouldRefreshRisk = AIPriceIntegration.shouldInvalidateCache('risk');
       
-      // Hedges are most price-sensitive - refresh if needed
+      // Use AIManager's priority queue for refreshes
       if (shouldRefreshHedges && address && !state.hedgesLoading) {
-        logger.info('[AIDecisionsContext] Price change triggered hedge refresh');
-        refreshHedges(true);
+        AIManager.forceRefresh('hedges');
       }
       
-      // Risk is important but less frequent
       if (shouldRefreshRisk && address && !state.riskLoading) {
-        logger.info('[AIDecisionsContext] Price change triggered risk refresh');
-        refreshRisk(true);
+        AIManager.forceRefresh('risk');
       }
     });
     
@@ -430,7 +460,7 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
       unsubscribe();
       AIPriceIntegration.stopPriceMonitoring();
     };
-  }, [address, positionsData?.positions, state.hedgesLoading, state.riskLoading, refreshHedges, refreshRisk]);
+  }, [address, positionsData?.positions, state.hedgesLoading, state.riskLoading]);
   
   // ============================================================================
   // Computed Values
