@@ -1,11 +1,12 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, useTransition } from 'react';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { dedupedFetch } from '@/lib/utils/request-deduplication';
 import { cache } from '@/lib/utils/cache';
 import { useUserPortfolios } from '@/lib/contracts/hooks';
 import { logger } from '@/lib/utils/logger';
+import { refreshCoordinator } from '@/lib/services/refresh-coordinator';
 
 // Performance metrics from on-chain history API
 interface PerformanceMetrics {
@@ -69,6 +70,7 @@ interface PositionsContextType {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  isPending: boolean; // True during transition updates
 }
 
 const PositionsContext = createContext<PositionsContextType | undefined>(undefined);
@@ -84,6 +86,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
   const [pnlMetrics, setPnlMetrics] = useState<PerformanceMetrics | null>(null);
   const lastFetchRef = useRef<number>(0);
   const _fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // useTransition for smooth UI updates during data refresh
+  const [isPending, startTransition] = useTransition();
 
   // Debug: Log when address changes
   useEffect(() => {
@@ -151,7 +156,11 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
       logger.info(`Loaded ${data.positions?.length || 0} positions, total: $${data.totalValue?.toFixed(2)}`, { component: 'PositionsContext' });
       logger.debug('Positions detail', { component: 'PositionsContext', data: data.positions?.map((p: Position) => `${p.symbol}: $${p.balanceUSD}`).join(', ') });
-      setPositionsData(data);
+      
+      // Use startTransition for smooth UI updates
+      startTransition(() => {
+        setPositionsData(data);
+      });
       
       // Record snapshot via API (stores in PostgreSQL with real hedge PnL)
       if (data.totalValue > 0) {
@@ -219,11 +228,22 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     fetchPositions();
   }, [fetchPositions]);
 
-  // Reduced auto-refresh: Only refresh when user is actively viewing (page visible)
-  // Increased interval to 2 minutes to reduce server load
+  // Coordinates refresh timing with other components via centralized RefreshCoordinator
+  // This prevents render storms from multiple components refreshing simultaneously
   useEffect(() => {
     if (!address) return;
 
+    // Listen to centralized refresh coordinator
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        logger.debug('Coordinator triggered positions refresh', { component: 'PositionsContext' });
+        fetchPositions(true);
+      }
+    };
+
+    refreshCoordinator.on('refresh:positions', handleRefresh);
+
+    // Also handle visibility changes for immediate refresh on tab focus
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         logger.debug('Page visible - refreshing positions', { component: 'PositionsContext' });
@@ -231,20 +251,11 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Refresh when page becomes visible
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Longer polling interval: 2 minutes instead of 1 minute
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        logger.debug('Auto-refreshing positions', { component: 'PositionsContext' });
-        fetchPositions(true);
-      }
-    }, 120000); // 2 minutes
-
     return () => {
+      refreshCoordinator.off('refresh:positions', handleRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(interval);
     };
   }, [address, fetchPositions]);
 
@@ -433,6 +444,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     loading: loading || countLoading,
     error,
     refetch: fetchPositions,
+    isPending, // Smooth transition indicator
   };
 
   return (

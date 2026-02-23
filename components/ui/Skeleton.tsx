@@ -104,3 +104,129 @@ export function DashboardSkeleton() {
     </div>
   );
 }
+
+/**
+ * Portfolio Overview skeleton - matches PortfolioOverview.tsx dimensions
+ */
+export function PortfolioOverviewSkeleton() {
+  return (
+    <div className="bg-white rounded-[16px] sm:rounded-[24px] shadow-sm border border-black/5 p-4 sm:p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-[12px]" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="w-10 h-10 rounded-full" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="bg-[#f5f5f7] rounded-xl p-3 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-6 w-20" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Hedge List skeleton - matches ActiveHedges.tsx dimensions
+ */
+export function HedgeListSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {[...Array(rows)].map((_, i) => (
+        <div key={i} className="bg-white rounded-xl p-4 border border-black/5">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+            <div className="text-right space-y-2">
+              <Skeleton className="h-4 w-16 ml-auto" />
+              <Skeleton className="h-3 w-12 ml-auto" />
+            </div>
+            <Skeleton className="h-8 w-20 rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Positions List skeleton - matches PositionsList.tsx dimensions
+ */
+export function PositionsListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="bg-white rounded-xl border border-black/5 overflow-hidden">
+      <div className="p-4 border-b border-black/5 flex items-center justify-between">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-8 w-8 rounded-full" />
+      </div>
+      <div className="divide-y divide-black/5">
+        {[...Array(rows)].map((_, i) => (
+          <div key={i} className="p-4 flex items-center gap-4">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <div className="text-right space-y-2">
+              <Skeleton className="h-4 w-16 ml-auto" />
+              <Skeleton className="h-3 w-12 ml-auto" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Risk Metrics skeleton - matches RiskMetrics.tsx dimensions
+ */
+export function RiskMetricsSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-black/5 p-4 sm:p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <Skeleton className="w-10 h-10 rounded-xl" />
+        <Skeleton className="h-5 w-28" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Performance Chart skeleton - matches PerformanceChart.tsx dimensions  
+ */
+export function PerformanceChartSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-black/5 p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-8 w-24" />
+        </div>
+        <div className="flex gap-2">
+          {['1D', '1W', '1M', '3M'].map((t) => (
+            <Skeleton key={t} className="h-8 w-10 rounded-lg" />
+          ))}
+        </div>
+      </div>
+      <Skeleton className="h-[200px] sm:h-[300px] w-full rounded-lg" />
+    </div>
+  );
+}
+

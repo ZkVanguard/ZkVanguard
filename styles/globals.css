@@ -808,3 +808,151 @@ h1, h2, h3, h4, h5, h6 {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERFORMANCE OPTIMIZATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* GPU acceleration for animated elements */
+.animate-pulse,
+.animate-spin,
+.animate-bounce,
+[data-animating="true"] {
+  will-change: opacity, transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Smooth transitions for loading states */
+[data-loading="true"] {
+  will-change: contents;
+  transition: opacity 0.15s ease-out;
+}
+
+/* Optimize hover transitions */
+.transition-colors,
+.transition-all {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Content visibility for off-screen optimization */
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* Shimmer animation for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.03) 0%,
+    rgba(0, 0, 0, 0.06) 50%,
+    rgba(0, 0, 0, 0.03) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Reduce motion for accessibility and performance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-pulse,
+  .animate-spin,
+  .animate-bounce,
+  .animate-shimmer {
+    animation: none !important;
+  }
+}
+
+/* Optimistic update visual feedback */
+[data-optimistic="true"] {
+  opacity: 0.8;
+  pointer-events: none;
+  position: relative;
+}
+
+[data-optimistic="true"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 122, 255, 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+/* Pending state indicator */
+[data-pending="true"] {
+  border-color: #FFD60A !important;
+  box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.2);
+}
+
+/* Smooth number transitions for counters */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on;
+}
+
+/* Prevent layout shift for loading content */
+.min-h-content {
+  min-height: 100px;
+}
+
+.min-h-chart {
+  min-height: 200px;
+}
+
+.min-h-list {
+  min-height: 150px;
+}
+
+/* Skeleton preserve aspect ratio */
+.skeleton-chart {
+  aspect-ratio: 16 / 9;
+}
+
+.skeleton-card {
+  aspect-ratio: 4 / 3;
+}
+
+/* Connection indicator styles */
+[data-connection="offline"] {
+  opacity: 0.5;
+  filter: grayscale(50%);
+}
+
+[data-connection="slow"] {
+  transition-duration: 0.5s !important;
+}
+
