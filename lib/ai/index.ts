@@ -25,6 +25,7 @@ export {
   fetchHedgeRecommendations,
   fetchInsightSummary,
   fetchPortfolioAction,
+  fetchCustomPortfolioAction,
   fetchAllAIDecisions,
   invalidateAllCache,
   invalidateCache,
@@ -45,6 +46,7 @@ export type {
   AIDecisionsState,
   AIEvent,
   FetchAllResult,
+  CustomActionPayload,
 } from '@/lib/services/ai-decisions';
 
 // ============================================================================

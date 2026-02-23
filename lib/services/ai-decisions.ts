@@ -419,6 +419,78 @@ export async function fetchPortfolioAction(
 }
 
 // ============================================================================
+// Custom Portfolio Action - For complex requests with predictions & realMetrics
+// ============================================================================
+
+export interface CustomActionPayload {
+  portfolioId: number | string;
+  currentValue: number;
+  targetYield: number;
+  riskTolerance: number;
+  assets: string[];
+  realMetrics?: {
+    riskScore: number;
+    volatility: number;
+    sharpeRatio: number;
+    hedgeSignals: number;
+    totalValue: number;
+  };
+  predictions?: Array<{
+    question: string;
+    probability: number;
+    impact: string;
+    recommendation: string;
+    source?: string;
+  }>;
+}
+
+export async function fetchCustomPortfolioAction(
+  payload: CustomActionPayload,
+  force = false
+): Promise<PortfolioAction> {
+  const hash = `custom-action-${payload.portfolioId}-${payload.currentValue}-${payload.predictions?.length || 0}`;
+  
+  if (!force && isCacheValid(cache.action, CACHE_TTL.action, hash)) {
+    logger.debug('[AIDecisions] Using cached custom portfolio action');
+    return cache.action!.data;
+  }
+
+  logger.info('[AIDecisions] Fetching custom portfolio action', { 
+    portfolioId: payload.portfolioId,
+    predictionsCount: payload.predictions?.length || 0,
+  });
+  
+  try {
+    const response = await dedupedFetch(`/api/agents/portfolio-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    
+    const data = await response.json();
+    
+    const action: PortfolioAction = {
+      action: data.recommendation || data.action?.type || 'HOLD',
+      confidence: data.confidence || 75,
+      reasoning: data.reasoning || data.rationale || 'AI analysis complete',
+      suggestedAssets: data.suggestedAssets || data.assets,
+      urgency: data.urgency || 'medium',
+      estimatedImpact: data.estimatedImpact,
+    };
+
+    cache.action = { data: action, timestamp: Date.now(), hash };
+    emitAIEvent('ai:action:updated', action);
+    
+    return action;
+  } catch (error) {
+    logger.error('[AIDecisions] Custom portfolio action failed', error instanceof Error ? error : undefined);
+    throw error;
+  }
+}
+
+// ============================================================================
 // Batch Operations - Fetch multiple AI decisions efficiently
 // ============================================================================
 
@@ -553,6 +625,7 @@ export const AIDecisions = {
   fetchHedges: fetchHedgeRecommendations,
   fetchInsights: fetchInsightSummary,
   fetchAction: fetchPortfolioAction,
+  fetchCustomAction: fetchCustomPortfolioAction,
   fetchAll: fetchAllAIDecisions,
   
   // Cache management
