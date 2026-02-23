@@ -19,6 +19,21 @@ export interface MarketPrice {
   source: string;
 }
 
+/**
+ * Extended market data with full 24h stats
+ * Used by AI decisions, risk analysis, and volatility calculations
+ */
+export interface ExtendedMarketData {
+  symbol: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+  high24h: number;
+  low24h: number;
+  timestamp: number;
+  source: string;
+}
+
 export interface TokenBalance {
   token: string;
   symbol: string;
@@ -585,6 +600,97 @@ class RealMarketDataService {
 
     // Annualize volatility (252 trading days)
     return stdDev * Math.sqrt(252);
+  }
+
+  /**
+   * Get extended market data for multiple symbols in a single API call
+   * Includes: price, 24h change, 24h high/low, 24h volume
+   * Used by: AI decisions, CommunityPool, risk analysis
+   */
+  async getExtendedPrices(symbols: string[]): Promise<Map<string, ExtendedMarketData>> {
+    const results = new Map<string, ExtendedMarketData>();
+    const now = Date.now();
+    
+    // Map symbols to Crypto.com format
+    const symbolMap: Record<string, string> = {};
+    for (const symbol of symbols) {
+      const upper = symbol.toUpperCase();
+      // Handle stablecoins
+      if (['USDC', 'USDT', 'DEVUSDC', 'DAI'].includes(upper)) {
+        results.set(upper, {
+          symbol: upper,
+          price: 1,
+          change24h: 0,
+          volume24h: 0,
+          high24h: 1,
+          low24h: 1,
+          timestamp: now,
+          source: 'stablecoin',
+        });
+      } else {
+        symbolMap[`${upper}_USDT`] = upper;
+      }
+    }
+    
+    // If only stablecoins, return early
+    if (Object.keys(symbolMap).length === 0) {
+      return results;
+    }
+    
+    try {
+      const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
+        signal: AbortSignal.timeout(10000),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Crypto.com API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const tickers = data.result?.data || [];
+      
+      for (const ticker of tickers) {
+        const symbol = symbolMap[ticker.i];
+        if (!symbol) continue;
+        
+        const price = parseFloat(ticker.a) || 0;
+        const change24h = parseFloat(ticker.c) || 0;
+        const volume24h = parseFloat(ticker.v) || 0;
+        const high24h = parseFloat(ticker.h) || price;
+        const low24h = parseFloat(ticker.l) || price;
+        
+        results.set(symbol, {
+          symbol,
+          price,
+          change24h,
+          volume24h,
+          high24h,
+          low24h,
+          timestamp: now,
+          source: 'cryptocom-exchange',
+        });
+        
+        // Update local cache too
+        this.priceCache.set(symbol, { price, timestamp: now });
+      }
+      
+      // Check for missing symbols
+      for (const symbol of symbols) {
+        const upper = symbol.toUpperCase();
+        if (!results.has(upper)) {
+          logger.warn(`[RealMarketData] Missing extended data for ${upper}`);
+        }
+      }
+      
+      logger.info(`[RealMarketData] Extended prices fetched for ${results.size} symbols`);
+      return results;
+      
+    } catch (error) {
+      logger.error('[RealMarketData] Failed to fetch extended prices:', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+      throw new Error('Unable to fetch extended market data from Crypto.com');
+    }
   }
 }
 

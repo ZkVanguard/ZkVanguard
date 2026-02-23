@@ -20,6 +20,7 @@
  */
 
 import { logger } from '../utils/logger';
+import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataService';
 import {
   getPoolState,
   savePoolState,
@@ -55,78 +56,80 @@ const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
 const DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
 const MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
 
-// Live price cache - initialized empty to force fresh fetch
-// ⚠️ WARNING: If API fails and cache is empty, operations requiring prices will fail safely
-// This is intentional for billion-dollar fund security - never use stale/hardcoded prices
-let priceCache: Record<SupportedAsset, number> | null = null;
-let priceCacheTime = 0;
-const PRICE_CACHE_TTL = 30000; // 30 seconds
+// Extended market data cache
+let extendedDataCache: Map<string, ExtendedMarketData> | null = null;
+let dataCacheTime = 0;
+const DATA_CACHE_TTL = 30000; // 30 seconds
 
 /**
- * Fetch live prices from Crypto.com API
+ * Fetch live prices using central RealMarketDataService
  * 
  * ⚠️ SECURITY: For billion-dollar fund, NEVER use hardcoded fallback prices.
- * If price fetch fails and cache is empty, throw error to prevent operations
- * from proceeding with stale/incorrect pricing.
+ * Uses the unified price service with proper caching and deduplication.
  */
 export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>> {
   const now = Date.now();
   
-  // Return cached prices if fresh and valid
-  if (priceCache && now - priceCacheTime < PRICE_CACHE_TTL) {
-    return priceCache;
+  // Return cached prices if fresh
+  if (extendedDataCache && now - dataCacheTime < DATA_CACHE_TTL) {
+    const prices: Partial<Record<SupportedAsset, number>> = {};
+    for (const asset of SUPPORTED_ASSETS) {
+      const data = extendedDataCache.get(asset);
+      if (data) prices[asset] = data.price;
+    }
+    if (Object.keys(prices).length === SUPPORTED_ASSETS.length) {
+      return prices as Record<SupportedAsset, number>;
+    }
   }
   
-  try {
-    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(5000),
-    });
-    
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    
-    const data = await response.json();
-    const tickers = data.result?.data || [];
-    
-    const tickerMap: Record<string, SupportedAsset> = {
-      'BTC_USDT': 'BTC',
-      'ETH_USDT': 'ETH',
-      'SUI_USDT': 'SUI',
-      'CRO_USDT': 'CRO',
-    };
-    
-    // Build new price cache
-    const newPrices: Partial<Record<SupportedAsset, number>> = {};
-    for (const ticker of tickers) {
-      const asset = tickerMap[ticker.i];
-      if (asset && ticker.a) {
-        newPrices[asset] = parseFloat(ticker.a);
-      }
+  // Use central RealMarketDataService
+  const marketService = getMarketDataService();
+  const extendedData = await marketService.getExtendedPrices(SUPPORTED_ASSETS);
+  
+  // Validate we got all required prices
+  const prices: Partial<Record<SupportedAsset, number>> = {};
+  const missingAssets: string[] = [];
+  
+  for (const asset of SUPPORTED_ASSETS) {
+    const data = extendedData.get(asset);
+    if (data && data.price > 0) {
+      prices[asset] = data.price;
+    } else {
+      missingAssets.push(asset);
     }
-    
-    // Validate we got all required prices
-    const missingAssets = SUPPORTED_ASSETS.filter(a => !newPrices[a]);
-    if (missingAssets.length > 0) {
-      throw new Error(`Missing prices for: ${missingAssets.join(', ')}`);
-    }
-    
-    priceCache = newPrices as Record<SupportedAsset, number>;
-    priceCacheTime = now;
-    logger.info(`[CommunityPool] Prices updated: BTC=$${priceCache.BTC}, ETH=$${priceCache.ETH}`);
-    
-    return priceCache;
-    
-  } catch (error) {
-    logger.error('[CommunityPool] Price fetch failed:', { error: String(error) });
-    
-    // If we have recently cached prices (< 5 min old), use them with warning
-    if (priceCache && (now - priceCacheTime) < 5 * 60 * 1000) {
-      logger.warn('[CommunityPool] Using stale cache (<5min) due to API failure');
-      return priceCache;
-    }
-    
-    // No valid cache - fail safely rather than use dangerous hardcoded prices
-    throw new Error('Unable to fetch live prices and no valid cache available. Operations halted for fund security.');
   }
+  
+  if (missingAssets.length > 0) {
+    throw new Error(`Missing prices for: ${missingAssets.join(', ')}. Operations halted for fund security.`);
+  }
+  
+  // Update cache
+  extendedDataCache = extendedData;
+  dataCacheTime = now;
+  
+  logger.info(`[CommunityPool] Prices via RealMarketDataService: BTC=$${prices.BTC}, ETH=$${prices.ETH}`);
+  return prices as Record<SupportedAsset, number>;
+}
+
+/**
+ * Fetch extended market data (includes 24h change, high, low)
+ * Used by AI decisions and risk analysis
+ */
+export async function fetchExtendedMarketData(): Promise<Map<string, ExtendedMarketData>> {
+  const now = Date.now();
+  
+  // Return cached if fresh
+  if (extendedDataCache && now - dataCacheTime < DATA_CACHE_TTL) {
+    return extendedDataCache;
+  }
+  
+  const marketService = getMarketDataService();
+  const extendedData = await marketService.getExtendedPrices(SUPPORTED_ASSETS);
+  
+  extendedDataCache = extendedData;
+  dataCacheTime = now;
+  
+  return extendedData;
 }
 
 /**

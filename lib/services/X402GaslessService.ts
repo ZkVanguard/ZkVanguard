@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
 import { addTransactionToCache } from '../utils/transactionCache';
 import { ON_CHAIN_FEES } from '@/lib/config/pricing';
+import { getMarketDataService } from './RealMarketDataService';
 
 export interface X402Config {
   contractAddress: string;
@@ -371,7 +372,7 @@ export class X402GaslessService {
 
   /**
    * Estimate savings from using gasless transaction
-   * Uses live CRO price from Crypto.com API
+   * Uses live CRO price from central RealMarketDataService
    */
   static async estimateGasSavings(
     provider: ethers.Provider,
@@ -388,18 +389,13 @@ export class X402GaslessService {
       const gasPrice = 5000000000000n; // 5000 gwei on Cronos
       const regularGasCost = gasPrice * BigInt(gasLimit);
 
-      // Fetch live CRO price from Crypto.com API
-      let croPrice = 0.10; // Conservative fallback only if API fails
+      // Get CRO price from central RealMarketDataService
+      let croPrice = 0.10; // Conservative fallback only if service fails
       try {
-        const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const croTicker = data.result?.data?.find((t: any) => t.i === 'CRO_USDT');
-          if (croTicker?.a) {
-            croPrice = parseFloat(croTicker.a);
-          }
+        const marketService = getMarketDataService();
+        const croData = await marketService.getTokenPrice('CRO');
+        if (croData.price > 0) {
+          croPrice = croData.price;
         }
       } catch (e) {
         logger.warn('[X402] Using fallback CRO price for gas estimation');
