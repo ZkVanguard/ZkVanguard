@@ -18,6 +18,7 @@
 
 import { logger } from '../utils/logger';
 import { getPoolHistory } from '../storage/community-pool-storage';
+import { getNavHistory } from '../db/community-pool';
 
 // Risk-free rate (annualized) - using 5% for T-Bill proxy
 const RISK_FREE_RATE = 0.05;
@@ -278,6 +279,10 @@ function calculateTradingMetrics(returns: number[]): { winRate: number; profitFa
 /**
  * Generate NAV history from share price data
  * 
+ * PRIORITY:
+ * 1. Database NAV history (most accurate - recorded snapshots)
+ * 2. Transaction history (fallback)
+ * 
  * IMPORTANT: Risk metrics should be based on SHARE PRICE changes, not NAV.
  * NAV changes when users deposit/withdraw - that's not investment performance.
  * Share price changes reflect actual portfolio performance.
@@ -285,6 +290,35 @@ function calculateTradingMetrics(returns: number[]): { winRate: number; profitFa
  * Returns empty array if no real performance data is available.
  */
 async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
+  // First try database NAV history (preferred source)
+  try {
+    const navHistory = await getNavHistory(365);
+    
+    if (navHistory.length >= 2) {
+      // Check for real price variation
+      const uniquePrices = new Set(navHistory.map(h => h.share_price));
+      const hasRealPriceData = uniquePrices.size > 1 || 
+        (uniquePrices.size === 1 && !uniquePrices.has(1));
+      
+      if (hasRealPriceData) {
+        logger.info('[RiskMetrics] Using database NAV history', {
+          dataPoints: navHistory.length,
+          uniquePrices: uniquePrices.size,
+        });
+        
+        const baseNAV = 10000; // Normalize to $10k base
+        return navHistory.map(h => ({
+          timestamp: h.timestamp.getTime(),
+          nav: baseNAV * h.share_price,
+          sharePrice: h.share_price,
+        }));
+      }
+    }
+  } catch (err) {
+    logger.warn('[RiskMetrics] Failed to fetch database NAV history, falling back to transactions', { err });
+  }
+  
+  // Fallback to transaction history
   const history = await getPoolHistory(365);
   
   // Need at least 2 data points to calculate returns

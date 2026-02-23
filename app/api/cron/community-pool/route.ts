@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
+import { recordNavSnapshot, initCommunityPoolTables } from '@/lib/db/community-pool';
 import { ethers } from 'ethers';
 
 // CommunityPool contract details
@@ -92,6 +93,24 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       memberCount: poolStats.memberCount,
       allocations: poolStats.allocations,
     });
+    
+    // Step 1.5: Record NAV snapshot for risk metrics history
+    try {
+      // Ensure tables exist (idempotent)
+      await initCommunityPoolTables();
+      
+      await recordNavSnapshot({
+        sharePrice: parseFloat(poolStats.sharePrice),
+        totalNav: parseFloat(poolStats.totalNAV),
+        totalShares: parseFloat(ethers.formatUnits(stats._totalShares, 18)),
+        memberCount: poolStats.memberCount,
+        allocations: poolStats.allocations,
+        source: 'on-chain',
+      });
+      logger.info('[CommunityPool Cron] NAV snapshot recorded for risk metrics');
+    } catch (navError) {
+      logger.warn('[CommunityPool Cron] Failed to record NAV snapshot (non-critical)', { error: navError });
+    }
     
     // Step 2: Run risk assessment via AutoHedgingService
     const riskAssessment = await autoHedgingService.triggerRiskAssessment(0, COMMUNITY_POOL_ADDRESS);
