@@ -13,7 +13,11 @@ import {
   onAIEvent,
   fetchAllAIDecisions,
   invalidateAllCache,
+  fetchCustomPortfolioAction,
+  CustomActionPayload,
 } from '@/lib/services/ai-decisions';
+
+export type { CustomActionPayload };
 
 // ============================================================================
 // Re-export types for convenience
@@ -80,6 +84,9 @@ export interface AIDecisionsContextType {
   
   // Quick access to recommended action
   recommendedAction: PortfolioAction['action'] | null;
+  
+  // Custom action request for complex payloads (with predictions, realMetrics)
+  requestCustomAction: (payload: CustomActionPayload, force?: boolean) => Promise<PortfolioAction | null>;
 }
 
 // ============================================================================
@@ -191,6 +198,29 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch insights';
       setState(prev => ({ ...prev, insightsLoading: false, insightsError: errorMsg }));
+    }
+  }, []);
+  
+  const requestCustomAction = useCallback(async (
+    payload: CustomActionPayload,
+    force = false
+  ): Promise<PortfolioAction | null> => {
+    setState(prev => ({ ...prev, actionLoading: true, actionError: null }));
+    
+    try {
+      const action = await fetchCustomPortfolioAction(payload, force);
+      setState(prev => ({ 
+        ...prev, 
+        action, 
+        actionLoading: false,
+        lastUpdated: Date.now(),
+        isInitialized: true,
+      }));
+      return action;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch action';
+      setState(prev => ({ ...prev, actionLoading: false, actionError: errorMsg }));
+      return null;
     }
   }, []);
   
@@ -412,6 +442,7 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     topHedge,
     marketSentiment,
     recommendedAction,
+    requestCustomAction,
   }), [
     state, 
     refreshRisk, 
@@ -426,7 +457,8 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     hasStaleData, 
     topHedge, 
     marketSentiment, 
-    recommendedAction
+    recommendedAction,
+    requestCustomAction
   ]);
   
   return (
@@ -496,12 +528,13 @@ export function useMarketInsights() {
  * Hook for portfolio action only
  */
 export function usePortfolioAction() {
-  const { state, refreshAction, recommendedAction } = useAIDecisions();
+  const { state, refreshAction, recommendedAction, requestCustomAction } = useAIDecisions();
   return {
     action: state.action,
     recommendedAction,
     loading: state.actionLoading,
     error: state.actionError,
     refresh: refreshAction,
+    requestCustomAction,
   };
 }
