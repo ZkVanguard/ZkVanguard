@@ -82,6 +82,7 @@ export const MAINNET_TOKENS = {
 // VVS Router addresses
 const VVS_ROUTER_TESTNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae';
 const VVS_ROUTER_MAINNET = '0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae'; // Same on mainnet
+const VVS_ROUTER_ADDRESS = VVS_ROUTER_MAINNET; // Default to mainnet
 
 // RPC endpoints
 const CRONOS_ZKEVM_TESTNET_RPC = 'https://rpc-zkevm-t0.cronos.org';
