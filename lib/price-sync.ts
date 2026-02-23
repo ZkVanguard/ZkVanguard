@@ -12,6 +12,7 @@
  */
 import { ethers } from 'ethers';
 import { getCurrentChainId, CHAIN_IDS, isMainnet, getRpcUrl } from '@/lib/utils/network';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // ⚠️ TESTNET-ONLY ADDRESSES
 // On mainnet, use real Moonlander oracle (no price sync needed)
@@ -64,7 +65,7 @@ let _cachedPrices: { prices: Record<number, number>; fetchedAt: number } | null 
 const CACHE_TTL_MS = 10_000; // 10s cache
 
 /**
- * Fetch ALL live prices from Crypto.com Exchange API in a single HTTP call.
+ * Fetch ALL live prices from central proactive price feed.
  * Returns prices as { pairIndex: price_usd }.
  */
 export async function fetchLivePricesFromCDC(): Promise<Record<number, number>> {
@@ -76,26 +77,26 @@ export async function fetchLivePricesFromCDC(): Promise<Record<number, number>> 
   const prices: Record<number, number> = {};
 
   try {
-    const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) throw new Error(`Crypto.com API ${response.status}`);
-
-    const data = await response.json();
-    const tickers: Array<{ i: string; a: string }> = data.result?.data || [];
-
-    for (const t of tickers) {
-      const pairIdx = TICKER_TO_PAIR[t.i];
-      if (pairIdx !== undefined) {
-        const p = parseFloat(t.a);
-        if (p > 0) prices[pairIdx] = p;
+    const marketDataService = getMarketDataService();
+    const symbols = ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL'];
+    const priceMap = await marketDataService.getTokenPrices(symbols);
+    
+    // Map symbol prices to pair indices
+    const symbolToPair: Record<string, number> = {
+      'BTC': 0, 'ETH': 1, 'CRO': 2, 'ATOM': 3, 'DOGE': 4, 'SOL': 5
+    };
+    
+    for (const [symbol, priceData] of priceMap) {
+      const pairIdx = symbolToPair[symbol.toUpperCase()];
+      if (pairIdx !== undefined && priceData.price > 0) {
+        prices[pairIdx] = priceData.price;
       }
     }
 
     _cachedPrices = { prices, fetchedAt: Date.now() };
-    console.log(`📡 Crypto.com live prices: BTC=$${prices[0]} ETH=$${prices[1]} CRO=$${prices[2]}`);
+    console.log(`📡 Live prices (proactive cache): BTC=$${prices[0]} ETH=$${prices[1]} CRO=$${prices[2]}`);
   } catch (err) {
-    console.warn('⚠️ Crypto.com price fetch failed:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Price fetch failed:', err instanceof Error ? err.message : err);
   }
 
   return prices;

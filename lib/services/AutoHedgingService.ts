@@ -11,7 +11,6 @@
 import { logger } from '@/lib/utils/logger';
 import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
-import { cryptocomExchangeService } from './CryptocomExchangeService';
 import { getAgentOrchestrator } from './agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
@@ -276,13 +275,14 @@ class AutoHedgingService {
     // Get unique assets
     const uniqueAssets = [...new Set(activeHedges.map(h => h.asset))];
     
-    // Fetch all prices
+    // Fetch all prices from central proactive cache (instant, non-blocking)
+    const marketDataService = getMarketDataService();
     const priceMap = new Map<string, number>();
     for (const asset of uniqueAssets) {
       try {
         const baseAsset = asset.replace('-PERP', '').replace('-USD-PERP', '');
-        const price = await cryptocomExchangeService.getPrice(baseAsset);
-        if (price) priceMap.set(asset, price);
+        const priceData = await marketDataService.getTokenPrice(baseAsset);
+        if (priceData.price) priceMap.set(asset, priceData.price);
       } catch (err) {
         logger.warn(`[AutoHedging] Failed to get price for ${asset}`);
       }
