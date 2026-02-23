@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
+import { RiskMetricsPanel } from './RiskMetricsPanel';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
 import { parseUnits, erc20Abi } from 'viem';
 
@@ -721,6 +722,13 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Risk Metrics Panel */}
+      {!compact && (
+        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+          <RiskMetricsPanel compact={false} />
+        </div>
+      )}
       
       {/* Leaderboard */}
       {!compact && leaderboard.length > 0 && (
