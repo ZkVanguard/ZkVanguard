@@ -364,3 +364,5 @@ scripts/test-auto-hedging-e2e.ts
 scripts/test-vercel-auto-rebalance.ts
 scripts/test/debug-pool-state.js
 scripts/test-production-services.cjs
+docs/PRODUCTION_READINESS_AUDIT.md
+scripts/test-ai-decision-data.cjs
