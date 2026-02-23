@@ -85,8 +85,8 @@ async function fetchActiveHedges(): Promise<ActiveHedge[]> {
     
     const data = await response.json();
     return data.hedges || getMockActiveHedges();
-  } catch (error) {
-    logger.warn('[HedgeMonitor] Error fetching positions:', error);
+  } catch (error: any) {
+    logger.warn('[HedgeMonitor] Error fetching positions:', { error: error?.message || String(error) });
     return getMockActiveHedges();
   }
 }

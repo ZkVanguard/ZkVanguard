@@ -10,23 +10,23 @@
   "crons": [
     {
       "path": "/api/cron/auto-rebalance",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/community-pool",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/hedge-monitor",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/liquidation-guard",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/pool-nav-monitor",
-      "schedule": "0 * * * *"
+      "schedule": "0 18 * * *"
     }
   ],
   "headers": [

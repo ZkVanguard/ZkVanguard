@@ -124,8 +124,8 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
     };
     
     return { totalNAV, memberCount, sharePrice, allocations, creationTime };
-  } catch (error) {
-    logger.error(`[PoolNAVMonitor] Failed to fetch pool stats for ${pool.id}:`, error);
+  } catch (error: any) {
+    logger.error(`[PoolNAVMonitor] Failed to fetch pool stats for ${pool.id}:`, { error: error?.message || String(error) });
     return null;
   }
 }
@@ -264,15 +264,15 @@ async function recordSnapshot(poolId: string, nav: number): Promise<void> {
   // Also record to database
   try {
     await recordNavSnapshot({
-      nav,
+      totalNav: nav,
       sharePrice: nav / 1000, // Simplified
       totalShares: 1000,
       memberCount: 0,
-      allocations: [35, 30, 20, 15],
-      timestamp: Date.now(),
+      allocations: { BTC: 35, ETH: 30, SUI: 20, CRO: 15 },
+      source: 'pool-nav-monitor-cron',
     });
-  } catch (error) {
-    logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, error);
+  } catch (error: any) {
+    logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: error?.message || String(error) });
   }
 }
 
