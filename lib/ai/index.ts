@@ -120,3 +120,34 @@ export {
 export type {
   UseAIManagerReturn,
 } from '@/lib/hooks/useAIManager';
+// ============================================================================
+// Unified Price Provider - Real-time prices for all services
+// ============================================================================
+export {
+  getUnifiedPriceProvider,
+  getLivePrice,
+  getHedgeExecutionPrice,
+  validatePriceForHedge,
+  UnifiedPriceProvider,
+} from '@/lib/services/unified-price-provider';
+
+export type {
+  LivePrice,
+  PriceValidation,
+  HedgePriceContext as UnifiedHedgePriceContext,
+} from '@/lib/services/unified-price-provider';
+
+// ============================================================================
+// Background Hedge Controller - Intelligent background hedging
+// ============================================================================
+export {
+  getBackgroundHedgeController,
+  BackgroundHedgeController,
+} from '@/lib/services/background-hedge-controller';
+
+export type {
+  HedgeIntent,
+  HedgeValidation,
+  HedgeExecution,
+  ControllerStatus,
+} from '@/lib/services/background-hedge-controller';
