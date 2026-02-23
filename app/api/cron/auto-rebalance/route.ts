@@ -330,6 +330,7 @@ async function executeProtectiveHedge(
       reason: `Auto loss protection: portfolio down ${Math.abs(assessment.pnlPercent).toFixed(2)}%`,
       walletAddress,
       autoApprovalEnabled: true,
+      systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       source: 'loss-protection-cron',
     }),
   });

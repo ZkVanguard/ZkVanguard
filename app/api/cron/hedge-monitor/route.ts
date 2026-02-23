@@ -149,15 +149,15 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'CLOSE',
-        hedgeId: hedge.id,
+        portfolioId: 1, // Default portfolio
         asset: hedge.asset,
-        side: hedge.side === 'LONG' ? 'SELL' : 'BUY', // Opposite to close
-        size: hedge.size,
-        reason,
+        side: hedge.side === 'LONG' ? 'SHORT' : 'LONG', // Opposite to close
+        notionalValue: hedge.size * hedge.currentPrice, // Value of position
+        leverage: 1,
+        reason: `Close hedge: ${reason}`,
         walletAddress: hedge.walletAddress,
         autoApprovalEnabled: true,
-        source: 'hedge-monitor-cron',
+        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     
