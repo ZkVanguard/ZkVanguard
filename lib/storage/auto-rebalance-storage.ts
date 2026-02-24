@@ -159,7 +159,10 @@ async function ensureAutoRebalanceTable(): Promise<void> {
 export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Promise<void> {
   config.updatedAt = Date.now();
   
-  if (shouldUseDatabase()) {
+  const useDb = shouldUseDatabase();
+  logger.info(`[Storage] saveAutoRebalanceConfig called. useDatabase=${useDb}, VERCEL=${process.env.VERCEL}, DATABASE_URL=${process.env.DATABASE_URL ? 'set' : 'missing'}`);
+  
+  if (useDb) {
     try {
       await ensureAutoRebalanceTable();
       
@@ -203,6 +206,12 @@ export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Prom
   }
   
   // File-based fallback (local dev only)
+  // On Vercel, file system is read-only - throw error instead
+  if (process.env.VERCEL) {
+    logger.error('[Storage] Cannot use file fallback on Vercel (read-only FS). Database query failed.');
+    throw new Error('Database save failed and file fallback not available on Vercel');
+  }
+  
   try {
     await ensureStorageDir();
     const configs = await getAutoRebalanceConfigs();
