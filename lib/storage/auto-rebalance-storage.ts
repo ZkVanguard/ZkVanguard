@@ -191,11 +191,15 @@ export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Prom
       return;
     } catch (error) {
       logger.error('[Storage] Error saving to database:', error);
-      // Fallback to file for local dev
+      // On Vercel (read-only FS), don't fallback to file - throw instead
+      if (process.env.VERCEL) {
+        throw error;
+      }
+      // Fallback to file for local dev only
     }
   }
   
-  // File-based fallback
+  // File-based fallback (local dev only)
   try {
     await ensureStorageDir();
     const configs = await getAutoRebalanceConfigs();
