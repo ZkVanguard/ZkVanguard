@@ -363,16 +363,27 @@ async function checkCommunityPools(): Promise<void> {
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
-    // Run auto-rebalance (includes loss protection hedging)
-    await fetch(`${baseUrl}/api/cron/auto-rebalance`, {
-      method: 'GET',
-      headers: { 
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
-        'X-Pool-Trigger': 'true',
-      },
-    });
+    // Run both auto-rebalance AND pool-nav-monitor (which has the hedging logic)
+    await Promise.allSettled([
+      // Auto-rebalance for portfolio allocation drift
+      fetch(`${baseUrl}/api/cron/auto-rebalance`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          'X-Pool-Trigger': 'true',
+        },
+      }),
+      // Pool NAV monitor for loss detection and auto-hedging
+      fetch(`${baseUrl}/api/cron/pool-nav-monitor`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          'X-Pool-Trigger': 'true',
+        },
+      }),
+    ]);
     
-    logger.info('[PriceAlert] Community pool auto-hedge check completed');
+    logger.info('[PriceAlert] Community pool auto-hedge check completed (rebalance + nav monitor)');
   } catch (error: any) {
     logger.error('[PriceAlert] Community pool check error:', { error: error?.message || String(error) });
   }
