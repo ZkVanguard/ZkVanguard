@@ -25,7 +25,7 @@ import {
   getTopShareholders,
   SUPPORTED_ASSETS,
 } from '@/lib/storage/community-pool-storage';
-import { resetNavHistory } from '@/lib/db/community-pool';
+import { resetNavHistory, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -289,30 +289,47 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Default: Get pool summary with REAL-TIME calculated NAV (using live market prices)
-    // On-chain contract has stale NAV - we calculate live NAV from actual holdings × current prices
-    const summary = await getPoolSummary();
-    
-    // Also get on-chain member count for accuracy
-    let memberCount = summary.totalMembers;
+    // Default: Get pool summary
+    // Try on-chain first for accurate NAV, fall back to local calculation
     try {
       const onChainPool = await getOnChainPoolData();
-      if (onChainPool && onChainPool.totalMembers > 0) {
-        memberCount = onChainPool.totalMembers;
+      if (onChainPool && onChainPool.totalValueUSD > 0) {
+        // On-chain data is authoritative when pool has value
+        const livePrices = await fetchLivePrices();
+        return NextResponse.json({
+          success: true,
+          pool: {
+            totalValueUSD: onChainPool.totalValueUSD,
+            totalShares: onChainPool.totalShares,
+            sharePrice: onChainPool.sharePrice,
+            totalMembers: onChainPool.totalMembers,
+            allocations: {
+              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.BTC.percentage / 100, amount: 0, price: livePrices.BTC },
+              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.ETH.percentage / 100, amount: 0, price: livePrices.ETH },
+              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.CRO.percentage / 100, amount: 0, price: livePrices.CRO },
+              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.SUI.percentage / 100, amount: 0, price: livePrices.SUI },
+            },
+            lastAIDecision: null,
+            performance: { day: null, week: null, month: null },
+          },
+          supportedAssets: SUPPORTED_ASSETS,
+          timestamp: Date.now(),
+          source: 'onchain',
+        });
       }
     } catch (e) {
-      // Use local member count if on-chain fails
+      // Fall back to local calculation
     }
+    
+    // Fallback: Local calculated NAV (for when on-chain has no value)
+    const summary = await getPoolSummary();
     
     return NextResponse.json({
       success: true,
-      pool: {
-        ...summary,
-        totalMembers: memberCount,
-      },
+      pool: summary,
       supportedAssets: SUPPORTED_ASSETS,
       timestamp: Date.now(),
-      source: 'realtime', // Real-time calculated NAV from live prices
+      source: 'calculated',
     });
     
   } catch (error: any) {
@@ -401,6 +418,114 @@ export async function POST(request: NextRequest) {
             remainingShares: result.remainingShares,
           },
           txHash,
+        });
+      }
+      
+      case 'sync-from-chain': {
+        // Admin only - sync database with on-chain state
+        const cronSecret = request.headers.get('x-cron-secret');
+        const expectedSecret = process.env.CRON_SECRET;
+        
+        if (!cronSecret || cronSecret !== expectedSecret) {
+          return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        // Get on-chain pool data
+        const onChainData = await getOnChainPoolData();
+        if (!onChainData) {
+          return NextResponse.json({ success: false, error: 'Failed to fetch on-chain data' }, { status: 500 });
+        }
+        
+        // Build allocations with required fields
+        const totalNAV = onChainData.totalValueUSD;
+        const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
+          BTC: { 
+            percentage: onChainData.allocations.BTC.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.BTC.percentage / 100,
+            amount: 0, // Unknown from on-chain
+            price: 0, // Unknown from on-chain
+          },
+          ETH: { 
+            percentage: onChainData.allocations.ETH.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.ETH.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+          CRO: { 
+            percentage: onChainData.allocations.CRO.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.CRO.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+          SUI: { 
+            percentage: onChainData.allocations.SUI.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.SUI.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+        };
+        
+        // Update pool state in DB
+        await savePoolStateToDb({
+          totalValueUSD: onChainData.totalValueUSD,
+          totalShares: onChainData.totalShares,
+          sharePrice: onChainData.sharePrice,
+          allocations,
+          lastRebalance: Date.now(),
+          lastAIDecision: null,
+        });
+        
+        // Update user shares if wallet address provided 
+        if (walletAddress) {
+          const onChainUser = await getOnChainUserPosition(walletAddress);
+          if (onChainUser) {
+            await saveUserSharesToDb({
+              walletAddress: walletAddress.toLowerCase(),
+              shares: onChainUser.shares,
+              costBasisUSD: onChainUser.valueUSD, // Use current value as cost basis
+            });
+          }
+        }
+        
+        // Reset NAV history with correct values
+        const resetResult = await resetNavHistory(
+          onChainData.totalValueUSD,
+          onChainData.sharePrice,
+          onChainData.totalShares,
+          onChainData.totalMembers
+        );
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Database synced with on-chain state',
+          onChainData: {
+            totalValueUSD: onChainData.totalValueUSD,
+            totalShares: onChainData.totalShares,
+            sharePrice: onChainData.sharePrice,
+            totalMembers: onChainData.totalMembers,
+          },
+          navHistoryReset: resetResult,
+        });
+      }
+      
+      case 'delete-user': {
+        // Admin only - delete stale user from database
+        const cronSecret = request.headers.get('x-cron-secret');
+        const expectedSecret = process.env.CRON_SECRET;
+        
+        if (!cronSecret || cronSecret !== expectedSecret) {
+          return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        if (!walletAddress) {
+          return NextResponse.json({ success: false, error: 'walletAddress required' }, { status: 400 });
+        }
+        
+        await deleteUserSharesFromDb(walletAddress.toLowerCase());
+        
+        return NextResponse.json({
+          success: true,
+          message: `Deleted user ${walletAddress} from database`,
         });
       }
       
