@@ -23,8 +23,10 @@ const path = require("path");
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 
-// Pyth Network addresses (same for mainnet/testnet on Cronos)
-const PYTH_ORACLE = "0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B";
+// Pyth Network address for Cronos TESTNET
+// Mainnet: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B
+// Testnet: 0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320
+const PYTH_ORACLE = "0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320";
 
 // Pyth Price IDs (Universal across all chains)
 // Source: https://pyth.network/developers/price-feed-ids
