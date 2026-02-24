@@ -25,6 +25,7 @@ import {
   getTopShareholders,
   SUPPORTED_ASSETS,
 } from '@/lib/storage/community-pool-storage';
+import { resetNavHistory } from '@/lib/db/community-pool';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -256,28 +257,62 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Default: Get pool summary (try on-chain first)
-    const onChainPool = await getOnChainPoolData();
-    
-    if (onChainPool) {
+    // Reset NAV history (admin only - requires cron secret)
+    if (action === 'reset-nav-history') {
+      const cronSecret = request.headers.get('x-cron-secret');
+      const expectedSecret = process.env.CRON_SECRET;
+      
+      if (!cronSecret || cronSecret !== expectedSecret) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      // Get current real-time NAV data
+      const summary = await getPoolSummary();
+      
+      // Reset with correct values
+      const result = await resetNavHistory(
+        summary.totalValueUSD,
+        summary.sharePrice,
+        summary.totalValueUSD / summary.sharePrice, // Calculate totalShares
+        summary.totalMembers
+      );
+      
       return NextResponse.json({
         success: true,
-        pool: onChainPool,
-        supportedAssets: SUPPORTED_ASSETS,
-        timestamp: Date.now(),
-        source: 'onchain',
+        message: 'NAV history reset',
+        deleted: result.deleted,
+        newSnapshot: {
+          nav: summary.totalValueUSD,
+          sharePrice: summary.sharePrice,
+          totalMembers: summary.totalMembers,
+        },
       });
     }
     
-    // Fallback to local storage
+    // Default: Get pool summary with REAL-TIME calculated NAV (using live market prices)
+    // On-chain contract has stale NAV - we calculate live NAV from actual holdings × current prices
     const summary = await getPoolSummary();
+    
+    // Also get on-chain member count for accuracy
+    let memberCount = summary.totalMembers;
+    try {
+      const onChainPool = await getOnChainPoolData();
+      if (onChainPool && onChainPool.totalMembers > 0) {
+        memberCount = onChainPool.totalMembers;
+      }
+    } catch (e) {
+      // Use local member count if on-chain fails
+    }
     
     return NextResponse.json({
       success: true,
-      pool: summary,
+      pool: {
+        ...summary,
+        totalMembers: memberCount,
+      },
       supportedAssets: SUPPORTED_ASSETS,
       timestamp: Date.now(),
-      source: 'local',
+      source: 'realtime', // Real-time calculated NAV from live prices
     });
     
   } catch (error: any) {
