@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
           autoApprovalEnabled: config?.autoApprovalEnabled !== false, // Default: enabled
           autoApprovalThreshold: config?.autoApprovalThreshold || 200000000, // Default: $200M
           targetAllocations: config?.targetAllocations,
+          lossProtection: config?.lossProtection, // Support loss/drawdown protection config
         };
 
         // Save to persistent storage (for Vercel Cron)

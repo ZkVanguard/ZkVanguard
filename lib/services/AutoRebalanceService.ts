@@ -40,6 +40,17 @@ const CONFIG = {
 
 export type RebalanceFrequency = 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
+export interface LossProtectionConfig {
+  enabled: boolean;
+  mode?: 'entry' | 'drawdown' | 'both';
+  lossThresholdPercent: number;
+  drawdownThresholdPercent?: number;
+  action: 'hedge' | 'sell_to_stable';
+  hedgeRatio: number;
+  maxHedgeLeverage: number;
+  cooldownHours?: number;
+}
+
 export interface AutoRebalanceConfig {
   portfolioId: number;
   walletAddress: string;
@@ -49,6 +60,7 @@ export interface AutoRebalanceConfig {
   autoApprovalEnabled: boolean;
   autoApprovalThreshold: number; // USD value
   targetAllocations?: Record<string, number>; // Asset -> percentage
+  lossProtection?: LossProtectionConfig; // Loss/drawdown protection settings
 }
 
 export interface AllocationDrift {
