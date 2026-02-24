@@ -24,9 +24,14 @@ const LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
 // Track last hedge for loss protection
 const lastHedgeTime = new Map<number, number>();
 
+// Track peak portfolio values for drawdown calculation
+const peakPortfolioValues = new Map<number, number>();
+
 interface LossProtectionConfig {
   enabled: boolean;
-  lossThresholdPercent: number;
+  lossThresholdPercent: number;  // Threshold for loss from entry
+  drawdownThresholdPercent?: number;  // Threshold for loss from peak (drawdown)
+  mode?: 'entry' | 'drawdown' | 'both';  // Which mode to use (default: 'entry')
   action: 'hedge' | 'sell_to_stable';
   hedgeRatio: number;
   maxHedgeLeverage: number;
@@ -152,15 +157,44 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
 
   // ════════════════════════════════════════════════════════════════════════
   // LOSS PROTECTION CHECK (runs before rebalancing)
+  // Supports both entry-based loss and drawdown-from-peak protection
   // ════════════════════════════════════════════════════════════════════════
-  if (lossProtection?.enabled && assessment.pnlPercent !== undefined) {
+  if (lossProtection?.enabled && assessment.totalValue !== undefined) {
     const lossConfig = lossProtection as LossProtectionConfig;
     const cooldownMs = (lossConfig.cooldownHours || 4) * 60 * 60 * 1000;
     const lastHedge = lastHedgeTime.get(portfolioId) || 0;
+    const mode = lossConfig.mode || 'entry';
     
-    // Check if loss exceeds threshold (pnlPercent is negative for losses)
-    if (assessment.pnlPercent < -lossConfig.lossThresholdPercent) {
-      logger.warn(`[LossProtection] Portfolio ${portfolioId} P&L ${assessment.pnlPercent.toFixed(2)}% breached -${lossConfig.lossThresholdPercent}% threshold!`);
+    // Track peak value for drawdown calculation
+    const currentValue = assessment.totalValue;
+    const previousPeak = peakPortfolioValues.get(portfolioId) || currentValue;
+    const newPeak = Math.max(previousPeak, currentValue);
+    peakPortfolioValues.set(portfolioId, newPeak);
+    
+    // Calculate drawdown from peak
+    const drawdownPercent = newPeak > 0 ? ((newPeak - currentValue) / newPeak) * 100 : 0;
+    const drawdownThreshold = lossConfig.drawdownThresholdPercent || 4; // Default 4% drawdown
+    
+    // Determine if protection should trigger
+    let shouldTrigger = false;
+    let triggerReason = '';
+    
+    // Entry-based loss check
+    if ((mode === 'entry' || mode === 'both') && assessment.pnlPercent !== undefined) {
+      if (assessment.pnlPercent < -lossConfig.lossThresholdPercent) {
+        shouldTrigger = true;
+        triggerReason = `P&L ${assessment.pnlPercent.toFixed(2)}% breached -${lossConfig.lossThresholdPercent}% threshold`;
+      }
+    }
+    
+    // Drawdown-based check
+    if ((mode === 'drawdown' || mode === 'both') && drawdownPercent > drawdownThreshold) {
+      shouldTrigger = true;
+      triggerReason = `Drawdown ${drawdownPercent.toFixed(2)}% from peak ($${(newPeak/1e6).toFixed(1)}M → $${(currentValue/1e6).toFixed(1)}M) breached ${drawdownThreshold}% threshold`;
+    }
+    
+    if (shouldTrigger) {
+      logger.warn(`[LossProtection] Portfolio ${portfolioId}: ${triggerReason}`);
       
       // Check hedge cooldown
       if (now - lastHedge < cooldownMs) {
