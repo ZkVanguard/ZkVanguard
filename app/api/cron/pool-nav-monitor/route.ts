@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
+import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 
 // Types
@@ -93,7 +94,8 @@ const lastPoolHedgeTime = new Map<string, number>();
 const POOL_HEDGE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
 /**
- * Fetch pool stats from blockchain
+ * Fetch pool stats - uses REAL-TIME calculated NAV from market prices
+ * Falls back to on-chain values if real-time calculation fails
  */
 async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
   totalNAV: number;
@@ -103,6 +105,40 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
   creationTime: number;
 } | null> {
   try {
+    // First try to get REAL-TIME NAV from CommunityPoolService (uses live market prices)
+    if (pool.id === 'community-pool') {
+      try {
+        const summary = await getPoolSummary();
+        logger.info(`[PoolNAVMonitor] Got real-time NAV: $${summary.totalValueUSD.toFixed(2)}`);
+        
+        // Convert allocations to percentages
+        const allocations: Record<string, number> = {};
+        for (const [asset, data] of Object.entries(summary.allocations)) {
+          allocations[asset] = (data as any).percentage || 0;
+        }
+        
+        // Estimate creation time from NAV history
+        let creationTime = Math.floor(Date.now() / 1000) - 86400 * 30;
+        try {
+          const history = await getNavHistory(365);
+          if (history && history.length > 0) {
+            creationTime = Math.floor(new Date(history[0].timestamp).getTime() / 1000);
+          }
+        } catch (e) { /* use default */ }
+        
+        return {
+          totalNAV: summary.totalValueUSD,
+          memberCount: summary.totalMembers,
+          sharePrice: summary.sharePrice,
+          allocations,
+          creationTime,
+        };
+      } catch (error) {
+        logger.warn('[PoolNAVMonitor] Real-time NAV failed, falling back to on-chain', { error });
+      }
+    }
+    
+    // Fallback to on-chain values
     const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
     const contract = new ethers.Contract(pool.address, pool.abi, provider);
     
