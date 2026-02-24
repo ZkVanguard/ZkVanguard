@@ -28,7 +28,7 @@ function loadDeployment(chainId) {
     contracts: {
       CommunityPool: {
         // Use new deployment or fallback to current
-        proxy: process.env.COMMUNITY_POOL_ADDRESS || "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30",
+        proxy: process.env.COMMUNITY_POOL_ADDRESS || "0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B",
       }
     },
     configuration: {
@@ -61,20 +61,20 @@ async function main() {
 
   // Get contracts
   const pool = await ethers.getContractAt("CommunityPool", poolAddress);
-  const usdc = await ethers.getContractAt("IERC20", usdcAddress);
+  const usdc = await ethers.getContractAt("@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20", usdcAddress);
   
   // Check balances
   const usdcBalance = await usdc.balanceOf(tester.address);
   console.log("Your USDC balance:", ethers.formatUnits(usdcBalance, 6), "USDC");
   
-  if (usdcBalance < 10n * 10n**6n) {
-    console.log("\n⚠️  Need at least 10 USDC to test deposit");
+  if (usdcBalance < 100n * 10n**6n) {
+    console.log("\n⚠️  Need at least 100 USDC to test first deposit");
     console.log("   Mint some MockUSDC first or get from faucet");
     return;
   }
 
-  // Test deposit amount: 10 USDC
-  const depositAmount = 10n * 10n**6n; // 10 USDC
+  // Test deposit amount: 100 USDC (first deposit minimum)
+  const depositAmount = 100n * 10n**6n; // 100 USDC
   
   // Check pool stats before
   console.log("\n📊 Pool Stats Before:");
