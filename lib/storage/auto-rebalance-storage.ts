@@ -349,28 +349,54 @@ export async function saveLastRebalance(portfolioId: number, timestamp: number):
  * Get rebalance history for a portfolio
  */
 export async function getRebalanceHistory(portfolioId: number, limit: number = 10): Promise<RebalanceHistory[]> {
-  if (kv) {
+  if (shouldUseDatabase()) {
     try {
-      const history = await kv.get(`auto-rebalance:history:${portfolioId}`);
-      return (history || []).slice(0, limit);
+      await query(`
+        CREATE TABLE IF NOT EXISTS auto_rebalance_history (
+          id SERIAL PRIMARY KEY,
+          portfolio_id INTEGER NOT NULL,
+          timestamp BIGINT NOT NULL,
+          type TEXT,
+          action TEXT,
+          allocations JSONB,
+          drift_percent NUMERIC,
+          gas_cost_usd NUMERIC,
+          success BOOLEAN DEFAULT true
+        )
+      `);
+      
+      const result = await query(
+        'SELECT * FROM auto_rebalance_history WHERE portfolio_id = $1 ORDER BY timestamp DESC LIMIT $2',
+        [portfolioId, limit]
+      );
+      return result.rows.map((row: any) => ({
+        portfolioId: row.portfolio_id,
+        timestamp: row.timestamp,
+        type: row.type,
+        action: row.action,
+        allocations: row.allocations,
+        driftPercent: row.drift_percent,
+        gasCostUsd: row.gas_cost_usd,
+        success: row.success,
+      }));
     } catch (error) {
-      logger.error('[Storage] Error reading history from KV:', error);
+      logger.debug('[Storage] Error reading history from database:', error);
       return [];
     }
-  } else {
-    // File-based fallback
-    const historyFile = path.join(STORAGE_DIR, `rebalance-history-${portfolioId}.json`);
-    try {
-      const data = await fs.readFile(historyFile, 'utf-8');
-      const history: RebalanceHistory[] = JSON.parse(data);
-      return history.slice(0, limit);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        return [];
-      }
-      logger.error('[Storage] Error reading history file:', error);
+  }
+  
+  // File-based fallback
+  const historyFile = path.join(STORAGE_DIR, `rebalance-history-${portfolioId}.json`);
+  try {
+    const data = await fs.readFile(historyFile, 'utf-8');
+    const history: RebalanceHistory[] = JSON.parse(data);
+    return history.slice(0, limit);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
       return [];
     }
+    logger.error('[Storage] Error reading history file:', error);
+    return [];
   }
 }
 
@@ -378,29 +404,44 @@ export async function getRebalanceHistory(portfolioId: number, limit: number = 1
  * Add entry to rebalance history
  */
 export async function addRebalanceHistory(entry: RebalanceHistory): Promise<void> {
-  if (kv) {
+  if (shouldUseDatabase()) {
     try {
-      const history = await getRebalanceHistory(entry.portfolioId, 100);
-      history.unshift(entry);
-      await kv.set(`auto-rebalance:history:${entry.portfolioId}`, history.slice(0, 100));
-      logger.info(`[Storage] Added rebalance history for portfolio ${entry.portfolioId} to KV`);
+      await query(`
+        INSERT INTO auto_rebalance_history (portfolio_id, timestamp, type, action, allocations, drift_percent, gas_cost_usd, success)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        entry.portfolioId,
+        entry.timestamp,
+        entry.type || 'rebalance',
+        entry.action || 'auto',
+        JSON.stringify(entry.allocations || null),
+        entry.driftPercent || 0,
+        entry.gasCostUsd || 0,
+        entry.success !== false,
+      ]);
+      logger.info(`[Storage] Added rebalance history for portfolio ${entry.portfolioId} to database`);
+      return;
     } catch (error) {
-      logger.error('[Storage] Error saving history to KV:', error);
-      throw error;
+      logger.error('[Storage] Error saving history to database:', error);
+      if (process.env.VERCEL) throw error;
     }
-  } else {
-    // File-based fallback
-    const historyFile = path.join(STORAGE_DIR, `rebalance-history-${entry.portfolioId}.json`);
-    try {
-      await ensureStorageDir();
-      const history = await getRebalanceHistory(entry.portfolioId, 100);
-      history.unshift(entry);
-      await fs.writeFile(historyFile, JSON.stringify(history.slice(0, 100), null, 2), 'utf-8');
-      logger.info(`[Storage] Added rebalance history for portfolio ${entry.portfolioId} to file`);
-    } catch (error) {
-      logger.error('[Storage] Error saving history file:', error);
-      throw error;
-    }
+  }
+  
+  // File-based fallback
+  if (process.env.VERCEL) {
+    throw new Error('Database save failed and file fallback not available on Vercel');
+  }
+  
+  const historyFile = path.join(STORAGE_DIR, `rebalance-history-${entry.portfolioId}.json`);
+  try {
+    await ensureStorageDir();
+    const history = await getRebalanceHistory(entry.portfolioId, 100);
+    history.unshift(entry);
+    await fs.writeFile(historyFile, JSON.stringify(history.slice(0, 100), null, 2), 'utf-8');
+    logger.info(`[Storage] Added rebalance history for portfolio ${entry.portfolioId} to file`);
+  } catch (error) {
+    logger.error('[Storage] Error saving history file:', error);
+    throw error;
   }
 }
 
@@ -408,12 +449,14 @@ export async function addRebalanceHistory(entry: RebalanceHistory): Promise<void
  * Clear all storage (for testing)
  */
 export async function clearAllStorage(): Promise<void> {
-  if (kv) {
+  if (shouldUseDatabase()) {
     try {
-      await kv.del('auto-rebalance:configs');
-      logger.info('[Storage] Cleared all KV storage');
+      await query('DELETE FROM auto_rebalance_configs');
+      await query('DELETE FROM auto_rebalance_history');
+      await query('DELETE FROM auto_rebalance_last');
+      logger.info('[Storage] Cleared all database tables');
     } catch (error) {
-      logger.error('[Storage] Error clearing KV:', error);
+      logger.error('[Storage] Error clearing database:', error);
     }
   } else {
     try {
