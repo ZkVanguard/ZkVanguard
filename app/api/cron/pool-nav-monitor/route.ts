@@ -309,12 +309,20 @@ function generateAlerts(
 }
 
 /**
- * Record NAV snapshot
+ * Record NAV snapshot with actual pool stats
  */
-async function recordSnapshot(poolId: string, nav: number): Promise<void> {
+async function recordSnapshot(
+  poolId: string, 
+  stats: { 
+    totalNAV: number; 
+    sharePrice: number; 
+    memberCount: number; 
+    allocations: Record<string, number>; 
+  }
+): Promise<void> {
   // Add to in-memory history
   const history = navHistory.get(poolId) || [];
-  history.push({ nav, timestamp: Date.now() });
+  history.push({ nav: stats.totalNAV, timestamp: Date.now() });
   
   // Keep last 168 hours (1 week)
   if (history.length > 168) {
@@ -322,16 +330,20 @@ async function recordSnapshot(poolId: string, nav: number): Promise<void> {
   }
   navHistory.set(poolId, history);
   
-  // Also record to database
+  // Calculate total shares from NAV and share price
+  const totalShares = stats.sharePrice > 0 ? stats.totalNAV / stats.sharePrice : 1000;
+  
+  // Also record to database with actual values
   try {
     await recordNavSnapshot({
-      totalNav: nav,
-      sharePrice: nav / 1000, // Simplified
-      totalShares: 1000,
-      memberCount: 0,
-      allocations: { BTC: 35, ETH: 30, SUI: 20, CRO: 15 },
+      totalNav: stats.totalNAV,
+      sharePrice: stats.sharePrice,
+      totalShares: Math.round(totalShares),
+      memberCount: stats.memberCount,
+      allocations: stats.allocations,
       source: 'pool-nav-monitor-cron',
     });
+    logger.info(`[PoolNAVMonitor] Snapshot recorded: NAV=$${stats.totalNAV.toFixed(2)}, SharePrice=$${stats.sharePrice.toFixed(4)}, Members=${stats.memberCount}`);
   } catch (error: any) {
     logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: error?.message || String(error) });
   }
@@ -486,8 +498,13 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
     
     allAlerts.push(...alerts);
     
-    // Record snapshot
-    await recordSnapshot(pool.id, stats.totalNAV);
+    // Record snapshot with full stats
+    await recordSnapshot(pool.id, {
+      totalNAV: stats.totalNAV,
+      sharePrice: stats.sharePrice,
+      memberCount: stats.memberCount,
+      allocations: stats.allocations,
+    });
     
     // Trigger rebalance if drift too high
     if (maxDrift > DRIFT_WARNING_PERCENT * 2) {
