@@ -2,11 +2,9 @@
  * Auto-Rebalance Storage Layer
  * 
  * Provides persistent storage for auto-rebalance configurations
- * Compatible with Vercel serverless environment
+ * Uses PostgreSQL database for Vercel compatibility
  * 
- * Storage options (in order of preference):
- * 1. Vercel KV (Redis) - If available
- * 2. File-based (JSON) - Fallback for development
+ * Storage: Neon PostgreSQL (same as community-pool)
  * 
  * Usage:
  * ```ts
@@ -16,19 +14,18 @@
  */
 
 import { logger } from '../utils/logger';
+import { query, queryOne } from '../db/postgres';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Storage paths
+// Fallback storage paths for local dev
 const STORAGE_DIR = path.join(process.cwd(), 'deployments');
 const CONFIG_FILE = path.join(STORAGE_DIR, 'auto-rebalance-configs.json');
 const REBALANCE_HISTORY_FILE = path.join(STORAGE_DIR, 'rebalance-history.json');
 
-// Vercel KV client (disabled - using file-based storage for free tier)
-let kv: any = null;
-
-// File-based storage is sufficient for auto-rebalance configs
-logger.info('[Storage] Using file-based storage (optimized for free tier)');
+// Prefer database, fallback to file for local dev
+const USE_DATABASE = process.env.DATABASE_URL ? true : false;
+logger.info(`[Storage] Using ${USE_DATABASE ? 'PostgreSQL database' : 'file-based'} storage`);
 
 // Types
 export interface LossProtectionConfig {
@@ -80,28 +77,42 @@ async function ensureStorageDir() {
  * Get all auto-rebalance configurations
  */
 export async function getAutoRebalanceConfigs(): Promise<AutoRebalanceConfig[]> {
-  if (kv) {
+  if (USE_DATABASE) {
     try {
-      const configs = await kv.get('auto-rebalance:configs');
-      return configs || [];
+      // Ensure table exists
+      await ensureAutoRebalanceTable();
+      
+      const result = await query(`SELECT * FROM auto_rebalance_configs WHERE enabled = true`);
+      return result.rows.map(row => ({
+        portfolioId: row.portfolio_id,
+        walletAddress: row.wallet_address,
+        enabled: row.enabled,
+        threshold: row.threshold,
+        frequency: row.frequency,
+        autoApprovalEnabled: row.auto_approval_enabled,
+        autoApprovalThreshold: row.auto_approval_threshold,
+        targetAllocations: row.target_allocations,
+        lossProtection: row.loss_protection,
+        createdAt: new Date(row.created_at).getTime(),
+        updatedAt: new Date(row.updated_at).getTime(),
+      }));
     } catch (error) {
-      logger.error('[Storage] Error reading from KV:', error);
+      logger.error('[Storage] Error reading from database:', error);
+      // Fallback to file
+    }
+  }
+  
+  // File-based fallback for local dev
+  try {
+    await ensureStorageDir();
+    const data = await fs.readFile(CONFIG_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
       return [];
     }
-  } else {
-    // File-based fallback
-    try {
-      await ensureStorageDir();
-      const data = await fs.readFile(CONFIG_FILE, 'utf-8');
-      return JSON.parse(data);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        // File doesn't exist yet
-        return [];
-      }
-      logger.error('[Storage] Error reading config file:', error);
-      return [];
-    }
+    logger.error('[Storage] Error reading config file:', error);
+    return [];
   }
 }
 
@@ -114,47 +125,93 @@ export async function getAutoRebalanceConfig(portfolioId: number): Promise<AutoR
 }
 
 /**
+ * Ensure auto_rebalance_configs table exists
+ */
+async function ensureAutoRebalanceTable(): Promise<void> {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS auto_rebalance_configs (
+        portfolio_id INTEGER PRIMARY KEY,
+        wallet_address TEXT NOT NULL,
+        enabled BOOLEAN DEFAULT true,
+        threshold NUMERIC DEFAULT 2,
+        frequency TEXT DEFAULT 'DAILY',
+        auto_approval_enabled BOOLEAN DEFAULT true,
+        auto_approval_threshold NUMERIC DEFAULT 200000000,
+        target_allocations JSONB,
+        loss_protection JSONB,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  } catch (error) {
+    // Table might already exist
+    logger.debug('[Storage] Auto-rebalance table check:', error);
+  }
+}
+
+/**
  * Save auto-rebalance configuration
  */
 export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Promise<void> {
   config.updatedAt = Date.now();
   
-  if (kv) {
+  if (USE_DATABASE) {
     try {
-      const configs = await getAutoRebalanceConfigs();
-      const existingIndex = configs.findIndex(c => c.portfolioId === config.portfolioId);
+      await ensureAutoRebalanceTable();
       
-      if (existingIndex >= 0) {
-        configs[existingIndex] = config;
-      } else {
-        configs.push(config);
-      }
+      await query(`
+        INSERT INTO auto_rebalance_configs 
+        (portfolio_id, wallet_address, enabled, threshold, frequency, auto_approval_enabled, auto_approval_threshold, target_allocations, loss_protection, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        ON CONFLICT (portfolio_id) 
+        DO UPDATE SET
+          wallet_address = EXCLUDED.wallet_address,
+          enabled = EXCLUDED.enabled,
+          threshold = EXCLUDED.threshold,
+          frequency = EXCLUDED.frequency,
+          auto_approval_enabled = EXCLUDED.auto_approval_enabled,
+          auto_approval_threshold = EXCLUDED.auto_approval_threshold,
+          target_allocations = EXCLUDED.target_allocations,
+          loss_protection = EXCLUDED.loss_protection,
+          updated_at = NOW()
+      `, [
+        config.portfolioId,
+        config.walletAddress,
+        config.enabled,
+        config.threshold,
+        config.frequency,
+        config.autoApprovalEnabled,
+        config.autoApprovalThreshold,
+        JSON.stringify(config.targetAllocations || null),
+        JSON.stringify(config.lossProtection || null),
+      ]);
       
-      await kv.set('auto-rebalance:configs', configs);
-      logger.info(`[Storage] Saved config for portfolio ${config.portfolioId} to KV`);
+      logger.info(`[Storage] Saved config for portfolio ${config.portfolioId} to database`);
+      return;
     } catch (error) {
-      logger.error('[Storage] Error saving to KV:', error);
-      throw error;
+      logger.error('[Storage] Error saving to database:', error);
+      // Fallback to file for local dev
     }
-  } else {
-    // File-based fallback
-    try {
-      await ensureStorageDir();
-      const configs = await getAutoRebalanceConfigs();
-      const existingIndex = configs.findIndex(c => c.portfolioId === config.portfolioId);
-      
-      if (existingIndex >= 0) {
-        configs[existingIndex] = config;
-      } else {
-        configs.push(config);
-      }
-      
-      await fs.writeFile(CONFIG_FILE, JSON.stringify(configs, null, 2), 'utf-8');
-      logger.info(`[Storage] Saved config for portfolio ${config.portfolioId} to file`);
-    } catch (error) {
-      logger.error('[Storage] Error saving config file:', error);
-      throw error;
+  }
+  
+  // File-based fallback
+  try {
+    await ensureStorageDir();
+    const configs = await getAutoRebalanceConfigs();
+    const existingIndex = configs.findIndex(c => c.portfolioId === config.portfolioId);
+    
+    if (existingIndex >= 0) {
+      configs[existingIndex] = config;
+    } else {
+      configs.push(config);
     }
+    
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(configs, null, 2), 'utf-8');
+    logger.info(`[Storage] Saved config for portfolio ${config.portfolioId} to file`);
+  } catch (error) {
+    logger.error('[Storage] Error saving config file:', error);
+    throw error;
   }
 }
 
@@ -162,27 +219,26 @@ export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Prom
  * Delete auto-rebalance configuration
  */
 export async function deleteAutoRebalanceConfig(portfolioId: number): Promise<void> {
-  if (kv) {
+  if (USE_DATABASE) {
     try {
-      const configs = await getAutoRebalanceConfigs();
-      const filtered = configs.filter(c => c.portfolioId !== portfolioId);
-      await kv.set('auto-rebalance:configs', filtered);
-      logger.info(`[Storage] Deleted config for portfolio ${portfolioId} from KV`);
+      await query('DELETE FROM auto_rebalance_configs WHERE portfolio_id = $1', [portfolioId]);
+      logger.info(`[Storage] Deleted config for portfolio ${portfolioId} from database`);
+      return;
     } catch (error) {
-      logger.error('[Storage] Error deleting from KV:', error);
-      throw error;
+      logger.error('[Storage] Error deleting from database:', error);
+      // Fallback to file
     }
-  } else {
-    // File-based fallback
-    try {
-      const configs = await getAutoRebalanceConfigs();
-      const filtered = configs.filter(c => c.portfolioId !== portfolioId);
-      await fs.writeFile(CONFIG_FILE, JSON.stringify(filtered, null, 2), 'utf-8');
-      logger.info(`[Storage] Deleted config for portfolio ${portfolioId} from file`);
-    } catch (error) {
-      logger.error('[Storage] Error deleting config file:', error);
-      throw error;
-    }
+  }
+  
+  // File-based fallback
+  try {
+    const configs = await getAutoRebalanceConfigs();
+    const filtered = configs.filter(c => c.portfolioId !== portfolioId);
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(filtered, null, 2), 'utf-8');
+    logger.info(`[Storage] Deleted config for portfolio ${portfolioId} from file`);
+  } catch (error) {
+    logger.error('[Storage] Error deleting config file:', error);
+    throw error;
   }
 }
 
@@ -190,28 +246,34 @@ export async function deleteAutoRebalanceConfig(portfolioId: number): Promise<vo
  * Get last rebalance timestamp for a portfolio
  */
 export async function getLastRebalance(portfolioId: number): Promise<number | null> {
-  if (kv) {
+  if (USE_DATABASE) {
     try {
-      const timestamp = await kv.get(`auto-rebalance:last:${portfolioId}`);
-      return timestamp || null;
-    } catch (error) {
-      logger.error('[Storage] Error reading last rebalance from KV:', error);
-      return null;
-    }
-  } else {
-    // File-based fallback
-    try {
-      await ensureStorageDir();
-      const data = await fs.readFile(REBALANCE_HISTORY_FILE, 'utf-8');
-      const history: Record<string, number> = JSON.parse(data);
-      return history[portfolioId] || null;
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        return null;
+      const result = await query(
+        'SELECT last_rebalance FROM auto_rebalance_last WHERE portfolio_id = $1',
+        [portfolioId]
+      );
+      if (result.rows.length > 0) {
+        return result.rows[0].last_rebalance;
       }
-      logger.error('[Storage] Error reading rebalance history:', error);
+      return null;
+    } catch (error) {
+      logger.debug('[Storage] Error reading last rebalance from database (table may not exist):', error);
+      // Fallback to file
+    }
+  }
+  
+  // File-based fallback
+  try {
+    await ensureStorageDir();
+    const data = await fs.readFile(REBALANCE_HISTORY_FILE, 'utf-8');
+    const history: Record<string, number> = JSON.parse(data);
+    return history[portfolioId] || null;
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
       return null;
     }
+    logger.error('[Storage] Error reading rebalance history:', error);
+    return null;
   }
 }
 
@@ -219,36 +281,51 @@ export async function getLastRebalance(portfolioId: number): Promise<number | nu
  * Save last rebalance timestamp
  */
 export async function saveLastRebalance(portfolioId: number, timestamp: number): Promise<void> {
-  if (kv) {
+  if (USE_DATABASE) {
     try {
-      await kv.set(`auto-rebalance:last:${portfolioId}`, timestamp);
-      logger.info(`[Storage] Saved last rebalance for portfolio ${portfolioId} to KV`);
-    } catch (error) {
-      logger.error('[Storage] Error saving last rebalance to KV:', error);
-      throw error;
-    }
-  } else {
-    // File-based fallback
-    try {
-      await ensureStorageDir();
-      let history: Record<string, number> = {};
+      await query(`
+        CREATE TABLE IF NOT EXISTS auto_rebalance_last (
+          portfolio_id INTEGER PRIMARY KEY,
+          last_rebalance BIGINT NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
       
-      try {
-        const data = await fs.readFile(REBALANCE_HISTORY_FILE, 'utf-8');
-        history = JSON.parse(data);
-      } catch (error: any) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
+      await query(`
+        INSERT INTO auto_rebalance_last (portfolio_id, last_rebalance, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (portfolio_id) 
+        DO UPDATE SET last_rebalance = EXCLUDED.last_rebalance, updated_at = NOW()
+      `, [portfolioId, timestamp]);
+      
+      logger.info(`[Storage] Saved last rebalance for portfolio ${portfolioId} to database`);
+      return;
+    } catch (error) {
+      logger.error('[Storage] Error saving last rebalance to database:', error);
+      // Fallback to file
+    }
+  }
+  
+  // File-based fallback
+  try {
+    await ensureStorageDir();
+    let history: Record<string, number> = {};
+    
+    try {
+      const data = await fs.readFile(REBALANCE_HISTORY_FILE, 'utf-8');
+      history = JSON.parse(data);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
       }
-      
-      history[portfolioId] = timestamp;
-      await fs.writeFile(REBALANCE_HISTORY_FILE, JSON.stringify(history, null, 2), 'utf-8');
-      logger.info(`[Storage] Saved last rebalance for portfolio ${portfolioId} to file`);
-    } catch (error) {
-      logger.error('[Storage] Error saving rebalance history:', error);
-      throw error;
     }
+    
+    history[portfolioId] = timestamp;
+    await fs.writeFile(REBALANCE_HISTORY_FILE, JSON.stringify(history, null, 2), 'utf-8');
+    logger.info(`[Storage] Saved last rebalance for portfolio ${portfolioId} to file`);
+  } catch (error) {
+    logger.error('[Storage] Error saving rebalance history:', error);
+    throw error;
   }
 }
 
