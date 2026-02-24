@@ -23,9 +23,12 @@ const STORAGE_DIR = path.join(process.cwd(), 'deployments');
 const CONFIG_FILE = path.join(STORAGE_DIR, 'auto-rebalance-configs.json');
 const REBALANCE_HISTORY_FILE = path.join(STORAGE_DIR, 'rebalance-history.json');
 
-// Prefer database, fallback to file for local dev
-const USE_DATABASE = process.env.DATABASE_URL ? true : false;
-logger.info(`[Storage] Using ${USE_DATABASE ? 'PostgreSQL database' : 'file-based'} storage`);
+// Function to check if we should use database (checked at runtime, not module load)
+function shouldUseDatabase(): boolean {
+  const hasDb = Boolean(process.env.DATABASE_URL);
+  const isVercel = Boolean(process.env.VERCEL);
+  return hasDb || isVercel; // Always use DB on Vercel (file system is read-only)
+}
 
 // Types
 export interface LossProtectionConfig {
@@ -77,7 +80,7 @@ async function ensureStorageDir() {
  * Get all auto-rebalance configurations
  */
 export async function getAutoRebalanceConfigs(): Promise<AutoRebalanceConfig[]> {
-  if (USE_DATABASE) {
+  if (shouldUseDatabase()) {
     try {
       // Ensure table exists
       await ensureAutoRebalanceTable();
@@ -156,7 +159,7 @@ async function ensureAutoRebalanceTable(): Promise<void> {
 export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Promise<void> {
   config.updatedAt = Date.now();
   
-  if (USE_DATABASE) {
+  if (shouldUseDatabase()) {
     try {
       await ensureAutoRebalanceTable();
       
@@ -223,7 +226,7 @@ export async function saveAutoRebalanceConfig(config: AutoRebalanceConfig): Prom
  * Delete auto-rebalance configuration
  */
 export async function deleteAutoRebalanceConfig(portfolioId: number): Promise<void> {
-  if (USE_DATABASE) {
+  if (shouldUseDatabase()) {
     try {
       await query('DELETE FROM auto_rebalance_configs WHERE portfolio_id = $1', [portfolioId]);
       logger.info(`[Storage] Deleted config for portfolio ${portfolioId} from database`);
@@ -250,7 +253,7 @@ export async function deleteAutoRebalanceConfig(portfolioId: number): Promise<vo
  * Get last rebalance timestamp for a portfolio
  */
 export async function getLastRebalance(portfolioId: number): Promise<number | null> {
-  if (USE_DATABASE) {
+  if (shouldUseDatabase()) {
     try {
       const result = await query(
         'SELECT last_rebalance FROM auto_rebalance_last WHERE portfolio_id = $1',
@@ -285,7 +288,7 @@ export async function getLastRebalance(portfolioId: number): Promise<number | nu
  * Save last rebalance timestamp
  */
 export async function saveLastRebalance(portfolioId: number, timestamp: number): Promise<void> {
-  if (USE_DATABASE) {
+  if (shouldUseDatabase()) {
     try {
       await query(`
         CREATE TABLE IF NOT EXISTS auto_rebalance_last (
