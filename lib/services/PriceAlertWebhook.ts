@@ -313,9 +313,17 @@ async function checkHeartbeat(): Promise<void> {
           'X-Heartbeat-Trigger': 'true',
         },
       }),
+      // Auto-rebalance includes loss protection for configured portfolios (e.g. Portfolio #3)
+      fetch(`${baseUrl}/api/cron/auto-rebalance`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          'X-Heartbeat-Trigger': 'true',
+        },
+      }),
     ]);
     
-    logger.info('[PriceAlert] Heartbeat monitoring completed');
+    logger.info('[PriceAlert] Heartbeat monitoring completed (hedge + liquidation + pool-nav + auto-rebalance)');
   } catch (error: any) {
     logger.error('[PriceAlert] Heartbeat error:', { error: error?.message || String(error) });
   }
