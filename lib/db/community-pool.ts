@@ -512,6 +512,35 @@ export async function cleanupOldNavSnapshots(keepDays = 365): Promise<number> {
   }
 }
 
+/**
+ * Reset NAV history completely and insert a fresh starting point
+ * Used when bad data has accumulated
+ */
+export async function resetNavHistory(currentNav: number, sharePrice: number, totalShares: number, memberCount: number): Promise<{ deleted: number; inserted: boolean }> {
+  try {
+    // Delete all NAV history
+    const deleted = await query(
+      `DELETE FROM community_pool_nav_history RETURNING id`,
+      []
+    );
+    logger.info('[CommunityPool DB] Deleted all NAV history', { count: deleted.length });
+    
+    // Insert fresh starting point
+    await query(
+      `INSERT INTO community_pool_nav_history 
+       (total_nav, share_price, total_shares, member_count, allocations, source)
+       VALUES ($1, $2, $3, $4, '{"BTC": 35, "ETH": 30, "SUI": 20, "CRO": 15}'::jsonb, 'manual-reset')`,
+      [currentNav, sharePrice, totalShares, memberCount]
+    );
+    logger.info('[CommunityPool DB] Inserted fresh NAV snapshot', { nav: currentNav, sharePrice, totalShares });
+    
+    return { deleted: deleted.length, inserted: true };
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to reset NAV history', error);
+    throw error;
+  }
+}
+
 // ============ Table Initialization ============
 
 /**
