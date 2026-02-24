@@ -18,7 +18,8 @@ import {
   saveAutoRebalanceConfig, 
   getAutoRebalanceConfig,
   getAutoRebalanceConfigs,
-  deleteAutoRebalanceConfig 
+  deleteAutoRebalanceConfig,
+  type AutoRebalanceConfig as StorageAutoRebalanceConfig
 } from '@/lib/storage/auto-rebalance-storage';
 
 export const runtime = 'nodejs';
@@ -257,7 +258,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update with new loss protection config
-    const updatedConfig: AutoRebalanceConfig = {
+    const updatedConfig: StorageAutoRebalanceConfig = {
       ...existingConfig,
       lossProtection: lossProtection ?? existingConfig.lossProtection,
       updatedAt: Date.now(),

@@ -86,7 +86,7 @@ export async function getAutoRebalanceConfigs(): Promise<AutoRebalanceConfig[]> 
       await ensureAutoRebalanceTable();
       
       const result = await query(`SELECT * FROM auto_rebalance_configs WHERE enabled = true`);
-      return result.rows.map(row => ({
+      return result.map((row: any) => ({
         portfolioId: row.portfolio_id,
         walletAddress: row.wallet_address,
         enabled: row.enabled,
@@ -149,7 +149,7 @@ async function ensureAutoRebalanceTable(): Promise<void> {
     `);
   } catch (error) {
     // Table might already exist
-    logger.debug('[Storage] Auto-rebalance table check:', error);
+    logger.debug('[Storage] Auto-rebalance table check:', { error: String(error) });
   }
 }
 
@@ -268,12 +268,12 @@ export async function getLastRebalance(portfolioId: number): Promise<number | nu
         'SELECT last_rebalance FROM auto_rebalance_last WHERE portfolio_id = $1',
         [portfolioId]
       );
-      if (result.rows.length > 0) {
-        return result.rows[0].last_rebalance;
+      if (result.length > 0) {
+        return (result[0] as any).last_rebalance;
       }
       return null;
     } catch (error) {
-      logger.debug('[Storage] Error reading last rebalance from database (table may not exist):', error);
+      logger.debug('[Storage] Error reading last rebalance from database (table may not exist):', { error: String(error) });
       // Fallback to file
     }
   }
@@ -356,12 +356,10 @@ export async function getRebalanceHistory(portfolioId: number, limit: number = 1
           id SERIAL PRIMARY KEY,
           portfolio_id INTEGER NOT NULL,
           timestamp BIGINT NOT NULL,
-          type TEXT,
-          action TEXT,
-          allocations JSONB,
-          drift_percent NUMERIC,
-          gas_cost_usd NUMERIC,
-          success BOOLEAN DEFAULT true
+          drift NUMERIC,
+          tx_hash TEXT,
+          actions JSONB,
+          cost NUMERIC
         )
       `);
       
@@ -369,18 +367,16 @@ export async function getRebalanceHistory(portfolioId: number, limit: number = 1
         'SELECT * FROM auto_rebalance_history WHERE portfolio_id = $1 ORDER BY timestamp DESC LIMIT $2',
         [portfolioId, limit]
       );
-      return result.rows.map((row: any) => ({
+      return result.map((row: any) => ({
         portfolioId: row.portfolio_id,
-        timestamp: row.timestamp,
-        type: row.type,
-        action: row.action,
-        allocations: row.allocations,
-        driftPercent: row.drift_percent,
-        gasCostUsd: row.gas_cost_usd,
-        success: row.success,
+        timestamp: Number(row.timestamp),
+        drift: Number(row.drift) || 0,
+        txHash: row.tx_hash || '',
+        actions: row.actions || [],
+        cost: Number(row.cost) || 0,
       }));
     } catch (error) {
-      logger.debug('[Storage] Error reading history from database:', error);
+      logger.debug('[Storage] Error reading history from database:', { error: String(error) });
       return [];
     }
   }
@@ -407,17 +403,15 @@ export async function addRebalanceHistory(entry: RebalanceHistory): Promise<void
   if (shouldUseDatabase()) {
     try {
       await query(`
-        INSERT INTO auto_rebalance_history (portfolio_id, timestamp, type, action, allocations, drift_percent, gas_cost_usd, success)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO auto_rebalance_history (portfolio_id, timestamp, drift, tx_hash, actions, cost)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         entry.portfolioId,
         entry.timestamp,
-        entry.type || 'rebalance',
-        entry.action || 'auto',
-        JSON.stringify(entry.allocations || null),
-        entry.driftPercent || 0,
-        entry.gasCostUsd || 0,
-        entry.success !== false,
+        entry.drift || 0,
+        entry.txHash || '',
+        JSON.stringify(entry.actions || []),
+        entry.cost || 0,
       ]);
       logger.info(`[Storage] Added rebalance history for portfolio ${entry.portfolioId} to database`);
       return;
