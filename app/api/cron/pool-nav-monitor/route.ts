@@ -68,6 +68,7 @@ const DRAWDOWN_CRITICAL_PERCENT = 10; // Critical at 10% drawdown
 const DRIFT_WARNING_PERCENT = 3; // Warn if allocation drifts 3%+ from target
 const HOURLY_LOSS_WARNING_PERCENT = 1; // Warn on 1%+ hourly loss
 const DAILY_LOSS_WARNING_PERCENT = 3; // Warn on 3%+ daily loss
+const AUTO_HEDGE_THRESHOLD_PERCENT = 2; // Trigger hedge at 2%+ loss
 
 // Pool contract addresses
 const POOLS = [
@@ -86,6 +87,10 @@ const POOLS = [
 // In-memory peak NAV tracking (would use database in production)
 const peakNavTracker = new Map<string, number>();
 const navHistory = new Map<string, { nav: number; timestamp: number }[]>();
+
+// Last hedge time tracking to prevent spam (cooldown 4 hours)
+const lastPoolHedgeTime = new Map<string, number>();
+const POOL_HEDGE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
 /**
  * Fetch pool stats from blockchain
@@ -309,6 +314,77 @@ async function triggerRebalanceIfNeeded(pool: typeof POOLS[0], maxDrift: number)
 }
 
 /**
+ * Trigger protective hedge for pool on significant loss
+ */
+async function triggerPoolHedge(
+  pool: typeof POOLS[0],
+  totalNAV: number,
+  lossPercent: number,
+  largestAsset: string
+): Promise<boolean> {
+  const now = Date.now();
+  const lastHedge = lastPoolHedgeTime.get(pool.id) || 0;
+  
+  // Check cooldown
+  if (now - lastHedge < POOL_HEDGE_COOLDOWN_MS) {
+    logger.info(`[PoolNAVMonitor] Hedge cooldown active for ${pool.id}, skipping`);
+    return false;
+  }
+  
+  try {
+    const baseUrl = process.env.VERCEL 
+      ? 'https://zkvanguard.vercel.app' 
+      : process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    
+    // Calculate hedge size - 25% of NAV as protective hedge
+    const hedgeRatio = 0.25;
+    const hedgeNotional = totalNAV * hedgeRatio;
+    const hedgeLeverage = 3; // Conservative leverage
+    
+    logger.warn(`[PoolNAVMonitor] Triggering protective hedge for ${pool.id}`, {
+      lossPercent,
+      hedgeNotional,
+      asset: largestAsset,
+    });
+    
+    const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Pool-Hedge-Trigger': 'true',
+      },
+      body: JSON.stringify({
+        portfolioId: `pool-${pool.id}`,
+        asset: largestAsset,
+        strategy: 'PROTECTIVE_PUT',
+        notionalValue: hedgeNotional,
+        leverage: hedgeLeverage,
+        side: 'SHORT', // Protective short since pool is NET LONG
+        orderType: 'MARKET',
+        reason: `Auto loss protection: ${pool.name} down ${Math.abs(lossPercent).toFixed(2)}%`,
+        simulationMode: false,
+        requiresSignature: false,
+        systemSecret: process.env.CRON_SECRET, // System auth for auto-execution
+      }),
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      lastPoolHedgeTime.set(pool.id, now);
+      logger.info(`[PoolNAVMonitor] Protective hedge executed for ${pool.id}:`, result);
+      return true;
+    } else {
+      const errorText = await response.text();
+      logger.error(`[PoolNAVMonitor] Hedge failed for ${pool.id}:`, errorText);
+    }
+  } catch (error) {
+    logger.error(`[PoolNAVMonitor] Failed to trigger hedge for ${pool.id}:`, error);
+  }
+  
+  return false;
+}
+
+/**
  * Monitor all pools
  */
 async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAlert[]; summary: PoolMonitorResult['summary'] }> {
@@ -360,6 +436,23 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
     // Trigger rebalance if drift too high
     if (maxDrift > DRIFT_WARNING_PERCENT * 2) {
       await triggerRebalanceIfNeeded(pool, maxDrift);
+    }
+    
+    // AUTO-HEDGE: Trigger protective hedge if pool is down > 2%
+    if (navChangePercent <= -AUTO_HEDGE_THRESHOLD_PERCENT || drawdownPercent >= AUTO_HEDGE_THRESHOLD_PERCENT) {
+      // Find largest allocation asset to hedge
+      const largestAsset = Object.entries(stats.allocations)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || 'BTC';
+      
+      const hedged = await triggerPoolHedge(pool, stats.totalNAV, navChangePercent || -drawdownPercent, largestAsset);
+      if (hedged) {
+        alerts.push({
+          severity: 'WARNING',
+          type: 'PERFORMANCE',
+          message: `${pool.name} auto-hedged: protective SHORT placed due to ${Math.abs(navChangePercent || drawdownPercent).toFixed(2)}% loss`,
+          timestamp: Date.now(),
+        });
+      }
     }
     
     const metrics: PoolMetrics = {
