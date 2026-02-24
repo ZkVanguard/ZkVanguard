@@ -31,7 +31,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // On-chain contract addresses
-const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
 
 // Minimal ABI for reading pool stats

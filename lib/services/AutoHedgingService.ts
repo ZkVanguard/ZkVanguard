@@ -130,7 +130,7 @@ class AutoHedgingService {
 
     // CommunityPool - Enable auto-hedging for TVL protection
     // Uses special portfolioId: 0 to indicate community pool
-    // Contract: 0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30
+    // Contract: 0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B (V2 with Pyth Oracle)
     this.enableForCommunityPool();
   }
 
@@ -139,7 +139,7 @@ class AutoHedgingService {
    */
   private async enableForCommunityPool(): Promise<void> {
     const COMMUNITY_POOL_ID = 0; // Special ID for community pool
-    const COMMUNITY_POOL_CONTRACT = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+    const COMMUNITY_POOL_CONTRACT = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
     
     this.autoHedgeConfigs.set(COMMUNITY_POOL_ID, {
       portfolioId: COMMUNITY_POOL_ID,
@@ -480,7 +480,7 @@ class AutoHedgingService {
    * Fetches on-chain data from CommunityPool contract
    */
   private async assessCommunityPoolRisk(): Promise<RiskAssessment> {
-    const COMMUNITY_POOL_CONTRACT = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+    const COMMUNITY_POOL_CONTRACT = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
     const COMMUNITY_POOL_ABI = [
       'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
     ];

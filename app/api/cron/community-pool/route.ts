@@ -19,7 +19,7 @@ import { recordNavSnapshot, initCommunityPoolTables } from '@/lib/db/community-p
 import { ethers } from 'ethers';
 
 // CommunityPool contract details
-const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
 const COMMUNITY_POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
   'function setTargetAllocation(uint256[4] newAllocationBps, string reasoning)',
