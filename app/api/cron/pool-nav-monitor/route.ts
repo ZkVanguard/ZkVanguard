@@ -145,10 +145,30 @@ function getPreviousNAV(poolId: string): number | null {
 }
 
 /**
- * Calculate drawdown from peak
+ * Calculate drawdown from peak - uses database NAV history for persistence
  */
-function calculateDrawdown(poolId: string, currentNAV: number): { drawdownPercent: number; peakNAV: number } {
-  const peak = peakNavTracker.get(poolId) || currentNAV;
+async function calculateDrawdown(poolId: string, currentNAV: number): Promise<{ drawdownPercent: number; peakNAV: number }> {
+  // Try to get peak from database first (persists across cold starts)
+  let peak = peakNavTracker.get(poolId);
+  
+  if (!peak) {
+    // Load NAV history from database to find peak
+    try {
+      const navHistory = await getNavHistory(30); // Last 30 days
+      if (navHistory && navHistory.length > 0) {
+        peak = Math.max(...navHistory.map(h => h.total_nav));
+        peakNavTracker.set(poolId, peak);
+        logger.info(`[PoolNAVMonitor] Loaded peak NAV from DB: $${peak.toFixed(2)}`);
+      }
+    } catch (error) {
+      logger.warn('[PoolNAVMonitor] Could not load NAV history for peak calculation');
+    }
+  }
+  
+  // Default to current NAV if no history
+  if (!peak) {
+    peak = currentNAV;
+  }
   
   // Update peak if new high
   if (currentNAV > peak) {
@@ -409,7 +429,7 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
     const navChange = previousNAV ? stats.totalNAV - previousNAV : 0;
     const navChangePercent = previousNAV ? (navChange / previousNAV) * 100 : 0;
     
-    const { drawdownPercent, peakNAV } = calculateDrawdown(pool.id, stats.totalNAV);
+    const { drawdownPercent, peakNAV } = await calculateDrawdown(pool.id, stats.totalNAV);
     const { maxDrift, driftingAssets } = checkAllocationDrift(stats.allocations, pool.targetAllocations);
     
     // Calculate since inception
