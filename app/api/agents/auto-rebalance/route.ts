@@ -215,3 +215,81 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+/**
+ * PATCH - Update existing auto-rebalance config (e.g., enable drawdown protection)
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { portfolioId, walletAddress, lossProtection } = body;
+
+    if (!portfolioId) {
+      return NextResponse.json(
+        { success: false, error: 'portfolioId required' },
+        { status: 400 }
+      );
+    }
+
+    // Get existing config or create new one
+    let existingConfig = await getAutoRebalanceConfig(parseInt(portfolioId));
+    
+    if (!existingConfig && walletAddress) {
+      // Create new config with defaults
+      existingConfig = {
+        portfolioId: parseInt(portfolioId),
+        walletAddress,
+        enabled: true,
+        threshold: 2,
+        frequency: 'DAILY' as RebalanceFrequency,
+        autoApprovalEnabled: true,
+        autoApprovalThreshold: 200000000,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+    }
+
+    if (!existingConfig) {
+      return NextResponse.json(
+        { success: false, error: 'Config not found. Provide walletAddress to create new config.' },
+        { status: 404 }
+      );
+    }
+
+    // Update with new loss protection config
+    const updatedConfig: AutoRebalanceConfig = {
+      ...existingConfig,
+      lossProtection: lossProtection ?? existingConfig.lossProtection,
+      updatedAt: Date.now(),
+    };
+
+    // Save to persistent storage
+    await saveAutoRebalanceConfig(updatedConfig);
+
+    // Also update in-memory service
+    autoRebalanceService.enableForPortfolio(updatedConfig);
+
+    logger.info('[API] Updated auto-rebalance config', {
+      portfolioId,
+      lossProtection: updatedConfig.lossProtection,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Auto-rebalance config updated for portfolio ${portfolioId}`,
+      config: updatedConfig,
+    });
+  } catch (error) {
+    logger.error('[API] Auto-rebalance PATCH error', {
+      error: error instanceof Error ? error.message : error,
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
