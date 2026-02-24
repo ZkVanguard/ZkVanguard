@@ -31,6 +31,17 @@ let kv: any = null;
 logger.info('[Storage] Using file-based storage (optimized for free tier)');
 
 // Types
+export interface LossProtectionConfig {
+  enabled: boolean;
+  mode?: 'entry' | 'drawdown' | 'both';
+  lossThresholdPercent: number;
+  drawdownThresholdPercent?: number;
+  action: 'hedge' | 'sell_to_stable';
+  hedgeRatio: number;
+  maxHedgeLeverage: number;
+  cooldownHours?: number;
+}
+
 export interface AutoRebalanceConfig {
   portfolioId: number;
   walletAddress: string;
@@ -40,6 +51,7 @@ export interface AutoRebalanceConfig {
   autoApprovalEnabled: boolean;
   autoApprovalThreshold: number;
   targetAllocations?: Record<string, number>;
+  lossProtection?: LossProtectionConfig;
   createdAt: number;
   updatedAt: number;
 }
