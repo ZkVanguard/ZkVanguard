@@ -500,6 +500,10 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
   try {
     const navSeries = await getHistoricalNAV();
     
+    // Minimum data points for meaningful risk metrics
+    // 7 points = 1 week of daily data, minimum for statistical significance
+    const MIN_DATA_POINTS = 7;
+    
     // Check for insufficient data
     if (navSeries.length < 2) {
       logger.info('[RiskMetrics] Insufficient data for risk calculation', {
@@ -521,6 +525,35 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
         ...emptyMetrics,
         dataPoints: navSeries.length,
         insufficientDataReason: 'Unable to calculate returns from available data.',
+      };
+    }
+    
+    // Check if we have enough data for statistically meaningful metrics
+    if (navSeries.length < MIN_DATA_POINTS) {
+      logger.info('[RiskMetrics] Limited data, returning conservative metrics', {
+        dataPoints: navSeries.length,
+        minRequired: MIN_DATA_POINTS,
+      });
+      
+      // Calculate only basic metrics that are meaningful with limited data
+      const { maxDD, maxDDDate } = calculateMaxDrawdown(navSeries);
+      const currentDD = calculateCurrentDrawdown(navSeries);
+      const returnsSinceInception = navSeries.length > 1 
+        ? (navSeries[navSeries.length - 1].nav - navSeries[0].nav) / navSeries[0].nav 
+        : 0;
+      
+      return {
+        ...emptyMetrics,
+        maxDrawdown: parseFloat(clamp(maxDD * 100, 0, 99.9).toFixed(2)),
+        maxDrawdownDate: maxDDDate,
+        currentDrawdown: parseFloat(clamp(currentDD * 100, 0, 99.9).toFixed(2)),
+        returnsSinceInception: parseFloat(clamp(returnsSinceInception * 100, -99, 10000).toFixed(2)),
+        dataPoints: returns.length,
+        lastCalculated: new Date().toISOString(),
+        periodStart: new Date(navSeries[0].timestamp).toISOString(),
+        periodEnd: new Date(navSeries[navSeries.length - 1].timestamp).toISOString(),
+        insufficientData: true,
+        insufficientDataReason: `Only ${navSeries.length} data points available. At least ${MIN_DATA_POINTS} required for statistically meaningful risk metrics.`,
       };
     }
     
