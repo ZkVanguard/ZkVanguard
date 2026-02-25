@@ -294,13 +294,29 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
   try {
     const navHistory = await getNavHistory(365);
     
-    if (navHistory.length >= 2) {
-      // Check for real price variation (convert to numbers for comparison)
+    // If we have NAV history, trust it as the source of truth
+    // Don't fall back to potentially corrupt transaction history
+    if (navHistory.length >= 1) {
       const prices = navHistory.map(h => Number(h.share_price));
-      const uniquePrices = new Set(prices);
+      
+      // Need at least 2 points to calculate returns
+      if (navHistory.length < 2) {
+        logger.info('[RiskMetrics] NAV history has only 1 entry, insufficient for metrics', {
+          dataPoints: navHistory.length,
+          price: prices[0],
+        });
+        // Return the single point anyway - caller will handle insufficient data
+        return navHistory.map(h => ({
+          timestamp: h.timestamp.getTime(),
+          nav: 10000 * Number(h.share_price),
+          sharePrice: Number(h.share_price),
+        }));
+      }
+      
+      const uniquePrices = new Set(prices.map(p => p.toFixed(4)));
       // Has real data if: multiple different prices, OR single price that isn't ~1.0
       const hasRealPriceData = uniquePrices.size > 1 || 
-        (uniquePrices.size === 1 && Math.abs([...uniquePrices][0] - 1.0) > 0.001);
+        (uniquePrices.size === 1 && Math.abs(prices[0] - 1.0) > 0.001);
       
       if (hasRealPriceData) {
         logger.info('[RiskMetrics] Using database NAV history', {
@@ -308,25 +324,25 @@ async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
           uniquePrices: uniquePrices.size,
           priceRange: `${Math.min(...prices).toFixed(4)} - ${Math.max(...prices).toFixed(4)}`,
         });
-        
-        const baseNAV = 10000; // Normalize to $10k base
-        return navHistory.map(h => ({
-          timestamp: h.timestamp.getTime(),
-          nav: baseNAV * Number(h.share_price),
-          sharePrice: Number(h.share_price),
-        }));
       } else {
-        logger.info('[RiskMetrics] NAV history has no price variation, falling back to transactions', {
+        logger.info('[RiskMetrics] NAV history has no price variation (early stage pool)', {
           dataPoints: navHistory.length,
-          price: [...uniquePrices][0],
+          price: prices[0],
         });
       }
+      
+      const baseNAV = 10000; // Normalize to $10k base
+      return navHistory.map(h => ({
+        timestamp: h.timestamp.getTime(),
+        nav: baseNAV * Number(h.share_price),
+        sharePrice: Number(h.share_price),
+      }));
     }
   } catch (err) {
     logger.warn('[RiskMetrics] Failed to fetch database NAV history, falling back to transactions', { err });
   }
   
-  // Fallback to transaction history
+  // Fallback to transaction history - ONLY if no NAV history exists at all
   const history = await getPoolHistory(365);
   
   // Need at least 2 data points to calculate returns
