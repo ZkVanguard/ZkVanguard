@@ -18,6 +18,7 @@ import {
   withdraw,
   getPoolSummary,
   fetchLivePrices,
+  calculatePoolNAV,
 } from '@/lib/services/CommunityPoolService';
 import {
   getUserShares,
@@ -297,35 +298,34 @@ export async function GET(request: NextRequest) {
     }
     
     // Default: Get pool summary
-    // Try on-chain first for accurate NAV, fall back to local calculation
+    // Use market-adjusted NAV (virtual holdings × current prices) for accurate display
+    // On-chain provides member count and share structure, DB provides virtual holdings
     try {
       const onChainPool = await getOnChainPoolData();
-      if (onChainPool && onChainPool.totalValueUSD > 0) {
-        // On-chain data is authoritative when pool has value
-        const livePrices = await fetchLivePrices();
+      const marketNAV = await calculatePoolNAV();
+      
+      if (onChainPool && onChainPool.totalShares > 0) {
+        // Blend on-chain structure with market-adjusted NAV
+        const marketSharePrice = marketNAV.totalValueUSD / onChainPool.totalShares;
+        
         return NextResponse.json({
           success: true,
           pool: {
-            totalValueUSD: onChainPool.totalValueUSD,
+            totalValueUSD: marketNAV.totalValueUSD,
             totalShares: onChainPool.totalShares,
-            sharePrice: onChainPool.sharePrice,
+            sharePrice: marketSharePrice,
             totalMembers: onChainPool.totalMembers,
-            allocations: {
-              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.BTC.percentage / 100, amount: 0, price: livePrices.BTC },
-              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.ETH.percentage / 100, amount: 0, price: livePrices.ETH },
-              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.CRO.percentage / 100, amount: 0, price: livePrices.CRO },
-              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: onChainPool.totalValueUSD * onChainPool.allocations.SUI.percentage / 100, amount: 0, price: livePrices.SUI },
-            },
+            allocations: marketNAV.allocations,
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
           },
           supportedAssets: SUPPORTED_ASSETS,
           timestamp: Date.now(),
-          source: 'onchain',
+          source: 'market-adjusted',
         });
       }
     } catch (e) {
-      // Fall back to local calculation
+      logger.warn('[CommunityPool API] Market-adjusted NAV failed, falling back', { error: e });
     }
     
     // Fallback: Local calculated NAV (for when on-chain has no value)
