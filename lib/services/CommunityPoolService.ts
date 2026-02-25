@@ -147,14 +147,41 @@ export async function calculatePoolNAV(): Promise<{
   let totalValueUSD = 0;
   const allocations = { ...poolState.allocations };
   
-  for (const asset of SUPPORTED_ASSETS) {
-    const amount = allocations[asset].amount;
-    const price = prices[asset];
-    const valueUSD = amount * price;
+  // Check if we need to initialize virtual holdings (migration from on-chain only)
+  const hasAmounts = SUPPORTED_ASSETS.some(a => allocations[a].amount > 0);
+  if (!hasAmounts && poolState.totalShares > 0) {
+    // Initialize virtual holdings based on on-chain NAV and target percentages
+    // Assume pool deposited at current share price (~$1.00 per share)
+    const baselineNAV = poolState.totalShares * poolState.sharePrice;
+    logger.info('[CommunityPool] Initializing virtual holdings from baseline', { 
+      baselineNAV, 
+      totalShares: poolState.totalShares 
+    });
     
-    allocations[asset].price = price;
-    allocations[asset].valueUSD = valueUSD;
-    totalValueUSD += valueUSD;
+    for (const asset of SUPPORTED_ASSETS) {
+      const targetPct = poolState.allocations[asset].percentage / 100;
+      const valueForAsset = baselineNAV * targetPct;
+      const price = prices[asset];
+      allocations[asset].amount = valueForAsset / price;
+      allocations[asset].price = price;
+      allocations[asset].valueUSD = valueForAsset;
+      totalValueUSD += valueForAsset;
+    }
+    
+    // Persist initialized amounts
+    poolState.allocations = allocations;
+    await savePoolState(poolState);
+  } else {
+    // Normal calculation from existing amounts
+    for (const asset of SUPPORTED_ASSETS) {
+      const amount = allocations[asset].amount;
+      const price = prices[asset];
+      const valueUSD = amount * price;
+      
+      allocations[asset].price = price;
+      allocations[asset].valueUSD = valueUSD;
+      totalValueUSD += valueUSD;
+    }
   }
   
   // Update percentages based on current values
