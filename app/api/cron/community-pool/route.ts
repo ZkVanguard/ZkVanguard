@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { recordNavSnapshot, initCommunityPoolTables } from '@/lib/db/community-pool';
+import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 
 // CommunityPool contract details
@@ -95,19 +96,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     });
     
     // Step 1.5: Record NAV snapshot for risk metrics history
+    // Use MARKET-ADJUSTED NAV based on virtual holdings × current prices
+    // This reflects actual market movements, not just USDC balance
     try {
       // Ensure tables exist (idempotent)
       await initCommunityPoolTables();
       
+      // Calculate market-adjusted NAV from virtual holdings
+      const marketNAV = await calculatePoolNAV();
+      const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+      
       await recordNavSnapshot({
-        sharePrice: parseFloat(poolStats.sharePrice),
-        totalNav: parseFloat(poolStats.totalNAV),
-        totalShares: parseFloat(ethers.formatUnits(stats._totalShares, 18)),
+        sharePrice: marketNAV.sharePrice,
+        totalNav: marketNAV.totalValueUSD,
+        totalShares: totalShares,
         memberCount: poolStats.memberCount,
-        allocations: poolStats.allocations,
-        source: 'on-chain',
+        allocations: {
+          BTC: marketNAV.allocations.BTC.percentage,
+          ETH: marketNAV.allocations.ETH.percentage,
+          SUI: marketNAV.allocations.SUI.percentage,
+          CRO: marketNAV.allocations.CRO.percentage,
+        },
+        source: 'market-adjusted',
       });
-      logger.info('[CommunityPool Cron] NAV snapshot recorded for risk metrics');
+      logger.info('[CommunityPool Cron] Market-adjusted NAV snapshot recorded', {
+        marketNAV: `$${marketNAV.totalValueUSD.toFixed(2)}`,
+        sharePrice: `$${marketNAV.sharePrice.toFixed(4)}`,
+        onChainNAV: `$${poolStats.totalNAV}`,
+      });
     } catch (navError) {
       logger.warn('[CommunityPool Cron] Failed to record NAV snapshot (non-critical)', { error: navError });
     }
