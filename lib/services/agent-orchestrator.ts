@@ -42,7 +42,11 @@ export class AgentOrchestrator {
     this.provider = getCronosProvider(rpcUrl).provider;
 
     // Initialize signer if private key available
-    const privateKey = process.env.AGENT_PRIVATE_KEY || process.env.PRIVATE_KEY;
+    // Check multiple env var names for compatibility
+    const privateKey = process.env.AGENT_PRIVATE_KEY 
+      || process.env.SERVER_PRIVATE_KEY 
+      || process.env.SERVER_WALLET_PRIVATE_KEY
+      || process.env.PRIVATE_KEY;
     if (privateKey) {
       this.signer = new ethers.Wallet(privateKey, this.provider);
       logger.info('AgentOrchestrator: Signer initialized');
