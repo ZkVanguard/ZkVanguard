@@ -10,7 +10,7 @@
 const { ethers } = require("hardhat");
 
 // Contract addresses
-const COMMUNITY_POOL_ADDRESS = "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30";
+const COMMUNITY_POOL_ADDRESS = "0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B"; // V2
 
 // Pyth Network addresses
 // Cronos Testnet: https://docs.pyth.network/price-feeds/contract-addresses/evm

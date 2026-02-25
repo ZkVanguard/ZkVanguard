@@ -10,7 +10,7 @@ const { ethers } = require("hardhat");
 async function main() {
   const [deployer] = await ethers.getSigners();
   
-  const POOL = "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30";
+  const POOL = "0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B"; // V2
   
   const pool = await ethers.getContractAt("CommunityPool", POOL);
   

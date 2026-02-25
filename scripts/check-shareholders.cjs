@@ -4,7 +4,7 @@ require('dotenv').config({ path: '.env.local' });
 
 const sql = neon(process.env.DATABASE_URL);
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
-const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B'; // V2
 
 // ABI for member list and details
 const POOL_ABI = [
