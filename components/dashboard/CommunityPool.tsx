@@ -89,7 +89,7 @@ const ASSET_ICONS: Record<string, string> = {
 
 // Contract addresses - Cronos Testnet
 const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as const; // MockUSDC on Cronos Testnet
-const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30' as const; // CommunityPool contract
+const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B' as const; // CommunityPool V2 contract
 
 // CommunityPool ABI (subset for deposit/withdraw)
 const COMMUNITY_POOL_ABI = [
