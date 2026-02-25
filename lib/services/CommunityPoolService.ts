@@ -144,18 +144,35 @@ export async function calculatePoolNAV(): Promise<{
   const poolState = await getPoolState();
   const prices = await fetchLivePrices();
   
+  // Get on-chain totalShares for accurate calculations (DB can be stale)
+  let onChainTotalShares = poolState.totalShares;
+  try {
+    const { ethers } = await import('ethers');
+    const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+    const poolContract = new ethers.Contract(
+      '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B',
+      ['function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)'],
+      provider
+    );
+    const stats = await poolContract.getPoolStats();
+    onChainTotalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+  } catch (err) {
+    logger.warn('[CommunityPool] Failed to fetch on-chain totalShares, using DB value', { err });
+  }
+  
   let totalValueUSD = 0;
   const allocations = { ...poolState.allocations };
   
   // Check if we need to initialize virtual holdings (migration from on-chain only)
   const hasAmounts = SUPPORTED_ASSETS.some(a => allocations[a].amount > 0);
-  if (!hasAmounts && poolState.totalShares > 0) {
+  if (!hasAmounts && onChainTotalShares > 0) {
     // Initialize virtual holdings based on on-chain NAV and target percentages
-    // Assume pool deposited at current share price (~$1.00 per share)
-    const baselineNAV = poolState.totalShares * poolState.sharePrice;
-    logger.info('[CommunityPool] Initializing virtual holdings from baseline', { 
+    // Use on-chain totalShares for accurate baseline
+    const baselineNAV = onChainTotalShares * 1.0; // Assume $1.00 initial share price
+    logger.info('[CommunityPool] Initializing virtual holdings from on-chain baseline', { 
       baselineNAV, 
-      totalShares: poolState.totalShares 
+      onChainTotalShares,
+      dbTotalShares: poolState.totalShares,
     });
     
     for (const asset of SUPPORTED_ASSETS) {
@@ -168,8 +185,9 @@ export async function calculatePoolNAV(): Promise<{
       totalValueUSD += valueForAsset;
     }
     
-    // Persist initialized amounts
+    // Persist initialized amounts and sync totalShares from on-chain
     poolState.allocations = allocations;
+    poolState.totalShares = onChainTotalShares;
     await savePoolState(poolState);
   } else {
     // Normal calculation from existing amounts
@@ -191,9 +209,9 @@ export async function calculatePoolNAV(): Promise<{
       : poolState.allocations[asset].percentage;
   }
   
-  // Calculate share price
-  const sharePrice = poolState.totalShares > 0 
-    ? totalValueUSD / poolState.totalShares 
+  // Calculate share price using on-chain totalShares (already fetched above)
+  const sharePrice = onChainTotalShares > 0 
+    ? totalValueUSD / onChainTotalShares 
     : 1.0;
   
   return { totalValueUSD, sharePrice, allocations };
