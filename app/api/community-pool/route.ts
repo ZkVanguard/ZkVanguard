@@ -266,15 +266,22 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
       
-      // Get current real-time NAV data
-      const summary = await getPoolSummary();
+      // Get current real-time NAV data from on-chain (authoritative)
+      const onChainData = await getOnChainPoolData();
+      const summary = onChainData || await getPoolSummary();
+      
+      // Ensure we have valid data
+      const nav = summary.totalValueUSD || 0;
+      const sharePrice = summary.sharePrice || 1;
+      const totalShares = nav > 0 ? nav / sharePrice : 0;
+      const memberCount = summary.totalMembers || (summary as { memberCount?: number }).memberCount || 1;
       
       // Reset with correct values
       const result = await resetNavHistory(
-        summary.totalValueUSD,
-        summary.sharePrice,
-        summary.totalValueUSD / summary.sharePrice, // Calculate totalShares
-        summary.totalMembers
+        nav,
+        sharePrice,
+        totalShares,
+        memberCount
       );
       
       return NextResponse.json({
@@ -282,9 +289,9 @@ export async function GET(request: NextRequest) {
         message: 'NAV history reset',
         deleted: result.deleted,
         newSnapshot: {
-          nav: summary.totalValueUSD,
-          sharePrice: summary.sharePrice,
-          totalMembers: summary.totalMembers,
+          nav,
+          sharePrice,
+          totalMembers: memberCount,
         },
       });
     }
