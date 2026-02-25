@@ -255,16 +255,33 @@ export async function saveUserSharesToDb(userShares: {
   }
 
   try {
-    await query(
-      `INSERT INTO community_pool_shares (wallet_address, shares, cost_basis_usd, joined_at, last_action_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
-       ON CONFLICT (wallet_address) DO UPDATE SET
-         shares = $2,
-         cost_basis_usd = $3,
-         last_action_at = NOW()`,
-      [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD]
+    // Use explicit check-then-update/insert pattern for case-insensitive deduplication
+    // First check if user exists (case-insensitive)
+    const existing = await queryOne<{ id: number }>(
+      `SELECT id FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
+      [userShares.walletAddress]
     );
-    logger.info('[CommunityPool DB] User shares saved', { wallet: userShares.walletAddress });
+    
+    if (existing) {
+      // Update existing record
+      await query(
+        `UPDATE community_pool_shares SET
+           wallet_address = $1,
+           shares = $2,
+           cost_basis_usd = $3,
+           last_action_at = NOW()
+         WHERE LOWER(wallet_address) = LOWER($1)`,
+        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD]
+      );
+    } else {
+      // Insert new record
+      await query(
+        `INSERT INTO community_pool_shares (wallet_address, shares, cost_basis_usd, joined_at, last_action_at)
+         VALUES ($1, $2, $3, NOW(), NOW())`,
+        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD]
+      );
+    }
+    logger.info('[CommunityPool DB] User shares saved', { wallet: userShares.walletAddress, shares: userShares.shares });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to save user shares', error);
     throw error;
@@ -616,6 +633,53 @@ export async function initCommunityPoolTables(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_tx_hash ON community_pool_transactions(tx_hash) WHERE tx_hash IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_pool_nav_timestamp ON community_pool_nav_history(timestamp DESC);
     `);
+    
+    // Add case-insensitive unique index for wallet addresses (prevents duplicates due to case differences)
+    // First, deduplicate any existing entries and normalize to lowercase
+    try {
+      // Consolidate duplicates: keep the one with highest shares, sum if needed
+      await query(`
+        WITH duplicates AS (
+          SELECT LOWER(wallet_address) as lower_addr, 
+                 MAX(shares) as max_shares,
+                 MAX(cost_basis_usd) as max_cost_basis,
+                 MIN(joined_at) as first_joined,
+                 MAX(last_action_at) as last_action
+          FROM community_pool_shares 
+          GROUP BY LOWER(wallet_address)
+          HAVING COUNT(*) > 1
+        )
+        UPDATE community_pool_shares s
+        SET wallet_address = LOWER(wallet_address),
+            shares = d.max_shares,
+            cost_basis_usd = d.max_cost_basis,
+            joined_at = d.first_joined,
+            last_action_at = d.last_action
+        FROM duplicates d
+        WHERE LOWER(s.wallet_address) = d.lower_addr
+          AND s.id = (SELECT MIN(id) FROM community_pool_shares WHERE LOWER(wallet_address) = d.lower_addr)
+      `);
+      
+      // Delete the duplicate rows (keep the one we just updated)
+      await query(`
+        DELETE FROM community_pool_shares a
+        USING community_pool_shares b
+        WHERE a.id > b.id 
+          AND LOWER(a.wallet_address) = LOWER(b.wallet_address)
+      `);
+      
+      // Normalize all remaining addresses to lowercase
+      await query(`UPDATE community_pool_shares SET wallet_address = LOWER(wallet_address)`);
+      
+      // Create case-insensitive unique index (if not exists)
+      await query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_shares_wallet_lower 
+        ON community_pool_shares(LOWER(wallet_address))
+      `);
+    } catch (dedupeError) {
+      // Log but don't fail - index may already exist
+      logger.warn('[CommunityPool DB] Deduplication/index creation note', { error: String(dedupeError) });
+    }
 
     // Insert initial state if not exists
     await query(`
