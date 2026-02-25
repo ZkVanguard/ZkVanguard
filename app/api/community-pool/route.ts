@@ -267,17 +267,18 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
       
-      // Get current real-time NAV data from on-chain (authoritative)
+      // Use market-adjusted NAV (virtual holdings × current prices)
+      // This ensures reset starts with accurate market values
       const onChainData = await getOnChainPoolData();
-      const summary = onChainData || await getPoolSummary();
+      const marketNAV = await calculatePoolNAV();
       
-      // Ensure we have valid data
-      const nav = summary.totalValueUSD || 0;
-      const sharePrice = summary.sharePrice || 1;
-      const totalShares = nav > 0 ? nav / sharePrice : 0;
-      const memberCount = summary.totalMembers || (summary as { memberCount?: number }).memberCount || 1;
+      // Use market-adjusted values but on-chain member count
+      const nav = marketNAV.totalValueUSD;
+      const sharePrice = marketNAV.sharePrice;
+      const totalShares = onChainData?.totalShares || (nav > 0 ? nav / sharePrice : 0);
+      const memberCount = onChainData?.totalMembers || 1;
       
-      // Reset with correct values
+      // Reset with market-adjusted values
       const result = await resetNavHistory(
         nav,
         sharePrice,
@@ -287,7 +288,7 @@ export async function GET(request: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        message: 'NAV history reset',
+        message: 'NAV history reset with market-adjusted values',
         deleted: result.deleted,
         newSnapshot: {
           nav,
