@@ -384,6 +384,44 @@ export async function POST(request: NextRequest) {
           );
         }
         
+        // CRITICAL: Sync from on-chain immediately after deposit
+        // On-chain is authoritative - overwrite any local calculation errors
+        try {
+          const onChainUser = await getOnChainUserPosition(walletAddress);
+          const onChainPool = await getOnChainPoolData();
+          
+          if (onChainUser && onChainPool) {
+            // Save on-chain user state directly to DB
+            await saveUserSharesToDb({
+              walletAddress: walletAddress.toLowerCase(),
+              shares: onChainUser.shares,
+              costBasisUSD: onChainUser.valueUSD,
+            });
+            
+            // Update pool state in DB
+            const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
+              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: 0, amount: 0, price: 0 },
+              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: 0, amount: 0, price: 0 },
+              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: 0, amount: 0, price: 0 },
+              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: 0, amount: 0, price: 0 },
+            };
+            
+            await savePoolStateToDb({
+              totalValueUSD: onChainPool.totalValueUSD,
+              totalShares: onChainPool.totalShares,
+              sharePrice: onChainPool.sharePrice,
+              allocations,
+              lastRebalance: Date.now(),
+              lastAIDecision: null,
+            });
+            
+            logger.info(`[CommunityPool] Post-deposit on-chain sync: ${walletAddress} has ${onChainUser.shares} shares`);
+          }
+        } catch (syncError) {
+          logger.error('[CommunityPool] Post-deposit on-chain sync failed (non-fatal)', syncError);
+          // Continue - local calculation was already saved
+        }
+        
         return NextResponse.json({
           success: true,
           message: `Deposited $${amount.toLocaleString()} and received ${result.sharesReceived.toFixed(4)} shares`,
@@ -413,6 +451,49 @@ export async function POST(request: NextRequest) {
             { success: false, error: result.error },
             { status: 400 }
           );
+        }
+        
+        // CRITICAL: Sync from on-chain immediately after withdrawal
+        // On-chain is authoritative - overwrite any local calculation errors
+        try {
+          const onChainUser = await getOnChainUserPosition(walletAddress);
+          const onChainPool = await getOnChainPoolData();
+          
+          if (onChainPool) {
+            // Update pool state in DB
+            const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
+              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: 0, amount: 0, price: 0 },
+              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: 0, amount: 0, price: 0 },
+              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: 0, amount: 0, price: 0 },
+              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: 0, amount: 0, price: 0 },
+            };
+            
+            await savePoolStateToDb({
+              totalValueUSD: onChainPool.totalValueUSD,
+              totalShares: onChainPool.totalShares,
+              sharePrice: onChainPool.sharePrice,
+              allocations,
+              lastRebalance: Date.now(),
+              lastAIDecision: null,
+            });
+          }
+          
+          if (onChainUser && onChainUser.shares > 0) {
+            // User still has shares - update
+            await saveUserSharesToDb({
+              walletAddress: walletAddress.toLowerCase(),
+              shares: onChainUser.shares,
+              costBasisUSD: onChainUser.valueUSD,
+            });
+          } else {
+            // User fully withdrew - delete from DB
+            await deleteUserSharesFromDb(walletAddress);
+          }
+          
+          logger.info(`[CommunityPool] Post-withdraw on-chain sync: ${walletAddress} has ${onChainUser?.shares || 0} shares`);
+        } catch (syncError) {
+          logger.error('[CommunityPool] Post-withdraw on-chain sync failed (non-fatal)', syncError);
+          // Continue - local calculation was already saved
         }
         
         return NextResponse.json({
