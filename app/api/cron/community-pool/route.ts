@@ -79,7 +79,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     const poolStats = {
       totalNAV: ethers.formatUnits(stats._totalNAV, 6),
       memberCount: Number(stats._memberCount),
-      sharePrice: ethers.formatUnits(stats._sharePrice, 18),
+      sharePrice: ethers.formatUnits(stats._sharePrice, 6), // USDC has 6 decimals
       allocations: {
         BTC: Number(stats._allocations[0]) / 100,
         ETH: Number(stats._allocations[1]) / 100,
