@@ -530,6 +530,48 @@ export async function cleanupOldNavSnapshots(keepDays = 365): Promise<number> {
 }
 
 /**
+ * Insert an inception snapshot at a specific timestamp
+ * Used to establish true all-time baseline without deleting existing data
+ */
+export async function insertInceptionSnapshot(
+  timestamp: Date,
+  sharePrice: number,
+  totalNav: number,
+  totalShares: number,
+  memberCount: number
+): Promise<boolean> {
+  try {
+    // Check if an inception record already exists before this timestamp
+    const existing = await queryOne(
+      `SELECT id FROM community_pool_nav_history WHERE timestamp <= $1 ORDER BY timestamp ASC LIMIT 1`,
+      [timestamp]
+    );
+    
+    if (existing) {
+      logger.info('[CommunityPool DB] Inception snapshot already exists, skipping', { timestamp });
+      return false;
+    }
+    
+    await query(
+      `INSERT INTO community_pool_nav_history 
+       (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
+       VALUES ($1, $2, $3, $4, $5, '{"BTC": 35, "ETH": 30, "SUI": 20, "CRO": 15}'::jsonb, 'inception')`,
+      [timestamp, sharePrice, totalNav, totalShares, memberCount]
+    );
+    logger.info('[CommunityPool DB] Inserted inception snapshot', { 
+      timestamp, 
+      sharePrice, 
+      totalNav 
+    });
+    
+    return true;
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to insert inception snapshot', error);
+    throw error;
+  }
+}
+
+/**
  * Reset NAV history completely and insert a fresh starting point
  * Used when bad data has accumulated
  */
