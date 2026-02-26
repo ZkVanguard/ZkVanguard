@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
-import { recordNavSnapshot, initCommunityPoolTables } from '@/lib/db/community-pool';
+import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 
@@ -24,6 +24,9 @@ const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
 const COMMUNITY_POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
   'function setTargetAllocation(uint256[4] newAllocationBps, string reasoning)',
+  'function getMemberCount() view returns (uint256)',
+  'function memberList(uint256) view returns (address)',
+  'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
 ];
 
 interface CronResult {
@@ -124,6 +127,39 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         sharePrice: `$${marketNAV.sharePrice.toFixed(4)}`,
         onChainNAV: `$${poolStats.totalNAV}`,
       });
+      
+      // Step 1.6: Sync on-chain members to DB cache
+      // This ensures DB always reflects on-chain state for fast UI queries
+      try {
+        const memberCount = Number(await poolContract.getMemberCount());
+        let syncedMembers = 0;
+        
+        for (let i = 0; i < memberCount; i++) {
+          const addr = await poolContract.memberList(i);
+          const memberData = await poolContract.members(addr);
+          
+          await saveUserSharesToDb({
+            walletAddress: addr.toLowerCase(),
+            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
+            costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+          });
+          syncedMembers++;
+        }
+        
+        // Also sync pool state
+        await savePoolStateToDb({
+          totalValueUSD: marketNAV.totalValueUSD,
+          totalShares: totalShares,
+          sharePrice: marketNAV.sharePrice,
+          allocations: marketNAV.allocations,
+          lastRebalance: Date.now(),
+          lastAIDecision: null,
+        });
+        
+        logger.info('[CommunityPool Cron] DB cache synced from on-chain', { syncedMembers });
+      } catch (syncError) {
+        logger.warn('[CommunityPool Cron] Failed to sync members to DB (non-critical)', { error: syncError });
+      }
     } catch (navError) {
       logger.warn('[CommunityPool Cron] Failed to record NAV snapshot (non-critical)', { error: navError });
     }

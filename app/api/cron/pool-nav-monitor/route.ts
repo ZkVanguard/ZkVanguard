@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
+import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 
@@ -80,6 +80,9 @@ const POOLS = [
     abi: [
       'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
       'function poolCreationTime() view returns (uint256)',
+      'function getMemberCount() view returns (uint256)',
+      'function memberList(uint256 index) view returns (address)',
+      'function members(address) view returns (uint256 shares, uint128 depositedUSD, uint64 investedAt, bool active)',
     ],
     targetAllocations: { BTC: 35, ETH: 30, SUI: 20, CRO: 15 },
   },
@@ -346,6 +349,36 @@ async function recordSnapshot(
     logger.info(`[PoolNAVMonitor] Snapshot recorded: NAV=$${stats.totalNAV.toFixed(2)}, SharePrice=$${stats.sharePrice.toFixed(4)}, Members=${stats.memberCount}`);
   } catch (error: any) {
     logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: error?.message || String(error) });
+  }
+  
+  // Sync on-chain members to DB for fast queries
+  try {
+    const pool = POOLS.find(p => p.id === poolId);
+    if (pool) {
+      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+      const contract = new ethers.Contract(pool.address, pool.abi, provider);
+      
+      const memberCount = Number(await contract.getMemberCount());
+      let syncedMembers = 0;
+      
+      for (let i = 0; i < memberCount; i++) {
+        const addr = await contract.memberList(i);
+        const memberData = await contract.members(addr);
+        
+        if (memberData.active) {
+          await saveUserSharesToDb({
+            walletAddress: addr.toLowerCase(),
+            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
+            costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+          });
+          syncedMembers++;
+        }
+      }
+      
+      logger.info(`[PoolNAVMonitor] Members synced to DB: ${syncedMembers}`);
+    }
+  } catch (syncError: any) {
+    logger.warn(`[PoolNAVMonitor] Failed to sync members (non-critical):`, { error: syncError?.message || String(syncError) });
   }
 }
 
