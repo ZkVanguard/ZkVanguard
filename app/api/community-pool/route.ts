@@ -26,7 +26,7 @@ import {
   getTopShareholders,
   SUPPORTED_ASSETS,
 } from '@/lib/storage/community-pool-storage';
-import { resetNavHistory, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
+import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -432,6 +432,45 @@ export async function GET(request: NextRequest) {
     }
     
     // Reset NAV history (admin only - requires cron secret)
+    if (action === 'insert-inception') {
+      const cronSecret = request.headers.get('x-cron-secret');
+      const expectedSecret = process.env.CRON_SECRET;
+      
+      if (!cronSecret || cronSecret !== expectedSecret) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      // Pool inception was when first member joined (you can adjust this timestamp)
+      // Using Feb 24, 2026 as approximate inception based on monitoring gap
+      const inceptionTimestamp = new Date('2026-02-24T16:00:00Z');
+      const inceptionSharePrice = 1.00;
+      const inceptionNav = 450.00; // First deposit amount
+      const inceptionShares = inceptionNav / inceptionSharePrice;
+      const inceptionMembers = 1;
+      
+      const inserted = await insertInceptionSnapshot(
+        inceptionTimestamp,
+        inceptionSharePrice,
+        inceptionNav,
+        inceptionShares,
+        inceptionMembers
+      );
+      
+      return NextResponse.json({
+        success: true,
+        inserted,
+        message: inserted 
+          ? 'Inception snapshot added at $1.00 share price' 
+          : 'Inception snapshot already exists',
+        inceptionData: {
+          timestamp: inceptionTimestamp.toISOString(),
+          sharePrice: inceptionSharePrice,
+          nav: inceptionNav,
+          shares: inceptionShares,
+        },
+      });
+    }
+    
     if (action === 'reset-nav-history') {
       const cronSecret = request.headers.get('x-cron-secret');
       const expectedSecret = process.env.CRON_SECRET;
