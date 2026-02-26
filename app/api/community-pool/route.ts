@@ -41,6 +41,9 @@ const POOL_ABI = [
   'function getMemberPosition(address member) view returns (uint256 shares, uint256 valueUSD, uint256 percentage)',
   'function calculateTotalNAV() view returns (uint256)',
   'function totalShares() view returns (uint256)',
+  'function getMemberCount() view returns (uint256)',
+  'function memberList(uint256) view returns (address)',
+  'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
 ];
 
 /**
@@ -102,6 +105,66 @@ async function getOnChainUserPosition(userAddress: string) {
   }
 }
 
+/**
+ * Fetch ALL on-chain members and their positions
+ */
+async function getAllOnChainMembers() {
+  try {
+    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+    
+    const memberCount = await pool.getMemberCount();
+    const count = Number(memberCount);
+    logger.info(`[CommunityPool API] On-chain member count: ${count}`);
+    
+    const members = [];
+    for (let i = 0; i < count; i++) {
+      const addr = await pool.memberList(i);
+      const memberData = await pool.members(addr);
+      
+      members.push({
+        walletAddress: addr.toLowerCase(),
+        shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
+        depositedUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+        joinTime: Number(memberData.joinTime),
+      });
+    }
+    
+    return members;
+  } catch (err) {
+    logger.error('[CommunityPool API] Failed to fetch all on-chain members:', err);
+    return null;
+  }
+}
+
+/**
+ * Find user in on-chain members by searching the member list
+ * This handles cases where the user's wallet address checksum differs from on-chain storage
+ */
+async function findOnChainMember(userAddress: string) {
+  const normalizedUser = userAddress.toLowerCase();
+  const members = await getAllOnChainMembers();
+  
+  if (!members) return null;
+  
+  const found = members.find(m => m.walletAddress.toLowerCase() === normalizedUser);
+  if (found) {
+    const onChainPool = await getOnChainPoolData();
+    const totalShares = onChainPool?.totalShares || members.reduce((sum, m) => sum + m.shares, 0);
+    
+    return {
+      walletAddress: found.walletAddress,
+      shares: found.shares,
+      valueUSD: found.depositedUSD, // Use deposited value
+      percentage: totalShares > 0 ? (found.shares / totalShares) * 100 : 0,
+      isMember: found.shares > 0,
+      onChain: true,
+    };
+  }
+  
+  return null;
+}
+
 
 /**
  * GET - Fetch pool info
@@ -110,16 +173,52 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
   const userAddress = searchParams.get('user');
-  const source = searchParams.get('source'); // 'onchain' to force on-chain
+  const forceOnChain = searchParams.get('source') === 'onchain';
   
   try {
     // Get user's position
     if (userAddress) {
-      // Try on-chain first
-      const onChainUser = await getOnChainUserPosition(userAddress);
+      // Try DB first (faster for UI) unless forceOnChain
+      if (!forceOnChain) {
+        try {
+          const userShares = await getUserShares(userAddress);
+          if (userShares && userShares.shares > 0) {
+            const onChainPool = await getOnChainPoolData();
+            const poolData = onChainPool || await getPoolSummary();
+            
+            return NextResponse.json({
+              success: true,
+              user: {
+                walletAddress: userShares.walletAddress,
+                shares: userShares.shares,
+                valueUSD: userShares.shares * (poolData?.sharePrice || 1),
+                percentage: poolData?.totalShares > 0 ? (userShares.shares / poolData.totalShares) * 100 : 0,
+                isMember: true,
+              },
+              pool: poolData,
+              source: 'db',
+            });
+          }
+        } catch (dbError) {
+          logger.warn('[CommunityPool API] DB user lookup failed, falling back to on-chain');
+        }
+      }
+      
+      // Fallback: Try on-chain via getMemberPosition
+      let onChainUser = await getOnChainUserPosition(userAddress);
       const onChainPool = await getOnChainPoolData();
       
-      if (onChainUser && onChainPool) {
+      // If getMemberPosition returned 0 shares, try searching the member list
+      // This handles checksum mismatches between connected wallet and on-chain storage
+      if (onChainUser && onChainUser.shares === 0) {
+        const memberSearch = await findOnChainMember(userAddress);
+        if (memberSearch && memberSearch.shares > 0) {
+          logger.info(`[CommunityPool API] Found user ${userAddress} via member list search: ${memberSearch.shares} shares`);
+          onChainUser = memberSearch;
+        }
+      }
+      
+      if (onChainUser && onChainUser.shares > 0 && onChainPool) {
         return NextResponse.json({
           success: true,
           user: onChainUser,
@@ -128,11 +227,9 @@ export async function GET(request: NextRequest) {
         });
       }
       
-      // Fallback to local storage
-      const userShares = await getUserShares(userAddress);
-      const poolSummary = await getPoolSummary();
-      
-      if (!userShares) {
+      // User not found on-chain with shares > 0
+      // Return not a member with on-chain pool data
+      if (onChainPool) {
         return NextResponse.json({
           success: true,
           user: {
@@ -142,28 +239,65 @@ export async function GET(request: NextRequest) {
             percentage: 0,
             isMember: false,
           },
-          pool: poolSummary,
-          source: 'local',
+          pool: onChainPool,
+          source: 'onchain',
         });
       }
       
-      return NextResponse.json({
-        success: true,
-        user: {
-          walletAddress: userShares.walletAddress,
-          shares: userShares.shares,
-          valueUSD: userShares.shares * poolSummary.sharePrice,
-          percentage: userShares.percentage,
-          isMember: true,
-          joinedAt: userShares.joinedAt,
-          totalDeposited: userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0),
-          totalWithdrawn: userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0),
-          depositCount: userShares.deposits.length,
-          withdrawalCount: userShares.withdrawals.length,
-        },
-        pool: poolSummary,
-        source: 'local',
-      });
+      // Fallback to local storage (only if on-chain fails)
+      try {
+        const userShares = await getUserShares(userAddress);
+        const poolSummary = await getPoolSummary();
+        
+        if (!userShares) {
+          return NextResponse.json({
+            success: true,
+            user: {
+              walletAddress: userAddress,
+              shares: 0,
+              valueUSD: 0,
+              percentage: 0,
+              isMember: false,
+            },
+            pool: poolSummary,
+            source: 'local',
+          });
+        }
+        
+        return NextResponse.json({
+          success: true,
+          user: {
+            walletAddress: userShares.walletAddress,
+            shares: userShares.shares,
+            valueUSD: userShares.shares * poolSummary.sharePrice,
+            percentage: userShares.percentage,
+            isMember: true,
+            joinedAt: userShares.joinedAt,
+            totalDeposited: userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0),
+            totalWithdrawn: userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0),
+            depositCount: userShares.deposits.length,
+            withdrawalCount: userShares.withdrawals.length,
+          },
+          pool: poolSummary,
+          source: 'local',
+        });
+      } catch (dbError) {
+        // Database unavailable - return not found response
+        logger.warn('[CommunityPool API] DB fallback failed, user not found on-chain', { userAddress });
+        return NextResponse.json({
+          success: true,
+          user: {
+            walletAddress: userAddress,
+            shares: 0,
+            valueUSD: 0,
+            percentage: 0,
+            isMember: false,
+          },
+          pool: null,
+          source: 'none',
+          warning: 'User not found on-chain or in database',
+        });
+      }
     }
     
     // Sync local storage with on-chain data for a specific user
@@ -239,12 +373,51 @@ export async function GET(request: NextRequest) {
     // Get leaderboard
     if (action === 'leaderboard') {
       const limit = parseInt(searchParams.get('limit') || '10');
-      const leaderboard = await getTopShareholders(limit);
+      const forceOnChain = searchParams.get('source') === 'onchain';
+      
+      // Try DB first (faster for UI)
+      if (!forceOnChain) {
+        try {
+          const leaderboard = await getTopShareholders(limit);
+          if (leaderboard && leaderboard.length > 0) {
+            return NextResponse.json({
+              success: true,
+              leaderboard,
+              count: leaderboard.length,
+              source: 'db',
+            });
+          }
+        } catch (dbError) {
+          logger.warn('[CommunityPool API] DB leaderboard failed, falling back to on-chain');
+        }
+      }
+      
+      // Fallback: On-chain (authoritative but slower)
+      const onChainMembers = await getAllOnChainMembers();
+      if (onChainMembers && onChainMembers.length > 0) {
+        const totalShares = onChainMembers.reduce((sum, m) => sum + m.shares, 0);
+        const leaderboard = onChainMembers
+          .sort((a, b) => b.shares - a.shares)
+          .slice(0, limit)
+          .map(m => ({
+            walletAddress: m.walletAddress,
+            shares: m.shares,
+            percentage: totalShares > 0 ? (m.shares / totalShares) * 100 : 0,
+          }));
+        
+        return NextResponse.json({
+          success: true,
+          leaderboard,
+          count: leaderboard.length,
+          source: 'onchain',
+        });
+      }
       
       return NextResponse.json({
         success: true,
-        leaderboard,
-        count: leaderboard.length,
+        leaderboard: [],
+        count: 0,
+        source: 'none',
       });
     }
     
@@ -303,42 +476,70 @@ export async function GET(request: NextRequest) {
     // On-chain provides member count and share structure, DB provides virtual holdings
     try {
       const onChainPool = await getOnChainPoolData();
-      const marketNAV = await calculatePoolNAV();
+      
+      // Try to get market-adjusted NAV (needs DB for virtual holdings)
+      let useMarketNav = false;
+      let marketNAV = null;
+      try {
+        marketNAV = await calculatePoolNAV();
+        useMarketNav = true;
+      } catch (dbError) {
+        logger.warn('[CommunityPool API] Market-adjusted NAV unavailable (no DB), using on-chain only');
+      }
       
       if (onChainPool && onChainPool.totalShares > 0) {
-        // Blend on-chain structure with market-adjusted NAV
-        const marketSharePrice = marketNAV.totalValueUSD / onChainPool.totalShares;
+        // Blend on-chain structure with market-adjusted NAV if available
+        if (useMarketNav && marketNAV) {
+          const marketSharePrice = marketNAV.totalValueUSD / onChainPool.totalShares;
+          
+          return NextResponse.json({
+            success: true,
+            pool: {
+              totalValueUSD: marketNAV.totalValueUSD,
+              totalShares: onChainPool.totalShares,
+              sharePrice: marketSharePrice,
+              totalMembers: onChainPool.totalMembers,
+              allocations: marketNAV.allocations,
+              lastAIDecision: null,
+              performance: { day: null, week: null, month: null },
+            },
+            supportedAssets: SUPPORTED_ASSETS,
+            timestamp: Date.now(),
+            source: 'market-adjusted',
+          });
+        }
         
+        // Pure on-chain fallback (no market adjustment)
         return NextResponse.json({
           success: true,
-          pool: {
-            totalValueUSD: marketNAV.totalValueUSD,
-            totalShares: onChainPool.totalShares,
-            sharePrice: marketSharePrice,
-            totalMembers: onChainPool.totalMembers,
-            allocations: marketNAV.allocations,
-            lastAIDecision: null,
-            performance: { day: null, week: null, month: null },
-          },
+          pool: onChainPool,
           supportedAssets: SUPPORTED_ASSETS,
           timestamp: Date.now(),
-          source: 'market-adjusted',
+          source: 'onchain',
         });
       }
     } catch (e) {
-      logger.warn('[CommunityPool API] Market-adjusted NAV failed, falling back', { error: e });
+      logger.warn('[CommunityPool API] Pool summary failed', { error: e });
     }
     
-    // Fallback: Local calculated NAV (for when on-chain has no value)
-    const summary = await getPoolSummary();
-    
-    return NextResponse.json({
-      success: true,
-      pool: summary,
-      supportedAssets: SUPPORTED_ASSETS,
-      timestamp: Date.now(),
-      source: 'calculated',
-    });
+    // Final fallback: Local calculated NAV (for when on-chain has no value)
+    try {
+      const summary = await getPoolSummary();
+      
+      return NextResponse.json({
+        success: true,
+        pool: summary,
+        supportedAssets: SUPPORTED_ASSETS,
+        timestamp: Date.now(),
+        source: 'calculated',
+      });
+    } catch (e) {
+      logger.error('[CommunityPool API] All pool summary fallbacks failed');
+      return NextResponse.json({
+        success: false,
+        error: 'Unable to retrieve pool data',
+      }, { status: 500 });
+    }
     
   } catch (error: any) {
     logger.error('[CommunityPool API] GET error:', error);
@@ -360,7 +561,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { walletAddress, amount, shares, txHash } = body;
     
-    if (!walletAddress) {
+    // Admin actions like sync-from-chain and delete-user don't require walletAddress upfront
+    const adminActions = ['sync-from-chain', 'delete-user'];
+    if (!walletAddress && !adminActions.includes(action || '')) {
       return NextResponse.json(
         { success: false, error: 'walletAddress required' },
         { status: 400 }
@@ -564,15 +767,21 @@ export async function POST(request: NextRequest) {
           lastAIDecision: null,
         });
         
-        // Update user shares if wallet address provided 
-        if (walletAddress) {
-          const onChainUser = await getOnChainUserPosition(walletAddress);
-          if (onChainUser) {
+        // CRITICAL: Sync ALL on-chain members to database
+        const onChainMembers = await getAllOnChainMembers();
+        const syncedMembers: string[] = [];
+        
+        if (onChainMembers && onChainMembers.length > 0) {
+          logger.info(`[CommunityPool API] Syncing ${onChainMembers.length} on-chain members to database`);
+          
+          for (const member of onChainMembers) {
             await saveUserSharesToDb({
-              walletAddress: walletAddress.toLowerCase(),
-              shares: onChainUser.shares,
-              costBasisUSD: onChainUser.valueUSD, // Use current value as cost basis
+              walletAddress: member.walletAddress,
+              shares: member.shares,
+              costBasisUSD: member.depositedUSD,
             });
+            syncedMembers.push(member.walletAddress);
+            logger.info(`[CommunityPool API] Synced member ${member.walletAddress}: ${member.shares} shares`);
           }
         }
         
@@ -593,6 +802,7 @@ export async function POST(request: NextRequest) {
             sharePrice: onChainData.sharePrice,
             totalMembers: onChainData.totalMembers,
           },
+          syncedMembers,
           navHistoryReset: resetResult,
         });
       }
