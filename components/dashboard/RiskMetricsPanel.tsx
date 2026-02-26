@@ -47,6 +47,8 @@ interface RiskMetrics {
   returnsSinceInception: number;
   dataPoints: number;
   lastCalculated: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   insufficientData?: boolean;
   insufficientDataReason?: string;
 }
@@ -340,7 +342,18 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
                   </p>
                 </div>
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">All Time</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {metrics.periodStart ? (
+                      (() => {
+                        const start = new Date(metrics.periodStart);
+                        const now = new Date();
+                        const hoursDiff = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60));
+                        if (hoursDiff < 48) return `${hoursDiff}h`;
+                        const daysDiff = Math.floor(hoursDiff / 24);
+                        return `${daysDiff}d`;
+                      })()
+                    ) : 'Since Start'}
+                  </p>
                   <p className={`font-bold ${metrics.returnsSinceInception >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatPct(metrics.returnsSinceInception)}
                   </p>
