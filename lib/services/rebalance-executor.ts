@@ -94,13 +94,13 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
     const pnlPercent = entryValue > 0 ? ((totalValue - entryValue) / entryValue) * 100 : 0;
     const assets = portfolio.assetBalances || [];
     
-    // For institutional portfolios, target allocations are: BTC 35%, ETH 30%, CRO 20%, SUI 15%
-    const targetAllocations: Record<string, number> = portfolio.isInstitutional ? {
+    // Use target allocations from portfolio API if available, otherwise default
+    const targetAllocations: Record<string, number> = portfolio.targetAllocations || (portfolio.isInstitutional ? {
       'BTC': 35,
       'ETH': 30,
       'CRO': 20,
       'SUI': 15,
-    } : {};
+    } : {});
     
     // Calculate drifts
     const drifts: AllocationDrift[] = [];

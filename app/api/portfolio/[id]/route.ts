@@ -271,7 +271,9 @@ export async function GET(
         symbol: v.symbol,
         balance: v.amount.toFixed(4),
         valueUSD: v.valueUSD,
-        percentage: v.percentage,
+        // Calculate ACTUAL percentage based on current market values (for drift detection)
+        percentage: totalCurrentValue > 0 ? (v.valueUSD / totalCurrentValue) * 100 : v.percentage,
+        targetPercentage: v.percentage, // Keep target for reference
         price: v.price,
         entryPrice: v.entryPrice,
         pnl: v.pnl,
@@ -279,6 +281,12 @@ export async function GET(
         chain: v.chain,
       })) : assetBalances, // Use virtual allocations if available
       virtualAllocations: virtualAllocations.length > 0 ? virtualAllocations : undefined,
+      targetAllocations: virtualAllocations.length > 0 ? {
+        'BTC': 35,
+        'ETH': 30,
+        'CRO': 20,
+        'SUI': 15,
+      } : undefined,
       pnl: {
         total: totalPnl,
         percentage: totalPnlPercentage,
