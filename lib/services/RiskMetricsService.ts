@@ -86,19 +86,31 @@ export interface NAVSnapshot {
 
 /**
  * Calculate daily returns from NAV series
+ * Normalizes returns to daily equivalents based on actual time span
  */
-function calculateReturns(navSeries: NAVSnapshot[]): number[] {
-  if (navSeries.length < 2) return [];
+function calculateReturns(navSeries: NAVSnapshot[]): { returns: number[]; avgIntervalDays: number } {
+  if (navSeries.length < 2) return { returns: [], avgIntervalDays: 1 };
   
   const returns: number[] = [];
+  let totalIntervalMs = 0;
+  
   for (let i = 1; i < navSeries.length; i++) {
     const prevNav = navSeries[i - 1].nav;
     const currNav = navSeries[i].nav;
+    const intervalMs = navSeries[i].timestamp - navSeries[i - 1].timestamp;
+    totalIntervalMs += intervalMs;
+    
     if (prevNav > 0) {
       returns.push((currNav - prevNav) / prevNav);
     }
   }
-  return returns;
+  
+  // Calculate average interval in days
+  const avgIntervalDays = returns.length > 0 
+    ? (totalIntervalMs / returns.length) / (24 * 60 * 60 * 1000)
+    : 1;
+  
+  return { returns, avgIntervalDays };
 }
 
 /**
@@ -533,7 +545,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
       };
     }
     
-    const returns = calculateReturns(navSeries);
+    const { returns, avgIntervalDays } = calculateReturns(navSeries);
     
     // Need at least 1 return to calculate anything meaningful
     if (returns.length < 1) {
@@ -544,11 +556,36 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
       };
     }
     
-    // Check if we have enough data for statistically meaningful metrics
-    if (navSeries.length < MIN_DATA_POINTS) {
-      logger.info('[RiskMetrics] Limited data, returning conservative metrics', {
+    // Calculate actual observation period in days
+    const totalPeriodMs = navSeries[navSeries.length - 1].timestamp - navSeries[0].timestamp;
+    const totalPeriodDays = totalPeriodMs / (24 * 60 * 60 * 1000);
+    
+    // For annualization, use periods per year based on actual interval
+    // E.g., if interval is 1 hour (1/24 day), periods_per_year = 365 * 24 = 8760
+    const periodsPerYear = avgIntervalDays > 0 ? TRADING_DAYS_PER_YEAR / avgIntervalDays : TRADING_DAYS_PER_YEAR;
+    
+    logger.info('[RiskMetrics] Time-based calculation', {
+      dataPoints: returns.length,
+      avgIntervalDays: avgIntervalDays.toFixed(4),
+      totalPeriodDays: totalPeriodDays.toFixed(2),
+      periodsPerYear: periodsPerYear.toFixed(0),
+    });
+    
+    // Check if we have enough data for statistically meaningful ANNUALIZED metrics
+    // Annualized metrics require BOTH:
+    // 1. Minimum data points (7) for statistical significance
+    // 2. Minimum time span (1 day) for meaningful annualization
+    const hasMinimumPoints = navSeries.length >= MIN_DATA_POINTS;
+    const hasMinimumTimeSpan = totalPeriodDays >= 1;
+    
+    if (!hasMinimumPoints || !hasMinimumTimeSpan) {
+      logger.info('[RiskMetrics] Insufficient data for annualized metrics', {
         dataPoints: navSeries.length,
-        minRequired: MIN_DATA_POINTS,
+        totalPeriodDays,
+        minPointsRequired: MIN_DATA_POINTS,
+        minDaysRequired: 1,
+        hasMinimumPoints,
+        hasMinimumTimeSpan,
       });
       
       // Calculate only basic metrics that are meaningful with limited data
@@ -569,19 +606,27 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
         periodStart: new Date(navSeries[0].timestamp).toISOString(),
         periodEnd: new Date(navSeries[navSeries.length - 1].timestamp).toISOString(),
         insufficientData: true,
-        insufficientDataReason: `Only ${navSeries.length} data points available. At least ${MIN_DATA_POINTS} required for statistically meaningful risk metrics.`,
+        insufficientDataReason: !hasMinimumTimeSpan 
+          ? `Only ${(totalPeriodDays * 24).toFixed(1)} hours of data. Annualized metrics require at least 1 day.`
+          : `Only ${navSeries.length} data points. At least ${MIN_DATA_POINTS} required for statistically meaningful metrics.`,
       };
     }
     
-    // Daily stats
-    const dailyMean = mean(returns);
-    const dailyStdDev = stdDev(returns, dailyMean);
+    // Interval-based stats (not assuming daily)
+    const intervalMean = mean(returns);
+    const intervalStdDev = stdDev(returns, intervalMean);
     const downsideVol = downsideDeviation(returns);
     
-    // Annualized metrics
+    // Convert to daily equivalents first (normalize by interval)
+    // Daily return = interval return / interval_days (simple scaling for small intervals)
+    const dailyMean = intervalMean / avgIntervalDays;
+    const dailyStdDev = intervalStdDev / Math.sqrt(avgIntervalDays);
+    const dailyDownsideVol = downsideVol / Math.sqrt(avgIntervalDays);
+    
+    // Now annualize from daily metrics
     const annualizedReturn = dailyMean * TRADING_DAYS_PER_YEAR;
     const annualizedVol = dailyStdDev * Math.sqrt(TRADING_DAYS_PER_YEAR);
-    const annualizedDownsideVol = downsideVol * Math.sqrt(TRADING_DAYS_PER_YEAR);
+    const annualizedDownsideVol = dailyDownsideVol * Math.sqrt(TRADING_DAYS_PER_YEAR);
     
     // Daily risk-free rate
     const dailyRiskFree = RISK_FREE_RATE / TRADING_DAYS_PER_YEAR;
@@ -608,16 +653,21 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     // Beta and Alpha (using mock BTC benchmark)
     const benchmarkReturns = generateBenchmarkReturns(returns.length);
     const beta = calculateBeta(returns, benchmarkReturns);
-    const benchmarkAnnualizedReturn = mean(benchmarkReturns) * TRADING_DAYS_PER_YEAR;
+    // Normalize benchmark returns the same way (assume same time intervals)
+    const benchmarkIntervalMean = mean(benchmarkReturns);
+    const benchmarkDailyMean = benchmarkIntervalMean / avgIntervalDays;
+    const benchmarkAnnualizedReturn = benchmarkDailyMean * TRADING_DAYS_PER_YEAR;
     const alpha = annualizedReturn - (RISK_FREE_RATE + beta * (benchmarkAnnualizedReturn - RISK_FREE_RATE));
     
     // Treynor Ratio
     const treynorRatio = beta !== 0 ? excessReturn / beta : 0;
     
-    // Information Ratio
+    // Information Ratio - also needs proper normalization
     const trackingErrors = returns.map((r, i) => r - benchmarkReturns[i]);
-    const trackingErrorStdDev = stdDev(trackingErrors) * Math.sqrt(TRADING_DAYS_PER_YEAR);
-    const informationRatio = trackingErrorStdDev > 0 ? (annualizedReturn - benchmarkAnnualizedReturn) / trackingErrorStdDev : 0;
+    const trackingErrorIntervalStdDev = stdDev(trackingErrors);
+    const trackingErrorDailyStdDev = trackingErrorIntervalStdDev / Math.sqrt(avgIntervalDays);
+    const trackingErrorAnnualized = trackingErrorDailyStdDev * Math.sqrt(TRADING_DAYS_PER_YEAR);
+    const informationRatio = trackingErrorAnnualized > 0 ? (annualizedReturn - benchmarkAnnualizedReturn) / trackingErrorAnnualized : 0;
     
     // Trading metrics
     const tradingMetrics = calculateTradingMetrics(returns);
