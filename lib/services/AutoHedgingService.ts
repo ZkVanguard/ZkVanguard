@@ -17,6 +17,7 @@ import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getMarketDataService } from './RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
+import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 
 // Configuration
 const CONFIG = {
@@ -108,53 +109,50 @@ class AutoHedgingService {
       riskCheckInterval: CONFIG.RISK_CHECK_INTERVAL_MS,
     });
 
-    // Enable auto-hedging for Portfolio #3 by default (institutional portfolio)
-    this.enableDefaultPortfolios();
+    // Load all enabled portfolios from persistent storage
+    await this.loadPortfoliosFromStorage();
   }
 
   /**
-   * Enable auto-hedging for default portfolios
+   * Load all enabled portfolio configurations from storage
+   * This replaces hardcoded portfolio IDs with dynamic database-driven configuration
    */
-  private enableDefaultPortfolios(): void {
-    // Portfolio #3 - Institutional portfolio with $153M+ allocation
-    // Wallet: 0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c
-    // Note: Risk threshold will be loaded from portfolio settings
-    this.enableForPortfolio({
-      portfolioId: 3,
-      walletAddress: '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c',
-      enabled: true,
-      riskThreshold: 5, // Default, will be overridden by portfolio settings
-      maxLeverage: CONFIG.DEFAULT_LEVERAGE,
-      allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
-    });
-
-    // CommunityPool - Enable auto-hedging for TVL protection
-    // Uses special portfolioId: 0 to indicate community pool
-    // Contract: 0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B (V2 with Pyth Oracle)
-    this.enableForCommunityPool();
-  }
-
-  /**
-   * Enable auto-hedging specifically for CommunityPool TVL
-   */
-  private async enableForCommunityPool(): Promise<void> {
-    const COMMUNITY_POOL_ID = 0; // Special ID for community pool
-    const COMMUNITY_POOL_CONTRACT = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
-    
-    this.autoHedgeConfigs.set(COMMUNITY_POOL_ID, {
-      portfolioId: COMMUNITY_POOL_ID,
-      walletAddress: COMMUNITY_POOL_CONTRACT,
-      enabled: true,
-      riskThreshold: 4, // More conservative for community funds
-      maxLeverage: 2, // Lower leverage for safety
-      allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
-    });
-    
-    logger.info('[AutoHedging] CommunityPool enabled for auto-hedging', {
-      contractAddress: COMMUNITY_POOL_CONTRACT,
-      riskThreshold: 4,
-      maxLeverage: 2,
-    });
+  private async loadPortfoliosFromStorage(): Promise<void> {
+    try {
+      const storedConfigs = await getAutoHedgeConfigs();
+      
+      if (storedConfigs.length === 0) {
+        logger.warn('[AutoHedging] No stored configurations found. Use API to enable portfolios.');
+        return;
+      }
+      
+      logger.info('[AutoHedging] Loading configurations from storage', {
+        count: storedConfigs.length,
+        portfolios: storedConfigs.map(c => c.portfolioId)
+      });
+      
+      for (const config of storedConfigs) {
+        // Convert storage format to service format
+        this.enableForPortfolio({
+          portfolioId: config.portfolioId,
+          walletAddress: config.walletAddress,
+          enabled: config.enabled,
+          riskThreshold: config.riskThreshold,
+          maxLeverage: config.maxLeverage,
+          allowedAssets: config.allowedAssets,
+        });
+      }
+      
+      logger.info('[AutoHedging] All stored portfolios loaded', {
+        activeCount: this.autoHedgeConfigs.size
+      });
+    } catch (error) {
+      logger.error('[AutoHedging] Failed to load configurations from storage', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      // Service continues running, but with no portfolios configured
+      // Use API to manually enable portfolios
+    }
   }
 
   /**

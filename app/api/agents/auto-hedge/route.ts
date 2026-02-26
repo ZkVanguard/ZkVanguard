@@ -10,6 +10,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoHedgingService, AUTO_HEDGE_CONFIG } from '@/lib/services/AutoHedgingService';
 import { logger } from '@/lib/utils/logger';
+import { 
+  saveAutoHedgeConfig, 
+  deleteAutoHedgeConfig, 
+  disableAutoHedge,
+  getAutoHedgeConfig 
+} from '@/lib/storage/auto-hedge-storage';
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,21 +87,36 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        autoHedgingService.enableForPortfolio({
+        const portfolioConfig = {
           portfolioId: parseInt(portfolioId),
           walletAddress,
           enabled: true,
           riskThreshold: config?.riskThreshold || 7, // Default: trigger at risk score 7+
           maxLeverage: config?.maxLeverage || AUTO_HEDGE_CONFIG.DEFAULT_LEVERAGE,
           allowedAssets: config?.allowedAssets || ['BTC', 'ETH', 'CRO', 'SUI'],
-        });
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        
+        // Persist to storage FIRST
+        await saveAutoHedgeConfig(portfolioConfig);
+        
+        // Then enable in runtime service
+        autoHedgingService.enableForPortfolio(portfolioConfig);
         
         // Make sure service is running
         await autoHedgingService.start();
         
+        logger.info('[AutoHedge API] Portfolio enabled and persisted', {
+          portfolioId,
+          walletAddress,
+          riskThreshold: portfolioConfig.riskThreshold
+        });
+        
         return NextResponse.json({
           success: true,
           message: `Auto-hedging enabled for portfolio ${portfolioId}`,
+          config: portfolioConfig,
           status: autoHedgingService.getStatus(),
         });
       
@@ -108,7 +129,15 @@ export async function POST(request: NextRequest) {
           );
         }
         
+        // Disable in storage (soft delete - sets enabled=false)
+        await disableAutoHedge(parseInt(portfolioId));
+        
+        // Disable in runtime service
         autoHedgingService.disableForPortfolio(parseInt(portfolioId));
+        
+        logger.info('[AutoHedge API] Portfolio disabled and persisted', {
+          portfolioId
+        });
         
         return NextResponse.json({
           success: true,
@@ -171,16 +200,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
     
+    // Delete from storage (hard delete)
+    await deleteAutoHedgeConfig(parseInt(portfolioId));
+    
+    // Disable in runtime service
     autoHedgingService.disableForPortfolio(parseInt(portfolioId));
+    
+    logger.info('[AutoHedge API] Portfolio config deleted', {
+      portfolioId
+    });
     
     return NextResponse.json({
       success: true,
-      message: `Auto-hedging disabled for portfolio ${portfolioId}`,
+      message: `Auto-hedging configuration deleted for portfolio ${portfolioId}`,
     });
   } catch (error) {
-    logger.error('Auto-hedging disable error', { error });
+    logger.error('Auto-hedging delete error', { error });
     return NextResponse.json(
-      { success: false, error: 'Failed to disable auto-hedging' },
+      { success: false, error: 'Failed to delete auto-hedging configuration' },
       { status: 500 }
     );
   }
