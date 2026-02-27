@@ -47,11 +47,11 @@ export interface UseAIManagerReturn {
 export function useAIManager(autoStart = true): UseAIManagerReturn {
   const [status, setStatus] = useState(() => AIManager.getStatus());
   
-  // Refresh status periodically
+  // Refresh status periodically (5s is sufficient for status monitoring)
   useEffect(() => {
     const interval = setInterval(() => {
       setStatus(AIManager.getStatus());
-    }, 2000);
+    }, 5000);
     
     return () => clearInterval(interval);
   }, []);

@@ -40,11 +40,11 @@ export const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     priority: 'high',
   },
   hedges: {
-    priceRefreshInterval: 15000,  // 15s - needs real-time for entry prices
+    priceRefreshInterval: 30000,  // 30s - reduced from 15s to lower API load
     invalidationThreshold: 2,     // 2% price change - more sensitive
     priceFields: ['price', 'change24h'],
     batchPrices: true,
-    priority: 'critical',
+    priority: 'high',  // Reduced from critical - still important but less aggressive
   },
   insights: {
     priceRefreshInterval: 60000,  // 60s - trend analysis less time-sensitive

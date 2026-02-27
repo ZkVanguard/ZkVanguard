@@ -422,7 +422,7 @@ export async function fetchInsightSummary(
   });
   
   try {
-    const response = await fetch(`/api/agents/insight-summary`, {
+    const response = await dedupedFetch(`/api/agents/insight-summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
