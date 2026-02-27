@@ -157,16 +157,26 @@ export async function POST(request: NextRequest) {
       
       case 'trigger_assessment':
         // Manually trigger risk assessment for a portfolio
-        if (!portfolioId || !walletAddress) {
+        const assessPortfolioId = parseInt(portfolioId);
+        const isCommunityPoolAssess = assessPortfolioId === 0;
+        
+        if (portfolioId === undefined || portfolioId === null) {
           return NextResponse.json(
-            { success: false, error: 'portfolioId and walletAddress required' },
+            { success: false, error: 'portfolioId required' },
+            { status: 400 }
+          );
+        }
+        
+        if (!isCommunityPoolAssess && !walletAddress) {
+          return NextResponse.json(
+            { success: false, error: 'walletAddress required for non-community portfolios' },
             { status: 400 }
           );
         }
         
         const assessment = await autoHedgingService.triggerRiskAssessment(
-          parseInt(portfolioId),
-          walletAddress
+          assessPortfolioId,
+          isCommunityPoolAssess ? 'community-pool' : walletAddress
         );
         
         return NextResponse.json({
