@@ -160,14 +160,6 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 - **AI:** Crypto.com AI SDK, Multi-agent orchestration
 - **Wallets:** RainbowKit (EVM), @mysten/dapp-kit (SUI)
 
----
-
-## Documentation
-
-- [Demo Walkthrough](./DEMO_WALKTHROUGH_GUIDE.md) - Complete demo script
-- [Investor Pitch](./INVESTOR_PITCH_DECK.md) - Market opportunity
-- [Architecture](./docs/ARCHITECTURE.md) - System design
-- [Setup Guide](./docs/SETUP.md) - Installation
 
 ---
 
