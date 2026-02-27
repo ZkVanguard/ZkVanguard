@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Sync subdirectories to specialized GitHub repos
+# Sync subdirectories to specialized GitHub repos (preserves existing files)
 
 param(
     [switch]$DryRun = $false
@@ -41,7 +41,7 @@ if (-not (Test-Path ".git")) {
     exit 1
 }
 
-Write-Host "Preparing subdirectory syncs..." -ForegroundColor Yellow
+Write-Host "Preparing subdirectory syncs (preserving existing files)..." -ForegroundColor Yellow
 Write-Host ""
 
 # Show what will be synced
@@ -85,9 +85,29 @@ foreach ($repo in $repos) {
     if (Test-Path $tempDir) {
         Remove-Item -Path $tempDir -Recurse -Force
     }
-    New-Item -ItemType Directory -Path $tempDir | Out-Null
     
-    # Copy subdirectories to temp
+    # Clone the existing repo to preserve README, LICENSE, etc.
+    Write-Host "      Cloning existing repo..." -ForegroundColor Gray
+    $cloneResult = git clone $remoteUrl $tempDir 2>&1
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "      Failed to clone: $cloneResult" -ForegroundColor Red
+        Write-Host ""
+        continue
+    }
+    
+    # Remove old code directories (but keep root files like README, LICENSE)
+    Push-Location $tempDir
+    foreach ($subdir in $repo.Subdirs) {
+        $destBase = Split-Path -Leaf $subdir
+        if (Test-Path $destBase) {
+            Remove-Item -Path $destBase -Recurse -Force
+            Write-Host "      Removed old: $destBase" -ForegroundColor Gray
+        }
+    }
+    Pop-Location
+    
+    # Copy fresh code from main repo
     foreach ($subdir in $repo.Subdirs) {
         if (Test-Path $subdir) {
             $destBase = Split-Path -Leaf $subdir
@@ -97,20 +117,26 @@ foreach ($repo in $repos) {
         }
     }
     
-    # Initialize git in temp directory
+    # Commit and push changes
     Push-Location $tempDir
     
-    git init 2>&1 | Out-Null
-    git add . 2>&1 | Out-Null
+    git add -A 2>&1 | Out-Null
+    
+    # Check if there are changes
+    $status = git status --porcelain
+    if (-not $status) {
+        Write-Host "      No changes to sync" -ForegroundColor Yellow
+        Pop-Location
+        Remove-Item -Path $tempDir -Recurse -Force
+        Write-Host ""
+        continue
+    }
     
     $commitMsg = "sync: Update from main repo - $lastCommit"
     git commit -m $commitMsg 2>&1 | Out-Null
     
-    # Add remote and push
-    Write-Host "      Pushing to $remoteUrl..." -ForegroundColor Gray
-    git remote add origin $remoteUrl 2>&1 | Out-Null
-    
-    $pushResult = git push origin HEAD:main --force 2>&1
+    Write-Host "      Pushing changes..." -ForegroundColor Gray
+    $pushResult = git push origin main 2>&1
     $exitCode = $LASTEXITCODE
     
     Pop-Location
