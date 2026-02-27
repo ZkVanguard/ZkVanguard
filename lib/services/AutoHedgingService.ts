@@ -488,12 +488,10 @@ class AutoHedgingService {
       const poolContract = new ethers.Contract(COMMUNITY_POOL_CONTRACT, COMMUNITY_POOL_ABI, provider);
       const marketDataService = getMarketDataService();
 
-      // Fetch on-chain pool stats
+      // Fetch on-chain pool stats  
       const stats = await poolContract.getPoolStats();
-      const totalNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
-      // Share price is in 6 decimals (USDC-based calculation)
-      const rawSharePrice = stats._sharePrice;
-      const sharePrice = Number(ethers.formatUnits(rawSharePrice, 6));
+      const totalShares = Number(ethers.formatUnits(stats._totalShares, 18));
+      const onChainNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
       const allocations = {
         BTC: Number(stats._allocations[0]) / 100,
         ETH: Number(stats._allocations[1]) / 100,
@@ -501,26 +499,27 @@ class AutoHedgingService {
         CRO: Number(stats._allocations[3]) / 100,
       };
 
-      logger.info('[AutoHedging] Community Pool stats', { 
-        totalNAV, 
-        rawSharePrice: rawSharePrice.toString(), 
-        sharePrice, 
-        allocations 
-      });
-
-      // Build positions from allocations
+      // Build positions from allocations with LIVE market prices
       const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+      let marketNAV = 0;
       
       for (const [symbol, percentage] of Object.entries(allocations)) {
         if (percentage > 0) {
           try {
             const priceData = await marketDataService.getTokenPrice(symbol);
-            const value = totalNAV * (percentage / 100);
+            // Calculate how much of on-chain NAV is allocated to this asset
+            const allocatedNAV = onChainNAV * (percentage / 100);
+            // Calculate how many tokens that represents at current price
+            const balance = allocatedNAV / priceData.price;
+            // Calculate current market value
+            const value = balance * priceData.price;
+            marketNAV += value;
+            
             positions.push({
               symbol,
               value,
               change24h: priceData.change24h || 0,
-              balance: value / priceData.price,
+              balance,
             });
           } catch (err) {
             logger.warn(`[AutoHedging] Failed to fetch price for ${symbol}`, { error: err });
@@ -528,22 +527,28 @@ class AutoHedgingService {
         }
       }
 
+      // Calculate MARKET-BASED share price (not the on-chain nominal price)
+      // This reflects actual crypto price movements
+      const marketSharePrice = totalShares > 0 ? marketNAV / totalShares : 1.0;
+      
       // Calculate drawdown from inception share price of $1.00
-      // This is the true loss since pool creation, not just 24h token changes
+      // This is the true loss since pool creation
       const INCEPTION_SHARE_PRICE = 1.0;
-      const drawdownPercent = sharePrice < INCEPTION_SHARE_PRICE 
-        ? ((INCEPTION_SHARE_PRICE - sharePrice) / INCEPTION_SHARE_PRICE) * 100 
+      const drawdownPercent = marketSharePrice < INCEPTION_SHARE_PRICE 
+        ? ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100 
         : 0;
 
-      logger.info('[AutoHedging] Drawdown calculation', { 
-        sharePrice, 
+      logger.info('[AutoHedging] Market NAV calculation', { 
+        onChainNAV,
+        marketNAV,
+        totalShares,
+        marketSharePrice, 
         inceptionPrice: INCEPTION_SHARE_PRICE, 
-        sharePriceLessThanInception: sharePrice < INCEPTION_SHARE_PRICE,
         drawdownPercent 
       });
 
       const volatility = this.calculateVolatility(positions);
-      const concentrationRisk = this.calculateConcentrationRisk(positions, totalNAV);
+      const concentrationRisk = this.calculateConcentrationRisk(positions, marketNAV);
 
       // Calculate risk score (more conservative thresholds for community funds)
       let riskScore = 1;
@@ -574,7 +579,7 @@ class AutoHedgingService {
       // Generate recommendations
       const recommendations = this.generateHedgeRecommendations(
         positions,
-        totalNAV,
+        marketNAV,
         allocations as Record<string, number>,
         activeHedges,
         drawdownPercent,
@@ -582,7 +587,7 @@ class AutoHedgingService {
       );
 
       logger.info('[AutoHedging] CommunityPool risk assessment', {
-        totalNAV: `$${totalNAV.toLocaleString()}`,
+        marketNAV: `$${marketNAV.toLocaleString()}`,
         positions: positions.length,
         drawdownPercent: drawdownPercent.toFixed(2),
         volatility: volatility.toFixed(2),
@@ -592,7 +597,7 @@ class AutoHedgingService {
 
       return {
         portfolioId: 0,
-        totalValue: totalNAV,
+        totalValue: marketNAV,
         drawdownPercent,
         volatility,
         riskScore,
