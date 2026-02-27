@@ -80,16 +80,27 @@ export async function POST(request: NextRequest) {
       
       case 'enable':
         // Enable auto-hedging for a specific portfolio
-        if (!portfolioId || !walletAddress) {
+        // Community Pool (portfolioId=0) doesn't require walletAddress
+        const parsedPortfolioId = parseInt(portfolioId);
+        const isCommunityPool = parsedPortfolioId === 0;
+        
+        if (portfolioId === undefined || portfolioId === null) {
           return NextResponse.json(
-            { success: false, error: 'portfolioId and walletAddress required' },
+            { success: false, error: 'portfolioId required' },
+            { status: 400 }
+          );
+        }
+        
+        if (!isCommunityPool && !walletAddress) {
+          return NextResponse.json(
+            { success: false, error: 'walletAddress required for non-community portfolios' },
             { status: 400 }
           );
         }
         
         const portfolioConfig = {
-          portfolioId: parseInt(portfolioId),
-          walletAddress,
+          portfolioId: parsedPortfolioId,
+          walletAddress: isCommunityPool ? 'community-pool' : walletAddress,
           enabled: true,
           riskThreshold: config?.riskThreshold || 7, // Default: trigger at risk score 7+
           maxLeverage: config?.maxLeverage || AUTO_HEDGE_CONFIG.DEFAULT_LEVERAGE,

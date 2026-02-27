@@ -26,9 +26,9 @@ const CONFIG = {
   RISK_CHECK_INTERVAL_MS: 60000, // 1 minute
   
   // Risk thresholds
-  MAX_PORTFOLIO_DRAWDOWN_PERCENT: 5, // Auto-hedge if portfolio down > 5%
+  MAX_PORTFOLIO_DRAWDOWN_PERCENT: 3, // Auto-hedge if portfolio down > 3%
   MAX_ASSET_CONCENTRATION_PERCENT: 40, // Hedge if single asset > 40%
-  MIN_HEDGE_SIZE_USD: 1000, // Minimum hedge size
+  MIN_HEDGE_SIZE_USD: 50, // Minimum hedge size (lowered for demo)
   
   // Hedge parameters
   DEFAULT_LEVERAGE: 3,
