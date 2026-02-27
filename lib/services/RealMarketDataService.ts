@@ -71,9 +71,9 @@ class RealMarketDataService {
   private provider: ethers.JsonRpcProvider;
   private priceCache: Map<string, { price: number; change24h: number; high24h: number; low24h: number; volume24h: number; timestamp: number }> = new Map();
   
-  // Proactive refresh configuration
-  private readonly REFRESH_INTERVAL = 5000; // 5 seconds - always fresh
-  private readonly CACHE_TTL = 10000; // 10 seconds - consider fresh
+  // Proactive refresh configuration (optimized to reduce API load)
+  private readonly REFRESH_INTERVAL = 10000; // 10 seconds - balance freshness vs API load
+  private readonly CACHE_TTL = 15000; // 15 seconds - consider fresh
   private readonly STALE_TTL = 60000; // 60 seconds - usable but should refresh
   private readonly TRACKED_SYMBOLS = ['BTC', 'ETH', 'SUI', 'CRO']; // Core symbols to always track
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
