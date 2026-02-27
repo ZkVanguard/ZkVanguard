@@ -491,12 +491,15 @@ class AutoHedgingService {
       // Fetch on-chain pool stats
       const stats = await poolContract.getPoolStats();
       const totalNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
+      const sharePrice = Number(ethers.formatUnits(stats._sharePrice, 6));
       const allocations = {
         BTC: Number(stats._allocations[0]) / 100,
         ETH: Number(stats._allocations[1]) / 100,
         SUI: Number(stats._allocations[2]) / 100,
         CRO: Number(stats._allocations[3]) / 100,
       };
+
+      logger.info('[AutoHedging] Community Pool stats', { totalNAV, sharePrice, allocations });
 
       // Build positions from allocations
       const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
@@ -518,8 +521,12 @@ class AutoHedgingService {
         }
       }
 
-      // Calculate risk metrics
-      const drawdownPercent = this.calculateDrawdown(positions, totalNAV);
+      // Calculate drawdown from inception share price of $1.00
+      // This is the true loss since pool creation, not just 24h token changes
+      const INCEPTION_SHARE_PRICE = 1.0;
+      const drawdownPercent = sharePrice < INCEPTION_SHARE_PRICE 
+        ? ((INCEPTION_SHARE_PRICE - sharePrice) / INCEPTION_SHARE_PRICE) * 100 
+        : 0;
       const volatility = this.calculateVolatility(positions);
       const concentrationRisk = this.calculateConcentrationRisk(positions, totalNAV);
 
