@@ -18,6 +18,7 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getMarketDataService } from './RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
+import { calculatePoolNAV } from './CommunityPoolService';
 
 // Configuration
 const CONFIG = {
@@ -475,7 +476,7 @@ class AutoHedgingService {
 
   /**
    * Assess risk specifically for CommunityPool TVL
-   * Fetches on-chain data from CommunityPool contract
+   * Uses market-adjusted NAV from CommunityPoolService for accurate pricing
    */
   private async assessCommunityPoolRisk(): Promise<RiskAssessment> {
     const COMMUNITY_POOL_CONTRACT = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
@@ -484,67 +485,58 @@ class AutoHedgingService {
     ];
 
     try {
+      // Get market-adjusted NAV and share price from CommunityPoolService
+      // This uses actual token holdings multiplied by live prices
+      const marketData = await calculatePoolNAV();
+      const { totalValueUSD: marketNAV, sharePrice: marketSharePrice, allocations: marketAllocations } = marketData;
+      
+      // Also get on-chain stats for comparison
       const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
       const poolContract = new ethers.Contract(COMMUNITY_POOL_CONTRACT, COMMUNITY_POOL_ABI, provider);
-      const marketDataService = getMarketDataService();
-
-      // Fetch on-chain pool stats  
       const stats = await poolContract.getPoolStats();
       const totalShares = Number(ethers.formatUnits(stats._totalShares, 18));
       const onChainNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
-      const allocations = {
-        BTC: Number(stats._allocations[0]) / 100,
-        ETH: Number(stats._allocations[1]) / 100,
-        SUI: Number(stats._allocations[2]) / 100,
-        CRO: Number(stats._allocations[3]) / 100,
-      };
 
-      // Build positions from allocations with LIVE market prices
+      // Build positions from market allocations
       const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
-      let marketNAV = 0;
+      const marketDataService = getMarketDataService();
       
-      for (const [symbol, percentage] of Object.entries(allocations)) {
-        if (percentage > 0) {
+      for (const [symbol, data] of Object.entries(marketAllocations)) {
+        const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
+        if (alloc.valueUSD > 0) {
           try {
             const priceData = await marketDataService.getTokenPrice(symbol);
-            // Calculate how much of on-chain NAV is allocated to this asset
-            const allocatedNAV = onChainNAV * (percentage / 100);
-            // Calculate how many tokens that represents at current price
-            const balance = allocatedNAV / priceData.price;
-            // Calculate current market value
-            const value = balance * priceData.price;
-            marketNAV += value;
-            
             positions.push({
               symbol,
-              value,
+              value: alloc.valueUSD,
               change24h: priceData.change24h || 0,
-              balance,
+              balance: alloc.amount,
             });
           } catch (err) {
-            logger.warn(`[AutoHedging] Failed to fetch price for ${symbol}`, { error: err });
+            // Use stored price data if real-time fails
+            positions.push({
+              symbol,
+              value: alloc.valueUSD,
+              change24h: 0,
+              balance: alloc.amount,
+            });
           }
         }
       }
 
-      // Calculate MARKET-BASED share price (not the on-chain nominal price)
-      // This reflects actual crypto price movements
-      const marketSharePrice = totalShares > 0 ? marketNAV / totalShares : 1.0;
-      
       // Calculate drawdown from inception share price of $1.00
-      // This is the true loss since pool creation
       const INCEPTION_SHARE_PRICE = 1.0;
       const drawdownPercent = marketSharePrice < INCEPTION_SHARE_PRICE 
         ? ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100 
         : 0;
 
-      logger.info('[AutoHedging] Market NAV calculation', { 
+      logger.info('[AutoHedging] Community Pool market NAV', { 
         onChainNAV,
         marketNAV,
         totalShares,
         marketSharePrice, 
         inceptionPrice: INCEPTION_SHARE_PRICE, 
-        drawdownPercent 
+        drawdownPercent: drawdownPercent.toFixed(2) + '%',
       });
 
       const volatility = this.calculateVolatility(positions);
@@ -576,11 +568,17 @@ class AutoHedgingService {
         notionalValue: parseFloat(String(h.notional_value)) || 0,
       }));
 
-      // Generate recommendations
+      // Generate recommendations - convert allocations to Record<string, number>
+      const allocationPercentages: Record<string, number> = {};
+      for (const [symbol, data] of Object.entries(marketAllocations)) {
+        const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
+        allocationPercentages[symbol] = alloc.percentage;
+      }
+      
       const recommendations = this.generateHedgeRecommendations(
         positions,
         marketNAV,
-        allocations as Record<string, number>,
+        allocationPercentages,
         activeHedges,
         drawdownPercent,
         concentrationRisk
