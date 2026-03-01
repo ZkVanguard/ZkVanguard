@@ -108,7 +108,7 @@ export interface SuiPoolTransactionResult {
 
 export class SuiCommunityPoolService {
   private network: keyof typeof SUI_POOL_DEPLOYMENTS;
-  private config: typeof SUI_POOL_DEPLOYMENTS.testnet;
+  private config: (typeof SUI_POOL_DEPLOYMENTS)[keyof typeof SUI_POOL_DEPLOYMENTS];
 
   constructor(network: keyof typeof SUI_POOL_DEPLOYMENTS = 'testnet') {
     this.network = network;
@@ -220,7 +220,7 @@ export class SuiCommunityPoolService {
       }
 
       const totalPortfolios = Number(stateData.portfolio_count || 0);
-      const totalValueLocked = BigInt(stateData.total_value_locked || '0');
+      const totalValueLocked = BigInt(String(stateData.total_value_locked || '0'));
       const suiPrice = 2.50; // Fallback; use real price in production
       const tvlUsd = Number(totalValueLocked) / 1e9 * suiPrice;
 

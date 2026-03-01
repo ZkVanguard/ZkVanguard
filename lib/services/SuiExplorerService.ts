@@ -83,12 +83,107 @@ export interface SuiCoinMetadata {
 }
 
 // ============================================
+// SUI RPC RESPONSE TYPES
+// ============================================
+
+/** suix_getAllBalances response item */
+interface RpcBalanceItem {
+  coinType: string;
+  totalBalance: string;
+  coinObjectCount: number;
+}
+
+/** suix_getBalance response */
+interface RpcBalance {
+  coinType: string;
+  totalBalance: string;
+  coinObjectCount: number;
+}
+
+/** sui_getTransactionBlock: gas used sub-object */
+interface RpcGasUsed {
+  computationCost: string;
+  storageCost: string;
+  storageRebate: string;
+}
+
+/** sui_getTransactionBlock: effects sub-object */
+interface RpcEffects {
+  status?: { status: string };
+  gasUsed?: RpcGasUsed;
+  [key: string]: unknown;
+}
+
+/** sui_getTransactionBlock: transaction → data sub-object */
+interface RpcTxData {
+  sender?: string;
+  transaction?: { kind?: string };
+}
+
+/** sui_getTransactionBlock response */
+interface RpcTransactionBlock {
+  digest: string;
+  timestampMs?: string;
+  effects?: RpcEffects;
+  transaction?: { data?: RpcTxData };
+}
+
+/** suix_queryTransactionBlocks response */
+interface RpcQueryTxResult {
+  data: RpcTransactionBlock[];
+  nextCursor: string | null;
+}
+
+/** sui_getObject → result.data */
+interface RpcObjectData {
+  objectId: string;
+  version: string;
+  digest: string;
+  type?: string;
+  owner?: string | { AddressOwner?: string; ObjectOwner?: string; Shared?: unknown };
+  content?: { fields?: Record<string, unknown> };
+}
+
+/** sui_getObject response */
+interface RpcObjectResult {
+  data?: RpcObjectData;
+}
+
+/** suix_getOwnedObjects response item */
+interface RpcOwnedObjectItem {
+  data?: RpcObjectData;
+}
+
+/** suix_getOwnedObjects response */
+interface RpcOwnedObjectsResult {
+  data: RpcOwnedObjectItem[];
+}
+
+/** sui_getCheckpoint response */
+interface RpcCheckpoint {
+  sequenceNumber: string;
+  digest: string;
+  timestampMs: string;
+  transactions: string[];
+  networkTotalTransactions: string;
+}
+
+/** suix_getCoinMetadata response */
+interface RpcCoinMetadata {
+  name: string;
+  symbol: string;
+  decimals: number;
+  description: string;
+  iconUrl: string | null;
+}
+
+// ============================================
 // SUI EXPLORER SERVICE
 // ============================================
 
 export class SuiExplorerService {
   private network: keyof typeof SUI_EXPLORER_CONFIG;
-  private config: typeof SUI_EXPLORER_CONFIG.testnet;
+  private config: (typeof SUI_EXPLORER_CONFIG)[keyof typeof SUI_EXPLORER_CONFIG];
 
   constructor(network: keyof typeof SUI_EXPLORER_CONFIG = 'testnet') {
     this.network = network;
@@ -105,9 +200,9 @@ export class SuiExplorerService {
    */
   async getAllBalances(address: string): Promise<SuiBalance[]> {
     try {
-      const result = await this.rpc('suix_getAllBalances', [address]);
+      const result = await this.rpc<RpcBalanceItem[]>('suix_getAllBalances', [address]);
 
-      return (result || []).map((b: Record<string, unknown>) => {
+      return (result || []).map((b) => {
         const coinType = String(b.coinType || '');
         const totalBalance = BigInt(String(b.totalBalance || '0'));
         const decimals = coinType.includes('::sui::SUI') ? 9 : 6;
@@ -131,13 +226,13 @@ export class SuiExplorerService {
    */
   async getSuiBalance(address: string): Promise<SuiBalance> {
     try {
-      const result = await this.rpc('suix_getBalance', [address, '0x2::sui::SUI']);
+      const result = await this.rpc<RpcBalance>('suix_getBalance', [address, '0x2::sui::SUI']);
       return {
         coinType: '0x2::sui::SUI',
         symbol: 'SUI',
-        totalBalance: BigInt(String(result?.totalBalance || '0')),
+        totalBalance: BigInt(result?.totalBalance || '0'),
         coinObjectCount: Number(result?.coinObjectCount || 0),
-        balanceFormatted: Number(BigInt(String(result?.totalBalance || '0'))) / 1e9,
+        balanceFormatted: Number(BigInt(result?.totalBalance || '0')) / 1e9,
       };
     } catch (e) {
       logger.error('[SuiExplorer] getSuiBalance error', { address, error: e });
@@ -160,15 +255,15 @@ export class SuiExplorerService {
    */
   async getTransaction(digest: string): Promise<SuiTransaction | null> {
     try {
-      const result = await this.rpc('sui_getTransactionBlock', [
+      const result = await this.rpc<RpcTransactionBlock>('sui_getTransactionBlock', [
         digest,
         { showEffects: true, showInput: true, showEvents: true },
       ]);
 
       if (!result) return null;
 
-      const effects = result.effects || {};
-      const gasUsed = effects.gasUsed || {};
+      const effects = result.effects || {} as RpcEffects;
+      const gasUsed = effects.gasUsed || {} as RpcGasUsed;
 
       return {
         digest: result.digest,
@@ -202,7 +297,7 @@ export class SuiExplorerService {
     cursor?: string,
   ): Promise<{ transactions: SuiTransaction[]; nextCursor: string | null }> {
     try {
-      const result = await this.rpc('suix_queryTransactionBlocks', [
+      const result = await this.rpc<RpcQueryTxResult>('suix_queryTransactionBlocks', [
         {
           filter: { FromAddress: address },
           options: { showEffects: true, showInput: true },
@@ -212,7 +307,7 @@ export class SuiExplorerService {
         true, // descending
       ]);
 
-      const transactions = (result?.data || []).map((tx: Record<string, unknown>) =>
+      const transactions = (result?.data || []).map((tx) =>
         this.parseTxBlock(tx)
       );
 
@@ -235,7 +330,7 @@ export class SuiExplorerService {
    */
   async getObject(objectId: string): Promise<SuiObjectInfo | null> {
     try {
-      const result = await this.rpc('sui_getObject', [
+      const result = await this.rpc<RpcObjectResult>('sui_getObject', [
         objectId,
         { showContent: true, showType: true, showOwner: true },
       ]);
@@ -248,7 +343,7 @@ export class SuiExplorerService {
         version: d.version,
         digest: d.digest,
         type: d.type || '',
-        owner: d.owner,
+        owner: d.owner || '',
         content: d.content?.fields || {},
         explorerUrl: `${this.config.explorerUrl}/object/${d.objectId}`,
       };
@@ -271,22 +366,22 @@ export class SuiExplorerService {
         ? { StructType: structType }
         : { MatchAll: [] };
 
-      const result = await this.rpc('suix_getOwnedObjects', [
+      const result = await this.rpc<RpcOwnedObjectsResult>('suix_getOwnedObjects', [
         address,
         { filter, options: { showContent: true, showType: true, showOwner: true } },
         null,
         limit,
       ]);
 
-      return (result?.data || []).map((obj: Record<string, unknown>) => {
-        const d = (obj as { data?: Record<string, unknown> }).data || {};
+      return (result?.data || []).map((obj) => {
+        const d = obj.data || {} as RpcObjectData;
         return {
-          objectId: d.objectId as string || '',
-          version: d.version as string || '',
-          digest: d.digest as string || '',
-          type: d.type as string || '',
-          owner: d.owner as string || '',
-          content: (d.content as Record<string, unknown>)?.fields as Record<string, unknown> || {},
+          objectId: d.objectId || '',
+          version: d.version || '',
+          digest: d.digest || '',
+          type: d.type || '',
+          owner: d.owner || '',
+          content: d.content?.fields || {},
           explorerUrl: `${this.config.explorerUrl}/object/${d.objectId}`,
         } as SuiObjectInfo;
       });
@@ -305,10 +400,10 @@ export class SuiExplorerService {
    */
   async getLatestCheckpoint(): Promise<SuiCheckpoint | null> {
     try {
-      const seqNum = await this.rpc('sui_getLatestCheckpointSequenceNumber', []);
+      const seqNum = await this.rpc<string>('sui_getLatestCheckpointSequenceNumber', []);
       if (!seqNum) return null;
 
-      const checkpoint = await this.rpc('sui_getCheckpoint', [seqNum.toString()]);
+      const checkpoint = await this.rpc<RpcCheckpoint>('sui_getCheckpoint', [seqNum.toString()]);
       if (!checkpoint) return null;
 
       return {
@@ -329,8 +424,8 @@ export class SuiExplorerService {
    */
   async getTotalTransactionCount(): Promise<bigint> {
     try {
-      const result = await this.rpc('sui_getTotalTransactionBlocks', []);
-      return BigInt(String(result || '0'));
+      const result = await this.rpc<string>('sui_getTotalTransactionBlocks', []);
+      return BigInt(result || '0');
     } catch {
       return 0n;
     }
@@ -345,7 +440,7 @@ export class SuiExplorerService {
    */
   async getCoinMetadata(coinType: string): Promise<SuiCoinMetadata | null> {
     try {
-      const result = await this.rpc('suix_getCoinMetadata', [coinType]);
+      const result = await this.rpc<RpcCoinMetadata>('suix_getCoinMetadata', [coinType]);
       if (!result) return null;
 
       return {
@@ -389,19 +484,19 @@ export class SuiExplorerService {
   /**
    * Generic SUI JSON-RPC call
    */
-  private async rpc(method: string, params: unknown[]): Promise<Record<string, unknown> | unknown> {
+  private async rpc<T>(method: string, params: unknown[]): Promise<T> {
     const response = await fetch(this.config.rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     });
 
-    const data = await response.json();
+    const data = await response.json() as { result?: T; error?: { message?: string } };
     if (data.error) {
       logger.error('[SuiExplorer] RPC error', { method, error: data.error });
       throw new Error(`SUI RPC: ${data.error.message || JSON.stringify(data.error)}`);
     }
-    return data.result;
+    return data.result as T;
   }
 
   /**
@@ -424,25 +519,25 @@ export class SuiExplorerService {
   /**
    * Parse a raw transaction block into our SuiTransaction type
    */
-  private parseTxBlock(tx: Record<string, unknown>): SuiTransaction {
-    const effects = tx.effects as Record<string, unknown> || {};
-    const gasUsed = effects.gasUsed as Record<string, unknown> || {};
-    const txData = (tx.transaction as Record<string, unknown>)?.data as Record<string, unknown> || {};
+  private parseTxBlock(tx: RpcTransactionBlock): SuiTransaction {
+    const effects = tx.effects || {} as RpcEffects;
+    const gasUsed = effects.gasUsed || {} as RpcGasUsed;
+    const txData = tx.transaction?.data || {} as RpcTxData;
 
     return {
-      digest: tx.digest as string || '',
+      digest: tx.digest || '',
       timestampMs: Number(tx.timestampMs || 0),
-      sender: txData.sender as string || '',
-      status: (effects.status as Record<string, unknown>)?.status === 'success' ? 'success' : 'failure',
+      sender: txData.sender || '',
+      status: effects.status?.status === 'success' ? 'success' : 'failure',
       gasUsed: {
-        computationCost: BigInt(String(gasUsed.computationCost || '0')),
-        storageCost: BigInt(String(gasUsed.storageCost || '0')),
-        storageRebate: BigInt(String(gasUsed.storageRebate || '0')),
-        total: BigInt(String(gasUsed.computationCost || '0')) +
-               BigInt(String(gasUsed.storageCost || '0')) -
-               BigInt(String(gasUsed.storageRebate || '0')),
+        computationCost: BigInt(gasUsed.computationCost || '0'),
+        storageCost: BigInt(gasUsed.storageCost || '0'),
+        storageRebate: BigInt(gasUsed.storageRebate || '0'),
+        total: BigInt(gasUsed.computationCost || '0') +
+               BigInt(gasUsed.storageCost || '0') -
+               BigInt(gasUsed.storageRebate || '0'),
       },
-      kind: ((txData.transaction as Record<string, unknown>)?.kind as string) || 'Unknown',
+      kind: txData.transaction?.kind || 'Unknown',
       effects: effects as Record<string, unknown>,
       explorerUrl: `${this.config.explorerUrl}/tx/${tx.digest}`,
     };

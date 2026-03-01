@@ -108,7 +108,7 @@ export interface SuiProxyInfo {
 
 export class SuiOnChainHedgeService {
   private network: keyof typeof SUI_DEPLOYMENTS;
-  private config: typeof SUI_DEPLOYMENTS.testnet;
+  private config: (typeof SUI_DEPLOYMENTS)[keyof typeof SUI_DEPLOYMENTS];
 
   constructor(network: keyof typeof SUI_DEPLOYMENTS = 'testnet') {
     this.network = network;

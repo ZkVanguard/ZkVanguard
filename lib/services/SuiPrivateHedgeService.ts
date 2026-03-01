@@ -92,7 +92,7 @@ export interface SuiStealthDeposit {
 
 export class SuiPrivateHedgeService {
   private network: keyof typeof SUI_ZK_DEPLOYMENTS;
-  private config: typeof SUI_ZK_DEPLOYMENTS.testnet;
+  private config: (typeof SUI_ZK_DEPLOYMENTS)[keyof typeof SUI_ZK_DEPLOYMENTS];
   private encryptionKeyHex: string;
 
   constructor(network: keyof typeof SUI_ZK_DEPLOYMENTS = 'testnet') {
