@@ -18,6 +18,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { BluefinService, BLUEFIN_PAIRS } from './BluefinService';
+import { getMarketDataService } from './RealMarketDataService';
 
 // ============================================
 // DEPLOYED CONTRACTS
@@ -95,23 +96,44 @@ const DEFAULT_SUI_ALLOCATIONS: SuiAllocationConfig[] = [
 ];
 
 // ============================================
-// APPROXIMATE PRICES (fallback when no oracle)
+// LIVE PRICE FETCHING (Crypto.com Exchange API)
 // ============================================
 
-const FALLBACK_PRICES: Record<string, number> = {
-  BTC: 71000,
-  ETH: 2100,
-  SUI: 2.50,
-  SOL: 88,
-  CRO: 0.08,
-  USDC: 1.0,
-  USDT: 1.0,
-  CETUS: 0.15,
-  DEEP: 0.10,
-  NAVX: 0.12,
-  APT: 4.5,
-  ARB: 0.45,
-};
+/** Cached live prices — refreshed each sync cycle */
+const _livePriceCache: Record<string, { price: number; ts: number }> = {};
+const PRICE_CACHE_TTL = 15_000; // 15 s
+
+/**
+ * Fetch a real-time price via RealMarketDataService (Crypto.com Exchange).
+ * Falls back to 0 if the symbol is genuinely unavailable — never uses
+ * hardcoded constants.
+ */
+async function fetchLivePrice(symbol: string): Promise<number> {
+  const cached = _livePriceCache[symbol];
+  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) return cached.price;
+
+  try {
+    const svc = getMarketDataService();
+    const data = await svc.getTokenPrice(symbol);
+    if (data.price > 0) {
+      _livePriceCache[symbol] = { price: data.price, ts: Date.now() };
+      return data.price;
+    }
+  } catch (e) {
+    logger.warn(`[SuiPortfolio] Live price fetch failed for ${symbol}`, { error: e });
+  }
+  // If we have a stale cached price, use it rather than 0
+  return cached?.price || 0;
+}
+
+/** Batch-fetch live prices for an array of symbols */
+async function fetchLivePrices(symbols: string[]): Promise<Record<string, number>> {
+  const results: Record<string, number> = {};
+  await Promise.all(symbols.map(async (s) => {
+    results[s] = await fetchLivePrice(s);
+  }));
+  return results;
+}
 
 // ============================================
 // SUI PORTFOLIO MANAGER
@@ -204,11 +226,15 @@ export class SuiPortfolioManager {
         // Parse allocations from on-chain data
         const allocations = fields.allocations;
         if (Array.isArray(allocations)) {
+          // Collect symbols to batch-fetch live prices
+          const symbols = allocations.map((a) => String((a as Record<string, unknown>).asset_type || 'SUI'));
+          const prices = await fetchLivePrices(symbols);
+
           for (const alloc of allocations) {
             const a = alloc as Record<string, unknown>;
             const symbol = String(a.asset_type || 'SUI');
             const amount = Number(a.amount || '0') / 1e9;
-            const price = FALLBACK_PRICES[symbol] || 1;
+            const price = prices[symbol] || 0;
 
             this.positions.set(symbol, {
               symbol,
@@ -247,19 +273,24 @@ export class SuiPortfolioManager {
 
       const balData = await balResp.json();
       const suiBalance = Number(BigInt(String(balData.result?.totalBalance || '0'))) / 1e9;
-      const suiPrice = FALLBACK_PRICES['SUI'];
+
+      // Fetch all required live prices in parallel
+      const allSymbols = ['SUI', ...this.allocations.map(a => a.symbol)];
+      const livePrices = await fetchLivePrices([...new Set(allSymbols)]);
+      const suiPrice = livePrices['SUI'] || 0;
       const totalValueUsd = suiBalance * suiPrice;
 
-      logger.info('[SuiPortfolio] SUI balance', {
+      logger.info('[SuiPortfolio] SUI balance (live prices)', {
         sui: suiBalance.toFixed(4),
         usd: totalValueUsd.toFixed(2),
+        suiPrice,
       });
 
       // Distribute across allocations
       for (const alloc of this.allocations) {
         const valueUsd = totalValueUsd * (alloc.percentage / 100);
-        const price = FALLBACK_PRICES[alloc.symbol] || 1;
-        const amount = valueUsd / price;
+        const price = livePrices[alloc.symbol] || 0;
+        const amount = price > 0 ? valueUsd / price : 0;
 
         this.positions.set(alloc.symbol, {
           symbol: alloc.symbol,
@@ -290,7 +321,7 @@ export class SuiPortfolioManager {
 
     return {
       ownerAddress: this.ownerAddress,
-      totalValueSui: BigInt(Math.floor(totalUsd / (FALLBACK_PRICES['SUI'] || 2.5) * 1e9)),
+      totalValueSui: BigInt(Math.floor(totalUsd / ((_livePriceCache['SUI']?.price) || 1) * 1e9)),
       totalValueUsd: totalUsd,
       positions,
       allocations: this.allocations,
@@ -400,10 +431,16 @@ export class SuiPortfolioManager {
             continue;
           }
         }
-        // Use fallback price
-        const price = FALLBACK_PRICES[symbol] || pos.currentPrice;
-        pos.currentPrice = price;
-        pos.valueUsd = pos.amount * price;
+        // Use live price from Crypto.com
+        const livePrice = await fetchLivePrice(symbol);
+        if (livePrice > 0) {
+          pos.currentPrice = livePrice;
+          pos.valueUsd = pos.amount * livePrice;
+          pos.pnl = (livePrice - pos.entryPrice) * pos.amount;
+          pos.pnlPercent = pos.entryPrice > 0
+            ? ((livePrice - pos.entryPrice) / pos.entryPrice) * 100
+            : 0;
+        }
       } catch {
         // Keep current price
       }

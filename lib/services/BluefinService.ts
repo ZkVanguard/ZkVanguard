@@ -15,6 +15,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import * as crypto from 'crypto';
+import { getMarketDataService } from './RealMarketDataService';
 
 // Network configurations
 export const BLUEFIN_NETWORKS = {
@@ -527,34 +528,42 @@ export class MockBluefinService {
     leverage: number;
   }): Promise<BluefinHedgeResult> {
     const hedgeId = `MOCK_BF_${Date.now()}`;
-    const mockPrice = this.getMockPrice(params.symbol);
+    const livePrice = await this.getLivePrice(params.symbol);
+    if (livePrice <= 0) {
+      return {
+        success: false,
+        hedgeId: '',
+        error: `Could not fetch live price for ${params.symbol}`,
+        timestamp: Date.now(),
+      };
+    }
 
-    // Store mock position
+    // Store position with live price
     this.positions.set(params.symbol, {
       symbol: params.symbol,
       side: params.side,
       size: params.size,
       leverage: params.leverage,
-      entryPrice: mockPrice,
-      markPrice: mockPrice,
+      entryPrice: livePrice,
+      markPrice: livePrice,
       liquidationPrice: params.side === 'LONG' 
-        ? mockPrice * (1 - 0.9 / params.leverage)
-        : mockPrice * (1 + 0.9 / params.leverage),
+        ? livePrice * (1 - 0.9 / params.leverage)
+        : livePrice * (1 + 0.9 / params.leverage),
       unrealizedPnl: 0,
-      margin: params.size * mockPrice / params.leverage,
+      margin: params.size * livePrice / params.leverage,
       marginRatio: 1 / params.leverage,
     });
 
-    logger.info('🧪 Mock BlueFin hedge opened', { hedgeId, ...params });
+    logger.info('📡 Mock BlueFin hedge opened (live price)', { hedgeId, price: livePrice, ...params });
 
     return {
       success: true,
       hedgeId,
       orderId: `ORDER_${hedgeId}`,
       txDigest: `TX_${hedgeId}`,
-      executionPrice: mockPrice,
+      executionPrice: livePrice,
       filledSize: params.size,
-      fees: params.size * mockPrice * 0.0005, // 0.05% fee
+      fees: params.size * livePrice * 0.0005, // 0.05% fee
       timestamp: Date.now(),
     };
   }
@@ -570,7 +579,7 @@ export class MockBluefinService {
       };
     }
 
-    const closePrice = this.getMockPrice(params.symbol);
+    const closePrice = await this.getLivePrice(params.symbol) || position.markPrice;
     const pnl = position.side === 'LONG'
       ? (closePrice - position.entryPrice) * position.size
       : (position.entryPrice - closePrice) * position.size;
@@ -598,18 +607,17 @@ export class MockBluefinService {
     return Array.from(this.positions.values());
   }
 
-  private getMockPrice(symbol: string): number {
-    const prices: Record<string, number> = {
-      'BTC-PERP': 71230,
-      'ETH-PERP': 2111,
-      'SUI-PERP': 0.91,
-      'SOL-PERP': 88,
-      'APT-PERP': 4.5,
-      'ARB-PERP': 0.45,
-      'DOGE-PERP': 0.097,
-      'PEPE-PERP': 0.0000082,
-    };
-    return prices[symbol] || 100;
+  private async getLivePrice(symbol: string): Promise<number> {
+    // Extract base asset from perp symbol (e.g. 'BTC-PERP' → 'BTC')
+    const baseAsset = symbol.replace('-PERP', '');
+    try {
+      const svc = getMarketDataService();
+      const data = await svc.getTokenPrice(baseAsset);
+      if (data.price > 0) return data.price;
+    } catch (e) {
+      logger.warn(`[MockBluefin] Live price fetch failed for ${baseAsset}`, { error: e });
+    }
+    return 0;
   }
 }
 

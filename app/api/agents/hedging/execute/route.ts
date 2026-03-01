@@ -504,7 +504,7 @@ export async function POST(request: NextRequest) {
       logger.warn('⚠️ No private key configured - running in simulation mode');
       
       // Get REAL price from unified price provider (WebSocket or REST fallback)
-      let mockPrice = 1000; // Fallback
+      let mockPrice = 0; // No fallback — must get a live price
       let simPriceContext: HedgePriceContext | null = null;
       
       try {
@@ -518,15 +518,22 @@ export async function POST(request: NextRequest) {
             slippage: `${simPriceContext.slippageEstimate.toFixed(3)}%`,
           });
         } else {
-          // Fallback: try cached entry price
-          mockPrice = simPriceContext.entryPrice > 0 ? simPriceContext.entryPrice : mockPrice;
+          // Use best available from price context
+          mockPrice = simPriceContext.entryPrice > 0 ? simPriceContext.entryPrice : 0;
           logger.warn(`⚠️ Price validation warnings for ${asset}`, {
             warnings: simPriceContext.validation.warnings,
             usingPrice: mockPrice,
           });
         }
       } catch (priceError) {
-        logger.error('❌ Failed to fetch price from unified provider, using fallback', { error: priceError });
+        logger.error('❌ Failed to fetch price from unified provider', { error: priceError });
+      }
+
+      if (mockPrice <= 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Unable to fetch live price for ${asset}. Cannot execute hedge without real-time pricing.`,
+        }, { status: 503 });
       }
       
       // Return simulated hedge execution with REAL price
