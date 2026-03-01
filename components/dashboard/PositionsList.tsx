@@ -1217,20 +1217,20 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
       )}
 
       {/* Token Holdings - Wallet Balances - REDESIGNED */}
-      {positions.length > 0 && parseFloat(positions[0].balanceUSD) > 0 && (
+      {positions.length > 0 && positions.some(p => parseFloat(p.balanceUSD || '0') > 0) && (
         <div className="space-y-3">
           {/* Wallet Section Header - Compact */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-[#FF9500]" />
               <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Wallet Balances</h3>
-              <span className="text-[12px] text-[#86868b]">({positions.length})</span>
+              <span className="text-[12px] text-[#86868b]">({positions.filter(p => parseFloat(p.balanceUSD || '0') > 0).length})</span>
             </div>
           </div>
 
           {/* Token Cards */}
           <div className="bg-white rounded-xl shadow-sm border border-black/5 overflow-hidden">
-            {positions.map((position, idx) => {
+            {positions.filter(p => parseFloat(p.balanceUSD || '0') > 0).map((position, idx, filteredPositions) => {
               const positionValue = parseFloat(position.balanceUSD || '0');
               const percentOfTotal = totalValue > 0 ? (positionValue / totalValue) * 100 : 0;
               
@@ -1238,7 +1238,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
                 <div 
                   key={`${position.symbol}-${idx}`} 
                   className={`px-3 sm:px-4 py-3 hover:bg-[#f5f5f7]/50 transition-all ${
-                    idx !== positions.length - 1 ? 'border-b border-black/5' : ''
+                    idx !== filteredPositions.length - 1 ? 'border-b border-black/5' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
