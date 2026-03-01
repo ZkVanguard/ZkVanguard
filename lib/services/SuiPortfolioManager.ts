@@ -119,7 +119,7 @@ const FALLBACK_PRICES: Record<string, number> = {
 
 export class SuiPortfolioManager {
   private network: keyof typeof SUI_PORTFOLIO_DEPLOYMENTS;
-  private config: typeof SUI_PORTFOLIO_DEPLOYMENTS.testnet;
+  private config: (typeof SUI_PORTFOLIO_DEPLOYMENTS)[keyof typeof SUI_PORTFOLIO_DEPLOYMENTS];
   private allocations: SuiAllocationConfig[];
   private positions: Map<string, SuiPosition> = new Map();
   private ownerAddress: string = '';

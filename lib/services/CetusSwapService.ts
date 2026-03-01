@@ -197,7 +197,7 @@ export interface CetusLiquidityResult {
 
 export class CetusSwapService {
   private network: 'mainnet' | 'testnet';
-  private config: typeof CETUS_CONFIG.mainnet;
+  private config: typeof CETUS_CONFIG[keyof typeof CETUS_CONFIG];
   private tokens: Record<string, TokenInfo>;
 
   constructor(network: 'mainnet' | 'testnet' = 'testnet') {
