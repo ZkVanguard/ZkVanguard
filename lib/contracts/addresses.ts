@@ -1,8 +1,14 @@
 /**
  * Smart Contract Addresses
- * Multi-chain deployment addresses for Cronos (EVM) and SUI (Move)
+ * Multi-chain deployment addresses for Cronos (EVM), Oasis ParaTimes (Emerald/Sapphire), and SUI (Move)
  * 
- * MAINNET READY: Set NEXT_PUBLIC_CHAIN_ID=25 and configure mainnet addresses via env vars
+ * OASIS PARATIMES:
+ *   - Consensus: Base layer (staking/governance, not smart-contract capable)
+ *   - Emerald: Public EVM ParaTime
+ *   - Sapphire: Confidential EVM ParaTime
+ *   - Cipher: Confidential WASM ParaTime (non-EVM)
+ * 
+ * MAINNET READY: Set NEXT_PUBLIC_CHAIN_ID and configure mainnet addresses via env vars
  */
 
 // ============================================
@@ -78,6 +84,59 @@ export const SUI_CONTRACT_ADDRESSES = {
 } as const;
 
 // ============================================
+// OASIS EMERALD (PUBLIC EVM) CONTRACT ADDRESSES
+// ============================================
+
+export const OASIS_EMERALD_CONTRACT_ADDRESSES = {
+  testnet: {
+    zkVerifier: ((process.env.NEXT_PUBLIC_EMERALD_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    rwaManager: ((process.env.NEXT_PUBLIC_EMERALD_RWAMANAGER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    paymentRouter: ((process.env.NEXT_PUBLIC_EMERALD_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_EMERALD_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_EMERALD_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+  mainnet: {
+    zkVerifier: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    rwaManager: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_RWAMANAGER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    paymentRouter: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+} as const;
+
+// ============================================
+// OASIS SAPPHIRE (CONFIDENTIAL EVM) CONTRACT ADDRESSES
+// ============================================
+
+export const OASIS_CONTRACT_ADDRESSES = {
+  testnet: {
+    // All Oasis Sapphire testnet addresses - deploy and update these
+    zkVerifier: ((process.env.NEXT_PUBLIC_OASIS_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    rwaManager: ((process.env.NEXT_PUBLIC_OASIS_RWAMANAGER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    paymentRouter: ((process.env.NEXT_PUBLIC_OASIS_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    // Confidential ZK contracts (leveraging Sapphire's native confidentiality)
+    confidentialZKVerifier: ((process.env.NEXT_PUBLIC_OASIS_CONFIDENTIAL_ZK_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    // Gasless commitment verifier
+    gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_OASIS_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    // Hedge executor
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_OASIS_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    // USDC/stablecoin token on Oasis Sapphire Testnet
+    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+  mainnet: {
+    zkVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    rwaManager: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_RWAMANAGER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    paymentRouter: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    confidentialZKVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_CONFIDENTIAL_ZK_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    hedgeExecutor: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+} as const;
+
+// ============================================
 // LEGACY EXPORT (for backward compatibility)
 // ============================================
 
@@ -87,13 +146,17 @@ export const CONTRACT_ADDRESSES = {
   sui_testnet: SUI_CONTRACT_ADDRESSES.testnet,
   sui_mainnet: SUI_CONTRACT_ADDRESSES.mainnet,
   sui_devnet: SUI_CONTRACT_ADDRESSES.devnet,
+  oasis_emerald_testnet: OASIS_EMERALD_CONTRACT_ADDRESSES.testnet,
+  oasis_emerald_mainnet: OASIS_EMERALD_CONTRACT_ADDRESSES.mainnet,
+  oasis_sapphire_testnet: OASIS_CONTRACT_ADDRESSES.testnet,
+  oasis_sapphire_mainnet: OASIS_CONTRACT_ADDRESSES.mainnet,
 } as const;
 
 // ============================================
 // CHAIN TYPE DETECTION
 // ============================================
 
-export type ChainType = 'evm' | 'sui';
+export type ChainType = 'evm' | 'sui' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
 export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
 
 export interface ChainInfo {
@@ -110,12 +173,28 @@ export function getChainInfo(chainId: number | string): ChainInfo {
     const network = chainId.split(':')[1] as NetworkType;
     return { type: 'sui', network, chainId };
   }
+  if (typeof chainId === 'string' && chainId.startsWith('oasis:consensus')) {
+    const network = chainId.split(':')[2] as NetworkType;
+    return { type: 'oasis-consensus', network: network || 'mainnet', chainId };
+  }
+  if (typeof chainId === 'string' && chainId.startsWith('oasis:cipher')) {
+    const network = chainId.split(':')[2] as NetworkType;
+    return { type: 'oasis-cipher', network: network || 'mainnet', chainId };
+  }
   
   switch (chainId) {
     case 338:
       return { type: 'evm', network: 'testnet', chainId };
     case 25:
       return { type: 'evm', network: 'mainnet', chainId };
+    case 42261:
+      return { type: 'oasis-emerald', network: 'testnet', chainId };
+    case 42262:
+      return { type: 'oasis-emerald', network: 'mainnet', chainId };
+    case 23295:
+      return { type: 'oasis-sapphire', network: 'testnet', chainId };
+    case 23294:
+      return { type: 'oasis-sapphire', network: 'mainnet', chainId };
     default:
       return { type: 'evm', network: 'testnet', chainId };
   }
@@ -130,6 +209,14 @@ export function getContractAddresses(chainId: number) {
       return CRONOS_CONTRACT_ADDRESSES.testnet;
     case 25: // Cronos Mainnet
       return CRONOS_CONTRACT_ADDRESSES.mainnet;
+    case 42261: // Oasis Emerald Testnet
+      return OASIS_EMERALD_CONTRACT_ADDRESSES.testnet;
+    case 42262: // Oasis Emerald Mainnet
+      return OASIS_EMERALD_CONTRACT_ADDRESSES.mainnet;
+    case 23295: // Oasis Sapphire Testnet
+      return OASIS_CONTRACT_ADDRESSES.testnet;
+    case 23294: // Oasis Sapphire Mainnet
+      return OASIS_CONTRACT_ADDRESSES.mainnet;
     default:
       return CRONOS_CONTRACT_ADDRESSES.testnet; // Default to testnet
   }
@@ -149,7 +236,27 @@ export function getMultiChainAddresses(chainType: ChainType, network: NetworkTyp
   if (chainType === 'sui') {
     return SUI_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet'];
   }
+  if (chainType === 'oasis-sapphire') {
+    return OASIS_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
+  }
+  if (chainType === 'oasis-emerald') {
+    return OASIS_EMERALD_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
+  }
   return CRONOS_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
+}
+
+/**
+ * Get Oasis Emerald contract addresses for the current network
+ */
+export function getOasisEmeraldContractAddresses(network: 'mainnet' | 'testnet' = 'testnet') {
+  return OASIS_EMERALD_CONTRACT_ADDRESSES[network];
+}
+
+/**
+ * Get Oasis Sapphire contract addresses for the current network
+ */
+export function getOasisContractAddresses(network: 'mainnet' | 'testnet' = 'testnet') {
+  return OASIS_CONTRACT_ADDRESSES[network];
 }
 
 /**
@@ -172,10 +279,29 @@ export function checkMainnetConfiguration(): { configured: boolean; missing: str
   const addresses = CRONOS_CONTRACT_ADDRESSES.mainnet;
   const missing: string[] = [];
   
-  if (!isAddressConfigured(addresses.zkVerifier)) missing.push('zkVerifier');
-  if (!isAddressConfigured(addresses.rwaManager)) missing.push('rwaManager');
-  if (!isAddressConfigured(addresses.hedgeExecutor)) missing.push('hedgeExecutor');
-  if (!isAddressConfigured(addresses.paymentRouter)) missing.push('paymentRouter');
+  if (!isAddressConfigured(addresses.zkVerifier)) missing.push('cronos:zkVerifier');
+  if (!isAddressConfigured(addresses.rwaManager)) missing.push('cronos:rwaManager');
+  if (!isAddressConfigured(addresses.hedgeExecutor)) missing.push('cronos:hedgeExecutor');
+  if (!isAddressConfigured(addresses.paymentRouter)) missing.push('cronos:paymentRouter');
+  
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
+}
+
+/**
+ * Check if Oasis Sapphire mainnet contracts are properly configured
+ */
+export function checkOasisMainnetConfiguration(): { configured: boolean; missing: string[] } {
+  const addresses = OASIS_CONTRACT_ADDRESSES.mainnet;
+  const missing: string[] = [];
+  
+  if (!isAddressConfigured(addresses.zkVerifier)) missing.push('oasis:zkVerifier');
+  if (!isAddressConfigured(addresses.rwaManager)) missing.push('oasis:rwaManager');
+  if (!isAddressConfigured(addresses.hedgeExecutor)) missing.push('oasis:hedgeExecutor');
+  if (!isAddressConfigured(addresses.paymentRouter)) missing.push('oasis:paymentRouter');
+  if (!isAddressConfigured(addresses.confidentialZKVerifier)) missing.push('oasis:confidentialZKVerifier');
   
   return {
     configured: missing.length === 0,
