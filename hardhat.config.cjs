@@ -47,11 +47,43 @@ const config = {
       gasPrice: 'auto',
       timeout: 60000,
     },
+    'oasis-emerald-testnet': {
+      chainId: 42261,
+      url: process.env.OASIS_EMERALD_TESTNET_RPC || 'https://testnet.emerald.oasis.io',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 60000,
+    },
+    'oasis-emerald-mainnet': {
+      chainId: 42262,
+      url: process.env.OASIS_EMERALD_MAINNET_RPC || 'https://emerald.oasis.io',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 60000,
+    },
+    'oasis-sapphire-testnet': {
+      chainId: 23295,
+      url: process.env.OASIS_SAPPHIRE_TESTNET_RPC || 'https://testnet.sapphire.oasis.io',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 60000,
+    },
+    'oasis-sapphire-mainnet': {
+      chainId: 23294,
+      url: process.env.OASIS_SAPPHIRE_MAINNET_RPC || 'https://sapphire.oasis.io',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 60000,
+    },
   },
   etherscan: {
     apiKey: {
       'cronos-testnet': process.env.CRONOSCAN_API_KEY || '',
       'cronos-mainnet': process.env.CRONOSCAN_API_KEY || '',
+      'oasis-emerald-testnet': 'no-api-key-needed',
+      'oasis-emerald-mainnet': 'no-api-key-needed',
+      'oasis-sapphire-testnet': 'no-api-key-needed',
+      'oasis-sapphire-mainnet': 'no-api-key-needed',
     },
     customChains: [
       {
@@ -68,6 +100,38 @@ const config = {
         urls: {
           apiURL: 'https://api.cronoscan.com/api',
           browserURL: 'https://explorer.cronos.org/',
+        },
+      },
+      {
+        network: 'oasis-emerald-testnet',
+        chainId: 42261,
+        urls: {
+          apiURL: 'https://explorer.oasis.io/testnet/emerald/api',
+          browserURL: 'https://explorer.oasis.io/testnet/emerald/',
+        },
+      },
+      {
+        network: 'oasis-emerald-mainnet',
+        chainId: 42262,
+        urls: {
+          apiURL: 'https://explorer.oasis.io/mainnet/emerald/api',
+          browserURL: 'https://explorer.oasis.io/mainnet/emerald/',
+        },
+      },
+      {
+        network: 'oasis-sapphire-testnet',
+        chainId: 23295,
+        urls: {
+          apiURL: 'https://explorer.oasis.io/testnet/sapphire/api',
+          browserURL: 'https://explorer.oasis.io/testnet/sapphire/',
+        },
+      },
+      {
+        network: 'oasis-sapphire-mainnet',
+        chainId: 23294,
+        urls: {
+          apiURL: 'https://explorer.oasis.io/mainnet/sapphire/api',
+          browserURL: 'https://explorer.oasis.io/mainnet/sapphire/',
         },
       },
     ],
