@@ -63,6 +63,8 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
   const sui = useSui();
   
   // Determine active connection based on chain
+  // Oasis Emerald & Sapphire are EVM-compatible, reuse the EVM wallet connection
+  // Consensus & Cipher are non-EVM (tracked separately like SUI)
   const isConnected = activeChain === 'sui' ? sui.isConnected : evmConnected;
   const address = activeChain === 'sui' ? sui.address : evmAddress ?? null;
   const balance = activeChain === 'sui' ? sui.balance : '0'; // EVM balance handled separately
@@ -71,6 +73,28 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
   const getExplorerUrl = useCallback((type: 'tx' | 'address', value: string): string => {
     if (activeChain === 'sui') {
       return sui.getExplorerUrl(type, value);
+    }
+
+    // Oasis ParaTime explorers
+    const oasisParaTimeMap: Record<string, string> = {
+      'oasis-consensus': 'consensus',
+      'oasis-emerald': 'emerald',
+      'oasis-sapphire': 'sapphire',
+      'oasis-cipher': 'cipher',
+    };
+    const paraTime = oasisParaTimeMap[activeChain];
+    if (paraTime) {
+      const baseUrl = network === 'mainnet'
+        ? `https://explorer.oasis.io/mainnet/${paraTime}`
+        : `https://explorer.oasis.io/testnet/${paraTime}`;
+      switch (type) {
+        case 'tx':
+          return `${baseUrl}/tx/${value}`;
+        case 'address':
+          return `${baseUrl}/address/${value}`;
+        default:
+          return baseUrl;
+      }
     }
     
     // EVM (Cronos) explorer
@@ -179,7 +203,7 @@ export function ChainSelector({ className = '' }: ChainSelectorProps) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       {/* Chain Toggle */}
-      <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+      <div className="flex flex-wrap bg-gray-100 dark:bg-gray-800 rounded-lg p-1 gap-0.5">
         <button
           onClick={() => setActiveChain('sui')}
           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
@@ -199,6 +223,46 @@ export function ChainSelector({ className = '' }: ChainSelectorProps) {
           }`}
         >
           Cronos
+        </button>
+        <button
+          onClick={() => setActiveChain('oasis-emerald')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            activeChain === 'oasis-emerald'
+              ? 'bg-green-500 text-white'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          Emerald
+        </button>
+        <button
+          onClick={() => setActiveChain('oasis-sapphire')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            activeChain === 'oasis-sapphire'
+              ? 'bg-indigo-500 text-white'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          Sapphire
+        </button>
+        <button
+          onClick={() => setActiveChain('oasis-cipher')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            activeChain === 'oasis-cipher'
+              ? 'bg-purple-500 text-white'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          Cipher
+        </button>
+        <button
+          onClick={() => setActiveChain('oasis-consensus')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            activeChain === 'oasis-consensus'
+              ? 'bg-rose-500 text-white'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          Consensus
         </button>
       </div>
 
