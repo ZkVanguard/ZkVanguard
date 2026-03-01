@@ -63,10 +63,20 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                   chain.type === 'evm' 
                     ? 'bg-gradient-to-r from-[#007AFF] to-[#5856D6]' 
+                    : chain.type === 'oasis-emerald'
+                    ? 'bg-gradient-to-r from-[#00C853] to-[#009624]'
+                    : chain.type === 'oasis-sapphire'
+                    ? 'bg-gradient-to-r from-[#0092F6] to-[#0500E1]'
+                    : chain.type === 'oasis-cipher'
+                    ? 'bg-gradient-to-r from-[#7C4DFF] to-[#651FFF]'
+                    : chain.type === 'oasis-consensus'
+                    ? 'bg-gradient-to-r from-[#FF6D00] to-[#E65100]'
                     : 'bg-gradient-to-r from-[#32ADE6] to-[#007AFF]'
                 }`}>
                   {chain.type === 'evm' ? (
                     <span className="text-white font-bold text-sm">CRO</span>
+                  ) : chain.type.startsWith('oasis') ? (
+                    <span className="text-white font-bold text-[10px]">ROSE</span>
                   ) : (
                     <svg viewBox="0 0 32 32" className="w-6 h-6 text-white" fill="currentColor">
                       <path d="M16 2L4 9.5v13L16 30l12-7.5v-13L16 2zm0 3.5l8 5v10l-8 5-8-5v-10l8-5z"/>
@@ -78,7 +88,12 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 <div className="flex-1 text-left">
                   <div className="text-[#1D1D1F] font-semibold">{chain.name}</div>
                   <div className="text-[#86868B] text-xs">
-                    {chain.type === 'evm' ? 'EVM Compatible • x402 Gasless' : 'Move-based • Sponsored Tx'}
+                    {chain.type === 'evm' ? 'EVM Compatible • x402 Gasless'
+                      : chain.type === 'oasis-emerald' ? 'Public EVM ParaTime'
+                      : chain.type === 'oasis-sapphire' ? 'Confidential EVM • Privacy'
+                      : chain.type === 'oasis-cipher' ? 'Confidential WASM ParaTime'
+                      : chain.type === 'oasis-consensus' ? 'Base Layer • Staking'
+                      : 'Move-based • Sponsored Tx'}
                   </div>
                 </div>
 
@@ -86,6 +101,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 <div className={`px-2 py-1 rounded-full text-xs font-medium ${
                   chain.type === 'evm'
                     ? 'bg-[#34C759]/10 text-[#34C759]'
+                    : chain.type.startsWith('oasis')
+                    ? 'bg-[#0092F6]/10 text-[#0092F6]'
                     : 'bg-[#32ADE6]/10 text-[#32ADE6]'
                 }`}>
                   {chain.type === 'evm' ? 'Live' : 'Ready'}

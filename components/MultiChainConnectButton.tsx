@@ -9,7 +9,7 @@ import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut } from 'lucide-r
 // MULTI-CHAIN WALLET CONTEXT
 // ============================================
 
-type ChainType = 'evm' | 'sui';
+type ChainType = 'evm' | 'sui' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
 
 interface MultiWalletContextType {
   activeChain: ChainType;
@@ -198,6 +198,65 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
                     Connect SUI Wallet
                   </button>
                 </div>
+
+                {/* Oasis ParaTimes Header */}
+                <div className="px-1 pt-2">
+                  <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Oasis Network ParaTimes</p>
+                </div>
+
+                {/* Oasis Emerald Option (Public EVM) */}
+                <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#00C853] transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#00C853] to-[#009624] flex items-center justify-center">
+                      <span className="text-white font-bold text-[10px]">ROSE</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-[#1D1D1F]">Emerald</div>
+                      <div className="text-xs text-[#86868B]">Public EVM • MetaMask</div>
+                    </div>
+                  </div>
+                  <RainbowConnectButton.Custom>
+                    {({ openConnectModal }) => (
+                      <button
+                        onClick={() => {
+                          setActiveChain('oasis-emerald');
+                          openConnectModal();
+                          setShowWalletSelector(false);
+                        }}
+                        className="w-full py-2.5 bg-[#00C853] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
+                      >
+                        Connect Emerald
+                      </button>
+                    )}
+                  </RainbowConnectButton.Custom>
+                </div>
+
+                {/* Oasis Sapphire Option (Confidential EVM) */}
+                <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#0092F6] transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0092F6] to-[#0500E1] flex items-center justify-center">
+                      <span className="text-white font-bold text-[10px]">ROSE</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-[#1D1D1F]">Sapphire</div>
+                      <div className="text-xs text-[#86868B]">Confidential EVM • MetaMask</div>
+                    </div>
+                  </div>
+                  <RainbowConnectButton.Custom>
+                    {({ openConnectModal }) => (
+                      <button
+                        onClick={() => {
+                          setActiveChain('oasis-sapphire');
+                          openConnectModal();
+                          setShowWalletSelector(false);
+                        }}
+                        className="w-full py-2.5 bg-[#0092F6] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
+                      >
+                        Connect Sapphire
+                      </button>
+                    )}
+                  </RainbowConnectButton.Custom>
+                </div>
               </div>
 
               <div className="p-3 border-t border-[#E5E5EA] bg-[#F5F5F7]">
@@ -226,6 +285,11 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
               <span className="text-white font-bold text-[8px]">CRO</span>
             </div>
           )}
+          {isEvmConnected && activeChain.startsWith('oasis') && (
+            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#0092F6] to-[#0500E1] flex items-center justify-center border-2 border-white">
+              <span className="text-white font-bold text-[7px]">ROSE</span>
+            </div>
+          )}
           {isSuiConnected && (
             <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#4DA2FF] to-[#6FBCFF] flex items-center justify-center border-2 border-white">
               <span className="text-white font-bold text-[8px]">SUI</span>
@@ -234,7 +298,7 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
         </div>
         
         <span className="text-[#1d1d1f] font-medium text-[14px]">
-          {activeChain === 'evm' && evmAddress && truncateAddress(evmAddress)}
+          {(activeChain === 'evm' || activeChain.startsWith('oasis')) && evmAddress && truncateAddress(evmAddress)}
           {activeChain === 'sui' && suiAddress && truncateAddress(suiAddress)}
           {!evmAddress && !suiAddress && 'Connected'}
         </span>

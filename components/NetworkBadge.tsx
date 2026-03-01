@@ -4,12 +4,13 @@ import { useState } from 'react';
 
 interface NetworkInfo {
   name: string;
-  type: 'evm' | 'sui';
+  type: 'evm' | 'sui' | 'oasis';
   status: 'live' | 'ready' | 'maintenance';
   network: 'mainnet' | 'testnet';
   color: string;
   packageId?: string;
   explorerUrl: string;
+  description?: string;
 }
 
 const NETWORKS: NetworkInfo[] = [
@@ -20,6 +21,7 @@ const NETWORKS: NetworkInfo[] = [
     network: 'testnet',
     color: '#002D74',
     explorerUrl: 'https://explorer.cronos.org/testnet',
+    description: 'EVM • x402 Gasless',
   },
   {
     name: 'SUI',
@@ -29,6 +31,43 @@ const NETWORKS: NetworkInfo[] = [
     color: '#4DA2FF',
     packageId: '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9',
     explorerUrl: 'https://suiscan.xyz/testnet/object/0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9',
+    description: 'Move • Sponsored Tx',
+  },
+  {
+    name: 'Oasis Consensus',
+    type: 'oasis',
+    status: 'ready',
+    network: 'testnet',
+    color: '#FF6D00',
+    explorerUrl: 'https://explorer.oasis.io/testnet/consensus',
+    description: 'Base Layer • Staking',
+  },
+  {
+    name: 'Oasis Emerald',
+    type: 'oasis',
+    status: 'ready',
+    network: 'testnet',
+    color: '#00C853',
+    explorerUrl: 'https://explorer.oasis.io/testnet/emerald',
+    description: 'Public EVM ParaTime',
+  },
+  {
+    name: 'Oasis Sapphire',
+    type: 'oasis',
+    status: 'ready',
+    network: 'testnet',
+    color: '#0092F6',
+    explorerUrl: 'https://explorer.oasis.io/testnet/sapphire',
+    description: 'Confidential EVM • Privacy',
+  },
+  {
+    name: 'Oasis Cipher',
+    type: 'oasis',
+    status: 'ready',
+    network: 'testnet',
+    color: '#7C4DFF',
+    explorerUrl: 'https://explorer.oasis.io/testnet/cipher',
+    description: 'Confidential WASM ParaTime',
   },
 ];
 
@@ -112,7 +151,7 @@ export function NetworkBadge({ compact = false, showDropdown = false }: NetworkB
                       <span className="text-xs text-[#86868B] capitalize">{network.network}</span>
                     </div>
                     <div className="text-xs text-[#86868B]">
-                      {network.type === 'evm' ? 'EVM • x402 Gasless' : 'Move • Sponsored Tx'}
+                      {network.description || (network.type === 'evm' ? 'EVM • x402 Gasless' : 'Move • Sponsored Tx')}
                     </div>
                   </div>
                   <div
