@@ -101,6 +101,7 @@ const MAX_CONSECUTIVE_FAILURES = 5;
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 const QUEUE_PROCESS_INTERVAL = 1000; // 1 second
 const WEBSOCKET_RECONNECT_DELAY = 5000;
+const WEBSOCKET_MAX_RETRIES = 3;
 const PERSISTENCE_KEY = 'ai_manager_state';
 
 // ============================================================================
@@ -114,6 +115,7 @@ class AIManagerService {
   private healthInterval: NodeJS.Timeout | null = null;
   private websocket: WebSocket | null = null;
   private websocketReconnectTimeout: NodeJS.Timeout | null = null;
+  private websocketRetryCount = 0;
   private eventUnsubscribes: Array<() => void> = [];
 
   constructor() {
@@ -275,6 +277,7 @@ class AIManagerService {
       this.websocket.onopen = () => {
         logger.info('[AIManager] WebSocket connected');
         this.state.websocketConnected = true;
+        this.websocketRetryCount = 0; // Reset on successful connection
         
         // Subscribe to price channels for common assets
         this.subscribeToChannels(['BTC_USD', 'ETH_USD', 'CRO_USD', 'SUI_USD']);
@@ -295,15 +298,19 @@ class AIManagerService {
       };
 
       this.websocket.onclose = () => {
-        logger.warn('[AIManager] WebSocket disconnected');
         this.state.websocketConnected = false;
+        this.websocketRetryCount++;
         
-        // Schedule reconnection
-        if (this.state.isRunning) {
+        // Schedule reconnection with exponential backoff, up to max retries
+        if (this.state.isRunning && this.websocketRetryCount <= WEBSOCKET_MAX_RETRIES) {
+          const delay = WEBSOCKET_RECONNECT_DELAY * Math.pow(2, this.websocketRetryCount - 1);
+          logger.debug(`[AIManager] WebSocket disconnected, retry ${this.websocketRetryCount}/${WEBSOCKET_MAX_RETRIES} in ${delay}ms`);
           this.websocketReconnectTimeout = setTimeout(() => {
-            logger.info('[AIManager] Reconnecting WebSocket...');
             this.connectWebSocket();
-          }, WEBSOCKET_RECONNECT_DELAY);
+          }, delay);
+        } else if (this.websocketRetryCount > WEBSOCKET_MAX_RETRIES) {
+          logger.info('[AIManager] WebSocket unavailable, using REST price polling instead');
+          AIPriceIntegration.startPriceMonitoring(['BTC', 'ETH', 'CRO', 'SUI'], 15000);
         }
       };
     } catch (error) {
