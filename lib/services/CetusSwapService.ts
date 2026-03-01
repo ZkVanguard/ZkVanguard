@@ -327,20 +327,24 @@ export class CetusSwapService {
     amountIn: bigint,
     slippage: number,
   ): Promise<CetusSwapQuote> {
-    // Approximate prices (USD) for simulation
-    const prices: Record<string, number> = {
-      SUI: 2.50,
-      USDC: 1.00,
-      USDT: 1.00,
-      WETH: 3500,
-      WBTC: 95000,
-      CETUS: 0.25,
-      DEEP: 0.15,
-      NAVX: 0.30,
-    };
-
-    const priceIn = prices[tokenIn.symbol] || 1;
-    const priceOut = prices[tokenOut.symbol] || 1;
+    // Fetch live prices from Crypto.com Exchange API
+    let priceIn = 0;
+    let priceOut = 0;
+    try {
+      const { getMarketDataService } = await import('./RealMarketDataService');
+      const svc = getMarketDataService();
+      const [dataIn, dataOut] = await Promise.all([
+        svc.getTokenPrice(tokenIn.symbol),
+        svc.getTokenPrice(tokenOut.symbol),
+      ]);
+      priceIn = dataIn.price;
+      priceOut = dataOut.price;
+    } catch (e) {
+      logger.error('[CetusSwap] Live prices unavailable for simulated quote', { error: e });
+      // For stablecoins we can safely assume $1
+      if (['USDC', 'USDT'].includes(tokenIn.symbol)) priceIn = 1;
+      if (['USDC', 'USDT'].includes(tokenOut.symbol)) priceOut = 1;
+    }
 
     // Convert amountIn to USD value
     const amountInHuman = Number(amountIn) / Math.pow(10, tokenIn.decimals);
@@ -585,12 +589,17 @@ export class CetusSwapService {
       const data = await response.json();
       return data.data?.[tokenInfo.type] || 0;
     } catch (error) {
-      logger.warn('[CetusSwap] Failed to get price, using fallback', { tokenSymbol, error });
-      // Fallback prices
-      const fallback: Record<string, number> = {
-        SUI: 2.50, USDC: 1.00, USDT: 1.00, WETH: 3500, WBTC: 95000, CETUS: 0.25,
-      };
-      return fallback[tokenSymbol.toUpperCase()] || 0;
+      logger.warn('[CetusSwap] Cetus price API failed, falling back to Crypto.com', { tokenSymbol, error });
+      // Fall back to live Crypto.com price
+      try {
+        const { getMarketDataService } = await import('./RealMarketDataService');
+        const svc = getMarketDataService();
+        const data = await svc.getTokenPrice(tokenSymbol);
+        if (data.price > 0) return data.price;
+      } catch (fallbackErr) {
+        logger.error('[CetusSwap] All price sources failed', { tokenSymbol, error: fallbackErr });
+      }
+      return 0;
     }
   }
 }

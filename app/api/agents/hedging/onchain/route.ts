@@ -41,11 +41,9 @@ const PAIR_SYMBOLS: Record<number, string> = {
   0: 'BTC', 1: 'ETH', 2: 'CRO', 3: 'ATOM', 4: 'DOGE', 5: 'SOL'
 };
 
-// Fallback prices only used if Crypto.com API is completely unreachable
-// Updated from live Crypto.com data — these should rarely be used
-const FALLBACK_PRICES: Record<number, number> = {
-  0: 67700, 1: 1990, 2: 0.080, 3: 5.50, 4: 0.25, 5: 180
-};
+// No hardcoded fallback prices — all prices come from live Crypto.com API
+// If the API is unreachable, prices stay at 0 and PnL won't be calculated
+const FALLBACK_PRICES: Record<number, number> = {};
 
 // MockMoonlander contract — reads actual openPrice for each trade
 const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
@@ -73,7 +71,7 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
   if (_priceCache && Date.now() < _priceCache.expiresAt) {
     const cached: Record<number, number> = {};
     for (const idx of pairIndices) {
-      cached[idx] = _priceCache.prices[idx] ?? FALLBACK_PRICES[idx] ?? 1000;
+      cached[idx] = _priceCache.prices[idx] ?? 0;
     }
     return { prices: cached, isLive: true }; // cache was live within 15s
   }
@@ -106,7 +104,7 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
 
   // Fill in missing with fallbacks (only when central service failed)
   for (const idx of pairIndices) {
-    if (!prices[idx]) prices[idx] = FALLBACK_PRICES[idx] || 1000;
+    if (!prices[idx]) prices[idx] = 0;
   }
 
   return { prices, isLive };

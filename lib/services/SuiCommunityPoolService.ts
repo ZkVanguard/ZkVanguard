@@ -14,6 +14,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { getMarketDataService } from './RealMarketDataService';
 
 // ============================================
 // DEPLOYED CONTRACT ADDRESSES
@@ -221,7 +222,16 @@ export class SuiCommunityPoolService {
 
       const totalPortfolios = Number(stateData.portfolio_count || 0);
       const totalValueLocked = BigInt(String(stateData.total_value_locked || '0'));
-      const suiPrice = 2.50; // Fallback; use real price in production
+
+      // Fetch live SUI price from Crypto.com Exchange API
+      let suiPrice = 0;
+      try {
+        const svc = getMarketDataService();
+        const priceData = await svc.getTokenPrice('SUI');
+        suiPrice = priceData.price;
+      } catch (e) {
+        logger.warn('[SuiPool] Failed to fetch live SUI price', { error: e });
+      }
       const tvlUsd = Number(totalValueLocked) / 1e9 * suiPrice;
 
       return {
