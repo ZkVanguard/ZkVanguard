@@ -101,20 +101,67 @@ export function usePortfolioCount() {
 export function useUserPortfolios(userAddress?: string) {
   const chainId = useChainId();
   const addresses = getContractAddresses(chainId);
-  const { data: totalCount } = usePortfolioCount();
+  const { data: totalCount, error: countError, isLoading: countLoading } = usePortfolioCount();
   const [userPortfolios, setUserPortfolios] = useState<UserPortfolio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Debug: log all the key values so we can see what's happening
+  useEffect(() => {
+    logger.info(`[useUserPortfolios] chainId=${chainId}, rwaManager=${addresses.rwaManager}, totalCount=${totalCount?.toString() ?? 'undefined'}, countLoading=${countLoading}, countError=${countError?.message ?? 'none'}, userAddress=${userAddress ?? 'none'}`, { component: 'hooks' });
+  }, [chainId, addresses.rwaManager, totalCount, countLoading, countError, userAddress]);
+
   useEffect(() => {
     async function fetchUserPortfolios() {
-      if (!userAddress || !totalCount || !addresses.rwaManager) {
+      if (!userAddress || !addresses.rwaManager) {
+        logger.warn(`[useUserPortfolios] Skipping: userAddress=${userAddress ?? 'none'}, rwaManager=${addresses.rwaManager}`, { component: 'hooks' });
+        setUserPortfolios([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // If totalCount is still loading, wait
+      if (totalCount === undefined || totalCount === null) {
+        logger.info(`[useUserPortfolios] totalCount not yet available (countLoading=${countLoading}), falling back to direct RPC`, { component: 'hooks' });
+        // Fall back to direct RPC call for portfolioCount instead of waiting for wagmi
+        try {
+          const { ethers } = await import('ethers');
+          const throttled = getCronosProvider(
+            process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
+          );
+          const provider = throttled.provider;
+          const contract = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
+          const directCount = await contract.portfolioCount();
+          logger.info(`[useUserPortfolios] Direct RPC portfolioCount = ${directCount.toString()}`, { component: 'hooks' });
+          if (Number(directCount) === 0) {
+            setUserPortfolios([]);
+            setIsLoading(false);
+            return;
+          }
+          // Continue with this count below
+          await fetchWithCount(Number(directCount));
+          return;
+        } catch (rpcErr) {
+          logger.error('[useUserPortfolios] Direct RPC fallback failed', rpcErr, { component: 'hooks' });
+          setUserPortfolios([]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Use wagmi totalCount if available, otherwise it was already handled via fallback above
+      await fetchWithCount(Number(totalCount));
+    }
+
+    async function fetchWithCount(count: number) {
+      if (count === 0) {
+        logger.info('[useUserPortfolios] portfolioCount is 0, no portfolios on-chain', { component: 'hooks' });
         setUserPortfolios([]);
         setIsLoading(false);
         return;
       }
 
       // Check cache first
-      const cacheKey = `portfolios-${userAddress}-${totalCount}`;
+      const cacheKey = `portfolios-${userAddress}-${count}`;
       const cached = portfolioCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < PORTFOLIO_CACHE_TTL) {
         logger.debug(`Using cached portfolios for ${userAddress}`, { component: 'hooks' });
@@ -124,7 +171,7 @@ export function useUserPortfolios(userAddress?: string) {
       }
 
       setIsLoading(true);
-      logger.info(`Fetching portfolios for ${userAddress}`, { component: 'hooks' });
+      logger.info(`[useUserPortfolios] Fetching ${count} portfolios for ${userAddress}`, { component: 'hooks' });
       const startTime = Date.now();
 
       try {
@@ -140,8 +187,7 @@ export function useUserPortfolios(userAddress?: string) {
           provider
         );
 
-        const count = Number(totalCount);
-        const portfolios = [];
+        const portfolios: UserPortfolio[] = [];
         
         // Fetch PortfolioCreated events to get transaction hashes
         // Cronos RPC has a 2000 block limit, so we need to query in chunks
@@ -211,7 +257,9 @@ export function useUserPortfolios(userAddress?: string) {
           const results = await Promise.all(batch);
           
           for (const result of results) {
-            if (result && result.portfolio.owner.toLowerCase() === userAddress.toLowerCase()) {
+            if (!result) continue;
+            logger.debug(`[useUserPortfolios] Portfolio ${result.i}: owner=${result.portfolio.owner}, comparing with ${userAddress}`, { component: 'hooks' });
+            if (result.portfolio.owner.toLowerCase() === userAddress!.toLowerCase()) {
               const txHash = txHashMap[result.i] || null;
               portfolios.push({
                 id: result.i,
@@ -229,11 +277,11 @@ export function useUserPortfolios(userAddress?: string) {
         
         // Cache the results
         portfolioCache.set(cacheKey, { data: portfolios, timestamp: Date.now() });
-        logger.info(`Fetched ${portfolios.length} portfolios in ${Date.now() - startTime}ms`, { component: 'hooks' });
+        logger.info(`[useUserPortfolios] Found ${portfolios.length}/${count} portfolios owned by ${userAddress} in ${Date.now() - startTime}ms`, { component: 'hooks' });
         
         setUserPortfolios(portfolios);
       } catch (error) {
-        logger.error('Error fetching user portfolios', error, { component: 'hooks' });
+        logger.error('[useUserPortfolios] Error fetching portfolios', error, { component: 'hooks' });
         setUserPortfolios([]);
       } finally {
         setIsLoading(false);
@@ -241,7 +289,7 @@ export function useUserPortfolios(userAddress?: string) {
     }
 
     fetchUserPortfolios();
-  }, [userAddress, totalCount, addresses.rwaManager]);
+  }, [userAddress, totalCount, addresses.rwaManager, countLoading]);
 
   return {
     data: userPortfolios,
