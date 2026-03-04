@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
       executionPrice: result.executionPrice,
       fees: result.fees,
       explorerLink: result.txDigest 
-        ? `https://suiscan.xyz/testnet/tx/${result.txDigest}`
+        ? `https://suiscan.xyz/${BLUEFIN_NETWORK}/tx/${result.txDigest}`
         : null,
     });
 
@@ -286,7 +286,7 @@ export async function DELETE(request: NextRequest) {
       fees: result.fees,
       txDigest: result.txDigest,
       explorerLink: result.txDigest
-        ? `https://suiscan.xyz/testnet/tx/${result.txDigest}`
+        ? `https://suiscan.xyz/${BLUEFIN_NETWORK}/tx/${result.txDigest}`
         : null,
     });
 
