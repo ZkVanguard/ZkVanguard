@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
+import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
 
 // Types
@@ -88,13 +89,40 @@ const POOLS = [
   },
 ];
 
-// In-memory peak NAV tracking (would use database in production)
-const peakNavTracker = new Map<string, number>();
-const navHistory = new Map<string, { nav: number; timestamp: number }[]>();
+// In-memory caches (warm path) — loaded from DB on cold start, saved on change
+let peakNavCache = new Map<string, number>();
+let navHistoryCache = new Map<string, { nav: number; timestamp: number }[]>();
+let lastPoolHedgeTimeCache = new Map<string, number>();
+let dbStateLoaded = false;
 
 // Last hedge time tracking to prevent spam (cooldown 4 hours)
-const lastPoolHedgeTime = new Map<string, number>();
 const POOL_HEDGE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Load critical state from database on cold start (once per invocation)
+ */
+async function loadStateFromDb(): Promise<void> {
+  if (dbStateLoaded) return;
+  dbStateLoaded = true;
+
+  try {
+    // Load peak NAVs
+    for (const pool of POOLS) {
+      const peak = await getNumber(CronKeys.poolNavPeak(pool.id));
+      if (peak > 0) {
+        peakNavCache.set(pool.id, peak);
+        logger.info(`[PoolNAVMonitor] Loaded peak NAV from DB for ${pool.id}: $${peak.toFixed(2)}`);
+      }
+
+      const lastHedge = await getTimestamp(CronKeys.poolNavLastHedge(pool.id));
+      if (lastHedge > 0) {
+        lastPoolHedgeTimeCache.set(pool.id, lastHedge);
+      }
+    }
+  } catch (error: any) {
+    logger.warn('[PoolNAVMonitor] Failed to load state from DB — using defaults', { error: error?.message });
+  }
+}
 
 /**
  * Fetch pool stats - uses REAL-TIME calculated NAV from market prices
@@ -175,29 +203,41 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
 }
 
 /**
- * Get previous NAV from history
+ * Get previous NAV from history — checks in-memory cache then DB
  */
-function getPreviousNAV(poolId: string): number | null {
-  const history = navHistory.get(poolId);
-  if (!history || history.length < 2) return null;
-  return history[history.length - 2].nav;
+async function getPreviousNAV(poolId: string): Promise<number | null> {
+  const history = navHistoryCache.get(poolId);
+  if (history && history.length >= 2) {
+    return history[history.length - 2].nav;
+  }
+  // Fallback: load last snapshot from DB
+  try {
+    const dbHistory = await getNavHistory(1);
+    if (dbHistory && dbHistory.length > 0) {
+      return dbHistory[dbHistory.length - 1].total_nav;
+    }
+  } catch { /* ignore */ }
+  return null;
 }
 
 /**
- * Calculate drawdown from peak - uses database NAV history for persistence
+ * Calculate drawdown from peak - uses database for persistence across cold starts
  */
 async function calculateDrawdown(poolId: string, currentNAV: number): Promise<{ drawdownPercent: number; peakNAV: number }> {
-  // Try to get peak from database first (persists across cold starts)
-  let peak = peakNavTracker.get(poolId);
+  // Load state from DB on cold start
+  await loadStateFromDb();
+
+  // Try cached peak first (already loaded from DB)
+  let peak = peakNavCache.get(poolId);
   
   if (!peak) {
     // Load NAV history from database to find peak
     try {
-      const navHistory = await getNavHistory(30); // Last 30 days
-      if (navHistory && navHistory.length > 0) {
-        peak = Math.max(...navHistory.map(h => h.total_nav));
-        peakNavTracker.set(poolId, peak);
-        logger.info(`[PoolNAVMonitor] Loaded peak NAV from DB: $${peak.toFixed(2)}`);
+      const navHist = await getNavHistory(30); // Last 30 days
+      if (navHist && navHist.length > 0) {
+        peak = Math.max(...navHist.map(h => h.total_nav));
+        peakNavCache.set(poolId, peak);
+        logger.info(`[PoolNAVMonitor] Loaded peak NAV from history: $${peak.toFixed(2)}`);
       }
     } catch (error) {
       logger.warn('[PoolNAVMonitor] Could not load NAV history for peak calculation');
@@ -209,9 +249,10 @@ async function calculateDrawdown(poolId: string, currentNAV: number): Promise<{ 
     peak = currentNAV;
   }
   
-  // Update peak if new high
+  // Update peak if new high — persist to DB
   if (currentNAV > peak) {
-    peakNavTracker.set(poolId, currentNAV);
+    peakNavCache.set(poolId, currentNAV);
+    await setNumber(CronKeys.poolNavPeak(poolId), currentNAV);
     return { drawdownPercent: 0, peakNAV: currentNAV };
   }
   
@@ -323,15 +364,15 @@ async function recordSnapshot(
     allocations: Record<string, number>; 
   }
 ): Promise<void> {
-  // Add to in-memory history
-  const history = navHistory.get(poolId) || [];
+  // Add to in-memory history cache
+  const history = navHistoryCache.get(poolId) || [];
   history.push({ nav: stats.totalNAV, timestamp: Date.now() });
   
   // Keep last 168 hours (1 week)
   if (history.length > 168) {
     history.shift();
   }
-  navHistory.set(poolId, history);
+  navHistoryCache.set(poolId, history);
   
   // Calculate total shares from NAV and share price
   const totalShares = stats.sharePrice > 0 ? stats.totalNAV / stats.sharePrice : 1000;
@@ -424,7 +465,10 @@ async function triggerPoolHedge(
   largestAsset: string
 ): Promise<boolean> {
   const now = Date.now();
-  const lastHedge = lastPoolHedgeTime.get(pool.id) || 0;
+
+  // Load state from DB on cold start
+  await loadStateFromDb();
+  const lastHedge = lastPoolHedgeTimeCache.get(pool.id) || 0;
   
   // Check cooldown
   if (now - lastHedge < POOL_HEDGE_COOLDOWN_MS) {
@@ -471,7 +515,8 @@ async function triggerPoolHedge(
     
     if (response.ok) {
       const result = await response.json();
-      lastPoolHedgeTime.set(pool.id, now);
+      lastPoolHedgeTimeCache.set(pool.id, now);
+      await setTimestamp(CronKeys.poolNavLastHedge(pool.id), now);
       logger.info(`[PoolNAVMonitor] Protective hedge executed for ${pool.id}:`, result);
       return true;
     } else {
@@ -495,6 +540,9 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
   let totalReturns = 0;
   let criticalPools = 0;
   let healthyPools = 0;
+
+  // Load DB state on cold start
+  await loadStateFromDb();
   
   for (const pool of POOLS) {
     logger.info(`[PoolNAVMonitor] Checking ${pool.name}`);
@@ -506,7 +554,7 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       continue;
     }
     
-    const previousNAV = getPreviousNAV(pool.id);
+    const previousNAV = await getPreviousNAV(pool.id);
     const navChange = previousNAV ? stats.totalNAV - previousNAV : 0;
     const navChangePercent = previousNAV ? (navChange / previousNAV) * 100 : 0;
     
