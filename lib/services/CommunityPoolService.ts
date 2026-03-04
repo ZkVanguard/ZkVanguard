@@ -188,7 +188,13 @@ export async function calculatePoolNAV(): Promise<{
     // Persist initialized amounts and sync totalShares from on-chain
     poolState.allocations = allocations;
     poolState.totalShares = onChainTotalShares;
-    await savePoolState(poolState);
+    try {
+      await savePoolState(poolState);
+    } catch (err) {
+      logger.warn('[CommunityPool] Failed to persist initialized pool state (DB unavailable, continuing)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   } else {
     // Normal calculation from existing amounts
     for (const asset of SUPPORTED_ASSETS) {

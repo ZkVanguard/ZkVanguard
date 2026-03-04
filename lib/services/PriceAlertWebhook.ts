@@ -4,6 +4,10 @@
  * Event-driven hedge monitoring triggered by significant price movements.
  * No cron jobs needed - runs on every price fetch and triggers automatically.
  * 
+ * State persistence: Critical timestamps (heartbeat, pool check) are persisted
+ * to the database via lib/db/cron-state.ts so they survive Vercel cold starts.
+ * Price history is kept in-memory (ephemeral, 1-hour window).
+ * 
  * Thresholds:
  * - 2% move in 1 hour: Check all hedges
  * - 5% move in 1 hour: Trigger stop-loss/take-profit checks
@@ -11,6 +15,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 
 // Types
 interface PriceSnapshot {
@@ -42,32 +47,64 @@ const THRESHOLD_EMERGENCY = 10; // 10% triggers emergency procedures
 const webhookQueue: PriceAlert[] = [];
 let isProcessingWebhooks = false;
 
-// Heartbeat tracking - ensure monitoring runs even without price moves
-let lastHeartbeatCheck = 0;
-const HEARTBEAT_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+// ─── DB-backed timestamps (survive Vercel cold starts) ──────────────────────
+// We lazy-load from DB on first access, then use in-memory for the rest
+// of the invocation. This avoids a DB call on EVERY price update.
+let _lastHeartbeatCheck: number | null = null;   // null = not loaded yet
+let _lastPoolCheck: number | null = null;         // null = not loaded yet
+
+async function getLastHeartbeatCheck(): Promise<number> {
+  if (_lastHeartbeatCheck === null) {
+    _lastHeartbeatCheck = await getTimestamp(CronKeys.heartbeatLastCheck);
+  }
+  return _lastHeartbeatCheck;
+}
+
+async function getLastPoolCheck(): Promise<number> {
+  if (_lastPoolCheck === null) {
+    _lastPoolCheck = await getTimestamp(CronKeys.poolCheckLastCheck);
+  }
+  return _lastPoolCheck;
+}
+
+// Request counter — kept in-memory (not critical; time-based fallbacks ensure correctness)
 let requestCounter = 0;
-const HEARTBEAT_CHECK_EVERY_N_REQUESTS = 100; // Check every 100 price requests
+
+const HEARTBEAT_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const HEARTBEAT_CHECK_EVERY_N_REQUESTS = 100;
 
 // Community pool continuous monitoring (more frequent than general heartbeat)
-let lastPoolCheck = 0;
 const POOL_CHECK_INTERVAL_MS = 15 * 60 * 1000; // Every 15 minutes for pools
 const POOL_CHECK_EVERY_N_REQUESTS = 20; // Or every 20 price requests
 
 /**
- * Record a price update and check for significant moves
+ * Record a price update and check for significant moves.
+ * Now async to support DB-backed timestamp persistence.
  */
-export function recordPriceUpdate(asset: string, price: number): PriceAlert | null {
+export async function recordPriceUpdate(asset: string, price: number): Promise<PriceAlert | null> {
   const now = Date.now();
   requestCounter++;
-  
-  // Community pool continuous monitoring (every 20 requests or 15 min)
-  if (requestCounter % POOL_CHECK_EVERY_N_REQUESTS === 0 || now - lastPoolCheck > POOL_CHECK_INTERVAL_MS) {
-    checkCommunityPools();
-  }
-  
-  // Periodic heartbeat check - ensures monitoring even without price moves
+
+  // ─── Determine which background checks to run ──────────────────────────
+  // Heartbeat is a SUPERSET of pool check (it calls all 5 cron endpoints).
+  // If heartbeat fires, skip pool check to avoid duplicate calls.
+  let heartbeatFired = false;
+
+  // Periodic heartbeat check (every 100 requests AND interval elapsed)
   if (requestCounter % HEARTBEAT_CHECK_EVERY_N_REQUESTS === 0) {
-    checkHeartbeat();
+    const lastHb = await getLastHeartbeatCheck();
+    if (now - lastHb > HEARTBEAT_INTERVAL_MS) {
+      checkHeartbeat(); // Covers all endpoints including pool ones
+      heartbeatFired = true;
+    }
+  }
+
+  // Community pool check (every 20 requests or 15 min) — skip if heartbeat already ran
+  if (!heartbeatFired) {
+    const lastPool = await getLastPoolCheck();
+    if (requestCounter % POOL_CHECK_EVERY_N_REQUESTS === 0 || now - lastPool > POOL_CHECK_INTERVAL_MS) {
+      checkCommunityPools();
+    }
   }
   
   const history = priceHistory.get(asset) || [];
@@ -277,12 +314,15 @@ export async function manualTriggerHedgeCheck(asset?: string): Promise<void> {
 async function checkHeartbeat(): Promise<void> {
   const now = Date.now();
   
-  // Check if heartbeat is due
-  if (now - lastHeartbeatCheck < HEARTBEAT_INTERVAL_MS) {
+  // Check if heartbeat is due (DB-backed)
+  const lastCheck = await getLastHeartbeatCheck();
+  if (now - lastCheck < HEARTBEAT_INTERVAL_MS) {
     return;
   }
   
-  lastHeartbeatCheck = now;
+  // Persist to DB + in-memory cache
+  _lastHeartbeatCheck = now;
+  await setTimestamp(CronKeys.heartbeatLastCheck, now);
   logger.info('[PriceAlert] Heartbeat triggered - running periodic monitoring');
   
   const baseUrl = process.env.VERCEL 
@@ -290,7 +330,7 @@ async function checkHeartbeat(): Promise<void> {
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
-    // Run all monitoring endpoints in parallel
+    // Run all monitoring endpoints in parallel (including community-pool AI management)
     await Promise.allSettled([
       fetch(`${baseUrl}/api/cron/hedge-monitor`, {
         method: 'GET',
@@ -321,9 +361,17 @@ async function checkHeartbeat(): Promise<void> {
           'X-Heartbeat-Trigger': 'true',
         },
       }),
+      // Community Pool AI management: risk assessment + auto-hedging for portfolio 0
+      fetch(`${baseUrl}/api/cron/community-pool`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          'X-Heartbeat-Trigger': 'true',
+        },
+      }),
     ]);
     
-    logger.info('[PriceAlert] Heartbeat monitoring completed (hedge + liquidation + pool-nav + auto-rebalance)');
+    logger.info('[PriceAlert] Heartbeat monitoring completed (hedge + liquidation + pool-nav + auto-rebalance + community-pool)');
   } catch (error: any) {
     logger.error('[PriceAlert] Heartbeat error:', { error: error?.message || String(error) });
   }
@@ -358,12 +406,15 @@ export async function triggerPoolNavUpdate(): Promise<void> {
 async function checkCommunityPools(): Promise<void> {
   const now = Date.now();
   
-  // Check if pool check is due
-  if (now - lastPoolCheck < POOL_CHECK_INTERVAL_MS) {
+  // Check if pool check is due (DB-backed)
+  const lastCheck = await getLastPoolCheck();
+  if (now - lastCheck < POOL_CHECK_INTERVAL_MS) {
     return;
   }
   
-  lastPoolCheck = now;
+  // Persist to DB + in-memory cache
+  _lastPoolCheck = now;
+  await setTimestamp(CronKeys.poolCheckLastCheck, now);
   logger.info('[PriceAlert] Community pool check - running auto-rebalance/hedging');
   
   const baseUrl = process.env.VERCEL 
@@ -371,7 +422,7 @@ async function checkCommunityPools(): Promise<void> {
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
-    // Run both auto-rebalance AND pool-nav-monitor (which has the hedging logic)
+    // Run auto-rebalance, pool-nav-monitor, AND community-pool cron (which triggers risk assessment + hedging)
     await Promise.allSettled([
       // Auto-rebalance for portfolio allocation drift
       fetch(`${baseUrl}/api/cron/auto-rebalance`, {
@@ -389,9 +440,17 @@ async function checkCommunityPools(): Promise<void> {
           'X-Pool-Trigger': 'true',
         },
       }),
+      // Community Pool AI management: risk assessment via AutoHedgingService (portfolio 0)
+      fetch(`${baseUrl}/api/cron/community-pool`, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          'X-Pool-Trigger': 'true',
+        },
+      }),
     ]);
     
-    logger.info('[PriceAlert] Community pool auto-hedge check completed (rebalance + nav monitor)');
+    logger.info('[PriceAlert] Community pool auto-hedge check completed (rebalance + nav monitor + community-pool)');
   } catch (error: any) {
     logger.error('[PriceAlert] Community pool check error:', { error: error?.message || String(error) });
   }
@@ -401,7 +460,8 @@ async function checkCommunityPools(): Promise<void> {
  * Force community pool check - for testing/admin
  */
 export async function forceCommunityPoolCheck(): Promise<void> {
-  lastPoolCheck = 0; // Reset to force trigger
+  _lastPoolCheck = 0; // Reset in-memory cache
+  await setTimestamp(CronKeys.poolCheckLastCheck, 0); // Reset DB
   await checkCommunityPools();
 }
 
@@ -409,6 +469,7 @@ export async function forceCommunityPoolCheck(): Promise<void> {
  * Force manual heartbeat - for testing/admin
  */
 export async function forceHeartbeat(): Promise<void> {
-  lastHeartbeatCheck = 0; // Reset to force trigger
+  _lastHeartbeatCheck = 0; // Reset in-memory cache
+  await setTimestamp(CronKeys.heartbeatLastCheck, 0); // Reset DB
   await checkHeartbeat();
 }

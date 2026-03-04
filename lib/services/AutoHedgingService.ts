@@ -77,7 +77,9 @@ class AutoHedgingService {
    */
   async start(): Promise<void> {
     if (this.isRunning) {
-      logger.info('[AutoHedging] Already running');
+      logger.info('[AutoHedging] Already running, reloading configs...');
+      // Always reload configs so newly-added portfolios (e.g. community pool) are picked up
+      await this.loadPortfoliosFromStorage();
       return;
     }
 
@@ -178,22 +180,27 @@ class AutoHedgingService {
 
   /**
    * Enable auto-hedging for a portfolio
-   * Fetches portfolio settings from on-chain data to use configured risk tolerance
+   * Immediately registers with provided config, then asynchronously fetches on-chain settings
    */
   enableForPortfolio(config: AutoHedgeConfig): void {
-    // Fetch and apply portfolio settings asynchronously
+    // Set config IMMEDIATELY so it's available for risk checks right away
+    this.autoHedgeConfigs.set(config.portfolioId, config);
+    logger.info('[AutoHedging] Portfolio registered immediately', {
+      portfolioId: config.portfolioId,
+      riskThreshold: config.riskThreshold,
+      allowedAssets: config.allowedAssets,
+    });
+
+    // Then asynchronously refine settings from on-chain data (non-blocking)
     this.loadPortfolioSettings(config).then(updatedConfig => {
       this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
-      logger.info('[AutoHedging] Portfolio enabled with settings', {
+      logger.info('[AutoHedging] Portfolio settings refined from on-chain', {
         portfolioId: updatedConfig.portfolioId,
         riskThreshold: updatedConfig.riskThreshold,
-        riskTolerance: updatedConfig.riskThreshold, // Will be fetched from portfolio
-        allowedAssets: updatedConfig.allowedAssets,
       });
     }).catch(error => {
-      // Fallback to provided config if fetch fails
-      this.autoHedgeConfigs.set(config.portfolioId, config);
-      logger.warn('[AutoHedging] Failed to load portfolio settings, using defaults', {
+      // Config already set above, just log the warning
+      logger.warn('[AutoHedging] Failed to load on-chain portfolio settings, using stored defaults', {
         portfolioId: config.portfolioId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -524,10 +531,24 @@ class AutoHedgingService {
         }
       }
 
-      // Calculate drawdown from inception share price of $1.00
+      // Calculate drawdown from rolling peak (DB-persisted) instead of hardcoded inception
+      // This catches drawdowns even when share price is above $1.00
       const INCEPTION_SHARE_PRICE = 1.0;
-      const drawdownPercent = marketSharePrice < INCEPTION_SHARE_PRICE 
-        ? ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100 
+      let peakSharePrice = INCEPTION_SHARE_PRICE;
+      try {
+        const { getNavHistory } = await import('@/lib/db/community-pool');
+        const navHistory = await getNavHistory(30); // Last 30 days
+        if (navHistory && navHistory.length > 0) {
+          const historicalPeak = Math.max(...navHistory.map(h => h.share_price || 0));
+          peakSharePrice = Math.max(peakSharePrice, historicalPeak, marketSharePrice);
+        } else {
+          peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
+        }
+      } catch {
+        peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
+      }
+      const drawdownPercent = marketSharePrice < peakSharePrice
+        ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
         : 0;
 
       logger.info('[AutoHedging] Community Pool market NAV', { 
@@ -535,6 +556,7 @@ class AutoHedgingService {
         marketNAV,
         totalShares,
         marketSharePrice, 
+        peakSharePrice,
         inceptionPrice: INCEPTION_SHARE_PRICE, 
         drawdownPercent: drawdownPercent.toFixed(2) + '%',
       });
@@ -553,20 +575,27 @@ class AutoHedgingService {
       if (concentrationRisk > 50) riskScore += 1;
       riskScore = Math.min(riskScore, 10);
 
-      // Fetch active hedges for community pool
-      const hedgesResult = await query(
-        `SELECT asset, side, size, notional_value
-         FROM hedges
-         WHERE portfolio_id = 0 AND status = 'active'`,
-        []
-      );
+      // Fetch active hedges for community pool (gracefully handle DB unavailability)
+      let activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }> = [];
+      try {
+        const hedgesResult = await query(
+          `SELECT asset, side, size, notional_value
+           FROM hedges
+           WHERE portfolio_id = 0 AND status = 'active'`,
+          []
+        );
 
-      const activeHedges = hedgesResult.map(h => ({
-        asset: String(h.asset || ''),
-        side: String(h.side || ''),
-        size: parseFloat(String(h.size)) || 0,
-        notionalValue: parseFloat(String(h.notional_value)) || 0,
-      }));
+        activeHedges = hedgesResult.map(h => ({
+          asset: String(h.asset || ''),
+          side: String(h.side || ''),
+          size: parseFloat(String(h.size)) || 0,
+          notionalValue: parseFloat(String(h.notional_value)) || 0,
+        }));
+      } catch (dbError) {
+        logger.warn('[AutoHedging] Could not fetch active hedges from DB (continuing without)', {
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+        });
+      }
 
       // Generate recommendations - convert allocations to Record<string, number>
       const allocationPercentages: Record<string, number> = {};
