@@ -75,6 +75,7 @@
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/sui": "^1.0.0",
     "@neondatabase/serverless": "^0.9.5",
+    "@oasisprotocol/sapphire-paratime": "^2.3.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",
     "@rainbow-me/rainbowkit": "^2.2.10",

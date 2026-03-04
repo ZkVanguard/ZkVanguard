@@ -192,3 +192,49 @@ export function getCronosProvider(rpcUrl: string = 'https://evm-t3.cronos.org'):
   }
   return _cachedProvider;
 }
+
+// ─── Oasis Sapphire Provider ───────────────────────────────────────────────
+
+let _cachedOasisSapphireProvider: ThrottledProvider | null = null;
+
+/**
+ * Get a singleton ThrottledProvider for Oasis Sapphire RPC.
+ * Supports both testnet and mainnet via environment variable.
+ */
+export function getOasisSapphireProvider(
+  rpcUrl: string = process.env.OASIS_SAPPHIRE_TESTNET_RPC || 
+                   process.env.OASIS_SAPPHIRE_MAINNET_RPC || 
+                   'https://testnet.sapphire.oasis.io'
+): ThrottledProvider {
+  if (!_cachedOasisSapphireProvider) {
+    _cachedOasisSapphireProvider = new ThrottledProvider(rpcUrl, {
+      maxConcurrency: 5,
+      cacheTTL: 30_000,
+      maxRetries: 3,
+    });
+  }
+  return _cachedOasisSapphireProvider;
+}
+
+// ─── Oasis Emerald Provider ────────────────────────────────────────────────
+
+let _cachedOasisEmeraldProvider: ThrottledProvider | null = null;
+
+/**
+ * Get a singleton ThrottledProvider for Oasis Emerald RPC.
+ * Supports both testnet and mainnet via environment variable.
+ */
+export function getOasisEmeraldProvider(
+  rpcUrl: string = process.env.OASIS_EMERALD_TESTNET_RPC ||
+                   process.env.OASIS_EMERALD_MAINNET_RPC ||
+                   'https://testnet.emerald.oasis.io'
+): ThrottledProvider {
+  if (!_cachedOasisEmeraldProvider) {
+    _cachedOasisEmeraldProvider = new ThrottledProvider(rpcUrl, {
+      maxConcurrency: 5,
+      cacheTTL: 30_000,
+      maxRetries: 3,
+    });
+  }
+  return _cachedOasisEmeraldProvider;
+}
