@@ -13,60 +13,77 @@ interface NetworkInfo {
   description?: string;
 }
 
+// Detect network from environment variable or default to testnet
+const OASIS_NETWORK = (process.env.NEXT_PUBLIC_OASIS_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+const CRONOS_NETWORK = (process.env.NEXT_PUBLIC_CRONOS_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+
 const NETWORKS: NetworkInfo[] = [
   {
     name: 'Cronos',
     type: 'evm',
     status: 'live',
-    network: 'testnet',
+    network: CRONOS_NETWORK,
     color: '#002D74',
-    explorerUrl: 'https://explorer.cronos.org/testnet',
+    explorerUrl: CRONOS_NETWORK === 'mainnet' 
+      ? 'https://explorer.cronos.org'
+      : 'https://explorer.cronos.org/testnet',
     description: 'EVM • x402 Gasless',
   },
   {
     name: 'SUI',
     type: 'sui',
     status: 'live',
-    network: 'testnet',
+    network: SUI_NETWORK,
     color: '#4DA2FF',
-    packageId: '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9',
-    explorerUrl: 'https://suiscan.xyz/testnet/object/0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9',
+    packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9',
+    explorerUrl: SUI_NETWORK === 'mainnet'
+      ? `https://suiscan.xyz/mainnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || ''}`
+      : `https://suiscan.xyz/testnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9'}`,
     description: 'Move • Sponsored Tx',
-  },
-  {
-    name: 'Oasis Consensus',
-    type: 'oasis',
-    status: 'ready',
-    network: 'testnet',
-    color: '#FF6D00',
-    explorerUrl: 'https://explorer.oasis.io/testnet/consensus',
-    description: 'Base Layer • Staking',
-  },
-  {
-    name: 'Oasis Emerald',
-    type: 'oasis',
-    status: 'ready',
-    network: 'testnet',
-    color: '#00C853',
-    explorerUrl: 'https://explorer.oasis.io/testnet/emerald',
-    description: 'Public EVM ParaTime',
   },
   {
     name: 'Oasis Sapphire',
     type: 'oasis',
     status: 'ready',
-    network: 'testnet',
+    network: OASIS_NETWORK,
     color: '#0092F6',
-    explorerUrl: 'https://explorer.oasis.io/testnet/sapphire',
+    explorerUrl: OASIS_NETWORK === 'mainnet'
+      ? 'https://explorer.oasis.io/mainnet/sapphire'
+      : 'https://explorer.oasis.io/testnet/sapphire',
     description: 'Confidential EVM • Privacy',
+  },
+  {
+    name: 'Oasis Emerald',
+    type: 'oasis',
+    status: 'ready',
+    network: OASIS_NETWORK,
+    color: '#00C853',
+    explorerUrl: OASIS_NETWORK === 'mainnet'
+      ? 'https://explorer.oasis.io/mainnet/emerald'
+      : 'https://explorer.oasis.io/testnet/emerald',
+    description: 'Public EVM ParaTime',
+  },
+  {
+    name: 'Oasis Consensus',
+    type: 'oasis',
+    status: 'ready',
+    network: OASIS_NETWORK,
+    color: '#FF6D00',
+    explorerUrl: OASIS_NETWORK === 'mainnet'
+      ? 'https://explorer.oasis.io/mainnet/consensus'
+      : 'https://explorer.oasis.io/testnet/consensus',
+    description: 'Base Layer • Staking',
   },
   {
     name: 'Oasis Cipher',
     type: 'oasis',
     status: 'ready',
-    network: 'testnet',
+    network: OASIS_NETWORK,
     color: '#7C4DFF',
-    explorerUrl: 'https://explorer.oasis.io/testnet/cipher',
+    explorerUrl: OASIS_NETWORK === 'mainnet'
+      ? 'https://explorer.oasis.io/mainnet/cipher'
+      : 'https://explorer.oasis.io/testnet/cipher',
     description: 'Confidential WASM ParaTime',
   },
 ];

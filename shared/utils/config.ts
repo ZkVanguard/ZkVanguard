@@ -79,6 +79,54 @@ export const networks: Record<string, NetworkConfig> = {
   },
   
   // ============================================
+  // OASIS CHAINS (EVM-Compatible ParaTimes)
+  // ============================================
+  'oasis-sapphire-testnet': {
+    chainId: 23295,
+    name: 'Oasis Sapphire Testnet',
+    rpcUrl: process.env.OASIS_SAPPHIRE_TESTNET_RPC || 'https://testnet.sapphire.oasis.io',
+    explorerUrl: 'https://explorer.oasis.io/testnet/sapphire',
+    nativeCurrency: {
+      name: 'Test ROSE',
+      symbol: 'TEST',
+      decimals: 18,
+    },
+  },
+  'oasis-sapphire-mainnet': {
+    chainId: 23294,
+    name: 'Oasis Sapphire',
+    rpcUrl: process.env.OASIS_SAPPHIRE_MAINNET_RPC || 'https://sapphire.oasis.io',
+    explorerUrl: 'https://explorer.oasis.io/mainnet/sapphire',
+    nativeCurrency: {
+      name: 'ROSE',
+      symbol: 'ROSE',
+      decimals: 18,
+    },
+  },
+  'oasis-emerald-testnet': {
+    chainId: 42261,
+    name: 'Oasis Emerald Testnet',
+    rpcUrl: process.env.OASIS_EMERALD_TESTNET_RPC || 'https://testnet.emerald.oasis.io',
+    explorerUrl: 'https://explorer.oasis.io/testnet/emerald',
+    nativeCurrency: {
+      name: 'Test ROSE',
+      symbol: 'TEST',
+      decimals: 18,
+    },
+  },
+  'oasis-emerald-mainnet': {
+    chainId: 42262,
+    name: 'Oasis Emerald',
+    rpcUrl: process.env.OASIS_EMERALD_MAINNET_RPC || 'https://emerald.oasis.io',
+    explorerUrl: 'https://explorer.oasis.io/mainnet/emerald',
+    nativeCurrency: {
+      name: 'ROSE',
+      symbol: 'ROSE',
+      decimals: 18,
+    },
+  },
+
+  // ============================================
   // LOCAL DEVELOPMENT
   // ============================================
   hardhat: {
