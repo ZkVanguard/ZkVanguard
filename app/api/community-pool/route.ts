@@ -511,54 +511,31 @@ export async function GET(request: NextRequest) {
     }
     
     // Default: Get pool summary
-    // Use market-adjusted NAV (virtual holdings × current prices) for accurate display
-    // On-chain provides member count and share structure, DB provides virtual holdings
+    // ALWAYS use on-chain contract data as source of truth
+    // On-chain contract has authoritative NAV, share price, and member count
     try {
       const onChainPool = await getOnChainPoolData();
       
-      // Try to get market-adjusted NAV (needs DB for virtual holdings)
-      let useMarketNav = false;
-      let marketNAV = null;
-      try {
-        marketNAV = await calculatePoolNAV();
-        useMarketNav = true;
-      } catch (dbError) {
-        logger.warn('[CommunityPool API] Market-adjusted NAV unavailable (no DB), using on-chain only');
-      }
-      
       if (onChainPool && onChainPool.totalShares > 0) {
-        // Blend on-chain structure with market-adjusted NAV if available
-        if (useMarketNav && marketNAV) {
-          const marketSharePrice = marketNAV.totalValueUSD / onChainPool.totalShares;
-          
-          return NextResponse.json({
-            success: true,
-            pool: {
-              totalValueUSD: marketNAV.totalValueUSD,
-              totalShares: onChainPool.totalShares,
-              sharePrice: marketSharePrice,
-              totalMembers: onChainPool.totalMembers,
-              allocations: marketNAV.allocations,
-              lastAIDecision: null,
-              performance: { day: null, week: null, month: null },
-            },
-            supportedAssets: SUPPORTED_ASSETS,
-            timestamp: Date.now(),
-            source: 'market-adjusted',
-          });
-        }
-        
-        // Pure on-chain fallback (no market adjustment)
+        // On-chain contract is the authoritative source - use it directly
         return NextResponse.json({
           success: true,
-          pool: onChainPool,
+          pool: {
+            totalValueUSD: onChainPool.totalValueUSD,
+            totalShares: onChainPool.totalShares,
+            sharePrice: onChainPool.sharePrice,
+            totalMembers: onChainPool.totalMembers,
+            allocations: onChainPool.allocations,
+            lastAIDecision: null,
+            performance: { day: null, week: null, month: null },
+          },
           supportedAssets: SUPPORTED_ASSETS,
           timestamp: Date.now(),
           source: 'onchain',
         });
       }
     } catch (e) {
-      logger.warn('[CommunityPool API] Pool summary failed', { error: e });
+      logger.warn('[CommunityPool API] On-chain pool summary failed', { error: e });
     }
     
     // Final fallback: Local calculated NAV (for when on-chain has no value)
