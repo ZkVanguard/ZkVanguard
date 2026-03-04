@@ -99,33 +99,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     });
     
     // Step 1.5: Record NAV snapshot for risk metrics history
-    // Use MARKET-ADJUSTED NAV based on virtual holdings × current prices
-    // This reflects actual market movements, not just USDC balance
+    // ALWAYS use on-chain contract data as source of truth
+    // On-chain contract has authoritative NAV and share price
     try {
       // Ensure tables exist (idempotent)
       await initCommunityPoolTables();
       
-      // Calculate market-adjusted NAV from virtual holdings
-      const marketNAV = await calculatePoolNAV();
+      // Use on-chain contract values (authoritative)
       const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+      const onChainNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
+      const onChainSharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
       
       await recordNavSnapshot({
-        sharePrice: marketNAV.sharePrice,
-        totalNav: marketNAV.totalValueUSD,
+        sharePrice: onChainSharePrice,
+        totalNav: onChainNAV,
         totalShares: totalShares,
         memberCount: poolStats.memberCount,
         allocations: {
-          BTC: marketNAV.allocations.BTC.percentage,
-          ETH: marketNAV.allocations.ETH.percentage,
-          SUI: marketNAV.allocations.SUI.percentage,
-          CRO: marketNAV.allocations.CRO.percentage,
+          BTC: poolStats.allocations.BTC,
+          ETH: poolStats.allocations.ETH,
+          SUI: poolStats.allocations.SUI,
+          CRO: poolStats.allocations.CRO,
         },
-        source: 'market-adjusted',
+        source: 'onchain-contract',
       });
-      logger.info('[CommunityPool Cron] Market-adjusted NAV snapshot recorded', {
-        marketNAV: `$${marketNAV.totalValueUSD.toFixed(2)}`,
-        sharePrice: `$${marketNAV.sharePrice.toFixed(4)}`,
-        onChainNAV: `$${poolStats.totalNAV}`,
+      logger.info('[CommunityPool Cron] On-chain NAV snapshot recorded', {
+        onChainNAV: `$${onChainNAV.toFixed(2)}`,
+        sharePrice: `$${onChainSharePrice.toFixed(6)}`,
+        totalShares: totalShares.toFixed(2),
       });
       
       // Step 1.6: Sync on-chain members to DB cache
