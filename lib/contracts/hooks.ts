@@ -119,16 +119,46 @@ export function useUserPortfolios(userAddress?: string) {
         return;
       }
 
-      // If totalCount is still loading, wait
+      // If wagmi is still loading portfolioCount, wait — don't proceed yet
+      if (countLoading) {
+        logger.info(`[useUserPortfolios] Waiting for wagmi portfolioCount to resolve...`, { component: 'hooks' });
+        return; // Effect will re-run when countLoading changes
+      }
+
+      // If wagmi returned an error or totalCount is still undefined after loading,
+      // use server-side API to fetch portfolios (avoids ethers in browser issues)
       if (totalCount === undefined || totalCount === null) {
-        logger.info(`[useUserPortfolios] totalCount not yet available (countLoading=${countLoading}), falling back to direct RPC`, { component: 'hooks' });
-        // Fall back to direct RPC call for portfolioCount instead of waiting for wagmi
+        logger.info(`[useUserPortfolios] wagmi portfolioCount unavailable (error: ${countError?.message ?? 'none'}), using API fallback`, { component: 'hooks' });
+        try {
+          const res = await fetch(`/api/portfolio/list?address=${encodeURIComponent(userAddress)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.portfolios && data.portfolios.length > 0) {
+              logger.info(`[useUserPortfolios] API fallback returned ${data.portfolios.length} portfolios`, { component: 'hooks' });
+              // Convert string values back to BigInt for compatibility
+              const converted: UserPortfolio[] = data.portfolios.map((p: { id: number; owner: string; totalValue: string; targetYield: string; riskTolerance: string; lastRebalance: string; isActive: boolean; txHash: string | null }) => ({
+                id: p.id,
+                owner: p.owner,
+                totalValue: BigInt(p.totalValue),
+                targetYield: BigInt(p.targetYield),
+                riskTolerance: BigInt(p.riskTolerance),
+                lastRebalance: BigInt(p.lastRebalance),
+                isActive: p.isActive,
+                txHash: p.txHash,
+              }));
+              setUserPortfolios(converted);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (apiErr) {
+          logger.warn('[useUserPortfolios] API fallback failed, trying direct RPC', { component: 'hooks', error: String(apiErr) });
+        }
+
+        // Last resort: direct RPC (works in Node.js/SSR, may fail in browser)
         try {
           const { ethers } = await import('ethers');
-          const throttled = getCronosProvider(
-            process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
-          );
-          const provider = throttled.provider;
+          const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
           const contract = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
           const directCount = await contract.portfolioCount();
           logger.info(`[useUserPortfolios] Direct RPC portfolioCount = ${directCount.toString()}`, { component: 'hooks' });
@@ -137,11 +167,10 @@ export function useUserPortfolios(userAddress?: string) {
             setIsLoading(false);
             return;
           }
-          // Continue with this count below
           await fetchWithCount(Number(directCount));
           return;
         } catch (rpcErr) {
-          logger.error('[useUserPortfolios] Direct RPC fallback failed', rpcErr, { component: 'hooks' });
+          logger.error('[useUserPortfolios] All fallbacks failed', rpcErr, { component: 'hooks' });
           setUserPortfolios([]);
           setIsLoading(false);
           return;
