@@ -15,17 +15,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
+import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
 
 // Configuration
 const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
 
-// Track last hedge for loss protection
-const lastHedgeTime = new Map<number, number>();
+// In-memory caches — loaded from DB on cold start, saved on change
+let lastHedgeTimeCache = new Map<number, number>();
+let peakPortfolioValuesCache = new Map<number, number>();
+let dbStateLoaded = false;
 
-// Track peak portfolio values for drawdown calculation
-const peakPortfolioValues = new Map<number, number>();
+/**
+ * Load critical loss-protection state from database on cold start
+ */
+async function loadStateFromDb(portfolioIds: number[]): Promise<void> {
+  if (dbStateLoaded) return;
+  dbStateLoaded = true;
+
+  try {
+    for (const id of portfolioIds) {
+      const lastHedge = await getTimestamp(CronKeys.rebalanceLastHedge(id));
+      if (lastHedge > 0) lastHedgeTimeCache.set(id, lastHedge);
+
+      const peakVal = await getNumber(CronKeys.rebalancePeakValue(id));
+      if (peakVal > 0) peakPortfolioValuesCache.set(id, peakVal);
+    }
+    logger.info(`[AutoRebalance] Loaded loss-protection state from DB for ${portfolioIds.length} portfolios`);
+  } catch (error: any) {
+    logger.warn('[AutoRebalance] Failed to load state from DB — using defaults', { error: error?.message });
+  }
+}
 
 interface LossProtectionConfig {
   enabled: boolean;
@@ -85,6 +106,9 @@ export async function GET(request: NextRequest) {
     }
     
     logger.info(`[AutoRebalance Cron] Processing ${enabledConfigs.length} portfolios`);
+
+    // Load DB-backed state for all enabled portfolios (cold-start resilience)
+    await loadStateFromDb(enabledConfigs.map(c => c.portfolioId));
     
     // Process each portfolio
     const results: ProcessingResult[] = [];
@@ -162,14 +186,17 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
   if (lossProtection?.enabled && assessment.totalValue !== undefined) {
     const lossConfig = lossProtection as LossProtectionConfig;
     const cooldownMs = (lossConfig.cooldownHours || 4) * 60 * 60 * 1000;
-    const lastHedge = lastHedgeTime.get(portfolioId) || 0;
+    const lastHedge = lastHedgeTimeCache.get(portfolioId) || 0;
     const mode = lossConfig.mode || 'entry';
     
-    // Track peak value for drawdown calculation
+    // Track peak value for drawdown calculation — DB-backed
     const currentValue = assessment.totalValue;
-    const previousPeak = peakPortfolioValues.get(portfolioId) || currentValue;
+    const previousPeak = peakPortfolioValuesCache.get(portfolioId) || currentValue;
     const newPeak = Math.max(previousPeak, currentValue);
-    peakPortfolioValues.set(portfolioId, newPeak);
+    if (newPeak > previousPeak) {
+      peakPortfolioValuesCache.set(portfolioId, newPeak);
+      await setNumber(CronKeys.rebalancePeakValue(portfolioId), newPeak);
+    }
     
     // Calculate drawdown from peak
     const drawdownPercent = newPeak > 0 ? ((newPeak - currentValue) / newPeak) * 100 : 0;
@@ -212,7 +239,8 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
             lossConfig
           );
           
-          lastHedgeTime.set(portfolioId, now);
+          lastHedgeTimeCache.set(portfolioId, now);
+          await setTimestamp(CronKeys.rebalanceLastHedge(portfolioId), now);
           
           return {
             portfolioId,
