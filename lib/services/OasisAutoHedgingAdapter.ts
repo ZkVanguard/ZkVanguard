@@ -49,9 +49,9 @@ const OASIS_HEDGE_CONFIG = {
 const OASIS_DEPLOYMENTS = {
   testnet: {
     chainId: 23295,
-    rwaManager: OASIS_CONTRACT_ADDRESSES.RWAManager,
-    hedgeExecutor: OASIS_CONTRACT_ADDRESSES.HedgeExecutor,
-    zkVerifier: OASIS_CONTRACT_ADDRESSES.ZKVerifier,
+    rwaManager: OASIS_CONTRACT_ADDRESSES.testnet.rwaManager,
+    hedgeExecutor: OASIS_CONTRACT_ADDRESSES.testnet.hedgeExecutor,
+    zkVerifier: OASIS_CONTRACT_ADDRESSES.testnet.zkVerifier,
     rpcUrl: process.env.OASIS_SAPPHIRE_TESTNET_RPC || 'https://testnet.sapphire.oasis.io',
   },
   mainnet: {
@@ -224,7 +224,7 @@ export class OasisAutoHedgingAdapter {
     const prices: Record<string, number> = {};
     for (const asset of uniqueAssets) {
       try {
-        const data = await marketData.getPrice(asset);
+        const data = await marketData.getTokenPrice(asset);
         if (data?.price) prices[asset] = data.price;
       } catch {
         logger.warn(`[OasisAutoHedge] Price fetch failed: ${asset}`);
@@ -399,7 +399,7 @@ export class OasisAutoHedgingAdapter {
 
     try {
       const marketData = getMarketDataService();
-      const priceData = await marketData.getPrice(rec.asset);
+      const priceData = await marketData.getTokenPrice(rec.asset);
       const entryPrice = priceData?.price || 0;
 
       if (entryPrice <= 0) {

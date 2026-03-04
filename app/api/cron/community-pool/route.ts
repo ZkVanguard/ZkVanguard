@@ -148,11 +148,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         }
         
         // Also sync pool state
+        const poolAllocRecord: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {};
+        for (const [asset, pct] of Object.entries(poolStats.allocations)) {
+          poolAllocRecord[asset] = { percentage: pct, valueUSD: onChainNAV * (pct / 100), amount: 0, price: 0 };
+        }
         await savePoolStateToDb({
-          totalValueUSD: marketNAV.totalValueUSD,
+          totalValueUSD: onChainNAV,
           totalShares: totalShares,
-          sharePrice: marketNAV.sharePrice,
-          allocations: marketNAV.allocations,
+          sharePrice: onChainSharePrice,
+          allocations: poolAllocRecord,
           lastRebalance: Date.now(),
           lastAIDecision: null,
         });

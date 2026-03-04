@@ -28,9 +28,9 @@ import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 const OASIS_PRIVATE_DEPLOYMENTS = {
   testnet: {
     chainId: 23295,
-    gaslessCommitmentVerifier: OASIS_CONTRACT_ADDRESSES.GaslessCommitmentVerifier,
-    hedgeExecutor: OASIS_CONTRACT_ADDRESSES.HedgeExecutor,
-    zkVerifier: OASIS_CONTRACT_ADDRESSES.ZKVerifier,
+    gaslessCommitmentVerifier: OASIS_CONTRACT_ADDRESSES.testnet.gaslessZKCommitmentVerifier,
+    hedgeExecutor: OASIS_CONTRACT_ADDRESSES.testnet.hedgeExecutor,
+    zkVerifier: OASIS_CONTRACT_ADDRESSES.testnet.zkVerifier,
     explorerBase: 'https://explorer.oasis.io/testnet/sapphire',
   },
   mainnet: {
