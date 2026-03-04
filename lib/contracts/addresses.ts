@@ -308,3 +308,22 @@ export function checkOasisMainnetConfiguration(): { configured: boolean; missing
     missing,
   };
 }
+
+/**
+ * Check if SUI mainnet contracts are properly configured
+ */
+export function checkSuiMainnetConfiguration(): { configured: boolean; missing: string[] } {
+  const addresses = SUI_CONTRACT_ADDRESSES.mainnet;
+  const missing: string[] = [];
+  
+  if (!addresses.packageId) missing.push('sui:packageId');
+  if (!addresses.rwaManagerState) missing.push('sui:rwaManagerState');
+  if (!addresses.zkVerifierState) missing.push('sui:zkVerifierState');
+  if (!addresses.paymentRouterState) missing.push('sui:paymentRouterState');
+  if (!addresses.adminCap) missing.push('sui:adminCap');
+  
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
+}

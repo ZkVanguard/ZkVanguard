@@ -42,13 +42,25 @@ const SUI_HEDGE_CONFIG = {
   DEFAULT_TAKE_PROFIT_PERCENT: 25,
 };
 
-// SUI deployed contract addresses
-const SUI_CONTRACTS = {
-  packageId: '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a',
-  rwaManagerState: '0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97',
-  hedgeExecutorState: '0xb6432f1ecc1f55a1f3f3c8c09d110c4bda9ed6536bd9ea4c9cb5e739c41cb41e',
-  rpcUrl: 'https://fullnode.testnet.sui.io:443',
-};
+// SUI deployed contract addresses (testnet & mainnet)
+const SUI_DEPLOYMENTS = {
+  testnet: {
+    packageId: '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a',
+    rwaManagerState: '0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97',
+    hedgeExecutorState: '0xb6432f1ecc1f55a1f3f3c8c09d110c4bda9ed6536bd9ea4c9cb5e739c41cb41e',
+    rpcUrl: 'https://fullnode.testnet.sui.io:443',
+  },
+  mainnet: {
+    packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '',
+    rwaManagerState: process.env.NEXT_PUBLIC_SUI_RWA_MANAGER_STATE || '',
+    hedgeExecutorState: '', // Populated after mainnet deployment
+    rpcUrl: process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443',
+  },
+} as const;
+
+// Active network based on env
+const SUI_NETWORK = (process.env.SUI_NETWORK || 'testnet') as keyof typeof SUI_DEPLOYMENTS;
+const SUI_CONTRACTS = SUI_DEPLOYMENTS[SUI_NETWORK] || SUI_DEPLOYMENTS.testnet;
 
 // ============================================
 // TYPES
