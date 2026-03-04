@@ -196,13 +196,14 @@ export class OasisPortfolioManager {
       const roseBalance = await this.provider.getBalance(this.walletAddress);
       const roseFormatted = parseFloat(ethers.formatEther(roseBalance));
       // ROSE is not directly on Crypto.com — estimate from CRO price as proxy
-      const croPrice = await marketData.getTokenPrice('CRO');
-      totalUsd = roseFormatted * (croPrice * 0.15); // ROSE ≈ 15% of CRO value (rough proxy)
+      const croData = await marketData.getTokenPrice('CRO');
+      totalUsd = roseFormatted * (croData.price * 0.15); // ROSE ≈ 15% of CRO value (rough proxy)
     }
 
     // Build positions from allocations × total value × live prices
     for (const alloc of this.allocations) {
-      const currentPrice = await marketData.getTokenPrice(alloc.symbol);
+      const priceData = await marketData.getTokenPrice(alloc.symbol);
+      const currentPrice = priceData.price;
       const allocValue = totalUsd * (alloc.percentage / 100);
       const amount = currentPrice > 0 ? allocValue / currentPrice : 0;
 
