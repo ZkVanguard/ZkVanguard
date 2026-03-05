@@ -257,7 +257,7 @@ export class HedgeExecutorClient {
           return null;
         }
       })
-      .find((e: any) => e?.name === 'HedgeOpened');
+      .find((e: any) => e?.name === 'AgentHedgeOpened' || e?.name === 'HedgeOpened');
 
     return {
       hedgeId: hedgeEvent?.args?.hedgeId || commitmentHash,

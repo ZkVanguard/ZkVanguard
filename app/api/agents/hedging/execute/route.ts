@@ -21,7 +21,7 @@ import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
 import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
 import type { NetworkType } from '@/integrations/moonlander/contracts';
-import { HedgeExecutorClient } from '@/integrations/hedge-executor/HedgeExecutorClient';
+import { HedgeExecutorClient, type OnChainHedgeResult } from '@/integrations/hedge-executor/HedgeExecutorClient';
 import { generateRebalanceProof, generateWalletOwnershipProof } from '@/lib/api/zk';
 import { deriveProxyPDA, type ProxyPDA } from '@/lib/crypto/ProxyPDA';
 import { getOnChainHedgeService } from '@/lib/services/OnChainHedgeService';
@@ -380,15 +380,29 @@ export async function POST(request: NextRequest) {
         }
 
         // Execute on HedgeExecutor contract
-        const result = await hedgeClient.openHedge({
-          market,
-          side,
-          collateralAmount,
-          leverage,
-          commitmentHash: '0x' + zkProofHash,
-        });
+        // Use agentOpenHedge for system/cron calls (auto-hedging) — emits AgentHedgeOpened event
+        // Use openHedge for user-initiated calls — emits HedgeOpened event
+        let result: OnChainHedgeResult;
+        if (isSystemCall && walletAddress) {
+          logger.info('🤖 Auto-hedge: using agentOpenHedge()', { trader: walletAddress, market, side });
+          result = await hedgeClient.agentOpenHedge({
+            trader: walletAddress,
+            market,
+            side,
+            collateralAmount,
+            leverage,
+          });
+        } else {
+          result = await hedgeClient.openHedge({
+            market,
+            side,
+            collateralAmount,
+            leverage,
+            commitmentHash: '0x' + zkProofHash,
+          });
+        }
 
-        logger.info('✅ On-chain hedge created via HedgeExecutor', {
+        logger.info(`✅ On-chain hedge created via HedgeExecutor (${isSystemCall ? 'agent/auto' : 'manual'})`, {
           hedgeId: result.hedgeId.slice(0, 18) + '...',
           txHash: result.txHash,
           status: result.status,
