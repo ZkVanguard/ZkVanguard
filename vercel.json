@@ -28,24 +28,12 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/community-pool",
+      "path": "/api/cron/master",
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/cron/pool-nav-monitor",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/auto-rebalance",
+      "path": "/api/cron/master",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/hedge-monitor",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/cron/liquidation-guard",
-      "schedule": "0 3 * * *"
     }
   ]
 }
