@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
-import { requireAuth } from '@/lib/security/auth-middleware';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
@@ -17,10 +16,6 @@ export async function GET(request: NextRequest) {
   // Rate limiting
   const rateLimitResponse = readLimiter.check(request);
   if (rateLimitResponse) return rateLimitResponse;
-
-  // Auth
-  const authResult = await requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { searchParams } = new URL(request.url);
