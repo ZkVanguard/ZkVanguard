@@ -60,10 +60,10 @@ INSERT INTO auto_hedge_configs (portfolio_id, wallet_address, enabled, risk_thre
 VALUES (3, '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1', true, 5, 3, '["BTC", "ETH", "CRO", "SUI"]'::jsonb)
 ON CONFLICT (portfolio_id) DO NOTHING;
 
--- Community Pool (Special ID: 0)
+-- Community Pool (Special ID: -1, reserved to avoid collision with RWAManager portfolio 0)
 -- Contract: 0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B
 INSERT INTO auto_hedge_configs (portfolio_id, wallet_address, enabled, risk_threshold, max_leverage, allowed_assets)
-VALUES (0, '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B', true, 4, 2, '["BTC", "ETH", "CRO", "SUI"]'::jsonb)
+VALUES (-1, '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B', true, 4, 2, '["BTC", "ETH", "CRO", "SUI"]'::jsonb)
 ON CONFLICT (portfolio_id) DO NOTHING;
 
 -- ============================================

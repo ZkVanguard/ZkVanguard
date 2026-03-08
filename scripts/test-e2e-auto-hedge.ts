@@ -14,6 +14,8 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 
+import { COMMUNITY_POOL_PORTFOLIO_ID } from '../lib/constants';
+
 const BASE_URL = 'http://localhost:3000';
 const CRON_SECRET = process.env.CRON_SECRET || 'RzQMP6OvwU0rC31xk5osBGueLXnASb24';
 
@@ -181,7 +183,7 @@ async function testDirectHedgeExecution() {
 
   // Execute a small protective hedge (SHORT BTC, $100 collateral, 2x leverage)
   const hedgePayload = {
-    portfolioId: 0, // Community pool
+    portfolioId: COMMUNITY_POOL_PORTFOLIO_ID, // Community pool
     asset: 'BTC',
     strategy: 'PROTECTIVE_PUT',
     notionalValue: 100, // $100 test hedge
