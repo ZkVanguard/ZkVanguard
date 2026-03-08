@@ -6,7 +6,6 @@ import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
-import { requireAuth } from '@/lib/security/auth-middleware';
 import { heavyLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
@@ -77,13 +76,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
-  // Rate limiting
+  // Rate limiting (no auth required - frontend analysis endpoint)
   const rateLimitResponse = heavyLimiter.check(request);
   if (rateLimitResponse) return rateLimitResponse;
-
-  // Auth
-  const authResult = await requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body = await request.json();
