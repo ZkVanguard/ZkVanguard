@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { DollarSign, RefreshCw, ChevronRight } from 'lucide-react';
-import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { usePositions } from '@/contexts/PositionsContext';
-import type { PortfolioAnalysis } from '../../lib/ai/cryptocom-service';
 import { logger } from '@/lib/utils/logger';
 
 interface PortfolioOverviewProps {
@@ -17,33 +15,11 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
   // Get ALL data from centralized context - zero redundant fetching!
   // isPending provides smooth visual feedback during background data transitions
   const { positionsData, derived, loading, refetch, isPending } = usePositions();
-  
-  const [_aiAnalysis, setAiAnalysis] = useState<PortfolioAnalysis | null>(null);
-  const [_aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
-    async function fetchAIAnalysis() {
-      if (!address || !derived) return;
-      
-      setAiLoading(true);
-      try {
-        // Optional: Try AI service for recommendations only
-        const aiService = getCryptocomAIService();
-        const analysis = await aiService.analyzePortfolio(address, { 
-          userPortfolioCount: derived.portfolioCount 
-        } as Record<string, unknown>);
-        setAiAnalysis(analysis);
-      } catch (aiError) {
-        logger.warn('[PortfolioOverview] AI recommendations unavailable', { error: String(aiError) });
-        // No problem - we have all the data we need from context
-      } finally {
-        setAiLoading(false);
-      }
-    }
-
-    if (address && derived) {
-      fetchAIAnalysis();
-    }
+    // OPTIMIZATION: Removed redundant AI analysis fetch
+    // AI recommendations are already available via AIDecisionsContext
+    // This prevents duplicate API calls to /api/agents/hedging/recommend
 
     // Listen for hedge updates to refresh
     const handleHedgeUpdate = () => {
@@ -56,7 +32,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
     return () => {
       window.removeEventListener('hedgeAdded', handleHedgeUpdate);
     };
-  }, [address, derived, refetch]);
+  }, [refetch]);
 
   if (loading) {
     return (
