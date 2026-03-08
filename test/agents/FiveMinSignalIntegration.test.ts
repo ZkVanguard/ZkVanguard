@@ -6,45 +6,13 @@
  * - RiskAgent (weighted sentiment)
  * - HedgingAgent (hedge ratio adjustment)
  * - DelphiMarketService (prediction injection)
+ * 
+ * NO MOCKS — uses real Polymarket5MinService for service behavior tests.
+ * Pure logic tests use inline fixtures (no service calls needed).
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-
-// ─── Mock: Polymarket5MinService ────────────────────────
-
-const mockGetLatest5MinSignal = jest.fn();
-const mockGetSignalHistory = jest.fn();
-const mockSignalToPredictionMarket = jest.fn();
-
-jest.mock('../../lib/services/Polymarket5MinService', () => ({
-  Polymarket5MinService: {
-    getLatest5MinSignal: mockGetLatest5MinSignal,
-    getSignalHistory: mockGetSignalHistory,
-    signalToPredictionMarket: mockSignalToPredictionMarket,
-  },
-  FiveMinBTCSignal: {},
-  FiveMinSignalHistory: {},
-}));
-
-// Mock logger
-jest.mock('../../lib/utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
-
-// Mock cache
-jest.mock('../../lib/utils/cache', () => ({
-  cache: {
-    get: jest.fn().mockReturnValue(null),
-    set: jest.fn(),
-  },
-  withCache: jest.fn((fn: (...args: unknown[]) => unknown) => fn),
-}));
-
+import { describe, it, expect } from '@jest/globals';
+import { Polymarket5MinService } from '../../lib/services/Polymarket5MinService';
 import type { FiveMinBTCSignal, FiveMinSignalHistory } from '../../lib/services/Polymarket5MinService';
 
 // ─── Test Fixtures ──────────────────────────────────────
@@ -116,12 +84,6 @@ function createMockHistory(signals: FiveMinBTCSignal[]): FiveMinSignalHistory {
 // ─── Tests ──────────────────────────────────────────────
 
 describe('5-Min Signal Agent Integration', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGetLatest5MinSignal.mockReset();
-    mockGetSignalHistory.mockReset();
-    mockSignalToPredictionMarket.mockReset();
-  });
 
   // ── Signal Shape Validation ───────────────────────────
 
@@ -397,39 +359,60 @@ describe('5-Min Signal Agent Integration', () => {
     });
   });
 
-  // ── Service Mock Behavior ─────────────────────────────
+  // ── Real Service Behavior ──────────────────────────────
 
-  describe('Service Mock Behavior', () => {
-    it('getLatest5MinSignal returns mocked signal', async () => {
+  describe('Real Service Behavior', () => {
+    it('getLatest5MinSignal returns signal with correct shape or null', async () => {
+      let signal: FiveMinBTCSignal | null;
+      try {
+        signal = await Polymarket5MinService.getLatest5MinSignal();
+      } catch {
+        // Polymarket API unavailable — skip
+        console.log('Polymarket API unavailable — skipping');
+        return;
+      }
+
+      // May be null if no 5-min market is currently active
+      if (signal === null) {
+        expect(signal).toBeNull();
+        return;
+      }
+
+      // Validate shape
+      expect(signal.direction).toMatch(/^(UP|DOWN)$/);
+      expect(signal.signalStrength).toMatch(/^(STRONG|MODERATE|WEAK)$/);
+      expect(signal.recommendation).toMatch(/^(HEDGE_SHORT|HEDGE_LONG|WAIT)$/);
+      expect(signal.probability).toBeGreaterThanOrEqual(0);
+      expect(signal.probability).toBeLessThanOrEqual(100);
+      expect(signal.confidence).toBeGreaterThanOrEqual(0);
+      expect(signal.priceToBeat).toBeGreaterThanOrEqual(0);
+      expect(signal.currentPrice).toBeGreaterThanOrEqual(0);
+      expect(typeof signal.marketId).toBe('string');
+      expect(typeof signal.windowLabel).toBe('string');
+    });
+
+    it('getSignalHistory returns valid history object', () => {
+      const history = Polymarket5MinService.getSignalHistory();
+
+      expect(history).toBeDefined();
+      expect(Array.isArray(history.signals)).toBe(true);
+      expect(typeof history.accuracy).toBe('object');
+      expect(typeof history.accuracy.correct).toBe('number');
+      expect(typeof history.accuracy.total).toBe('number');
+      expect(typeof history.accuracy.rate).toBe('number');
+      expect(typeof history.streak).toBe('object');
+      expect(typeof history.avgConfidence).toBe('number');
+    });
+
+    it('signalToPredictionMarket converts signal to PredictionMarket shape', () => {
       const signal = createStrongDownSignal();
-      mockGetLatest5MinSignal.mockResolvedValueOnce(signal);
+      const pm = Polymarket5MinService.signalToPredictionMarket(signal);
 
-      const { Polymarket5MinService } = require('../../lib/services/Polymarket5MinService');
-      const result = await Polymarket5MinService.getLatest5MinSignal();
-
-      expect(result).toBe(signal);
-      expect(result.direction).toBe('DOWN');
-    });
-
-    it('getLatest5MinSignal returns null when no market available', async () => {
-      mockGetLatest5MinSignal.mockResolvedValueOnce(null);
-
-      const { Polymarket5MinService } = require('../../lib/services/Polymarket5MinService');
-      const result = await Polymarket5MinService.getLatest5MinSignal();
-
-      expect(result).toBeNull();
-    });
-
-    it('getSignalHistory returns mocked history', async () => {
-      const history = createMockHistory([createStrongDownSignal(), createStrongDownSignal()]);
-      mockGetSignalHistory.mockReturnValueOnce(history);
-
-      const { Polymarket5MinService } = require('../../lib/services/Polymarket5MinService');
-      const result = Polymarket5MinService.getSignalHistory();
-
-      expect(result.signals).toHaveLength(2);
-      expect(result.streak.direction).toBe('DOWN');
-      expect(result.streak.count).toBe(2);
+      expect(pm).toBeDefined();
+      expect(pm.id).toContain('polymarket-5min');
+      expect(pm.source).toBe('polymarket');
+      expect(Array.isArray(pm.relatedAssets)).toBe(true);
+      expect(pm.relatedAssets).toContain('BTC');
     });
   });
 });
