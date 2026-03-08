@@ -12,6 +12,7 @@ import { autoHedgingService, AUTO_HEDGE_CONFIG } from '@/lib/services/AutoHedgin
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { 
   saveAutoHedgeConfig, 
   deleteAutoHedgeConfig, 
@@ -214,10 +215,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     logger.error('Auto-hedging action error', { error });
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to execute action' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Auto-hedge action');
   }
 }
 

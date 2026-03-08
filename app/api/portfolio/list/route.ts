@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { CRONOS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { getCronosProvider } from '@/lib/throttled-provider';
@@ -138,9 +139,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     logger.error('[Portfolio List API] Error', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch portfolios', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio list');
   }
 }

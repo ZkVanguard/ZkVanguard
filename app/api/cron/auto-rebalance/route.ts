@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
@@ -146,14 +147,7 @@ export async function GET(request: NextRequest) {
     
   } catch (error: any) {
     logger.error('[AutoRebalance Cron] Fatal error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message,
-        duration: Date.now() - startTime,
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Auto-rebalance cron');
   }
 }
 
@@ -381,7 +375,6 @@ async function executeProtectiveHedge(
   // Call the hedge execution API
   const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/agents/hedging/execute`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       asset: assetToHedge,
       side: 'SHORT',

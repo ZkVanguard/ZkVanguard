@@ -306,14 +306,14 @@ export class SettlementAgent extends BaseAgent {
           from: await this.signer.getAddress(),
           to: settlement.beneficiary,
           amount: settlement.amount,
-        });
+        }) as unknown as { txHash: string; [key: string]: unknown };
       } else if (typeof extClient.batchTransfer === 'function') {
         result = await extClient.batchTransfer({
           token: settlement.token,
           from: await this.signer.getAddress(),
           to: settlement.beneficiary,
           amount: settlement.amount,
-        });
+        }) as unknown as { txHash: string; [key: string]: unknown };
       } else {
         throw new Error('No compatible x402 transfer method available (executeGaslessTransfer or batchTransfer)');
       }

@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
@@ -692,20 +693,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PoolMonito
     
   } catch (error: any) {
     logger.error('[PoolNAVMonitor] Error:', error);
-    return NextResponse.json({
-      success: false,
-      poolsChecked: 0,
-      pools: [],
-      alerts: [],
-      summary: {
-        totalAUM: 0,
-        avgReturns: 0,
-        criticalPools: 0,
-        healthyPools: 0,
-      },
-      duration: Date.now() - startTime,
-      error: error.message,
-    }, { status: 500 });
+    return safeErrorResponse(error, 'Pool NAV monitor') as NextResponse<PoolMonitorResult>;
   }
 }
 

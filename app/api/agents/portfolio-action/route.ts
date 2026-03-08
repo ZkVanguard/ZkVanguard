@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -384,12 +385,6 @@ REASON3: [risk/opportunity assessment]`;
 
   } catch (error) {
     logger.error('Portfolio action analysis failed', { error });
-    return NextResponse.json(
-      {
-        error: 'Failed to analyze portfolio action',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio action analysis');
   }
 }

@@ -21,6 +21,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { 
   getOnChainHistoryService,
   type ChartDataPoint,
@@ -109,10 +110,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error('[Portfolio History API] GET error', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch portfolio history', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio history');
   }
 }
 
@@ -205,10 +203,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error('[Portfolio History API] POST error', error);
-    return NextResponse.json(
-      { error: 'Failed to record snapshot', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio snapshot');
   }
 }
 
@@ -247,9 +242,6 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     logger.error('[Portfolio History API] DELETE error', error);
-    return NextResponse.json(
-      { error: 'Failed to clear history', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio history clear');
   }
 }

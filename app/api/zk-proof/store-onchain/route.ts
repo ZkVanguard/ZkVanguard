@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,11 +52,14 @@ export async function POST(request: NextRequest) {
 
     const lowered = errorMessage.toLowerCase();
     const isUserRecoverable = lowered.includes('balance') || lowered.includes('wallet') || lowered.includes('allowance');
-    const status = isUserRecoverable ? 400 : 500;
     
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status }
-    );
+    if (isUserRecoverable) {
+      return NextResponse.json(
+        { success: false, error: errorMessage },
+        { status: 400 }
+      );
+    }
+
+    return safeErrorResponse(error, 'ZK on-chain storage');
   }
 }

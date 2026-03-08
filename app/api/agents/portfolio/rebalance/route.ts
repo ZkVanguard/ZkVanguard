@@ -9,6 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateRebalanceProof } from '@/lib/api/zk';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +20,14 @@ export const dynamic = 'force-dynamic';
  * POST - Execute portfolio rebalancing
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = mutationLimiter.check(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  // Auth - require wallet auth and verify ownership
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { 
@@ -33,6 +44,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'portfolioId and walletAddress required' },
         { status: 400 }
+      );
+    }
+
+    // Verify caller owns this wallet
+    if (authResult.identity?.toLowerCase() !== walletAddress?.toLowerCase()) {
+      return NextResponse.json(
+        { success: false, error: 'Wallet address mismatch' },
+        { status: 403 }
       );
     }
 
@@ -69,15 +88,7 @@ export async function POST(request: NextRequest) {
         proofHash: zkProofResult.proof.proof_hash,
       });
     } catch (error) {
-      logger.error('[Rebalance] ZK proof generation failed', {
-        error: error instanceof Error ? error.message : error,
-      });
-
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to generate ZK proof',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      }, { status: 500 });
+      return safeErrorResponse(error, 'ZK proof generation for rebalance');
     }
 
     // In a real implementation, this would call the RWAManager contract:
@@ -110,16 +121,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('[Rebalance] API error', {
-      error: error instanceof Error ? error.message : error,
-    });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio rebalance');
   }
 }

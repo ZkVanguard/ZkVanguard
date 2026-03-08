@@ -31,6 +31,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { upsertOnChainHedge } from '@/lib/db/hedges';
@@ -55,9 +56,10 @@ const getAddresses = () => {
 
 // PRIVACY: Dedicated relayer wallet — user's address NEVER touches the chain
 // The relayer holds its own USDC pool and pays gas, acting as a privacy shield
-const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY;
-if (!RELAYER_PK) {
-  throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+function getRelayerKey(): string {
+  const key = process.env.RELAYER_PRIVATE_KEY;
+  if (!key) throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+  return key;
 }
 
 // Deployer wallet — OWNER of MockMoonlander (needed for setMockPrice calls)
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     const tp = getCronosProvider(rpcUrl);
     const provider = tp.provider;
-    const relayer = new ethers.Wallet(RELAYER_PK, provider);
+    const relayer = new ethers.Wallet(getRelayerKey(), provider);
     const contract = new ethers.Contract(hedgeExecutor, HEDGE_EXECUTOR_ABI, relayer);
     const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, relayer);
 
@@ -358,13 +360,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('x402 Gasless open error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to open hedge gaslessly',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Gasless hedge open');
   }
 }
 

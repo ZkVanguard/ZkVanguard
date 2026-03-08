@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // ============================================================================
 // Response Cache - prevents redundant AI processing for same predictions
@@ -748,10 +749,7 @@ Return ONLY valid JSON.`,
     return NextResponse.json(response);
   } catch (error) {
     console.error('Insight summary error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate insight summary', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Insight summary');
   }
 }
 

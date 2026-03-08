@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOasisPortfolioManager } from '@/lib/services/OasisPortfolioManager';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
@@ -74,13 +75,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error('[OasisPortfolioAPI] Error', { error: String(error) });
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        chain: 'oasis-sapphire',
-      },
-      { status: 500 },
-    );
+    return safeErrorResponse(error, 'Oasis portfolio');
   }
 }

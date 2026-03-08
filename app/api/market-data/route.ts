@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataMCPClient } from '@/lib/services/market-data-mcp';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -47,13 +48,7 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error('Market data fetch failed:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to fetch market data',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Market data fetch');
   }
 }
 
@@ -120,12 +115,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Market data operation failed:', error);
-    return NextResponse.json(
-      { 
-        error: 'Market data operation failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Market data operation');
   }
 }

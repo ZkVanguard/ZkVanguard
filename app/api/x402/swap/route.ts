@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -113,10 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
     });
   } catch (error) {
     logger.error('[x402/swap] Error:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'X402 swap') as NextResponse<SwapResponse>;
   }
 }
 
@@ -246,10 +244,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   } catch (error) {
     logger.error('[x402/swap] Quote error:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to get quote' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'X402 swap quote');
   }
 }
 

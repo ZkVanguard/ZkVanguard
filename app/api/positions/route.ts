@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { readLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -11,6 +14,14 @@ const positionsCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 30000; // 30 seconds
 
 export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = readLimiter.check(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  // Auth
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get('address');
@@ -103,10 +114,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    logger.error('[Positions API] Error', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch positions', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Positions fetch');
   }
 }

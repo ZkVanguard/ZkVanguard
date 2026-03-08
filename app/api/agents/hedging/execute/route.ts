@@ -16,6 +16,7 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
     const body: HedgeExecutionRequest = await request.json();
 
     // Authentication: require internal service token, system secret, or wallet signature
-    const authResult = await requireAuth(request, body as Record<string, unknown>);
+    const authResult = await requireAuth(request, body as unknown as Record<string, unknown>);
     if (authResult instanceof NextResponse) return authResult;
 
     const { 
@@ -985,13 +986,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.error('❌ Hedge execution failed', { error });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error during hedge execution',
-        simulationMode: true,
-      } satisfies Partial<HedgeExecutionResponse>,
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Hedge execution');
   }
 }

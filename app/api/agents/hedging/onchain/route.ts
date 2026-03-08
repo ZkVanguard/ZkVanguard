@@ -18,6 +18,7 @@ import { getCronosProvider } from '@/lib/throttled-provider';
 import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes, resyncOnChainHedge } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // Live price sync v2
@@ -773,13 +774,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('On-chain hedge fetch error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch on-chain hedges',
-        source: 'on-chain',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'On-chain hedge fetch');
   }
 }

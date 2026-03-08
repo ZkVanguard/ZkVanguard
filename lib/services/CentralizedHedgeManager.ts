@@ -131,6 +131,11 @@ export class CentralizedHedgeManager {
   private static instance: CentralizedHedgeManager | null = null;
   private lastCycleResult: CycleResult | null = null;
   private lastSnapshot: MarketSnapshot | null = null;
+  /** Prevents concurrent cycle execution (race condition guard) */
+  private cycleRunning = false;
+  /** Track recently created hedges to prevent duplicates within a cycle */
+  private recentHedgeKeys = new Set<string>();
+  private recentHedgeKeysTTL: number = 0;
 
   static getInstance(): CentralizedHedgeManager {
     if (!CentralizedHedgeManager.instance) {
@@ -300,7 +305,7 @@ export class CentralizedHedgeManager {
     // Get pool state from DB for allocation amounts (no price fetch)
     let allocationsFromDB: Record<string, { amount: number; percentage: number }> = {};
     try {
-      const { getPoolState } = await import('@/lib/db/community-pool');
+      const { getPoolState } = await import('@/lib/storage/community-pool-storage');
       const poolState = await getPoolState();
       for (const [asset, alloc] of Object.entries(poolState.allocations)) {
         allocationsFromDB[asset] = { 
@@ -524,16 +529,32 @@ export class CentralizedHedgeManager {
   assessPortfolioRisk(ctx: PortfolioContext, snapshot: MarketSnapshot): RiskAssessment {
     const { positions, totalValue, portfolioId, isCommunityPool, poolStats } = ctx;
 
+    // Guard: if totalValue is zero or invalid, skip assessment
+    if (!totalValue || !isFinite(totalValue) || totalValue <= 0) {
+      return {
+        portfolioId,
+        totalValue: 0,
+        drawdownPercent: 0,
+        volatility: 0,
+        riskScore: 0,
+        recommendations: [],
+        timestamp: Date.now(),
+      };
+    }
+
     // Calculate drawdown
     let drawdownPercent: number;
     if (isCommunityPool && poolStats) {
       // Community pool: share-price-based drawdown (more accurate)
-      drawdownPercent = poolStats.sharePrice < poolStats.peakSharePrice
+      drawdownPercent = poolStats.sharePrice < poolStats.peakSharePrice && poolStats.peakSharePrice > 0
         ? ((poolStats.peakSharePrice - poolStats.sharePrice) / poolStats.peakSharePrice) * 100
         : 0;
     } else {
       drawdownPercent = this.calculateDrawdown(positions, totalValue);
     }
+
+    // Clamp computed values to sane ranges
+    drawdownPercent = isFinite(drawdownPercent) ? Math.max(0, Math.min(drawdownPercent, 100)) : 0;
 
     const volatility = this.calculateVolatility(positions);
     const concentrationRisk = this.calculateConcentrationRisk(positions, totalValue);
@@ -598,6 +619,8 @@ export class CentralizedHedgeManager {
     for (const pos of positions) {
       if (hedgedAssets.has(pos.symbol)) continue;
       if (pos.value < CENTRAL_CONFIG.MIN_HEDGE_SIZE_USD) continue;
+      // Guard: skip positions with invalid values
+      if (!isFinite(pos.value) || !isFinite(pos.change24h)) continue;
 
       // ANY meaningful loss (≥1%) → hedge to protect
       if (pos.change24h < -1) {
@@ -618,15 +641,18 @@ export class CentralizedHedgeManager {
 
       // Concentrated positions (≥35%) → hedge
       const concentration = (pos.value / totalValue) * 100;
-      if (concentration > 35) {
-        recommendations.push({
-          asset: pos.symbol,
-          side: 'SHORT',
-          reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}% - reduce exposure`,
-          suggestedSize: pos.value * ((concentration - 25) / 100),
-          leverage: 2,
-          confidence: 0.75,
-        });
+      if (isFinite(concentration) && concentration > 35) {
+        const hedgeSize = pos.value * ((concentration - 25) / 100);
+        if (isFinite(hedgeSize) && hedgeSize > 0) {
+          recommendations.push({
+            asset: pos.symbol,
+            side: 'SHORT',
+            reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}% - reduce exposure`,
+            suggestedSize: hedgeSize,
+            leverage: 2,
+            confidence: 0.75,
+          });
+        }
       }
 
       // Portfolio drawdown + volatile assets → hedge
@@ -675,6 +701,13 @@ export class CentralizedHedgeManager {
         continue;
       }
 
+      // Dedup: prevent duplicate hedge for same portfolio+asset+side within a cycle
+      const dedupKey = `${ctx.portfolioId}:${rec.asset}:${rec.side}`;
+      if (this.recentHedgeKeys.has(dedupKey)) {
+        logger.warn('[CentralHedge] Duplicate hedge skipped', { dedupKey });
+        continue;
+      }
+
       // Validate price is recent (< 60s)
       const priceAge = Date.now() - snapshot.timestamp;
       if (priceAge > 60_000) {
@@ -688,6 +721,15 @@ export class CentralizedHedgeManager {
       const leverage = Math.min(rec.leverage, ctx.config.maxLeverage);
       const effectivePrice = rec.side === 'SHORT' ? snapshotPrice.bid : snapshotPrice.ask;
       const market = `${rec.asset}-USD-PERP`;
+
+      // Guard: validate computed values are sane
+      if (!isFinite(effectivePrice) || effectivePrice <= 0 || !isFinite(rec.suggestedSize) || rec.suggestedSize <= 0) {
+        logger.warn('[CentralHedge] Invalid price or size — skipping', {
+          asset: rec.asset, effectivePrice, suggestedSize: rec.suggestedSize,
+        });
+        executionFailed++;
+        continue;
+      }
 
       try {
         const orchestrator = getAgentOrchestrator();
@@ -733,6 +775,7 @@ export class CentralizedHedgeManager {
             size: rec.suggestedSize,
             price: effectivePrice,
           });
+          this.recentHedgeKeys.add(dedupKey);
           executed++;
         } else {
           // Orchestrator failed — fall through to simulation
@@ -874,6 +917,24 @@ export class CentralizedHedgeManager {
    * This replaces the serial per-portfolio approach.
    */
   async runCycle(configs: Map<number, AutoHedgeConfig>): Promise<CycleResult> {
+    // ── RACE CONDITION GUARD ──
+    if (this.cycleRunning) {
+      logger.warn('[CentralHedge] Cycle already running — skipping duplicate invocation');
+      throw new Error('Cycle already in progress');
+    }
+    this.cycleRunning = true;
+    // Reset dedup set at start of each cycle
+    this.recentHedgeKeys = new Set<string>();
+    this.recentHedgeKeysTTL = Date.now();
+
+    try {
+      return await this._runCycleInternal(configs);
+    } finally {
+      this.cycleRunning = false;
+    }
+  }
+
+  private async _runCycleInternal(configs: Map<number, AutoHedgeConfig>): Promise<CycleResult> {
     const cycleStart = Date.now();
 
     logger.info('[CentralHedge] ═══ Starting centralized assessment cycle ═══', {

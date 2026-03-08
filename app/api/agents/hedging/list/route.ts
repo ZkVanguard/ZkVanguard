@@ -1,11 +1,15 @@
 /**
  * Get Hedges from PostgreSQL Database
  * API endpoint for fetching hedge positions
+ * SECURITY: Rate-limited. Auth required to view hedges.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllHedges, getActiveHedges, getHedgeStats, getActiveHedgesByWallet, getAllHedgesByWallet } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { readLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +25,13 @@ export const dynamic = 'force-dynamic';
  * - limit: Number of results (default: 50)
  */
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
+  // Require auth to view hedge data
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const portfolioId = searchParams.get('portfolioId');
@@ -62,14 +73,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('❌ Failed to fetch hedges', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch hedges',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'hedging/list');
   }
 }

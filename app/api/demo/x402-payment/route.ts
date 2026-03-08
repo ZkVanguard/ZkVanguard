@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
+import { ethers } from 'ethers';
+
+const MAX_AMOUNT = 100_000; // $100k max per demo settlement
+const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
 /**
  * x402 Facilitator Gasless Payment API
- * TRUE GASLESS via @crypto.com/facilitator-client SDK
- * Executes real gasless transfer via SettlementAgent + x402 (NO GAS COSTS!)
+ * SECURITY: Requires authentication + rate limiting. Disabled in production.
  */
 export async function POST(request: NextRequest) {
+  // SECURITY: Block in production — demo routes must not execute real settlements
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { success: false, error: 'Demo endpoints are disabled in production' },
+      { status: 403 }
+    );
+  }
+
+  // Rate limit
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
+  // Require authentication
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { 
@@ -17,17 +39,29 @@ export async function POST(request: NextRequest) {
       priority = 'HIGH'
     } = body;
 
-    if (!beneficiary) {
+    // Input validation
+    if (!beneficiary || !ethers.isAddress(beneficiary)) {
       return NextResponse.json(
-        { error: 'Beneficiary address is required' },
+        { success: false, error: 'Valid beneficiary address is required' },
+        { status: 400 }
+      );
+    }
+    const numAmount = parseFloat(amount);
+    if (!isFinite(numAmount) || numAmount <= 0 || numAmount > MAX_AMOUNT) {
+      return NextResponse.json(
+        { success: false, error: `Amount must be between 0 and ${MAX_AMOUNT}` },
+        { status: 400 }
+      );
+    }
+    if (!VALID_PRIORITIES.includes(priority as typeof VALID_PRIORITIES[number])) {
+      return NextResponse.json(
+        { success: false, error: `Priority must be one of: ${VALID_PRIORITIES.join(', ')}` },
         { status: 400 }
       );
     }
 
     const orchestrator = getAgentOrchestrator();
     
-    // Execute TRUE gasless settlement via x402 Facilitator
-    // NO GAS COSTS - x402 handles everything!
     const result = await orchestrator.executeSettlement({
       portfolioId: 'demo-portfolio',
       beneficiary,
@@ -54,41 +88,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { 
+        success: false,
         error: 'Settlement failed',
-        details: result.error 
       },
       { status: 500 }
     );
   } catch (error) {
-    console.error('x402 gasless payment failed:', error);
-    
-    // Return demo data on error (for hackathon demo)
-    const requestId = `settlement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    return NextResponse.json({
-      success: true,
-      settlement: {
-        requestId,
-        status: 'COMPLETED',
-        beneficiary: 'demo-beneficiary',
-        amount: '100',
-        token: '0x0000000000000000000000000000000000000000',
-        purpose: 'x402 gasless payment',
-        gasCost: '$0.00',
-        x402TransactionId: `x402-${Date.now()}`,
-        zkProofHash: `0x${Math.random().toString(16).substr(2, 64)}`,
-        processedAt: Date.now(),
-      },
-      agentId: 'settlement-agent-001',
-      executionTime: 856,
-      x402Powered: true,
-      gasless: true,
-      gasCost: '$0.00',
-      zkProofGenerated: true,
-      live: false,
-      demoMode: true,
-      timestamp: new Date().toISOString(),
-      note: 'Demo mode - x402 Facilitator SDK handles gas costs',
-    });
+    return safeErrorResponse(error, 'demo/x402-payment');
   }
 }
 

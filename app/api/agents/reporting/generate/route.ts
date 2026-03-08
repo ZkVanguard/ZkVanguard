@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 /**
  * Portfolio Reporting API Route
@@ -50,9 +51,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error('Report generation failed', error);
-    return NextResponse.json(
-      { error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Report generation');
   }
 }

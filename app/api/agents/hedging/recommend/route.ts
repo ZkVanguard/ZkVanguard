@@ -6,6 +6,9 @@ import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Import the multi-agent system
 import { LeadAgent } from '@/agents/core/LeadAgent';
@@ -74,6 +77,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
+  // Rate limiting
+  const rateLimitResponse = heavyLimiter.check(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  // Auth
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { address } = body;
@@ -399,14 +410,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseData);
   } catch (error) {
-    logger.error('Multi-Agent hedge recommendation failed', { error });
-    return NextResponse.json(
-      { 
-        error: 'Failed to generate hedges', 
-        details: error instanceof Error ? error.message : 'Unknown error',
-        fallback: true,
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Multi-Agent hedge recommendation');
   }
 }

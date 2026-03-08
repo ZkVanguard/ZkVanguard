@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInstitutionalPortfolioManager } from '@/lib/services/InstitutionalPortfolioManager';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 /**
  * Institutional Portfolio API
@@ -60,13 +61,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error('Institutional portfolio API error', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to fetch institutional portfolio', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Institutional portfolio');
   }
 }
 
@@ -123,12 +118,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error('Institutional portfolio action error', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to execute action', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Institutional portfolio action');
   }
 }

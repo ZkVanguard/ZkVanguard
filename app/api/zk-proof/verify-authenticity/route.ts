@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 const ZK_API_URL = process.env.ZK_API_URL;
 
@@ -191,13 +192,6 @@ export async function GET(_request: NextRequest) {
 
   } catch (error: unknown) {
     console.error('Authenticity verification error:', error);
-    return NextResponse.json(
-      { 
-        authentic: false,
-        error: error instanceof Error ? error.message : String(error),
-        hint: 'Make sure ZK backend is running on localhost:8000'
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'ZK authenticity verification');
   }
 }

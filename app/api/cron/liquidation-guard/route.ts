@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Types
 interface LeveragedPosition {
@@ -475,20 +476,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<Liquidatio
     
   } catch (error: any) {
     logger.error('[LiquidationGuard] Error:', error);
-    return NextResponse.json({
-      success: false,
-      positionsChecked: 0,
-      actionsExecuted: [],
-      summary: {
-        criticalCount: 0,
-        warningCount: 0,
-        healthyCount: 0,
-        totalCollateralAtRisk: 0,
-        averageMarginLevel: 0,
-      },
-      duration: Date.now() - startTime,
-      error: error.message,
-    }, { status: 500 });
+    return safeErrorResponse(error, 'Liquidation guard') as NextResponse<LiquidationGuardResult>;
   }
 }
 

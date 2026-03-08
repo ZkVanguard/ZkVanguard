@@ -2,6 +2,8 @@
  * Chat API Route - LLM-powered conversational interface with AI Agent orchestration
  * Supports both standard and streaming responses
  * Routes requests through LeadAgent for intelligent decision-making
+ * 
+ * SECURITY: Requires wallet auth for agent operations. Rate-limited.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,15 +11,19 @@ import { llmProvider } from '@/lib/ai/llm-provider';
 import { logger } from '@/lib/utils/logger';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { getPortfolioData } from '@/lib/services/portfolio-actions';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// CORS headers for all responses
+// SECURITY: Restrict CORS to our own domain only
+const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || 'https://zkvanguard.vercel.app';
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-wallet-address, x-wallet-signature, x-wallet-message',
 };
 
 /**
@@ -80,6 +86,14 @@ async function shouldUseAgents(message: string): Promise<boolean> {
  * Generate LLM response for user message, routing through agents when appropriate
  */
 export async function POST(request: NextRequest) {
+  // Rate limit — chat is computationally heavy (LLM + agents)
+  const limited = heavyLimiter.check(request);
+  if (limited) return limited;
+
+  // SECURITY: Require auth for chat — it can execute real hedges via LeadAgent
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { message, conversationId = 'default', context, stream = false } = body;
@@ -182,14 +196,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Chat API error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to process chat request',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'chat');
   }
 }
 

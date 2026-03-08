@@ -188,7 +188,7 @@ export class HedgingAgent extends BaseAgent {
     return {
       price: mcpData.price,
       priceChange24h: mcpData.priceChange24h ?? 0,
-      volume24h: mcpData.volume24h,
+      volume24h: mcpData.volume24h ?? 0,
     };
   }
   

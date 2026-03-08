@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { bluefinService, mockBluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/BluefinService';
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,10 +84,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     logger.error('BlueFin GET failed', error instanceof Error ? error : undefined);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    return safeErrorResponse(error, 'BlueFin market data');
   }
 }
 
@@ -231,10 +229,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     logger.error('BlueFin POST failed', error instanceof Error ? error : undefined);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    return safeErrorResponse(error, 'BlueFin hedge open');
   }
 }
 
@@ -303,9 +298,6 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     logger.error('BlueFin DELETE failed', error instanceof Error ? error : undefined);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    return safeErrorResponse(error, 'BlueFin hedge close');
   }
 }

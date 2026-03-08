@@ -1,12 +1,16 @@
 /**
  * Get Real-time Hedge PnL
  * API endpoint for fetching current profit/loss on active hedges using real market data
+ * SECURITY: GET requires auth + rate limit. POST (manual trigger) requires admin auth.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
 import { getActiveHedges, getHedgeByOrderId, getActiveHedgesByWallet } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
+import { readLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +26,12 @@ export const dynamic = 'force-dynamic';
  * - summary: Get portfolio summary (optional)
  */
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const orderId = searchParams.get('orderId');
@@ -98,23 +108,23 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('❌ Failed to fetch hedge PnL', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch PnL',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'hedging/pnl GET');
   }
 }
 
 /**
  * POST /api/agents/hedging/pnl
  * Manually trigger PnL update for all active hedges
+ * SECURITY: Admin-only — triggers global update for all hedges
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const limited = heavyLimiter.check(request);
+  if (limited) return limited;
+
+  // SECURITY: Admin-only — this updates ALL hedges globally
+  const adminCheck = requireAdminAuth(request);
+  if (adminCheck !== true) return adminCheck;
+
   try {
     logger.info('🔄 Manual PnL update triggered');
 
@@ -127,14 +137,6 @@ export async function POST() {
     });
 
   } catch (error) {
-    logger.error('❌ Manual PnL update failed', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'PnL update failed',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'hedging/pnl POST');
   }
 }
