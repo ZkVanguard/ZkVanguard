@@ -348,9 +348,9 @@ export async function updateHedgeStatus(
   // Try to update by order_id first, then by hedge_id_onchain
   const sql = `
     UPDATE hedges 
-    SET status = $1, 
+    SET status = $1::varchar, 
         updated_at = CURRENT_TIMESTAMP,
-        closed_at = CASE WHEN $1 IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END
+        closed_at = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END
     WHERE order_id = $2 OR hedge_id_onchain = $2
   `;
   await query(sql, [status, hedgeIdOrOrderId]);
