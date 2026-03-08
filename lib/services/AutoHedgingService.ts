@@ -18,6 +18,7 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getMarketDataService } from './RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
+import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from './CommunityPoolService';
 
 // Configuration
@@ -386,8 +387,8 @@ class AutoHedgingService {
    * Fetches positions, allocations, risk metrics, and active hedges
    */
   async assessPortfolioRisk(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
-    // Special handling for CommunityPool (portfolioId = 0)
-    if (portfolioId === 0) {
+    // Special handling for CommunityPool (portfolioId = COMMUNITY_POOL_PORTFOLIO_ID)
+    if (isCommunityPoolPortfolio(portfolioId)) {
       return this.assessCommunityPoolRisk();
     }
 
@@ -581,8 +582,8 @@ class AutoHedgingService {
         const hedgesResult = await query(
           `SELECT asset, side, size, notional_value
            FROM hedges
-           WHERE portfolio_id = 0 AND status = 'active'`,
-          []
+           WHERE portfolio_id = $1 AND status = 'active'`,
+          [COMMUNITY_POOL_PORTFOLIO_ID]
         );
 
         activeHedges = hedgesResult.map(h => ({
@@ -623,7 +624,7 @@ class AutoHedgingService {
       });
 
       return {
-        portfolioId: 0,
+        portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
         totalValue: marketNAV,
         drawdownPercent,
         volatility,
@@ -634,7 +635,7 @@ class AutoHedgingService {
     } catch (error) {
       logger.error('[AutoHedging] CommunityPool risk assessment failed', { error });
       return {
-        portfolioId: 0,
+        portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
         totalValue: 0,
         drawdownPercent: 0,
         volatility: 0,

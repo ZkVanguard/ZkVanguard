@@ -449,6 +449,7 @@ export async function POST(request: NextRequest) {
             commitmentHash: result.commitmentHash,
             proxyWallet,
             walletAddress: walletAddress || signer.address,
+            portfolioId: body.portfolioId,  // Preserve portfolio_id (-1 = community pool, 0+ = user)
           });
           logger.info('💾 On-chain hedge saved to DB (DB-first cache)', { hedgeId: result.hedgeId.slice(0, 18) });
         } catch (dbErr) {
