@@ -1,5 +1,5 @@
 /**
- * Vercel Cron Job: Hedge Position Monitor
+ * Cron Job: Hedge Position Monitor
  * 
  * Monitors all active hedge positions and executes:
  * - Stop-loss orders when price hits threshold
@@ -7,14 +7,14 @@
  * - Trailing stop updates on profitable moves
  * - Emergency closes on extreme volatility
  * 
- * Schedule: Every 15 minutes
- * Configured in: vercel.json
+ * Schedule: Every 15 minutes via Upstash QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 
 // Types
 interface ActiveHedge {
@@ -371,11 +371,9 @@ async function monitorHedges(): Promise<HedgeMonitorResult['actionsExecuted'] & 
 export async function GET(request: NextRequest): Promise<NextResponse<HedgeMonitorResult>> {
   const startTime = Date.now();
   
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'HedgeMonitor');
+  if (authResult !== true) {
     return NextResponse.json(
       { success: false, hedgesChecked: 0, actionsExecuted: { stopLossTriggered: [], takeProfitTriggered: [], trailingStopUpdated: [], emergencyCloses: [] }, summary: { totalPnl: 0, totalPnlPercent: 0, criticalCount: 0, healthyCount: 0 }, duration: Date.now() - startTime, error: 'Unauthorized' },
       { status: 401 }

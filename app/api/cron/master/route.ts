@@ -1,8 +1,7 @@
 /**
- * Vercel Cron Job: Master Orchestrator
+ * QStash Cron Job: Master Orchestrator
  * 
- * Vercel Hobby plan allows only 2 cron jobs at daily frequency.
- * This master endpoint chains ALL cron tasks in a single invocation:
+ * Chains ALL cron tasks in a single invocation:
  * 
  * 1. Community Pool snapshot & AI management
  * 2. Pool NAV monitoring & drawdown alerts
@@ -10,14 +9,14 @@
  * 4. Hedge position monitoring (stop-loss, take-profit, trailing stops)
  * 5. Liquidation guard for leveraged positions
  * 
- * Schedule: Twice daily (00:00 & 12:00 UTC) via 2 Vercel cron slots
- * This maximizes the Vercel Hobby tier (2 cron jobs × 1/day = 2 runs/day).
+ * Schedule: Every 5 minutes via Upstash QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET for internal calls
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 
 interface SubCronResult {
   name: string;
@@ -93,12 +92,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
   const startTime = Date.now();
   const ranAt = new Date().toISOString();
   
-  // Security: Verify CRON_SECRET
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    logger.warn('[MasterCron] Unauthorized request');
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'MasterCron');
+  if (authResult !== true) {
     return NextResponse.json(
       { 
         success: false, 
@@ -110,6 +106,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
       { status: 401 }
     );
   }
+  const cronSecret = process.env.CRON_SECRET?.trim() || '';
   
   logger.info('[MasterCron] ═══════════════════════════════════════');
   logger.info('[MasterCron] Starting master cron orchestration');

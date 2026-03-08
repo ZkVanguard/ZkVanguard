@@ -1,5 +1,5 @@
 /**
- * Vercel Cron Job: Liquidation Risk Monitor
+ * Cron Job: Liquidation Risk Monitor
  * 
  * Monitors all leveraged positions for liquidation risk and executes:
  * - Add collateral when margin level drops below threshold
@@ -7,14 +7,14 @@
  * - Emergency close before liquidation
  * - Alert generation for critical positions
  * 
- * Schedule: Every 5 minutes
- * Configured in: vercel.json
+ * Schedule: Every 10 minutes via Upstash QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 
 // Types
 interface LeveragedPosition {
@@ -442,11 +442,9 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
 export async function GET(request: NextRequest): Promise<NextResponse<LiquidationGuardResult>> {
   const startTime = Date.now();
   
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'LiquidationGuard');
+  if (authResult !== true) {
     return NextResponse.json(
       { success: false, positionsChecked: 0, actionsExecuted: [], summary: { criticalCount: 0, warningCount: 0, healthyCount: 0, totalCollateralAtRisk: 0, averageMarginLevel: 0 }, duration: Date.now() - startTime, error: 'Unauthorized' },
       { status: 401 }

@@ -1,5 +1,5 @@
 /**
- * Vercel Cron Job: Pool NAV Monitor
+ * Cron Job: Pool NAV Monitor
  * 
  * Monitors all investment pools (Community Pool, institutional pools) and:
  * - Tracks NAV changes and performance
@@ -8,14 +8,14 @@
  * - Triggers rebalancing on allocation drift
  * - Notifies stakeholders on critical events
  * 
- * Schedule: Every hour
- * Configured in: vercel.json
+ * Schedule: Every 15 minutes via Upstash QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
@@ -663,11 +663,9 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
 export async function GET(request: NextRequest): Promise<NextResponse<PoolMonitorResult>> {
   const startTime = Date.now();
   
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'PoolNAVMonitor');
+  if (authResult !== true) {
     return NextResponse.json(
       { success: false, poolsChecked: 0, pools: [], alerts: [], summary: { totalAUM: 0, avgReturns: 0, criticalPools: 0, healthyPools: 0 }, duration: Date.now() - startTime, error: 'Unauthorized' },
       { status: 401 }
