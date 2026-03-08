@@ -563,14 +563,14 @@ class AutoHedgingService {
         timestamp: Date.now(),
       };
     } catch (error) {
-      logger.error('[AutoHedging] Risk assessment error', { portfolioId, error });
-      // Return safe default
+      logger.error('[AutoHedging] Risk assessment error — treating as elevated risk', { portfolioId, error });
+      // Unknown state = elevated risk, not safe default
       return {
         portfolioId,
         totalValue: 0,
         drawdownPercent: 0,
         volatility: 0,
-        riskScore: 1,
+        riskScore: 4,
         recommendations: [],
         timestamp: Date.now(),
       };
@@ -660,15 +660,20 @@ class AutoHedgingService {
       const volatility = this.calculateVolatility(positions);
       const concentrationRisk = this.calculateConcentrationRisk(positions, marketNAV);
 
-      // Calculate risk score (more conservative thresholds for community funds)
+      // Calculate risk score — AGGRESSIVE thresholds for community funds
+      // Any loss in a community pool should trigger protective hedging
       let riskScore = 1;
-      if (drawdownPercent > 1) riskScore += 1;
-      if (drawdownPercent > 3) riskScore += 2;
-      if (drawdownPercent > 7) riskScore += 2;
-      if (volatility > 2) riskScore += 1;
-      if (volatility > 4) riskScore += 1;
-      if (concentrationRisk > 35) riskScore += 2;
-      if (concentrationRisk > 50) riskScore += 1;
+      if (drawdownPercent > 0.5) riskScore += 1;  // Even small losses matter
+      if (drawdownPercent > 1.5) riskScore += 2;  // Moderate loss → high alert
+      if (drawdownPercent > 4) riskScore += 2;    // Significant loss → critical
+      if (drawdownPercent > 8) riskScore += 1;    // Severe loss → maximum
+      if (volatility > 1.5) riskScore += 1;       // Lower vol threshold
+      if (volatility > 3) riskScore += 1;         // High volatility
+      if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
+      if (concentrationRisk > 45) riskScore += 1; // High concentration
+      // Any negative 24h change across positions adds risk
+      const anyNegative = positions.some(p => p.change24h < -1);
+      if (anyNegative) riskScore += 1;
       riskScore = Math.min(riskScore, 10);
 
       // Fetch active hedges for community pool (gracefully handle DB unavailability)
@@ -728,13 +733,15 @@ class AutoHedgingService {
         timestamp: Date.now(),
       };
     } catch (error) {
-      logger.error('[AutoHedging] CommunityPool risk assessment failed', { error });
+      logger.error('[AutoHedging] CommunityPool risk assessment failed — treating as ELEVATED risk', { error });
+      // CRITICAL: Unknown state = elevated risk, NOT safe default
+      // If we can't assess the pool, assume something is wrong
       return {
         portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
         totalValue: 0,
         drawdownPercent: 0,
         volatility: 0,
-        riskScore: 1,
+        riskScore: 5, // Elevated — triggers investigation
         recommendations: [],
         timestamp: Date.now(),
       };
@@ -935,7 +942,7 @@ class AutoHedgingService {
     const recommendations: HedgeRecommendation[] = [];
     const hedgedAssets = new Set(activeHedges.map(h => h.asset));
 
-    // Check each position for hedging needs
+    // Check each position for hedging needs — ANY loss triggers protection
     for (const pos of positions) {
       // Skip if already hedged
       if (hedgedAssets.has(pos.symbol)) continue;
@@ -943,40 +950,45 @@ class AutoHedgingService {
       // Skip if position too small
       if (pos.value < CONFIG.MIN_HEDGE_SIZE_USD) continue;
 
-      // Hedge assets with significant losses
-      if (pos.change24h < -3) {
+      // Hedge assets with ANY meaningful loss (>1%)
+      if (pos.change24h < -1) {
+        const absChange = Math.abs(pos.change24h);
+        // Scale hedge size: 1-3% loss → 20-30% of position, 3-10% → 30-50%
+        const hedgeRatio = Math.min(0.5, 0.15 + absChange / 15);
+        // Higher confidence for bigger losses — always above 0.7 for >1% loss
+        const confidence = Math.min(0.7 + absChange / 15, 0.95);
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
-          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}% (24h) - protect against further losses`,
-          suggestedSize: pos.value * Math.min(0.5, Math.abs(pos.change24h) / 10), // Scale with loss
+          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}% (24h) - auto-protect against further losses`,
+          suggestedSize: pos.value * hedgeRatio,
           leverage: CONFIG.DEFAULT_LEVERAGE,
-          confidence: Math.min(0.6 + Math.abs(pos.change24h) / 20, 0.95),
+          confidence,
         });
       }
 
-      // Hedge concentrated positions
+      // Hedge concentrated positions (>35% of portfolio)
       const concentration = (pos.value / totalValue) * 100;
-      if (concentration > CONFIG.MAX_ASSET_CONCENTRATION_PERCENT) {
+      if (concentration > 35) {
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
           reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}% - reduce exposure`,
-          suggestedSize: pos.value * ((concentration - 30) / 100),
+          suggestedSize: pos.value * ((concentration - 25) / 100),
           leverage: 2,
           confidence: 0.75,
         });
       }
 
-      // Hedge volatile assets during high portfolio drawdown
-      if (drawdownPercent > 5 && Math.abs(pos.change24h) > 5) {
+      // Hedge volatile assets during portfolio drawdown (>2%)
+      if (drawdownPercent > 2 && Math.abs(pos.change24h) > 3) {
         recommendations.push({
           asset: pos.symbol,
-          side: pos.change24h < 0 ? 'SHORT' : 'SHORT', // Always hedge with short
-          reason: `High portfolio drawdown (${drawdownPercent.toFixed(1)}%) + ${pos.symbol} volatility`,
+          side: 'SHORT',
+          reason: `Portfolio drawdown (${drawdownPercent.toFixed(1)}%) + ${pos.symbol} volatility (${pos.change24h.toFixed(1)}%)`,
           suggestedSize: pos.value * 0.25,
           leverage: CONFIG.DEFAULT_LEVERAGE,
-          confidence: 0.7,
+          confidence: 0.75,
         });
       }
     }
@@ -1038,7 +1050,7 @@ class AutoHedgingService {
       });
 
       if (result.success) {
-        // Also record in our hedges table for tracking with real price
+        // Record in our hedges table for tracking with real price
         const orderId = `auto-hedge-${portfolioId}-${Date.now()}`;
         await createHedge({
           orderId,
@@ -1046,11 +1058,11 @@ class AutoHedgingService {
           asset: recommendation.asset,
           market,
           side: recommendation.side,
-          size: recommendation.suggestedSize / 1000, // Convert to contract size
+          size: recommendation.suggestedSize / 1000,
           notionalValue: recommendation.suggestedSize,
           leverage,
-          entryPrice: priceContext.effectivePrice, // Use validated price
-          simulationMode: false, // Real hedge
+          entryPrice: priceContext.effectivePrice,
+          simulationMode: false,
           reason: `[AUTO] ${recommendation.reason}`,
           metadata: {
             confidence: recommendation.confidence,
@@ -1073,14 +1085,52 @@ class AutoHedgingService {
         });
         return true;
       } else {
-        logger.warn('[AutoHedging] Hedge execution failed', {
+        // Orchestrator failed — fall through to simulation fallback
+        logger.warn('[AutoHedging] Orchestrator execution failed, falling back to simulation', {
           error: result.error,
           asset: recommendation.asset,
         });
-        return false;
       }
     } catch (error) {
-      logger.error('[AutoHedging] Hedge execution error', { error, recommendation });
+      logger.warn('[AutoHedging] Live execution failed, falling back to simulation', { error });
+    }
+
+    // ═══ SIMULATION FALLBACK ═══
+    // When the exchange API is unavailable (Moonlander offline, no API keys, etc.),
+    // record the hedge as a simulation so the system still tracks intended hedges.
+    // This ensures losses are never ignored just because the exchange is down.
+    try {
+      const orderId = `auto-sim-${portfolioId}-${Date.now()}`;
+      await createHedge({
+        orderId,
+        portfolioId,
+        asset: recommendation.asset,
+        market,
+        side: recommendation.side,
+        size: recommendation.suggestedSize / 1000,
+        notionalValue: recommendation.suggestedSize,
+        leverage,
+        entryPrice: priceContext.effectivePrice,
+        simulationMode: true,
+        reason: `[AUTO-SIM] ${recommendation.reason} (exchange unavailable)`,
+        metadata: {
+          confidence: recommendation.confidence,
+          simulationReason: 'exchange_unavailable',
+          priceAtDecision: priceContext.effectivePrice,
+          priceSource: priceContext.validation.priceSource,
+        },
+      });
+
+      logger.info('[AutoHedging] Simulation hedge recorded (exchange unavailable)', {
+        portfolioId,
+        asset: recommendation.asset,
+        side: recommendation.side,
+        size: recommendation.suggestedSize,
+        entryPrice: priceContext.effectivePrice,
+      });
+      return true;
+    } catch (simError) {
+      logger.error('[AutoHedging] Even simulation recording failed', { simError, recommendation });
       return false;
     }
   }
