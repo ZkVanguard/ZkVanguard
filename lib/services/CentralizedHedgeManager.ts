@@ -115,7 +115,7 @@ const CENTRAL_CONFIG = {
   DEFAULT_TAKE_PROFIT_PERCENT: 20,
   
   // Execution
-  MIN_CONFIDENCE_FOR_EXECUTION: 0.7,
+  MIN_CONFIDENCE_FOR_EXECUTION: 0.65,
   
   // Cronos Testnet
   RPC_URL: 'https://evm-t3.cronos.org',
@@ -541,14 +541,18 @@ export class CentralizedHedgeManager {
     // Risk score calculation — community pool uses tighter thresholds
     let riskScore = 1;
     if (isCommunityPool) {
-      // Conservative: community pool is shared money
-      if (drawdownPercent > 1) riskScore += 1;
-      if (drawdownPercent > 3) riskScore += 2;
-      if (drawdownPercent > 7) riskScore += 2;
-      if (volatility > 2) riskScore += 1;
-      if (volatility > 4) riskScore += 1;
-      if (concentrationRisk > 35) riskScore += 2;
-      if (concentrationRisk > 50) riskScore += 1;
+      // AGGRESSIVE: community pool is shared money — any loss triggers action
+      if (drawdownPercent > 0.5) riskScore += 1;  // Even small losses matter
+      if (drawdownPercent > 1.5) riskScore += 2;  // Moderate loss → high alert
+      if (drawdownPercent > 4) riskScore += 2;    // Significant loss → critical
+      if (drawdownPercent > 8) riskScore += 1;    // Severe loss → maximum
+      if (volatility > 1.5) riskScore += 1;       // Lower vol threshold
+      if (volatility > 3) riskScore += 1;         // High volatility
+      if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
+      if (concentrationRisk > 45) riskScore += 1; // High concentration
+      // Any negative 24h change across positions adds risk
+      const anyNegative = positions.some(p => p.change24h < -1);
+      if (anyNegative) riskScore += 1;
     } else {
       // Standard user portfolio thresholds
       if (drawdownPercent > 2) riskScore += 1;
@@ -595,40 +599,45 @@ export class CentralizedHedgeManager {
       if (hedgedAssets.has(pos.symbol)) continue;
       if (pos.value < CENTRAL_CONFIG.MIN_HEDGE_SIZE_USD) continue;
 
-      // Significant loss → hedge
-      if (pos.change24h < -3) {
+      // ANY meaningful loss (≥1%) → hedge to protect
+      if (pos.change24h < -1) {
+        const absChange = Math.abs(pos.change24h);
+        // Scale hedge size: 1-3% loss → 20-30%, 3-10% → 30-50%
+        const hedgeRatio = Math.min(0.5, 0.15 + absChange / 15);
+        // Confidence always ≥0.7 for losses >1%
+        const confidence = Math.min(0.7 + absChange / 15, 0.95);
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
-          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}% (24h) - protect against further losses`,
-          suggestedSize: pos.value * Math.min(0.5, Math.abs(pos.change24h) / 10),
+          reason: `${pos.symbol} down ${pos.change24h.toFixed(2)}% (24h) - auto-protect against further losses`,
+          suggestedSize: pos.value * hedgeRatio,
           leverage: CENTRAL_CONFIG.DEFAULT_LEVERAGE,
-          confidence: Math.min(0.6 + Math.abs(pos.change24h) / 20, 0.95),
+          confidence,
         });
       }
 
-      // Over-concentrated → hedge
+      // Concentrated positions (≥35%) → hedge
       const concentration = (pos.value / totalValue) * 100;
-      if (concentration > CENTRAL_CONFIG.MAX_ASSET_CONCENTRATION_PERCENT) {
+      if (concentration > 35) {
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
           reason: `${pos.symbol} concentration at ${concentration.toFixed(1)}% - reduce exposure`,
-          suggestedSize: pos.value * ((concentration - 30) / 100),
+          suggestedSize: pos.value * ((concentration - 25) / 100),
           leverage: 2,
           confidence: 0.75,
         });
       }
 
-      // High drawdown + volatile assets → hedge
-      if (drawdownPercent > 5 && Math.abs(pos.change24h) > 5) {
+      // Portfolio drawdown + volatile assets → hedge
+      if (drawdownPercent > 2 && Math.abs(pos.change24h) > 3) {
         recommendations.push({
           asset: pos.symbol,
           side: 'SHORT',
-          reason: `High portfolio drawdown (${drawdownPercent.toFixed(1)}%) + ${pos.symbol} volatility`,
+          reason: `Portfolio drawdown (${drawdownPercent.toFixed(1)}%) + ${pos.symbol} volatility (${pos.change24h.toFixed(1)}%)`,
           suggestedSize: pos.value * 0.25,
           leverage: CENTRAL_CONFIG.DEFAULT_LEVERAGE,
-          confidence: 0.7,
+          confidence: 0.75,
         });
       }
     }
@@ -726,15 +735,69 @@ export class CentralizedHedgeManager {
           });
           executed++;
         } else {
-          executionFailed++;
+          // Orchestrator failed — fall through to simulation
+          logger.warn('[CentralHedge] Orchestrator failed, recording simulation hedge', {
+            asset: rec.asset, error: result.error,
+          });
+          await this.recordSimulationHedge(ctx, rec, effectivePrice, snapshot, 'orchestrator_failed');
+          executed++;
         }
       } catch (error) {
-        logger.error('[CentralHedge] Hedge execution error', { error, asset: rec.asset });
-        executionFailed++;
+        logger.warn('[CentralHedge] Live execution failed, recording simulation hedge', { error, asset: rec.asset });
+        try {
+          await this.recordSimulationHedge(ctx, rec, effectivePrice, snapshot, 'execution_error');
+          executed++;
+        } catch (simError) {
+          logger.error('[CentralHedge] Even simulation recording failed', { simError });
+          executionFailed++;
+        }
       }
     }
 
     return { executed, failed: executionFailed };
+  }
+
+  /**
+   * Record a simulation hedge when the exchange is unavailable.
+   * This ensures losses are never ignored just because the exchange is down.
+   */
+  private async recordSimulationHedge(
+    ctx: PortfolioContext,
+    rec: HedgeRecommendation,
+    effectivePrice: number,
+    snapshot: MarketSnapshot,
+    reason: string
+  ): Promise<void> {
+    const orderId = `auto-sim-${ctx.portfolioId}-${Date.now()}`;
+    const market = `${rec.asset}-USD-PERP`;
+    await createHedge({
+      orderId,
+      portfolioId: ctx.portfolioId,
+      walletAddress: ctx.walletAddress,
+      asset: rec.asset,
+      market,
+      side: rec.side,
+      size: rec.suggestedSize / 1000,
+      notionalValue: rec.suggestedSize,
+      leverage: Math.min(rec.leverage, ctx.config.maxLeverage),
+      entryPrice: effectivePrice,
+      simulationMode: true,
+      reason: `[AUTO-SIM] ${rec.reason} (${reason})`,
+      metadata: {
+        confidence: rec.confidence,
+        simulationReason: reason,
+        snapshotSource: snapshot.source,
+        snapshotTimestamp: snapshot.timestamp,
+        priceAtDecision: effectivePrice,
+      },
+    });
+    logger.info('[CentralHedge] Simulation hedge recorded', {
+      portfolioId: ctx.portfolioId,
+      asset: rec.asset,
+      side: rec.side,
+      size: rec.suggestedSize,
+      reason,
+    });
   }
 
   // ─── STEP 6: BATCH PNL UPDATE ─────────────────────────────────────────────
