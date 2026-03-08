@@ -8,9 +8,11 @@ import { RiskAgent } from '@/agents/specialized/RiskAgent';
 import { HedgingAgent } from '@/agents/specialized/HedgingAgent';
 import { SettlementAgent } from '@/agents/specialized/SettlementAgent';
 import { ReportingAgent } from '@/agents/specialized/ReportingAgent';
+import { PriceMonitorAgent } from '@/agents/specialized/PriceMonitorAgent';
 import { LeadAgent } from '@/agents/core/LeadAgent';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import type { MarketSnapshot } from './CentralizedHedgeManager';
 
 export interface AgentOrchestrationResult {
   success: boolean;
@@ -35,6 +37,10 @@ export class AgentOrchestrator {
   private settlementAgent: SettlementAgent | null = null;
   private reportingAgent: ReportingAgent | null = null;
   private leadAgent: LeadAgent | null = null;
+  private priceMonitorAgent: PriceMonitorAgent | null = null;
+
+  // Shared market snapshot — set by CentralizedHedgeManager each cycle
+  private currentSnapshot: MarketSnapshot | null = null;
 
   private constructor() {
     // Initialize provider
@@ -83,6 +89,11 @@ export class AgentOrchestrator {
       return;
     }
     logger.info('Shutting down AgentOrchestrator...');
+    // Stop PriceMonitorAgent polling loop
+    if (this.priceMonitorAgent) {
+      try { this.priceMonitorAgent.stop(); } catch { /* */ }
+    }
+
     const shutdownResults = await Promise.allSettled([
       this.riskAgent?.shutdown(),
       this.hedgingAgent?.shutdown(),
@@ -104,6 +115,8 @@ export class AgentOrchestrator {
     this.settlementAgent = null;
     this.reportingAgent = null;
     this.leadAgent = null;
+    this.priceMonitorAgent = null;
+    this.currentSnapshot = null;
     logger.info('AgentOrchestrator shutdown complete.');
   }
 
@@ -169,6 +182,10 @@ export class AgentOrchestrator {
       if (this.settlementAgent) agentRegistry.register(this.settlementAgent);
       if (this.reportingAgent) agentRegistry.register(this.reportingAgent);
 
+      // Initialize PriceMonitorAgent (standalone — not a BaseAgent, has its own lifecycle)
+      logger.info('Creating PriceMonitorAgent...');
+      this.priceMonitorAgent = new PriceMonitorAgent();
+
       // Initialize all agents with individual error handling
       logger.info('Initializing agents...');
       const initResults = await Promise.allSettled([
@@ -194,6 +211,7 @@ export class AgentOrchestrator {
         settlementAgent: !!this.settlementAgent,
         reportingAgent: !!this.reportingAgent,
         leadAgent: !!this.leadAgent,
+        priceMonitorAgent: !!this.priceMonitorAgent,
       });
 
       // Start auto-hedging PnL tracking (but not auto-execute hedges by default)
@@ -602,8 +620,10 @@ export class AgentOrchestrator {
       settlement: boolean;
       reporting: boolean;
       lead: boolean;
+      priceMonitor: boolean;
     };
     signerAvailable: boolean;
+    snapshotAge: number | null;
   } {
     return {
       initialized: this.initialized,
@@ -613,8 +633,10 @@ export class AgentOrchestrator {
         settlement: this.settlementAgent !== null,
         reporting: this.reportingAgent !== null,
         lead: this.leadAgent !== null,
+        priceMonitor: this.priceMonitorAgent !== null,
       },
       signerAvailable: this.signer !== null,
+      snapshotAge: this.currentSnapshot ? Date.now() - this.currentSnapshot.timestamp : null,
     };
   }
 
@@ -628,6 +650,7 @@ export class AgentOrchestrator {
     settlementAgent: SettlementAgent | null;
     reportingAgent: ReportingAgent | null;
     leadAgent: LeadAgent | null;
+    priceMonitorAgent: PriceMonitorAgent | null;
     signerAvailable: boolean;
   } {
     return {
@@ -637,6 +660,7 @@ export class AgentOrchestrator {
       settlementAgent: this.settlementAgent,
       reportingAgent: this.reportingAgent,
       leadAgent: this.leadAgent,
+      priceMonitorAgent: this.priceMonitorAgent,
       signerAvailable: this.signer !== null,
     };
   }
@@ -664,6 +688,46 @@ export class AgentOrchestrator {
   public async getHedgingAgent(): Promise<HedgingAgent | null> {
     await this.ensureInitialized();
     return this.hedgingAgent;
+  }
+
+  /**
+   * Get PriceMonitorAgent for direct access
+   */
+  public getPriceMonitorAgent(): PriceMonitorAgent | null {
+    return this.priceMonitorAgent;
+  }
+
+  // ─── CENTRALIZED MARKET SNAPSHOT SHARING ──────────────────────────────────
+
+  /**
+   * Share a centralized MarketSnapshot with all agents.
+   * Called by CentralizedHedgeManager at the start of each cycle so agents
+   * can use this data instead of fetching independently.
+   */
+  public shareMarketSnapshot(snapshot: MarketSnapshot): void {
+    this.currentSnapshot = snapshot;
+
+    // Feed snapshot to PriceMonitorAgent so it skips its next independent fetch
+    if (this.priceMonitorAgent) {
+      this.priceMonitorAgent.ingestCentralizedPrices(snapshot);
+    }
+
+    logger.debug('[Orchestrator] Market snapshot shared with agents', {
+      symbols: snapshot.prices.size,
+      timestamp: snapshot.timestamp,
+      source: snapshot.source,
+    });
+  }
+
+  /**
+   * Get the current shared MarketSnapshot (if any).
+   * Agents can call this to use centralized prices before falling back to their own fetch.
+   */
+  public getSharedSnapshot(): MarketSnapshot | null {
+    if (!this.currentSnapshot) return null;
+    // Only return if fresh (< 30s)
+    if (Date.now() - this.currentSnapshot.timestamp > 30_000) return null;
+    return this.currentSnapshot;
   }
 }
 

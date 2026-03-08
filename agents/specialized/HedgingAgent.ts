@@ -156,6 +156,36 @@ export class HedgingAgent extends BaseAgent {
   protected onMessageReceived(_message: AgentMessage): void {
     // Handle messages from other agents
   }
+
+  /**
+   * Get price from centralized snapshot (if fresh) or fall back to MCP.
+   * This avoids redundant API calls when CentralizedHedgeManager has
+   * already fetched all prices for the current cycle.
+   */
+  private async getPriceFromSnapshotOrMCP(assetSymbol: string): Promise<{ price: number; priceChange24h: number; volume24h: number }> {
+    // Try centralized snapshot via orchestrator
+    try {
+      const { getAgentOrchestrator } = await import('../../lib/services/agent-orchestrator');
+      const snapshot = getAgentOrchestrator().getSharedSnapshot();
+      if (snapshot) {
+        const sym = assetSymbol.toUpperCase().replace('-PERP', '').replace('-USD-PERP', '');
+        const data = snapshot.prices.get(sym);
+        if (data) {
+          logger.debug('[HedgingAgent] Using centralized snapshot price', { asset: sym, price: data.price });
+          return {
+            price: data.price,
+            priceChange24h: data.change24h,
+            volume24h: data.volume24h,
+          };
+        }
+      }
+    } catch {
+      // Orchestrator not available — fall through to MCP
+    }
+
+    // Fallback: independent MCP fetch
+    return this.mcpClient.getPrice(assetSymbol);
+  }
   
   /**
    * Cleanup on shutdown
@@ -245,8 +275,8 @@ export class HedgingAgent extends BaseAgent {
     }
 
     try {
-      // Get current market data
-      const priceData = await this.mcpClient.getPrice(assetSymbol);
+      // Get current market data — try centralized snapshot first, then MCP fallback
+      let priceData = await this.getPriceFromSnapshotOrMCP(assetSymbol);
       if (!priceData) {
         throw new Error(`Could not retrieve price data for ${assetSymbol}`);
       }
@@ -956,7 +986,7 @@ export class HedgingAgent extends BaseAgent {
       // Last resort: derive approximate volatility from current 24h price change
       // This is a rough estimate but still uses REAL data, not hardcoded values
       try {
-        const currentPrice = await this.mcpClient.getPrice(assetSymbol);
+        const currentPrice = await this.getPriceFromSnapshotOrMCP(assetSymbol);
         const change24h = Math.abs(currentPrice.priceChange24h || 0) / 100; // as decimal
         // Rough annualization: daily move × sqrt(365)
         // 24h change is one sample of daily volatility
@@ -1118,7 +1148,7 @@ export class HedgingAgent extends BaseAgent {
       }
 
       // Case 3: Minimal data — derive from real ticker volume + price change
-      const currentPrice = await this.mcpClient.getPrice(assetSymbol);
+      const currentPrice = await this.getPriceFromSnapshotOrMCP(assetSymbol);
       const volume = currentPrice.volume24h || 0;
       const priceChange = Math.abs(currentPrice.priceChange24h || 0) / 100; // as decimal
       // Continuous formula: log volume score adjusted by 24h volatility
@@ -1137,7 +1167,7 @@ export class HedgingAgent extends BaseAgent {
 
       // Even as a last resort, try to use real volume + change data
       try {
-        const spot = await this.mcpClient.getPrice(assetSymbol);
+        const spot = await this.getPriceFromSnapshotOrMCP(assetSymbol);
         const volume = spot.volume24h || 0;
         const change = Math.abs(spot.priceChange24h || 0) / 100;
         const volScore = volume > 0 ? Math.min(1, Math.log10(volume) / 10) : 0;
