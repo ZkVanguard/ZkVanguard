@@ -25,15 +25,5 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/master",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/master",
-      "schedule": "0 12 * * *"
-    }
   ]
 }

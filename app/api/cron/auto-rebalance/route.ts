@@ -1,18 +1,18 @@
 /**
- * Vercel Cron Job: Auto-Rebalance & Loss Protection
+ * Cron Job: Auto-Rebalance & Loss Protection
  * 
- * This endpoint is invoked by Vercel Cron Jobs every hour to:
+ * This endpoint is invoked by Upstash QStash (or master cron) to:
  * 1. Check and rebalance portfolios based on allocation drift
  * 2. Monitor P&L and trigger protective hedges on significant losses
  * 
- * Schedule: Every hour (0 * * * *)
- * Configured in: vercel.json
+ * Schedule: Every 15 minutes via QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
@@ -76,11 +76,9 @@ interface ProcessingResult {
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
-  // Security: Verify request is from Vercel Cron
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'AutoRebalance Cron');
+  if (authResult !== true) {
     logger.warn('[AutoRebalance Cron] Unauthorized request');
     return NextResponse.json(
       { success: false, error: 'Unauthorized' },

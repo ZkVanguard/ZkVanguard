@@ -1,19 +1,19 @@
 /**
- * Vercel Cron Job: Community Pool AI Management
+ * Cron Job: Community Pool AI Management
  * 
- * This endpoint is invoked by Vercel Cron Jobs to:
+ * This endpoint is invoked by Upstash QStash (or master cron) to:
  * 1. Check community pool risk metrics
  * 2. Execute AI allocation decisions
  * 3. Trigger auto-hedging when needed
  * 
- * Schedule: Every 4 hours (cron: 0 0,4,8,12,16,20 * * *)
- * Configured in: vercel.json
+ * Schedule: Every 30 minutes via QStash
  * 
- * Security: Protected by CRON_SECRET environment variable
+ * Security: Verified by QStash signature or CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
@@ -61,12 +61,9 @@ interface CronResult {
 export async function GET(request: NextRequest): Promise<NextResponse<CronResult>> {
   const startTime = Date.now();
   
-  // Security: Verify request is from Vercel Cron
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    logger.warn('[CommunityPool Cron] Unauthorized request');
+  // Security: Verify QStash signature or CRON_SECRET
+  const authResult = await verifyCronRequest(request, 'CommunityPool Cron');
+  if (authResult !== true) {
     return NextResponse.json(
       { success: false, error: 'Unauthorized', duration: Date.now() - startTime },
       { status: 401 }
