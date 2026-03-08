@@ -268,7 +268,7 @@ Respond ONLY with valid JSON, no explanation.`,
 
     const intent: StrategyIntent = {
       action,
-      targetPortfolio: input.portfolioId || 0,
+      targetPortfolio: input.portfolioId ?? 0,  // Default to user's first portfolio (0)
       objectives: {
         yieldTarget,
         riskLimit,

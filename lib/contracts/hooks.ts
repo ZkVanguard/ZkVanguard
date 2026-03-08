@@ -262,7 +262,7 @@ export function useUserPortfolios(userAddress?: string) {
         const txHashMap: Record<number, string> = {};
         for (const event of events) {
           const args = event.args as Record<string, unknown> | undefined;
-          const portfolioId = Number(args?.portfolioId || (Array.isArray(args) ? args[0] : 0));
+          const portfolioId = Number(args?.portfolioId ?? (Array.isArray(args) ? args[0] : 0));
           const txHash = event.transactionHash;
           txHashMap[portfolioId] = txHash;
         }
