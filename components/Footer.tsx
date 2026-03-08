@@ -19,7 +19,7 @@ export function Footer() {
                 <li><Link href="/dashboard" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">{t('dashboard')}</Link></li>
                 <li><Link href="/agents" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">{t('agents')}</Link></li>
                 <li><Link href="/simulator" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">{t('simulator')}</Link></li>
-                <li><Link href="/docs" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">{t('documentation')}</Link></li>
+                <li><Link href="/whitepaper" className="text-[14px] text-[#424245] hover:text-[#007AFF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] leading-relaxed">{t('documentation')}</Link></li>
               </ul>
             </div>
 

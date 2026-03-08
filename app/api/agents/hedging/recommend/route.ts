@@ -111,19 +111,32 @@ export async function POST(request: NextRequest) {
     if (!_cachedLeadAgent || !_cachedRegistry) {
       if (!_agentInitPromise) {
         _agentInitPromise = (async () => {
-          const registry = new AgentRegistry();
-          const riskAgent = new RiskAgent('risk-agent-1', provider, signer);
-          await riskAgent.initialize();
-          registry.register(riskAgent);
-          if (signer) {
-            const hedgingAgent = new HedgingAgent('hedging-agent-1', provider, signer);
-            await hedgingAgent.initialize();
-            registry.register(hedgingAgent);
+          try {
+            const registry = new AgentRegistry();
+            const riskAgent = new RiskAgent('risk-agent-1', provider, signer);
+            await riskAgent.initialize();
+            registry.register(riskAgent);
+            if (signer) {
+              try {
+                const hedgingAgent = new HedgingAgent('hedging-agent-1', provider, signer);
+                await hedgingAgent.initialize();
+                registry.register(hedgingAgent);
+              } catch (hedgeErr) {
+                // HedgingAgent is optional — MoonlanderClient may not have API keys
+                logger.warn('HedgingAgent init failed (non-critical, continuing without)', { 
+                  error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr) 
+                });
+              }
+            }
+            const leadAgent = new LeadAgent('lead-agent-1', provider, signer, registry);
+            await leadAgent.initialize();
+            _cachedRegistry = registry;
+            _cachedLeadAgent = leadAgent;
+          } catch (err) {
+            // Reset promise so next request retries initialization
+            _agentInitPromise = null;
+            throw err;
           }
-          const leadAgent = new LeadAgent('lead-agent-1', provider, signer, registry);
-          await leadAgent.initialize();
-          _cachedRegistry = registry;
-          _cachedLeadAgent = leadAgent;
         })();
       }
       await _agentInitPromise;
