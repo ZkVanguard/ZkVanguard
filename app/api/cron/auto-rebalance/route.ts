@@ -390,9 +390,12 @@ async function executeProtectiveHedge(
       reason: `Auto loss protection: portfolio down ${Math.abs(assessment.pnlPercent).toFixed(2)}%`,
       walletAddress,
       autoApprovalEnabled: true,
-      systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       source: 'loss-protection-cron',
     }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
+    },
   });
   
   if (!response.ok) {

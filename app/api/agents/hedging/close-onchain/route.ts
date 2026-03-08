@@ -24,7 +24,10 @@ export const dynamic = 'force-dynamic';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const RPC_URL = 'https://evm-t3.cronos.org';
-const DEPLOYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
+const DEPLOYER_PK = process.env.RELAYER_PRIVATE_KEY;
+if (!DEPLOYER_PK) {
+  throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+}
 
 // Deployer/Owner wallet — required for setMockPrice calls on MockMoonlander
 const OWNER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
@@ -47,8 +50,19 @@ const PAIR_NAMES: Record<number, string> = {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  // Rate limiting
+  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication: require wallet signature or internal service token
+    const { requireAuth } = await import('@/lib/security/auth-middleware');
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { hedgeId, signature, walletAddress, signatureTimestamp } = body;
 
     if (!hedgeId) {

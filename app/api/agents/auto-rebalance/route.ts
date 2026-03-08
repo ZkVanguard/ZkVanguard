@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoRebalanceService, type AutoRebalanceConfig, type RebalanceFrequency } from '@/lib/services/AutoRebalanceService';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { 
   saveAutoRebalanceConfig, 
   getAutoRebalanceConfig,
@@ -29,10 +31,18 @@ export const dynamic = 'force-dynamic';
  * POST - Control auto-rebalancing service
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
     const body = await request.json().catch(() => ({}));
+
+    // Authentication required for all auto-rebalance mutations
+    const authResult = await requireAuth(request, body as Record<string, unknown>);
+    if (authResult instanceof NextResponse) return authResult;
     
     const { portfolioId, walletAddress, config } = body;
 

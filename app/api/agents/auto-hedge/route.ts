@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoHedgingService, AUTO_HEDGE_CONFIG } from '@/lib/services/AutoHedgingService';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { 
   saveAutoHedgeConfig, 
   deleteAutoHedgeConfig, 
@@ -57,8 +59,17 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication required for all auto-hedge mutations
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { action, portfolioId, walletAddress, config } = body;
     
     switch (action) {

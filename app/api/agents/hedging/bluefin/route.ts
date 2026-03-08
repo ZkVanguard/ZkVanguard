@@ -94,8 +94,19 @@ export async function GET(request: NextRequest) {
  * POST - Open a hedge position on BlueFin
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication required
+    const { requireAuth } = await import('@/lib/security/auth-middleware');
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const {
       asset,
       side,

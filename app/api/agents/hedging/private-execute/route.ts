@@ -13,6 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
@@ -70,8 +72,17 @@ export interface PrivateHedgeResponse {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  // Rate limiting
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body: PrivateHedgeRequest = await request.json();
+
+    // Authentication required for private hedge execution
+    const authResult = await requireAuth(request, body as Record<string, unknown>);
+    if (authResult instanceof NextResponse) return authResult;
+
     const {
       portfolioId,
       asset,

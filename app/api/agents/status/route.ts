@@ -40,19 +40,15 @@ export async function GET() {
       integrations: {
         x402: {
           enabled: !!process.env.X402_API_KEY,
-          facilitatorUrl: process.env.X402_FACILITATOR_URL || 'https://api.x402.io',
         },
         moonlander: {
-          enabled: !!process.env.NEXT_PUBLIC_MOONLANDER_API_KEY,
-          apiUrl: process.env.NEXT_PUBLIC_MOONLANDER_API || 'https://api.moonlander.io',
+          enabled: !!process.env.MOONLANDER_API_KEY || !!process.env.NEXT_PUBLIC_MOONLANDER_API_KEY,
         },
         cryptocomAI: {
           enabled: !!(process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY),
-          fallbackMode: !(process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY),
         },
         mcp: {
           enabled: !!process.env.MCP_API_KEY,
-          serverUrl: process.env.MCP_SERVER_URL || 'https://mcp.crypto.com/market-data/mcp',
         },
       },
       timestamp: new Date().toISOString(),
@@ -73,6 +69,11 @@ export async function GET() {
  * Initialize orchestrator manually
  */
 export async function POST(request: NextRequest) {
+  // Admin auth required to reinitialize orchestrator
+  const { requireAdminAuth } = await import('@/lib/security/auth-middleware');
+  const authCheck = requireAdminAuth(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
   try {
     const body = await request.json();
     const { force = false } = body;

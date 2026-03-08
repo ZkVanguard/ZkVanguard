@@ -147,7 +147,10 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
     
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         portfolioId: 1, // Default portfolio
         asset: hedge.asset,
@@ -157,7 +160,6 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
         reason: `Close hedge: ${reason}`,
         walletAddress: hedge.walletAddress,
         autoApprovalEnabled: true,
-        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     

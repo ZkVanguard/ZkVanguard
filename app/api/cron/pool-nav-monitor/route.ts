@@ -498,6 +498,7 @@ async function triggerPoolHedge(
       headers: {
         'Content-Type': 'application/json',
         'X-Pool-Hedge-Trigger': 'true',
+        'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
       body: JSON.stringify({
         portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,  // Community pool uses reserved ID (-1)
@@ -510,7 +511,6 @@ async function triggerPoolHedge(
         reason: `Auto loss protection: ${pool.name} down ${Math.abs(lossPercent).toFixed(2)}%`,
         simulationMode: false,
         requiresSignature: false,
-        systemSecret: process.env.CRON_SECRET, // System auth for auto-execution
       }),
     });
     

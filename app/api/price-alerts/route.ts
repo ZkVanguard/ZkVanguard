@@ -47,6 +47,11 @@ export async function GET() {
  * Body: { action: 'hedge' | 'heartbeat' | 'pool-nav', asset?: string }
  */
 export async function POST(request: NextRequest) {
+  // Admin auth required — triggers real hedge/monitoring operations
+  const { requireAdminAuth } = await import('@/lib/security/auth-middleware');
+  const authCheck = requireAdminAuth(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
   try {
     const body = await request.json();
     const { action = 'hedge', asset } = body;
