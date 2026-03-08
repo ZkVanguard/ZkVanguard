@@ -7,11 +7,26 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  priceMonitorAgent, 
+  PriceMonitorAgent,
   PriceAlert, 
   AgentStatus, 
   PriceData
 } from '@/agents/specialized/PriceMonitorAgent';
+
+// Lazy singleton — only this route uses it directly.
+// The orchestrator manages its own independent instance for centralized data flow.
+let _priceMonitorAgent: PriceMonitorAgent | null = null;
+function getPriceMonitorAgent(): PriceMonitorAgent {
+  if (!_priceMonitorAgent) {
+    _priceMonitorAgent = new PriceMonitorAgent();
+  }
+  return _priceMonitorAgent;
+}
+const priceMonitorAgent = new Proxy({} as PriceMonitorAgent, {
+  get(_target, prop) {
+    return (getPriceMonitorAgent() as any)[prop];
+  },
+});
 
 export interface MonitorControlRequest {
   action: 'start' | 'stop' | 'status' | 'add_alert' | 'remove_alert' | 'get_prices';

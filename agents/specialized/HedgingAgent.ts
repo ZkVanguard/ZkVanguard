@@ -184,7 +184,12 @@ export class HedgingAgent extends BaseAgent {
     }
 
     // Fallback: independent MCP fetch
-    return this.mcpClient.getPrice(assetSymbol);
+    const mcpData = await this.mcpClient.getPrice(assetSymbol);
+    return {
+      price: mcpData.price,
+      priceChange24h: mcpData.priceChange24h ?? 0,
+      volume24h: mcpData.volume24h,
+    };
   }
   
   /**
