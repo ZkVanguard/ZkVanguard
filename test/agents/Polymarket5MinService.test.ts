@@ -105,9 +105,9 @@ function setupFetchMocks(
       const url =
         typeof input === 'string' ? input : (input as URL).toString();
 
-      // Crypto.com BTC price endpoint
-      if (url.includes('api.crypto.com') || url.includes('get-ticker')) {
-        return createPriceResponse(btcPrice);
+      // BTC price endpoint — internal /api/prices route OR direct Crypto.com
+      if (url.includes('/api/prices') || url.includes('api.crypto.com') || url.includes('get-ticker')) {
+        return createMockResponse({ price: btcPrice.toString() });
       }
 
       // Polymarket slug-based market lookup
