@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
       const notionalValue = parseFloat(size) * (result.executionPrice || 0);
       await createHedge({
         orderId: result.hedgeId,
-        portfolioId: portfolioId || null,
+        portfolioId: portfolioId ?? null,  // Use ?? to preserve portfolioId=-1 (community pool) and 0 (user)
         walletAddress: walletAddress || undefined,
         asset,
         market: symbol,

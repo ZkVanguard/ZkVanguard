@@ -361,7 +361,7 @@ async function checkHeartbeat(): Promise<void> {
           'X-Heartbeat-Trigger': 'true',
         },
       }),
-      // Community Pool AI management: risk assessment + auto-hedging for portfolio 0
+      // Community Pool AI management: risk assessment + auto-hedging (portfolio_id=-1)
       fetch(`${baseUrl}/api/cron/community-pool`, {
         method: 'GET',
         headers: { 
@@ -440,7 +440,7 @@ async function checkCommunityPools(): Promise<void> {
           'X-Pool-Trigger': 'true',
         },
       }),
-      // Community Pool AI management: risk assessment via AutoHedgingService (portfolio 0)
+      // Community Pool AI management: risk assessment via AutoHedgingService (portfolio_id=-1)
       fetch(`${baseUrl}/api/cron/community-pool`, {
         method: 'GET',
         headers: { 

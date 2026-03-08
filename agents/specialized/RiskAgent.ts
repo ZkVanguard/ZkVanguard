@@ -172,7 +172,7 @@ export class RiskAgent extends BaseAgent {
       };
     };
     
-    const portfolioId = params.portfolioId || parseInt(params.address?.split('-')[1] || '0');
+    const portfolioId = params.portfolioId ?? parseInt(params.address?.split('-')[1] || '0');
     const portfolioData = params.portfolioData;
 
     logger.info('Analyzing portfolio risk with AI', {
