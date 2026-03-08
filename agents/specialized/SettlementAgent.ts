@@ -74,6 +74,24 @@ export class SettlementAgent extends BaseAgent {
   private batchHistory: Map<string, BatchSettlement> = new Map();
   private schedules: Map<string, SettlementSchedule> = new Map();
   private processingInterval?: NodeJS.Timeout;
+  private static readonly MAX_COMPLETED = 1000;
+  private static readonly MAX_BATCH_HISTORY = 500;
+
+  /** Evict oldest entries to prevent unbounded memory growth */
+  private capMaps(): void {
+    if (this.completedSettlements.size > SettlementAgent.MAX_COMPLETED) {
+      const keys = Array.from(this.completedSettlements.keys());
+      for (let i = 0; i < keys.length - 800; i++) {
+        this.completedSettlements.delete(keys[i]);
+      }
+    }
+    if (this.batchHistory.size > SettlementAgent.MAX_BATCH_HISTORY) {
+      const keys = Array.from(this.batchHistory.keys());
+      for (let i = 0; i < keys.length - 400; i++) {
+        this.batchHistory.delete(keys[i]);
+      }
+    }
+  }
 
   constructor(
     agentId: string,
@@ -113,6 +131,8 @@ export class SettlementAgent extends BaseAgent {
    */
   protected async onShutdown(): Promise<void> {
     try {
+      // Stop automatic processing timer (defense in depth — shutdown() also calls stopAutomaticProcessing)
+      this.stopAutomaticProcessing();
       logger.info('SettlementAgent shutdown complete', { agentId: this.agentId });
     } catch (error) {
       logger.error('Error during SettlementAgent shutdown', { error });
@@ -279,19 +299,24 @@ export class SettlementAgent extends BaseAgent {
       // Execute TRUE gasless transfer via x402 Facilitator
       // NO GAS COSTS - x402 handles everything!
       const extClient = this.x402Client as unknown as X402ClientExt;
-      const result = typeof extClient.executeGaslessTransfer === 'function'
-        ? await extClient.executeGaslessTransfer({
-        token: settlement.token,
-        from: await this.signer.getAddress(),
-        to: settlement.beneficiary,
-        amount: settlement.amount,
-        })
-        : await (extClient.batchTransfer ?? extClient.executeGaslessTransfer)!({
+      let result: { txHash: string; [key: string]: unknown };
+      if (typeof extClient.executeGaslessTransfer === 'function') {
+        result = await extClient.executeGaslessTransfer({
           token: settlement.token,
           from: await this.signer.getAddress(),
           to: settlement.beneficiary,
           amount: settlement.amount,
         });
+      } else if (typeof extClient.batchTransfer === 'function') {
+        result = await extClient.batchTransfer({
+          token: settlement.token,
+          from: await this.signer.getAddress(),
+          to: settlement.beneficiary,
+          amount: settlement.amount,
+        });
+      } else {
+        throw new Error('No compatible x402 transfer method available (executeGaslessTransfer or batchTransfer)');
+      }
 
       settlement.status = 'COMPLETED';
       settlement.processedAt = Date.now();
@@ -299,6 +324,7 @@ export class SettlementAgent extends BaseAgent {
       // Move to completed
       this.pendingSettlements.delete(resolvedRequestId);
       this.completedSettlements.set(resolvedRequestId, settlement);
+      this.capMaps();
 
       logger.info('Settlement processed successfully', {
         requestId: resolvedRequestId,
@@ -412,6 +438,7 @@ export class SettlementAgent extends BaseAgent {
             this.pendingSettlements.delete(settlement.requestId);
             this.completedSettlements.set(settlement.requestId, settlement);
           }
+          this.capMaps();
 
           results.push({
             token,
@@ -447,6 +474,7 @@ export class SettlementAgent extends BaseAgent {
       };
 
       this.batchHistory.set(batchRecord.batchId, batchRecord);
+      this.capMaps();
 
       logger.info('Batch settlements completed', {
         batchId: batchRecord.batchId,

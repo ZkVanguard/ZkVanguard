@@ -279,6 +279,15 @@ export class MoonlanderClient {
   async placeOrder(orderRequest: OrderRequest): Promise<OrderResult> {
     this.ensureInitialized();
 
+    // ── Input validation (critical for billions on the line) ──
+    const parsedSize = parseFloat(orderRequest.size);
+    if (!isFinite(parsedSize) || parsedSize <= 0) {
+      throw new Error(`Invalid order size: ${orderRequest.size}. Must be a positive finite number.`);
+    }
+    if (!orderRequest.market || !orderRequest.side || !orderRequest.type) {
+      throw new Error(`Missing required order fields: market=${orderRequest.market}, side=${orderRequest.side}, type=${orderRequest.type}`);
+    }
+
     try {
       logger.info('Placing order', { orderRequest });
 
@@ -383,9 +392,18 @@ export class MoonlanderClient {
       // Get market info for size calculation
       const marketInfo = await this.getMarketInfo(market);
       const markPrice = parseFloat(marketInfo.markPrice);
+
+      // ── Guard against zero/NaN markPrice (critical: prevents Infinity position sizes) ──
+      if (!isFinite(markPrice) || markPrice <= 0) {
+        throw new Error(`Invalid markPrice for ${market}: ${marketInfo.markPrice}. Cannot calculate position size.`);
+      }
       
       // Calculate position size
-      const size = (parseFloat(notionalValue) * leverage / markPrice).toFixed(4);
+      const rawSize = parseFloat(notionalValue) * leverage / markPrice;
+      if (!isFinite(rawSize) || rawSize <= 0) {
+        throw new Error(`Invalid calculated position size: ${rawSize} (notional=${notionalValue}, leverage=${leverage}, markPrice=${markPrice})`);
+      }
+      const size = rawSize.toFixed(4);
 
       // Place main order
       const orderSide = side === 'LONG' ? 'BUY' : 'SELL';

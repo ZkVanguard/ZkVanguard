@@ -95,6 +95,8 @@ export class SafeExecutionGuard {
   private lastExecutionTime: number = 0;
   private activeExecutions: Set<string> = new Set();
   private auditLogs: AuditLog[] = [];
+  private static readonly MAX_AUDIT_LOGS = 10_000;
+  private static readonly MAX_PENDING_CONSENSUS = 100;
   private circuitBreaker: CircuitBreakerState = {
     isOpen: false,
     failureCount: 0,
@@ -348,6 +350,24 @@ export class SafeExecutionGuard {
     };
 
     this.auditLogs.push(auditLog);
+
+    // Cap audit logs to prevent unbounded memory growth
+    if (this.auditLogs.length > SafeExecutionGuard.MAX_AUDIT_LOGS) {
+      // Keep most recent 80% when cap is hit (amortized eviction)
+      const keepFrom = Math.floor(SafeExecutionGuard.MAX_AUDIT_LOGS * 0.2);
+      this.auditLogs = this.auditLogs.slice(keepFrom);
+      logger.debug('Audit logs trimmed', { kept: this.auditLogs.length });
+    }
+
+    // Clean up expired pending consensus entries
+    if (this.pendingConsensus.size > SafeExecutionGuard.MAX_PENDING_CONSENSUS) {
+      const now = new Date();
+      for (const [execId, consensus] of this.pendingConsensus) {
+        if (now > consensus.deadline) {
+          this.pendingConsensus.delete(execId);
+        }
+      }
+    }
 
     logger.info('🚀 Execution started', {
       executionId,
