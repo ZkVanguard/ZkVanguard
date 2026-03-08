@@ -1,5 +1,6 @@
 import { query, queryOne } from './postgres';
 import crypto from 'crypto';
+import { COMMUNITY_POOL_PORTFOLIO_ID } from '../constants';
 
 export interface Hedge {
   id: number;
@@ -139,7 +140,7 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
 
     const result = await queryOne<Hedge>(sql, [
       params.orderId,
-      params.portfolioId || null,
+      params.portfolioId ?? null,  // Use ?? to preserve portfolioId=0 (community pool)
       params.walletAddress || null, // Always store OWNER wallet as wallet_address
       params.asset,
       params.market,
@@ -180,7 +181,7 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
 
     const result = await queryOne<Hedge>(simpleSql, [
       params.orderId,
-      params.portfolioId || null,
+      params.portfolioId ?? null,  // Use ?? to preserve portfolioId=0 (community pool)
       params.walletAddress || null,
       params.asset,
       params.market,
@@ -223,7 +224,7 @@ export async function getHedgeByZkProofHash(proofHash: string): Promise<Hedge | 
 }
 
 export async function getActiveHedges(portfolioId?: number): Promise<Hedge[]> {
-  if (portfolioId) {
+  if (portfolioId !== undefined) {
     const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 AND status = $2 ORDER BY created_at DESC';
     return query<Hedge>(sql, [portfolioId, 'active']);
   }
@@ -326,7 +327,7 @@ export async function getAllHedgesByWallet(walletAddress: string, limit = 50): P
 }
 
 export async function getAllHedges(portfolioId?: number, limit = 50): Promise<Hedge[]> {
-  if (portfolioId) {
+  if (portfolioId !== undefined) {
     const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 ORDER BY created_at DESC LIMIT $2';
     return query<Hedge>(sql, [portfolioId, limit]);
   }
@@ -546,6 +547,7 @@ export interface OnChainHedgeParams {
   blockNumber?: number;
   explorerLink?: string;
   walletAddress?: string;       // Real owner wallet (for ZK-private hedges)
+  portfolioId?: number;         // Portfolio ID (-1 = community pool, 0+ = user portfolios)
   metadata?: Record<string, unknown>;
 }
 
@@ -564,21 +566,22 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
 
     const sql = `
       INSERT INTO hedges (
-        order_id, wallet_address, asset, market, side,
+        order_id, portfolio_id, wallet_address, asset, market, side,
         size, notional_value, leverage, entry_price,
         simulation_mode, tx_hash, on_chain, chain, chain_id,
         contract_address, hedge_id_onchain, commitment_hash,
         nullifier, proxy_wallet, block_number, explorer_link,
         metadata, status
       ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        false, $10, true, $11, $12,
-        $13, $14, $15,
-        $16, $17, $18, $19,
-        $20, 'active'
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        false, $11, true, $12, $13,
+        $14, $15, $16,
+        $17, $18, $19, $20,
+        $21, 'active'
       )
       ON CONFLICT (order_id) DO UPDATE SET
+        portfolio_id = COALESCE(EXCLUDED.portfolio_id, hedges.portfolio_id),
         asset = CASE WHEN EXCLUDED.asset IS NOT NULL AND EXCLUDED.asset != '' THEN EXCLUDED.asset ELSE hedges.asset END,
         market = CASE WHEN EXCLUDED.market IS NOT NULL AND EXCLUDED.market != '' THEN EXCLUDED.market ELSE hedges.market END,
         side = EXCLUDED.side,
@@ -599,6 +602,7 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
 
     return await queryOne<Hedge>(sql, [
       orderId,
+      params.portfolioId ?? null,  // Use ?? to preserve portfolioId=0 (community pool)
       params.walletAddress || params.trader,
       params.asset,
       `${params.asset}/USD`,
