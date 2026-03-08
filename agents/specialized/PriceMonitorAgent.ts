@@ -9,6 +9,7 @@ import { logger } from '../../lib/utils/logger';
 import { X402FacilitatorService } from '../../lib/services/x402-facilitator';
 import { CronosNetwork } from '@crypto.com/facilitator-client';
 import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
+import type { MarketSnapshot } from '../../lib/services/CentralizedHedgeManager';
 
 // Price thresholds for different alert levels
 export interface PriceAlert {
@@ -59,6 +60,9 @@ export class PriceMonitorAgent {
   // ── Proactive 5-min signal (pushed by ticker) ──────────
   private cachedFiveMinSignal: FiveMinBTCSignal | null = null;
   private fiveMinUnsubscribers: (() => void)[] = [];
+
+  // ── Centralized market snapshot (pushed by CentralizedHedgeManager) ──────
+  private centralizedSnapshot: MarketSnapshot | null = null;
 
   constructor(config: Partial<MonitorConfig> = {}) {
     this.config = {
@@ -208,9 +212,62 @@ export class PriceMonitorAgent {
   }
 
   /**
-   * Fetch prices from all configured feeds
+   * Ingest centralized market prices from CentralizedHedgeManager.
+   * When a fresh snapshot is available, the agent uses it instead of
+   * independently calling the Crypto.com API — eliminating redundant fetches.
+   */
+  ingestCentralizedPrices(snapshot: MarketSnapshot): void {
+    this.centralizedSnapshot = snapshot;
+
+    // Convert snapshot into PriceData and store in history
+    for (const [symbol, assetPrice] of snapshot.prices) {
+      if (!PRICE_FEEDS[symbol] && !['SUI'].includes(symbol)) continue; // Only track symbols we care about
+
+      const priceData: PriceData = {
+        symbol,
+        price: assetPrice.price,
+        change24h: assetPrice.change24h,
+        volume24h: assetPrice.volume24h,
+        timestamp: snapshot.timestamp,
+        source: `centralized:${snapshot.source}`,
+      };
+
+      const history = this.priceHistory.get(symbol) || [];
+      history.push(priceData);
+      if (history.length > 1000) history.shift();
+      this.priceHistory.set(symbol, history);
+    }
+
+    logger.debug('[PriceMonitor] Ingested centralized snapshot', {
+      symbols: snapshot.prices.size,
+      age: Date.now() - snapshot.timestamp,
+    });
+  }
+
+  /**
+   * Fetch prices from all configured feeds.
+   * Uses centralized snapshot if fresh (< 15s), otherwise falls back to independent fetch.
    */
   private async fetchAllPrices(): Promise<Map<string, PriceData>> {
+    // Use centralized snapshot if fresh
+    if (this.centralizedSnapshot && (Date.now() - this.centralizedSnapshot.timestamp) < 15_000) {
+      const prices = new Map<string, PriceData>();
+      for (const [symbol, assetPrice] of this.centralizedSnapshot.prices) {
+        if (!PRICE_FEEDS[symbol] && !['SUI'].includes(symbol)) continue;
+        prices.set(symbol, {
+          symbol,
+          price: assetPrice.price,
+          change24h: assetPrice.change24h,
+          volume24h: assetPrice.volume24h,
+          timestamp: this.centralizedSnapshot.timestamp,
+          source: `centralized:${this.centralizedSnapshot.source}`,
+        });
+      }
+      logger.debug('[PriceMonitor] Using centralized snapshot prices', { symbols: prices.size });
+      return prices;
+    }
+
+    // Fallback: independent fetch
     const prices = new Map<string, PriceData>();
 
     for (const [symbol, url] of Object.entries(PRICE_FEEDS)) {

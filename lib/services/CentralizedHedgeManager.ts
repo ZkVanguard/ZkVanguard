@@ -776,6 +776,17 @@ export class CentralizedHedgeManager {
     // ── 1. SINGLE MARKET FETCH ──
     const snapshot = await this.fetchMarketSnapshot();
 
+    // ── 1b. SHARE SNAPSHOT WITH ALL AGENTS ──
+    // Push the freshly-fetched snapshot to the orchestrator so every agent
+    // (PriceMonitorAgent, HedgingAgent, etc.) can use centralized data
+    // instead of fetching independently.
+    try {
+      const orchestrator = getAgentOrchestrator();
+      orchestrator.shareMarketSnapshot(snapshot);
+    } catch {
+      // Orchestrator may not be initialized yet — non-critical
+    }
+
     // ── 2. PARALLEL CONTEXT GATHERING ──
     const contexts = await this.gatherAllPortfolioContexts(configs, snapshot);
 
