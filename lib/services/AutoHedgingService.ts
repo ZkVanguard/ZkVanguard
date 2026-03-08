@@ -20,6 +20,7 @@ import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from './CommunityPoolService';
+import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
 
 // Configuration
 const CONFIG = {
@@ -272,9 +273,29 @@ class AutoHedgingService {
 
   /**
    * Update PnL for all active hedges
-   * Uses unified price provider for real-time prices
+   * Uses CentralizedHedgeManager's last snapshot if fresh, else fetches new snapshot
    */
   async updateAllHedgePnL(): Promise<{ updated: number; errors: number }> {
+    try {
+      const manager = getCentralizedHedgeManager();
+      let snapshot = manager.getLastSnapshot();
+      
+      // Use existing snapshot if fresh (< 15s), else fetch new one
+      if (!snapshot || (Date.now() - snapshot.timestamp) > 15_000) {
+        snapshot = await manager.fetchMarketSnapshot();
+      }
+
+      return await manager.batchUpdatePnL(snapshot);
+    } catch (error) {
+      logger.warn('[AutoHedging] Centralized PnL update failed, falling back', { error });
+      return this.updateAllHedgePnLLegacy();
+    }
+  }
+
+  /**
+   * Legacy PnL update — per-asset price fetching
+   */
+  private async updateAllHedgePnLLegacy(): Promise<{ updated: number; errors: number }> {
     const activeHedges = await getActiveHedges();
     
     if (activeHedges.length === 0) {
@@ -356,9 +377,39 @@ class AutoHedgingService {
   }
 
   /**
-   * Check risk for all enabled portfolios
+   * Check risk for all enabled portfolios — CENTRALIZED
+   * Uses CentralizedHedgeManager to fetch market data ONCE and assess all portfolios
    */
   async checkAllPortfolioRisks(): Promise<void> {
+    if (this.autoHedgeConfigs.size === 0) return;
+
+    try {
+      const manager = getCentralizedHedgeManager();
+      const result = await manager.runCycle(this.autoHedgeConfigs);
+
+      // Store all assessments
+      for (const [portfolioId, assessment] of result.assessments) {
+        this.lastRiskAssessments.set(portfolioId, assessment);
+      }
+
+      logger.info('[AutoHedging] Centralized cycle complete', {
+        portfolios: result.portfoliosAssessed,
+        hedgesExecuted: result.hedgesExecuted,
+        pnlUpdated: result.pnlUpdated,
+        durationMs: result.durationMs,
+      });
+    } catch (error) {
+      logger.error('[AutoHedging] Centralized risk check failed, falling back to serial', { error });
+      // Fallback to serial per-portfolio assessment
+      await this.checkAllPortfolioRisksSerial();
+    }
+  }
+
+  /**
+   * Serial fallback: check risk for all portfolios one-by-one
+   * Used when CentralizedHedgeManager fails
+   */
+  private async checkAllPortfolioRisksSerial(): Promise<void> {
     for (const [portfolioId, config] of this.autoHedgeConfigs) {
       if (!config.enabled) continue;
 
@@ -366,7 +417,6 @@ class AutoHedgingService {
         const assessment = await this.assessPortfolioRisk(portfolioId, config.walletAddress);
         this.lastRiskAssessments.set(portfolioId, assessment);
 
-        // Check if auto-hedging is needed
         if (assessment.riskScore >= config.riskThreshold) {
           logger.info('[AutoHedging] Risk threshold exceeded', {
             portfolioId,
@@ -374,7 +424,6 @@ class AutoHedgingService {
             threshold: config.riskThreshold,
           });
 
-          // Execute recommended hedges
           for (const recommendation of assessment.recommendations) {
             if (recommendation.confidence >= 0.7) {
               await this.executeAutoHedge(portfolioId, config, recommendation);
