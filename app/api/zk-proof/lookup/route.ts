@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeByZkProofHash, getHedgeById } from '@/lib/db/hedges';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
@@ -221,12 +222,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Lookup error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to lookup proof',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'ZK proof lookup');
   }
 }

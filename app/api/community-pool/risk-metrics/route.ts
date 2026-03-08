@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateRiskMetrics, getRiskRating } from '@/lib/services/RiskMetricsService';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -99,9 +100,6 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     logger.error('[RiskMetrics API] Failed to calculate metrics', error);
     
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+    return safeErrorResponse(error, 'Risk metrics calculation');
   }
 }

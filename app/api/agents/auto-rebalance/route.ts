@@ -16,6 +16,7 @@ import { autoRebalanceService, type AutoRebalanceConfig, type RebalanceFrequency
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { 
   saveAutoRebalanceConfig, 
   getAutoRebalanceConfig,
@@ -155,13 +156,7 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : error,
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Auto-rebalance action');
   }
 }
 
@@ -217,13 +212,7 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : error,
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Auto-rebalance status');
   }
 }
 
@@ -295,12 +284,6 @@ export async function PATCH(request: NextRequest) {
       error: error instanceof Error ? error.message : error,
     });
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Auto-rebalance config update');
   }
 }

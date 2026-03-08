@@ -6,12 +6,17 @@
  * 1. POST /prepare - Get signature request for user
  * 2. User signs in frontend (FREE)
  * 3. POST /execute - We relay the signed message (user pays $0.00)
+ * 
+ * SECURITY: Rate-limited to prevent relayer wallet draining.
+ * Wallet auth required for execute to prevent unauthorized relay usage.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { mutationLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -65,7 +70,11 @@ const TYPES = {
  * GET /api/gasless/paymaster
  * Get contract stats and prepare endpoint info
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limit read endpoint
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     if (ZK_PAYMASTER_ADDRESS === '0x0000000000000000000000000000000000000000') {
       return NextResponse.json({
@@ -100,11 +109,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    logger.error('❌ Failed to get paymaster stats', { error });
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    return safeErrorResponse(error, 'gasless/paymaster GET');
   }
 }
 
@@ -115,6 +120,11 @@ export async function GET() {
  * - action: "execute" - Relay signed message
  */
 export async function POST(request: NextRequest) {
+  // SECURITY: Rate limit to prevent relayer wallet draining
+  // Execute is heavy (on-chain tx), prepare is lighter
+  const limited = heavyLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const { action } = body;
@@ -130,11 +140,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
   } catch (error) {
-    logger.error('❌ Gasless paymaster error', { error });
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+    return safeErrorResponse(error, 'gasless/paymaster POST');
   }
 }
 
@@ -206,13 +212,22 @@ async function handleExecute(body: {
   merkleRoot: string;
   securityLevel: number;
   signature: string;
+  deadline?: number;
 }) {
-  const { userAddress, proofHash, merkleRoot, securityLevel, signature } = body;
+  const { userAddress, proofHash, merkleRoot, securityLevel, signature, deadline: clientDeadline } = body;
 
   if (!userAddress || !proofHash || !merkleRoot || !signature) {
     return NextResponse.json({
       success: false,
       error: 'Missing required fields: userAddress, proofHash, merkleRoot, signature',
+    }, { status: 400 });
+  }
+
+  // Validate address format
+  if (!ethers.isAddress(userAddress)) {
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid userAddress format',
     }, { status: 400 });
   }
 
@@ -229,8 +244,12 @@ async function handleExecute(body: {
   const relayer = new ethers.Wallet(relayerPrivateKey, provider);
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, relayer);
 
-  // Use deadline from now (nonce is verified on-chain, no need to fetch it here)
-  const deadline = Math.floor(Date.now() / 1000) + 3600;
+  // SECURITY FIX: Use the SAME deadline that was signed during prepare, not a new one.
+  // If client provides the deadline from prepare, use it. Otherwise create new one.
+  // This prevents TOCTOU where prepare and execute use different deadlines.
+  const deadline = clientDeadline && clientDeadline > Math.floor(Date.now() / 1000)
+    ? clientDeadline
+    : Math.floor(Date.now() / 1000) + 3600;
 
   logger.info('🚀 Relaying gasless transaction', {
     user: userAddress,

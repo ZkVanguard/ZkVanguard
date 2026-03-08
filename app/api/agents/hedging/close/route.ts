@@ -2,12 +2,16 @@
  * Close Hedge Position
  * API endpoint for closing active hedge positions
  * Supports proxy wallet privacy - funds always go to OWNER wallet
+ * SECURITY: Requires auth. DELETE requires admin auth.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { closeHedge, getHedgeByOrderId, clearSimulationHedges, clearAllHedges } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 import _crypto from 'crypto';
+import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,13 +24,16 @@ function verifyOwnership(walletAddress: string, hedgeId: string, storedWallet: s
 /**
  * POST /api/agents/hedging/close
  * Close a hedge position
- * 
- * Body:
- * - orderId: The order ID to close
- * - realizedPnl: Final PnL at close (optional)
- * - walletAddress: Wallet requesting the close (must be owner for withdrawal)
+ * SECURITY: walletAddress is REQUIRED and must match hedge owner.
  */
 export async function POST(request: NextRequest) {
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
+  // Require authentication
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { orderId, realizedPnl, walletAddress } = body;
@@ -57,14 +64,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // SECURITY: walletAddress is REQUIRED to verify ownership
+    if (!walletAddress) {
+      return NextResponse.json(
+        { success: false, error: 'walletAddress is required to close a hedge' },
+        { status: 400 }
+      );
+    }
+
     // Verify ownership - CRITICAL for proxy wallet security
     // Only the OWNER wallet can close and receive funds
     const ownerWallet = hedge.wallet_address;
-    let isOwner = false;
     const withdrawalDestination = ownerWallet;
 
-    if (walletAddress && ownerWallet) {
-      isOwner = verifyOwnership(walletAddress, orderId, ownerWallet);
+    if (ownerWallet) {
+      const isOwner = verifyOwnership(walletAddress, orderId, ownerWallet);
       if (!isOwner) {
         logger.warn('⚠️ Non-owner attempted to close hedge', { 
           requestingWallet: walletAddress, 
@@ -91,7 +105,7 @@ export async function POST(request: NextRequest) {
       orderId, 
       finalPnl: finalPnl.toFixed(2),
       withdrawalDestination: withdrawalDestination?.slice(0, 10) + '...',
-      ownerVerified: isOwner
+      ownerVerified: true
     });
 
     return NextResponse.json({
@@ -99,33 +113,26 @@ export async function POST(request: NextRequest) {
       message: 'Hedge closed successfully',
       orderId,
       finalPnl,
-      // Withdrawal info - always goes to OWNER wallet
       withdrawalDestination: ownerWallet,
-      ownerVerified: isOwner,
-      proxyWalletUsed: false, // Proxy only executes, never receives
+      ownerVerified: true,
+      proxyWalletUsed: false,
     });
 
   } catch (error) {
-    logger.error('❌ Failed to close hedge', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to close hedge',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'hedging/close POST');
   }
 }
 
 /**
  * DELETE /api/agents/hedging/close
  * Clear all simulation hedges or all hedges
- * 
- * Query params:
- * - all: If true, clears ALL hedges (use with caution)
+ * SECURITY: Requires ADMIN auth — this destroys data
  */
 export async function DELETE(request: NextRequest) {
+  // SECURITY: Admin-only operation — clears hedge data
+  const adminCheck = requireAdminAuth(request);
+  if (adminCheck !== true) return adminCheck;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const clearAll = searchParams.get('all') === 'true';
@@ -148,14 +155,6 @@ export async function DELETE(request: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('❌ Failed to clear hedges', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to clear hedges',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'hedging/close DELETE');
   }
 }

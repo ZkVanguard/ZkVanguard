@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createPublicClient, http, erc20Abi } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
@@ -308,9 +309,6 @@ export async function GET(
     });
   } catch (error: unknown) {
     logger.error('[Portfolio API] Error fetching portfolio', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch portfolio data', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio fetch');
   }
 }

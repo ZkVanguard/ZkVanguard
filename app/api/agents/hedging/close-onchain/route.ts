@@ -17,6 +17,7 @@ import { ethers } from 'ethers';
 import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TYPES } from '@/lib/hedge-ownership';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,9 +25,11 @@ export const dynamic = 'force-dynamic';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const RPC_URL = 'https://evm-t3.cronos.org';
-const DEPLOYER_PK = process.env.RELAYER_PRIVATE_KEY;
-if (!DEPLOYER_PK) {
-  throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+
+function getRelayerKey(): string {
+  const key = process.env.RELAYER_PRIVATE_KEY;
+  if (!key) throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+  return key;
 }
 
 // Deployer/Owner wallet — required for setMockPrice calls on MockMoonlander
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
-    const wallet = new ethers.Wallet(DEPLOYER_PK, provider);
+    const wallet = new ethers.Wallet(getRelayerKey(), provider);
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
     const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, provider);
 
@@ -187,7 +190,7 @@ export async function POST(request: NextRequest) {
           );
           
           // For legacy hedges, accept if signer matches on-chain trader OR relayer
-          const relayerAddress = new ethers.Wallet(DEPLOYER_PK).address;
+          const relayerAddress = new ethers.Wallet(getRelayerKey()).address;
           if (recoveredAddress.toLowerCase() !== onChainTrader.toLowerCase() &&
               recoveredAddress.toLowerCase() !== relayerAddress.toLowerCase()) {
             console.warn(`🚫 Legacy hedge: signer ${recoveredAddress} is not trader ${onChainTrader}`);
@@ -400,12 +403,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('On-chain close error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to close hedge on-chain',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'On-chain hedge close');
   }
 }

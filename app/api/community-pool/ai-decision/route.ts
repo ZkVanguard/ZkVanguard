@@ -25,6 +25,9 @@ import {
   SUPPORTED_ASSETS,
   SupportedAsset,
 } from '@/lib/storage/community-pool-storage';
+import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
+import { readLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -204,7 +207,11 @@ ${indicators.map(i => `- ${i.asset}: $${i.price.toLocaleString()} (${i.change24h
 /**
  * GET - Get current AI recommendation without applying
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = readLimiter.check(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const poolSummary = await getPoolSummary();
     const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation();
@@ -234,11 +241,7 @@ export async function GET() {
     });
     
   } catch (error: any) {
-    logger.error('[CommunityPool AI] GET error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'CommunityPool AI GET');
   }
 }
 
@@ -246,23 +249,18 @@ export async function GET() {
  * POST - Generate and optionally apply AI decision
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = heavyLimiter.check(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json().catch(() => ({}));
-    const { apply = false, cronSecret, marketConditions } = body;
+    const { apply = false, marketConditions } = body;
     
-    // If applying changes, verify authorization
+    // If applying changes, require admin auth (internal API only)
     if (apply) {
-      const validSecret = process.env.CRON_SECRET;
-      if (validSecret && cronSecret !== validSecret) {
-        // Check if it's from an authorized source
-        const authHeader = request.headers.get('authorization');
-        if (authHeader !== `Bearer ${validSecret}`) {
-          return NextResponse.json(
-            { success: false, error: 'Unauthorized to apply AI decisions' },
-            { status: 401 }
-          );
-        }
-      }
+      const adminAuth = await requireAdminAuth(request);
+      if (adminAuth instanceof NextResponse) return adminAuth;
     }
     
     const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation(marketConditions);
@@ -326,10 +324,6 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    logger.error('[CommunityPool AI] POST error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'CommunityPool AI POST');
   }
 }

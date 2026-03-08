@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
@@ -262,14 +263,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('[CommunityPool Cron] Fatal error:', { error: errorMessage });
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: errorMessage,
-        duration: Date.now() - startTime,
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Community pool cron') as NextResponse<CronResult>;
   }
 }
 

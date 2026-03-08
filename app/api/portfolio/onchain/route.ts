@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOnChainPortfolioManager } from '@/lib/services/OnChainPortfolioManager';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
+import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
+
+// SECURITY: Max mint amount to prevent unlimited minting
+const MAX_MINT_AMOUNT = 1_000_000_000; // $1B max
 
 /**
  * On-Chain Portfolio API
  * 
  * Manages the portfolio using ACTUAL MockUSDC on Cronos Testnet
- * 
- * Contract Addresses:
- * - MockUSDC: 0x28217DAddC55e3C4831b4A48A00Ce04880786967
- * - MockMoonlander: 0xAb4946d7BD583a74F5E5051b22332fA674D7BE54
- * - HedgeExecutor: 0x090b6221137690EbB37667E4644287487CE462B9
+ * SECURITY: POST requires auth. Mint requires admin auth. Amount bounds enforced.
  */
 
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'summary';
@@ -76,18 +81,19 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('On-Chain portfolio API error', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to fetch on-chain portfolio', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'portfolio/onchain GET');
   }
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit mutations
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
+  // SECURITY: Require auth for all POST actions
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { action, address, amount } = body;
@@ -108,11 +114,14 @@ export async function POST(request: NextRequest) {
         result = await manager.assessRiskWithAI();
         break;
       
-      case 'mint':
-        // Mint MockUSDC (requires PRIVATE_KEY in env)
-        if (!amount || amount <= 0) {
+      case 'mint': {
+        // SECURITY: Mint is admin-only to prevent unlimited token minting
+        const adminCheck = requireAdminAuth(request);
+        if (adminCheck !== true) return adminCheck;
+        
+        if (!amount || amount <= 0 || amount > MAX_MINT_AMOUNT) {
           return NextResponse.json(
-            { error: 'Amount is required for minting' },
+            { success: false, error: `Amount must be between 1 and ${MAX_MINT_AMOUNT}` },
             { status: 400 }
           );
         }
@@ -125,11 +134,12 @@ export async function POST(request: NextRequest) {
           };
         } else {
           return NextResponse.json(
-            { error: 'Minting requires PRIVATE_KEY environment variable' },
+            { success: false, error: 'Minting requires PRIVATE_KEY environment variable' },
             { status: 400 }
           );
         }
         break;
+      }
       
       case 'full-analysis':
         const summary = await manager.getSummary();
@@ -184,13 +194,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('On-Chain portfolio action error', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to execute action', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'portfolio/onchain POST');
   }
 }

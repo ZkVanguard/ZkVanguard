@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSimulatedPortfolioManager } from '@/lib/services/SimulatedPortfolioManager';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 /**
  * Simulated Portfolio Management API
@@ -26,10 +27,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Simulated portfolio error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get portfolio', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Simulated portfolio');
   }
 }
 
@@ -105,9 +103,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Simulated portfolio action error:', error);
-    return NextResponse.json(
-      { error: 'Failed to execute action', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Simulated portfolio action');
   }
 }

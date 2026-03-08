@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getX402FacilitatorService } from '@/lib/services/x402-facilitator';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 /**
  * POST /api/x402/settle
@@ -57,14 +58,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('[X402 Settle] Error:', error);
-    return NextResponse.json(
-      { 
-        ok: false, 
-        error: 'Settlement failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'X402 settlement');
   }
 }
 

@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createHedge } from '@/lib/db/hedges';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     const body: PrivateHedgeRequest = await request.json();
 
     // Authentication required for private hedge execution
-    const authResult = await requireAuth(request, body as Record<string, unknown>);
+    const authResult = await requireAuth(request, body as unknown as Record<string, unknown>);
     if (authResult instanceof NextResponse) return authResult;
 
     const {
@@ -263,10 +264,7 @@ export async function POST(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('❌ Private hedge execution failed', { error: errorMessage });
 
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Private hedge execution');
   }
 }
 

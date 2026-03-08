@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -82,13 +83,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error('Failed to store portfolio strategy:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to store strategy on-chain',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio strategy storage');
   }
 }
 

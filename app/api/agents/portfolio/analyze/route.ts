@@ -4,6 +4,7 @@ import { MCPClient } from '@/integrations/mcp/MCPClient';
 import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 /**
  * AI-Powered Portfolio Analysis API
@@ -107,13 +108,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Portfolio analysis error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Portfolio analysis failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Portfolio analysis');
   }
 }
 

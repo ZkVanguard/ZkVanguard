@@ -4,6 +4,7 @@ import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeServic
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -167,14 +168,7 @@ export async function GET(request: NextRequest) {
     }
   } catch (error: unknown) {
     logger.error('[Market Data API] Error', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to fetch market data',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Price data fetch');
   }
 }
       
@@ -248,13 +242,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: unknown) {
     logger.error('[Market Data API] POST error', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to process request',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Price data operation');
   }
 }

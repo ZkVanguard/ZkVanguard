@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, type Log } from 'viem';
 import { CronosTestnet } from '@/lib/chains';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract (x402 + USDC)
@@ -156,13 +157,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: unknown) {
     logger.error('Error in comprehensive verification:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error),
-        hint: 'Make sure the proof exists on-chain and ZK backend is running'
-      },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'ZK on-chain verification');
   }
 }

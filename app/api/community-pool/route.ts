@@ -8,6 +8,8 @@
  * - POST /api/community-pool?action=withdraw   - Withdraw by burning shares
  * - GET  /api/community-pool?action=history    - Get pool transaction history
  * - GET  /api/community-pool?action=leaderboard - Get top shareholders
+ * 
+ * SECURITY: deposit/withdraw require wallet auth. Admin actions require CRON_SECRET.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,6 +29,9 @@ import {
   SUPPORTED_ASSETS,
 } from '@/lib/storage/community-pool-storage';
 import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
+import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -170,6 +175,10 @@ async function findOnChainMember(userAddress: string) {
  * GET - Fetch pool info
  */
 export async function GET(request: NextRequest) {
+  // Rate limit read operations
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
   const userAddress = searchParams.get('user');
@@ -557,19 +566,21 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
     
-  } catch (error: any) {
-    logger.error('[CommunityPool API] GET error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, 'community-pool GET');
   }
 }
 
 /**
  * POST - Deposit or withdraw
+ * SECURITY: deposit/withdraw require wallet auth to verify the caller owns the wallet.
+ * Admin actions (sync-from-chain, delete-user) require CRON_SECRET.
  */
 export async function POST(request: NextRequest) {
+  // Rate limit mutations
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
   
@@ -584,6 +595,22 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'walletAddress required' },
         { status: 400 }
       );
+    }
+
+    // SECURITY: For deposit/withdraw, verify the caller owns the wallet
+    // This prevents anyone from depositing/withdrawing on behalf of another wallet
+    const userActions = ['deposit', 'withdraw'];
+    if (userActions.includes(action || '')) {
+      const authResult = await requireAuth(request, body);
+      if (authResult instanceof NextResponse) return authResult;
+      
+      // If wallet auth was used, verify the authenticated wallet matches the request
+      if (authResult.method === 'wallet' && authResult.identity?.toLowerCase() !== walletAddress?.toLowerCase()) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet address does not match authenticated wallet' },
+          { status: 403 }
+        );
+      }
     }
     
     switch (action) {
@@ -851,11 +878,7 @@ export async function POST(request: NextRequest) {
         );
     }
     
-  } catch (error: any) {
-    logger.error('[CommunityPool API] POST error:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, 'community-pool POST');
   }
 }

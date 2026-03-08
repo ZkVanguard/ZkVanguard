@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createPublicClient, http, type PublicClient, type Block } from 'viem';
 import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
@@ -461,9 +462,6 @@ export async function GET(
     });
   } catch (error: unknown) {
     logger.error('[Transactions API] Error', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch transactions', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'Transaction fetch');
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeErrorResponse } from '@/lib/security/safe-error';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
@@ -37,9 +38,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error verifying proof:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'ZK proof verification');
   }
 }
