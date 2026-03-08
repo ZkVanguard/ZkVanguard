@@ -320,7 +320,9 @@ class AutoHedgingService {
         const notionalValue = Number(hedge.notional_value);
         const leverage = Number(hedge.leverage) || 1;
 
-        // Calculate PnL
+        // Calculate PnL (guard against division by zero)
+        if (entryPrice === 0) continue;
+
         let pnlMultiplier: number;
         if (hedge.side === 'SHORT') {
           pnlMultiplier = (entryPrice - currentPrice) / entryPrice;
@@ -329,6 +331,9 @@ class AutoHedgingService {
         }
 
         const unrealizedPnL = notionalValue * pnlMultiplier * leverage;
+
+        // Guard against non-finite values (Infinity, NaN)
+        if (!isFinite(unrealizedPnL)) continue;
 
         // Update in database
         await query(
