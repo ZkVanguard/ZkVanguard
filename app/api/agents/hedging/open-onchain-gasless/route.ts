@@ -55,7 +55,10 @@ const getAddresses = () => {
 
 // PRIVACY: Dedicated relayer wallet — user's address NEVER touches the chain
 // The relayer holds its own USDC pool and pays gas, acting as a privacy shield
-const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
+const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY;
+if (!RELAYER_PK) {
+  throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+}
 
 // Deployer wallet — OWNER of MockMoonlander (needed for setMockPrice calls)
 const DEPLOYER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
@@ -78,8 +81,19 @@ const ERC20_ABI = [
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  // Rate limiting
+  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication: require wallet signature or internal service token
+    const { requireAuth } = await import('@/lib/security/auth-middleware');
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { pairIndex, collateralAmount, leverage, isLong, walletAddress } = body;
 
     // Validate inputs

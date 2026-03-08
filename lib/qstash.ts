@@ -95,9 +95,16 @@ export async function verifyCronRequest(
     return true;
   }
 
-  // No CRON_SECRET configured = open access (dev only)
+  // No auth configured — reject in production, allow in dev
   if (!cronSecret && !signature) {
-    logger.debug(`[QStash] ⚠️ No auth configured — allowing ${routeName} (dev mode)`);
+    if (process.env.NODE_ENV === 'production') {
+      logger.error(`[QStash] ❌ CRITICAL: No CRON_SECRET configured in production — rejecting ${routeName}`);
+      return NextResponse.json(
+        { success: false, error: 'Server misconfiguration: auth not configured' },
+        { status: 500 }
+      );
+    }
+    logger.warn(`[QStash] ⚠️ No auth configured — allowing ${routeName} (dev mode only)`);
     return true;
   }
 

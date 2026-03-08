@@ -36,8 +36,9 @@ export class CryptocomTradeService {
 
   constructor() {
     // API keys from environment (for production)
-    this.apiKey = process.env.NEXT_PUBLIC_CRYPTOCOM_API_KEY;
-    this.apiSecret = process.env.NEXT_PUBLIC_CRYPTOCOM_API_SECRET;
+    // API secrets must NEVER use NEXT_PUBLIC_ prefix (would be exposed to browser)
+    this.apiKey = process.env.CRYPTOCOM_API_KEY || process.env.NEXT_PUBLIC_CRYPTOCOM_API_KEY;
+    this.apiSecret = process.env.CRYPTOCOM_API_SECRET;
   }
 
   /**

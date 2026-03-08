@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
@@ -114,8 +116,17 @@ export interface HedgeExecutionResponse {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  // Rate limiting
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body: HedgeExecutionRequest = await request.json();
+
+    // Authentication: require internal service token, system secret, or wallet signature
+    const authResult = await requireAuth(request, body as Record<string, unknown>);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { 
       asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, 
       privateMode = false, privacyLevel = 'standard',
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Check for system/internal authentication (cron jobs, liquidation guard, etc.)
-    const isSystemCall = systemSecret === process.env.CRON_SECRET && process.env.CRON_SECRET;
+    const isSystemCall = authResult.method === 'system' || authResult.method === 'internal';
     const systemAutoApprovalThreshold = 1_000_000; // $1M limit for system calls
 
     // Validate required fields

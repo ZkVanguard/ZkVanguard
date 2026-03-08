@@ -203,7 +203,10 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
     // For reducing a position, we close part of it by taking the opposite side
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         portfolioId: position.portfolioId || 1,
         asset: position.asset,
@@ -213,7 +216,6 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
         reason: `Reduce position size by ${reductionPercent}% to improve margin`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
-        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     
@@ -243,7 +245,10 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
     // Close entire position by taking opposite side
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         portfolioId: position.portfolioId || 1,
         asset: position.asset,
@@ -253,7 +258,6 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
         reason: `EMERGENCY CLOSE: ${reason}`,
         walletAddress: position.walletAddress,
         autoApprovalEnabled: true,
-        systemSecret: process.env.CRON_SECRET, // System authentication for automated calls
       }),
     });
     

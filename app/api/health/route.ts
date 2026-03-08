@@ -94,11 +94,7 @@ export async function GET() {
         zkVerifier: (process.env.NEXT_PUBLIC_ZKVERIFIER_ADDRESS || '0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8 (default)').trim(),
         chainId: (process.env.NEXT_PUBLIC_CHAIN_ID || '338 (default)').trim(),
       },
-      serverEnv: {
-        hasAsiApiKey: !!process.env.ASI_API_KEY,
-        hasDatabaseUrl: !!process.env.DATABASE_URL,
-        hasServerWalletKey: !!process.env.SERVER_WALLET_PRIVATE_KEY,
-      },
+      // SECURITY: Never expose which secrets are configured in production
     };
 
     logger.info('[Health Check] Complete', { data: health });

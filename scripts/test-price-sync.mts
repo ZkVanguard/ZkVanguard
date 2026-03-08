@@ -6,7 +6,10 @@ import { ethers } from 'ethers';
 const RPC = 'https://evm-t3.cronos.org';
 const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
-const DEPLOYER_PK = '0x7af57dd2889cb16393ff945b87a8ce670aea2950179c425a572059017636b18d';
+const DEPLOYER_PK = process.env.DEPLOYER_PRIVATE_KEY;
+if (!DEPLOYER_PK) {
+  throw new Error('DEPLOYER_PRIVATE_KEY environment variable is required. Never hardcode private keys.');
+}
 
 const MOONLANDER_ABI = [
   'function setMockPrice(uint256 pairIndex, uint256 price) external',

@@ -27,10 +27,16 @@ export async function GET() {
 /**
  * POST /api/agents/hedging/tracker
  * Start or stop tracker
+ * SECURITY: Requires admin authentication
  * 
  * Body: { action: 'start' | 'stop' }
  */
 export async function POST(request: NextRequest) {
+  // Admin auth required to control tracker
+  const { requireAdminAuth } = await import('@/lib/security/auth-middleware');
+  const authCheck = requireAdminAuth(request);
+  if (authCheck instanceof NextResponse) return authCheck;
+
   try {
     const body = await request.json();
     const { action } = body;

@@ -17,7 +17,10 @@ config({ path: '.env.local' });
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '../lib/constants';
 
 const BASE_URL = 'http://localhost:3000';
-const CRON_SECRET = process.env.CRON_SECRET || 'RzQMP6OvwU0rC31xk5osBGueLXnASb24';
+const CRON_SECRET = process.env.CRON_SECRET;
+if (!CRON_SECRET) {
+  throw new Error('CRON_SECRET environment variable is required');
+}
 
 const PASS = '\x1b[32m✓\x1b[0m';
 const FAIL = '\x1b[31m✗\x1b[0m';

@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 /**
  * Settlement Execution API Route
  * Real SettlementAgent integration with x402 gasless transfers
+ * SECURITY: Requires authentication (internal service or wallet signature)
  */
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication required
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { transactions, useRealAgent = true } = body;
 
     if (!transactions || !Array.isArray(transactions)) {
