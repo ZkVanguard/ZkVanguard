@@ -51,10 +51,65 @@ const POOL_ABI = [
   'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
 ];
 
+// ============================================================================
+// OPTIMIZATION: In-memory cache for RPC calls to reduce on-chain latency
+// ============================================================================
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+const rpcCache = new Map<string, CacheEntry<unknown>>();
+
+function getCachedRpc<T>(key: string): T | null {
+  const entry = rpcCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    rpcCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCachedRpc<T>(key: string, data: T, ttlMs: number = 30000): void {
+  rpcCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+// Explicit types for RPC cache to avoid circular ReturnType references
+interface PoolDataCache {
+  totalValueUSD: number;
+  totalShares: number;
+  sharePrice: number;
+  totalMembers: number;
+  allocations: {
+    BTC: { percentage: number };
+    ETH: { percentage: number };
+    CRO: { percentage: number };
+    SUI: { percentage: number };
+  };
+  onChain: boolean;
+}
+
+interface UserPositionCache {
+  walletAddress: string;
+  shares: number;
+  valueUSD: number;
+  percentage: number;
+  isMember: boolean;
+  onChain: boolean;
+}
+
 /**
- * Fetch on-chain pool data
+ * Fetch on-chain pool data (cached 30s)
  */
-async function getOnChainPoolData() {
+async function getOnChainPoolData(): Promise<PoolDataCache | null> {
+  // Check cache first
+  const cacheKey = 'pool-data';
+  const cached = getCachedRpc<PoolDataCache>(cacheKey);
+  if (cached) {
+    logger.debug('[CommunityPool API] Using cached pool data');
+    return cached;
+  }
+  
   try {
     const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
     const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
@@ -67,7 +122,7 @@ async function getOnChainPoolData() {
     const memberCount = Number(stats._memberCount);
     const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
     
-    return {
+    const result = {
       totalValueUSD: totalNAV,
       totalShares,
       sharePrice,
@@ -80,6 +135,10 @@ async function getOnChainPoolData() {
       },
       onChain: true,
     };
+    
+    // Cache for 30 seconds
+    setCachedRpc(cacheKey, result, 30000);
+    return result;
   } catch (err) {
     logger.error('[CommunityPool API] On-chain fetch error:', err);
     return null;
@@ -87,16 +146,24 @@ async function getOnChainPoolData() {
 }
 
 /**
- * Fetch on-chain user position
+ * Fetch on-chain user position (cached 15s per user)
  */
-async function getOnChainUserPosition(userAddress: string) {
+async function getOnChainUserPosition(userAddress: string): Promise<UserPositionCache | null> {
+  // Check cache first
+  const cacheKey = `user-pos-${userAddress.toLowerCase()}`;
+  const cached = getCachedRpc<UserPositionCache>(cacheKey);
+  if (cached) {
+    logger.debug('[CommunityPool API] Using cached user position');
+    return cached;
+  }
+  
   try {
     const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
     const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
     
     const pos = await pool.getMemberPosition(userAddress);
     
-    return {
+    const result: UserPositionCache = {
       walletAddress: userAddress,
       shares: parseFloat(ethers.formatUnits(pos.shares, 18)),
       valueUSD: parseFloat(ethers.formatUnits(pos.valueUSD, 6)),
@@ -104,6 +171,10 @@ async function getOnChainUserPosition(userAddress: string) {
       isMember: pos.shares > 0n,
       onChain: true,
     };
+    
+    // Cache for 15 seconds (shorter since user-specific)
+    setCachedRpc(cacheKey, result, 15000);
+    return result;
   } catch (err) {
     logger.error('[CommunityPool API] On-chain user fetch error:', err);
     return null;

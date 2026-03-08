@@ -162,49 +162,48 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
         setPositionsData(data);
       });
       
-      // Record snapshot via API (stores in PostgreSQL with real hedge PnL)
+      // OPTIMIZATION: Fire-and-forget portfolio history POST to eliminate waterfall
+      // PnL metrics are fetched async without blocking the main positions render
       if (data.totalValue > 0) {
-        try {
-          const snapshotRes = await fetch('/api/portfolio/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address,
-              totalValue: data.totalValue,
-              positions: data.positions || [],
-            }),
-          });
-          
+        // Non-blocking snapshot + PnL fetch
+        fetch('/api/portfolio/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            totalValue: data.totalValue,
+            positions: data.positions || [],
+          }),
+        }).then(snapshotRes => {
           if (snapshotRes.ok) {
-            const snapshotData = await snapshotRes.json();
-            if (snapshotData.metrics) {
-              // Update PnL metrics from API response (real on-chain data)
-              setPnlMetrics({
-                currentValue: data.totalValue,
-                initialValue: snapshotData.metrics.initialValue || data.totalValue,
-                highestValue: data.totalValue,
-                lowestValue: data.totalValue,
-                totalPnL: snapshotData.metrics.totalPnL || 0,
-                totalPnLPercentage: snapshotData.metrics.totalPnLPercentage || 0,
-                dailyPnL: snapshotData.metrics.dailyPnL || 0,
-                dailyPnLPercentage: snapshotData.metrics.dailyPnLPercentage || 0,
-                weeklyPnL: 0,
-                weeklyPnLPercentage: 0,
-                monthlyPnL: 0,
-                monthlyPnLPercentage: 0,
-                volatility: 0,
-                sharpeRatio: 0,
-                maxDrawdown: 0,
-                winRate: 50,
-              });
-              
-              // Note: hedge count is now sourced from on-chain API only (see fetchHedgeCount)
-              // Do NOT override from snapshot DB data — it may be stale
-            }
+            return snapshotRes.json();
           }
-        } catch (historyError) {
+          return null;
+        }).then(snapshotData => {
+          if (snapshotData?.metrics) {
+            // Update PnL metrics from API response (real on-chain data)
+            setPnlMetrics({
+              currentValue: data.totalValue,
+              initialValue: snapshotData.metrics.initialValue || data.totalValue,
+              highestValue: data.totalValue,
+              lowestValue: data.totalValue,
+              totalPnL: snapshotData.metrics.totalPnL || 0,
+              totalPnLPercentage: snapshotData.metrics.totalPnLPercentage || 0,
+              dailyPnL: snapshotData.metrics.dailyPnL || 0,
+              dailyPnLPercentage: snapshotData.metrics.dailyPnLPercentage || 0,
+              weeklyPnL: 0,
+              weeklyPnLPercentage: 0,
+              monthlyPnL: 0,
+              monthlyPnLPercentage: 0,
+              volatility: 0,
+              sharpeRatio: 0,
+              maxDrawdown: 0,
+              winRate: 50,
+            });
+          }
+        }).catch(historyError => {
           logger.warn('Failed to record portfolio snapshot', { error: String(historyError) });
-        }
+        });
       }
       
       // Cache for 45 seconds (increased from 30s)
@@ -310,9 +309,16 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
     };
 
     fetchHedgeCount();
-    
-    // Refresh hedge count every 30 seconds (aligned with server-side DB cache TTL)
-    const interval = setInterval(() => fetchHedgeCount(), 30000);
+
+    // OPTIMIZATION: Use RefreshCoordinator instead of separate interval
+    // Reduces duplicate API calls when multiple components refresh
+    const handleHedgeRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        logger.debug('Coordinator triggered hedge count refresh', { component: 'PositionsContext' });
+        fetchHedgeCount();
+      }
+    };
+    refreshCoordinator.on('refresh:hedges', handleHedgeRefresh);
 
     // Listen for hedgeAdded events — force refresh bypassing client cache
     const handleHedgeAdded = () => {
@@ -323,7 +329,7 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      refreshCoordinator.off('refresh:hedges', handleHedgeRefresh);
       window.removeEventListener('hedgeAdded', handleHedgeAdded);
     };
   }, [address]);

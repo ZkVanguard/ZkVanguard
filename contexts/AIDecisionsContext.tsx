@@ -121,6 +121,18 @@ const initialState: AIDecisionsState = {
 
 const AIDecisionsContext = createContext<AIDecisionsContextType | undefined>(undefined);
 
+// Debounce helper
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = React.useState(value);
+  
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
+
 export function AIDecisionsProvider({ children }: { children: React.ReactNode }) {
   const { address } = useWallet();
   const { positionsData } = usePositions();
@@ -138,6 +150,10 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
     if (!positionsData) return '';
     return `${positionsData.totalValue}-${positionsData.positions?.length || 0}`;
   }, [positionsData]);
+  
+  // OPTIMIZATION: Debounce portfolio changes to prevent cascading re-renders
+  // Wait 500ms for positions to stabilize before triggering AI refresh
+  const debouncedPortfolioHash = useDebouncedValue(portfolioHash, 500);
   
   // ============================================================================
   // Individual Refresh Functions
@@ -354,9 +370,9 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
       return;
     }
     
-    // Check if we need to refresh
+    // Check if we need to refresh (using debounced portfolio hash)
     const addressChanged = lastAddressRef.current !== address;
-    const portfolioChanged = lastPortfolioHashRef.current !== portfolioHash && lastPortfolioHashRef.current !== '';
+    const portfolioChanged = lastPortfolioHashRef.current !== debouncedPortfolioHash && lastPortfolioHashRef.current !== '';
     
     if (addressChanged || portfolioChanged) {
       logger.debug('[AIDecisionsContext] Triggering refresh', { 
@@ -365,7 +381,7 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
       });
       
       lastAddressRef.current = address;
-      lastPortfolioHashRef.current = portfolioHash;
+      lastPortfolioHashRef.current = debouncedPortfolioHash;
       
       // Only auto-refresh if not already initializing
       if (!initializingRef.current) {
@@ -375,7 +391,7 @@ export function AIDecisionsProvider({ children }: { children: React.ReactNode })
         });
       }
     }
-  }, [address, portfolioHash, refreshAll]);
+  }, [address, debouncedPortfolioHash, refreshAll]);
   
   // ============================================================================
   // Listen for AI events

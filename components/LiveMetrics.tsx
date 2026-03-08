@@ -78,15 +78,32 @@ export const LiveMetrics = memo(function LiveMetrics() {
   useEffect(() => {
     if (!mounted) return;
     
-    // Reduced update frequency from 3s to 5s to save CPU
+    // OPTIMIZATION: Update only every 10s with significance check
+    // Only triggers re-render if visible change (>1% TVL diff or new transaction)
     const interval = setInterval(() => {
-      setMetrics((prev) => ({
-        tvl: prev.tvl + Math.random() * 5000 - 2500,
-        transactions: prev.transactions + Math.floor(Math.random() * 3),
-        gasSaved: Math.min(75, prev.gasSaved + Math.random() * 0.1),
-        agents: 5, // Static value, doesn't change
-      }));
-    }, 5000); // Changed from 3000ms to 5000ms
+      setMetrics((prev) => {
+        const newTvl = prev.tvl + Math.random() * 5000 - 2500;
+        const newTransactions = prev.transactions + Math.floor(Math.random() * 2);
+        const newGasSaved = Math.min(75, prev.gasSaved + Math.random() * 0.05);
+        
+        // Only update if there's a visible difference (prevents pointless re-renders)
+        const tvlDiff = Math.abs(newTvl - prev.tvl) / prev.tvl;
+        const hasTxChange = newTransactions !== prev.transactions;
+        const gasChanged = Math.abs(newGasSaved - prev.gasSaved) > 0.1;
+        
+        // If no significant visual change, return previous state (no re-render)
+        if (tvlDiff < 0.001 && !hasTxChange && !gasChanged) {
+          return prev;
+        }
+        
+        return {
+          tvl: newTvl,
+          transactions: newTransactions,
+          gasSaved: newGasSaved,
+          agents: 5,
+        };
+      });
+    }, 10000); // Increased from 5s to 10s
 
     return () => clearInterval(interval);
   }, [mounted]);
