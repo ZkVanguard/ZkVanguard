@@ -20,6 +20,7 @@ import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/c
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
+import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
 // Types
 interface PoolMetrics {
@@ -499,7 +500,7 @@ async function triggerPoolHedge(
         'X-Pool-Hedge-Trigger': 'true',
       },
       body: JSON.stringify({
-        portfolioId: `pool-${pool.id}`,
+        portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,  // Community pool uses reserved ID (-1)
         asset: largestAsset,
         strategy: 'PROTECTIVE_PUT',
         notionalValue: hedgeNotional,

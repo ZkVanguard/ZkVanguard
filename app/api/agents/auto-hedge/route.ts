@@ -16,6 +16,7 @@ import {
   disableAutoHedge,
   getAutoHedgeConfig 
 } from '@/lib/storage/auto-hedge-storage';
+import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,9 +81,9 @@ export async function POST(request: NextRequest) {
       
       case 'enable':
         // Enable auto-hedging for a specific portfolio
-        // Community Pool (portfolioId=0) doesn't require walletAddress
+        // Community Pool (portfolioId=COMMUNITY_POOL_PORTFOLIO_ID) doesn't require walletAddress
         const parsedPortfolioId = parseInt(portfolioId);
-        const isCommunityPool = parsedPortfolioId === 0;
+        const isCommunityPool = isCommunityPoolPortfolio(parsedPortfolioId);
         
         if (portfolioId === undefined || portfolioId === null) {
           return NextResponse.json(
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
       case 'trigger_assessment':
         // Manually trigger risk assessment for a portfolio
         const assessPortfolioId = parseInt(portfolioId);
-        const isCommunityPoolAssess = assessPortfolioId === 0;
+        const isCommunityPoolAssess = isCommunityPoolPortfolio(assessPortfolioId);
         
         if (portfolioId === undefined || portfolioId === null) {
           return NextResponse.json(

@@ -18,6 +18,7 @@ import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
+import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
 // CommunityPool contract details
 const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     }
     
     // Step 2: Run risk assessment via AutoHedgingService
-    const riskAssessment = await autoHedgingService.triggerRiskAssessment(0, COMMUNITY_POOL_ADDRESS);
+    const riskAssessment = await autoHedgingService.triggerRiskAssessment(COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS);
     
     logger.info('[CommunityPool Cron] Risk assessment complete', {
       riskScore: riskAssessment.riskScore,
