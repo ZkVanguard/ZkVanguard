@@ -3,6 +3,7 @@ import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { getCached, setCached } from '@/lib/db/ui-cache';
 
 // ============================================================================
 // Response Cache - prevents redundant AI processing for same predictions
@@ -28,6 +29,19 @@ function getCachedInsight(hash: string): unknown | null {
 
 function setCachedInsight(hash: string, data: unknown): void {
   Object.assign(insightCache, { data, hash, timestamp: Date.now() });
+}
+
+async function getDbCachedInsight(hash: string): Promise<unknown | null> {
+  try {
+    return await getCached('agent-results', `insight:${hash}`);
+  } catch {
+    return null;
+  }
+}
+
+async function setAllInsightCaches(hash: string, data: unknown): Promise<void> {
+  setCachedInsight(hash, data);
+  setCached('agent-results', `insight:${hash}`, data, INSIGHT_CACHE_TTL).catch(() => {});
 }
 
 /**
@@ -97,12 +111,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check cache first
+    // Two-tier cache check (memory → DB)
     const predictionHash = createPredictionHash(predictions);
-    const cached = getCachedInsight(predictionHash);
-    if (cached) {
-      console.log('[InsightSummary] Returning cached response');
-      return NextResponse.json(cached);
+    
+    // Tier 1: In-memory cache
+    const memCached = getCachedInsight(predictionHash);
+    if (memCached) {
+      console.log('[InsightSummary] Memory cache HIT');
+      return NextResponse.json(memCached);
+    }
+    
+    // Tier 2: DB cache (survives cold starts)
+    const dbCached = await getDbCachedInsight(predictionHash);
+    if (dbCached) {
+      setCachedInsight(predictionHash, dbCached);
+      console.log('[InsightSummary] DB cache HIT (cold start recovery)');
+      return NextResponse.json(dbCached);
     }
 
     // ====================================================================
@@ -742,9 +766,9 @@ Return ONLY valid JSON.`,
       agentsPipeline,
     };
 
-    // Cache the response for future requests
-    setCachedInsight(predictionHash, response);
-    console.log('[InsightSummary] Cached response');
+    // Cache the response (two-tier: memory + DB)
+    await setAllInsightCaches(predictionHash, response);
+    console.log('[InsightSummary] Cached response (memory + DB)');
 
     return NextResponse.json(response);
   } catch (error) {

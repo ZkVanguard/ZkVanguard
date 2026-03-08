@@ -5,13 +5,27 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { CRONOS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCached, setCached } from '@/lib/db/ui-cache';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-// Cache for portfolio list (30s TTL)
+// Two-tier cache: In-memory (fast) + DB (survives cold starts)
 let listCache: { address: string; data: unknown; timestamp: number } | null = null;
 const CACHE_TTL = 30000;
+
+async function getDbCachedList(address: string): Promise<unknown | null> {
+  try {
+    return await getCached('portfolio', `list:${address.toLowerCase()}`);
+  } catch {
+    return null;
+  }
+}
+
+async function setAllListCaches(address: string, data: unknown): Promise<void> {
+  listCache = { address: address.toLowerCase(), data, timestamp: Date.now() };
+  setCached('portfolio', `list:${address.toLowerCase()}`, data, CACHE_TTL).catch(() => {});
+}
 
 /**
  * GET /api/portfolio/list?address=0x...
@@ -28,10 +42,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address parameter is required' }, { status: 400 });
     }
 
-    // Check cache
+    // Two-tier cache check (memory → DB)
+    // Tier 1: In-memory cache
     if (listCache && listCache.address === address.toLowerCase() && Date.now() - listCache.timestamp < CACHE_TTL) {
-      logger.info(`[Portfolio List API] Cache HIT for ${address}`);
+      logger.info(`[Portfolio List API] Memory cache HIT for ${address}`);
       return NextResponse.json(listCache.data);
+    }
+    
+    // Tier 2: DB cache (survives cold starts)
+    const dbCached = await getDbCachedList(address);
+    if (dbCached) {
+      listCache = { address: address.toLowerCase(), data: dbCached, timestamp: Date.now() };
+      logger.info(`[Portfolio List API] DB cache HIT (cold start recovery) for ${address}`);
+      return NextResponse.json(dbCached);
     }
 
     logger.info(`[Portfolio List API] Fetching portfolios for ${address}`);
@@ -52,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     if (count === 0) {
       const response = { portfolios: [], count: 0 };
-      listCache = { address: address.toLowerCase(), data: response, timestamp: Date.now() };
+      await setAllListCaches(address, response);
       return NextResponse.json(response);
     }
 
@@ -131,8 +154,8 @@ export async function GET(request: NextRequest) {
       totalOnChain: count,
     };
 
-    // Cache result
-    listCache = { address: address.toLowerCase(), data: response, timestamp: Date.now() };
+    // Cache result (two-tier: memory + DB)
+    await setAllListCaches(address, response);
 
     logger.info(`[Portfolio List API] Found ${portfoliosWithTx.length}/${count} portfolios for ${address} in ${Date.now() - startTime}ms`);
 
