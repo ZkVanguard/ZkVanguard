@@ -147,8 +147,33 @@ export async function POST(request: NextRequest) {
       }
       await _agentInitPromise;
     }
-    const registry = _cachedRegistry!;
-    const leadAgent = _cachedLeadAgent!;
+    
+    // Safety check: if agents still not initialized, fail gracefully
+    if (!_cachedLeadAgent || !_cachedRegistry) {
+      logger.error('Agent initialization completed but agents are null');
+      return NextResponse.json({
+        recommendations: [{
+          strategy: 'Agent System Unavailable',
+          confidence: 0.5,
+          expectedReduction: 0,
+          description: 'Multi-agent system failed to initialize. Please try again.',
+          agentSource: 'system',
+          actions: [],
+        }],
+        portfolioAnalysis: { totalValue: 0, tokens: 0, dominantAsset: null },
+        hackathonAPIs: {
+          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+          marketData: 'Crypto.com MCP (FREE)',
+          perpetuals: 'Moonlander (hackathon integrated)',
+          zkProofs: 'ZK-STARK verification',
+        },
+        totalExecutionTime: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    
+    const registry = _cachedRegistry;
+    const leadAgent = _cachedLeadAgent;;
     
     logger.info('✅ Multi-Agent System ready (cached)', { 
       agents: ['LeadAgent', 'RiskAgent', signer ? 'HedgingAgent' : '(HedgingAgent - no signer)'] 
@@ -161,17 +186,47 @@ export async function POST(request: NextRequest) {
     
     // Get real wallet balances using RealMarketDataService
     const marketDataService = getMarketDataService();
-    const realPortfolio = await marketDataService.getPortfolioData(address);
+    let realPortfolio;
+    try {
+      realPortfolio = await marketDataService.getPortfolioData(address);
+    } catch (portfolioError) {
+      logger.error('Failed to fetch portfolio data', portfolioError);
+      // Return empty portfolio response on failure
+      return NextResponse.json({
+        recommendations: [{
+          strategy: 'Portfolio Fetch Failed',
+          confidence: 0.5,
+          expectedReduction: 0,
+          description: 'Unable to fetch on-chain portfolio data. Please try again in a moment.',
+          agentSource: 'system',
+          actions: [],
+        }],
+        portfolioAnalysis: { totalValue: 0, tokens: 0, dominantAsset: null },
+        hackathonAPIs: {
+          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+          marketData: 'Crypto.com MCP (FREE)',
+          perpetuals: 'Moonlander (hackathon integrated)',
+          zkProofs: 'ZK-STARK verification',
+        },
+        totalExecutionTime: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    }
     
     const portfolioData: PortfolioData = {
       address,
-      tokens: realPortfolio.tokens.map(t => ({
-        symbol: t.symbol,
-        balance: parseFloat(t.balance),
-        price: t.usdValue / parseFloat(t.balance),
-        value: t.usdValue,
-      })),
-      totalValue: realPortfolio.totalValue,
+      tokens: realPortfolio.tokens.map(t => {
+        const balance = parseFloat(t.balance) || 0;
+        // Prevent division by zero - use usdValue or 0 as price if balance is 0
+        const price = balance > 0 ? t.usdValue / balance : (t.usdValue || 0);
+        return {
+          symbol: t.symbol,
+          balance,
+          price: isFinite(price) ? price : 0,
+          value: t.usdValue || 0,
+        };
+      }),
+      totalValue: realPortfolio.totalValue || 0,
     };
 
     // If wallet has no tokens, provide helpful message
@@ -218,19 +273,57 @@ export async function POST(request: NextRequest) {
     logger.info('🎯 LeadAgent orchestrating multi-agent hedge analysis...');
     
     // Execute strategy through LeadAgent with 30s timeout
-    const executionReport = await withTimeout(leadAgent.executeStrategyFromIntent({
-      action: 'hedge',
-      targetPortfolio: 1,
-      objectives: {
-        riskLimit: 30, // Target 30% risk reduction
-      },
-      constraints: {
-        maxSlippage: 0.5,
-        timeframe: 3600,
-      },
-      requiredAgents: ['risk', 'hedging', 'reporting'],
-      estimatedComplexity: 'medium',
-    }), 30000, 'LeadAgent.executeStrategyFromIntent');
+    let executionReport;
+    try {
+      executionReport = await withTimeout(leadAgent.executeStrategyFromIntent({
+        action: 'hedge',
+        targetPortfolio: 1,
+        objectives: {
+          riskLimit: 30, // Target 30% risk reduction
+        },
+        constraints: {
+          maxSlippage: 0.5,
+          timeframe: 3600,
+        },
+        requiredAgents: ['risk', 'hedging', 'reporting'],
+        estimatedComplexity: 'medium',
+      }), 30000, 'LeadAgent.executeStrategyFromIntent');
+    } catch (strategyError) {
+      logger.error('LeadAgent strategy execution failed', strategyError);
+      // Return fallback response based on portfolio data alone
+      const dominantAsset = portfolioData.tokens[0];
+      return NextResponse.json({
+        recommendations: [{
+          strategy: dominantAsset ? `${dominantAsset.symbol} Hedge (Fallback)` : 'Portfolio Analysis',
+          confidence: 0.6,
+          expectedReduction: 0.15,
+          description: 'Agent analysis timed out. Based on portfolio composition, consider hedging your dominant position.',
+          agentSource: 'system-fallback',
+          actions: dominantAsset ? [{
+            action: 'SHORT',
+            asset: dominantAsset.symbol,
+            size: dominantAsset.balance * 0.2,
+            leverage: 3,
+            protocol: 'Moonlander',
+            reason: 'Basic hedge for dominant position',
+          }] : [],
+        }],
+        portfolioAnalysis: {
+          totalValue: portfolioData.totalValue,
+          tokens: portfolioData.tokens.length,
+          dominantAsset: dominantAsset?.symbol || null,
+        },
+        hackathonAPIs: {
+          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
+          marketData: 'Crypto.com MCP (FREE)',
+          perpetuals: 'Moonlander (hackathon integrated)',
+          zkProofs: 'ZK-STARK verification',
+        },
+        totalExecutionTime: Date.now() - startTime,
+        timestamp: new Date().toISOString(),
+        fallbackReason: 'Agent execution timeout or failure',
+      });
+    }
 
     logger.info('📋 Multi-Agent execution complete', {
       executionId: executionReport.executionId,
@@ -264,33 +357,38 @@ export async function POST(request: NextRequest) {
     
     // Extract recommendation from RiskAgent analysis
     const riskAnalysis = executionReport.riskAnalysis;
-    if (riskAnalysis) {
+    if (riskAnalysis && portfolioData.tokens.length > 0) {
       const dominantAsset = portfolioData.tokens.reduce((max, token) => 
         token.value > (max?.value || 0) ? token : max
       , portfolioData.tokens[0]);
 
-      // Determine hedge direction based on risk sentiment
-      const hedgeSide = riskAnalysis.marketSentiment === 'bearish' ? 'SHORT' : 
-                        riskAnalysis.marketSentiment === 'bullish' ? 'LONG' : 'SHORT';
-      
-      recommendations.push({
-        strategy: `${hedgeSide} ${dominantAsset.symbol} Hedge`,
-        confidence: Math.max(0.5, 1 - (riskAnalysis.totalRisk / 100)),
-        expectedReduction: riskAnalysis.volatility * 0.5, // Aim to reduce 50% of volatility
-        description: riskAnalysis.recommendations?.[0] || `Risk-adjusted ${hedgeSide.toLowerCase()} hedge based on ${riskAnalysis.marketSentiment} sentiment`,
-        riskScore: riskAnalysis.totalRisk,
-        volatility: riskAnalysis.volatility,
-        sentiment: riskAnalysis.marketSentiment,
-        agentSource: 'RiskAgent + LeadAgent',
-        actions: [{
-          action: hedgeSide,
-          asset: dominantAsset.symbol,
-          size: dominantAsset.balance * 0.25, // Hedge 25% of position
-          leverage: Math.min(5, Math.ceil(riskAnalysis.volatility * 10)),
-          protocol: 'Moonlander',
-          reason: `AI-recommended hedge based on ${(riskAnalysis.totalRisk).toFixed(0)}% risk score`,
-        }],
-      });
+      if (dominantAsset) {
+        // Determine hedge direction based on risk sentiment
+        const hedgeSide = riskAnalysis.marketSentiment === 'bearish' ? 'SHORT' : 
+                          riskAnalysis.marketSentiment === 'bullish' ? 'LONG' : 'SHORT';
+        
+        const totalRisk = isFinite(riskAnalysis.totalRisk) ? riskAnalysis.totalRisk : 50;
+        const volatility = isFinite(riskAnalysis.volatility) ? riskAnalysis.volatility : 0.3;
+        
+        recommendations.push({
+          strategy: `${hedgeSide} ${dominantAsset.symbol} Hedge`,
+          confidence: Math.max(0.5, 1 - (totalRisk / 100)),
+          expectedReduction: volatility * 0.5, // Aim to reduce 50% of volatility
+          description: riskAnalysis.recommendations?.[0] || `Risk-adjusted ${hedgeSide.toLowerCase()} hedge based on ${riskAnalysis.marketSentiment || 'neutral'} sentiment`,
+          riskScore: totalRisk,
+          volatility: volatility,
+          sentiment: riskAnalysis.marketSentiment,
+          agentSource: 'RiskAgent + LeadAgent',
+          actions: [{
+            action: hedgeSide,
+            asset: dominantAsset.symbol,
+            size: (dominantAsset.balance || 0) * 0.25, // Hedge 25% of position
+            leverage: Math.min(5, Math.ceil(volatility * 10)),
+            protocol: 'Moonlander',
+            reason: `AI-recommended hedge based on ${totalRisk.toFixed(0)}% risk score`,
+          }],
+        });
+      }
     }
 
     // Extract recommendation from HedgingAgent strategy
@@ -322,9 +420,11 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     try {
       const aiService = getCryptocomAIService();
+      const firstToken = portfolioData.tokens[0];
+      const totalValue = portfolioData.totalValue || 1; // Avoid division by zero
       const riskProfile = {
-        dominantAsset: portfolioData.tokens[0]?.symbol || 'BTC',
-        concentration: portfolioData.tokens[0] ? (portfolioData.tokens[0].value / portfolioData.totalValue) * 100 : 50,
+        dominantAsset: firstToken?.symbol || 'BTC',
+        concentration: firstToken ? Math.min(100, (firstToken.value / totalValue) * 100) : 50,
         totalValue: portfolioData.totalValue,
       };
       
