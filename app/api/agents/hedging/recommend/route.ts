@@ -8,6 +8,7 @@ import { getCronosProvider } from '@/lib/throttled-provider';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { heavyLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { getCached, setCached } from '@/lib/db/ui-cache';
 
 // Import the multi-agent system
 import { LeadAgent } from '@/agents/core/LeadAgent';
@@ -24,14 +25,14 @@ let _cachedRegistry: AgentRegistry | null = null;
 let _agentInitPromise: Promise<void> | null = null;
 
 // ============================================================================
-// Response Cache - prevents redundant AI processing for same address
+// Two-Tier Cache: In-Memory (fast) + DB (survives cold starts)
 // ============================================================================
 interface CachedResponse {
   data: unknown;
   timestamp: number;
 }
 const responseCache = new Map<string, CachedResponse>();
-const CACHE_TTL_MS = 30000; // 30 second cache TTL
+const CACHE_TTL_MS = 60000; // 60 second cache TTL (DB-backed now)
 
 function getCachedResponse(address: string): CachedResponse | null {
   const cached = responseCache.get(address.toLowerCase());
@@ -52,6 +53,30 @@ function setCachedResponse(address: string, data: unknown): void {
     if (oldestKey) responseCache.delete(oldestKey);
   }
   responseCache.set(address.toLowerCase(), { data, timestamp: Date.now() });
+}
+
+/**
+ * Try DB cache as fallback when in-memory cache misses
+ */
+async function getDbCachedResponse(address: string): Promise<unknown | null> {
+  try {
+    const cacheKey = `recommend:${address.toLowerCase()}`;
+    return await getCached('recommendations', cacheKey);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store response in both in-memory and DB cache
+ */
+async function setAllCaches(address: string, data: unknown): Promise<void> {
+  // In-memory (synchronous, fast)
+  setCachedResponse(address, data);
+  
+  // DB cache (async, survives cold starts)
+  const cacheKey = `recommend:${address.toLowerCase()}`;
+  setCached('recommendations', cacheKey, data, CACHE_TTL_MS).catch(() => {});
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -94,10 +119,20 @@ export async function POST(request: NextRequest) {
     // Check cache first (unless force refresh requested)
     const forceRefresh = body.force === true;
     if (!forceRefresh) {
-      const cached = getCachedResponse(address);
-      if (cached) {
-        logger.info('🚀 Returning cached recommendation', { address, age: Date.now() - cached.timestamp });
-        return NextResponse.json(cached.data);
+      // Tier 1: In-memory cache (instant)
+      const memCached = getCachedResponse(address);
+      if (memCached) {
+        logger.info('🚀 Returning in-memory cached recommendation', { address, age: Date.now() - memCached.timestamp });
+        return NextResponse.json(memCached.data);
+      }
+      
+      // Tier 2: DB cache (survives cold starts, shared across instances)
+      const dbCached = await getDbCachedResponse(address);
+      if (dbCached) {
+        // Hydrate in-memory cache for subsequent requests
+        setCachedResponse(address, dbCached);
+        logger.info('🗄️ Returning DB-cached recommendation (cold start recovery)', { address });
+        return NextResponse.json(dbCached);
       }
     }
 
@@ -499,9 +534,9 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     };
 
-    // Cache the response for future requests
-    setCachedResponse(address, responseData);
-    logger.info('💾 Cached recommendation response', { address, executionTime: totalExecutionTime });
+    // Cache the response in both tiers (in-memory + DB)
+    await setAllCaches(address, responseData);
+    logger.info('💾 Cached recommendation (memory + DB)', { address, executionTime: totalExecutionTime });
 
     return NextResponse.json(responseData);
   } catch (error) {

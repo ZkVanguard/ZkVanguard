@@ -6,6 +6,7 @@ import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getCached, setCached } from '@/lib/db/ui-cache';
 
 // Token price estimates (in production, fetch from price oracle)
 const TOKEN_PRICES: Record<string, number> = {
@@ -28,9 +29,22 @@ const TOKEN_SYMBOLS: Record<string, string> = {
   '0x28217daddc55e3c4831b4a48a00ce04880786967': 'MockUSDC',
 };
 
-// In-memory cache for portfolio data (60s TTL)
+// Two-tier cache: In-memory (fast) + DB (survives cold starts)
 const portfolioCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 60000; // 60 seconds
+
+async function getDbCachedPortfolio(id: string): Promise<unknown | null> {
+  try {
+    return await getCached('portfolio', `detail:${id}`);
+  } catch {
+    return null;
+  }
+}
+
+async function setAllPortfolioCaches(id: string, data: unknown): Promise<void> {
+  portfolioCache.set(`portfolio-${id}`, { data, timestamp: Date.now() });
+  setCached('portfolio', `detail:${id}`, data, CACHE_TTL).catch(() => {});
+}
 
 export async function GET(
   request: NextRequest,
@@ -45,12 +59,23 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get('refresh') === 'true';
     
-    // Check cache first (unless bypassed)
+    // Two-tier cache check (memory → DB)
     const cacheKey = `portfolio-${id}`;
-    const cached = portfolioCache.get(cacheKey);
-    if (!bypassCache && cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      logger.info(`[Portfolio API] Cache HIT for portfolio ${id}`);
-      return NextResponse.json(cached.data);
+    if (!bypassCache) {
+      // Tier 1: In-memory cache
+      const memCached = portfolioCache.get(cacheKey);
+      if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+        logger.info(`[Portfolio API] Memory cache HIT for portfolio ${id}`);
+        return NextResponse.json(memCached.data);
+      }
+      
+      // Tier 2: DB cache (survives cold starts)
+      const dbCached = await getDbCachedPortfolio(id);
+      if (dbCached) {
+        portfolioCache.set(cacheKey, { data: dbCached, timestamp: Date.now() });
+        logger.info(`[Portfolio API] DB cache HIT (cold start recovery) for portfolio ${id}`);
+        return NextResponse.json(dbCached);
+      }
     }
     
     logger.info(`[Portfolio API] Fetching portfolio ${portfolioId}${bypassCache ? ' (cache bypassed)' : ''}...`);
@@ -299,8 +324,8 @@ export async function GET(
 
     logger.info(`[Portfolio API] Portfolio ${id} final value: $${finalEntryValue.toFixed(2)}, assets: ${assetBalances.length}`);
 
-    // Cache the response
-    portfolioCache.set(cacheKey, { data: portfolioData, timestamp: Date.now() });
+    // Cache the response (two-tier: memory + DB)
+    await setAllPortfolioCaches(id, portfolioData);
 
     return NextResponse.json(portfolioData, {
       headers: {

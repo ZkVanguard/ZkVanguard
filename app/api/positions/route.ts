@@ -4,13 +4,27 @@ import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { getCached, setCached } from '@/lib/db/ui-cache';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
-// In-memory cache for positions (30s TTL)
+// Two-tier cache: In-memory (fast) + DB (survives cold starts)
 const positionsCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 30000; // 30 seconds
+
+async function getDbCachedPositions(address: string): Promise<unknown | null> {
+  try {
+    return await getCached('portfolio', `positions:${address.toLowerCase()}`);
+  } catch {
+    return null;
+  }
+}
+
+async function setAllPositionsCaches(address: string, data: unknown): Promise<void> {
+  positionsCache.set(address, { data, timestamp: Date.now() });
+  setCached('portfolio', `positions:${address.toLowerCase()}`, data, CACHE_TTL).catch(() => {});
+}
 
 export async function GET(request: NextRequest) {
   // Rate limiting
@@ -28,11 +42,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check cache first
-    const cached = positionsCache.get(address);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      logger.info(`[Positions API] Cache HIT for ${address}`);
-      return NextResponse.json(cached.data);
+    // Check cache first (two-tier: memory → DB)
+    const memCached = positionsCache.get(address);
+    if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+      logger.info(`[Positions API] Memory cache HIT for ${address}`);
+      return NextResponse.json(memCached.data);
+    }
+    
+    // Tier 2: DB cache (survives cold starts)
+    const dbCached = await getDbCachedPositions(address);
+    if (dbCached) {
+      positionsCache.set(address, { data: dbCached, timestamp: Date.now() });
+      logger.info(`[Positions API] DB cache HIT (cold start recovery) for ${address}`);
+      return NextResponse.json(dbCached);
     }
 
     logger.info(`[Positions API] Cache MISS - fetching positions for ${address}`);
@@ -96,9 +118,9 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Cache the response
-    positionsCache.set(address, { data: response, timestamp: Date.now() });
-    logger.info(`[Positions API] Cached positions for ${address}`);
+    // Cache the response (two-tier: memory + DB)
+    await setAllPositionsCaches(address, response);
+    logger.info(`[Positions API] Cached positions (memory + DB) for ${address}`);
     logger.info(`[Positions API] Total request time: ${Date.now() - startTime}ms`);
     
     // Return with SWR cache headers for smooth UI
