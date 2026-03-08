@@ -213,6 +213,17 @@ export interface ComprehensiveReport {
 export class ReportingAgent extends BaseAgent {
   private reports: Map<string, ReportRequest> = new Map();
   private completedReports: Map<string, unknown> = new Map();
+  private static readonly MAX_COMPLETED_REPORTS = 500;
+
+  /** Evict oldest reports when cap is exceeded */
+  private capCompletedReports(): void {
+    if (this.completedReports.size > ReportingAgent.MAX_COMPLETED_REPORTS) {
+      const keys = Array.from(this.completedReports.keys());
+      for (let i = 0; i < keys.length - 400; i++) {
+        this.completedReports.delete(keys[i]);
+      }
+    }
+  }
 
   constructor(
     agentId: string,
@@ -421,6 +432,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = `risk-${portfolioId}-${Date.now()}`;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,
@@ -554,6 +566,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = `performance-${portfolioId}-${Date.now()}`;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,
@@ -614,6 +627,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = `settlement-${Date.now()}`;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,
@@ -667,6 +681,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = `portfolio-${portfolioId}-${Date.now()}`;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,
@@ -734,6 +749,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = `audit-${Date.now()}`;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,
@@ -808,6 +824,7 @@ export class ReportingAgent extends BaseAgent {
 
       const reportId = report.reportId;
       this.completedReports.set(reportId, report);
+      this.capCompletedReports();
 
       return {
         success: true,

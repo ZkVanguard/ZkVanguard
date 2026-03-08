@@ -224,10 +224,6 @@ export class MCPClient extends EventEmitter {
 
       // Wait for price update (with timeout)
       return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error(`Timeout waiting for price data for ${symbol}`));
-        }, 10000);
-
         const handler = (data: MCPPriceData) => {
           if (data.symbol === symbol) {
             clearTimeout(timeout);
@@ -235,6 +231,12 @@ export class MCPClient extends EventEmitter {
             resolve(data);
           }
         };
+
+        const timeout = setTimeout(() => {
+          // CRITICAL: remove listener on timeout to prevent event listener leak
+          this.removeListener('price-update', handler);
+          reject(new Error(`Timeout waiting for price data for ${symbol}`));
+        }, 10000);
 
         this.on('price-update', handler);
       });

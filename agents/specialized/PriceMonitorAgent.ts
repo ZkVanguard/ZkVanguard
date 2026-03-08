@@ -135,6 +135,8 @@ export class PriceMonitorAgent {
     for (const unsub of this.fiveMinUnsubscribers) unsub();
     this.fiveMinUnsubscribers = [];
     this.cachedFiveMinSignal = null;
+    // Clear centralized snapshot to prevent stale data after restart
+    this.centralizedSnapshot = null;
     logger.info('Price monitor agent stopped');
     this.emit({ type: 'agent_stopped', timestamp: Date.now() });
   }
@@ -546,5 +548,6 @@ export interface AgentStatus {
   x402Enabled: boolean;
 }
 
-// Export singleton
-export const priceMonitorAgent = new PriceMonitorAgent();
+// NOTE: Do NOT export a module-level singleton here.
+// The orchestrator creates and manages the PriceMonitorAgent instance.
+// A rogue singleton would bypass centralized price sharing.

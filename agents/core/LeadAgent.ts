@@ -544,6 +544,14 @@ Respond ONLY with valid JSON, no explanation.`,
       report.totalExecutionTime = Date.now() - startTime;
       this.executionReports.set(executionId, report);
 
+      // Cap executionReports to prevent unbounded memory growth
+      if (this.executionReports.size > 1000) {
+        const keys = Array.from(this.executionReports.keys());
+        for (let i = 0; i < keys.length - 800; i++) {
+          this.executionReports.delete(keys[i]);
+        }
+      }
+
       logger.info('Strategy execution successful', {
         agentId: this.id,
         executionId,

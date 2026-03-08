@@ -24,7 +24,7 @@ import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataS
 import { getUnifiedPriceProvider } from './unified-price-provider';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
-import { calculatePoolNAV } from './CommunityPoolService';
+// calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './AutoHedgingService';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -262,7 +262,7 @@ export class CentralizedHedgeManager {
 
   /**
    * Gather context for a single portfolio.
-   * Community pool: on-chain getPoolStats() + calculatePoolNAV()
+   * Community pool: on-chain getPoolStats() + snapshot prices
    * User portfolio: on-chain RWAManager.portfolios() + getPortfolioAssets()
    * Both use snapshot prices — NO API price fetches.
    */
@@ -278,17 +278,14 @@ export class CentralizedHedgeManager {
   }
 
   /**
-   * Community pool context using snapshot prices + on-chain pool stats
+   * Community pool context using snapshot prices + on-chain pool stats.
+   * Uses the pre-fetched snapshot directly — does NOT call calculatePoolNAV()
+   * which would independently fetch prices and defeat centralized single-fetch.
    */
   private async gatherCommunityPoolContext(
     config: AutoHedgeConfig,
     snapshot: MarketSnapshot
   ): Promise<PortfolioContext> {
-    // Get market-adjusted NAV (this calls fetchLivePrices internally, 
-    // but it has its own 5s cache so at worst it's a single extra call)
-    const marketData = await calculatePoolNAV();
-    const { totalValueUSD: marketNAV, sharePrice, allocations: marketAllocations } = marketData;
-    
     // On-chain pool stats
     const provider = new ethers.JsonRpcProvider(CENTRAL_CONFIG.RPC_URL);
     const poolContract = new ethers.Contract(
@@ -300,24 +297,71 @@ export class CentralizedHedgeManager {
     const totalShares = Number(ethers.formatUnits(stats[0], 18));
     const onChainNAV = Number(ethers.formatUnits(stats[1], 6));
 
-    // Build positions from allocations using SNAPSHOT prices (not re-fetching)
-    const positions: Position[] = [];
-    const allocationPcts: Record<string, number> = {};
-
-    for (const [symbol, data] of Object.entries(marketAllocations)) {
-      const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
-      if (alloc.valueUSD > 0) {
-        // Use snapshot price for change24h instead of re-fetching
-        const snapshotPrice = snapshot.prices.get(symbol);
-        positions.push({
-          symbol,
-          value: alloc.valueUSD,
-          change24h: snapshotPrice?.change24h || 0,
-          balance: alloc.amount,
-        });
-        allocationPcts[symbol] = alloc.percentage;
+    // Get pool state from DB for allocation amounts (no price fetch)
+    let allocationsFromDB: Record<string, { amount: number; percentage: number }> = {};
+    try {
+      const { getPoolState } = await import('@/lib/db/community-pool');
+      const poolState = await getPoolState();
+      for (const [asset, alloc] of Object.entries(poolState.allocations)) {
+        allocationsFromDB[asset] = { 
+          amount: (alloc as { amount: number }).amount || 0, 
+          percentage: (alloc as { percentage: number }).percentage || 0 
+        };
+      }
+    } catch {
+      // If DB unavailable, use equal allocation estimates from on-chain NAV
+      const symbols = ['CRO', 'ETH', 'BTC', 'SUI'];
+      const pct = 100 / symbols.length;
+      for (const sym of symbols) {
+        allocationsFromDB[sym] = { amount: 0, percentage: pct };
       }
     }
+
+    // Build positions from DB amounts + SNAPSHOT prices (no redundant fetch)
+    const positions: Position[] = [];
+    const allocationPcts: Record<string, number> = {};
+    let totalValue = 0;
+
+    for (const [symbol, allocData] of Object.entries(allocationsFromDB)) {
+      const snapshotPrice = snapshot.prices.get(symbol);
+      if (!snapshotPrice) continue;
+
+      if (allocData.amount > 0) {
+        // DB has actual amounts — use them directly
+        const valueUSD = allocData.amount * snapshotPrice.price;
+        totalValue += valueUSD;
+        positions.push({
+          symbol,
+          value: valueUSD,
+          change24h: snapshotPrice.change24h,
+          balance: allocData.amount,
+        });
+      } else if (allocData.percentage > 0 && onChainNAV > 0) {
+        // DB has percentages but no amounts — estimate from on-chain NAV
+        const valueUSD = onChainNAV * (allocData.percentage / 100);
+        const estimatedBalance = valueUSD / snapshotPrice.price;
+        totalValue += valueUSD;
+        positions.push({
+          symbol,
+          value: valueUSD,
+          change24h: snapshotPrice.change24h,
+          balance: estimatedBalance,
+        });
+      }
+    }
+
+    // Calculate percentages from actual values
+    for (const pos of positions) {
+      allocationPcts[pos.symbol] = totalValue > 0 ? (pos.value / totalValue) * 100 : 0;
+    }
+
+    // If still no value but on-chain has NAV, use on-chain NAV directly
+    if (totalValue === 0 && onChainNAV > 0) {
+      totalValue = onChainNAV;
+    }
+
+    // Calculate share price from snapshot-derived NAV
+    const sharePrice = totalShares > 0 ? totalValue / totalShares : 1.0;
 
     // Peak share price from NAV history
     let peakSharePrice = 1.0;
@@ -343,12 +387,12 @@ export class CentralizedHedgeManager {
       positions,
       activeHedges,
       allocations: allocationPcts,
-      totalValue: marketNAV,
+      totalValue,
       isCommunityPool: true,
       poolStats: {
         totalShares,
         onChainNAV,
-        marketNAV,
+        marketNAV: totalValue,
         sharePrice,
         peakSharePrice,
       },

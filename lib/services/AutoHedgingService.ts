@@ -74,6 +74,15 @@ class AutoHedgingService {
   private autoHedgeConfigs: Map<number, AutoHedgeConfig> = new Map();
   private lastRiskAssessments: Map<number, RiskAssessment> = new Map();
 
+  // ── Overlap guards: prevent concurrent execution of async interval callbacks ──
+  // Without these, if updateAllHedgePnL() takes >10s or checkAllPortfolioRisks() >60s,
+  // overlapping executions could cause duplicate hedges, inconsistent state, or DB races.
+  private pnlUpdateInProgress = false;
+  private riskCheckInProgress = false;
+
+  // ── Memory cap for assessments map ──
+  private static readonly MAX_RISK_ASSESSMENTS = 500;
+
   /**
    * Start the auto-hedging service
    */
@@ -91,21 +100,35 @@ class AutoHedgingService {
     // Initial PnL update
     await this.updateAllHedgePnL();
 
-    // Start PnL update loop
+    // Start PnL update loop — with overlap guard
     this.pnlUpdateInterval = setInterval(async () => {
+      if (this.pnlUpdateInProgress) {
+        logger.debug('[AutoHedging] PnL update skipped — previous still running');
+        return;
+      }
+      this.pnlUpdateInProgress = true;
       try {
         await this.updateAllHedgePnL();
       } catch (error) {
         logger.error('[AutoHedging] PnL update error', { error: error instanceof Error ? error.message : error });
+      } finally {
+        this.pnlUpdateInProgress = false;
       }
     }, CONFIG.PNL_UPDATE_INTERVAL_MS);
 
-    // Start risk check loop
+    // Start risk check loop — with overlap guard
     this.riskCheckInterval = setInterval(async () => {
+      if (this.riskCheckInProgress) {
+        logger.debug('[AutoHedging] Risk check skipped — previous still running');
+        return;
+      }
+      this.riskCheckInProgress = true;
       try {
         await this.checkAllPortfolioRisks();
       } catch (error) {
         logger.error('[AutoHedging] Risk check error', { error: error instanceof Error ? error.message : error });
+      } finally {
+        this.riskCheckInProgress = false;
       }
     }, CONFIG.RISK_CHECK_INTERVAL_MS);
 
@@ -177,14 +200,23 @@ class AutoHedgingService {
     }
 
     this.isRunning = false;
+    this.pnlUpdateInProgress = false;
+    this.riskCheckInProgress = false;
     logger.info('[AutoHedging] Service stopped');
   }
 
   /**
    * Enable auto-hedging for a portfolio
-   * Immediately registers with provided config, then asynchronously fetches on-chain settings
+   * Immediately registers with provided config, then asynchronously fetches on-chain settings.
+   * Uses a version counter to prevent stale async results from overwriting newer configs.
    */
+  private configVersions: Map<number, number> = new Map();
+
   enableForPortfolio(config: AutoHedgeConfig): void {
+    // Increment version for this portfolio — prevents stale async overwrites
+    const version = (this.configVersions.get(config.portfolioId) || 0) + 1;
+    this.configVersions.set(config.portfolioId, version);
+
     // Set config IMMEDIATELY so it's available for risk checks right away
     this.autoHedgeConfigs.set(config.portfolioId, config);
     logger.info('[AutoHedging] Portfolio registered immediately', {
@@ -195,11 +227,20 @@ class AutoHedgingService {
 
     // Then asynchronously refine settings from on-chain data (non-blocking)
     this.loadPortfolioSettings(config).then(updatedConfig => {
-      this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
-      logger.info('[AutoHedging] Portfolio settings refined from on-chain', {
-        portfolioId: updatedConfig.portfolioId,
-        riskThreshold: updatedConfig.riskThreshold,
-      });
+      // Only apply if this is still the latest version (no newer enableForPortfolio call)
+      if (this.configVersions.get(config.portfolioId) === version) {
+        this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
+        logger.info('[AutoHedging] Portfolio settings refined from on-chain', {
+          portfolioId: updatedConfig.portfolioId,
+          riskThreshold: updatedConfig.riskThreshold,
+        });
+      } else {
+        logger.debug('[AutoHedging] Skipping stale on-chain config update', {
+          portfolioId: config.portfolioId,
+          staleVersion: version,
+          currentVersion: this.configVersions.get(config.portfolioId),
+        });
+      }
     }).catch(error => {
       // Config already set above, just log the warning
       logger.warn('[AutoHedging] Failed to load on-chain portfolio settings, using stored defaults', {
