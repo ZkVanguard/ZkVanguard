@@ -185,8 +185,8 @@ Check logs after deployment:
 ```
 [AutoHedging] Starting service...
 [AutoHedging] Loading configurations from storage
-[AutoHedging] Loaded configs from database: {count: 2, portfolios: [0, 3]}
-[AutoHedging] Portfolio enabled with settings: {portfolioId: 0, riskThreshold: 4}
+[AutoHedging] Loaded configs from database: {count: 2, portfolios: [-1, 3]}
+[AutoHedging] Portfolio enabled with settings: {portfolioId: -1, riskThreshold: 4}
 [AutoHedging] Portfolio enabled with settings: {portfolioId: 3, riskThreshold: 5}
 [AutoHedging] All stored portfolios loaded: {activeCount: 2}
 [AutoHedging] Service started

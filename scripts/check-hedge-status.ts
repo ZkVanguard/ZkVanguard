@@ -7,23 +7,26 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { query } from '../lib/db/postgres';
+import { COMMUNITY_POOL_PORTFOLIO_ID } from '../lib/constants';
 
 async function checkHedgeStatus() {
   console.log('📊 Community Pool Auto-Hedging Status\n');
   
   // Check recent hedges
   const hedges = await query(
-    'SELECT * FROM hedges WHERE portfolio_id = 0 ORDER BY created_at DESC LIMIT 5'
+    'SELECT * FROM hedges WHERE portfolio_id = $1 ORDER BY created_at DESC LIMIT 5',
+    [COMMUNITY_POOL_PORTFOLIO_ID]
   );
   
-  console.log('Recent Hedges for Community Pool (Portfolio 0):');
+  console.log(`Recent Hedges for Community Pool (Portfolio ${COMMUNITY_POOL_PORTFOLIO_ID}):`);
   if (hedges.length === 0) {
     console.log('  ⚠️  NO HEDGES FOUND IN DATABASE');
   } else {
     hedges.forEach((h: any, i: number) => {
-      console.log(`  ${i+1}. ${h.position} ${h.asset} | Size: $${h.collateral_amount} | Leverage: ${h.leverage}x`);
+      console.log(`  ${i+1}. ${h.side} ${h.asset} | Size: $${h.notional_value} | Leverage: ${h.leverage}x`);
       console.log(`     Created: ${h.created_at} | Status: ${h.status}`);
       if (h.tx_hash) console.log(`     TX: ${h.tx_hash}`);
+      if (h.reason) console.log(`     Reason: ${h.reason}`);
     });
   }
   
@@ -47,37 +50,43 @@ async function checkHedgeStatus() {
   }
   
   // Check pool NAV history
-  const navHistory = await query(
-    'SELECT * FROM pool_nav_history WHERE pool_id = 0 ORDER BY timestamp DESC LIMIT 10'
-  );
-  
-  console.log('\n📈 Recent NAV History (Last 10 entries):');
-  if (navHistory.length === 0) {
-    console.log('  ⚠️  NO NAV HISTORY FOUND');
-  } else {
-    navHistory.forEach((n: any, i: number) => {
-      console.log(`  ${i+1}. $${parseFloat(n.nav).toFixed(2)} at ${new Date(n.timestamp).toLocaleString()}`);
-    });
+  try {
+    const navHistory = await query(
+      'SELECT * FROM pool_nav_history WHERE pool_id = 0 ORDER BY timestamp DESC LIMIT 10'
+    );
     
-    const peak = Math.max(...navHistory.map((n: any) => parseFloat(n.nav)));
-    const current = parseFloat(navHistory[0].nav);
-    const drawdown = ((current - peak) / peak * 100);
-    console.log(`\n  📊 Analysis:`);
-    console.log(`     Peak NAV: $${peak.toFixed(2)}`);
-    console.log(`     Current NAV: $${current.toFixed(2)}`);
-    console.log(`     Drawdown: ${drawdown.toFixed(2)}%`);
-    console.log(`     Loss: $${(peak - current).toFixed(2)}`);
+    console.log('\n📈 Recent NAV History (Last 10 entries):');
+    if (navHistory.length === 0) {
+      console.log('  ⚠️  NO NAV HISTORY FOUND');
+    } else {
+      navHistory.forEach((n: any, i: number) => {
+        console.log(`  ${i+1}. $${parseFloat(n.nav).toFixed(2)} at ${new Date(n.timestamp).toLocaleString()}`);
+      });
+      
+      const peak = Math.max(...navHistory.map((n: any) => parseFloat(n.nav)));
+      const current = parseFloat(navHistory[0].nav);
+      const drawdown = ((current - peak) / peak * 100);
+      console.log(`\n  📊 Analysis:`);
+      console.log(`     Peak NAV: $${peak.toFixed(2)}`);
+      console.log(`     Current NAV: $${current.toFixed(2)}`);
+      console.log(`     Drawdown: ${drawdown.toFixed(2)}%`);
+      console.log(`     Loss: $${(peak - current).toFixed(2)}`);
+    }
+  } catch {
+    console.log('\n📈 Recent NAV History:');
+    console.log('  ⚠️  pool_nav_history table does not exist yet');
   }
   
   // Check if auto-hedging is enabled
   console.log('\n⚙️  Auto-Hedge Configuration:');
   try {
     const config = await query(
-      'SELECT * FROM auto_hedge_configs WHERE portfolio_id = 0'
+      'SELECT * FROM auto_hedge_configs WHERE portfolio_id = $1',
+      [COMMUNITY_POOL_PORTFOLIO_ID]
     );
     if (config.length > 0) {
       const c = config[0];
-      console.log(`  Portfolio 0: ${c.enabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+      console.log(`  Community Pool: ${c.enabled ? '✅ ENABLED' : '❌ DISABLED'}`);
       console.log(`  Risk Threshold: ${c.risk_threshold}%`);
       console.log(`  Max Leverage: ${c.max_leverage}x`);
     } else {
