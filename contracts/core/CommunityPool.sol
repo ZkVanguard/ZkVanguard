@@ -1143,6 +1143,18 @@ contract CommunityPool is
     }
 
     /**
+     * @notice Set asset token address (for post-initialization configuration)
+     * @param assetIndex Index of asset (0=BTC, 1=ETH, 2=SUI, 3=CRO)
+     * @param token ERC20 token address
+     */
+    function setAssetToken(uint8 assetIndex, address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(assetIndex < NUM_ASSETS, "Invalid asset index");
+        require(token != address(0), "Zero address");
+        assetTokens[assetIndex] = IERC20(token);
+        assetDecimals[assetIndex] = IERC20Metadata(token).decimals();
+    }
+
+    /**
      * @notice Set Pyth Network oracle contract address
      * @param _pythOracle Address of Pyth oracle (Cronos: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B)
      */
