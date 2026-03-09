@@ -52,13 +52,51 @@ const POOL_ABI = [
 ];
 
 // ============================================================================
-// OPTIMIZATION: In-memory cache for RPC calls to reduce on-chain latency
+// HIGH-CONCURRENCY OPTIMIZATIONS
 // ============================================================================
+
+// 1. In-memory cache with INCREASED TTLs for community pool data
 interface CacheEntry<T> {
   data: T;
   expiresAt: number;
 }
 const rpcCache = new Map<string, CacheEntry<unknown>>();
+
+// 2. Request deduplication - prevent thundering herd
+// When 100 users request the same data simultaneously, only 1 fetch runs
+const pendingRequests = new Map<string, Promise<unknown>>();
+
+async function dedupedFetch<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number
+): Promise<T> {
+  // Check cache first
+  const cached = getCachedRpc<T>(key);
+  if (cached !== null) {
+    return cached;
+  }
+  
+  // Check if a request is already in flight
+  const pending = pendingRequests.get(key) as Promise<T> | undefined;
+  if (pending) {
+    logger.debug('[CommunityPool] Deduped request', { key });
+    return pending;
+  }
+  
+  // Create new request with cleanup
+  const request = fetcher()
+    .then(result => {
+      setCachedRpc(key, result, ttlMs);
+      return result;
+    })
+    .finally(() => {
+      pendingRequests.delete(key);
+    });
+  
+  pendingRequests.set(key, request);
+  return request;
+}
 
 function getCachedRpc<T>(key: string): T | null {
   const entry = rpcCache.get(key);
@@ -98,119 +136,141 @@ interface UserPositionCache {
   onChain: boolean;
 }
 
+// CACHE TTLs - Increased for high concurrency (pool data changes slowly)
+const POOL_DATA_TTL = 60_000;       // 60 seconds for pool summary
+const USER_POSITION_TTL = 30_000;   // 30 seconds for user positions
+const LEADERBOARD_TTL = 120_000;    // 2 minutes for leaderboard
+
 /**
- * Fetch on-chain pool data (cached 30s)
+ * Create a JSON response with CDN cache headers for Vercel Edge Cache
+ * s-maxage: CDN caches for specified seconds
+ * stale-while-revalidate: serves stale while fetching fresh in background
+ */
+function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
+  return NextResponse.json(data, {
+    headers: {
+      'Cache-Control': `s-maxage=${cdnTtlSeconds}, stale-while-revalidate=${cdnTtlSeconds * 2}`,
+    },
+  });
+}
+
+/**
+ * Fetch on-chain pool data with request deduplication
+ * TTL: 60 seconds (pool data changes slowly)
  */
 async function getOnChainPoolData(): Promise<PoolDataCache | null> {
-  // Check cache first
-  const cacheKey = 'pool-data';
-  const cached = getCachedRpc<PoolDataCache>(cacheKey);
-  if (cached) {
-    logger.debug('[CommunityPool API] Using cached pool data');
-    return cached;
-  }
-  
-  try {
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-    
-    const stats = await pool.getPoolStats();
-    
-    // Format values (shares are 18 decimals, NAV/price are 6 decimals USDC)
-    const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-    const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
-    const memberCount = Number(stats._memberCount);
-    const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
-    
-    const result = {
-      totalValueUSD: totalNAV,
-      totalShares,
-      sharePrice,
-      totalMembers: memberCount,
-      allocations: {
-        BTC: { percentage: Number(stats._allocations[0]) / 100 },
-        ETH: { percentage: Number(stats._allocations[1]) / 100 },
-        CRO: { percentage: Number(stats._allocations[2]) / 100 },
-        SUI: { percentage: Number(stats._allocations[3]) / 100 },
-      },
-      onChain: true,
-    };
-    
-    // Cache for 30 seconds
-    setCachedRpc(cacheKey, result, 30000);
-    return result;
-  } catch (err) {
-    logger.error('[CommunityPool API] On-chain fetch error:', err);
-    return null;
-  }
+  return dedupedFetch<PoolDataCache | null>(
+    'pool-data',
+    async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+        
+        const stats = await pool.getPoolStats();
+        
+        // Format values (shares are 18 decimals, NAV/price are 6 decimals USDC)
+        const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+        const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
+        const memberCount = Number(stats._memberCount);
+        const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
+        
+        return {
+          totalValueUSD: totalNAV,
+          totalShares,
+          sharePrice,
+          totalMembers: memberCount,
+          allocations: {
+            BTC: { percentage: Number(stats._allocations[0]) / 100 },
+            ETH: { percentage: Number(stats._allocations[1]) / 100 },
+            CRO: { percentage: Number(stats._allocations[2]) / 100 },
+            SUI: { percentage: Number(stats._allocations[3]) / 100 },
+          },
+          onChain: true,
+        };
+      } catch (err) {
+        logger.error('[CommunityPool API] On-chain fetch error:', err);
+        return null;
+      }
+    },
+    POOL_DATA_TTL
+  );
 }
 
 /**
- * Fetch on-chain user position (cached 15s per user)
+ * Fetch on-chain user position with request deduplication
+ * TTL: 30 seconds per user
  */
 async function getOnChainUserPosition(userAddress: string): Promise<UserPositionCache | null> {
-  // Check cache first
-  const cacheKey = `user-pos-${userAddress.toLowerCase()}`;
-  const cached = getCachedRpc<UserPositionCache>(cacheKey);
-  if (cached) {
-    logger.debug('[CommunityPool API] Using cached user position');
-    return cached;
-  }
+  const normalizedAddr = userAddress.toLowerCase();
   
-  try {
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-    
-    const pos = await pool.getMemberPosition(userAddress);
-    
-    const result: UserPositionCache = {
-      walletAddress: userAddress,
-      shares: parseFloat(ethers.formatUnits(pos.shares, 18)),
-      valueUSD: parseFloat(ethers.formatUnits(pos.valueUSD, 6)),
-      percentage: parseFloat(ethers.formatUnits(pos.percentage, 2)),
-      isMember: pos.shares > 0n,
-      onChain: true,
-    };
-    
-    // Cache for 15 seconds (shorter since user-specific)
-    setCachedRpc(cacheKey, result, 15000);
-    return result;
-  } catch (err) {
-    logger.error('[CommunityPool API] On-chain user fetch error:', err);
-    return null;
-  }
+  return dedupedFetch<UserPositionCache | null>(
+    `user-pos-${normalizedAddr}`,
+    async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+        
+        const pos = await pool.getMemberPosition(userAddress);
+        
+        return {
+          walletAddress: userAddress,
+          shares: parseFloat(ethers.formatUnits(pos.shares, 18)),
+          valueUSD: parseFloat(ethers.formatUnits(pos.valueUSD, 6)),
+          percentage: parseFloat(ethers.formatUnits(pos.percentage, 2)),
+          isMember: pos.shares > 0n,
+          onChain: true,
+        };
+      } catch (err) {
+        logger.error('[CommunityPool API] On-chain user fetch error:', err);
+        return null;
+      }
+    },
+    USER_POSITION_TTL
+  );
 }
 
 /**
- * Fetch ALL on-chain members and their positions
+ * Fetch ALL on-chain members and their positions with request deduplication
+ * TTL: 120 seconds (expensive query)
  */
 async function getAllOnChainMembers() {
-  try {
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-    const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-    
-    const memberCount = await pool.getMemberCount();
-    const count = Number(memberCount);
-    logger.info(`[CommunityPool API] On-chain member count: ${count}`);
-    
-    const members = [];
-    for (let i = 0; i < count; i++) {
-      const addr = await pool.memberList(i);
-      const memberData = await pool.members(addr);
-      
-      members.push({
-        walletAddress: addr.toLowerCase(),
-        shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
-        depositedUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
-        joinTime: Number(memberData.joinTime),
-      });
-    }
-    
-    return members;
-  } catch (err) {
-    logger.error('[CommunityPool API] Failed to fetch all on-chain members:', err);
-    return null;
-  }
+  return dedupedFetch<Array<{
+    walletAddress: string;
+    shares: number;
+    depositedUSD: number;
+    joinTime: number;
+  }> | null>(
+    'all-members',
+    async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+        
+        const memberCount = await pool.getMemberCount();
+        const count = Number(memberCount);
+        logger.info(`[CommunityPool API] On-chain member count: ${count}`);
+        
+        const members = [];
+        for (let i = 0; i < count; i++) {
+          const addr = await pool.memberList(i);
+          const memberData = await pool.members(addr);
+          
+          members.push({
+            walletAddress: addr.toLowerCase(),
+            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
+            depositedUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+            joinTime: Number(memberData.joinTime),
+          });
+        }
+        
+        return members;
+      } catch (err) {
+        logger.error('[CommunityPool API] Failed to fetch all on-chain members:', err);
+        return null;
+      }
+    },
+    LEADERBOARD_TTL
+  );
 }
 
 /**
@@ -460,12 +520,12 @@ export async function GET(request: NextRequest) {
         try {
           const leaderboard = await getTopShareholders(limit);
           if (leaderboard && leaderboard.length > 0) {
-            return NextResponse.json({
+            return cachedJsonResponse({
               success: true,
               leaderboard,
               count: leaderboard.length,
               source: 'db',
-            });
+            }, 60); // CDN cache for 60 seconds
           }
         } catch (dbError) {
           logger.warn('[CommunityPool API] DB leaderboard failed, falling back to on-chain');
@@ -485,15 +545,15 @@ export async function GET(request: NextRequest) {
             percentage: totalShares > 0 ? (m.shares / totalShares) * 100 : 0,
           }));
         
-        return NextResponse.json({
+        return cachedJsonResponse({
           success: true,
           leaderboard,
           count: leaderboard.length,
           source: 'onchain',
-        });
+        }, 60); // CDN cache for 60 seconds
       }
       
-      return NextResponse.json({
+      return cachedJsonResponse({
         success: true,
         leaderboard: [],
         count: 0,
@@ -598,7 +658,7 @@ export async function GET(request: NextRequest) {
       
       if (onChainPool && onChainPool.totalShares > 0) {
         // On-chain contract is the authoritative source - use it directly
-        return NextResponse.json({
+        return cachedJsonResponse({
           success: true,
           pool: {
             totalValueUSD: onChainPool.totalValueUSD,
@@ -612,7 +672,7 @@ export async function GET(request: NextRequest) {
           supportedAssets: SUPPORTED_ASSETS,
           timestamp: Date.now(),
           source: 'onchain',
-        });
+        }, 30); // CDN cache for 30 seconds
       }
     } catch (e) {
       logger.warn('[CommunityPool API] On-chain pool summary failed', { error: e });
