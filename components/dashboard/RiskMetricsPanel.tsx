@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { 
   Shield, 
   TrendingUp, 
@@ -142,8 +142,16 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(!compact);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchRef = useRef<number>(0);
   
-  const fetchMetrics = useCallback(async () => {
+  const fetchMetrics = useCallback(async (force = false) => {
+    // OPTIMIZATION: Client-side debounce - skip if fetched within last 30s
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 30000) {
+      return;
+    }
+    lastFetchRef.current = now;
+    
     try {
       const res = await fetch('/api/community-pool/risk-metrics');
       const json = await res.json();
@@ -164,7 +172,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
   }, []);
   
   useEffect(() => {
-    fetchMetrics();
+    fetchMetrics(true); // Force initial fetch
   }, [fetchMetrics]);
   
   // Refresh every 5 minutes
