@@ -66,9 +66,10 @@ export async function storeCommitmentTrueGaslessServerSide(
     
     // Use server wallet for signing x402 transactions
     // In production, this should be an env variable with a funded wallet
-    const serverPrivateKey = process.env.SERVER_WALLET_PRIVATE_KEY 
+    // Trim to prevent whitespace issues from env copy-paste
+    const serverPrivateKey = (process.env.SERVER_WALLET_PRIVATE_KEY 
       || process.env.PRIVATE_KEY
-      || process.env.AGENT_PRIVATE_KEY;
+      || process.env.AGENT_PRIVATE_KEY)?.trim();
     
     if (!serverPrivateKey) {
       throw new Error('No server wallet configured. Please set SERVER_WALLET_PRIVATE_KEY in environment variables.');

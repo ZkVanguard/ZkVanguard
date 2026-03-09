@@ -145,7 +145,9 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
     ).provider;
     
-    const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
+    // Trim private key to remove any trailing whitespace from env vars
+    const rawPrivateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
+    const privateKey = rawPrivateKey?.trim();
     const signer = privateKey ? new ethers.Wallet(privateKey, provider) : undefined;
 
     // Use cached agent instances (singleton per process)

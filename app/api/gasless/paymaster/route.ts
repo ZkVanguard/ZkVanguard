@@ -231,8 +231,8 @@ async function handleExecute(body: {
     }, { status: 400 });
   }
 
-  // Initialize relayer
-  const relayerPrivateKey = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY;
+  // Initialize relayer (trim to prevent whitespace issues from env copy-paste)
+  const relayerPrivateKey = (process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY)?.trim();
   if (!relayerPrivateKey) {
     return NextResponse.json({
       success: false,
