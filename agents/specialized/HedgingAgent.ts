@@ -79,7 +79,7 @@ export class HedgingAgent extends BaseAgent {
     private signer: ethers.Wallet | ethers.Signer,
     hedgeExecutorConfig?: HedgeExecutorConfig
   ) {
-    super(agentId, 'HedgingAgent', [
+    super(agentId, 'hedging', [
       AgentCapability.RISK_ANALYSIS,
       AgentCapability.PORTFOLIO_MANAGEMENT,
       AgentCapability.MARKET_INTEGRATION,
