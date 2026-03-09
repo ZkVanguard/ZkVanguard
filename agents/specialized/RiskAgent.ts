@@ -27,7 +27,7 @@ export class RiskAgent extends BaseAgent {
     signer?: ethers.Wallet | ethers.Signer,
     rwaManagerAddress?: string
   ) {
-    super(agentId, 'RiskAgent', ['RISK_ANALYSIS', 'PORTFOLIO_MANAGEMENT', 'MARKET_INTEGRATION']);
+    super(agentId, 'risk', ['RISK_ANALYSIS', 'PORTFOLIO_MANAGEMENT', 'MARKET_INTEGRATION']);
     this.provider = provider;
     this.signer = signer;
     this.rwaManagerAddress = rwaManagerAddress;

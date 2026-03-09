@@ -99,7 +99,7 @@ export class SettlementAgent extends BaseAgent {
     private signer: ethers.Wallet | ethers.Signer,
     private paymentRouterAddress: string
   ) {
-    super(agentId, 'SettlementAgent', [
+    super(agentId, 'settlement', [
       AgentCapability.PAYMENT_PROCESSING,
       AgentCapability.SETTLEMENT,
     ]);

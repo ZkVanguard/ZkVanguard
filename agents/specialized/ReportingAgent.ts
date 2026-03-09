@@ -229,7 +229,7 @@ export class ReportingAgent extends BaseAgent {
     agentId: string,
     private provider: ethers.Provider
   ) {
-    super(agentId, 'ReportingAgent', [
+    super(agentId, 'reporting', [
       AgentCapability.DATA_ANALYSIS,
       AgentCapability.REPORTING,
     ]);

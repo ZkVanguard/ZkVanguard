@@ -42,7 +42,7 @@ export class LeadAgent extends BaseAgent {
     signer?: ethers.Wallet | ethers.Signer,
     agentRegistry?: AgentRegistry
   ) {
-    super(agentId, 'LeadAgent', ['intent-parsing', 'task-delegation', 'result-aggregation', 'orchestration']);
+    super(agentId, 'lead', ['intent-parsing', 'task-delegation', 'result-aggregation', 'orchestration']);
     this.agentRegistry = agentRegistry || new AgentRegistry();
     this.executionReports = new Map();
     this.provider = provider;
