@@ -3,6 +3,7 @@ import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { ProductionGuard } from '@/lib/security/production-guard';
 
 /**
  * Settlement Execution API Route
@@ -30,8 +31,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use real agent orchestration if enabled
-    if (useRealAgent) {
+    // PRODUCTION SAFETY: Never allow demo mode in production - real money at stake
+    const forceRealAgent = ProductionGuard.ENFORCE_PRODUCTION_SAFETY || useRealAgent;
+
+    // Use real agent orchestration
+    if (forceRealAgent) {
       const orchestrator = getAgentOrchestrator();
       const result = await orchestrator.executeBatchSettlement({ transactions });
 
@@ -45,9 +49,29 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString(),
         });
       }
+      
+      // In production, if real agent fails, return error instead of demo
+      if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+        ProductionGuard.auditLog({
+          timestamp: Date.now(),
+          operation: 'SETTLEMENT_AGENT_FAILED',
+          result: 'failure',
+          reason: result.error,
+          metadata: {
+            transactionCount: transactions.length,
+          },
+        });
+        
+        return NextResponse.json({
+          error: 'Settlement execution failed',
+          details: result.error,
+          realAgent: true,
+          timestamp: new Date().toISOString(),
+        }, { status: 503 });
+      }
     }
     
-    // Fallback demo response
+    // Fallback demo response (DEVELOPMENT ONLY)
     return NextResponse.json({
       batchId: `batch-${Date.now()}`,
       transactionCount: transactions.length,
@@ -56,6 +80,7 @@ export async function POST(request: NextRequest) {
       status: 'completed',
       zkProofGenerated: true,
       realAgent: false,
+      developmentMode: true,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

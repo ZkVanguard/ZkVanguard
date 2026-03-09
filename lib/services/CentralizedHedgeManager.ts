@@ -24,6 +24,13 @@ import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataS
 import { getUnifiedPriceProvider } from './unified-price-provider';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
+import { 
+  ProductionGuard, 
+  validateFinancialAmount, 
+  validatePercentage, 
+  validateLeverage,
+  auditLog 
+} from '@/lib/security/production-guard';
 // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './AutoHedgingService';
 
@@ -308,12 +315,20 @@ export class CentralizedHedgeManager {
       const { getPoolState } = await import('@/lib/storage/community-pool-storage');
       const poolState = await getPoolState();
       for (const [asset, alloc] of Object.entries(poolState.allocations)) {
-        allocationsFromDB[asset] = { 
-          amount: (alloc as { amount: number }).amount || 0, 
-          percentage: (alloc as { percentage: number }).percentage || 0 
-        };
+        const rawAmount = (alloc as { amount: number }).amount;
+        const rawPercentage = (alloc as { percentage: number }).percentage;
+        
+        // PRODUCTION SAFETY: Validate allocation data
+        // Allow 0 (empty position) but not negative or NaN
+        const amount = Number.isFinite(rawAmount) && rawAmount >= 0 ? rawAmount : 0;
+        const percentage = Number.isFinite(rawPercentage) && rawPercentage >= 0 && rawPercentage <= 100 
+          ? rawPercentage 
+          : 0;
+        
+        allocationsFromDB[asset] = { amount, percentage };
       }
-    } catch {
+    } catch (error) {
+      logger.warn('[HedgeManager] Failed to load pool state from DB, using equal allocation estimates', { error });
       // If DB unavailable, use equal allocation estimates from on-chain NAV
       const symbols = ['CRO', 'ETH', 'BTC', 'SUI'];
       const pct = 100 / symbols.length;
@@ -508,13 +523,47 @@ export class CentralizedHedgeManager {
          WHERE portfolio_id = $1 AND status = 'active'`,
         [portfolioId]
       );
-      return result.map(h => ({
-        asset: String(h.asset || ''),
-        side: String(h.side || ''),
-        size: parseFloat(String(h.size)) || 0,
-        notionalValue: parseFloat(String(h.notional_value)) || 0,
-      }));
-    } catch {
+      
+      // PRODUCTION SAFETY: Validate hedge data from DB
+      const validHedges: ActiveHedge[] = [];
+      
+      for (const h of result) {
+        const asset = String(h.asset || '');
+        const side = String(h.side || '');
+        
+        // Parse and validate size
+        const rawSize = parseFloat(String(h.size));
+        if (!Number.isFinite(rawSize) || rawSize <= 0) {
+          logger.warn('[HedgeManager] Skipping hedge with invalid size', { 
+            portfolioId, 
+            asset, 
+            rawSize: h.size 
+          });
+          continue;
+        }
+        
+        // Parse and validate notional value
+        const rawNotional = parseFloat(String(h.notional_value));
+        if (!Number.isFinite(rawNotional) || rawNotional <= 0) {
+          logger.warn('[HedgeManager] Skipping hedge with invalid notional_value', { 
+            portfolioId, 
+            asset, 
+            rawNotional: h.notional_value 
+          });
+          continue;
+        }
+        
+        validHedges.push({
+          asset,
+          side,
+          size: rawSize,
+          notionalValue: rawNotional,
+        });
+      }
+      
+      return validHedges;
+    } catch (error) {
+      logger.error('[HedgeManager] Failed to fetch active hedges', { portfolioId, error });
       return [];
     }
   }
@@ -862,13 +911,59 @@ export class CentralizedHedgeManager {
     for (const hedge of activeHedges) {
       const baseAsset = hedge.asset.replace('-PERP', '').replace('-USD-PERP', '');
       const snapshotPrice = snapshot.prices.get(baseAsset) || snapshot.prices.get(hedge.asset);
-      if (!snapshotPrice) continue;
+      if (!snapshotPrice) {
+        logger.warn('[HedgeManager] Missing price for hedge asset', { asset: hedge.asset, hedgeId: hedge.id });
+        continue;
+      }
 
-      const entryPrice = Number(hedge.entry_price) || 0;
-      if (entryPrice === 0) continue;
+      // PRODUCTION SAFETY: Validate entry price - must be positive
+      const rawEntryPrice = Number(hedge.entry_price);
+      if (!Number.isFinite(rawEntryPrice) || rawEntryPrice <= 0) {
+        logger.error('[HedgeManager] Invalid entry_price for hedge - skipping PnL calculation', { 
+          hedgeId: hedge.id, 
+          entryPrice: hedge.entry_price,
+          asset: hedge.asset 
+        });
+        auditLog({
+          timestamp: Date.now(),
+          operation: 'hedge_pnl_skip',
+          result: 'rejected',
+          reason: `Invalid entry_price: ${hedge.entry_price}`,
+          metadata: { hedgeId: hedge.id, asset: hedge.asset }
+        });
+        errors++;
+        continue;
+      }
+      const entryPrice = rawEntryPrice;
 
-      const notionalValue = Number(hedge.notional_value);
-      const leverage = Number(hedge.leverage) || 1;
+      // PRODUCTION SAFETY: Validate notional value
+      const rawNotionalValue = Number(hedge.notional_value);
+      if (!Number.isFinite(rawNotionalValue) || rawNotionalValue <= 0) {
+        logger.error('[HedgeManager] Invalid notional_value for hedge', { 
+          hedgeId: hedge.id, 
+          notionalValue: hedge.notional_value 
+        });
+        errors++;
+        continue;
+      }
+      const notionalValue = rawNotionalValue;
+
+      // PRODUCTION SAFETY: Validate leverage (must be 1-125x)
+      const rawLeverage = Number(hedge.leverage);
+      let leverage = 1; // Default only if explicitly allowed
+      if (Number.isFinite(rawLeverage) && rawLeverage >= 1 && rawLeverage <= 125) {
+        leverage = rawLeverage;
+      } else if (rawLeverage !== undefined && rawLeverage !== null && rawLeverage !== 0) {
+        // Non-default but invalid leverage
+        logger.error('[HedgeManager] Invalid leverage for hedge', { 
+          hedgeId: hedge.id, 
+          leverage: hedge.leverage 
+        });
+        if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+          errors++;
+          continue;
+        }
+      }
 
       let pnlMultiplier: number;
       if (hedge.side === 'SHORT') {

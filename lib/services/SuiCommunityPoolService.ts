@@ -15,6 +15,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from './RealMarketDataService';
+import { ProductionGuard } from '@/lib/security/production-guard';
 
 // ============================================
 // DEPLOYED CONTRACT ADDRESSES
@@ -326,11 +327,42 @@ export class SuiCommunityPoolService {
 
   /**
    * Get member position summary
+   * 
+   * PRODUCTION: Fetches live SUI price from market data service.
+   * Never uses hardcoded prices for financial calculations.
    */
   async getMemberPosition(ownerAddress: string): Promise<SuiMemberPosition> {
     const portfolios = await this.getPortfoliosByOwner(ownerAddress);
     const totalValue = portfolios.reduce((sum, p) => sum + p.totalValue, 0n);
-    const suiPrice = 2.50;
+    
+    // CRITICAL: Fetch live SUI price - never use hardcoded values
+    let suiPrice: number;
+    try {
+      const marketService = getMarketDataService();
+      const priceData = await marketService.getTokenPrice('SUI');
+      
+      // Validate price is reasonable
+      const validatedPrice = ProductionGuard.requireLivePrice(
+        'SUI',
+        priceData.price,
+        priceData.timestamp,
+        priceData.source
+      );
+      
+      suiPrice = validatedPrice.price;
+      logger.debug('[SuiPool] Using live SUI price', { price: suiPrice, source: priceData.source });
+    } catch (error) {
+      // PRODUCTION: Fail safely - do not use stale/fake prices
+      logger.error('[SuiPool] CRITICAL: Failed to fetch SUI price', { error });
+      
+      if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+        throw new Error('Unable to fetch live SUI price. Member position calculation halted for safety.');
+      }
+      
+      // In development ONLY - use a clearly marked fallback
+      logger.warn('[SuiPool] DEV MODE: Using fallback SUI price of $0 (calculations will be zero)');
+      suiPrice = 0; // Will result in 0 USD value, making it obvious something is wrong
+    }
 
     return {
       address: ownerAddress,

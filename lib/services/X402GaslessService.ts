@@ -9,6 +9,7 @@ import { ethers } from 'ethers';
 import { addTransactionToCache } from '../utils/transactionCache';
 import { ON_CHAIN_FEES } from '@/lib/config/pricing';
 import { getMarketDataService } from './RealMarketDataService';
+import { ProductionGuard, requireLivePrice } from '@/lib/security/production-guard';
 
 export interface X402Config {
   contractAddress: string;
@@ -389,18 +390,39 @@ export class X402GaslessService {
       const gasPrice = 5000000000000n; // 5000 gwei on Cronos
       const regularGasCost = gasPrice * BigInt(gasLimit);
 
-      // Get CRO price from central RealMarketDataService
-      let croPrice = 0.10; // Conservative fallback only if service fails
+      // PRODUCTION SAFETY: Get live CRO price - no hardcoded fallbacks
+      let croPrice: number;
       try {
         const marketService = getMarketDataService();
         const croData = await marketService.getTokenPrice('CRO');
-        if (croData.price > 0) {
-          croPrice = croData.price;
-        }
+        
+        // Validate price is reasonable
+        const validated = requireLivePrice('CRO', croData.price, croData.timestamp, croData.source);
+        croPrice = validated.price;
+        
+        logger.debug('[X402] Using live CRO price for gas estimation', { price: croPrice });
       } catch (e) {
-        logger.warn('[X402] Using fallback CRO price for gas estimation');
+        logger.error('[X402] CRITICAL: Failed to get CRO price for gas estimation', { error: e });
+        
+        if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+          // In production, return zeros rather than using fake prices
+          // This makes the UI show "unable to estimate" rather than misleading numbers
+          return {
+            regularGasCostCRO: '0',
+            regularGasCostUSD: '0',
+            x402FeeCRO: '0',
+            x402FeeUSD: '0',
+            savingsCRO: '0',
+            savingsUSD: '0',
+          };
+        }
+        
+        // Dev mode only - log but continue with 0 (will show obviously wrong values)
+        croPrice = 0;
       }
-      const usdcPrice = 1.0; // USDC is always ~$1
+      
+      // USDC price validation (stablecoins should be ~$1)
+      const usdcPrice = 1.0; // Stablecoin - acceptable to hardcode
 
       const regularGasCostUSD = parseFloat(ethers.formatEther(regularGasCost)) * croPrice;
 

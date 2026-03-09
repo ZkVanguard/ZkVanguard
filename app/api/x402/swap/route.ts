@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { ProductionGuard } from '@/lib/security/production-guard';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -82,10 +83,29 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
       );
     }
     
-    // Validate wallet address format
-    if (!/^0x[a-fA-F0-9]{40}$/.test(body.walletAddress)) {
+    // Validate wallet address format using ProductionGuard
+    if (!ProductionGuard.validateEvmAddress(body.walletAddress)) {
       return NextResponse.json(
         { success: false, error: 'Invalid wallet address format' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate amount is positive and within reasonable bounds
+    const amountNum = parseFloat(body.amountIn);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid amountIn: must be a positive number' },
+        { status: 400 }
+      );
+    }
+    
+    // Use ProductionGuard to validate amount bounds
+    try {
+      ProductionGuard.validateFinancialAmount(amountNum, 'amountIn');
+    } catch (error: any) {
+      return NextResponse.json(
+        { success: false, error: error.message || 'Amount exceeds maximum allowed value' },
         { status: 400 }
       );
     }

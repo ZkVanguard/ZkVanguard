@@ -112,7 +112,7 @@ const COMMUNITY_POOL_ABI = [
   },
 ] as const;
 
-export const CommunityPool = memo(function CommunityPool({ address, compact = false }: CommunityPoolProps) {
+export const CommunityPool = memo(function CommunityPool({ address: propAddress, compact = false }: CommunityPoolProps) {
   const [poolData, setPoolData] = useState<PoolSummary | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState<AIRecommendation | null>(null);
@@ -131,7 +131,9 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const mountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   
-  // wagmi hooks for on-chain deposits
+  // wagmi hooks for on-chain deposits - use connected wallet address
+  const { address: connectedAddress, isConnected } = useAccount();
+  const address = propAddress || connectedAddress; // Use prop if provided, else connected wallet
   const chainId = useChainId();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
@@ -338,7 +340,19 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   
   // Handle deposit - prompts wallet signature
   const handleDeposit = async () => {
-    if (!address || !depositAmount) return;
+    // Clear previous errors
+    setError(null);
+    
+    // SECURITY: Require wallet connection
+    if (!isConnected || !address) {
+      setError('Please connect your wallet first');
+      return;
+    }
+    
+    if (!depositAmount) {
+      setError('Please enter a deposit amount');
+      return;
+    }
     
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount < 10) {
@@ -348,12 +362,11 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     
     // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
     if (chainId !== 338 && chainId !== 25) {
-      setError('Please switch to Cronos network');
+      setError('Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet)');
       return;
     }
     
     setActionLoading(true);
-    setError(null);
     setTxStatus('approving');
     
     try {
@@ -361,7 +374,9 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
       const amountInUnits = parseUnits(amount.toString(), 6);
       
       // Step 1: Approve CommunityPool contract to spend USDC
+      // This will trigger the wallet popup for approval signature
       // Step 2 (deposit) is triggered by the effect watching isConfirmed
+      console.log('[CommunityPool] Initiating USDC approval for', amountInUnits.toString());
       writeContract({
         address: USDC_ADDRESS,
         abi: erc20Abi,
@@ -369,7 +384,8 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
         args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
       });
     } catch (err: any) {
-      setError(err.message);
+      console.error('[CommunityPool] Deposit error:', err);
+      setError(err.message || 'Failed to initiate deposit');
       setActionLoading(false);
       setTxStatus('idle');
     }
@@ -377,7 +393,19 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   
   // Handle withdraw - calls on-chain contract
   const handleWithdraw = async () => {
-    if (!address || !withdrawShares) return;
+    // Clear previous errors
+    setError(null);
+    
+    // SECURITY: Require wallet connection
+    if (!isConnected || !address) {
+      setError('Please connect your wallet first');
+      return;
+    }
+    
+    if (!withdrawShares) {
+      setError('Please enter the number of shares to withdraw');
+      return;
+    }
     
     const shares = parseFloat(withdrawShares);
     if (isNaN(shares) || shares <= 0) {
@@ -392,19 +420,20 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     
     // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
     if (chainId !== 338 && chainId !== 25) {
-      setError('Please switch to Cronos network');
+      setError('Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet)');
       return;
     }
     
     setActionLoading(true);
-    setError(null);
     setTxStatus('withdrawing');
     
     try {
       // Convert shares to wei (18 decimals)
       const sharesInWei = parseUnits(shares.toString(), 18);
       
-      // Call withdraw on CommunityPool contract (minAmountOut = 0 for no slippage check)
+      // Call withdraw on CommunityPool contract
+      // This will trigger the wallet popup for transaction signature
+      console.log('[CommunityPool] Initiating withdrawal of', shares, 'shares');
       writeContract({
         address: COMMUNITY_POOL_ADDRESS,
         abi: COMMUNITY_POOL_ABI,
@@ -412,7 +441,8 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
         args: [sharesInWei, BigInt(0)],
       });
     } catch (err: any) {
-      setError(err.message);
+      console.error('[CommunityPool] Withdrawal error:', err);
+      setError(err.message || 'Failed to initiate withdrawal');
       setActionLoading(false);
       setTxStatus('idle');
     }

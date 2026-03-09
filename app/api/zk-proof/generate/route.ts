@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { ProductionGuard } from '@/lib/security/production-guard';
 
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
@@ -171,9 +172,31 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`[ZK Generate] ZK backend error: ${errorMessage}`, error);
-    logger.warn('[ZK Generate] Falling back to deterministic proof generation');
     
-    // Return fallback proof when ZK backend is unavailable
+    // PRODUCTION SAFETY: Never use fallback proofs in production - real money at stake
+    if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+      ProductionGuard.auditLog({
+        timestamp: Date.now(),
+        operation: 'ZK_BACKEND_UNAVAILABLE',
+        result: 'failure',
+        reason: errorMessage,
+        metadata: {
+          scenario: body.scenario,
+          statement: body.statement
+        }
+      });
+      
+      return NextResponse.json({
+        success: false,
+        error: 'ZK proof generation service unavailable',
+        code: 'ZK_SERVICE_UNAVAILABLE',
+        message: 'Zero-knowledge proof backend is currently unavailable. Please try again later.'
+      }, { status: 503 });
+    }
+    
+    // Only allow fallback in development/testing
+    logger.warn('[ZK Generate] DEV MODE: Falling back to deterministic proof generation');
+    
     const fallbackResult = generateFallbackProof(
       body.scenario || 'generic',
       body.statement || {},

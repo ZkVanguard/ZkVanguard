@@ -91,32 +91,34 @@ export async function POST(request: NextRequest) {
       return safeErrorResponse(error, 'ZK proof generation for rebalance');
     }
 
-    // In a real implementation, this would call the RWAManager contract:
-    // const contract = new ethers.Contract(RWA_MANAGER_ADDRESS, ABI, signer);
-    // const tx = await contract.rebalancePortfolio(portfolioId, assets, newAllocations, zkProofHash);
-    // await tx.wait();
+    // PRODUCTION SAFETY: This API only generates recommendations and ZK proofs
+    // Actual transactions MUST be executed by the user signing in their wallet
+    // Backend NEVER executes transactions affecting user funds
 
-    // For now, return success with simulation data
-    const mockTxHash = `0x${Array.from({ length: 64 }, () => 
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('')}`;
-
-    logger.info('[Rebalance] Portfolio rebalanced successfully', {
+    logger.info('[Rebalance] Generated rebalance recommendation', {
       portfolioId,
-      txHash: mockTxHash,
       autoApproved,
+      actionCount: actions?.length || 0,
     });
 
+    // Return recommendation - user must execute via wallet
     return NextResponse.json({
       success: true,
-      message: 'Portfolio rebalanced successfully',
-      txHash: mockTxHash,
+      message: 'Rebalance recommendation generated - execute via wallet',
+      // NO txHash - user must sign transaction themselves
+      status: 'pending_user_signature',
       portfolioId,
       zkProof: {
         proofHash: zkProofResult.proof.proof_hash || zkProofResult.proof.merkle_root,
         verified: true,
       },
-      actions: actions || [],
+      recommendedActions: actions || [],
+      // User must call contract directly from frontend
+      contractCall: {
+        method: 'rebalancePortfolio',
+        args: [portfolioId, newAllocations.map(a => a.asset), newAllocations.map(a => a.percentage)],
+        zkProofHash: zkProofResult.proof.proof_hash,
+      },
       timestamp: Date.now(),
     });
 

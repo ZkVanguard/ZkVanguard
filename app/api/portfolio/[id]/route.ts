@@ -7,27 +7,73 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCached, setCached } from '@/lib/db/ui-cache';
+import { ProductionGuard } from '@/lib/security/production-guard';
 
-// Token price estimates (in production, fetch from price oracle)
-const TOKEN_PRICES: Record<string, number> = {
-  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 1.0,  // devUSDC = $1
-  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 0.10, // WCRO = $0.10
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 1.0,  // MockUSDC = $1
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// PRODUCTION SAFETY: Token configuration with NO hardcoded prices
+// Prices MUST be fetched from market data service in production
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Token decimals
+// Token decimals (static - these don't change)
 const TOKEN_DECIMALS: Record<string, number> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 6,   // devUSDC = 6 decimals
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 18,  // WCRO = 18 decimals
   '0x28217daddc55e3c4831b4a48a00ce04880786967': 6,   // MockUSDC = 6 decimals
 };
 
-// Token symbols
+// Token symbols (for price lookup)
 const TOKEN_SYMBOLS: Record<string, string> = {
+  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'USDC',  // Treat devUSDC as USDC
+  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'CRO',   // WCRO -> CRO price
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC',  // MockUSDC -> USDC price
+};
+
+// Token display names
+const TOKEN_DISPLAY_NAMES: Record<string, string> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'devUSDC',
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'WCRO',
   '0x28217daddc55e3c4831b4a48a00ce04880786967': 'MockUSDC',
 };
+
+/**
+ * Fetch live token price - NEVER falls back to hardcoded values in production
+ */
+async function getLiveTokenPrice(tokenAddress: string): Promise<number> {
+  const addr = tokenAddress.toLowerCase();
+  const symbol = TOKEN_SYMBOLS[addr];
+  
+  if (!symbol) {
+    logger.warn('[Portfolio API] Unknown token address - cannot fetch price', { tokenAddress });
+    if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+      throw new Error(`Unknown token ${tokenAddress}: cannot determine price`);
+    }
+    return 0;
+  }
+  
+  try {
+    const marketService = getMarketDataService();
+    const priceData = await marketService.getTokenPrice(symbol);
+    
+    // Validate price is reasonable
+    const validated = ProductionGuard.requireLivePrice(
+      symbol,
+      priceData.price,
+      priceData.timestamp,
+      priceData.source
+    );
+    
+    return validated.price;
+  } catch (error) {
+    logger.error('[Portfolio API] Failed to fetch live price', { symbol, tokenAddress, error });
+    
+    if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
+      throw new Error(`Unable to fetch price for ${symbol}. Portfolio valuation halted.`);
+    }
+    
+    // Dev mode only - return 0 (will show clearly something is wrong)
+    return 0;
+  }
+}
 
 // Two-tier cache: In-memory (fast) + DB (survives cold starts)
 const portfolioCache = new Map<string, { data: unknown; timestamp: number }>();
@@ -130,6 +176,22 @@ export async function GET(
         )
       );
 
+      // PRODUCTION SAFETY: Fetch live prices for all unique assets first
+      const uniqueAssets = [...new Set(assets.map(a => a.toLowerCase()))];
+      const priceMap: Map<string, number> = new Map();
+      
+      for (const addr of uniqueAssets) {
+        try {
+          const price = await getLiveTokenPrice(addr);
+          priceMap.set(addr, price);
+        } catch (error) {
+          // In production, this error is already thrown by getLiveTokenPrice
+          // In dev, log and continue with 0
+          logger.error('[Portfolio API] Price fetch failed', { addr, error });
+          priceMap.set(addr, 0);
+        }
+      }
+
       for (const result of allocationResults) {
         if (result.status === 'rejected') {
           logger.warn(`[Portfolio API] Failed to fetch allocation`, { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
@@ -138,11 +200,11 @@ export async function GET(
         const { assetAddress, allocation } = result.value;
         const addr = assetAddress.toLowerCase();
         const decimals = TOKEN_DECIMALS[addr] || 18;
-        const price = TOKEN_PRICES[addr] || 1.0;
-        const symbol = TOKEN_SYMBOLS[addr] || 'Unknown';
+        const price = priceMap.get(addr) || 0; // Never use hardcoded fallback
+        const symbol = TOKEN_DISPLAY_NAMES[addr] || 'Unknown';
         const balanceNum = Number(allocation) / Math.pow(10, decimals);
         const valueUSD = balanceNum * price;
-        logger.debug(`[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, value=$${valueUSD.toFixed(2)}`);
+        logger.debug(`[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, price=$${price}, value=$${valueUSD.toFixed(2)}`);
         if (balanceNum > 0) {
           assetBalances.push({ token: assetAddress, symbol, balance: balanceNum.toFixed(4), valueUSD });
           calculatedValue += valueUSD;

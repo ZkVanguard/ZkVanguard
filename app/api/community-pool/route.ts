@@ -141,6 +141,153 @@ const POOL_DATA_TTL = 60_000;       // 60 seconds for pool summary
 const USER_POSITION_TTL = 30_000;   // 30 seconds for user positions
 const LEADERBOARD_TTL = 120_000;    // 2 minutes for leaderboard
 
+// ============================================================================
+// ON-CHAIN TRANSACTION VERIFICATION
+// ============================================================================
+
+// CommunityPool event signatures for deposit/withdraw
+const DEPOSIT_EVENT_TOPIC = ethers.id('Deposited(address,uint256,uint256)');
+const WITHDRAW_EVENT_TOPIC = ethers.id('Withdrawn(address,uint256,uint256,uint256)');
+
+/**
+ * Verify that a transaction hash corresponds to a real on-chain deposit
+ * to the CommunityPool contract from the claimed wallet.
+ * 
+ * SECURITY: This prevents fake deposits where someone could call the API
+ * with a fabricated txHash and get shares credited without actually depositing.
+ * 
+ * @param txHash - The transaction hash to verify
+ * @param expectedWallet - The wallet address that should have made the deposit
+ * @returns Verified deposit amount in USD (from on-chain), or null if invalid
+ */
+async function verifyOnChainDeposit(
+  txHash: string,
+  expectedWallet: string
+): Promise<{ verified: boolean; amountUSD: number; sharesReceived: number; error?: string }> {
+  try {
+    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    
+    // Fetch transaction receipt
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction not found on-chain' };
+    }
+    
+    // Verify transaction was successful
+    if (receipt.status !== 1) {
+      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction failed on-chain' };
+    }
+    
+    // Verify transaction was to the CommunityPool contract
+    if (receipt.to?.toLowerCase() !== COMMUNITY_POOL_ADDRESS.toLowerCase()) {
+      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction not to CommunityPool contract' };
+    }
+    
+    // Find the Deposited event in the logs
+    const depositLog = receipt.logs.find(log => 
+      log.topics[0] === DEPOSIT_EVENT_TOPIC &&
+      log.address.toLowerCase() === COMMUNITY_POOL_ADDRESS.toLowerCase()
+    );
+    
+    if (!depositLog) {
+      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'No Deposited event found in transaction' };
+    }
+    
+    // Decode the event: Deposited(address depositor, uint256 amount, uint256 shares)
+    // depositor is indexed (in topics[1])
+    const depositorAddress = ethers.getAddress('0x' + depositLog.topics[1].slice(26));
+    
+    // Verify the depositor matches the expected wallet
+    if (depositorAddress.toLowerCase() !== expectedWallet.toLowerCase()) {
+      return { 
+        verified: false, 
+        amountUSD: 0, 
+        sharesReceived: 0, 
+        error: `Depositor ${depositorAddress} does not match expected ${expectedWallet}` 
+      };
+    }
+    
+    // Decode the non-indexed parameters (amount, shares)
+    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+      ['uint256', 'uint256'],
+      depositLog.data
+    );
+    const amountUSD = parseFloat(ethers.formatUnits(decoded[0], 6)); // USDC has 6 decimals
+    const sharesReceived = parseFloat(ethers.formatUnits(decoded[1], 18)); // Shares have 18 decimals
+    
+    logger.info(`[CommunityPool] Verified on-chain deposit: ${expectedWallet} deposited $${amountUSD}, received ${sharesReceived} shares`);
+    
+    return { verified: true, amountUSD, sharesReceived };
+    
+  } catch (error: any) {
+    logger.error('[CommunityPool] On-chain deposit verification failed:', error);
+    return { verified: false, amountUSD: 0, sharesReceived: 0, error: error.message };
+  }
+}
+
+/**
+ * Verify that a transaction hash corresponds to a real on-chain withdrawal
+ * from the CommunityPool contract by the claimed wallet.
+ */
+async function verifyOnChainWithdraw(
+  txHash: string,
+  expectedWallet: string
+): Promise<{ verified: boolean; amountUSD: number; sharesBurned: number; error?: string }> {
+  try {
+    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction not found on-chain' };
+    }
+    
+    if (receipt.status !== 1) {
+      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction failed on-chain' };
+    }
+    
+    if (receipt.to?.toLowerCase() !== COMMUNITY_POOL_ADDRESS.toLowerCase()) {
+      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction not to CommunityPool contract' };
+    }
+    
+    // Find the Withdrawn event: Withdrawn(address member, uint256 shares, uint256 amountOut, uint256 fee)
+    const withdrawLog = receipt.logs.find(log => 
+      log.topics[0] === WITHDRAW_EVENT_TOPIC &&
+      log.address.toLowerCase() === COMMUNITY_POOL_ADDRESS.toLowerCase()
+    );
+    
+    if (!withdrawLog) {
+      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'No Withdrawn event found in transaction' };
+    }
+    
+    const memberAddress = ethers.getAddress('0x' + withdrawLog.topics[1].slice(26));
+    
+    if (memberAddress.toLowerCase() !== expectedWallet.toLowerCase()) {
+      return { 
+        verified: false, 
+        amountUSD: 0, 
+        sharesBurned: 0, 
+        error: `Withdrawer ${memberAddress} does not match expected ${expectedWallet}` 
+      };
+    }
+    
+    // Decode: shares, amountOut, fee
+    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+      ['uint256', 'uint256', 'uint256'],
+      withdrawLog.data
+    );
+    const sharesBurned = parseFloat(ethers.formatUnits(decoded[0], 18));
+    const amountUSD = parseFloat(ethers.formatUnits(decoded[1], 6));
+    
+    logger.info(`[CommunityPool] Verified on-chain withdrawal: ${expectedWallet} withdrew $${amountUSD}, burned ${sharesBurned} shares`);
+    
+    return { verified: true, amountUSD, sharesBurned };
+    
+  } catch (error: any) {
+    logger.error('[CommunityPool] On-chain withdrawal verification failed:', error);
+    return { verified: false, amountUSD: 0, sharesBurned: 0, error: error.message };
+  }
+}
+
 /**
  * Create a JSON response with CDN cache headers for Vercel Edge Cache
  * s-maxage: CDN caches for specified seconds
@@ -755,6 +902,14 @@ export async function POST(request: NextRequest) {
     
     switch (action) {
       case 'deposit': {
+        // SECURITY: txHash is REQUIRED - must verify on-chain deposit before recording
+        if (!txHash) {
+          return NextResponse.json(
+            { success: false, error: 'Transaction hash (txHash) is required. Deposit must be made on-chain first.' },
+            { status: 400 }
+          );
+        }
+        
         if (!amount || amount <= 0) {
           return NextResponse.json(
             { success: false, error: 'Valid deposit amount required' },
@@ -762,7 +917,25 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        const result = await deposit(walletAddress, amount, txHash);
+        // SECURITY: Verify the on-chain deposit before recording
+        const verification = await verifyOnChainDeposit(txHash, walletAddress);
+        if (!verification.verified) {
+          logger.warn(`[CommunityPool] Deposit verification failed: ${verification.error}`, { txHash, walletAddress });
+          return NextResponse.json(
+            { success: false, error: `On-chain verification failed: ${verification.error}` },
+            { status: 400 }
+          );
+        }
+        
+        // Use the verified on-chain amount (not the client-provided amount)
+        // This prevents amount manipulation attacks
+        const verifiedAmount = verification.amountUSD;
+        if (Math.abs(verifiedAmount - amount) > 0.01) {
+          logger.warn(`[CommunityPool] Amount mismatch: client=${amount}, on-chain=${verifiedAmount}`, { txHash });
+          // Use the on-chain amount as source of truth
+        }
+        
+        const result = await deposit(walletAddress, verifiedAmount, txHash);
         
         if (!result.success) {
           return NextResponse.json(
@@ -824,6 +997,14 @@ export async function POST(request: NextRequest) {
       }
       
       case 'withdraw': {
+        // SECURITY: txHash is REQUIRED - must verify on-chain withdrawal before recording
+        if (!txHash) {
+          return NextResponse.json(
+            { success: false, error: 'Transaction hash (txHash) is required. Withdrawal must be made on-chain first.' },
+            { status: 400 }
+          );
+        }
+        
         if (!shares || shares <= 0) {
           return NextResponse.json(
             { success: false, error: 'Valid share amount required' },
@@ -831,7 +1012,24 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        const result = await withdraw(walletAddress, shares, txHash);
+        // SECURITY: Verify the on-chain withdrawal before recording
+        const verification = await verifyOnChainWithdraw(txHash, walletAddress);
+        if (!verification.verified) {
+          logger.warn(`[CommunityPool] Withdrawal verification failed: ${verification.error}`, { txHash, walletAddress });
+          return NextResponse.json(
+            { success: false, error: `On-chain verification failed: ${verification.error}` },
+            { status: 400 }
+          );
+        }
+        
+        // Use the verified on-chain shares burned (not the client-provided shares)
+        const verifiedShares = verification.sharesBurned;
+        if (Math.abs(verifiedShares - shares) > 0.0001) {
+          logger.warn(`[CommunityPool] Shares mismatch: client=${shares}, on-chain=${verifiedShares}`, { txHash });
+          // Use the on-chain shares as source of truth
+        }
+        
+        const result = await withdraw(walletAddress, verifiedShares, txHash);
         
         if (!result.success) {
           return NextResponse.json(
