@@ -157,6 +157,10 @@ function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
 /**
  * Fetch on-chain pool data with request deduplication
  * TTL: 60 seconds (pool data changes slowly)
+ * 
+ * IMPORTANT: Uses market-adjusted NAV and share price from calculatePoolNAV()
+ * The on-chain contract only holds USDC (no actual trading), so on-chain NAV = USDC balance
+ * We use virtual holdings × live prices for accurate market-based valuation
  */
 async function getOnChainPoolData(): Promise<PoolDataCache | null> {
   return dedupedFetch<PoolDataCache | null>(
@@ -166,24 +170,29 @@ async function getOnChainPoolData(): Promise<PoolDataCache | null> {
         const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
         const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
         
+        // Get on-chain data (totalShares, memberCount) - these are authoritative
         const stats = await pool.getPoolStats();
-        
-        // Format values (shares are 18 decimals, NAV/price are 6 decimals USDC)
         const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-        const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
         const memberCount = Number(stats._memberCount);
-        const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
+        
+        // Get market-adjusted NAV and share price from calculatePoolNAV()
+        // This uses virtual holdings × live prices for accurate valuation
+        // Without this, share price would be stuck at $1.00 (USDC only)
+        const marketData = await calculatePoolNAV();
+        const marketNAV = marketData.totalValueUSD;
+        const marketSharePrice = marketData.sharePrice;
+        const marketAllocations = marketData.allocations;
         
         return {
-          totalValueUSD: totalNAV,
+          totalValueUSD: marketNAV,
           totalShares,
-          sharePrice,
+          sharePrice: marketSharePrice,
           totalMembers: memberCount,
           allocations: {
-            BTC: { percentage: Number(stats._allocations[0]) / 100 },
-            ETH: { percentage: Number(stats._allocations[1]) / 100 },
-            CRO: { percentage: Number(stats._allocations[2]) / 100 },
-            SUI: { percentage: Number(stats._allocations[3]) / 100 },
+            BTC: { percentage: marketAllocations.BTC?.percentage || Number(stats._allocations[0]) / 100 },
+            ETH: { percentage: marketAllocations.ETH?.percentage || Number(stats._allocations[1]) / 100 },
+            CRO: { percentage: marketAllocations.CRO?.percentage || Number(stats._allocations[2]) / 100 },
+            SUI: { percentage: marketAllocations.SUI?.percentage || Number(stats._allocations[3]) / 100 },
           },
           onChain: true,
         };
