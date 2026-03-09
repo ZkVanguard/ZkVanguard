@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId, useSwitchChain, useSignMessage } from 'wagmi';
 import { parseUnits, erc20Abi } from 'viem';
 
 interface PoolAllocation {
@@ -138,10 +138,25 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // Prefer chain from account (wallet's actual chain) over wagmi's default chainId
   const chainId = chain?.id ?? wagmiChainId;
   const { switchChain } = useSwitchChain();
+  const { signMessageAsync } = useSignMessage();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
   });
+
+  // Helper: Sign message for API authentication (informative message)
+  const signForApi = useCallback(async (action: 'deposit' | 'withdraw', amount: string): Promise<{ signature: string; message: string } | null> => {
+    if (!address) return null;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `ZkVanguard Community Pool\n\nAction: ${action.toUpperCase()}\nAmount: $${amount}\nWallet: ${address}\ntimestamp:${timestamp}`;
+    try {
+      const signature = await signMessageAsync({ message });
+      return { signature, message };
+    } catch (err) {
+      console.error('[CommunityPool] Signature rejected:', err);
+      return null;
+    }
+  }, [address, signMessageAsync]);
 
   // OPTIMIZATION: Parallel fetch with client-side caching
   const fetchPoolData = useCallback(async (force = false) => {
@@ -245,9 +260,26 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       const recordDeposit = async () => {
         try {
           const amount = parseFloat(depositAmount);
+          
+          // Sign message for API authentication
+          setError('Please sign to confirm your deposit...');
+          const authData = await signForApi('deposit', amount.toString());
+          if (!authData) {
+            setError('Signature required to confirm deposit');
+            setTxStatus('idle');
+            setActionLoading(false);
+            return;
+          }
+          setError(null);
+          
           const res = await fetch('/api/community-pool?action=deposit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-wallet-address': address!,
+              'x-wallet-signature': authData.signature,
+              'x-wallet-message': authData.message,
+            },
             body: JSON.stringify({
               walletAddress: address,
               amount,
@@ -290,9 +322,26 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       const recordWithdrawal = async () => {
         try {
           const shares = parseFloat(withdrawShares);
+          
+          // Sign message for API authentication
+          setError('Please sign to confirm your withdrawal...');
+          const authData = await signForApi('withdraw', shares.toString());
+          if (!authData) {
+            setError('Signature required to confirm withdrawal');
+            setTxStatus('idle');
+            setActionLoading(false);
+            return;
+          }
+          setError(null);
+          
           const res = await fetch('/api/community-pool?action=withdraw', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-wallet-address': address!,
+              'x-wallet-signature': authData.signature,
+              'x-wallet-message': authData.message,
+            },
             body: JSON.stringify({
               walletAddress: address,
               shares,
@@ -328,7 +377,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       };
       recordWithdrawal();
     }
-  }, [isConfirmed, txHash, txStatus, depositAmount, withdrawShares, address, fetchPoolData, resetWrite, writeContract]);
+  }, [isConfirmed, txHash, txStatus, depositAmount, withdrawShares, address, fetchPoolData, resetWrite, writeContract, signForApi]);
   
   // Handle write errors
   useEffect(() => {
