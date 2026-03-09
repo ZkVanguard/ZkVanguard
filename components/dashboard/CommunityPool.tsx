@@ -132,9 +132,11 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const lastFetchRef = useRef<number>(0);
   
   // wagmi hooks for on-chain deposits - use connected wallet address
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { address: connectedAddress, isConnected, chain } = useAccount();
   const address = propAddress || connectedAddress; // Use prop if provided, else connected wallet
-  const chainId = useChainId();
+  const wagmiChainId = useChainId();
+  // Prefer chain from account (wallet's actual chain) over wagmi's default chainId
+  const chainId = chain?.id ?? wagmiChainId;
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -361,8 +363,11 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
     
     // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
-    if (chainId !== 338 && chainId !== 25) {
-      setError('Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet)');
+    // Use loose equality to handle potential string/number type mismatches
+    const isValidChain = chainId == 338 || chainId == 25;
+    console.log('[CommunityPool] Chain check:', { chainId, type: typeof chainId, isValidChain });
+    if (!isValidChain) {
+      setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
       return;
     }
     
@@ -419,8 +424,11 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
     
     // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
-    if (chainId !== 338 && chainId !== 25) {
-      setError('Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet)');
+    // Use loose equality to handle potential string/number type mismatches
+    const isValidChainW = chainId == 338 || chainId == 25;
+    console.log('[CommunityPool] Chain check (withdraw):', { chainId, type: typeof chainId, isValidChain: isValidChainW });
+    if (!isValidChainW) {
+      setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
       return;
     }
     
