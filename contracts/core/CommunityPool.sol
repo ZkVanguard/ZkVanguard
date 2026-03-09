@@ -79,9 +79,13 @@ interface IPyth {
 }
 
 /**
- * @title CommunityPool
+ * @title ZkVanguard Community Pool
+ * @author ZkVanguard Team
  * @notice AI-managed community investment pool with share-based ownership
  * @dev ERC-4626-inspired vault for collective investment in BTC, ETH, SUI, CRO
+ *
+ * @custom:security-contact security@zkvanguard.xyz
+ * @custom:oz-upgrades-from CommunityPool
  *
  * FEATURES:
  * =========
@@ -422,9 +426,14 @@ contract CommunityPool is
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * @notice Deposit USDC and receive pool shares
-     * @param amount Amount of USDC to deposit (6 decimals)
-     * @return shares Number of shares received
+     * @notice Deposit USDC into ZkVanguard Community Pool and receive shares
+     * @dev Deposits USDC and mints proportional pool shares to the caller.
+     *      Uses ERC-4626 virtual offset to prevent share inflation attacks.
+     *      Your shares represent ownership of the pool's diversified portfolio.
+     * @param amount Amount of USDC to deposit (6 decimals). Min: $10 USDC
+     * @return shares Number of pool shares minted to your wallet
+     * @custom:security Non-reentrant, requires active pool
+     * @custom:emits Deposited(depositor, amount, shares, sharePrice, timestamp)
      */
     function deposit(uint256 amount) 
         external 
@@ -487,10 +496,15 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Withdraw by burning shares with slippage protection
-     * @param sharesToBurn Number of shares to burn
-     * @param minAmountOut Minimum USDC to receive (slippage protection)
-     * @return amountUSD Amount of USDC returned
+     * @notice Withdraw USDC from ZkVanguard Community Pool by burning shares
+     * @dev Burns your pool shares and returns proportional USDC value.
+     *      Includes slippage protection to ensure minimum received amount.
+     *      Performance fees are deducted if profit above high-water mark.
+     * @param sharesToBurn Number of your shares to redeem for USDC
+     * @param minAmountOut Minimum USDC to receive (reverts if less - slippage protection)
+     * @return amountUSD Amount of USDC transferred to your wallet
+     * @custom:security Non-reentrant, requires active pool
+     * @custom:emits Withdrawn(withdrawer, shares, amountUSD, sharePrice, timestamp)
      */
     function withdraw(uint256 sharesToBurn, uint256 minAmountOut)
         external
@@ -502,10 +516,12 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Convenience withdraw without slippage protection  
-     * @dev WARNING: No slippage protection - not recommended for production
-     * @param sharesToBurn Number of shares to burn
-     * @return amountUSD Amount of USDC returned
+     * @notice Withdraw USDC from ZkVanguard Community Pool (no slippage protection)
+     * @dev Burns your pool shares and returns proportional USDC value.
+     *      WARNING: No minimum output protection - use withdraw(shares, minOut) for safety.
+     * @param sharesToBurn Number of your shares to redeem for USDC
+     * @return amountUSD Amount of USDC transferred to your wallet
+     * @custom:security Non-reentrant, requires active pool
      */
     function withdraw(uint256 sharesToBurn)
         external
