@@ -49,10 +49,11 @@ export class AgentOrchestrator {
 
     // Initialize signer if private key available
     // Check multiple env var names for compatibility
-    const privateKey = process.env.AGENT_PRIVATE_KEY 
+    // Trim to prevent whitespace issues from env copy-paste
+    const privateKey = (process.env.AGENT_PRIVATE_KEY 
       || process.env.SERVER_PRIVATE_KEY 
       || process.env.SERVER_WALLET_PRIVATE_KEY
-      || process.env.PRIVATE_KEY;
+      || process.env.PRIVATE_KEY)?.trim();
     if (privateKey) {
       this.signer = new ethers.Wallet(privateKey, this.provider);
       logger.info('AgentOrchestrator: Signer initialized');

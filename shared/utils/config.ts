@@ -203,6 +203,18 @@ export function saveContractAddresses(
 }
 
 /**
+ * Safely get a private key from environment variables.
+ * Trims whitespace to prevent issues with keys copied with trailing newlines.
+ */
+export function getSafePrivateKey(): string | undefined {
+  const rawKey = process.env.MOONLANDER_PRIVATE_KEY 
+    || process.env.PRIVATE_KEY 
+    || process.env.SERVER_WALLET_PRIVATE_KEY
+    || process.env.AGENT_PRIVATE_KEY;
+  return rawKey?.trim() || undefined;
+}
+
+/**
  * Application configuration
  */
 export const config = {
@@ -212,8 +224,8 @@ export const config = {
   isProduction: process.env.NODE_ENV === 'production',
 
   // Blockchain
-  privateKey: process.env.PRIVATE_KEY || '',
-  deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY || '',
+  privateKey: (process.env.PRIVATE_KEY || '').trim(),
+  deployerPrivateKey: (process.env.DEPLOYER_PRIVATE_KEY || '').trim(),
   
   // APIs
   cryptocomAiApiKey: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY || process.env.NEXT_PUBLIC_CRYPTOCOM_API_KEY || '',
