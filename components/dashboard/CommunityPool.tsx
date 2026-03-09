@@ -129,6 +129,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete'>('idle');
   const mountedRef = useRef(true);
+  const lastFetchRef = useRef<number>(0);
   
   // wagmi hooks for on-chain deposits
   const chainId = useChainId();
@@ -137,32 +138,41 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     hash: txHash,
   });
 
-  // Fetch pool data
-  const fetchPoolData = useCallback(async () => {
+  // OPTIMIZATION: Parallel fetch with client-side caching
+  const fetchPoolData = useCallback(async (force = false) => {
+    // Client-side debounce: skip if fetched within last 5s (unless forced)
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 5000) {
+      return;
+    }
+    lastFetchRef.current = now;
+    
     try {
-      // Fetch pool summary
-      const poolRes = await fetch('/api/community-pool');
-      const poolJson = await poolRes.json();
+      // OPTIMIZATION: Fire all requests in parallel instead of sequentially
+      const [poolRes, userRes, leaderRes] = await Promise.all([
+        fetch('/api/community-pool'),
+        address ? fetch(`/api/community-pool?user=${address}`) : Promise.resolve(null),
+        fetch('/api/community-pool?action=leaderboard&limit=5'),
+      ]);
       
-      if (poolJson.success && mountedRef.current) {
+      // Process results in parallel
+      const [poolJson, userJson, leaderJson] = await Promise.all([
+        poolRes.json(),
+        userRes ? userRes.json() : null,
+        leaderRes.json(),
+      ]);
+      
+      if (!mountedRef.current) return;
+      
+      if (poolJson.success) {
         setPoolData(poolJson.pool);
       }
       
-      // Fetch user position if address provided
-      if (address) {
-        const userRes = await fetch(`/api/community-pool?user=${address}`);
-        const userJson = await userRes.json();
-        
-        if (userJson.success && mountedRef.current) {
-          setUserPosition(userJson.user);
-        }
+      if (userJson?.success) {
+        setUserPosition(userJson.user);
       }
       
-      // Fetch leaderboard
-      const leaderRes = await fetch('/api/community-pool?action=leaderboard&limit=5');
-      const leaderJson = await leaderRes.json();
-      
-      if (leaderJson.success && mountedRef.current) {
+      if (leaderJson.success) {
         setLeaderboard(leaderJson.leaderboard);
       }
       
@@ -200,8 +210,8 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
     };
   }, [fetchPoolData]);
   
-  // Polling
-  usePolling(fetchPoolData, 30000);
+  // OPTIMIZATION: Increased polling interval from 30s to 60s (data changes slowly)
+  usePolling(fetchPoolData, 60000);
   
   // Handle transaction confirmation based on current status
   useEffect(() => {
@@ -456,7 +466,7 @@ export const CommunityPool = memo(function CommunityPool({ address, compact = fa
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchPoolData}
+              onClick={() => fetchPoolData(true)}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
               title="Refresh"
             >

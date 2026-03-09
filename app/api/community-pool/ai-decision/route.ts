@@ -32,6 +32,17 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// ============================================================================
+// OPTIMIZATION: In-memory cache for AI recommendations (2 minute TTL)
+// Reduces CPU and API calls for frequently requested endpoint
+// ============================================================================
+interface AIRecommendationCache {
+  data: unknown;
+  timestamp: number;
+}
+const AI_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+let aiRecommendationCache: AIRecommendationCache | null = null;
+
 // Real market indicators from central RealMarketDataService
 interface MarketIndicators {
   asset: SupportedAsset;
@@ -213,6 +224,19 @@ export async function GET(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const forceRefresh = searchParams.get('refresh') === 'true';
+    
+    // OPTIMIZATION: Return cached response if fresh (2 minute TTL)
+    if (!forceRefresh && aiRecommendationCache && (Date.now() - aiRecommendationCache.timestamp) < AI_CACHE_TTL_MS) {
+      logger.debug('[AI Decision] Returning cached recommendation');
+      return NextResponse.json({
+        ...(aiRecommendationCache.data as object),
+        cached: true,
+        cacheAge: Math.round((Date.now() - aiRecommendationCache.timestamp) / 1000),
+      });
+    }
+    
     const poolSummary = await getPoolSummary();
     const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation();
     
@@ -225,7 +249,7 @@ export async function GET(request: NextRequest) {
       change: allocations[asset] - currentAllocations[asset].percentage,
     }));
     
-    return NextResponse.json({
+    const responseData = {
       success: true,
       recommendation: {
         allocations,
@@ -238,6 +262,17 @@ export async function GET(request: NextRequest) {
       currentPool: poolSummary,
       timestamp: Date.now(),
       note: 'This is a recommendation. Use POST to apply the decision.',
+    };
+    
+    // Cache the response
+    aiRecommendationCache = {
+      data: responseData,
+      timestamp: Date.now(),
+    };
+    
+    return NextResponse.json({
+      ...responseData,
+      cached: false,
     });
     
   } catch (error: any) {
