@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { parseUnits, erc20Abi } from 'viem';
 
 interface PoolAllocation {
@@ -137,6 +137,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const wagmiChainId = useChainId();
   // Prefer chain from account (wallet's actual chain) over wagmi's default chainId
   const chainId = chain?.id ?? wagmiChainId;
+  const { switchChain } = useSwitchChain();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -367,6 +368,20 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     const isValidChain = chainId == 338 || chainId == 25;
     console.log('[CommunityPool] Chain check:', { chainId, type: typeof chainId, isValidChain });
     if (!isValidChain) {
+      // Try to switch to Cronos Testnet automatically
+      if (switchChain) {
+        try {
+          setError('Switching to Cronos Testnet...');
+          await switchChain({ chainId: 338 });
+          // After switch, let user retry the deposit
+          setError('Switched to Cronos Testnet. Please click Deposit again.');
+          return;
+        } catch (switchErr) {
+          console.error('[CommunityPool] Chain switch failed:', switchErr);
+          setError(`Please switch to Cronos Testnet in your wallet. You are on chain ${chainId}.`);
+          return;
+        }
+      }
       setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
       return;
     }
@@ -428,6 +443,19 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     const isValidChainW = chainId == 338 || chainId == 25;
     console.log('[CommunityPool] Chain check (withdraw):', { chainId, type: typeof chainId, isValidChain: isValidChainW });
     if (!isValidChainW) {
+      // Try to switch to Cronos Testnet automatically
+      if (switchChain) {
+        try {
+          setError('Switching to Cronos Testnet...');
+          await switchChain({ chainId: 338 });
+          setError('Switched to Cronos Testnet. Please click Withdraw again.');
+          return;
+        } catch (switchErr) {
+          console.error('[CommunityPool] Chain switch failed:', switchErr);
+          setError(`Please switch to Cronos Testnet in your wallet. You are on chain ${chainId}.`);
+          return;
+        }
+      }
       setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
       return;
     }
