@@ -885,23 +885,18 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: For deposit/withdraw, verify the caller owns the wallet.
-    // EXCEPTION: If txHash is provided, we verify ownership via on-chain txHash verification
-    // (which is stronger than wallet signature - proves actual transaction execution).
+    // Accepts either wallet signature OR verified on-chain txHash.
     const userActions = ['deposit', 'withdraw'];
     if (userActions.includes(action || '')) {
-      // If txHash provided, we'll verify on-chain - skip wallet signature requirement
-      // The on-chain verification proves the wallet actually sent the transaction
-      if (!txHash) {
-        const authResult = await requireAuth(request, body);
-        if (authResult instanceof NextResponse) return authResult;
-        
-        // If wallet auth was used, verify the authenticated wallet matches the request
-        if (authResult.method === 'wallet' && authResult.identity?.toLowerCase() !== walletAddress?.toLowerCase()) {
-          return NextResponse.json(
-            { success: false, error: 'Wallet address does not match authenticated wallet' },
-            { status: 403 }
-          );
-        }
+      const authResult = await requireAuth(request, body);
+      if (authResult instanceof NextResponse) return authResult;
+      
+      // If wallet auth was used, verify the authenticated wallet matches the request
+      if (authResult.method === 'wallet' && authResult.identity?.toLowerCase() !== walletAddress?.toLowerCase()) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet address does not match authenticated wallet' },
+          { status: 403 }
+        );
       }
     }
     
