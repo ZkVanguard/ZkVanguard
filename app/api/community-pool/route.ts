@@ -334,7 +334,7 @@ async function getOnChainPoolData(): Promise<PoolDataCache | null> {
           totalValueUSD: marketNAV,
           totalShares,
           sharePrice: marketSharePrice,
-          memberCount: memberCount,
+          totalMembers: memberCount,
           allocations: {
             BTC: { percentage: marketAllocations.BTC?.percentage || Number(stats._allocations[0]) / 100 },
             ETH: { percentage: marketAllocations.ETH?.percentage || Number(stats._allocations[1]) / 100 },
