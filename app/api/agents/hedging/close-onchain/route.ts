@@ -10,7 +10,7 @@
  * Gas is paid by the x402 relayer — TRUE gasless for the user!
  * 
  * POST /api/agents/hedging/close-onchain
- * Body: { hedgeId: bytes32 }
+ * Body: { hedgeId: bytes32 | number }  // Accepts on-chain bytes32 OR database ID
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
@@ -18,6 +18,7 @@ import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TY
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { getHedgeByNumericId } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,7 +88,32 @@ export async function POST(request: NextRequest) {
     // 3. The signature verification happens below with verifyTypedData()
     // Generic auth would fail because it expects different signature format
 
-    const { hedgeId, signature, walletAddress, signatureTimestamp } = body;
+    let { hedgeId, signature, walletAddress, signatureTimestamp } = body;
+
+    if (!hedgeId) {
+      return NextResponse.json(
+        { success: false, error: 'Missing hedgeId (bytes32 or database ID)' },
+        { status: 400 }
+      );
+    }
+
+    // Support both numeric database IDs and bytes32 on-chain IDs
+    if (typeof hedgeId === 'number' || (typeof hedgeId === 'string' && /^\d+$/.test(hedgeId))) {
+      const numericId = typeof hedgeId === 'number' ? hedgeId : parseInt(hedgeId, 10);
+      const dbHedge = await getHedgeByNumericId(numericId);
+      if (!dbHedge || !dbHedge.order_id) {
+        return NextResponse.json(
+          { success: false, error: `Hedge #${numericId} not found or has no on-chain ID` },
+          { status: 404 }
+        );
+      }
+      console.log(`📝 Resolved DB hedge #${numericId} to on-chain ID: ${dbHedge.order_id}`);
+      hedgeId = dbHedge.order_id;
+      // Auto-populate wallet address from DB if not provided
+      if (!walletAddress && dbHedge.wallet_address) {
+        walletAddress = dbHedge.wallet_address;
+      }
+    }
 
     if (!hedgeId) {
       return NextResponse.json(
