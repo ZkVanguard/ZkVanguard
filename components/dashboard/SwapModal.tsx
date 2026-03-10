@@ -248,7 +248,7 @@ export function SwapModal({
         }});
         
         setAmountOut(formattedOut);
-        setPriceImpact(quote.priceImpact);
+        setPriceImpact(Number(quote.priceImpact) || 0);
         setRoute(quote.route);
       } catch (error) {
         logger.error('Failed to get quote', error instanceof Error ? error : undefined, { component: 'SwapModal' });
@@ -535,8 +535,8 @@ export function SwapModal({
                     onClick={() => setAmountIn(tokenInBalance)}
                     className="text-[11px] sm:text-[12px] text-[#86868b] hover:text-[#007AFF] transition-colors"
                   >
-                    Balance: {balanceLoading ? '...' : parseFloat(tokenInBalance).toFixed(4)}
-                    {parseFloat(tokenInBalance) > 0 && <span className="text-[#007AFF] ml-1 font-medium">(MAX)</span>}
+                    Balance: {balanceLoading ? '...' : (Number(tokenInBalance) || 0).toFixed(4)}
+                    {Number(tokenInBalance) > 0 && <span className="text-[#007AFF] ml-1 font-medium">(MAX)</span>}
                   </button>
                 </div>
                 <div className="flex items-center justify-between gap-3">
@@ -604,13 +604,13 @@ export function SwapModal({
                   <div className="flex justify-between">
                     <span className="text-[#86868b]">Rate</span>
                     <span className="font-semibold text-[#1d1d1f]">
-                      1 {tokenIn} ≈ {(parseFloat(amountOut) / parseFloat(amountIn)).toFixed(6)} {tokenOut}
+                      1 {tokenIn} ≈ {(Number(amountIn) > 0 ? (Number(amountOut) / Number(amountIn)) : 0).toFixed(6)} {tokenOut}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#86868b]">Price Impact</span>
-                    <span className={`font-semibold ${priceImpact > 5 ? 'text-[#FF3B30]' : 'text-[#34C759]'}`}>
-                      {priceImpact.toFixed(2)}%
+                    <span className={`font-semibold ${(Number(priceImpact) || 0) > 5 ? 'text-[#FF3B30]' : 'text-[#34C759]'}`}>
+                      {(Number(priceImpact) || 0).toFixed(2)}%
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -725,7 +725,7 @@ export function SwapModal({
               </div>
               <h4 className="text-[17px] sm:text-[19px] font-semibold text-[#1d1d1f] mb-2">Swap Complete!</h4>
               <p className="text-[#86868b] text-[13px] sm:text-[14px]">
-                Swapped {amountIn} {tokenIn} for ~{parseFloat(amountOut || '0').toFixed(6)} {tokenOut}
+                Swapped {amountIn} {tokenIn} for ~{(Number(amountOut) || 0).toFixed(6)} {tokenOut}
               </p>
               {zkProofHash && (
                 <div className="mt-3 bg-[#AF52DE]/10 rounded-[10px] p-3">
