@@ -328,6 +328,7 @@ contract CommunityPool is
 
     event MemberJoined(address indexed member, uint256 timestamp);
     event MemberExited(address indexed member, uint256 timestamp);
+    event TokensRescued(address indexed token, uint256 amount);
 
     // ═══════════════════════════════════════════════════════════════
     // ERRORS
@@ -872,16 +873,23 @@ contract CommunityPool is
         
         if (toWithdraw == 0) return;
 
-        // Only clear the amount actually withdrawn
-        if (toWithdraw >= accumulatedManagementFees) {
-            toWithdraw = accumulatedManagementFees;
+        // Deduct from fees in order: management first, then performance
+        uint256 remaining = toWithdraw;
+        
+        if (remaining >= accumulatedManagementFees) {
+            remaining -= accumulatedManagementFees;
             accumulatedManagementFees = 0;
         } else {
-            accumulatedManagementFees -= toWithdraw;
+            accumulatedManagementFees -= remaining;
+            remaining = 0;
         }
-        // Performance fees withdrawn separately if management fully cleared
-        if (toWithdraw == totalFees) {
-            accumulatedPerformanceFees = 0;
+        
+        if (remaining > 0) {
+            if (remaining >= accumulatedPerformanceFees) {
+                accumulatedPerformanceFees = 0;
+            } else {
+                accumulatedPerformanceFees -= remaining;
+            }
         }
 
         depositToken.safeTransfer(treasury, toWithdraw);
@@ -1223,6 +1231,43 @@ contract CommunityPool is
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESCUE FUNCTIONS (Emergency Recovery)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Rescue accidentally sent ETH/CRO to treasury
+     * @dev Only callable by admin. Use for recovering stuck native tokens.
+     */
+    function rescueETH() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH to rescue");
+        (bool success, ) = payable(treasury).call{value: balance}("");
+        require(success, "ETH rescue failed");
+        emit TokensRescued(address(0), balance);
+    }
+
+    /**
+     * @notice Rescue accidentally sent ERC20 tokens to treasury
+     * @dev Cannot rescue deposit token or pool assets - only unknown tokens
+     * @param token Address of the ERC20 token to rescue
+     */
+    function rescueToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        require(token != address(0), "Invalid token");
+        require(token != address(depositToken), "Cannot rescue deposit token");
+        
+        // Prevent rescuing pool assets
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            require(token != address(assetTokens[i]), "Cannot rescue pool asset");
+        }
+        
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        require(balance > 0, "No tokens to rescue");
+        
+        IERC20(token).safeTransfer(treasury, balance);
+        emit TokensRescued(token, balance);
     }
 
     // ═══════════════════════════════════════════════════════════════
