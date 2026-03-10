@@ -14,6 +14,9 @@
 import { logger } from '@/lib/utils/logger';
 import CryptocomExchangeService, { type MarketPrice } from './CryptocomExchangeService';
 
+// Detect if running in browser
+const isBrowser = typeof window !== 'undefined';
+
 // ============================================================================
 // Service-Specific Configurations
 // ============================================================================
@@ -77,7 +80,45 @@ let previousSnapshot: PriceSnapshot | null = null;
 let priceListeners: Array<(snapshot: PriceSnapshot) => void> = [];
 let refreshInterval: NodeJS.Timeout | null = null;
 
-const priceService = new CryptocomExchangeService();
+// Server-side price service (only used on server)
+const priceService = !isBrowser ? new CryptocomExchangeService() : null;
+
+/**
+ * Fetch prices via API route (client-side safe - no CORS issues)
+ */
+async function fetchPricesViaAPI(symbols: string[]): Promise<Record<string, MarketPrice>> {
+  const prices: Record<string, MarketPrice> = {};
+  
+  try {
+    const response = await fetch(`/api/prices?symbols=${symbols.join(',')}`);
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.success && Array.isArray(result.data)) {
+      for (const item of result.data) {
+        prices[item.symbol.toUpperCase()] = {
+          symbol: item.symbol,
+          price: item.price,
+          change24h: item.change24h || 0,
+          volume24h: item.volume24h || 0,
+          high24h: item.price, // API may not return these
+          low24h: item.price,
+          timestamp: Date.now(),
+          source: 'cryptocom-exchange' as const,
+        };
+      }
+    }
+  } catch (error) {
+    logger.warn('[AIPriceIntegration] API fetch failed, using fallbacks', { 
+      component: 'AIPriceIntegration',
+    });
+  }
+  
+  return prices;
+}
 
 // ============================================================================
 // Smart Price Monitoring
@@ -144,16 +185,21 @@ export async function refreshPrices(assets: string[]): Promise<Record<string, Ma
   const uniqueAssets = [...new Set(normalizedAssets)];
   
   try {
-    const prices: Record<string, MarketPrice> = {};
+    let prices: Record<string, MarketPrice> = {};
     
-    // Batch fetch for efficiency
-    for (const symbol of uniqueAssets) {
-      try {
-        const data = await priceService.getMarketData(symbol);
-        prices[symbol] = data;
-      } catch {
-        // Skip failed symbols, don't break the batch
-        logger.debug(`[AIPriceIntegration] Skipped ${symbol} - not available`);
+    // Use API route on client-side (avoids CORS), direct service on server
+    if (isBrowser) {
+      prices = await fetchPricesViaAPI(uniqueAssets);
+    } else if (priceService) {
+      // Batch fetch for efficiency (server-side)
+      for (const symbol of uniqueAssets) {
+        try {
+          const data = await priceService.getMarketData(symbol);
+          prices[symbol] = data;
+        } catch {
+          // Skip failed symbols, don't break the batch
+          logger.debug(`[AIPriceIntegration] Skipped ${symbol} - not available`);
+        }
       }
     }
     
