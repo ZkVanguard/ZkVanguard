@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     if (!hedgeId) {
       return NextResponse.json(
-        { success: false, error: 'Missing hedgeId v2 (bytes32 or database ID)' },
+        { success: false, error: 'Missing hedgeId (bytes32 or database ID)' },
         { status: 400 }
       );
     }
@@ -113,6 +113,22 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
+      
+      // Check if this is an on-chain hedge (order_id should be bytes32: 0x + 64 hex chars)
+      const isOnChainHedge = /^0x[a-fA-F0-9]{64}$/.test(dbHedge.order_id);
+      if (!isOnChainHedge) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `Hedge #${numericId} is a simulation/off-chain hedge. Use /api/agents/hedging/close for off-chain hedges. Order ID: ${dbHedge.order_id.substring(0, 30)}...`,
+            hedgeStatus: dbHedge.status,
+            isSimulation: dbHedge.simulation_mode,
+            onChain: dbHedge.on_chain
+          },
+          { status: 400 }
+        );
+      }
+      
       console.log(`📝 Resolved DB hedge #${numericId} to on-chain ID: ${dbHedge.order_id}`);
       hedgeId = dbHedge.order_id;
       // Auto-populate wallet address from DB if not provided
@@ -548,11 +564,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // For debugging: Temporarily expose error message in non-production style
-    // TODO: Remove this after fixing the issue
-    return NextResponse.json(
-      { success: false, error: `Debug error: ${errMsg.substring(0, 200)}` },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, 'On-chain hedge close');
   }
 }
