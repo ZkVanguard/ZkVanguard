@@ -548,6 +548,11 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    return safeErrorResponse(error, 'On-chain hedge close');
+    // For debugging: Temporarily expose error message in non-production style
+    // TODO: Remove this after fixing the issue
+    return NextResponse.json(
+      { success: false, error: `Debug error: ${errMsg.substring(0, 200)}` },
+      { status: 500 }
+    );
   }
 }
