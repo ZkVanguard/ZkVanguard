@@ -61,10 +61,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Authentication: require wallet signature or internal service token
-    const { requireAuth } = await import('@/lib/security/auth-middleware');
-    const authResult = await requireAuth(request, body);
-    if (authResult instanceof NextResponse) return authResult;
+    // NOTE: We do NOT use generic requireAuth() here because:
+    // 1. This endpoint uses EIP-712 typed data signatures (not personal_sign)
+    // 2. We have specialized dual verification: ZK commitment + EIP-712 wallet signature
+    // 3. The signature verification happens below with verifyTypedData()
+    // Generic auth would fail because it expects different signature format
 
     const { hedgeId, signature, walletAddress, signatureTimestamp } = body;
 
