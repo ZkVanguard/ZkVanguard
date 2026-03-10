@@ -136,6 +136,11 @@ const config = {
       },
     ],
   },
+  sourcify: {
+    enabled: true,
+    apiUrl: "https://sourcify.dev/server",
+    browserUrl: "https://repo.sourcify.dev",
+  },
   gasReporter: {
     enabled: process.env.REPORT_GAS === 'true',
     currency: 'USD',
