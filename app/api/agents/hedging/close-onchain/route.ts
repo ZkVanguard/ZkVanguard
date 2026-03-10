@@ -518,6 +518,30 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Database-related errors
+    if (errMsg.includes('not found') || errMsg.includes('no on-chain ID')) {
+      return NextResponse.json(
+        { success: false, error: errMsg },
+        { status: 404 }
+      );
+    }
+    
+    // bytes32 format issues
+    if (errMsg.includes('invalid') && (errMsg.includes('hex') || errMsg.includes('bytes32'))) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid hedge ID format. This hedge may not be on-chain.' },
+        { status: 400 }
+      );
+    }
+    
+    // Invalid private key format
+    if (errMsg.includes('invalid private key') || errMsg.includes('privateKey')) {
+      return NextResponse.json(
+        { success: false, error: 'Server configuration error - invalid relayer key format' },
+        { status: 500 }
+      );
+    }
+    
     return safeErrorResponse(error, 'On-chain hedge close');
   }
 }
