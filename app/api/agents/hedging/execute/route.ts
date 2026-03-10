@@ -787,21 +787,32 @@ export async function POST(request: NextRequest) {
       pairIndex = 0;
     }
     
-    // Get validated price from unified provider for position sizing
-    let currentPrice = 1000;
-    let moonlanderPriceContext: HedgePriceContext | null = null;
+    // ═══ STRICT PRICE VALIDATION FOR MOONLANDER ═══
+    // Get validated price from unified provider - REJECT if unavailable
+    let currentPrice: number;
+    let priceSource: string;
+    
     try {
-      moonlanderPriceContext = await getHedgeExecutionPrice(asset, side);
-      if (moonlanderPriceContext.validation.isValid) {
-        currentPrice = moonlanderPriceContext.effectivePrice;
-        logger.info('📊 Using validated price for Moonlander hedge', {
-          asset,
-          price: currentPrice,
-          source: moonlanderPriceContext.validation.priceSource,
-        });
-      }
-    } catch {
-      logger.warn('Failed to fetch price from unified provider, using fallback');
+      const { getStrictHedgePrice } = await import('@/lib/services/unified-price-provider');
+      const priceContext = await getStrictHedgePrice(asset, side, {
+        maxStalenessMs: 15000, // 15s max for executions
+        maxSpreadPercent: 3.0,
+      });
+      currentPrice = priceContext.effectivePrice;
+      priceSource = priceContext.source;
+      logger.info('📊 Using validated price for Moonlander hedge', {
+        asset,
+        price: currentPrice,
+        source: priceSource,
+      });
+    } catch (priceErr) {
+      // Price validation failed - DO NOT proceed with hedge
+      logger.error('❌ Failed to get valid price for Moonlander hedge', { error: priceErr });
+      return NextResponse.json({
+        success: false,
+        error: `Price validation failed: ${priceErr instanceof Error ? priceErr.message : 'Unknown error'}`,
+        hint: 'Cannot create hedge without valid real-time price. Please retry in a few seconds.',
+      }, { status: 503 });
     }
 
     // Calculate collateral needed (notionalValue / leverage)
