@@ -65,10 +65,13 @@ export async function POST(request: NextRequest) {
 
   // Wrap EVERYTHING in a proper try-catch for better error reporting
   try {
-    // Validate relayer key exists FIRST
-    const relayerKey = process.env.RELAYER_PRIVATE_KEY;
+    // Validate relayer key exists FIRST - check multiple possible env var names
+    const relayerKey = process.env.RELAYER_PRIVATE_KEY 
+      || process.env.PRIVATE_KEY 
+      || process.env.SERVER_WALLET_PRIVATE_KEY
+      || process.env.AGENT_PRIVATE_KEY;
     if (!relayerKey) {
-      console.error('RELAYER_PRIVATE_KEY not configured');
+      console.error('No relayer private key configured (checked RELAYER_PRIVATE_KEY, PRIVATE_KEY, SERVER_WALLET_PRIVATE_KEY, AGENT_PRIVATE_KEY)');
       return NextResponse.json(
         { success: false, error: 'Server not configured for gasless operations (missing relayer)' },
         { status: 503 }
