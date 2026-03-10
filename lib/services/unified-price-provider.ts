@@ -632,4 +632,134 @@ export function validatePriceForHedge(price: LivePrice | null): PriceValidation 
   return provider.validatePrice(price);
 }
 
+/**
+ * STRICT price validation for critical financial operations.
+ * NEVER falls back to hardcoded values - throws if price unavailable.
+ * 
+ * Use this for:
+ * - Hedge creation (entry_price MUST be real)
+ * - PnL calculations (unreliable prices = wrong PnL)
+ * - Settlement/closing (must know exact exit price)
+ * 
+ * @throws Error if valid price cannot be obtained
+ */
+export async function getStrictHedgePrice(
+  symbol: string,
+  side: 'LONG' | 'SHORT',
+  options?: {
+    maxStalenessMs?: number;    // Default: 10000 (10s)
+    requireWebSocket?: boolean; // Default: false (allows REST/cache)
+    maxSpreadPercent?: number;  // Default: 2.0%
+  }
+): Promise<HedgePriceContext & { source: string }> {
+  const maxStale = options?.maxStalenessMs ?? 10000;
+  const maxSpread = options?.maxSpreadPercent ?? 2.0;
+  
+  const provider = getUnifiedPriceProvider();
+  await provider.initialize();
+  
+  // Try unified provider first (WebSocket → REST → Cache)
+  let priceContext = await provider.getHedgePrice(symbol, side);
+  
+  // If no price or invalid, try MCP as fallback
+  if (!priceContext.validation.isValid || priceContext.entryPrice <= 0) {
+    try {
+      const { getMarketDataService } = await import('./RealMarketDataService');
+      const marketService = getMarketDataService();
+      const marketData = await marketService.getPrice(symbol);
+      
+      if (marketData && marketData.price > 0) {
+        const staleness = Date.now() - marketData.timestamp;
+        const spread = marketData.high24h && marketData.low24h
+          ? ((marketData.high24h - marketData.low24h) / marketData.price) * 100
+          : 0;
+          
+        priceContext = {
+          entryPrice: marketData.price,
+          bidPrice: marketData.price * 0.999,
+          askPrice: marketData.price * 1.001,
+          effectivePrice: side === 'LONG' ? marketData.price * 1.001 : marketData.price * 0.999,
+          slippageEstimate: 0.1,
+          validation: {
+            isValid: staleness < maxStale,
+            isFresh: staleness < 1000,
+            staleness,
+            spreadPercent: spread,
+            priceSource: 'mcp-fallback',
+            warnings: staleness > 5000 ? [`MCP price is ${(staleness/1000).toFixed(1)}s old`] : [],
+          },
+          timestamp: marketData.timestamp,
+        };
+      }
+    } catch (mcpErr) {
+      // MCP also failed - will throw below
+    }
+  }
+  
+  // Strict validation - REJECT if criteria not met
+  if (priceContext.entryPrice <= 0) {
+    throw new Error(
+      `PRICE_UNAVAILABLE: Cannot get valid price for ${symbol}. ` +
+      `Hedge creation blocked - never use hardcoded prices for financial operations.`
+    );
+  }
+  
+  if (priceContext.validation.staleness > maxStale) {
+    throw new Error(
+      `PRICE_STALE: ${symbol} price is ${(priceContext.validation.staleness/1000).toFixed(1)}s old ` +
+      `(max: ${maxStale/1000}s). Hedge creation blocked.`
+    );
+  }
+  
+  if (priceContext.validation.spreadPercent > maxSpread) {
+    throw new Error(
+      `SPREAD_TOO_HIGH: ${symbol} spread is ${priceContext.validation.spreadPercent.toFixed(2)}% ` +
+      `(max: ${maxSpread}%). Hedge creation blocked.`
+    );
+  }
+  
+  if (options?.requireWebSocket && priceContext.validation.priceSource !== 'websocket') {
+    throw new Error(
+      `WEBSOCKET_REQUIRED: ${symbol} price from ${priceContext.validation.priceSource}, ` +
+      `but WebSocket real-time price required. Hedge creation blocked.`
+    );
+  }
+  
+  // All validations passed - return with source info
+  return {
+    ...priceContext,
+    source: priceContext.validation.priceSource,
+  };
+}
+
+/**
+ * Cache entry price to DB at hedge creation time.
+ * This ensures price is ALWAYS stored when hedge is created.
+ */
+export async function cacheHedgeEntryPrice(
+  hedgeId: string | number,
+  entryPrice: number,
+  source: string
+): Promise<void> {
+  if (entryPrice <= 0) {
+    throw new Error(`Cannot cache invalid entry price: ${entryPrice}`);
+  }
+  
+  try {
+    const { query } = await import('@/lib/db/postgres');
+    await query(`
+      UPDATE hedges SET
+        entry_price = $1,
+        price_source = $2,
+        price_updated_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $3::integer OR order_id = $3::text OR hedge_id_onchain = $3::text
+    `, [entryPrice, source, String(hedgeId)]);
+    
+    logger.info(`[PriceCache] Entry price cached: ${hedgeId} = $${entryPrice} (${source})`);
+  } catch (err) {
+    logger.error('[PriceCache] Failed to cache entry price', { hedgeId, entryPrice, error: err });
+  }
+}
+
 export { UnifiedPriceProvider };

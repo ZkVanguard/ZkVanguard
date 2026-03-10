@@ -170,33 +170,34 @@ export async function POST(request: NextRequest) {
     const asset = PAIR_NAMES[pairIndex] || `PAIR-${pairIndex}`;
     const side = isLong ? 'LONG' : 'SHORT';
     
-    // Fetch live entry price from Crypto.com API (important for PnL calculation!)
-    let entryPrice: number | null = null;
+    // ═══ STRICT PRICE VALIDATION ═══
+    // NEVER use hardcoded prices - get validated price from unified provider
+    // This includes: WebSocket real-time → REST API → MCP → DB cache
+    // If all fail, we REJECT the hedge creation rather than use fake prices
+    let entryPrice: number;
+    let priceSource: string;
+    
     try {
-      const symbolMap: Record<number, string> = { 0: 'BTC_USDT', 1: 'ETH_USDT', 2: 'CRO_USDT', 3: 'ATOM_USDT', 4: 'DOGE_USDT', 5: 'SOL_USDT' };
-      const tickerResponse = await fetch(`https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=${symbolMap[pairIndex]}`, {
-        signal: AbortSignal.timeout(5000),
+      const { getStrictHedgePrice } = await import('@/lib/services/unified-price-provider');
+      const priceContext = await getStrictHedgePrice(asset, side as 'LONG' | 'SHORT', {
+        maxStalenessMs: 15000, // 15s max staleness for executions
+        maxSpreadPercent: 3.0, // Allow higher spread on testnet
       });
-      if (tickerResponse.ok) {
-        const tickerData = await tickerResponse.json();
-        const ticker = tickerData.result?.data?.[0];
-        if (ticker && ticker.a) {
-          entryPrice = parseFloat(ticker.a);
-          console.log(`📈 Entry price for ${asset}: $${entryPrice}`);
-        }
-      }
+      
+      entryPrice = priceContext.effectivePrice;
+      priceSource = priceContext.source;
+      console.log(`📈 Validated entry price for ${asset}: $${entryPrice} (source: ${priceSource})`);
     } catch (priceErr) {
-      console.warn('Could not fetch entry price:', priceErr instanceof Error ? priceErr.message : priceErr);
+      // Price validation failed - DO NOT proceed with hedge
+      console.error('❌ Strict price validation failed:', priceErr);
+      return NextResponse.json({
+        success: false,
+        error: `Price validation failed: ${priceErr instanceof Error ? priceErr.message : 'Unknown error'}`,
+        hint: 'Cannot create hedge without valid real-time price. Please retry in a few seconds.',
+      }, { status: 503 });
     }
     
-    // Fallback prices if API fails
-    if (!entryPrice) {
-      const fallbackPrices: Record<number, number> = { 0: 71230, 1: 2111, 2: 0.081, 3: 1.979, 4: 0.097, 5: 88.02 };
-      entryPrice = fallbackPrices[pairIndex] || 1000;
-      console.log(`⚠️ Using fallback entry price for ${asset}: $${entryPrice}`);
-    }
-    
-    console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} | relayer: ${relayer.address} (user hidden)`);
+    console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} (${priceSource}) | relayer: ${relayer.address} (user hidden)`);
 
     // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN (TESTNET ONLY) ═══
     // On mainnet, Moonlander has real oracle - no price sync needed
@@ -320,10 +321,10 @@ export async function POST(request: NextRequest) {
       blockNumber: receipt.blockNumber,
       explorerLink: `https://explorer.cronos.org/${chainId === 25 ? '' : 'testnet/'}tx/${tx.hash}`,
       walletAddress: userWallet !== 'anonymous' ? userWallet : undefined,
-      metadata: { gasless: true, x402: true },
+      metadata: { gasless: true, x402: true, priceSource },
     }).catch(err => console.warn('DB persist skipped:', err instanceof Error ? err.message : err));
 
-    console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Entry: $${entryPrice} | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
+    console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Entry: $${entryPrice} (${priceSource}) | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
 
     return NextResponse.json({
       success: true,
@@ -345,6 +346,7 @@ export async function POST(request: NextRequest) {
       collateral: Number(collateralAmount),
       leverage: Number(leverage),
       entryPrice: entryPrice, // Entry price for PnL calculation
+      priceSource, // Where the validated price came from
       totalHedges: Number(totalHedges),
       explorerLink: `https://explorer.cronos.org/${chainId === 25 ? '' : 'testnet/'}tx/${tx.hash}`,
       // x402 Gasless info
