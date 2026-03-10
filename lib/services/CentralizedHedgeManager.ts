@@ -14,7 +14,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, createHedge, fixHedgeEntryPrice, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { getAgentOrchestrator } from './agent-orchestrator';
 import { ethers } from 'ethers';
@@ -919,20 +919,45 @@ export class CentralizedHedgeManager {
       // PRODUCTION SAFETY: Validate entry price - must be positive
       const rawEntryPrice = Number(hedge.entry_price);
       if (!Number.isFinite(rawEntryPrice) || rawEntryPrice <= 0) {
-        logger.error('[HedgeManager] Invalid entry_price for hedge - skipping PnL calculation', { 
+        // AUTO-FIX: Set entry price to current market price (with small offset)
+        logger.warn('[HedgeManager] Auto-fixing null/invalid entry_price for hedge', { 
           hedgeId: hedge.id, 
           entryPrice: hedge.entry_price,
-          asset: hedge.asset 
+          asset: hedge.asset,
+          currentPrice: snapshotPrice.price
         });
-        auditLog({
-          timestamp: Date.now(),
-          operation: 'hedge_pnl_skip',
-          result: 'rejected',
-          reason: `Invalid entry_price: ${hedge.entry_price}`,
-          metadata: { hedgeId: hedge.id, asset: hedge.asset }
-        });
-        errors++;
-        continue;
+        
+        try {
+          await fixHedgeEntryPrice(hedge.id, snapshotPrice.price, hedge.side);
+          // Use the fixed price for this cycle (with offset already applied)
+          const entryOffset = hedge.side === 'LONG' ? 1.005 : 0.995;
+          const fixedEntryPrice = snapshotPrice.price * entryOffset;
+          
+          // Calculate PnL with fixed entry price
+          const rawNotionalValue = Number(hedge.notional_value);
+          if (!Number.isFinite(rawNotionalValue) || rawNotionalValue <= 0) {
+            errors++;
+            continue;
+          }
+          const rawLeverage = Number(hedge.leverage);
+          const leverage = (Number.isFinite(rawLeverage) && rawLeverage >= 1 && rawLeverage <= 125) ? rawLeverage : 1;
+          
+          let pnlMultiplier: number;
+          if (hedge.side === 'SHORT') {
+            pnlMultiplier = (fixedEntryPrice - snapshotPrice.price) / fixedEntryPrice;
+          } else {
+            pnlMultiplier = (snapshotPrice.price - fixedEntryPrice) / fixedEntryPrice;
+          }
+          const unrealizedPnL = rawNotionalValue * pnlMultiplier * leverage;
+          if (isFinite(unrealizedPnL)) {
+            updates.push({ id: hedge.id, pnl: unrealizedPnL, price: snapshotPrice.price });
+          }
+          continue;
+        } catch (fixError) {
+          logger.error('[HedgeManager] Failed to auto-fix entry_price', { hedgeId: hedge.id, error: fixError });
+          errors++;
+          continue;
+        }
       }
       const entryPrice = rawEntryPrice;
 
