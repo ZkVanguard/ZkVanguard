@@ -53,8 +53,19 @@ const PAIR_NAMES: Record<number, string> = {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
-  // Rate limiting
-  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
+  // Rate limiting - wrap in try-catch to avoid mysterious 500s
+  let mutationLimiter;
+  try {
+    const rateModule = await import('@/lib/security/rate-limiter');
+    mutationLimiter = rateModule.mutationLimiter;
+  } catch (importErr) {
+    console.error('Failed to import rate-limiter:', importErr);
+    return NextResponse.json(
+      { success: false, error: 'Server configuration error (rate-limiter)' },
+      { status: 500 }
+    );
+  }
+  
   const limited = mutationLimiter.check(request);
   if (limited) return limited;
 
@@ -404,6 +415,52 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('On-chain close error:', error);
+    
+    // Provide more informative error messages for financial operations
+    // (without leaking sensitive internals)
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Common error patterns users should know about
+    if (errMsg.includes('RELAYER_PRIVATE_KEY')) {
+      return NextResponse.json(
+        { success: false, error: 'Server configuration error - relayer not configured' },
+        { status: 500 }
+      );
+    }
+    if (errMsg.includes('insufficient funds') || errMsg.includes('gas required exceeds')) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction failed - insufficient gas. Please try again later.' },
+        { status: 503 }
+      );
+    }
+    if (errMsg.includes('nonce') || errMsg.includes('replacement transaction')) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction pending - please wait 30 seconds and retry.' },
+        { status: 503 }
+      );
+    }
+    if (errMsg.includes('execution reverted')) {
+      // Extract revert reason if available
+      const revertMatch = errMsg.match(/reason="([^"]+)"/);
+      const revertReason = revertMatch ? revertMatch[1] : 'Contract execution failed';
+      return NextResponse.json(
+        { success: false, error: `Close failed: ${revertReason}` },
+        { status: 400 }
+      );
+    }
+    if (errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('ECONNREFUSED')) {
+      return NextResponse.json(
+        { success: false, error: 'Network error - blockchain RPC unavailable. Retry in a few seconds.' },
+        { status: 503 }
+      );
+    }
+    if (errMsg.includes('Signature') || errMsg.includes('signature')) {
+      return NextResponse.json(
+        { success: false, error: errMsg },
+        { status: 401 }
+      );
+    }
+    
     return safeErrorResponse(error, 'On-chain hedge close');
   }
 }
