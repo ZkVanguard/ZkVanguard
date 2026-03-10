@@ -44,14 +44,30 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ];
 
-// Contract addresses
+// Contract addresses - Load from deployments
+import { readFileSync } from 'fs';
+import * as path from 'path';
+
+function loadPoolAddress(network: 'mainnet' | 'testnet'): string {
+  try {
+    const deploymentFile = network === 'mainnet' 
+      ? 'community-pool-mainnet.json' 
+      : 'community-pool-v2-testnet.json';
+    const deploymentPath = path.join(process.cwd(), 'deployments', deploymentFile);
+    const deployment = JSON.parse(readFileSync(deploymentPath, 'utf-8'));
+    return deployment.contracts?.CommunityPool?.proxy || '';
+  } catch {
+    return '';
+  }
+}
+
 const ADDRESSES = {
   mainnet: {
-    communityPool: '', // TODO: Deploy and set
+    communityPool: loadPoolAddress('mainnet'),
     usdc: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59',
   },
   testnet: {
-    communityPool: '', // TODO: Deploy and set
+    communityPool: loadPoolAddress('testnet'),
     usdc: '0x28217daddC55e3C4831b4A48A00Ce04880786967',
   },
 };
