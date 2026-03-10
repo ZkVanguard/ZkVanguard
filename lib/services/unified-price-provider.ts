@@ -666,13 +666,13 @@ export async function getStrictHedgePrice(
     try {
       const { getMarketDataService } = await import('./RealMarketDataService');
       const marketService = getMarketDataService();
-      const marketData = await marketService.getPrice(symbol);
+      const marketData = await marketService.getTokenPrice(symbol);
       
       if (marketData && marketData.price > 0) {
         const staleness = Date.now() - marketData.timestamp;
-        const spread = marketData.high24h && marketData.low24h
-          ? ((marketData.high24h - marketData.low24h) / marketData.price) * 100
-          : 0;
+        // MarketPrice doesn't have high24h/low24h, so we estimate spread as 0
+        // A proper spread would require ExtendedMarketData
+        const spread = 0;
           
         priceContext = {
           entryPrice: marketData.price,
