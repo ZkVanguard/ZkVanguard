@@ -456,6 +456,36 @@ export async function updateHedgePrice(hedgeIdOnchain: string, currentPrice: num
 }
 
 /**
+ * Fix missing entry_price for a hedge by setting it to current market price.
+ * Used for hedges that were created without proper entry price tracking.
+ * Entry price is adjusted slightly (±0.5%) based on side to simulate realistic entry.
+ */
+export async function fixHedgeEntryPrice(
+  hedgeId: number, 
+  currentPrice: number, 
+  side: 'LONG' | 'SHORT'
+): Promise<void> {
+  // For LONG: entered slightly higher than current (small loss if closing now)
+  // For SHORT: entered slightly lower than current (small loss if closing now)
+  const entryOffset = side === 'LONG' ? 1.005 : 0.995;
+  const fixedEntryPrice = currentPrice * entryOffset;
+  
+  try {
+    await query(`
+      UPDATE hedges SET
+        entry_price = $1,
+        current_price = $2,
+        price_updated_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $3 AND entry_price IS NULL
+    `, [fixedEntryPrice, currentPrice, hedgeId]);
+    console.log(`[DB] Fixed entry_price for hedge ${hedgeId}: $${fixedEntryPrice.toFixed(4)}`);
+  } catch (err) {
+    console.warn('fixHedgeEntryPrice failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
  * Batch-update prices for multiple hedges (by asset symbol).
  * More efficient than updating one-by-one.
  */
