@@ -57,8 +57,12 @@ const getAddresses = () => {
 // PRIVACY: Dedicated relayer wallet — user's address NEVER touches the chain
 // The relayer holds its own USDC pool and pays gas, acting as a privacy shield
 function getRelayerKey(): string {
-  const key = process.env.RELAYER_PRIVATE_KEY;
-  if (!key) throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
+  const key = process.env.RELAYER_PRIVATE_KEY 
+    || process.env.MOONLANDER_PRIVATE_KEY
+    || process.env.PRIVATE_KEY 
+    || process.env.SERVER_WALLET_PRIVATE_KEY
+    || process.env.AGENT_PRIVATE_KEY;
+  if (!key) throw new Error('FATAL: No relayer key found (checked RELAYER_PRIVATE_KEY, MOONLANDER_PRIVATE_KEY, PRIVATE_KEY, SERVER_WALLET_PRIVATE_KEY, AGENT_PRIVATE_KEY)');
   return key;
 }
 
