@@ -820,7 +820,7 @@ export async function GET(request: NextRequest) {
             totalValueUSD: onChainPool.totalValueUSD,
             totalShares: onChainPool.totalShares,
             sharePrice: onChainPool.sharePrice,
-            memberCount: onChainPool.memberCount ?? onChainPool.totalMembers ?? 0,
+            memberCount: onChainPool.totalMembers ?? 0,
             allocations: onChainPool.allocations,
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
