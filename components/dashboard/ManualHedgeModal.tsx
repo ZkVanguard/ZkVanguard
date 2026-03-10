@@ -718,6 +718,7 @@ export function ManualHedgeModal({
   // ── Step labels ───────────────────────────────────────────────
   const stepLabel: Record<TxStep, string> = {
     idle: '',
+    signing: 'Sign hedge request in your wallet...',
     checking: 'Checking allowance...',
     approving: 'Approve MockUSDC in your wallet...',
     'approve-confirming': 'Waiting for approval confirmation...',
@@ -728,7 +729,7 @@ export function ManualHedgeModal({
   };
 
   const stepProgress: Record<TxStep, number> = {
-    idle: 0, checking: 1, approving: 1, 'approve-confirming': 2,
+    idle: 0, signing: 1, checking: 1, approving: 1, 'approve-confirming': 2,
     opening: 3, 'open-confirming': 3, done: 4, error: 0,
   };
   const progress = stepProgress[txStep];
