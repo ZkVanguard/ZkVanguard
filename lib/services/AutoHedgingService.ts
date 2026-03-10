@@ -18,7 +18,7 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getMarketDataService } from './RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
-import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
+import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from './CommunityPoolService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
 
@@ -144,42 +144,63 @@ class AutoHedgingService {
   /**
    * Load all enabled portfolio configurations from storage
    * This replaces hardcoded portfolio IDs with dynamic database-driven configuration
+   * 
+   * NOTE: Community Pool is ALWAYS auto-enrolled for protective monitoring
    */
   private async loadPortfoliosFromStorage(): Promise<void> {
     try {
+      // ALWAYS enroll Community Pool first (self-sustaining fund requires protection)
+      // Uses conservative thresholds: riskThreshold=3 means hedge early
+      const communityPoolConfig: AutoHedgeConfig = {
+        portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+        walletAddress: COMMUNITY_POOL_ADDRESS,
+        enabled: true,
+        riskThreshold: 3, // Aggressive: hedge at moderate risk (protects community funds)
+        maxLeverage: 3,
+        allowedAssets: ['BTC', 'ETH', 'SUI', 'CRO'],
+      };
+      this.enableForPortfolio(communityPoolConfig);
+      logger.info('[AutoHedging] Community Pool auto-enrolled for protective monitoring', {
+        portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+        address: COMMUNITY_POOL_ADDRESS,
+        riskThreshold: communityPoolConfig.riskThreshold,
+      });
+
+      // Load additional portfolios from storage
       const storedConfigs = await getAutoHedgeConfigs();
       
-      if (storedConfigs.length === 0) {
-        logger.warn('[AutoHedging] No stored configurations found. Use API to enable portfolios.');
-        return;
-      }
+      // Filter out community pool from stored configs (we already enrolled it above)
+      const otherConfigs = storedConfigs.filter(c => c.portfolioId !== COMMUNITY_POOL_PORTFOLIO_ID);
       
-      logger.info('[AutoHedging] Loading configurations from storage', {
-        count: storedConfigs.length,
-        portfolios: storedConfigs.map(c => c.portfolioId)
-      });
-      
-      for (const config of storedConfigs) {
-        // Convert storage format to service format
-        this.enableForPortfolio({
-          portfolioId: config.portfolioId,
-          walletAddress: config.walletAddress,
-          enabled: config.enabled,
-          riskThreshold: config.riskThreshold,
-          maxLeverage: config.maxLeverage,
-          allowedAssets: config.allowedAssets,
+      if (otherConfigs.length > 0) {
+        logger.info('[AutoHedging] Loading additional configurations from storage', {
+          count: otherConfigs.length,
+          portfolios: otherConfigs.map(c => c.portfolioId)
         });
+        
+        for (const config of otherConfigs) {
+          // Convert storage format to service format
+          this.enableForPortfolio({
+            portfolioId: config.portfolioId,
+            walletAddress: config.walletAddress,
+            enabled: config.enabled,
+            riskThreshold: config.riskThreshold,
+            maxLeverage: config.maxLeverage,
+            allowedAssets: config.allowedAssets,
+          });
+        }
       }
       
-      logger.info('[AutoHedging] All stored portfolios loaded', {
-        activeCount: this.autoHedgeConfigs.size
+      logger.info('[AutoHedging] All portfolios loaded (including Community Pool)', {
+        activeCount: this.autoHedgeConfigs.size,
+        portfolioIds: Array.from(this.autoHedgeConfigs.keys()),
       });
     } catch (error) {
       logger.error('[AutoHedging] Failed to load configurations from storage', {
         error: error instanceof Error ? error.message : String(error)
       });
-      // Service continues running, but with no portfolios configured
-      // Use API to manually enable portfolios
+      // Even on error, Community Pool should still be enrolled from the code above
+      // Service continues running with at least the community pool
     }
   }
 
