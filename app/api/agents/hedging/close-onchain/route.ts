@@ -124,12 +124,34 @@ export async function POST(request: NextRequest) {
 
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
+    console.log(`[close-onchain] Step 1: Got provider`);
+    
     const wallet = new ethers.Wallet(relayerKey, provider);
+    console.log(`[close-onchain] Step 2: Created wallet from relayer key`);
+    
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
     const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, provider);
+    console.log(`[close-onchain] Step 3: Contract instances created`);
 
     // ── STEP 1: Read on-chain hedge data for ZK verification ──────────────────
-    const hedgeData = await contract.hedges(hedgeId);
+    console.log(`[close-onchain] Step 4: Reading on-chain hedge for ID: ${hedgeId}`);
+    let hedgeData;
+    try {
+      hedgeData = await contract.hedges(hedgeId);
+    } catch (readErr) {
+      console.error(`[close-onchain] Failed to read hedge from chain:`, readErr);
+      const errMsg = readErr instanceof Error ? readErr.message : String(readErr);
+      // Check if it's an invalid bytes32 format
+      if (errMsg.includes('invalid') || errMsg.includes('hex') || errMsg.includes('format')) {
+        return NextResponse.json(
+          { success: false, error: `Invalid hedge ID format. Expected bytes32 (0x...), got: ${hedgeId}` },
+          { status: 400 }
+        );
+      }
+      throw readErr;
+    }
+    console.log(`[close-onchain] Step 5: Got hedge data from chain`);
+    
     const onChainCommitmentHash = hedgeData[7] as string; // commitmentHash field (index 7)
     const onChainTrader = hedgeData[1] as string;
     const hedgeStatus = Number(hedgeData[12]);
