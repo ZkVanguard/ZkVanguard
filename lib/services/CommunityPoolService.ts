@@ -163,18 +163,36 @@ export async function calculatePoolNAV(): Promise<{
   let totalValueUSD = 0;
   const allocations = { ...poolState.allocations };
   
-  // Check if we need to initialize virtual holdings (migration from on-chain only)
+  // First, calculate current TVL from existing amounts to check consistency
+  let currentTVL = 0;
+  for (const asset of SUPPORTED_ASSETS) {
+    const amount = allocations[asset].amount || 0;
+    const price = prices[asset];
+    currentTVL += amount * price;
+  }
+  
+  // Calculate what the share price would be with current amounts
+  const impliedSharePrice = onChainTotalShares > 0 ? currentTVL / onChainTotalShares : 1.0;
+  
+  // Check if amounts need (re)initialization:
+  // - No amounts at all, OR
+  // - Share price is way off from expected (~$1.00), indicating corrupted data
   const hasAmounts = SUPPORTED_ASSETS.some(a => allocations[a].amount > 0);
-  if (!hasAmounts && onChainTotalShares > 0) {
-    // Initialize virtual holdings based on on-chain NAV and target percentages
-    // Use on-chain totalShares for accurate baseline
+  const needsReinit = !hasAmounts || (onChainTotalShares > 1000 && (impliedSharePrice < 0.50 || impliedSharePrice > 2.00));
+  
+  if (needsReinit && onChainTotalShares > 0) {
+    // Initialize/reinitialize virtual holdings based on on-chain totalShares
+    // Use $1.00 initial share price assumption (standard for first deposits)
     const baselineNAV = onChainTotalShares * 1.0; // Assume $1.00 initial share price
-    logger.info('[CommunityPool] Initializing virtual holdings from on-chain baseline', { 
+    logger.info('[CommunityPool] Reinitializing virtual holdings (amounts were corrupted or missing)', { 
       baselineNAV, 
       onChainTotalShares,
-      dbTotalShares: poolState.totalShares,
+      previousTVL: currentTVL,
+      impliedSharePrice,
+      reason: !hasAmounts ? 'no amounts' : 'share price out of range',
     });
     
+    totalValueUSD = 0;
     for (const asset of SUPPORTED_ASSETS) {
       const targetPct = poolState.allocations[asset].percentage / 100;
       const valueForAsset = baselineNAV * targetPct;
@@ -185,18 +203,23 @@ export async function calculatePoolNAV(): Promise<{
       totalValueUSD += valueForAsset;
     }
     
-    // Persist initialized amounts and sync totalShares from on-chain
+    // Persist corrected amounts and sync totalShares from on-chain
     poolState.allocations = allocations;
     poolState.totalShares = onChainTotalShares;
     try {
       await savePoolState(poolState);
+      logger.info('[CommunityPool] Corrected pool state saved successfully', {
+        newTVL: totalValueUSD,
+        newSharePrice: totalValueUSD / onChainTotalShares,
+      });
     } catch (err) {
-      logger.warn('[CommunityPool] Failed to persist initialized pool state (DB unavailable, continuing)', {
+      logger.warn('[CommunityPool] Failed to persist corrected pool state (DB unavailable, continuing)', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
   } else {
     // Normal calculation from existing amounts
+    totalValueUSD = currentTVL;
     for (const asset of SUPPORTED_ASSETS) {
       const amount = allocations[asset].amount;
       const price = prices[asset];
@@ -204,7 +227,6 @@ export async function calculatePoolNAV(): Promise<{
       
       allocations[asset].price = price;
       allocations[asset].valueUSD = valueUSD;
-      totalValueUSD += valueUSD;
     }
   }
   
