@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId, useWalletClient } from 'wagmi';
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
@@ -106,7 +106,7 @@ interface HedgeSuccess {
   entryPrice: string;
 }
 
-type TxStep = 'idle' | 'checking' | 'approving' | 'approve-confirming' | 'opening' | 'open-confirming' | 'done' | 'error';
+type TxStep = 'idle' | 'checking' | 'signing' | 'approving' | 'approve-confirming' | 'opening' | 'open-confirming' | 'done' | 'error';
 
 // ── Tx Hash Display with copy ───────────────────────────────────
 function TxHashDisplay({ hash, label }: { hash: string; label: string }) {
@@ -179,6 +179,7 @@ export function ManualHedgeModal({
 
   // ── Wallet / chain state ──────────────────────────────────────
   const { address } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const explorerUrl = useMemo(() => getExplorerUrl(chainId), [chainId]);
@@ -187,6 +188,67 @@ export function ManualHedgeModal({
   const usdcAddress = useMemo(() => getUsdcAddress(chainId), [chainId]);
   const [usdcBalance, setUsdcBalance] = useState<string>('0');
   const [currentAllowance, setCurrentAllowance] = useState<bigint>(0n);
+
+  // ── EIP-712 Domain for typed signatures ───────────────────────
+  const getEIP712Domain = useCallback(() => ({
+    name: 'ZK Vanguard',
+    version: '1',
+    chainId: chainId,
+  }), [chainId]);
+
+  // ── Sign hedge opening with EIP-712 ───────────────────────────
+  const signOpenHedge = useCallback(async (
+    assetName: string,
+    side: string,
+    collateral: number,
+    lev: number
+  ): Promise<{ signature: string; timestamp: number } | null> => {
+    try {
+      if (!walletClient) {
+        logger.warn('Wallet not connected for signing', { component: 'ManualHedgeModal' });
+        return null;
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const domain = getEIP712Domain();
+      const types = {
+        OpenHedge: [
+          { name: 'asset', type: 'string' },
+          { name: 'side', type: 'string' },
+          { name: 'collateral', type: 'uint256' },
+          { name: 'leverage', type: 'uint256' },
+          { name: 'timestamp', type: 'uint256' },
+        ],
+      } as const;
+      const message = {
+        asset: assetName,
+        side,
+        collateral: BigInt(Math.round(collateral * 1e6)), // USDC 6 decimals
+        leverage: BigInt(lev),
+        timestamp: BigInt(timestamp),
+      };
+
+      logger.info('🔑 Requesting wallet signature', {
+        component: 'ManualHedgeModal',
+        wallet: walletClient.account?.address,
+        asset: assetName,
+        side,
+      });
+
+      const signature = await walletClient.signTypedData({
+        domain,
+        types,
+        primaryType: 'OpenHedge',
+        message,
+      });
+
+      logger.info('✅ Hedge signed', { component: 'ManualHedgeModal', signer: walletClient.account?.address });
+      return { signature, timestamp };
+    } catch (err) {
+      logger.warn('Wallet signature declined', { component: 'ManualHedgeModal', error: err });
+      return null;
+    }
+  }, [walletClient, getEIP712Domain]);
 
   // ── Transaction state ─────────────────────────────────────────
   const [txStep, setTxStep] = useState<TxStep>('idle');
@@ -438,10 +500,21 @@ export function ManualHedgeModal({
 
   const handleGaslessOpen = async () => {
     try {
-      setTxStep('opening');
+      setTxStep('signing');
 
       const pairIndex = PAIR_INDEX[asset] ?? 0;
       const isLong = hedgeType === 'LONG';
+      const collateralNum = parseFloat(pendingCollateral);
+
+      // Step 1: Get EIP-712 signature from user's wallet
+      const signResult = await signOpenHedge(asset, hedgeType, collateralNum, leverage);
+      if (!signResult) {
+        setError('Signature cancelled');
+        setTxStep('error');
+        return;
+      }
+
+      setTxStep('opening');
 
       logger.info('Opening hedge via x402 gasless', {
         component: 'ManualHedgeModal',
@@ -457,6 +530,8 @@ export function ManualHedgeModal({
           leverage,
           isLong,
           walletAddress: address,
+          signature: signResult.signature,
+          timestamp: signResult.timestamp,
         }),
       });
 
@@ -1074,7 +1149,9 @@ export function ManualHedgeModal({
                       {isBusy ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          {txStep === 'approving' || txStep === 'approve-confirming'
+                          {txStep === 'signing'
+                            ? 'Signing...'
+                            : txStep === 'approving' || txStep === 'approve-confirming'
                             ? 'Approving...'
                             : useGasless ? 'Creating (Gasless)...' : 'Creating...'}
                         </>
