@@ -95,12 +95,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Authentication: require wallet signature or internal service token
-    const { requireAuth } = await import('@/lib/security/auth-middleware');
-    const authResult = await requireAuth(request, body);
-    if (authResult instanceof NextResponse) return authResult;
+    // NOTE: We do NOT use generic requireAuth() here because:
+    // 1. This endpoint uses EIP-712 typed data signatures (not personal_sign)
+    // 2. The signature format is: { asset, side, collateral, leverage, timestamp }
+    // 3. We validate the EIP-712 signature below with verifyTypedData()
+    // Generic auth expects personal_sign format which would fail
+    //
+    // However, internal service calls (with X-Internal-Token) are allowed without signature
 
-    const { pairIndex, collateralAmount, leverage, isLong, walletAddress } = body;
+    const { pairIndex, collateralAmount, leverage, isLong, walletAddress, signature, timestamp, systemSecret } = body;
+
+    // Check for internal/system authentication (for automated hedging services)
+    const { verifyInternalAuth } = await import('@/lib/security/auth-middleware');
+    const isInternalCall = verifyInternalAuth(request);
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    const isSystemCall = systemSecret && cronSecret && systemSecret === cronSecret;
 
     // Validate inputs
     if (pairIndex === undefined || !collateralAmount || !leverage || isLong === undefined) {
@@ -131,6 +140,87 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Leverage must be 2-100' },
         { status: 400 }
       );
+    }
+
+    // ── EIP-712 Signature Verification ───────────────────────────────────────
+    // Verify the wallet signature proves user authorized this specific hedge
+    // Internal/system calls bypass signature verification
+    if (!isInternalCall && !isSystemCall) {
+      if (!signature || !timestamp) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet signature required. Please sign the hedge request in your wallet.' },
+          { status: 401 }
+        );
+      }
+
+      // Check timestamp is recent (5 minute window)
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - timestamp) > 300) {
+        return NextResponse.json(
+          { success: false, error: 'Signature expired. Please sign again.' },
+          { status: 401 }
+        );
+      }
+
+      // EIP-712 domain and types matching frontend
+      const OPEN_HEDGE_DOMAIN = {
+        name: 'ZK Vanguard',
+        version: '1',
+        chainId: getCurrentChainId(),
+      };
+
+      const OPEN_HEDGE_TYPES = {
+        OpenHedge: [
+          { name: 'asset', type: 'string' },
+          { name: 'side', type: 'string' },
+          { name: 'collateral', type: 'uint256' },
+          { name: 'leverage', type: 'uint256' },
+          { name: 'timestamp', type: 'uint256' },
+        ],
+      };
+
+      // Reconstruct the message that was signed
+      const asset = PAIR_NAMES[pairIndex] || 'BTC';
+      const side = isLong ? 'LONG' : 'SHORT';
+      const collateralWei = BigInt(Math.round(collateralAmount * 1e6)); // USDC 6 decimals
+
+      try {
+        const recoveredAddress = ethers.verifyTypedData(
+          OPEN_HEDGE_DOMAIN,
+          OPEN_HEDGE_TYPES,
+          {
+            asset,
+            side,
+            collateral: collateralWei,
+            leverage: BigInt(leverage),
+            timestamp: BigInt(timestamp),
+          },
+          signature
+        );
+
+        if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+          console.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${walletAddress}`);
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `Wallet signature verification failed. Signed with different wallet.`,
+              expectedWallet: walletAddress,
+              signedBy: recoveredAddress,
+            },
+            { status: 403 }
+          );
+        }
+
+        console.log(`✅ EIP-712 signature verified: ${recoveredAddress} authorized hedge`);
+      } catch (sigErr) {
+        console.error('Signature verification error:', sigErr);
+        return NextResponse.json(
+          { success: false, error: 'Invalid signature format. Please try again.' },
+          { status: 401 }
+        );
+      }
+    } else {
+      console.log(`🔑 Internal/system call - bypassing EIP-712 signature verification`);
     }
 
     // Dynamic address resolution
