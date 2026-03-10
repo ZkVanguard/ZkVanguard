@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     if (!hedgeId) {
       return NextResponse.json(
-        { success: false, error: 'Missing hedgeId (bytes32 or database ID)' },
+        { success: false, error: 'Missing hedgeId v2 (bytes32 or database ID)' },
         { status: 400 }
       );
     }
