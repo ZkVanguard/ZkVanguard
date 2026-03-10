@@ -334,7 +334,7 @@ async function getOnChainPoolData(): Promise<PoolDataCache | null> {
           totalValueUSD: marketNAV,
           totalShares,
           sharePrice: marketSharePrice,
-          totalMembers: memberCount,
+          memberCount: memberCount,
           allocations: {
             BTC: { percentage: marketAllocations.BTC?.percentage || Number(stats._allocations[0]) / 100 },
             ETH: { percentage: marketAllocations.ETH?.percentage || Number(stats._allocations[1]) / 100 },
@@ -820,7 +820,7 @@ export async function GET(request: NextRequest) {
             totalValueUSD: onChainPool.totalValueUSD,
             totalShares: onChainPool.totalShares,
             sharePrice: onChainPool.sharePrice,
-            totalMembers: onChainPool.totalMembers,
+            memberCount: onChainPool.memberCount ?? onChainPool.totalMembers ?? 0,
             allocations: onChainPool.allocations,
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
@@ -840,7 +840,10 @@ export async function GET(request: NextRequest) {
       
       return NextResponse.json({
         success: true,
-        pool: summary,
+        pool: {
+          ...summary,
+          memberCount: summary.totalMembers, // Map to frontend expected field name
+        },
         supportedAssets: SUPPORTED_ASSETS,
         timestamp: Date.now(),
         source: 'calculated',
