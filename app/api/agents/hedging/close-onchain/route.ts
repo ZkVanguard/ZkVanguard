@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
   // Wrap EVERYTHING in a proper try-catch for better error reporting
   try {
     // Validate relayer key exists FIRST - check multiple possible env var names
-    const relayerKey = process.env.RELAYER_PRIVATE_KEY 
+    let relayerKey = process.env.RELAYER_PRIVATE_KEY 
       || process.env.MOONLANDER_PRIVATE_KEY
       || process.env.PRIVATE_KEY 
       || process.env.SERVER_WALLET_PRIVATE_KEY
@@ -78,6 +78,12 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Server not configured for gasless operations (missing relayer)' },
         { status: 503 }
       );
+    }
+    
+    // Normalize key format (ensure 0x prefix)
+    relayerKey = relayerKey.trim();
+    if (!relayerKey.startsWith('0x')) {
+      relayerKey = '0x' + relayerKey;
     }
     
     const body = await request.json();
