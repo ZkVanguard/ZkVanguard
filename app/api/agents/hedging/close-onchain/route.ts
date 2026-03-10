@@ -26,12 +26,6 @@ const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
 const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const RPC_URL = 'https://evm-t3.cronos.org';
 
-function getRelayerKey(): string {
-  const key = process.env.RELAYER_PRIVATE_KEY;
-  if (!key) throw new Error('FATAL: RELAYER_PRIVATE_KEY environment variable is required');
-  return key;
-}
-
 // Deployer/Owner wallet — required for setMockPrice calls on MockMoonlander
 const OWNER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
 
@@ -69,7 +63,18 @@ export async function POST(request: NextRequest) {
   const limited = mutationLimiter.check(request);
   if (limited) return limited;
 
+  // Wrap EVERYTHING in a proper try-catch for better error reporting
   try {
+    // Validate relayer key exists FIRST
+    const relayerKey = process.env.RELAYER_PRIVATE_KEY;
+    if (!relayerKey) {
+      console.error('RELAYER_PRIVATE_KEY not configured');
+      return NextResponse.json(
+        { success: false, error: 'Server not configured for gasless operations (missing relayer)' },
+        { status: 503 }
+      );
+    }
+    
     const body = await request.json();
 
     // NOTE: We do NOT use generic requireAuth() here because:
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
-    const wallet = new ethers.Wallet(getRelayerKey(), provider);
+    const wallet = new ethers.Wallet(relayerKey, provider);
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
     const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, provider);
 
@@ -202,7 +207,7 @@ export async function POST(request: NextRequest) {
           );
           
           // For legacy hedges, accept if signer matches on-chain trader OR relayer
-          const relayerAddress = new ethers.Wallet(getRelayerKey()).address;
+          const relayerAddress = new ethers.Wallet(relayerKey).address;
           if (recoveredAddress.toLowerCase() !== onChainTrader.toLowerCase() &&
               recoveredAddress.toLowerCase() !== relayerAddress.toLowerCase()) {
             console.warn(`🚫 Legacy hedge: signer ${recoveredAddress} is not trader ${onChainTrader}`);
