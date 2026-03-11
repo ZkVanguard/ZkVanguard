@@ -71,10 +71,22 @@ export async function verifyWalletAuth(
     (body?.signature as string)
   );
 
-  const message = (
-    request.headers.get('x-wallet-message') ||
-    (body?.signedMessage as string)
-  );
+  // Message from header is base64-encoded (to avoid newline issues in HTTP headers)
+  // Message from body is plain text
+  const rawMessage = request.headers.get('x-wallet-message');
+  let message: string | undefined;
+  
+  if (rawMessage) {
+    try {
+      // Decode base64-encoded header value
+      message = Buffer.from(rawMessage, 'base64').toString('utf-8');
+    } catch {
+      // Fallback: try as plain text (for backwards compatibility)
+      message = rawMessage;
+    }
+  } else {
+    message = body?.signedMessage as string;
+  }
 
   if (!walletAddress || !signature || !message) {
     return { authenticated: false };
