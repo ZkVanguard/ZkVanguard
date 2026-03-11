@@ -73,10 +73,27 @@ if (typeof window !== 'undefined') {
         );
       }
 
-      return originalFetch.call(this, input, init);
+      // For RPC requests, wrap in try-catch to provide better error info
+      return originalFetch.call(this, input, init).catch((err: Error) => {
+        console.error('[API Interceptor] Fetch failed:', {
+          url,
+          error: err.message,
+          init: init ? { 
+            method: init.method,
+            hasBody: !!init.body,
+            bodyType: init.body ? typeof init.body : 'none',
+            headers: init.headers ? Object.fromEntries(
+              init.headers instanceof Headers 
+                ? init.headers.entries() 
+                : Object.entries(init.headers as Record<string, string>)
+            ) : 'none'
+          } : 'no init'
+        });
+        throw err;
+      });
     } catch (err) {
-      // If anything goes wrong in our interceptor, fall back to original fetch
-      logger.debug('[API Interceptor] Error in interceptor, falling back', { error: String(err) });
+      // If anything goes wrong in our interceptor, log and fall back to original fetch
+      console.error('[API Interceptor] Error in interceptor:', err);
       return originalFetch.call(this, input, init);
     }
   };

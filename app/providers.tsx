@@ -17,8 +17,10 @@ import '@rainbow-me/rainbowkit/styles.css';
 import { SuiWalletProviders } from './sui-providers';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
-// Trim to remove any accidental whitespace/newlines from env vars
-const projectId = (process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID').trim();
+// Trim and sanitize to remove any accidental whitespace/newlines/special chars from env vars
+const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+// Remove any non-alphanumeric characters and ensure valid ID
+const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e03fd167375f597f59';
 
 // Create config and queryClient OUTSIDE component to prevent recreation
 // This fixes the "WalletConnect Core is already initialized" warning
