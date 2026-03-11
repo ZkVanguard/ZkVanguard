@@ -153,8 +153,8 @@ contract MockMoonlander {
         if (currentPrice == 0) currentPrice = 1000 * 10**10; // Default
         
         // Store trade
-        // Direction: 0 = long, 1 = short (matching HedgeExecutor)
-        bool isLong = direction == 0;
+        // Direction mapping: HedgeExecutor sends 2=long, 0=short
+        bool isLong = direction == 2;
         trades[msg.sender][pairIndex][tradeIndex] = Trade({
             trader: msg.sender,
             pairIndex: pairIndex,
@@ -239,9 +239,13 @@ contract MockMoonlander {
         // Close trade
         trade.isOpen = false;
         
-        // Return funds
-        if (returnAmount > 0 && collateral.balanceOf(address(this)) >= returnAmount) {
-            collateral.transfer(msg.sender, returnAmount);
+        // Return funds - always return at least the collateral we have
+        if (returnAmount > 0) {
+            uint256 available = collateral.balanceOf(address(this));
+            uint256 toReturn = returnAmount > available ? available : returnAmount;
+            if (toReturn > 0) {
+                collateral.transfer(msg.sender, toReturn);
+            }
         }
         
         emit TradeClosed(msg.sender, pairIndex, tradeIndex, pnl);

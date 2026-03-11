@@ -79,6 +79,40 @@ interface IPyth {
 }
 
 /**
+ * @title IHedgeExecutor
+ * @notice Interface for HedgeExecutor contract used for x402 gasless auto-hedging
+ */
+interface IHedgeExecutor {
+    function openHedge(
+        uint256 pairIndex,
+        uint256 collateralAmount,
+        uint256 leverage,
+        bool isLong,
+        bytes32 commitmentHash,
+        bytes32 nullifier,
+        bytes32 merkleRoot
+    ) external payable returns (bytes32 hedgeId);
+
+    function closeHedge(bytes32 hedgeId) external;
+
+    function hedges(bytes32 hedgeId) external view returns (
+        bytes32 _hedgeId,
+        address trader,
+        uint256 pairIndex,
+        uint256 tradeIndex,
+        uint256 collateralAmount,
+        uint256 leverage,
+        bool isLong,
+        bytes32 commitmentHash,
+        bytes32 nullifier,
+        uint256 openTimestamp,
+        uint256 closeTimestamp,
+        int256 realizedPnl,
+        uint8 status
+    );
+}
+
+/**
  * @title ZkVanguard Community Pool
  * @author ZkVanguard Team
  * @notice AI-managed community investment pool with share-based ownership
@@ -262,6 +296,38 @@ contract CommunityPool is
     bool public emergencyWithdrawEnabled;
 
     // ═══════════════════════════════════════════════════════════════
+    // AUTO-HEDGE INTEGRATION (x402 Gasless)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice HedgeExecutor contract for auto-hedging
+    address public hedgeExecutor;
+
+    /// @notice Active hedge IDs opened by this pool
+    bytes32[] public activePoolHedges;
+
+    /// @notice Mapping of hedge ID to active status
+    mapping(bytes32 => bool) public isPoolHedge;
+
+    /// @notice Auto-hedge configuration
+    struct AutoHedgeConfig {
+        bool enabled;              // Whether auto-hedging is enabled
+        uint256 riskThresholdBps;  // Risk level to trigger hedge (e.g., 500 = 5% drawdown)
+        uint256 maxHedgeRatioBps;  // Max portion of NAV to hedge (e.g., 2500 = 25%)
+        uint256 defaultLeverage;   // Default leverage for hedges (2-10)
+        uint256 cooldownSeconds;   // Min time between auto-hedges
+        uint256 lastAutoHedgeTime; // Last auto-hedge timestamp
+    }
+
+    /// @notice Pool's auto-hedge configuration
+    AutoHedgeConfig public autoHedgeConfig;
+
+    /// @notice Total value currently hedged (USD, 6 decimals)
+    uint256 public totalHedgedValue;
+
+    /// @notice Oracle fee for Moonlander trades (CRO)
+    uint256 public constant MOONLANDER_ORACLE_FEE = 0.06 ether;
+
+    // ═══════════════════════════════════════════════════════════════
     // EVENTS
     // ═══════════════════════════════════════════════════════════════
 
@@ -330,6 +396,31 @@ contract CommunityPool is
     event MemberExited(address indexed member, uint256 timestamp);
     event TokensRescued(address indexed token, uint256 amount);
 
+    // Auto-hedge events
+    event PoolHedgeOpened(
+        bytes32 indexed hedgeId,
+        uint8 pairIndex,
+        uint256 collateralAmount,
+        uint256 leverage,
+        bool isLong,
+        string reason
+    );
+
+    event PoolHedgeClosed(
+        bytes32 indexed hedgeId,
+        int256 pnl,
+        string reason
+    );
+
+    event AutoHedgeConfigUpdated(
+        bool enabled,
+        uint256 riskThresholdBps,
+        uint256 maxHedgeRatioBps,
+        uint256 defaultLeverage
+    );
+
+    event HedgeExecutorSet(address indexed newExecutor);
+
     // ═══════════════════════════════════════════════════════════════
     // ERRORS
     // ═══════════════════════════════════════════════════════════════
@@ -356,6 +447,9 @@ contract CommunityPool is
     error AssetWithoutPriceFeed(uint8 assetIndex, uint256 balance);
     error SharePriceTooLow(uint256 currentPrice, uint256 minimumPrice);
     error PoolUndercollateralized(uint256 nav, uint256 expectedMinNav);
+    error HedgeExecutorNotSet();
+    error AutoHedgeCooldownActive(uint256 nextAllowedTime);
+    error HedgeNotOwnedByPool(bytes32 hedgeId);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -1331,6 +1425,212 @@ contract CommunityPool is
         
         IERC20(token).safeTransfer(treasury, balance);
         emit TokensRescued(token, balance);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // AUTO-HEDGE MANAGEMENT (x402 Gasless)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Set the HedgeExecutor contract address
+     * @param _hedgeExecutor Address of the HedgeExecutor contract
+     */
+    function setHedgeExecutor(address _hedgeExecutor) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_hedgeExecutor == address(0)) revert ZeroAddress();
+        hedgeExecutor = _hedgeExecutor;
+        emit HedgeExecutorSet(_hedgeExecutor);
+    }
+
+    /**
+     * @notice Configure auto-hedge settings
+     * @param _enabled Enable/disable auto-hedging
+     * @param _riskThresholdBps Risk level to trigger hedge (e.g., 500 = 5% drawdown)
+     * @param _maxHedgeRatioBps Max % of NAV to hedge (e.g., 2500 = 25%)
+     * @param _defaultLeverage Default leverage (2-10)
+     * @param _cooldownSeconds Min time between auto-hedges
+     */
+    function setAutoHedgeConfig(
+        bool _enabled,
+        uint256 _riskThresholdBps,
+        uint256 _maxHedgeRatioBps,
+        uint256 _defaultLeverage,
+        uint256 _cooldownSeconds
+    ) external onlyRole(AGENT_ROLE) {
+        require(_defaultLeverage >= 2 && _defaultLeverage <= 10, "Leverage must be 2-10");
+        require(_maxHedgeRatioBps <= 5000, "Max hedge ratio too high"); // Max 50%
+        
+        autoHedgeConfig = AutoHedgeConfig({
+            enabled: _enabled,
+            riskThresholdBps: _riskThresholdBps,
+            maxHedgeRatioBps: _maxHedgeRatioBps,
+            defaultLeverage: _defaultLeverage,
+            cooldownSeconds: _cooldownSeconds,
+            lastAutoHedgeTime: autoHedgeConfig.lastAutoHedgeTime
+        });
+        
+        emit AutoHedgeConfigUpdated(_enabled, _riskThresholdBps, _maxHedgeRatioBps, _defaultLeverage);
+    }
+
+    /**
+     * @notice Open a hedge position for the pool (AI-managed)
+     * @dev Called by AGENT_ROLE when risk conditions are met
+     * @param pairIndex Asset to hedge (0=BTC, 1=ETH, etc.)
+     * @param collateralAmount USDC collateral for the hedge
+     * @param leverage Leverage multiplier (2-10)
+     * @param isLong Direction (false = SHORT for hedging)
+     * @param reason AI reasoning for opening the hedge
+     */
+    function openPoolHedge(
+        uint8 pairIndex,
+        uint256 collateralAmount,
+        uint256 leverage,
+        bool isLong,
+        string calldata reason
+    ) external payable onlyRole(AGENT_ROLE) nonReentrant whenNotPaused returns (bytes32 hedgeId) {
+        if (hedgeExecutor == address(0)) revert HedgeExecutorNotSet();
+        if (collateralAmount == 0) revert ZeroAmount();
+        
+        // Check auto-hedge cooldown
+        if (autoHedgeConfig.enabled && 
+            block.timestamp < autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds) {
+            revert AutoHedgeCooldownActive(autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds);
+        }
+        
+        // Ensure we have enough collateral
+        uint256 poolBalance = depositToken.balanceOf(address(this));
+        require(poolBalance >= collateralAmount, "Insufficient pool balance");
+        
+        // Check max hedge ratio
+        uint256 nav = calculateTotalNAV();
+        uint256 maxHedgeAmount = (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR;
+        require(totalHedgedValue + collateralAmount <= maxHedgeAmount, "Exceeds max hedge ratio");
+        
+        // Generate ZK commitment for privacy
+        bytes32 commitmentHash = keccak256(abi.encodePacked(
+            address(this),
+            pairIndex,
+            collateralAmount,
+            block.timestamp
+        ));
+        bytes32 nullifier = keccak256(abi.encodePacked(commitmentHash, block.number));
+        bytes32 merkleRoot = keccak256(abi.encodePacked(commitmentHash, nullifier));
+        
+        // Approve HedgeExecutor to spend collateral
+        depositToken.safeIncreaseAllowance(hedgeExecutor, collateralAmount);
+        
+        // Open hedge via HedgeExecutor (x402 gasless compatible)
+        hedgeId = IHedgeExecutor(hedgeExecutor).openHedge{value: MOONLANDER_ORACLE_FEE}(
+            pairIndex,
+            collateralAmount,
+            leverage,
+            isLong,
+            commitmentHash,
+            nullifier,
+            merkleRoot
+        );
+        
+        // Track the hedge
+        activePoolHedges.push(hedgeId);
+        isPoolHedge[hedgeId] = true;
+        totalHedgedValue += collateralAmount;
+        autoHedgeConfig.lastAutoHedgeTime = block.timestamp;
+        
+        emit PoolHedgeOpened(hedgeId, pairIndex, collateralAmount, leverage, isLong, reason);
+    }
+
+    /**
+     * @notice Close a pool hedge position
+     * @param hedgeId ID of the hedge to close
+     * @param reason AI reasoning for closing
+     */
+    function closePoolHedge(
+        bytes32 hedgeId,
+        string calldata reason
+    ) external payable onlyRole(AGENT_ROLE) nonReentrant whenNotPaused {
+        if (!isPoolHedge[hedgeId]) revert HedgeNotOwnedByPool(hedgeId);
+        
+        // Get hedge details for PnL calculation
+        (,,,, uint256 collateralAmount,,,,,,,, uint8 status) = IHedgeExecutor(hedgeExecutor).hedges(hedgeId);
+        require(status == 1, "Hedge not active"); // 1 = ACTIVE
+        
+        // Close the hedge (no oracle fee needed - HedgeExecutor handles it)
+        IHedgeExecutor(hedgeExecutor).closeHedge(hedgeId);
+        
+        // Get realized PnL
+        (,,,,,,,,,,, int256 realizedPnl,) = IHedgeExecutor(hedgeExecutor).hedges(hedgeId);
+        
+        // Update tracking
+        isPoolHedge[hedgeId] = false;
+        totalHedgedValue = totalHedgedValue > collateralAmount ? 
+            totalHedgedValue - collateralAmount : 0;
+        
+        // Remove from active hedges array
+        for (uint256 i = 0; i < activePoolHedges.length; i++) {
+            if (activePoolHedges[i] == hedgeId) {
+                activePoolHedges[i] = activePoolHedges[activePoolHedges.length - 1];
+                activePoolHedges.pop();
+                break;
+            }
+        }
+        
+        emit PoolHedgeClosed(hedgeId, realizedPnl, reason);
+    }
+
+    /**
+     * @notice Get all active pool hedges
+     */
+    function getActivePoolHedges() external view returns (bytes32[] memory) {
+        return activePoolHedges;
+    }
+
+    /**
+     * @notice Get current auto-hedge configuration
+     */
+    function getAutoHedgeConfig() external view returns (
+        bool enabled,
+        uint256 riskThresholdBps,
+        uint256 maxHedgeRatioBps,
+        uint256 defaultLeverage,
+        uint256 cooldownSeconds,
+        uint256 lastAutoHedgeTime
+    ) {
+        AutoHedgeConfig memory config = autoHedgeConfig;
+        return (
+            config.enabled,
+            config.riskThresholdBps,
+            config.maxHedgeRatioBps,
+            config.defaultLeverage,
+            config.cooldownSeconds,
+            config.lastAutoHedgeTime
+        );
+    }
+
+    /**
+     * @notice Check if pool should auto-hedge based on risk conditions
+     * @dev Called by off-chain AI agent to determine if hedge is needed
+     */
+    function shouldAutoHedge() external view returns (bool shouldHedge, string memory reason) {
+        if (!autoHedgeConfig.enabled) {
+            return (false, "Auto-hedge disabled");
+        }
+        
+        if (hedgeExecutor == address(0)) {
+            return (false, "HedgeExecutor not set");
+        }
+        
+        if (block.timestamp < autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds) {
+            return (false, "Cooldown active");
+        }
+        
+        // Check if already at max hedge ratio
+        uint256 nav = calculateTotalNAV();
+        uint256 maxHedgeAmount = (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR;
+        if (totalHedgedValue >= maxHedgeAmount) {
+            return (false, "Max hedge ratio reached");
+        }
+        
+        // Pool should hedge (actual risk calculation done off-chain by AI)
+        return (true, "Ready to hedge");
     }
 
     // ═══════════════════════════════════════════════════════════════
