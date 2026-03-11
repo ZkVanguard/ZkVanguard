@@ -221,7 +221,9 @@ export async function calculatePoolNAV(): Promise<{
       
       onChainTotalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
       onChainNAV = parseFloat(ethers.formatUnits(rawNav, 6)); // USDC has 6 decimals
-      onChainSharePrice = parseFloat(ethers.formatUnits(rawSharePrice, 18)); // WAD format (1e18 = $1)
+      // Contract returns (USDC_6dec × WAD) / Shares_18dec = 6 decimal result
+      // e.g., $0.75 per share = 750000 raw (750000 / 1e6 = 0.75)
+      onChainSharePrice = parseFloat(ethers.formatUnits(rawSharePrice, 6));
       
       logger.info('[CommunityPool] On-chain NAV fetched successfully', {
         network: isMainnet() ? 'mainnet' : 'testnet',

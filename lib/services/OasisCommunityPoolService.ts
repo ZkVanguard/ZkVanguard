@@ -147,7 +147,8 @@ export async function getOasisPoolStats(
     totalShares: ethers.formatUnits(stats._totalShares, 18),
     totalNAV: ethers.formatUnits(stats._totalNAV, 6),
     memberCount: Number(stats._memberCount),
-    sharePrice: ethers.formatUnits(stats._sharePrice, 18),
+    // Contract returns (USDC_6dec × WAD) / Shares_18dec = 6 decimal result
+    sharePrice: ethers.formatUnits(stats._sharePrice, 6),
     allocations: {
       BTC: Number(stats._allocations[0]) / 100,
       ETH: Number(stats._allocations[1]) / 100,

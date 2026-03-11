@@ -153,7 +153,8 @@ export async function getOnChainPoolStats(
     totalShares: ethers.formatUnits(stats._totalShares, 18),
     totalNAV: ethers.formatUnits(stats._totalNAV, 6),
     memberCount: Number(stats._memberCount),
-    sharePrice: ethers.formatUnits(stats._sharePrice, 18),
+    // Contract returns (USDC_6dec × WAD) / Shares_18dec = 6 decimal result
+    sharePrice: ethers.formatUnits(stats._sharePrice, 6),
     allocations: {
       BTC: Number(stats._allocations[0]) / 100,
       ETH: Number(stats._allocations[1]) / 100,
@@ -269,7 +270,8 @@ export async function depositOnChain(
     if (event) {
       const parsed = pool.interface.parseLog(event);
       sharesReceived = ethers.formatUnits(parsed?.args.sharesReceived || 0, 18);
-      sharePrice = ethers.formatUnits(parsed?.args.sharePrice || 0, 18);
+      // Contract emits share price in 6 decimal format
+      sharePrice = ethers.formatUnits(parsed?.args.sharePrice || 0, 6);
     }
     
     logger.info(`[CommunityPool] Deposit successful: ${sharesReceived} shares`);
