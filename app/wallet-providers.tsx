@@ -9,8 +9,9 @@ import { PositionsProvider } from '../contexts/PositionsContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Production-ready configuration for Cronos x402 Paytech Hackathon
-// Trim to remove any accidental whitespace/newlines from env vars
-const projectId = (process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID').trim();
+// Trim and sanitize to remove any accidental whitespace/newlines/special chars from env vars
+const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e03fd167375f597f59';
 
 // Use RainbowKit's getDefaultConfig for proper wallet configuration
 const config = getDefaultConfig({
