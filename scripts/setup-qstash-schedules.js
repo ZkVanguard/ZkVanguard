@@ -30,9 +30,10 @@
  *   node scripts/setup-qstash-schedules.js --delete-all   # Remove all schedules
  */
 
-const BASE_URL = process.env.APP_URL || process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL}`
-  : 'https://zkvanguard.vercel.app';
+const BASE_URL = process.env.BASE_URL 
+  || process.env.APP_URL 
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+  || 'https://zkvanguard.xyz';
 
 // Use region-specific URL (us-east-1 for this account)
 const QSTASH_API = process.env.QSTASH_URL 

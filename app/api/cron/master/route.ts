@@ -152,5 +152,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
   });
 }
 
+// QStash sends POST, Vercel cron sends GET — support both
+export const POST = GET;
+
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes — enough for all sub-tasks
