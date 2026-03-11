@@ -41,28 +41,44 @@ if (typeof window !== 'undefined') {
   // Intercept fetch API
   const originalFetch = window.fetch;
   window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    try {
+      let url: string;
+      if (typeof input === 'string') {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.toString();
+      } else if (input instanceof Request) {
+        url = input.url;
+      } else {
+        // Unknown type, pass through to original fetch
+        return originalFetch.call(this, input, init);
+      }
 
-    // Check if URL contains any blocked domains
-    const isBlocked = blockedDomains.some((domain) => url.includes(domain));
+      // Check if URL contains any blocked domains
+      const isBlocked = blockedDomains.some((domain) => url.includes(domain));
 
-    if (isBlocked) {
-      logger.debug('[API Interceptor] Blocked request', { url });
+      if (isBlocked) {
+        logger.debug('[API Interceptor] Blocked request', { url });
 
-      // Find appropriate mock response
-      const mockKey = Object.keys(mockResponses).find((key) => url.includes(key));
-      const mockData = mockKey ? mockResponses[mockKey] : { success: true };
+        // Find appropriate mock response
+        const mockKey = Object.keys(mockResponses).find((key) => url.includes(key));
+        const mockData = mockKey ? mockResponses[mockKey] : { success: true };
 
-      return Promise.resolve(
-        new Response(JSON.stringify(mockData), {
-          status: 200,
-          statusText: 'OK',
-          headers: { 'Content-Type': 'application/json' },
-        })
-      );
+        return Promise.resolve(
+          new Response(JSON.stringify(mockData), {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+
+      return originalFetch.call(this, input, init);
+    } catch (err) {
+      // If anything goes wrong in our interceptor, fall back to original fetch
+      logger.debug('[API Interceptor] Error in interceptor, falling back', { error: String(err) });
+      return originalFetch.call(this, input, init);
     }
-
-    return originalFetch.call(this, input, init);
   };
 
   // Also intercept XMLHttpRequest for legacy code
