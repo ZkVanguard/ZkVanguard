@@ -34,7 +34,10 @@ const BASE_URL = process.env.APP_URL || process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : 'https://zkvanguard.vercel.app';
 
-const QSTASH_API = 'https://qstash.upstash.io/v2';
+// Use region-specific URL (us-east-1 for this account)
+const QSTASH_API = process.env.QSTASH_URL 
+  ? `${process.env.QSTASH_URL}/v2`
+  : 'https://qstash.upstash.io/v2';
 
 const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
 
@@ -102,16 +105,16 @@ async function createSchedule(config) {
   console.log(`   URL:  ${destination}`);
   console.log(`   Cron: ${cron}`);
 
-  const response = await fetch(`${QSTASH_API}/schedules`, {
+  // QStash expects destination in URL path (not encoded)
+  const response = await fetch(`${QSTASH_API}/schedules/${destination}`, {
     method: 'POST',
     headers: {
       ...headers,
       'Upstash-Cron': cron,
       'Upstash-Retries': String(retries || 3),
       'Upstash-Method': 'GET',
-      'Upstash-Timeout': '300', // 5 min timeout
+      'Upstash-Timeout': '300s', // 5 min timeout
     },
-    body: JSON.stringify({ destination }),
   });
 
   if (!response.ok) {
