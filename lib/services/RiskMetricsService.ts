@@ -76,6 +76,7 @@ export interface RiskMetrics {
   // Data availability
   insufficientData: boolean;
   insufficientDataReason?: string;
+  hasBenchmarkData: boolean;    // True if real BTC benchmark data was used
 }
 
 export interface NAVSnapshot {
@@ -479,12 +480,100 @@ function aggregateToTimePeriod(
 
 /**
  * Generate BTC benchmark returns for beta calculation
- * Uses actual BTC price data if available, otherwise returns empty
+ * Fetches REAL BTC price history from Crypto.com Exchange API
+ * Matches timestamps with NAV series for proper correlation calculation
  */
-function generateBenchmarkReturns(length: number): number[] {
-  // TODO: In production, fetch actual BTC price history
-  // For now, return zeros to indicate no benchmark comparison available
-  return Array.from({ length }, () => 0);
+async function fetchBTCBenchmarkReturns(navSeries: NAVSnapshot[]): Promise<number[]> {
+  if (navSeries.length < 2) return [];
+  
+  try {
+    const EXCHANGE_API = 'https://api.crypto.com/exchange/v1/public';
+    
+    // Determine appropriate timeframe based on NAV observation frequency
+    const totalPeriodMs = navSeries[navSeries.length - 1].timestamp - navSeries[0].timestamp;
+    const avgIntervalMs = totalPeriodMs / (navSeries.length - 1);
+    const avgIntervalHours = avgIntervalMs / (1000 * 60 * 60);
+    
+    // Choose timeframe: use 1D for periods > 12h, 1h for shorter
+    const timeframe = avgIntervalHours >= 12 ? '1D' : '1h';
+    const count = Math.min(navSeries.length + 10, 300); // Extra buffer for matching
+    
+    const url = `${EXCHANGE_API}/get-candlestick?instrument_name=BTC_USDT&timeframe=${timeframe}&count=${count}`;
+    
+    logger.info('[RiskMetrics] Fetching BTC benchmark data', { timeframe, count, avgIntervalHours: avgIntervalHours.toFixed(2) });
+    
+    const response = await fetch(url, { 
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Exchange API HTTP error: ${response.status}`);
+    }
+    
+    const json = await response.json();
+    
+    if (json.code !== 0 || !json.result?.data || json.result.data.length === 0) {
+      throw new Error(`Exchange API error: ${json.message || 'no data'}`);
+    }
+    
+    const candles = json.result.data as Array<{ t: number; o: string; c: string }>;
+    
+    // Sort candles by timestamp ascending
+    candles.sort((a, b) => a.t - b.t);
+    
+    logger.info('[RiskMetrics] Received BTC candlestick data', { count: candles.length });
+    
+    // Create price map for efficient timestamp matching
+    const btcPriceMap = new Map<number, number>();
+    for (const candle of candles) {
+      btcPriceMap.set(candle.t, parseFloat(candle.c));
+    }
+    
+    // Match BTC prices to NAV timestamps (find closest candle)
+    const matchedBTCPrices: number[] = [];
+    for (const nav of navSeries) {
+      // Find candle closest to NAV timestamp
+      let closestTimestamp = 0;
+      let minDiff = Infinity;
+      
+      for (const candleTs of btcPriceMap.keys()) {
+        const diff = Math.abs(candleTs - nav.timestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestTimestamp = candleTs;
+        }
+      }
+      
+      const price = btcPriceMap.get(closestTimestamp);
+      if (price) {
+        matchedBTCPrices.push(price);
+      }
+    }
+    
+    // Calculate BTC returns (same method as portfolio returns)
+    const btcReturns: number[] = [];
+    for (let i = 1; i < matchedBTCPrices.length; i++) {
+      const prevPrice = matchedBTCPrices[i - 1];
+      const currPrice = matchedBTCPrices[i];
+      if (prevPrice > 0) {
+        btcReturns.push((currPrice - prevPrice) / prevPrice);
+      }
+    }
+    
+    logger.info('[RiskMetrics] Calculated BTC benchmark returns', { 
+      btcDataPoints: btcReturns.length,
+      btcMeanReturn: (mean(btcReturns) * 100).toFixed(4) + '%',
+    });
+    
+    return btcReturns;
+    
+  } catch (error) {
+    logger.warn('[RiskMetrics] Failed to fetch BTC benchmark, using fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Return empty array - caller will handle gracefully
+    return [];
+  }
 }
 
 /**
@@ -523,6 +612,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     periodEnd: null,
     insufficientData: true,
     insufficientDataReason: 'No share price history available',
+    hasBenchmarkData: false,
   };
 
   try {
@@ -650,24 +740,43 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     const var95Weekly = var95Daily * Math.sqrt(7);
     const cvar95 = calculateCVaR(returns, VAR_CONFIDENCE);
     
-    // Beta and Alpha (using mock BTC benchmark)
-    const benchmarkReturns = generateBenchmarkReturns(returns.length);
-    const beta = calculateBeta(returns, benchmarkReturns);
-    // Normalize benchmark returns the same way (assume same time intervals)
-    const benchmarkIntervalMean = mean(benchmarkReturns);
-    const benchmarkDailyMean = benchmarkIntervalMean / avgIntervalDays;
-    const benchmarkAnnualizedReturn = benchmarkDailyMean * TRADING_DAYS_PER_YEAR;
-    const alpha = annualizedReturn - (RISK_FREE_RATE + beta * (benchmarkAnnualizedReturn - RISK_FREE_RATE));
+    // Beta and Alpha using REAL BTC benchmark data
+    const benchmarkReturns = await fetchBTCBenchmarkReturns(navSeries);
+    const hasBenchmarkData = benchmarkReturns.length === returns.length && benchmarkReturns.some(r => r !== 0);
     
-    // Treynor Ratio
-    const treynorRatio = beta !== 0 ? excessReturn / beta : 0;
+    let beta = 1.0;  // Default to market beta if no data
+    let benchmarkAnnualizedReturn = 0;
+    let alpha = 0;
+    let treynorRatio = 0;
+    let informationRatio = 0;
     
-    // Information Ratio - also needs proper normalization
-    const trackingErrors = returns.map((r, i) => r - benchmarkReturns[i]);
-    const trackingErrorIntervalStdDev = stdDev(trackingErrors);
-    const trackingErrorDailyStdDev = trackingErrorIntervalStdDev / Math.sqrt(avgIntervalDays);
-    const trackingErrorAnnualized = trackingErrorDailyStdDev * Math.sqrt(TRADING_DAYS_PER_YEAR);
-    const informationRatio = trackingErrorAnnualized > 0 ? (annualizedReturn - benchmarkAnnualizedReturn) / trackingErrorAnnualized : 0;
+    if (hasBenchmarkData) {
+      beta = calculateBeta(returns, benchmarkReturns);
+      // Normalize benchmark returns the same way (same time intervals as portfolio)
+      const benchmarkIntervalMean = mean(benchmarkReturns);
+      const benchmarkDailyMean = benchmarkIntervalMean / avgIntervalDays;
+      benchmarkAnnualizedReturn = benchmarkDailyMean * TRADING_DAYS_PER_YEAR;
+      // Jensen's Alpha: actual return - CAPM expected return
+      alpha = annualizedReturn - (RISK_FREE_RATE + beta * (benchmarkAnnualizedReturn - RISK_FREE_RATE));
+      
+      // Treynor Ratio
+      treynorRatio = beta !== 0 ? excessReturn / beta : 0;
+      
+      // Information Ratio - excess return per unit tracking error
+      const trackingErrors = returns.map((r, i) => r - (benchmarkReturns[i] || 0));
+      const trackingErrorIntervalStdDev = stdDev(trackingErrors);
+      const trackingErrorDailyStdDev = trackingErrorIntervalStdDev / Math.sqrt(avgIntervalDays);
+      const trackingErrorAnnualized = trackingErrorDailyStdDev * Math.sqrt(TRADING_DAYS_PER_YEAR);
+      informationRatio = trackingErrorAnnualized > 0 ? (annualizedReturn - benchmarkAnnualizedReturn) / trackingErrorAnnualized : 0;
+      
+      logger.info('[RiskMetrics] Calculated with real BTC benchmark', {
+        beta: beta.toFixed(4),
+        alpha: (alpha * 100).toFixed(2) + '%',
+        benchmarkReturn: (benchmarkAnnualizedReturn * 100).toFixed(2) + '%',
+      });
+    } else {
+      logger.warn('[RiskMetrics] No BTC benchmark data available, using defaults');
+    }
     
     // Trading metrics
     const tradingMetrics = calculateTradingMetrics(returns);
@@ -727,6 +836,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
       
       // Data is sufficient
       insufficientData: false,
+      hasBenchmarkData,
     };
     
     logger.info('[RiskMetrics] Calculated risk metrics', { sharpeRatio, maxDrawdown: maxDD, beta });
@@ -781,6 +891,7 @@ function getDefaultMetrics(): RiskMetrics {
     periodEnd: null,
     insufficientData: true,
     insufficientDataReason: 'No performance data available',
+    hasBenchmarkData: false,
   };
 }
 
