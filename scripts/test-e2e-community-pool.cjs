@@ -243,10 +243,11 @@ async function test4_NAVCalculation() {
     
     // Get NAV per share
     const navPerShare = await pool.getNavPerShare();
-    log(`   NAV per share: ${ethers.formatUnits(navPerShare, 18)}`);
+    // Contract returns (USDC_6dec × WAD) / Shares_18dec = 6 decimal result
+    log(`   NAV per share: ${ethers.formatUnits(navPerShare, 6)}`);
     
     // Should be approximately 1.0 for a pure USDC pool
-    const navPerShareNum = Number(ethers.formatUnits(navPerShare, 18));
+    const navPerShareNum = Number(ethers.formatUnits(navPerShare, 6));
     if (navPerShareNum >= 0.99 && navPerShareNum <= 1.01) {
       pass("NAV per share ~ 1.0 (no gains/losses yet)");
     } else {

@@ -1005,7 +1005,9 @@ contract CommunityPool is
 
     /**
      * @notice Get NAV per share
-     * @return navPerShare NAV per share (18 decimals)
+     * @return navPerShare NAV per share (6 decimals, USDC-scaled)
+     * @dev Formula: (nav_6dec × WAD) / shares_18dec = 6 decimal result
+     *      e.g., $0.75 per share returns 750000 (750000 / 1e6 = 0.75)
      */
     function getNavPerShare() external view returns (uint256) {
         return _calculateNavPerShare();
@@ -1018,9 +1020,10 @@ contract CommunityPool is
         uint256 totalAssetsWithOffset = nav + VIRTUAL_ASSETS;
         uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
         
-        // Result in WAD (1e18 = $1 per share)
-        // navPerShare = totalAssets * WAD / totalShares
+        // Result in 6 decimals (USDC-scaled): nav_6dec × WAD / shares_18dec = 6 dec
+        // e.g., $1.00 per share = 1,000,000 (formatUnits with 6 decimals = 1.0)
         return totalAssetsWithOffset.mulDiv(WAD, totalSharesWithOffset, Math.Rounding.Floor);
+    }
     }
 
     /**

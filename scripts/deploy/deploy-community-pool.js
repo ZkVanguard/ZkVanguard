@@ -133,7 +133,8 @@ async function main() {
   console.log("  Total Shares:", stats._totalShares.toString());
   console.log("  Total NAV:", ethers.formatUnits(stats._totalNAV, 6), "USDC");
   console.log("  Member Count:", stats._memberCount.toString());
-  console.log("  Share Price:", ethers.formatUnits(stats._sharePrice, 18));
+  // Contract returns share price in 6 decimal format
+  console.log("  Share Price:", ethers.formatUnits(stats._sharePrice, 6));
   console.log("  Allocations: BTC", stats._allocations[0].toString(), "bps,",
               "ETH", stats._allocations[1].toString(), "bps,",
               "SUI", stats._allocations[2].toString(), "bps,",
