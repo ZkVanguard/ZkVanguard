@@ -146,8 +146,10 @@ const LEADERBOARD_TTL = 120_000;    // 2 minutes for leaderboard
 // ============================================================================
 
 // CommunityPool event signatures for deposit/withdraw
-const DEPOSIT_EVENT_TOPIC = ethers.id('Deposited(address,uint256,uint256)');
-const WITHDRAW_EVENT_TOPIC = ethers.id('Withdrawn(address,uint256,uint256,uint256)');
+// Event: Deposited(address indexed member, uint256 amountUSD, uint256 sharesReceived, uint256 sharePrice, uint256 timestamp)
+const DEPOSIT_EVENT_TOPIC = ethers.id('Deposited(address,uint256,uint256,uint256,uint256)');
+// Event: Withdrawn(address indexed member, uint256 sharesBurned, uint256 amountUSD, uint256 sharePrice, uint256 timestamp)
+const WITHDRAW_EVENT_TOPIC = ethers.id('Withdrawn(address,uint256,uint256,uint256,uint256)');
 
 /**
  * Verify that a transaction hash corresponds to a real on-chain deposit
@@ -207,9 +209,9 @@ async function verifyOnChainDeposit(
       };
     }
     
-    // Decode the non-indexed parameters (amount, shares)
+    // Decode the non-indexed parameters: amountUSD, sharesReceived, sharePrice, timestamp
     const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-      ['uint256', 'uint256'],
+      ['uint256', 'uint256', 'uint256', 'uint256'],
       depositLog.data
     );
     const amountUSD = parseFloat(ethers.formatUnits(decoded[0], 6)); // USDC has 6 decimals
@@ -270,12 +272,13 @@ async function verifyOnChainWithdraw(
       };
     }
     
-    // Decode: shares, amountOut, fee
+    // Decode: sharesBurned, amountUSD, sharePrice, timestamp (4 non-indexed params)
     const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-      ['uint256', 'uint256', 'uint256'],
+      ['uint256', 'uint256', 'uint256', 'uint256'],
       withdrawLog.data
     );
     const sharesBurned = parseFloat(ethers.formatUnits(decoded[0], 18));
+    // amountUSD is in 6 decimals (USDC)
     const amountUSD = parseFloat(ethers.formatUnits(decoded[1], 6));
     
     logger.info(`[CommunityPool] Verified on-chain withdrawal: ${expectedWallet} withdrew $${amountUSD}, burned ${sharesBurned} shares`);
