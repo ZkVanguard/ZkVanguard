@@ -27,6 +27,7 @@ import {
   getPoolHistory,
   getTopShareholders,
   SUPPORTED_ASSETS,
+  getUserTransactionCounts,
 } from '@/lib/storage/community-pool-storage';
 import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
 import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
@@ -477,6 +478,9 @@ export async function GET(request: NextRequest) {
   try {
     // Get user's position
     if (userAddress) {
+      // Get transaction counts for user (used in multiple responses)
+      const txCounts = await getUserTransactionCounts(userAddress);
+      
       // Try DB first (faster for UI) unless forceOnChain
       if (!forceOnChain) {
         try {
@@ -493,6 +497,8 @@ export async function GET(request: NextRequest) {
                 valueUSD: userShares.shares * (poolData?.sharePrice || 1),
                 percentage: poolData?.totalShares > 0 ? (userShares.shares / poolData.totalShares) * 100 : 0,
                 isMember: true,
+                depositCount: txCounts.depositCount,
+                withdrawalCount: txCounts.withdrawalCount,
               },
               pool: poolData,
               source: 'db',
@@ -520,7 +526,11 @@ export async function GET(request: NextRequest) {
       if (onChainUser && onChainUser.shares > 0 && onChainPool) {
         return NextResponse.json({
           success: true,
-          user: onChainUser,
+          user: {
+            ...onChainUser,
+            depositCount: txCounts.depositCount,
+            withdrawalCount: txCounts.withdrawalCount,
+          },
           pool: onChainPool,
           source: 'onchain',
         });
@@ -537,6 +547,8 @@ export async function GET(request: NextRequest) {
             valueUSD: 0,
             percentage: 0,
             isMember: false,
+            depositCount: txCounts.depositCount,
+            withdrawalCount: txCounts.withdrawalCount,
           },
           pool: onChainPool,
           source: 'onchain',
@@ -557,6 +569,8 @@ export async function GET(request: NextRequest) {
               valueUSD: 0,
               percentage: 0,
               isMember: false,
+              depositCount: txCounts.depositCount,
+              withdrawalCount: txCounts.withdrawalCount,
             },
             pool: poolSummary,
             source: 'local',
@@ -574,8 +588,8 @@ export async function GET(request: NextRequest) {
             joinedAt: userShares.joinedAt,
             totalDeposited: userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0),
             totalWithdrawn: userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0),
-            depositCount: userShares.deposits.length,
-            withdrawalCount: userShares.withdrawals.length,
+            depositCount: txCounts.depositCount || userShares.deposits.length,
+            withdrawalCount: txCounts.withdrawalCount || userShares.withdrawals.length,
           },
           pool: poolSummary,
           source: 'local',
@@ -591,6 +605,8 @@ export async function GET(request: NextRequest) {
             valueUSD: 0,
             percentage: 0,
             isMember: false,
+            depositCount: 0,
+            withdrawalCount: 0,
           },
           pool: null,
           source: 'none',

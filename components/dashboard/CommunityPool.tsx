@@ -717,7 +717,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
               </div>
               <div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">
-                  {userPosition.depositCount || 0}
+                  {(userPosition.depositCount || 0) + (userPosition.withdrawalCount || 0)}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Transactions</p>
               </div>

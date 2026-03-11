@@ -19,13 +19,14 @@ import {
   addPoolTransactionToDb,
   initCommunityPoolTables,
   txHashExists,
+  getUserTransactionCounts,
   DbPoolState,
   DbUserShares,
   DbPoolTransaction,
 } from '../db/community-pool';
 
 // Re-export txHashExists for idempotency checks
-export { txHashExists };
+export { txHashExists, getUserTransactionCounts };
 
 // Initialize tables on first import
 let tablesInitialized = false;
