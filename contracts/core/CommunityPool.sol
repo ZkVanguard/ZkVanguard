@@ -354,6 +354,8 @@ contract CommunityPool is
     error PriceFeedNotConfigured(uint8 assetIndex);
     error OracleCallFailed(uint8 assetIndex);
     error AssetWithoutPriceFeed(uint8 assetIndex, uint256 balance);
+    error SharePriceTooLow(uint256 currentPrice, uint256 minimumPrice);
+    error PoolUndercollateralized(uint256 nav, uint256 expectedMinNav);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -448,6 +450,16 @@ contract CommunityPool is
         }
         if (amount < MIN_DEPOSIT) revert DepositTooSmall(amount, MIN_DEPOSIT);
 
+        // SAFEGUARD: Verify pool isn't undercollateralized before accepting deposits
+        // This prevents new depositors from getting unfair share dilution
+        if (totalShares > 0) {
+            uint256 currentSharePrice = _calculateNavPerShare();
+            uint256 minSharePrice = 9e17; // $0.90 in WAD
+            if (currentSharePrice < minSharePrice) {
+                revert SharePriceTooLow(currentSharePrice, minSharePrice);
+            }
+        }
+
         // Collect any pending fees first
         _collectFees();
 
@@ -485,6 +497,14 @@ contract CommunityPool is
         // Update pool state
         totalShares += shares;
         totalDeposited += amount;
+
+        // SAFEGUARD: Verify share price didn't drop below $0.90 after deposit
+        // This catches any accounting anomalies or exploits
+        uint256 newSharePrice = _calculateNavPerShare();
+        uint256 minSharePrice = 9e17; // $0.90 in WAD (18 decimals)
+        if (newSharePrice < minSharePrice) {
+            revert SharePriceTooLow(newSharePrice, minSharePrice);
+        }
 
         // Add to cash balance (will be deployed by rebalancer)
         // For now, USDC stays in contract until rebalanced
@@ -1024,7 +1044,6 @@ contract CommunityPool is
         // e.g., $1.00 per share = 1,000,000 (formatUnits with 6 decimals = 1.0)
         return totalAssetsWithOffset.mulDiv(WAD, totalSharesWithOffset, Math.Rounding.Floor);
     }
-    }
 
     /**
      * @notice Get member's current value
@@ -1073,6 +1092,47 @@ contract CommunityPool is
         _memberCount = memberList.length;
         _sharePrice = _calculateNavPerShare();
         _allocations = targetAllocationBps;
+    }
+
+    /**
+     * @notice Pool health check - verifies accounting integrity
+     * @dev Call this to detect any accounting anomalies
+     * @return isHealthy True if pool accounting is correct
+     * @return sharePrice Current share price in WAD (1e18 = $1)
+     * @return expectedMinNav Minimum NAV based on deposits/withdrawals
+     * @return actualNav Actual NAV from calculateTotalNAV()
+     * @return discrepancy Difference between expected and actual (negative = underfunded)
+     */
+    function healthCheck() 
+        external 
+        view 
+        returns (
+            bool isHealthy,
+            uint256 sharePrice,
+            uint256 expectedMinNav,
+            uint256 actualNav,
+            int256 discrepancy
+        ) 
+    {
+        actualNav = calculateTotalNAV();
+        sharePrice = _calculateNavPerShare();
+        
+        // Expected minimum NAV = total deposited - total withdrawn - fees
+        uint256 totalFees = accumulatedManagementFees + accumulatedPerformanceFees;
+        expectedMinNav = totalDeposited > (totalWithdrawn + totalFees) 
+            ? totalDeposited - totalWithdrawn - totalFees 
+            : 0;
+        
+        // Allow 1% tolerance for rounding
+        uint256 tolerance = expectedMinNav / 100;
+        
+        if (actualNav >= expectedMinNav) {
+            discrepancy = int256(actualNav - expectedMinNav);
+            isHealthy = true;
+        } else {
+            discrepancy = -int256(expectedMinNav - actualNav);
+            isHealthy = (expectedMinNav - actualNav) <= tolerance;
+        }
     }
 
     /**

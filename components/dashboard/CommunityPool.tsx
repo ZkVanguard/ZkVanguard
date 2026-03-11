@@ -382,9 +382,23 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // Handle write errors
   useEffect(() => {
     if (writeError) {
-      setError(writeError.message.includes('User rejected') 
-        ? 'Transaction rejected by user' 
-        : writeError.message);
+      console.error('[CommunityPool] Write error:', writeError);
+      const errorMsg = writeError.message || '';
+      
+      if (errorMsg.includes('User rejected') || errorMsg.includes('user rejected')) {
+        setError('Transaction rejected by user');
+      } else if (errorMsg.includes('Invalid value') || errorMsg.includes('fetch')) {
+        // This can happen with BigInt serialization issues
+        setError('Transaction failed - please check your input values and try again');
+      } else if (errorMsg.includes('InsufficientShares')) {
+        setError('Insufficient shares to withdraw');
+      } else if (errorMsg.includes('InsufficientLiquidity')) {
+        setError('Insufficient liquidity in pool - please try a smaller amount');
+      } else {
+        // Extract short message if available
+        const shortMsg = (writeError as any).shortMessage || errorMsg;
+        setError(shortMsg.slice(0, 200));
+      }
       setActionLoading(false);
       setTxStatus('idle');
     }
@@ -471,12 +485,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       return;
     }
     
-    if (!withdrawShares) {
+    if (!withdrawShares || withdrawShares.trim() === '') {
       setError('Please enter the number of shares to withdraw');
       return;
     }
     
-    const shares = parseFloat(withdrawShares);
+    // Parse and validate shares
+    const sharesStr = withdrawShares.trim().replace(/,/g, '');
+    const shares = parseFloat(sharesStr);
     if (isNaN(shares) || shares <= 0) {
       setError('Invalid share amount');
       return;
@@ -514,20 +530,24 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     
     try {
       // Convert shares to wei (18 decimals)
-      const sharesInWei = parseUnits(shares.toString(), 18);
+      // Truncate to avoid exceeding 18 decimal places
+      const sharesFixed = Math.floor(shares * 1e18).toString();
+      const sharesInWei = BigInt(sharesFixed);
+      const minAmountOut = BigInt(0);
       
       // Call withdraw on CommunityPool contract
       // This will trigger the wallet popup for transaction signature
-      console.log('[CommunityPool] Initiating withdrawal of', shares, 'shares');
+      console.log('[CommunityPool] Initiating withdrawal of', shares, 'shares, wei:', sharesInWei.toString());
       writeContract({
+        chainId: 338, // Cronos Testnet
         address: COMMUNITY_POOL_ADDRESS,
         abi: COMMUNITY_POOL_ABI,
         functionName: 'withdraw',
-        args: [sharesInWei, BigInt(0)],
+        args: [sharesInWei, minAmountOut],
       });
     } catch (err: any) {
-      console.error('[CommunityPool] Withdrawal error:', err);
-      setError(err.message || 'Failed to initiate withdrawal');
+      console.error('[CommunityPool] Withdrawal error:', err, JSON.stringify(err, null, 2));
+      setError(err.shortMessage || err.message || 'Failed to initiate withdrawal');
       setActionLoading(false);
       setTxStatus('idle');
     }
