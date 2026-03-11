@@ -3,6 +3,14 @@
 import { logger } from '../lib/utils/logger';
 
 if (typeof window !== 'undefined') {
+  // Add BigInt serialization support to prevent "Invalid value" fetch errors
+  // This is needed because viem/wagmi may serialize BigInt values in error objects
+  if (!(BigInt.prototype as any).toJSON) {
+    (BigInt.prototype as any).toJSON = function() {
+      return this.toString();
+    };
+  }
+  
   const blockedDomains = [
     'api.web3modal.org',
     'pulse.walletconnect.org',

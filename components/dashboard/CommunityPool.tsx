@@ -529,24 +529,24 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     setTxStatus('withdrawing');
     
     try {
-      // Convert shares to wei (18 decimals)
-      // Truncate to avoid exceeding 18 decimal places
-      const sharesFixed = Math.floor(shares * 1e18).toString();
-      const sharesInWei = BigInt(sharesFixed);
-      const minAmountOut = BigInt(0);
+      // Convert shares to wei (18 decimals) - parseUnits handles this cleanly
+      // Format shares to avoid floating point issues
+      const sharesFixed = shares.toFixed(6);
+      const sharesWei = parseUnits(sharesFixed, 18);
+      const zeroMin = BigInt(0); // No minimum amount out
       
       // Call withdraw on CommunityPool contract
       // This will trigger the wallet popup for transaction signature
-      console.log('[CommunityPool] Initiating withdrawal of', shares, 'shares, wei:', sharesInWei.toString());
+      console.log('[CommunityPool] Initiating withdrawal:', { shares: sharesFixed, sharesWei: sharesWei.toString(), minAmountOut: '0' });
+      
       writeContract({
-        chainId: 338, // Cronos Testnet
         address: COMMUNITY_POOL_ADDRESS,
         abi: COMMUNITY_POOL_ABI,
         functionName: 'withdraw',
-        args: [sharesInWei, minAmountOut],
+        args: [sharesWei, zeroMin],
       });
     } catch (err: any) {
-      console.error('[CommunityPool] Withdrawal error:', err, JSON.stringify(err, null, 2));
+      console.error('[CommunityPool] Withdrawal error:', err);
       setError(err.shortMessage || err.message || 'Failed to initiate withdrawal');
       setActionLoading(false);
       setTxStatus('idle');
