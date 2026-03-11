@@ -313,6 +313,36 @@ export async function deleteUserSharesFromDb(walletAddress: string): Promise<voi
 // ============ Transaction History Operations ============
 
 /**
+ * Get user transaction counts (deposits and withdrawals)
+ * Security: Validates wallet address format
+ */
+export async function getUserTransactionCounts(walletAddress: string): Promise<{ depositCount: number; withdrawalCount: number }> {
+  // Security: Validate wallet address
+  if (!isValidWalletAddress(walletAddress)) {
+    return { depositCount: 0, withdrawalCount: 0 };
+  }
+
+  try {
+    const result = await queryOne<{ deposit_count: string; withdrawal_count: string }>(
+      `SELECT 
+         COUNT(*) FILTER (WHERE type = 'DEPOSIT') as deposit_count,
+         COUNT(*) FILTER (WHERE type = 'WITHDRAWAL') as withdrawal_count
+       FROM community_pool_transactions 
+       WHERE LOWER(wallet_address) = LOWER($1)`,
+      [walletAddress]
+    );
+    
+    return {
+      depositCount: parseInt(result?.deposit_count || '0', 10),
+      withdrawalCount: parseInt(result?.withdrawal_count || '0', 10),
+    };
+  } catch (error) {
+    logger.error('[CommunityPool DB] Failed to get user transaction counts', error);
+    return { depositCount: 0, withdrawalCount: 0 };
+  }
+}
+
+/**
  * Get pool transaction history
  * Security: Limits query size to prevent resource exhaustion
  */
