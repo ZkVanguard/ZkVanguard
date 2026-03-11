@@ -9,7 +9,8 @@ const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
-const deployment = require("../../deployments/community-pool.json");
+// Use V2 deployment
+const deployment = require("../../deployments/community-pool-v2-testnet.json");
 
 const PROXY_ADDRESS = deployment.contracts.CommunityPool.proxy;
 
