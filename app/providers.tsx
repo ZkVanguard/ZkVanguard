@@ -1,5 +1,8 @@
 'use client';
 
+// MUST be imported first - sets up BigInt serialization and fetch interceptor
+import './api-interceptor';
+
 import { ReactNode, useMemo } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { CronosTestnet, CronosMainnet, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
