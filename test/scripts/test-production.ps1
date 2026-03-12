@@ -4,7 +4,7 @@
 Write-Host "`n=== ZkVanguard Production Test ===" -ForegroundColor Cyan
 Write-Host ""
 
-$baseUrl = "https://zkvanguard.vercel.app"
+$baseUrl = "https://zkvanguard.xyz"
 $allPassed = $true
 
 # Test 1: Health Check

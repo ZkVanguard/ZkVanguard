@@ -483,7 +483,7 @@ User: Portfolio protected 3 days before crash
 
 ### What's Live Today (January 2026)
 
-✅ **Production Platform:** [https://zkvanguard.vercel.app](https://zkvanguard.vercel.app)
+✅ **Production Platform:** [https://zkvanguard.xyz](https://zkvanguard.xyz)
 
 ✅ **Cronos Testnet:** Smart contracts deployed and verified
 
@@ -569,7 +569,7 @@ Not just a product—**a paradigm shift**:
 ### Ready to Lead the Round?
 
 **Contact Us:**
-- **Website:** [https://zkvanguard.vercel.app](https://zkvanguard.vercel.app)
+- **Website:** [https://zkvanguard.xyz](https://zkvanguard.xyz)
 - **Email:** [founders@zkvanguard.io]
 - **Schedule Demo:** [Calendly link]
 - **GitHub:** [https://github.com/your-repo] (Available for due diligence)

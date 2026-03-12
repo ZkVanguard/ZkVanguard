@@ -72,7 +72,7 @@ const trailingStopPeaks = new Map<string, number>();
 async function fetchActiveHedges(): Promise<ActiveHedge[]> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/positions?type=hedges&status=active`, {
@@ -98,7 +98,7 @@ async function fetchActiveHedges(): Promise<ActiveHedge[]> {
 async function getCurrentPrices(assets: string[]): Promise<Record<string, number>> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/prices?assets=${assets.join(',')}`, {
@@ -143,7 +143,7 @@ function calculatePnl(hedge: ActiveHedge, currentPrice: number): { pnl: number; 
 async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolean> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {

@@ -1,13 +1,13 @@
 # ⚡ ZkVanguard Quick Demo Script
 
-**Duration:** 8-10 minutes | **URL:** https://zkvanguard.vercel.app
+**Duration:** 8-10 minutes | **URL:** https://zkvanguard.xyz
 
 ---
 
 ## ✅ Pre-Demo Checklist (2 min before)
 
 ```
-□ Website live at https://zkvanguard.vercel.app
+□ Website live at https://zkvanguard.xyz
 □ MetaMask on Cronos Testnet (Chain ID: 338)
 □ Demo wallet has tCRO balance
 □ Browser zoom 100-125%, notifications OFF

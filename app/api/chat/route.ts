@@ -19,7 +19,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // SECURITY: Restrict CORS to our own domain only
-const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || 'https://zkvanguard.vercel.app';
+const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || 'https://zkvanguard.xyz';
 const corsHeaders = {
   'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',

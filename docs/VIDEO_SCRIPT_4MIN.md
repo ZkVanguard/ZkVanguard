@@ -2,7 +2,7 @@
 
 **Total Duration:** 4 minutes (240 seconds)  
 **Tone:** Professional, confident, visionary  
-**Live Demo:** [zkvanguard.vercel.app](https://zkvanguard.vercel.app)
+**Live Demo:** [zkvanguard.xyz](https://zkvanguard.xyz)
 
 ---
 
@@ -93,7 +93,7 @@
 ## 🎬 SCENE 4: LIVE DEMO (2:10 - 3:10) — 60 seconds
 
 ### Visual
-- Screen recording of live dashboard at zkvanguard.vercel.app
+- Screen recording of live dashboard at zkvanguard.xyz
 - Show each step with mouse movements
 
 ### Narration (while demonstrating)
@@ -165,14 +165,14 @@
 >
 > "ZkVanguard: AI agents. Predictive intelligence. Quantum-proof privacy. Zero gas fees."
 >
-> "Visit zkvanguard.vercel.app — and see the future of portfolio protection."
+> "Visit zkvanguard.xyz — and see the future of portfolio protection."
 >
 > "Your portfolio. Protected."
 
 ### On-Screen Text
 - **ZkVanguard**
 - "AI-Powered Multi-Chain RWA Risk Management"
-- **zkvanguard.vercel.app**
+- **zkvanguard.xyz**
 - "Demo Live Now"
 - QR Code
 

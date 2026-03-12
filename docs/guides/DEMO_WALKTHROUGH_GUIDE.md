@@ -3,7 +3,7 @@
 ## Interactive Demo Script with Speaking Points
 
 **Platform:** ZkVanguard - AI-Powered Multi-Agent RWA Risk Management  
-**Live Demo URL:** https://zkvanguard.vercel.app  
+**Live Demo URL:** https://zkvanguard.xyz  
 **Duration:** 20-25 minutes (comprehensive) or 10-12 minutes (quick pitch)  
 **Last Updated:** January 9, 2026
 
@@ -61,7 +61,7 @@
 ### 🔧 Technical Setup (15 minutes before)
 
 ```
-□ Verify website is live: https://zkvanguard.vercel.app
+□ Verify website is live: https://zkvanguard.xyz
 □ Test ZK backend is running (if local demo)
 □ Ensure demo wallet has testnet funds:
   - 10+ TCRO for gas sponsorship
@@ -131,7 +131,7 @@ This isn't hypothetical. This happened during the largest liquidation cascade in
 ## 2. Landing Page Tour (2 minutes)
 
 ### 🎯 What to Show
-Navigate to: `https://zkvanguard.vercel.app`
+Navigate to: `https://zkvanguard.xyz`
 
 **Screen Actions:**
 1. Hero section with animated gradient (10 sec)
@@ -712,7 +712,7 @@ Return to landing page or show a summary slide
 >
 > **[Call to Action]**
 > - **For investors**: We're raising a $1-2M seed round to audit our contracts and scale to 500 users by Q4 2026.
-> - **For users**: Beta access is free for 3 months. Connect your wallet at zkvanguard.vercel.app.
+> - **For users**: Beta access is free for 3 months. Connect your wallet at zkvanguard.xyz.
 > - **For partners**: White-label API access for RWA platforms managing $100M+ TVL.
 >
 > **[Close]**
@@ -973,7 +973,7 @@ If you're recording this demo:
 
 ## 📞 Contact & Resources
 
-- **Live Demo:** https://zkvanguard.vercel.app
+- **Live Demo:** https://zkvanguard.xyz
 - **GitHub:** [Request Access]
 - **Documentation:** `/docs` on the website
 - **Cronos Explorer:** https://testnet.cronoscan.com

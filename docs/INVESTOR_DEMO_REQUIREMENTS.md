@@ -10,7 +10,7 @@
 ## ✅ What We Have (Production-Ready Foundation)
 
 ### 1. **Working Product** ✅ COMPLETE
-- **Live URL:** https://zkvanguard.vercel.app
+- **Live URL:** https://zkvanguard.xyz
 - **Status:** 10/10 tests passing, zero build errors
 - **Evidence:** 
   - 2 ZK proofs generated on-chain
@@ -67,7 +67,7 @@
 - ✅ **Backup Demo Video (3 minutes):**
   - Screen recording with voiceover
   - Highlight: "Notice the gas cost: $0.00" + "ZK proof hides sensitive data"
-  - Include CTA: "Try the beta at zkvanguard.vercel.app"
+  - Include CTA: "Try the beta at zkvanguard.xyz"
 
 - ✅ **Interactive Demo Environment:**
   - Pre-seeded testnet wallet ($10K portfolio)

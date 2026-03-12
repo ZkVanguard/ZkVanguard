@@ -86,7 +86,7 @@ vercel --prod
 4. Test deployment
 5. Add live URL to README + DoraHacks
 
-**Deliverable**: Live URL (e.g., ZkVanguard.vercel.app)
+**Deliverable**: Live URL (e.g., zkvanguard.xyz)
 
 **Validation**:
 - [ ] Frontend accessible publicly

@@ -351,10 +351,10 @@ Institutional investors managing $1.2T in DeFi assets face critical operational 
 
 | Screen | Status | Link |
 |--------|--------|------|
-| Landing Page | ✅ Live | [View](https://zkvanguard.vercel.app) |
-| Dashboard | ✅ Live | [View](https://zkvanguard.vercel.app/dashboard) |
-| Chat Interface | ✅ Live | [View](https://zkvanguard.vercel.app/dashboard) |
-| ZK Proof Viewer | ✅ Live | [View](https://zkvanguard.vercel.app/dashboard/zk-proof) |
+| Landing Page | ✅ Live | [View](https://zkvanguard.xyz) |
+| Dashboard | ✅ Live | [View](https://zkvanguard.xyz/dashboard) |
+| Chat Interface | ✅ Live | [View](https://zkvanguard.xyz/dashboard) |
+| ZK Proof Viewer | ✅ Live | [View](https://zkvanguard.xyz/dashboard/zk-proof) |
 | Settings | ⏳ Feb 15, 2026 | TBD |
 | Onboarding Flow | ⏳ Mar 1, 2026 | TBD |
 

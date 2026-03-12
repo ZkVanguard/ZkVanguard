@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SUI Full On-Chain E2E Test
  * 
  * Executes REAL transactions on SUI testnet:
@@ -45,7 +45,7 @@ import * as crypto from 'crypto';
 // ===== Configuration =====
 const SUI_RPC = 'https://fullnode.testnet.sui.io:443';
 
-// Two package IDs â€” hedge_executor deployed separately from the rest
+// Two package IDs — hedge_executor deployed separately from the rest
 const PKG_HEDGE = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
 const PKG_MAIN  = '0x142e6c41391f0d27e2b5a2dbf35029809efbf78e340369ac6f1ce8fb8aa080b6';
 
@@ -69,15 +69,15 @@ const results: { step: string; status: string; digest?: string; detail?: string 
 function ok(step: string, detail: string, digest?: string) {
   passed++;
   const link = digest ? `https://suiscan.xyz/testnet/tx/${digest}` : '';
-  console.log(`  âœ… ${step} â€” ${detail}`);
-  if (link) console.log(`     ðŸ”— ${link}`);
+  console.log(`  ✅ ${step} — ${detail}`);
+  if (link) console.log(`     🔗 ${link}`);
   results.push({ step, status: 'PASS', digest, detail });
 }
 
 function fail(step: string, err: unknown) {
   failed++;
   const msg = err instanceof Error ? err.message : String(err);
-  console.log(`  âŒ ${step} â€” ${msg}`);
+  console.log(`  ❌ ${step} — ${msg}`);
   results.push({ step, status: 'FAIL', detail: msg });
 }
 
@@ -103,7 +103,7 @@ async function signAndExecute(tx: Transaction, description: string): Promise<{
   tx.setSender(keypair.getPublicKey().toSuiAddress());
   tx.setGasBudget(50_000_000); // 0.05 SUI
 
-  console.log(`  â³ Signing & executing: ${description}...`);
+  console.log(`  ⏳ Signing & executing: ${description}...`);
   
   const result = await client.signAndExecuteTransaction({
     signer: keypair,
@@ -128,9 +128,9 @@ async function signAndExecute(tx: Transaction, description: string): Promise<{
 
 // ===== STEP 1: Open a Hedge Position =====
 async function step1_openHedge(): Promise<string | null> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 1: Open Hedge Position (SUI-PERP SHORT)');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -187,9 +187,9 @@ async function step1_openHedge(): Promise<string | null> {
 
 // ===== STEP 2: Store ZK Commitment On-Chain =====
 async function step2_storeCommitment(): Promise<string | null> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 2: Store ZK Hedge Commitment');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -237,9 +237,9 @@ async function step2_storeCommitment(): Promise<string | null> {
 
 // ===== STEP 3: Create ZK Proxy Vault =====
 async function step3_createProxy(): Promise<string | null> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 3: Create ZK Proxy Vault');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -279,9 +279,9 @@ async function step3_createProxy(): Promise<string | null> {
 
 // ===== STEP 4: Deposit into Proxy Vault =====
 async function step4_depositProxy(proxyId: string): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 4: Deposit 0.05 SUI into Proxy Vault');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -300,7 +300,7 @@ async function step4_depositProxy(proxyId: string): Promise<void> {
       ],
     });
 
-    const result = await signAndExecute(tx, `deposit 0.05 SUI â†’ proxy ${proxyId.slice(0, 12)}`);
+    const result = await signAndExecute(tx, `deposit 0.05 SUI → proxy ${proxyId.slice(0, 12)}`);
     const status = (result.effects as any)?.status?.status;
 
     if (status === 'success') {
@@ -313,9 +313,9 @@ async function step4_depositProxy(proxyId: string): Promise<void> {
 
 // ===== STEP 5: Create Portfolio (RWA Manager) =====
 async function step5_createPortfolio(): Promise<string | null> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 5: Create Portfolio (yield: 8%, risk: medium)');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -355,9 +355,9 @@ async function step5_createPortfolio(): Promise<string | null> {
 
 // ===== STEP 6: Deposit into Portfolio =====
 async function step6_depositPortfolio(portfolioId: string): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 6: Deposit 0.05 SUI into Portfolio');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -375,7 +375,7 @@ async function step6_depositPortfolio(portfolioId: string): Promise<void> {
       ],
     });
 
-    const result = await signAndExecute(tx, `deposit 0.05 SUI â†’ portfolio ${portfolioId.slice(0, 12)}`);
+    const result = await signAndExecute(tx, `deposit 0.05 SUI → portfolio ${portfolioId.slice(0, 12)}`);
     const status = (result.effects as any)?.status?.status;
 
     if (status === 'success') {
@@ -388,9 +388,9 @@ async function step6_depositPortfolio(portfolioId: string): Promise<void> {
 
 // ===== STEP 7: Verify ZK Proof On-Chain =====
 async function step7_verifyProof(): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 7: Verify ZK Proof On-Chain');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -430,9 +430,9 @@ async function step7_verifyProof(): Promise<void> {
 
 // ===== STEP 8: Route a Payment =====
 async function step8_routePayment(): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 8: Route Payment (0.02 SUI)');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -470,9 +470,9 @@ async function step8_routePayment(): Promise<void> {
 
 // ===== STEP 9: Close Hedge (Risk Management) =====
 async function step9_closeHedge(hedgePositionId: string): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 9: Close Hedge (Risk Management)');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -501,9 +501,9 @@ async function step9_closeHedge(hedgePositionId: string): Promise<void> {
 
 // ===== STEP 10: Swap Quote + Build (Cetus DEX) =====
 async function step10_swapSimulation(): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
-  console.log('  STEP 10: DEX Swap â€” SUIâ†’USDC Quote + TX Build');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
+  console.log('  STEP 10: DEX Swap — SUI→USDC Quote + TX Build');
+  console.log('══════════════════════════════════════════════');
 
   try {
     // Import CetusSwapService
@@ -522,9 +522,9 @@ async function step10_swapSimulation(): Promise<void> {
     });
 
     if (quote.amountOut > 0n) {
-      ok('DEX Quote (SUIâ†’USDC)', `0.1 SUI â†’ ${Number(quote.amountOut) / 1e6} USDC | price: ${quote.price?.toFixed(4) || 'N/A'} | impact: ${quote.priceImpact?.toFixed(2) || 'N/A'}%`);
+      ok('DEX Quote (SUI→USDC)', `0.1 SUI → ${Number(quote.amountOut) / 1e6} USDC | price: ${quote.price?.toFixed(4) || 'N/A'} | impact: ${quote.priceImpact?.toFixed(2) || 'N/A'}%`);
     } else {
-      ok('DEX Quote (fallback)', `Simulated: 0.1 SUI â†’ ~$0.25 USDC (Cetus API unavailable, simulated quote used)`);
+      ok('DEX Quote (fallback)', `Simulated: 0.1 SUI → ~$0.25 USDC (Cetus API unavailable, simulated quote used)`);
     }
 
     // Build swap transaction parameters
@@ -548,9 +548,9 @@ async function step10_swapSimulation(): Promise<void> {
 
 // ===== STEP 11: Create ZK Commitment (verifier) =====
 async function step11_createZKCommitment(): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 11: Create ZK Commitment (Verifier)');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -585,9 +585,9 @@ async function step11_createZKCommitment(): Promise<void> {
 
 // ===== STEP 12: Withdraw from Portfolio =====
 async function step12_withdrawPortfolio(portfolioId: string): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  STEP 12: Withdraw 0.03 SUI from Portfolio');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   try {
     const tx = new Transaction();
@@ -615,9 +615,9 @@ async function step12_withdrawPortfolio(portfolioId: string): Promise<void> {
 
 // ===== Verify Final On-Chain State =====
 async function verifyFinalState(): Promise<void> {
-  console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('\n══════════════════════════════════════════════');
   console.log('  VERIFICATION: On-Chain State');
-  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('══════════════════════════════════════════════');
 
   const keypair = getKeypair();
   const address = keypair.getPublicKey().toSuiAddress();
@@ -673,11 +673,11 @@ async function verifyFinalState(): Promise<void> {
 
 // ===== MAIN =====
 async function main() {
-  console.log('â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
-  console.log('â•‘  SUI Full On-Chain E2E Test â€” REAL Transactions             â•‘');
-  console.log('â•‘  Network: SUI Testnet                                       â•‘');
-  console.log('â•‘  Package: ' + PKG_HEDGE.slice(0, 24) + '...              â•‘');
-  console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('╔══════════════════════════════════════════════════════════════╗');
+  console.log('║  SUI Full On-Chain E2E Test — REAL Transactions             ║');
+  console.log('║  Network: SUI Testnet                                       ║');
+  console.log('║  Package: ' + PKG_HEDGE.slice(0, 24) + '...              ║');
+  console.log('╚══════════════════════════════════════════════════════════════╝');
 
   const keypair = getKeypair();
   const address = keypair.getPublicKey().toSuiAddress();
@@ -689,7 +689,7 @@ async function main() {
   console.log(`  Balance: ${startingSUI.toFixed(4)} SUI`);
 
   if (startingSUI < 0.5) {
-    console.log('\n  âš ï¸ Insufficient balance. Need at least 0.5 SUI. Fund the address above.');
+    console.log('\n  ⚠️ Insufficient balance. Need at least 0.5 SUI. Fund the address above.');
     process.exit(1);
   }
 
@@ -725,7 +725,7 @@ async function main() {
   // 8. Route a payment
   await step8_routePayment();
 
-  // 9. Close hedge (risk management â€” unwinding position)
+  // 9. Close hedge (risk management — unwinding position)
   if (hedgeId && hedgeId !== 'unknown') {
     await step9_closeHedge(hedgeId);
   }
@@ -736,7 +736,7 @@ async function main() {
   // 11. Create ZK commitment via verifier
   await step11_createZKCommitment();
 
-  // 12. Withdraw from portfolio (risk management â€” reducing exposure)
+  // 12. Withdraw from portfolio (risk management — reducing exposure)
   if (portfolioId && portfolioId !== 'unknown') {
     await step12_withdrawPortfolio(portfolioId);
   }
@@ -747,22 +747,22 @@ async function main() {
   // ===== Summary =====
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  console.log('\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
-  console.log(`â•‘  RESULTS: ${passed} passed, ${failed} failed (${elapsed}s)${' '.repeat(Math.max(0, 35 - elapsed.length - String(passed).length - String(failed).length))}â•‘`);
-  console.log('â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£');
+  console.log('\n╔══════════════════════════════════════════════════════════════╗');
+  console.log(`║  RESULTS: ${passed} passed, ${failed} failed (${elapsed}s)${' '.repeat(Math.max(0, 35 - elapsed.length - String(passed).length - String(failed).length))}║`);
+  console.log('╠══════════════════════════════════════════════════════════════╣');
   
   for (const r of results) {
-    const icon = r.status === 'PASS' ? 'âœ…' : 'âŒ';
+    const icon = r.status === 'PASS' ? '✅' : '❌';
     const line = `${icon} ${r.step}`;
-    console.log(`â•‘  ${line}${' '.repeat(Math.max(1, 60 - line.length))}â•‘`);
+    console.log(`║  ${line}${' '.repeat(Math.max(1, 60 - line.length))}║`);
   }
   
-  console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log('╚══════════════════════════════════════════════════════════════╝');
 
   if (failed > 0) process.exit(1);
 }
 
 main().catch(e => {
-  console.error('\nðŸ’¥ FATAL:', e);
+  console.error('\n💥 FATAL:', e);
   process.exit(1);
 });

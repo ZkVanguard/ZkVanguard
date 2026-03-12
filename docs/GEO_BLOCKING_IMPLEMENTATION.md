@@ -256,7 +256,7 @@ if (process.env.NODE_ENV === 'development' && process.env.GEO_OVERRIDE) {
 
 1. **Vercel Preview with Headers**:
    ```bash
-   curl -H "x-vercel-ip-country: KP" https://preview.zkvanguard.vercel.app/api/health
+   curl -H "x-vercel-ip-country: KP" https://preview.zkvanguard.xyz/api/health
    ```
 
 2. **VPN Testing**:

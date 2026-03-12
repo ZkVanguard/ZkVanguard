@@ -13,7 +13,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://zkvanguard.vercel.app"
+          "value": "https://zkvanguard.xyz"
         },
         {
           "key": "Access-Control-Allow-Methods",

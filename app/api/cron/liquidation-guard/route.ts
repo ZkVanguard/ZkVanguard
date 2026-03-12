@@ -73,7 +73,7 @@ const SIZE_REDUCTION_PERCENT = 25; // Reduce size by 25% if collateral unavailab
 async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/positions?type=leveraged&status=active`, {
@@ -99,7 +99,7 @@ async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
 async function getCurrentPrices(assets: string[]): Promise<Record<string, number>> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/prices?assets=${assets.join(',')}`, {
@@ -173,7 +173,7 @@ function getDistanceToLiquidation(position: LeveragedPosition, currentPrice: num
 async function addCollateral(position: LeveragedPosition, amount: number): Promise<{ success: boolean; txHash?: string }> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     // For adding collateral, call the collateral management endpoint
@@ -195,7 +195,7 @@ async function addCollateral(position: LeveragedPosition, amount: number): Promi
 async function reducePosition(position: LeveragedPosition, reductionPercent: number): Promise<{ success: boolean; txHash?: string }> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     // Calculate reduction value
@@ -240,7 +240,7 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
 async function emergencyClose(position: LeveragedPosition, reason: string): Promise<{ success: boolean; txHash?: string }> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     // Close entire position by taking opposite side

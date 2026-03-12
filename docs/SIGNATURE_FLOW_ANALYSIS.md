@@ -42,7 +42,7 @@ Rainbow Kit opens wallet selection modal
   ↓
 User selects MetaMask/WalletConnect/etc.
   ↓
-Wallet opens: "Connect to zkvanguard.vercel.app?"
+Wallet opens: "Connect to zkvanguard.xyz?"
   ↓
 ✅ SIGNATURE #1: User approves connection (READ ONLY)
   ↓

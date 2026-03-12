@@ -2,13 +2,13 @@
 
 **AI-Powered Multi-Chain RWA Risk Management Platform**
 
-[![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://zkvanguard.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://zkvanguard.xyz)
 [![Tests](https://img.shields.io/badge/Tests-10%2F10-brightgreen)](./docs/reports/COMPLETE_SYSTEM_TEST_REPORT.md)
 [![Cronos](https://img.shields.io/badge/Cronos-Testnet-blue)](https://cronos.org)
 [![SUI](https://img.shields.io/badge/SUI-Testnet-cyan)](https://sui.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 
-**Live Demo:** [zkvanguard.vercel.app](https://zkvanguard.vercel.app)
+**Live Demo:** [zkvanguard.xyz](https://zkvanguard.xyz)
 
 ---
 
@@ -171,6 +171,6 @@ Apache 2.0 - See [LICENSE](LICENSE)
 
 <div align="center">
 
-**[Live Demo](https://zkvanguard.vercel.app)** • **[Docs](./docs/)** • **[Demo Guide](./DEMO_WALKTHROUGH_GUIDE.md)**
+**[Live Demo](https://zkvanguard.xyz)** • **[Docs](./docs/)** • **[Demo Guide](./DEMO_WALKTHROUGH_GUIDE.md)**
 
 </div>

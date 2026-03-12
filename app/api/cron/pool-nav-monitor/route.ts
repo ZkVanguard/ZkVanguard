@@ -435,7 +435,7 @@ async function triggerRebalanceIfNeeded(pool: typeof POOLS[0], maxDrift: number)
   
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/cron/auto-rebalance`, {
@@ -480,7 +480,7 @@ async function triggerPoolHedge(
   
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     // Calculate hedge size - 25% of NAV as protective hedge
