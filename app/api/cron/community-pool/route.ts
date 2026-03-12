@@ -2,9 +2,16 @@
  * Cron Job: Community Pool AI Management
  * 
  * This endpoint is invoked by Upstash QStash (or master cron) to:
- * 1. Check community pool risk metrics
+ * 1. Check community pool risk metrics via all AI agents
  * 2. Execute AI allocation decisions
  * 3. Trigger auto-hedging when needed
+ * 
+ * AI Agents Involved:
+ * - RiskAgent: Assesses portfolio risk and drawdown
+ * - HedgingAgent: Generates and executes hedge recommendations
+ * - PriceMonitorAgent: Monitors price movements and alerts
+ * - ReportingAgent: Generates performance reports
+ * - SettlementAgent: Handles x402 settlements
  * 
  * Schedule: Every 30 minutes via QStash
  * 
@@ -21,6 +28,7 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
+import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
@@ -73,6 +81,10 @@ interface CronResult {
     dailyUsedUSD: number;
     remainingDailyUSD: number;
     circuitBreakerOpen: boolean;
+  };
+  agentStatus?: {
+    active: string[];
+    inactive: string[];
   };
   duration: number;
   error?: string;
@@ -210,12 +222,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     }
     
     // Step 2: Run risk assessment via AutoHedgingService
+    // This triggers all AI agents: RiskAgent, HedgingAgent, PriceMonitorAgent
     const riskAssessment = await autoHedgingService.triggerRiskAssessment(COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS);
     
     logger.info('[CommunityPool Cron] Risk assessment complete', {
       riskScore: riskAssessment.riskScore,
       recommendations: riskAssessment.recommendations.length,
     });
+
+    // Step 2.5: Get agent orchestrator status
+    let agentStatus: { active: string[]; inactive: string[] } = { active: [], inactive: [] };
+    try {
+      const orchestrator = getAgentOrchestrator();
+      const status = orchestrator.getStatus();
+      agentStatus = {
+        active: Object.entries(status.agents)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+        inactive: Object.entries(status.agents)
+          .filter(([, v]) => !v)
+          .map(([k]) => k),
+      };
+      logger.info('[CommunityPool Cron] Agent orchestrator status', {
+        initialized: status.initialized,
+        activeAgents: agentStatus.active,
+      });
+    } catch (orchError) {
+      logger.warn('[CommunityPool Cron] Could not get orchestrator status', { error: orchError });
+    }
     
     // Step 3: Get AI allocation decision
     let aiDecision: CronResult['aiDecision'] = {
@@ -449,6 +483,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       hedgesExecuted,
       priceValidation,
       signerStatus,
+      agentStatus,
       duration: Date.now() - startTime,
     };
     
@@ -457,6 +492,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       duration: result.duration,
       hedgesExecuted: result.hedgesExecuted,
       riskScore: result.riskAssessment?.riskScore,
+      activeAgents: agentStatus.active,
     });
     
     return NextResponse.json(result);

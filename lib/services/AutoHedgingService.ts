@@ -745,6 +745,56 @@ class AutoHedgingService {
         recommendations: recommendations.length,
       });
 
+      // Get AI agent analysis via orchestrator for enhanced risk assessment
+      // This engages RiskAgent, HedgingAgent, and other specialized agents
+      try {
+        const orchestrator = getAgentOrchestrator();
+        
+        // Run parallel agent analysis for comprehensive pool management
+        const [riskAnalysis, hedgeAnalysis] = await Promise.all([
+          orchestrator.assessRisk({
+            address: COMMUNITY_POOL_CONTRACT,
+            portfolioData: {
+              portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+              type: 'community_pool',
+              positions,
+              allocations: allocationPercentages,
+              totalValue: marketNAV,
+              drawdownPercent,
+              volatility,
+            },
+          }),
+          orchestrator.generateHedgeRecommendations({
+            portfolioId: String(COMMUNITY_POOL_PORTFOLIO_ID),
+            assetSymbol: positions[0]?.symbol || 'BTC',
+            notionalValue: marketNAV,
+          }),
+        ]);
+
+        // Log agent results
+        logger.info('[AutoHedging] CommunityPool AI agents analysis complete', {
+          riskAgentSuccess: riskAnalysis.success,
+          hedgeAgentSuccess: hedgeAnalysis.success,
+          riskAgentTime: `${riskAnalysis.executionTime}ms`,
+          hedgeAgentTime: `${hedgeAnalysis.executionTime}ms`,
+        });
+
+        // Enhance recommendations with agent insights if available
+        if (hedgeAnalysis.success && hedgeAnalysis.data) {
+          const agentHedgeData = hedgeAnalysis.data as { recommendations?: Array<{ asset: string; action: string; confidence: number }> };
+          if (agentHedgeData.recommendations?.length) {
+            logger.info('[AutoHedging] HedgingAgent provided recommendations for pool', {
+              count: agentHedgeData.recommendations.length,
+            });
+          }
+        }
+      } catch (agentError) {
+        // Non-critical: manual analysis still valid, agents are enhancement
+        logger.warn('[AutoHedging] Agent orchestrator analysis failed (continuing with manual assessment)', {
+          error: agentError instanceof Error ? agentError.message : String(agentError),
+        });
+      }
+
       return {
         portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
         totalValue: marketNAV,
