@@ -143,7 +143,7 @@ export class SecureAgentSigner {
 
   private initializeWallet(): void {
     // Check for agent-specific key first, then fallback to general keys
-    // Priority: AGENT_SIGNER_KEY > AGENT_PRIVATE_KEY > SERVER_WALLET_PRIVATE_KEY
+    // Priority: AGENT_SIGNER_KEY > AGENT_PRIVATE_KEY > SERVER_PRIVATE_KEY > SERVER_WALLET_PRIVATE_KEY > PRIVATE_KEY
     const keyName = IS_PRODUCTION 
       ? 'AGENT_SIGNER_KEY'  // Production uses dedicated signer key
       : 'AGENT_PRIVATE_KEY'; // Dev/staging uses general agent key
@@ -151,13 +151,14 @@ export class SecureAgentSigner {
     const privateKey = (
       process.env.AGENT_SIGNER_KEY 
       || process.env.AGENT_PRIVATE_KEY 
+      || process.env.SERVER_PRIVATE_KEY
       || process.env.SERVER_WALLET_PRIVATE_KEY
       || process.env.PRIVATE_KEY
     )?.trim();
     
     if (!privateKey) {
       logger.warn('[SecureAgentSigner] No private key configured - signer will be unavailable', {
-        checkedKeys: ['AGENT_SIGNER_KEY', 'AGENT_PRIVATE_KEY', 'SERVER_WALLET_PRIVATE_KEY', 'PRIVATE_KEY'],
+        checkedKeys: ['AGENT_SIGNER_KEY', 'AGENT_PRIVATE_KEY', 'SERVER_PRIVATE_KEY', 'SERVER_WALLET_PRIVATE_KEY', 'PRIVATE_KEY'],
       });
       return;
     }
