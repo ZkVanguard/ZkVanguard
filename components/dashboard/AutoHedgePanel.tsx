@@ -40,12 +40,30 @@ interface AIDecision {
   timestamp: string;
 }
 
+interface PredictionSource {
+  name: string;
+  available: boolean;
+  weight: number;
+  direction?: string;
+  confidence?: number;
+}
+
+interface AggregatedPrediction {
+  direction: string;
+  confidence: number;
+  consensus: number;
+  recommendation: string;
+  sizeMultiplier: number;
+  sources: PredictionSource[];
+}
+
 interface RiskAssessment {
   riskScore: number;
   drawdownPercent: number;
   volatility: number;
   recommendations: number;
   lastUpdated: string;
+  aggregatedPrediction?: AggregatedPrediction | null;
 }
 
 interface AutoHedgeData {
@@ -282,6 +300,98 @@ export function AutoHedgePanel() {
                       <div className="text-xs text-slate-500">Recommendations</div>
                     </div>
                   </div>
+                  
+                  {/* Multi-Source Prediction Aggregation */}
+                  {data.riskAssessment.aggregatedPrediction && (
+                    <div className="mt-4 pt-4 border-t border-slate-700/50">
+                      <h5 className="text-xs font-medium text-slate-400 mb-3 flex items-center gap-2">
+                        <Brain className="w-3.5 h-3.5" />
+                        Multi-Source AI Prediction
+                      </h5>
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="bg-slate-800/50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-slate-500">Direction</span>
+                            <span className={`flex items-center gap-1 font-medium ${
+                              data.riskAssessment.aggregatedPrediction.direction === 'UP' 
+                                ? 'text-green-400' 
+                                : data.riskAssessment.aggregatedPrediction.direction === 'DOWN'
+                                ? 'text-red-400'
+                                : 'text-slate-400'
+                            }`}>
+                              {data.riskAssessment.aggregatedPrediction.direction === 'UP' && <TrendingUp className="w-4 h-4" />}
+                              {data.riskAssessment.aggregatedPrediction.direction === 'DOWN' && <TrendingDown className="w-4 h-4" />}
+                              {data.riskAssessment.aggregatedPrediction.direction}
+                            </span>
+                          </div>
+                          <div className="text-lg font-bold text-white">
+                            {data.riskAssessment.aggregatedPrediction.confidence}%
+                            <span className="text-xs text-slate-500 ml-1">confidence</span>
+                          </div>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-slate-500">Consensus</span>
+                            <span className="text-xs text-slate-400">
+                              {data.riskAssessment.aggregatedPrediction.sources.filter(s => s.available).length} sources
+                            </span>
+                          </div>
+                          <div className="text-lg font-bold text-white">
+                            {data.riskAssessment.aggregatedPrediction.consensus}%
+                            <span className="text-xs text-slate-500 ml-1">agreement</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Recommendation Badge */}
+                      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${
+                        data.riskAssessment.aggregatedPrediction.recommendation.includes('STRONG') 
+                          ? data.riskAssessment.aggregatedPrediction.recommendation.includes('SHORT')
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-green-500/20 text-green-400'
+                          : data.riskAssessment.aggregatedPrediction.recommendation.includes('SHORT')
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : data.riskAssessment.aggregatedPrediction.recommendation.includes('LONG')
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-slate-500/20 text-slate-400'
+                      }`}>
+                        <Zap className="w-3.5 h-3.5" />
+                        {data.riskAssessment.aggregatedPrediction.recommendation.replace(/_/g, ' ')}
+                        <span className="text-xs opacity-70">
+                          ({data.riskAssessment.aggregatedPrediction.sizeMultiplier}x size)
+                        </span>
+                      </div>
+                      
+                      {/* Source Breakdown */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {data.riskAssessment.aggregatedPrediction.sources.map((source) => (
+                          <div 
+                            key={source.name}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+                              source.available 
+                                ? 'bg-slate-700/50 text-slate-300' 
+                                : 'bg-slate-800/30 text-slate-500'
+                            }`}
+                          >
+                            {source.available ? (
+                              <CheckCircle className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <Clock className="w-3 h-3 text-slate-600" />
+                            )}
+                            <span>{source.name}</span>
+                            {source.available && source.direction && (
+                              <span className={`font-medium ${
+                                source.direction === 'UP' ? 'text-green-400' : 
+                                source.direction === 'DOWN' ? 'text-red-400' : 'text-slate-400'
+                              }`}>
+                                {source.direction === 'UP' ? '↑' : source.direction === 'DOWN' ? '↓' : '-'}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

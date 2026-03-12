@@ -50,6 +50,20 @@ interface AutoHedgeStatus {
     volatility: number;
     recommendations: number;
     lastUpdated: string;
+    aggregatedPrediction?: {
+      direction: string;
+      confidence: number;
+      consensus: number;
+      recommendation: string;
+      sizeMultiplier: number;
+      sources: Array<{
+        name: string;
+        available: boolean;
+        weight: number;
+        direction?: string;
+        confidence?: number;
+      }>;
+    } | null;
   } | null;
   stats: {
     totalHedgeValue: number;
@@ -114,6 +128,7 @@ export async function GET(): Promise<NextResponse> {
         volatility: assessment.volatility,
         recommendations: assessment.recommendations.length,
         lastUpdated: new Date().toISOString(),
+        aggregatedPrediction: assessment.aggregatedPrediction || null,
       };
     } catch (e) {
       logger.warn('[AutoHedge API] Could not get risk assessment', { error: e });
