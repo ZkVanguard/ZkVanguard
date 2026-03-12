@@ -312,6 +312,8 @@ function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
  * IMPORTANT: Uses market-adjusted NAV and share price from calculatePoolNAV()
  * The on-chain contract only holds USDC (no actual trading), so on-chain NAV = USDC balance
  * We use virtual holdings × live prices for accurate market-based valuation
+ * 
+ * NOTE: memberCount is calculated from ACTIVE shareholders (shares > 0), not historical count
  */
 async function getOnChainPoolData(): Promise<PoolDataCache | null> {
   return dedupedFetch<PoolDataCache | null>(
@@ -321,10 +323,14 @@ async function getOnChainPoolData(): Promise<PoolDataCache | null> {
         const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
         const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
         
-        // Get on-chain data (totalShares, memberCount) - these are authoritative
+        // Get on-chain data (totalShares) - authoritative
         const stats = await pool.getPoolStats();
         const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-        const memberCount = Number(stats._memberCount);
+        
+        // Get ACTIVE member count by fetching all members and counting those with shares > 0
+        // The on-chain _memberCount includes historical members who withdrew to 0
+        const allMembers = await getAllOnChainMembers();
+        const activeCount = allMembers?.filter(m => m.shares > 0).length || 0;
         
         // Get market-adjusted NAV and share price from calculatePoolNAV()
         // This uses virtual holdings × live prices for accurate valuation
@@ -338,7 +344,7 @@ async function getOnChainPoolData(): Promise<PoolDataCache | null> {
           totalValueUSD: marketNAV,
           totalShares,
           sharePrice: marketSharePrice,
-          totalMembers: memberCount,
+          totalMembers: activeCount, // Use ACTIVE count, not historical
           allocations: {
             BTC: { percentage: marketAllocations.BTC?.percentage || Number(stats._allocations[0]) / 100 },
             ETH: { percentage: marketAllocations.ETH?.percentage || Number(stats._allocations[1]) / 100 },
@@ -685,33 +691,18 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Get leaderboard
+    // Get leaderboard - ALWAYS use on-chain as authoritative source
+    // DB is a cache that can have stale data or ghost entries
     if (action === 'leaderboard') {
       const limit = parseInt(searchParams.get('limit') || '10');
-      const forceOnChain = searchParams.get('source') === 'onchain';
       
-      // Try DB first (faster for UI)
-      if (!forceOnChain) {
-        try {
-          const leaderboard = await getTopShareholders(limit);
-          if (leaderboard && leaderboard.length > 0) {
-            return cachedJsonResponse({
-              success: true,
-              leaderboard,
-              count: leaderboard.length,
-              source: 'db',
-            }, 60); // CDN cache for 60 seconds
-          }
-        } catch (dbError) {
-          logger.warn('[CommunityPool API] DB leaderboard failed, falling back to on-chain');
-        }
-      }
-      
-      // Fallback: On-chain (authoritative but slower)
+      // On-chain is authoritative - always use it
       const onChainMembers = await getAllOnChainMembers();
       if (onChainMembers && onChainMembers.length > 0) {
-        const totalShares = onChainMembers.reduce((sum, m) => sum + m.shares, 0);
-        const leaderboard = onChainMembers
+        // Filter to only active members (shares > 0)
+        const activeMembers = onChainMembers.filter(m => m.shares > 0);
+        const totalShares = activeMembers.reduce((sum, m) => sum + m.shares, 0);
+        const leaderboard = activeMembers
           .sort((a, b) => b.shares - a.shares)
           .slice(0, limit)
           .map(m => ({
@@ -723,7 +714,7 @@ export async function GET(request: NextRequest) {
         return cachedJsonResponse({
           success: true,
           leaderboard,
-          count: leaderboard.length,
+          count: activeMembers.length, // Count of ACTIVE members, not historical
           source: 'onchain',
         }, 60); // CDN cache for 60 seconds
       }
