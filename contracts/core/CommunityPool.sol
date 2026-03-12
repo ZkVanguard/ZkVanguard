@@ -556,9 +556,9 @@ contract CommunityPool is
         // This prevents new depositors from getting unfair share dilution
         if (totalShares > 0) {
             uint256 currentSharePrice = _calculateNavPerShare();
-            uint256 minSharePriceWad = 9e17; // $0.90 in WAD
-            if (currentSharePrice < minSharePriceWad) {
-                revert SharePriceTooLow(currentSharePrice, minSharePriceWad);
+            uint256 minSharePrice = 9e5; // $0.90 in 6 decimals (USDC-scaled)
+            if (currentSharePrice < minSharePrice) {
+                revert SharePriceTooLow(currentSharePrice, minSharePrice);
             }
         }
 
@@ -603,7 +603,7 @@ contract CommunityPool is
         // SAFEGUARD: Verify share price didn't drop below $0.90 after deposit
         // This catches any accounting anomalies or exploits
         uint256 newSharePrice = _calculateNavPerShare();
-        uint256 minSharePrice = 9e17; // $0.90 in WAD (18 decimals)
+        uint256 minSharePrice = 9e5; // $0.90 in 6 decimals (USDC-scaled)
         if (newSharePrice < minSharePrice) {
             revert SharePriceTooLow(newSharePrice, minSharePrice);
         }
@@ -1450,6 +1450,27 @@ contract CommunityPool is
         
         IERC20(token).safeTransfer(treasury, balance);
         emit TokensRescued(token, balance);
+    }
+
+    /**
+     * @notice Admin migration function - transfers all deposit tokens to a new contract
+     * @dev DANGER: Only use for contract migration! Transfers all USDC and resets shares.
+     * @param recipient The new contract or address to receive the funds
+     */
+    function adminMigrateFunds(address recipient) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        require(recipient != address(0), "Invalid recipient");
+        require(emergencyWithdrawEnabled, "Enable emergency mode first");
+        
+        uint256 balance = depositToken.balanceOf(address(this));
+        require(balance > 0, "No funds to migrate");
+        
+        // Transfer all deposit tokens
+        depositToken.safeTransfer(recipient, balance);
+        
+        // Reset pool state
+        totalShares = 0;
+        
+        emit TokensRescued(address(depositToken), balance);
     }
 
     // ═══════════════════════════════════════════════════════════════

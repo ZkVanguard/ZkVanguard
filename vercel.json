@@ -1,6 +1,16 @@
 {
   "framework": "nextjs",
   "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/cron/community-pool",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/pool-nav-monitor",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",

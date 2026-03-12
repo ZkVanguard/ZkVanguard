@@ -29,7 +29,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb } from '@/lib/db/community-pool';
+import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb, getAllUserSharesFromDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
@@ -181,23 +181,50 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         totalShares: totalShares.toFixed(2),
       });
       
-      // Step 1.6: Sync on-chain members to DB cache
-      // This ensures DB always reflects on-chain state for fast UI queries
+      // Step 1.6: AUTHORITATIVE sync - DB must match on-chain exactly
+      // This deletes ghost entries and ensures DB reflects on-chain state
       try {
         const memberCount = Number(await poolContract.getMemberCount());
+        const onChainAddresses = new Set<string>();
         let syncedMembers = 0;
+        let activeMembers = 0;
         
+        // First pass: Get all on-chain members and sync to DB
         for (let i = 0; i < memberCount; i++) {
           const addr = await poolContract.memberList(i);
+          const addrLower = addr.toLowerCase();
+          onChainAddresses.add(addrLower);
+          
           const memberData = await poolContract.members(addr);
+          const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
           
           await saveUserSharesToDb({
-            walletAddress: addr.toLowerCase(),
-            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
+            walletAddress: addrLower,
+            shares: shares,
             costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
           });
           syncedMembers++;
+          if (shares > 0) activeMembers++;
         }
+        
+        // Second pass: DELETE any DB entries not found on-chain (ghost cleanup)
+        const dbEntries = await getAllUserSharesFromDb();
+        let deletedGhosts = 0;
+        for (const entry of dbEntries) {
+          const dbAddr = entry.wallet_address.toLowerCase();
+          if (!onChainAddresses.has(dbAddr) && Number(entry.shares) > 0) {
+            await deleteUserSharesFromDb(entry.wallet_address);
+            logger.warn('[CommunityPool Cron] Deleted ghost DB entry', { address: dbAddr, hadShares: entry.shares });
+            deletedGhosts++;
+          }
+        }
+        
+        logger.info('[CommunityPool Cron] Authoritative sync complete', {
+          onChainMembers: memberCount,
+          activeMembers,
+          syncedMembers,
+          deletedGhosts,
+        });
         
         // Also sync pool state
         const poolAllocRecord: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {};
