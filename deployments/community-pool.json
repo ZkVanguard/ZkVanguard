@@ -5,7 +5,7 @@
   "contracts": {
     "CommunityPool": {
       "proxy": "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30",
-      "implementation": "0x69cB31a63fdD23bd34E307Db985551b5ce28F8D8",
+      "implementation": "0x5912a942f643c8050A6a500704309881cF277d65",
       "previousImplementation": "0x69cB31a63fdD23bd34E307Db985551b5ce28F8D8"
     }
   },
@@ -22,6 +22,6 @@
     "performanceFeeBps": 1000
   },
   "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
-  "lastUpgrade": "2026-02-22T23:34:46.890Z",
-  "upgradeReason": "Lower MIN_FIRST_DEPOSIT from $1000 to $100"
+  "lastUpgrade": "2026-03-12T17:45:00.000Z",
+  "upgradeReason": "Add resetAssetBalance function and fix corrupted NAV"
 }
