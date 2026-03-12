@@ -762,4 +762,128 @@ export async function cacheHedgeEntryPrice(
   }
 }
 
+/**
+ * Multi-source price validation for critical financial operations.
+ * Fetches price from multiple independent sources and validates they agree.
+ * 
+ * Use for Community Pool NAV calculations and large hedge operations.
+ * 
+ * @throws Error if sources disagree by more than maxDeviation
+ */
+export async function getMultiSourceValidatedPrice(
+  symbol: string,
+  options?: {
+    maxDeviationPercent?: number;  // Default: 2% - max difference between sources
+    minSources?: number;           // Default: 2 - min sources that must agree
+    timeout?: number;              // Default: 5000ms
+  }
+): Promise<{
+  price: number;
+  confidence: 'high' | 'medium' | 'low';
+  sources: Array<{ name: string; price: number; timestamp: number }>;
+  deviation: number;
+}> {
+  const maxDeviation = options?.maxDeviationPercent ?? 2;
+  const minSources = options?.minSources ?? 2;
+  const timeout = options?.timeout ?? 5000;
+  
+  const sources: Array<{ name: string; price: number; timestamp: number }> = [];
+  const promises: Promise<void>[] = [];
+  
+  // Source 1: Unified Price Provider (Crypto.com WebSocket/REST)
+  promises.push((async () => {
+    try {
+      const provider = getUnifiedPriceProvider();
+      await provider.initialize();
+      const price = provider.getPrice(symbol);
+      if (price && price.price > 0) {
+        sources.push({ name: 'crypto.com', price: price.price, timestamp: price.timestamp });
+      }
+    } catch { /* ignore */ }
+  })());
+  
+  // Source 2: RealMarketDataService (independent Crypto.com fetch)
+  promises.push((async () => {
+    try {
+      const { getMarketDataService } = await import('./RealMarketDataService');
+      const service = getMarketDataService();
+      const data = await service.getTokenPrice(symbol);
+      if (data && data.price > 0) {
+        sources.push({ name: 'mcp-market', price: data.price, timestamp: data.timestamp });
+      }
+    } catch { /* ignore */ }
+  })());
+  
+  // Source 3: Direct API call (backup)
+  promises.push((async () => {
+    try {
+      const normalized = symbol.toUpperCase().replace(/^W/, '');
+      const response = await fetch(
+        `https://api.crypto.com/exchange/v1/public/get-ticker?instrument_name=${normalized}_USDT`,
+        { signal: AbortSignal.timeout(timeout) }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const ticker = data.result?.data;
+        if (ticker && ticker.a > 0) {
+          sources.push({ name: 'crypto.com-direct', price: parseFloat(ticker.a), timestamp: Date.now() });
+        }
+      }
+    } catch { /* ignore */ }
+  })());
+  
+  // Wait for all sources with timeout
+  await Promise.race([
+    Promise.allSettled(promises),
+    new Promise(resolve => setTimeout(resolve, timeout)),
+  ]);
+  
+  // Validate we have enough sources
+  if (sources.length < minSources) {
+    throw new Error(
+      `INSUFFICIENT_SOURCES: Only ${sources.length}/${minSources} price sources available for ${symbol}. ` +
+      `Cannot proceed with unreliable pricing.`
+    );
+  }
+  
+  // Calculate median price (most robust against outliers)
+  const prices = sources.map(s => s.price).sort((a, b) => a - b);
+  const medianPrice = prices.length % 2 === 0
+    ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
+    : prices[Math.floor(prices.length / 2)];
+  
+  // Calculate max deviation from median
+  const deviations = sources.map(s => Math.abs(s.price - medianPrice) / medianPrice * 100);
+  const maxActualDeviation = Math.max(...deviations);
+  
+  // Validate deviation
+  if (maxActualDeviation > maxDeviation) {
+    const sourceDetails = sources.map(s => `${s.name}=$${s.price.toFixed(2)}`).join(', ');
+    throw new Error(
+      `PRICE_DEVIATION: ${symbol} prices differ by ${maxActualDeviation.toFixed(2)}% ` +
+      `(max allowed: ${maxDeviation}%). Sources: ${sourceDetails}. ` +
+      `Possible oracle manipulation or data issue - operation blocked.`
+    );
+  }
+  
+  // Determine confidence
+  let confidence: 'high' | 'medium' | 'low';
+  if (sources.length >= 3 && maxActualDeviation < 0.5) {
+    confidence = 'high';
+  } else if (sources.length >= 2 && maxActualDeviation < 1.0) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
+  
+  logger.info(`[MultiSource] ${symbol} validated: $${medianPrice.toFixed(2)} (${confidence} confidence, ${sources.length} sources, ${maxActualDeviation.toFixed(2)}% deviation)`);
+  
+  return {
+    price: medianPrice,
+    confidence,
+    sources,
+    deviation: maxActualDeviation,
+  };
+}
+
 export { UnifiedPriceProvider };
