@@ -21,7 +21,7 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
-import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
+import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
@@ -384,6 +384,53 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           logger.warn('[CommunityPool Cron] AI decision fetch failed', { error: aiError });
         }
       }
+    }
+    
+    // Step 3.5: Log AI decision to database (always log, even HOLD decisions)
+    try {
+      const decisionId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await addPoolTransactionToDb({
+        id: decisionId,
+        type: 'AI_DECISION',
+        details: {
+          action: aiDecision.action,
+          reasoning: aiDecision.reasoning,
+          executed: aiDecision.executed,
+          txHash: aiDecision.txHash || null,
+          riskScore: riskAssessment.riskScore,
+          drawdownPercent: riskAssessment.drawdownPercent,
+          volatility: riskAssessment.volatility,
+          allocations: poolStats.allocations,
+          priceValidation,
+        },
+        txHash: aiDecision.txHash,
+      });
+      
+      // Update pool state with last AI decision
+      if (aiDecision.action !== 'HOLD' || riskAssessment.riskScore >= 3) {
+        await savePoolStateToDb({
+          totalValueUSD: parseFloat(poolStats.totalNAV),
+          totalShares: parseFloat(ethers.formatUnits(stats._totalShares, 18)),
+          sharePrice: parseFloat(poolStats.sharePrice),
+          allocations: Object.entries(poolStats.allocations).reduce((acc, [key, pct]) => {
+            acc[key] = { percentage: pct, valueUSD: parseFloat(poolStats.totalNAV) * (pct / 100), amount: 0, price: 0 };
+            return acc;
+          }, {} as Record<string, { percentage: number; valueUSD: number; amount: number; price: number }>),
+          lastRebalance: Date.now(),
+          lastAIDecision: {
+            timestamp: Date.now(),
+            reasoning: aiDecision.reasoning,
+            allocations: poolStats.allocations,
+          },
+        });
+      }
+      
+      logger.info('[CommunityPool Cron] AI decision logged to database', { 
+        id: decisionId, 
+        action: aiDecision.action 
+      });
+    } catch (logError) {
+      logger.warn('[CommunityPool Cron] Failed to log AI decision to DB (non-critical)', { error: logError });
     }
     
     // Step 4: Count hedges executed by AutoHedgingService
