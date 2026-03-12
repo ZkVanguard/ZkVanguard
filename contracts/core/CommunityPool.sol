@@ -1403,6 +1403,23 @@ contract CommunityPool is
     // ═══════════════════════════════════════════════════════════════
 
     /**
+     * @notice Reset asset balances to zero (emergency fix for testnet)
+     * @dev Only callable by admin. Use when assetBalances are corrupted.
+     * @param assetIndex Index of asset to reset (0=BTC, 1=ETH, 2=SUI, 3=CRO), or 255 to reset all
+     */
+    function resetAssetBalance(uint8 assetIndex) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (assetIndex == 255) {
+            // Reset all asset balances
+            for (uint8 i = 0; i < NUM_ASSETS; i++) {
+                assetBalances[i] = 0;
+            }
+        } else {
+            require(assetIndex < NUM_ASSETS, "Invalid asset index");
+            assetBalances[assetIndex] = 0;
+        }
+    }
+
+    /**
      * @notice Rescue accidentally sent ETH/CRO to treasury
      * @dev Only callable by admin. Use for recovering stuck native tokens.
      */
