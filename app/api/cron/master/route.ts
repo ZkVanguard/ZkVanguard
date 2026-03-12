@@ -46,7 +46,7 @@ async function runSubCron(name: string, path: string, cronSecret: string): Promi
   
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.vercel.app' 
+      ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const url = `${baseUrl}${path}`;

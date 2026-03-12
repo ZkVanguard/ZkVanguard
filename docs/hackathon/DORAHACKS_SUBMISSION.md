@@ -261,7 +261,7 @@ https://youtu.be/[your-video-id]
 
 ### 8. Live Demo URL (Optional)
 ```
-https://ZkVanguard.vercel.app
+https://zkvanguard.xyz
 ```
 *If deployed to Vercel/Netlify/etc.*
 

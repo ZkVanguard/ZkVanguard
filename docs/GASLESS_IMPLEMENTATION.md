@@ -95,7 +95,7 @@ TX: 0x3263c2999cbaee96b8919e6efb4289be8f5b6f56bfa6f2d7f9d4e62305051f92
 
 ### Option 2: Via API
 ```bash
-curl -X POST https://zkvanguard.vercel.app/api/agents/hedging/open-onchain-gasless \\
+curl -X POST https://zkvanguard.xyz/api/agents/hedging/open-onchain-gasless \\
   -H "Content-Type: application/json" \\
   -d '{
     "pairIndex": 0,

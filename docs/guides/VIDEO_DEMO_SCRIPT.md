@@ -4,7 +4,7 @@
 **Video Duration:** 10 minutes  
 **Format:** Screen recording + voiceover  
 **Platform:** Live demo on Cronos testnet  
-**URL:** https://zkvanguard.vercel.app
+**URL:** https://zkvanguard.xyz
 
 ---
 
@@ -28,7 +28,7 @@
 
 ### SECTION 1: PRODUCT INTRODUCTION (0:00 - 1:00)
 
-**Visual:** Landing page at zkvanguard.vercel.app
+**Visual:** Landing page at zkvanguard.xyz
 
 **Narration:**
 
@@ -404,7 +404,7 @@
 >
 > The $1.2 trillion in institutional capital waiting on the sidelines? We're building the infrastructure to bring it on-chain.
 >
-> Thank you for watching. Questions? Reach me at [your email] or visit zkvanguard.vercel.app to try the demo."
+> Thank you for watching. Questions? Reach me at [your email] or visit zkvanguard.xyz to try the demo."
 
 **Screen Actions:**
 - 9:00-9:15: Show pricing tiers table with all features
@@ -484,7 +484,7 @@
 ### What to Include in Submission
 1. **Video Link:** [YouTube/Vimeo URL]
 2. **One-Pager PDF:** Attach PRD executive summary (1 page)
-3. **Demo Access:** https://zkvanguard.vercel.app (live testnet demo)
+3. **Demo Access:** https://zkvanguard.xyz (live testnet demo)
 4. **GitHub Repo:** [Link if public, or code snippets]
 5. **Contact:** Email, LinkedIn, Twitter for follow-up
 

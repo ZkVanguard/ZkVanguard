@@ -4,7 +4,7 @@
 Write-Host "`n=== Advanced Chat API Stress Test ===" -ForegroundColor Cyan
 Write-Host ""
 
-$baseUrl = "https://zkvanguard.vercel.app"
+$baseUrl = "https://zkvanguard.xyz"
 $conversationId = "stress-test-$(Get-Date -Format 'yyyyMMddHHmmss')"
 $testsPassed = 0
 $totalTests = 0

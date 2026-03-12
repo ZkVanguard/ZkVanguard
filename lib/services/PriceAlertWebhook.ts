@@ -197,7 +197,7 @@ async function processWebhookQueue(): Promise<void> {
  */
 async function triggerWebhook(alert: PriceAlert): Promise<void> {
   const baseUrl = process.env.VERCEL 
-    ? 'https://zkvanguard.vercel.app' 
+    ? 'https://zkvanguard.xyz' 
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
@@ -293,7 +293,7 @@ export function getPriceAlertStatus(): {
  */
 export async function manualTriggerHedgeCheck(asset?: string): Promise<void> {
   const baseUrl = process.env.VERCEL 
-    ? 'https://zkvanguard.vercel.app' 
+    ? 'https://zkvanguard.xyz' 
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   await fetch(`${baseUrl}/api/cron/hedge-monitor`, {
@@ -326,7 +326,7 @@ async function checkHeartbeat(): Promise<void> {
   logger.info('[PriceAlert] Heartbeat triggered - running periodic monitoring');
   
   const baseUrl = process.env.VERCEL 
-    ? 'https://zkvanguard.vercel.app' 
+    ? 'https://zkvanguard.xyz' 
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
@@ -382,7 +382,7 @@ async function checkHeartbeat(): Promise<void> {
  */
 export async function triggerPoolNavUpdate(): Promise<void> {
   const baseUrl = process.env.VERCEL 
-    ? 'https://zkvanguard.vercel.app' 
+    ? 'https://zkvanguard.xyz' 
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {
@@ -418,7 +418,7 @@ async function checkCommunityPools(): Promise<void> {
   logger.info('[PriceAlert] Community pool check - running auto-rebalance/hedging');
   
   const baseUrl = process.env.VERCEL 
-    ? 'https://zkvanguard.vercel.app' 
+    ? 'https://zkvanguard.xyz' 
     : process.env.NEXTAUTH_URL || 'http://localhost:3000';
   
   try {

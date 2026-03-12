@@ -407,5 +407,5 @@ Open browser console:
 ---
 
 **Status:** ✅ ALL FEATURES WORKING
-**Demo:** https://zkvanguard.vercel.app
+**Demo:** https://zkvanguard.xyz
 **Date:** December 14, 2025

@@ -15,7 +15,7 @@ const CONFIG = {
   communityPool: "0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B",
   apiUrl: process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}/api/community-pool` 
-    : "https://zkvanguard.vercel.app/api/community-pool",
+    : "https://zkvanguard.xyz/api/community-pool",
   cronSecret: process.env.CRON_SECRET || ""
 };
 

@@ -86,7 +86,7 @@ CREATE TABLE auto_hedge_configs (
 ### Enable Auto-Hedging for a Portfolio
 
 ```bash
-curl -X POST https://zkvanguard.vercel.app/api/agents/auto-hedge \
+curl -X POST https://zkvanguard.xyz/api/agents/auto-hedge \
   -H "Content-Type: application/json" \
   -d '{
     "action": "enable",
@@ -126,13 +126,13 @@ curl -X POST https://zkvanguard.vercel.app/api/agents/auto-hedge \
 ### Check Status
 
 ```bash
-curl https://zkvanguard.vercel.app/api/agents/auto-hedge
+curl https://zkvanguard.xyz/api/agents/auto-hedge
 ```
 
 ### Disable Auto-Hedging
 
 ```bash
-curl -X POST https://zkvanguard.vercel.app/api/agents/auto-hedge \
+curl -X POST https://zkvanguard.xyz/api/agents/auto-hedge \
   -H "Content-Type: application/json" \
   -d '{
     "action": "disable",
@@ -143,7 +143,7 @@ curl -X POST https://zkvanguard.vercel.app/api/agents/auto-hedge \
 ### Delete Configuration (Hard Delete)
 
 ```bash
-curl -X DELETE "https://zkvanguard.vercel.app/api/agents/auto-hedge?portfolioId=3"
+curl -X DELETE "https://zkvanguard.xyz/api/agents/auto-hedge?portfolioId=3"
 ```
 
 ---
@@ -287,7 +287,7 @@ const calculatedThreshold = Math.max(2, Math.min(10,
 ### Check Current Configurations
 
 ```bash
-curl https://zkvanguard.vercel.app/api/agents/auto-hedge
+curl https://zkvanguard.xyz/api/agents/auto-hedge
 ```
 
 ### View Database Configurations
@@ -308,7 +308,7 @@ portfolio_id | wallet_address | risk_threshold | hedge_strategy
 ### Trigger Manual Risk Assessment
 
 ```bash
-curl -X POST https://zkvanguard.vercel.app/api/agents/auto-hedge \
+curl -X POST https://zkvanguard.xyz/api/agents/auto-hedge \
   -H "Content-Type: application/json" \
   -d '{
     "action": "trigger_assessment",
