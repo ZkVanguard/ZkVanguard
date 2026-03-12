@@ -6,6 +6,7 @@
  * 2. Updates hedge PnL with live prices
  * 3. Auto-creates hedges when risk thresholds are exceeded
  * 4. Coordinates with multi-agent system for intelligent decisions
+ * 5. Integrates Polymarket prediction market signals for enhanced risk detection
  */
 
 import { logger } from '@/lib/utils/logger';
@@ -21,6 +22,7 @@ import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } fr
 import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from './CommunityPoolService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
+import type { FiveMinBTCSignal } from './Polymarket5MinService';
 
 // Configuration
 const CONFIG = {
@@ -696,6 +698,40 @@ class AutoHedgingService {
       // Any negative 24h change across positions adds risk
       const anyNegative = positions.some(p => p.change24h < -1);
       if (anyNegative) riskScore += 1;
+
+      // 🔮 PREDICTION MARKET INTEGRATION: Enhance risk with Polymarket 5-min signals
+      let polymarketSignal: FiveMinBTCSignal | null = null;
+      try {
+        const { Polymarket5MinService } = await import('./Polymarket5MinService');
+        polymarketSignal = await Polymarket5MinService.getLatest5MinSignal();
+        
+        if (polymarketSignal && polymarketSignal.signalStrength !== 'WEAK') {
+          // Strong DOWN signal from prediction market adds risk
+          if (polymarketSignal.direction === 'DOWN' && polymarketSignal.probability >= 60) {
+            riskScore += polymarketSignal.signalStrength === 'STRONG' ? 2 : 1;
+            logger.info('[AutoHedging] Polymarket signal elevated risk', {
+              direction: polymarketSignal.direction,
+              probability: polymarketSignal.probability,
+              signalStrength: polymarketSignal.signalStrength,
+              recommendation: polymarketSignal.recommendation,
+              addedRisk: polymarketSignal.signalStrength === 'STRONG' ? 2 : 1,
+            });
+          }
+          // Strong UP signal can slightly reduce risk (market optimism)
+          else if (polymarketSignal.direction === 'UP' && polymarketSignal.probability >= 70) {
+            riskScore = Math.max(1, riskScore - 1);
+            logger.info('[AutoHedging] Polymarket signal reduced risk (strong UP)', {
+              direction: polymarketSignal.direction,
+              probability: polymarketSignal.probability,
+            });
+          }
+        }
+      } catch (polyErr) {
+        logger.debug('[AutoHedging] Polymarket signal unavailable (non-critical)', { 
+          error: polyErr instanceof Error ? polyErr.message : String(polyErr) 
+        });
+      }
+
       riskScore = Math.min(riskScore, 10);
 
       // Fetch active hedges for community pool (gracefully handle DB unavailability)
@@ -742,6 +778,11 @@ class AutoHedgingService {
         drawdownPercent: drawdownPercent.toFixed(2),
         volatility: volatility.toFixed(2),
         riskScore,
+        polymarketSignal: polymarketSignal ? {
+          direction: polymarketSignal.direction,
+          probability: polymarketSignal.probability,
+          strength: polymarketSignal.signalStrength,
+        } : null,
         recommendations: recommendations.length,
       });
 

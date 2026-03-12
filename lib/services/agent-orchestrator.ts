@@ -195,12 +195,13 @@ export class AgentOrchestrator {
         this.settlementAgent.initialize().then(() => logger.info('✅ SettlementAgent initialized')),
         this.reportingAgent.initialize().then(() => logger.info('✅ ReportingAgent initialized')),
         this.leadAgent.initialize().then(() => logger.info('✅ LeadAgent initialized')),
+        this.priceMonitorAgent.start().then(() => logger.info('✅ PriceMonitorAgent started')),
       ]);
 
       // Log any initialization failures
       initResults.forEach((result, index) => {
         if (result.status === 'rejected') {
-          const agentNames = ['RiskAgent', 'HedgingAgent', 'SettlementAgent', 'ReportingAgent', 'LeadAgent'];
+          const agentNames = ['RiskAgent', 'HedgingAgent', 'SettlementAgent', 'ReportingAgent', 'LeadAgent', 'PriceMonitorAgent'];
           logger.warn(`${agentNames[index]} initialization failed:`, { error: result.reason });
         }
       });
