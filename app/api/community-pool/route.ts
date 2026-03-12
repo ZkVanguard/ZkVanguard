@@ -33,12 +33,12 @@ import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSh
 import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { COMMUNITY_POOL_ADDRESS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// On-chain contract addresses
-const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
+// On-chain contract addresses (using constants for V3 proxy)
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
 
 // Minimal ABI for reading pool stats
