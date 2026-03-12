@@ -177,6 +177,11 @@ contract CommunityPool is
     uint256 public constant PRECISION_FACTOR = 1e12; // 18 - 6 = 12
     uint256 public constant WAD = 1e18; // Standard 18 decimal precision
 
+    // Reserve and safety limits
+    uint256 public constant MIN_RESERVE_RATIO_BPS = 2000; // 20% of NAV must stay liquid
+    uint256 public constant MAX_SINGLE_HEDGE_BPS = 500;   // Max 5% of NAV per hedge
+    uint256 public constant DAILY_HEDGE_CAP_BPS = 1500;   // Max 15% daily hedge deployment
+
     // Asset indices
     uint8 public constant ASSET_BTC = 0;
     uint8 public constant ASSET_ETH = 1;
@@ -450,6 +455,9 @@ contract CommunityPool is
     error HedgeExecutorNotSet();
     error AutoHedgeCooldownActive(uint256 nextAllowedTime);
     error HedgeNotOwnedByPool(bytes32 hedgeId);
+    error ReserveRatioBreached(uint256 availableAfter, uint256 minReserve);
+    error SingleHedgeTooLarge(uint256 hedgeAmount, uint256 maxAllowed);
+    error DailyHedgeCapExceeded(uint256 dailyTotal, uint256 maxDaily);
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -548,9 +556,9 @@ contract CommunityPool is
         // This prevents new depositors from getting unfair share dilution
         if (totalShares > 0) {
             uint256 currentSharePrice = _calculateNavPerShare();
-            uint256 minSharePrice = 9e17; // $0.90 in WAD
-            if (currentSharePrice < minSharePrice) {
-                revert SharePriceTooLow(currentSharePrice, minSharePrice);
+            uint256 minSharePriceWad = 9e17; // $0.90 in WAD
+            if (currentSharePrice < minSharePriceWad) {
+                revert SharePriceTooLow(currentSharePrice, minSharePriceWad);
             }
         }
 
@@ -1500,8 +1508,13 @@ contract CommunityPool is
         uint256 poolBalance = depositToken.balanceOf(address(this));
         require(poolBalance >= collateralAmount, "Insufficient pool balance");
         
-        // Check max hedge ratio
+        // CRITICAL: Enforce minimum reserve ratio (20% of NAV must stay liquid)
+        // This ensures members can always withdraw even when hedges are active
         uint256 nav = calculateTotalNAV();
+        uint256 minReserve = (nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
+        require(poolBalance - collateralAmount >= minReserve, "Would breach minimum reserve ratio");
+        
+        // Check max hedge ratio
         uint256 maxHedgeAmount = (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR;
         require(totalHedgedValue + collateralAmount <= maxHedgeAmount, "Exceeds max hedge ratio");
         

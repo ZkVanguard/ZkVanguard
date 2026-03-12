@@ -9,6 +9,11 @@
  * Schedule: Every 30 minutes via QStash
  * 
  * Security: Verified by QStash signature or CRON_SECRET
+ * 
+ * SECURITY HARDENED:
+ * - Uses SecureAgentSigner with rate limiting and circuit breaker
+ * - Multi-source price validation to prevent manipulation
+ * - Respects on-chain reserve ratio requirements (MIN_RESERVE_RATIO_BPS)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,15 +25,21 @@ import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoo
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
+import { SecureAgentSigner, getSecureAgentSigner } from '@/lib/services/SecureAgentSigner';
+import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
 
 // CommunityPool contract details
-const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
+const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const COMMUNITY_POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
   'function setTargetAllocation(uint256[4] newAllocationBps, string reasoning)',
   'function getMemberCount() view returns (uint256)',
   'function memberList(uint256) view returns (address)',
   'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
+  'function openPoolHedge(address hedgeContract, uint256 collateralAmount, bytes32 positionId, uint256 expectedPayout)',
+  'function MIN_RESERVE_RATIO_BPS() view returns (uint256)',
+  'function MAX_SINGLE_HEDGE_BPS() view returns (uint256)',
+  'function DAILY_HEDGE_CAP_BPS() view returns (uint256)',
 ];
 
 interface CronResult {
@@ -49,10 +60,40 @@ interface CronResult {
     action: string;
     reasoning: string;
     executed: boolean;
+    txHash?: string;
+    executionError?: string;
   };
   hedgesExecuted?: number;
+  priceValidation?: {
+    BTC?: { price: number; confidence: string };
+    ETH?: { price: number; confidence: string };
+  };
+  signerStatus?: {
+    isAvailable: boolean;
+    dailyUsedUSD: number;
+    remainingDailyUSD: number;
+    circuitBreakerOpen: boolean;
+  };
   duration: number;
   error?: string;
+}
+
+// Helper to get secure signer with availability check
+function getSecureSignerIfAvailable(): SecureAgentSigner | null {
+  try {
+    const signer = getSecureAgentSigner();
+    const availability = signer.isAvailable();
+    if (availability.available) {
+      logger.info('[CommunityPool Cron] SecureAgentSigner is available');
+      return signer;
+    } else {
+      logger.warn('[CommunityPool Cron] SecureAgentSigner unavailable', { reason: availability.reason });
+      return null;
+    }
+  } catch (error) {
+    logger.error('[CommunityPool Cron] Failed to get SecureAgentSigner', { error });
+    return null;
+  }
 }
 
 /**
@@ -177,15 +218,71 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     });
     
     // Step 3: Get AI allocation decision
-    let aiDecision = {
+    let aiDecision: CronResult['aiDecision'] = {
       action: 'HOLD',
       reasoning: 'Risk within acceptable parameters, no rebalancing needed',
       executed: false,
     };
     
+    // Track price validation results
+    let priceValidation: CronResult['priceValidation'] = {};
+    let signerStatus: CronResult['signerStatus'] = {
+      isAvailable: false,
+      dailyUsedUSD: 0,
+      remainingDailyUSD: 0,
+      circuitBreakerOpen: false,
+    };
+    
+    // Initialize secure signer and report status
+    const secureSigner = getSecureSignerIfAvailable();
+    if (secureSigner) {
+      const status = await secureSigner.getStatus();
+      signerStatus = {
+        isAvailable: status.available,
+        dailyUsedUSD: status.dailyVolumeUSD,
+        remainingDailyUSD: status.config.maxDailyTxUSD - status.dailyVolumeUSD,
+        circuitBreakerOpen: status.circuitOpen,
+      };
+    }
+    
     // Only trigger AI decision if risk is elevated
     if (riskAssessment.riskScore >= 4) {
+      // First, validate prices from multiple sources to prevent manipulation
       try {
+        const btcValidation = await getMultiSourceValidatedPrice('BTC');
+        const ethValidation = await getMultiSourceValidatedPrice('ETH');
+        
+        priceValidation = {
+          BTC: { price: btcValidation.price, confidence: btcValidation.confidence },
+          ETH: { price: ethValidation.price, confidence: ethValidation.confidence },
+        };
+        
+        logger.info('[CommunityPool Cron] Price validation passed', {
+          BTC: `$${btcValidation.price.toFixed(2)} (${btcValidation.confidence})`,
+          ETH: `$${ethValidation.price.toFixed(2)} (${ethValidation.confidence})`,
+        });
+        
+        // Reject low confidence prices
+        if (btcValidation.confidence === 'low' || ethValidation.confidence === 'low') {
+          logger.warn('[CommunityPool Cron] Skipping execution due to low price confidence');
+          aiDecision = {
+            action: 'HOLD',
+            reasoning: 'Price manipulation risk detected - oracle confidence too low',
+            executed: false,
+          };
+        }
+      } catch (priceError) {
+        logger.error('[CommunityPool Cron] Price validation failed - possible manipulation', { error: priceError });
+        aiDecision = {
+          action: 'HOLD',
+          reasoning: `Price validation failed: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`,
+          executed: false,
+        };
+      }
+      
+      // Only proceed if price validation passed
+      if (aiDecision.action !== 'HOLD') {
+        try {
         const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/community-pool/ai-decision`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -216,20 +313,76 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             const navThreshold = parseFloat(process.env.COMMUNITY_POOL_NAV_THRESHOLD || '100000');
             const currentNAV = parseFloat(poolStats.totalNAV);
             
-            if (autoApprovalEnabled && currentNAV <= navThreshold) {
+            if (autoApprovalEnabled && currentNAV <= navThreshold && secureSigner) {
               logger.info('[CommunityPool Cron] Auto-executing rebalance', {
                 newAllocations: aiData.recommendation.allocations,
               });
               
-              // Note: On-chain execution requires signer - would need agent wallet
-              // For now, log the recommendation
-              aiDecision.executed = false;
-              aiDecision.reasoning += ' (Manual execution required - no agent signer configured)';
+              try {
+                // Get validated transaction amount
+                const amountUSD = aiData.recommendation.hedgeAmountUSD || 0;
+                
+                if (amountUSD > 0) {
+                  // Create contract instance for SecureAgentSigner
+                  // The signer gets the wallet internally
+                  const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+                  const poolContract = new ethers.Contract(
+                    COMMUNITY_POOL_ADDRESS,
+                    COMMUNITY_POOL_ABI,
+                    provider
+                  );
+                  
+                  // Convert allocations to BPS format for contract
+                  const allocationsBps: [bigint, bigint, bigint, bigint] = [
+                    BigInt(Math.round((aiData.recommendation.allocations?.BTC || poolStats.allocations.BTC) * 100)),
+                    BigInt(Math.round((aiData.recommendation.allocations?.ETH || poolStats.allocations.ETH) * 100)),
+                    BigInt(Math.round((aiData.recommendation.allocations?.SUI || poolStats.allocations.SUI) * 100)),
+                    BigInt(Math.round((aiData.recommendation.allocations?.CRO || poolStats.allocations.CRO) * 100)),
+                  ];
+                  
+                  // Sign and execute via SecureAgentSigner with rate limiting
+                  // signAndSend(contract, method, params, valueUSD, options?)
+                  const result = await secureSigner.signAndSend(
+                    poolContract,
+                    'setTargetAllocation',
+                    [allocationsBps, `AI reallocation: ${aiData.recommendation.reasoning}`],
+                    amountUSD,
+                    { description: `Pool rebalance - Risk score ${riskAssessment.riskScore}` }
+                  );
+                  
+                  if (result.success) {
+                    aiDecision.executed = true;
+                    aiDecision.txHash = result.txHash;
+                    
+                    logger.info('[CommunityPool Cron] Rebalance executed successfully', {
+                      txHash: result.txHash,
+                    });
+                  } else {
+                    throw new Error(result.error || 'Unknown error from signer');
+                  }
+                } else {
+                  aiDecision.reasoning += ' (No hedge amount specified by AI)';
+                }
+              } catch (execError) {
+                const errorMsg = execError instanceof Error ? execError.message : 'Unknown execution error';
+                aiDecision.executed = false;
+                aiDecision.executionError = errorMsg;
+                aiDecision.reasoning += ` (Execution failed: ${errorMsg})`;
+                
+                logger.error('[CommunityPool Cron] Rebalance execution failed', { error: errorMsg });
+              }
+            } else if (!secureSigner) {
+              aiDecision.reasoning += ' (SecureAgentSigner unavailable - check AGENT_SIGNER_KEY)';
+            } else if (!autoApprovalEnabled) {
+              aiDecision.reasoning += ' (Auto-execution disabled - COMMUNITY_POOL_AUTO_REBALANCE=false)';
+            } else if (currentNAV > navThreshold) {
+              aiDecision.reasoning += ` (NAV $${currentNAV.toFixed(2)} exceeds threshold $${navThreshold} - manual approval required)`;
             }
           }
         }
-      } catch (aiError) {
-        logger.warn('[CommunityPool Cron] AI decision fetch failed', { error: aiError });
+        } catch (aiError) {
+          logger.warn('[CommunityPool Cron] AI decision fetch failed', { error: aiError });
+        }
       }
     }
     
@@ -247,6 +400,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       },
       aiDecision,
       hedgesExecuted,
+      priceValidation,
+      signerStatus,
       duration: Date.now() - startTime,
     };
     
