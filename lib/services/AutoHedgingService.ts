@@ -23,6 +23,7 @@ import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPor
 import { calculatePoolNAV } from './CommunityPoolService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
+import { PredictionAggregatorService, type AggregatedPrediction } from './PredictionAggregatorService';
 
 // Configuration
 const CONFIG = {
@@ -57,6 +58,20 @@ export interface RiskAssessment {
   volatility: number;
   riskScore: number; // 1-10
   recommendations: HedgeRecommendation[];
+  aggregatedPrediction?: {
+    direction: string;
+    confidence: number;
+    consensus: number;
+    recommendation: string;
+    sizeMultiplier: number;
+    sources: Array<{
+      name: string;
+      available: boolean;
+      weight: number;
+      direction?: string;
+      confidence?: number;
+    }>;
+  } | null;
   timestamp: number;
 }
 
@@ -699,36 +714,55 @@ class AutoHedgingService {
       const anyNegative = positions.some(p => p.change24h < -1);
       if (anyNegative) riskScore += 1;
 
-      // 🔮 PREDICTION MARKET INTEGRATION: Enhance risk with Polymarket 5-min signals
-      let polymarketSignal: FiveMinBTCSignal | null = null;
+      // 🔮 MULTI-SOURCE PREDICTION AGGREGATION: Combine multiple markets for optimal hedging
+      // Uses: Polymarket 5-min, Delphi Digital, Crypto.com, Funding Rate proxy
+      let aggregatedPrediction: AggregatedPrediction | null = null;
       try {
-        const { Polymarket5MinService } = await import('./Polymarket5MinService');
-        polymarketSignal = await Polymarket5MinService.getLatest5MinSignal();
+        aggregatedPrediction = await PredictionAggregatorService.getAggregatedPrediction();
         
-        if (polymarketSignal && polymarketSignal.signalStrength !== 'WEAK') {
-          // Strong DOWN signal from prediction market adds risk
-          if (polymarketSignal.direction === 'DOWN' && polymarketSignal.probability >= 60) {
-            riskScore += polymarketSignal.signalStrength === 'STRONG' ? 2 : 1;
-            logger.info('[AutoHedging] Polymarket signal elevated risk', {
-              direction: polymarketSignal.direction,
-              probability: polymarketSignal.probability,
-              signalStrength: polymarketSignal.signalStrength,
-              recommendation: polymarketSignal.recommendation,
-              addedRisk: polymarketSignal.signalStrength === 'STRONG' ? 2 : 1,
-            });
+        if (aggregatedPrediction && aggregatedPrediction.consensus > 50) {
+          // High consensus + bearish direction = elevated risk
+          if (aggregatedPrediction.direction === 'DOWN') {
+            // Scale risk increase by confidence and consensus
+            const riskIncrease = aggregatedPrediction.confidence >= 70 ? 2 : 
+                                 aggregatedPrediction.confidence >= 55 ? 1 : 0;
+            if (riskIncrease > 0) {
+              riskScore += riskIncrease;
+              logger.info('[AutoHedging] Aggregated prediction elevated risk (bearish consensus)', {
+                direction: aggregatedPrediction.direction,
+                confidence: aggregatedPrediction.confidence,
+                consensus: aggregatedPrediction.consensus,
+                recommendation: aggregatedPrediction.recommendation,
+                sizeMultiplier: aggregatedPrediction.sizeMultiplier,
+                sourcesUsed: aggregatedPrediction.sources.length,
+                addedRisk: riskIncrease,
+              });
+            }
           }
-          // Strong UP signal can slightly reduce risk (market optimism)
-          else if (polymarketSignal.direction === 'UP' && polymarketSignal.probability >= 70) {
+          // Strong bullish consensus with high confidence can reduce risk
+          else if (aggregatedPrediction.direction === 'UP' && 
+                   aggregatedPrediction.confidence >= 65 && 
+                   aggregatedPrediction.consensus >= 70) {
             riskScore = Math.max(1, riskScore - 1);
-            logger.info('[AutoHedging] Polymarket signal reduced risk (strong UP)', {
-              direction: polymarketSignal.direction,
-              probability: polymarketSignal.probability,
+            logger.info('[AutoHedging] Aggregated prediction reduced risk (strong bullish consensus)', {
+              direction: aggregatedPrediction.direction,
+              confidence: aggregatedPrediction.confidence,
+              consensus: aggregatedPrediction.consensus,
             });
           }
         }
-      } catch (polyErr) {
-        logger.debug('[AutoHedging] Polymarket signal unavailable (non-critical)', { 
-          error: polyErr instanceof Error ? polyErr.message : String(polyErr) 
+        
+        logger.info('[AutoHedging] Multi-source prediction aggregation complete', {
+          direction: aggregatedPrediction?.direction,
+          confidence: aggregatedPrediction?.confidence,
+          consensus: aggregatedPrediction?.consensus,
+          recommendation: aggregatedPrediction?.recommendation,
+          sizeMultiplier: aggregatedPrediction?.sizeMultiplier,
+          sourceCount: aggregatedPrediction?.sources.length,
+        });
+      } catch (predictionErr) {
+        logger.debug('[AutoHedging] Prediction aggregation unavailable (non-critical)', { 
+          error: predictionErr instanceof Error ? predictionErr.message : String(predictionErr) 
         });
       }
 
@@ -778,10 +812,13 @@ class AutoHedgingService {
         drawdownPercent: drawdownPercent.toFixed(2),
         volatility: volatility.toFixed(2),
         riskScore,
-        polymarketSignal: polymarketSignal ? {
-          direction: polymarketSignal.direction,
-          probability: polymarketSignal.probability,
-          strength: polymarketSignal.signalStrength,
+        aggregatedPrediction: aggregatedPrediction ? {
+          direction: aggregatedPrediction.direction,
+          confidence: aggregatedPrediction.confidence,
+          consensus: aggregatedPrediction.consensus,
+          recommendation: aggregatedPrediction.recommendation,
+          sizeMultiplier: aggregatedPrediction.sizeMultiplier,
+          sourceCount: aggregatedPrediction.sources.length,
         } : null,
         recommendations: recommendations.length,
       });
@@ -843,6 +880,20 @@ class AutoHedgingService {
         volatility,
         riskScore,
         recommendations,
+        aggregatedPrediction: aggregatedPrediction ? {
+          direction: aggregatedPrediction.direction,
+          confidence: aggregatedPrediction.confidence,
+          consensus: aggregatedPrediction.consensus,
+          recommendation: aggregatedPrediction.recommendation,
+          sizeMultiplier: aggregatedPrediction.sizeMultiplier,
+          sources: aggregatedPrediction.sources.map(s => ({
+            name: s.name,
+            available: true, // All sources in the array have been fetched
+            weight: s.weight,
+            direction: s.direction,
+            confidence: s.confidence,
+          })),
+        } : null,
         timestamp: Date.now(),
       };
     } catch (error) {
