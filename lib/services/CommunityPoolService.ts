@@ -55,7 +55,7 @@ const POOL_CONFIG = {
   },
   testnet: {
     rpcUrl: process.env.CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org',
-    poolAddress: '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B',
+    poolAddress: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
     chainId: 338,
   },
 } as const;

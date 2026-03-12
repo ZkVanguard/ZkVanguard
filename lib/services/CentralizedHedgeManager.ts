@@ -127,7 +127,7 @@ const CENTRAL_CONFIG = {
   // Cronos Testnet
   RPC_URL: 'https://evm-t3.cronos.org',
   CHAIN_ID: 338,
-  COMMUNITY_POOL_ADDRESS: '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B',
+  COMMUNITY_POOL_ADDRESS: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
