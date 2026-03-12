@@ -282,6 +282,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     // Only trigger AI decision if risk is elevated
     if (riskAssessment.riskScore >= 4) {
       // First, validate prices from multiple sources to prevent manipulation
+      let priceValidationPassed = false;
       try {
         const btcValidation = await getMultiSourceValidatedPrice('BTC');
         const ethValidation = await getMultiSourceValidatedPrice('ETH');
@@ -304,6 +305,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             reasoning: 'Price manipulation risk detected - oracle confidence too low',
             executed: false,
           };
+        } else {
+          // Price validation passed with acceptable confidence
+          priceValidationPassed = true;
         }
       } catch (priceError) {
         logger.error('[CommunityPool Cron] Price validation failed - possible manipulation', { error: priceError });
@@ -314,8 +318,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         };
       }
       
-      // Only proceed if price validation passed
-      if (aiDecision.action !== 'HOLD') {
+      // Only proceed if price validation passed with good confidence
+      if (priceValidationPassed) {
         try {
         const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/community-pool/ai-decision`, {
           method: 'POST',
