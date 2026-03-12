@@ -78,10 +78,10 @@ export async function GET(): Promise<NextResponse> {
         WHERE type = 'AI_DECISION'
         ORDER BY created_at DESC 
         LIMIT 10
-      `);
+      `) as Array<{ id: string; details: Record<string, unknown>; created_at: Date }>;
       
-      recentDecisions = decisions.map((d: { id: string; details: Record<string, unknown>; created_at: Date }) => ({
-        id: d.id,
+      recentDecisions = decisions.map((d) => ({
+        id: String(d.id || ''),
         action: String(d.details?.action || 'UNKNOWN'),
         reasoning: String(d.details?.reasoning || ''),
         riskScore: Number(d.details?.riskScore || 0),
