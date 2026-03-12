@@ -26,5 +26,6 @@ export function isCommunityPoolPortfolio(portfolioId: number | null | undefined)
 
 /**
  * Community Pool contract address on Cronos Testnet.
+ * Updated to CommunityPool V3 proxy with auto-hedge support.
  */
-export const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
+export const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
