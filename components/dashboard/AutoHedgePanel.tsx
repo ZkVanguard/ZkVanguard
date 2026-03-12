@@ -135,7 +135,7 @@ export function AutoHedgePanel() {
       <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
         <div className="flex items-center gap-3 mb-4">
           <Shield className="w-6 h-6 text-cyan-400 animate-pulse" />
-          <h3 className="text-lg font-semibold text-white">AI Auto-Hedge</h3>
+          <h3 className="text-lg font-semibold text-white">Community Pool Auto-Hedge</h3>
         </div>
         <div className="animate-pulse space-y-3">
           <div className="h-4 bg-slate-700 rounded w-3/4"></div>
@@ -171,7 +171,7 @@ export function AutoHedgePanel() {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              AI Auto-Hedge
+              Community Pool Auto-Hedge
               {data.enabled && (
                 <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full">
                   Active
@@ -179,7 +179,7 @@ export function AutoHedgePanel() {
               )}
             </h3>
             <p className="text-sm text-slate-400">
-              {data.stats.hedgeCount} active hedges • {data.stats.decisionsToday} decisions today
+              AI-managed hedges protecting pool assets • {data.stats.hedgeCount} positions • {data.stats.decisionsToday} decisions today
             </p>
           </div>
         </div>
@@ -250,7 +250,7 @@ export function AutoHedgePanel() {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
                       <Activity className="w-4 h-4" />
-                      Real-time Risk Assessment
+                      Pool Risk Assessment
                     </h4>
                     <span className="text-xs text-slate-500">
                       Updated {new Date(data.riskAssessment.lastUpdated).toLocaleTimeString()}
@@ -290,7 +290,7 @@ export function AutoHedgePanel() {
                 <div className="bg-slate-900/50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2 mb-3">
                     <Shield className="w-4 h-4" />
-                    Active Hedges ({data.activeHedges.length})
+                    Pool Hedge Positions ({data.activeHedges.length})
                   </h4>
                   <div className="space-y-2">
                     {data.activeHedges.map((hedge) => (
@@ -347,9 +347,9 @@ export function AutoHedgePanel() {
               {data.activeHedges.length === 0 && (
                 <div className="bg-slate-900/50 rounded-lg p-6 text-center">
                   <Shield className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                  <p className="text-slate-400 text-sm">No active hedges</p>
+                  <p className="text-slate-400 text-sm">No active pool hedges</p>
                   <p className="text-slate-500 text-xs">
-                    AI will open hedges when risk thresholds are exceeded
+                    AI agents will open hedges when pool risk exceeds threshold
                   </p>
                 </div>
               )}
@@ -359,7 +359,7 @@ export function AutoHedgePanel() {
                 <div className="bg-slate-900/50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2 mb-3">
                     <Brain className="w-4 h-4" />
-                    Recent AI Decisions
+                    Pool AI Decisions
                   </h4>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {data.recentDecisions.slice(0, 5).map((decision) => (
