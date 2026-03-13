@@ -58,14 +58,18 @@ export const CRONOS_CONTRACT_ADDRESSES = {
 
 export const SUI_CONTRACT_ADDRESSES = {
   testnet: {
-    // Package ID (deployed module)
-    packageId: ((process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9').trim()) as string,
+    // ZKVanguard Package ID (includes all modules: community_pool, zk_proxy_vault, etc.)
+    packageId: ((process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6').trim()) as string,
     // Shared object IDs
     rwaManagerState: ((process.env.NEXT_PUBLIC_SUI_RWA_MANAGER_STATE || '0x84925d623a658bc40a5821ef74458e7f8e8f5a2971c58ec9df6fb59277a8951d').trim()) as string,
     zkVerifierState: ((process.env.NEXT_PUBLIC_SUI_ZK_VERIFIER_STATE || '0x19f9c7a1ca761442180928f0efe982d414fd324948a1a092a258e8116c56213e').trim()) as string,
     paymentRouterState: ((process.env.NEXT_PUBLIC_SUI_PAYMENT_ROUTER_STATE || '0x08c0f37564f618162edc982d714b79dd946fbf7d387731f6c5ca3946d6cbe507').trim()) as string,
+    zkProxyVaultState: ((process.env.NEXT_PUBLIC_SUI_ZK_PROXY_VAULT_STATE || '0x0738bb829009c6b2fd930e5e9adb1a7fdbf3f5180d41ad0bf091bebc611add35').trim()) as string,
+    // Community Pool - requires create_pool call to create shared state
+    communityPoolPackage: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6' as string,
     // Capability object IDs (owned by admin)
-    adminCap: ((process.env.NEXT_PUBLIC_SUI_ADMIN_CAP || '0x5084205f4dedd52f9d7b6680f3ff27af1046f9e43a02b0de40b52815a91b3e37').trim()) as string,
+    adminCap: ((process.env.NEXT_PUBLIC_SUI_ADMIN_CAP || '0x088fef47064d46e298b57214eb68d9c245f420989249978625b5fdd0f1afb28f').trim()) as string,
+    feeManagerCap: '0x13731b6f7852b9bfa5072ff4901abe11124b956cac62a9fea3e7568808931e70' as string,
   },
   mainnet: {
     packageId: '' as string,
@@ -137,6 +141,35 @@ export const OASIS_CONTRACT_ADDRESSES = {
 } as const;
 
 // ============================================
+// ARBITRUM CONTRACT ADDRESSES
+// ============================================
+
+export const ARBITRUM_CONTRACT_ADDRESSES = {
+  testnet: {
+    // Arbitrum Sepolia (Chain ID: 421614)
+    communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B' as `0x${string}`,
+    usdcToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // MockUSDC
+    pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF' as `0x${string}`,
+    zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    hedgeExecutor: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+  mainnet: {
+    // Arbitrum One (Chain ID: 42161)
+    communityPool: ((process.env.NEXT_PUBLIC_ARB_COMMUNITY_POOL || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    usdcToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as `0x${string}`, // Native USDC on Arbitrum
+    pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C' as `0x${string}`,
+    zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    hedgeExecutor: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+} as const;
+
+// ============================================
 // LEGACY EXPORT (for backward compatibility)
 // ============================================
 
@@ -148,6 +181,8 @@ export const CONTRACT_ADDRESSES = {
   sui_devnet: SUI_CONTRACT_ADDRESSES.devnet,
   oasis_emerald_testnet: OASIS_EMERALD_CONTRACT_ADDRESSES.testnet,
   oasis_emerald_mainnet: OASIS_EMERALD_CONTRACT_ADDRESSES.mainnet,
+  arbitrum_testnet: ARBITRUM_CONTRACT_ADDRESSES.testnet,
+  arbitrum_mainnet: ARBITRUM_CONTRACT_ADDRESSES.mainnet,
   oasis_sapphire_testnet: OASIS_CONTRACT_ADDRESSES.testnet,
   oasis_sapphire_mainnet: OASIS_CONTRACT_ADDRESSES.mainnet,
 } as const;
@@ -156,7 +191,7 @@ export const CONTRACT_ADDRESSES = {
 // CHAIN TYPE DETECTION
 // ============================================
 
-export type ChainType = 'evm' | 'sui' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
+export type ChainType = 'evm' | 'sui' | 'arbitrum' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
 export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
 
 export interface ChainInfo {
@@ -187,6 +222,10 @@ export function getChainInfo(chainId: number | string): ChainInfo {
       return { type: 'evm', network: 'testnet', chainId };
     case 25:
       return { type: 'evm', network: 'mainnet', chainId };
+    case 421614:
+      return { type: 'arbitrum', network: 'testnet', chainId };
+    case 42161:
+      return { type: 'arbitrum', network: 'mainnet', chainId };
     case 42261:
       return { type: 'oasis-emerald', network: 'testnet', chainId };
     case 42262:
@@ -209,6 +248,10 @@ export function getContractAddresses(chainId: number) {
       return CRONOS_CONTRACT_ADDRESSES.testnet;
     case 25: // Cronos Mainnet
       return CRONOS_CONTRACT_ADDRESSES.mainnet;
+    case 421614: // Arbitrum Sepolia
+      return ARBITRUM_CONTRACT_ADDRESSES.testnet;
+    case 42161: // Arbitrum One
+      return ARBITRUM_CONTRACT_ADDRESSES.mainnet;
     case 42261: // Oasis Emerald Testnet
       return OASIS_EMERALD_CONTRACT_ADDRESSES.testnet;
     case 42262: // Oasis Emerald Mainnet
@@ -235,6 +278,9 @@ export function getSuiContractAddresses(network: 'mainnet' | 'testnet' | 'devnet
 export function getMultiChainAddresses(chainType: ChainType, network: NetworkType) {
   if (chainType === 'sui') {
     return SUI_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet'];
+  }
+  if (chainType === 'arbitrum') {
+    return ARBITRUM_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
   }
   if (chainType === 'oasis-sapphire') {
     return OASIS_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];

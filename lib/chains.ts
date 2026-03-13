@@ -51,6 +51,56 @@ export const CronosTestnet = defineChain({
 });
 
 // ============================================
+// ARBITRUM CHAINS
+// ============================================
+
+// Arbitrum One (Mainnet)
+export const ArbitrumOne = defineChain({
+  id: 42161,
+  name: 'Arbitrum One',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ethereum',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://arb1.arbitrum.io/rpc'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Arbiscan',
+      url: 'https://arbiscan.io',
+    },
+  },
+  testnet: false,
+});
+
+// Arbitrum Sepolia (Testnet)
+export const ArbitrumSepolia = defineChain({
+  id: 421614,
+  name: 'Arbitrum Sepolia',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Sepolia Ethereum',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://sepolia-rollup.arbitrum.io/rpc'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Arbiscan Sepolia',
+      url: 'https://sepolia.arbiscan.io',
+    },
+  },
+  testnet: true,
+});
+
+// ============================================
 // OASIS NETWORK PARATIMES
 // ============================================
 // Oasis has 4 ParaTimes: Consensus (base layer), Emerald (public EVM),
