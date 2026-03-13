@@ -181,6 +181,12 @@ contract CommunityPool is
     uint256 public constant MIN_RESERVE_RATIO_BPS = 2000; // 20% of NAV must stay liquid
     uint256 public constant MAX_SINGLE_HEDGE_BPS = 500;   // Max 5% of NAV per hedge
     uint256 public constant DAILY_HEDGE_CAP_BPS = 1500;   // Max 15% daily hedge deployment
+    
+    // Circuit Breakers - Critical for mainnet safety
+    uint256 public constant DEFAULT_MAX_SINGLE_DEPOSIT = 100_000e6;  // $100K default
+    uint256 public constant DEFAULT_MAX_SINGLE_WITHDRAWAL_BPS = 2500;  // Default 25% of pool per withdrawal
+    uint256 public constant DEFAULT_DAILY_WITHDRAWAL_CAP_BPS = 5000;   // Default 50% of pool withdrawn per day
+    uint256 public constant WHALE_THRESHOLD_BPS = 1000;        // 10% ownership = whale (extra checks)
 
     // Asset indices
     uint8 public constant ASSET_BTC = 0;
@@ -333,6 +339,28 @@ contract CommunityPool is
     uint256 public constant MOONLANDER_ORACLE_FEE = 0.06 ether;
 
     // ═══════════════════════════════════════════════════════════════
+    // CIRCUIT BREAKER STATE
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice Daily withdrawal tracking - resets each day
+    uint256 public dailyWithdrawalTotal;
+    
+    /// @notice Current day number for tracking (days since epoch)
+    uint256 public currentWithdrawalDay;
+    
+    /// @notice Circuit breaker: contract frozen by admin
+    bool public circuitBreakerTripped;
+    
+    /// @notice Max single deposit amount (admin-configurable)
+    uint256 public maxSingleDeposit;
+    
+    /// @notice Max single withdrawal in basis points of pool (admin-configurable)
+    uint256 public maxSingleWithdrawalBps;
+    
+    /// @notice Daily withdrawal cap in basis points (admin-configurable)
+    uint256 public dailyWithdrawalCapBps;
+
+    // ═══════════════════════════════════════════════════════════════
     // EVENTS
     // ═══════════════════════════════════════════════════════════════
 
@@ -425,6 +453,11 @@ contract CommunityPool is
     );
 
     event HedgeExecutorSet(address indexed newExecutor);
+    
+    // Circuit breaker events
+    event CircuitBreakerTripped(address indexed by, string reason);
+    event CircuitBreakerReset(address indexed by);
+    event DailyWithdrawalReset(uint256 newDay, uint256 previousTotal);
 
     // ═══════════════════════════════════════════════════════════════
     // ERRORS
@@ -458,6 +491,26 @@ contract CommunityPool is
     error ReserveRatioBreached(uint256 availableAfter, uint256 minReserve);
     error SingleHedgeTooLarge(uint256 hedgeAmount, uint256 maxAllowed);
     error DailyHedgeCapExceeded(uint256 dailyTotal, uint256 maxDaily);
+    
+    // Circuit breaker errors
+    error CircuitBreakerActive();
+    error DepositTooLarge(uint256 amount, uint256 maximum);
+    error SingleWithdrawalTooLarge(uint256 amount, uint256 maxBps);
+    error DailyWithdrawalCapExceeded(uint256 requested, uint256 remainingCap);
+    
+    // Additional errors (saves bytecode vs require strings)
+    error InvalidAssetIndex();
+    error EmergencyModeRequired();
+    error HedgeNotActive();
+    error MaxHedgeRatioExceeded();
+    error InsufficientPoolBalance();
+    error CannotRescuePoolToken();
+    error FeeTooHigh();
+    error ThresholdOutOfRange();
+    error NothingToRescue();
+    error RescueFailed();
+    error InvalidLeverage();
+    error MinSharesRequired();
 
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
@@ -514,6 +567,9 @@ contract CommunityPool is
         // Cooldowns and limits
         rebalanceCooldown = 1 hours;
         lastFeeCollection = block.timestamp;
+        maxSingleDeposit = DEFAULT_MAX_SINGLE_DEPOSIT;
+        maxSingleWithdrawalBps = DEFAULT_MAX_SINGLE_WITHDRAWAL_BPS;
+        dailyWithdrawalCapBps = DEFAULT_DAILY_WITHDRAWAL_CAP_BPS;
 
         // Initial share price = $1 (1e18 shares per $1M NAV)
         allTimeHighNavPerShare = 1e18;
@@ -546,6 +602,12 @@ contract CommunityPool is
         whenNotPaused 
         returns (uint256 shares) 
     {
+        // Circuit breaker check
+        if (circuitBreakerTripped) revert CircuitBreakerActive();
+        
+        // Max single deposit check (prevent whale manipulation)
+        if (amount > maxSingleDeposit) revert DepositTooLarge(amount, maxSingleDeposit);
+        
         // First deposit requires higher minimum to prevent inflation attack
         if (totalShares == 0 && amount < MIN_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(amount, MIN_FIRST_DEPOSIT);
@@ -577,7 +639,7 @@ contract CommunityPool is
         shares = amount.mulDiv(totalSharesWithOffset, totalAssetsWithOffset, Math.Rounding.Floor);
         
         // Ensure minimum shares to prevent dust attacks
-        require(shares >= MIN_SHARES_FOR_WITHDRAWAL, "Shares too small");
+        if (shares < MIN_SHARES_FOR_WITHDRAWAL) revert MinSharesRequired();
 
         // Transfer USDC from user
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -659,11 +721,28 @@ contract CommunityPool is
         internal
         returns (uint256 amountUSD)
     {
+        // Circuit breaker check (except for emergency mode)
+        if (circuitBreakerTripped && !emergencyWithdrawEnabled) revert CircuitBreakerActive();
+        
         if (sharesToBurn < MIN_SHARES_FOR_WITHDRAWAL) revert ZeroAmount();
         
         Member storage member = members[msg.sender];
         if (member.shares < sharesToBurn) {
             revert InsufficientShares(sharesToBurn, member.shares);
+        }
+
+        // Check single withdrawal isn't too large (prevent bank run/manipulation)
+        uint256 withdrawalBps = sharesToBurn.mulDiv(BPS_DENOMINATOR, totalShares, Math.Rounding.Ceil);
+        if (withdrawalBps > maxSingleWithdrawalBps) {
+            revert SingleWithdrawalTooLarge(sharesToBurn, maxSingleWithdrawalBps);
+        }
+
+        // Daily withdrawal limit tracking
+        uint256 today = block.timestamp / 1 days;
+        if (today != currentWithdrawalDay) {
+            emit DailyWithdrawalReset(today, dailyWithdrawalTotal);
+            dailyWithdrawalTotal = 0;
+            currentWithdrawalDay = today;
         }
 
         // Collect any pending fees first
@@ -677,6 +756,13 @@ contract CommunityPool is
         
         // amountUSD = sharesToBurn * totalAssetsWithOffset / totalSharesWithOffset
         amountUSD = sharesToBurn.mulDiv(totalAssetsWithOffset, totalSharesWithOffset, Math.Rounding.Floor);
+
+        // Daily withdrawal cap check
+        uint256 dailyCap = currentNav.mulDiv(dailyWithdrawalCapBps, BPS_DENOMINATOR, Math.Rounding.Floor);
+        if (dailyWithdrawalTotal + amountUSD > dailyCap) {
+            revert DailyWithdrawalCapExceeded(amountUSD, dailyCap - dailyWithdrawalTotal);
+        }
+        dailyWithdrawalTotal += amountUSD;
 
         // Slippage protection - user specifies minimum acceptable output
         if (amountUSD < minAmountOut) {
@@ -1265,20 +1351,14 @@ contract CommunityPool is
         bool[NUM_ASSETS] memory fresh
     ) {
         healthy = true;
-        
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
             configured[i] = pythPriceIds[i] != bytes32(0);
-            
             if (configured[i]) {
                 (bool success, int64 price, , uint publishTime) = _getPythPrice(i);
                 working[i] = success && price > 0;
                 fresh[i] = success && (block.timestamp - publishTime <= priceStaleThreshold);
-                
-                // If asset has balance, oracle MUST be working and fresh
-                if (assetBalances[i] > 0) {
-                    if (!working[i] || !fresh[i]) {
-                        healthy = false;
-                    }
+                if (assetBalances[i] > 0 && (!working[i] || !fresh[i])) {
+                    healthy = false;
                 }
             }
         }
@@ -1314,17 +1394,29 @@ contract CommunityPool is
     }
 
     function setManagementFee(uint256 _feeBps) external onlyRole(FEE_MANAGER_ROLE) {
-        require(_feeBps <= 500, "Max 5%");
+        if (_feeBps > 500) revert FeeTooHigh();
         managementFeeBps = _feeBps;
     }
 
     function setPerformanceFee(uint256 _feeBps) external onlyRole(FEE_MANAGER_ROLE) {
-        require(_feeBps <= 3000, "Max 30%");
+        if (_feeBps > 3000) revert FeeTooHigh();
         performanceFeeBps = _feeBps;
     }
 
     function setRebalanceCooldown(uint256 _cooldown) external onlyRole(DEFAULT_ADMIN_ROLE) {
         rebalanceCooldown = _cooldown;
+    }
+
+    function setMaxSingleDeposit(uint256 _max) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        maxSingleDeposit = _max;
+    }
+
+    function setMaxSingleWithdrawalBps(uint256 _bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        maxSingleWithdrawalBps = _bps;
+    }
+
+    function setDailyWithdrawalCapBps(uint256 _bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        dailyWithdrawalCapBps = _bps;
     }
 
     function setDexRouter(address _router) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -1337,8 +1429,8 @@ contract CommunityPool is
      * @param token ERC20 token address
      */
     function setAssetToken(uint8 assetIndex, address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(assetIndex < NUM_ASSETS, "Invalid asset index");
-        require(token != address(0), "Zero address");
+        if (assetIndex >= NUM_ASSETS) revert InvalidAssetIndex();
+        if (token == address(0)) revert ZeroAddress();
         assetTokens[assetIndex] = IERC20(token);
         assetDecimals[assetIndex] = IERC20Metadata(token).decimals();
     }
@@ -1348,7 +1440,7 @@ contract CommunityPool is
      * @param _pythOracle Address of Pyth oracle (Cronos: 0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B)
      */
     function setPythOracle(address _pythOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_pythOracle != address(0), "Invalid oracle");
+        if (_pythOracle == address(0)) revert ZeroAddress();
         pythOracle = IPyth(_pythOracle);
     }
 
@@ -1358,7 +1450,7 @@ contract CommunityPool is
      * @param priceId Pyth price feed ID (bytes32)
      */
     function setPriceId(uint8 assetIndex, bytes32 priceId) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(assetIndex < NUM_ASSETS, "Invalid asset index");
+        if (assetIndex >= NUM_ASSETS) revert InvalidAssetIndex();
         pythPriceIds[assetIndex] = priceId;
         emit PriceFeedSet(assetIndex, address(0)); // Event for tracking
     }
@@ -1381,13 +1473,31 @@ contract CommunityPool is
      * @param threshold Maximum age of price data in seconds (default: 1 hour)
      */
     function setPriceStaleThreshold(uint256 threshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(threshold >= 60, "Threshold too low"); // Minimum 1 minute
-        require(threshold <= 86400, "Threshold too high"); // Maximum 24 hours
+        if (threshold < 60 || threshold > 86400) revert ThresholdOutOfRange();
         priceStaleThreshold = threshold;
     }
 
     function setEmergencyWithdraw(bool _enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
         emergencyWithdrawEnabled = _enabled;
+    }
+
+    /**
+     * @notice Trip circuit breaker - freezes deposits and withdrawals
+     * @dev Use in case of oracle failure, exploit detected, or market emergency
+     * @param reason Description of why circuit breaker was triggered
+     */
+    function tripCircuitBreaker(string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        circuitBreakerTripped = true;
+        emit CircuitBreakerTripped(msg.sender, reason);
+    }
+
+    /**
+     * @notice Reset circuit breaker - re-enables normal operations
+     * @dev Only call after confirming the emergency has been resolved
+     */
+    function resetCircuitBreaker() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        circuitBreakerTripped = false;
+        emit CircuitBreakerReset(msg.sender);
     }
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -1414,7 +1524,7 @@ contract CommunityPool is
                 assetBalances[i] = 0;
             }
         } else {
-            require(assetIndex < NUM_ASSETS, "Invalid asset index");
+            if (assetIndex >= NUM_ASSETS) revert InvalidAssetIndex();
             assetBalances[assetIndex] = 0;
         }
     }
@@ -1425,9 +1535,9 @@ contract CommunityPool is
      */
     function rescueETH() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to rescue");
+        if (balance == 0) revert NothingToRescue();
         (bool success, ) = payable(treasury).call{value: balance}("");
-        require(success, "ETH rescue failed");
+        if (!success) revert RescueFailed();
         emit TokensRescued(address(0), balance);
     }
 
@@ -1437,16 +1547,16 @@ contract CommunityPool is
      * @param token Address of the ERC20 token to rescue
      */
     function rescueToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
-        require(token != address(0), "Invalid token");
-        require(token != address(depositToken), "Cannot rescue deposit token");
+        if (token == address(0)) revert ZeroAddress();
+        if (token == address(depositToken)) revert CannotRescuePoolToken();
         
         // Prevent rescuing pool assets
         for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            require(token != address(assetTokens[i]), "Cannot rescue pool asset");
+            if (token == address(assetTokens[i])) revert CannotRescuePoolToken();
         }
         
         uint256 balance = IERC20(token).balanceOf(address(this));
-        require(balance > 0, "No tokens to rescue");
+        if (balance == 0) revert NothingToRescue();
         
         IERC20(token).safeTransfer(treasury, balance);
         emit TokensRescued(token, balance);
@@ -1458,11 +1568,11 @@ contract CommunityPool is
      * @param recipient The new contract or address to receive the funds
      */
     function adminMigrateFunds(address recipient) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
-        require(recipient != address(0), "Invalid recipient");
-        require(emergencyWithdrawEnabled, "Enable emergency mode first");
+        if (recipient == address(0)) revert ZeroAddress();
+        if (!emergencyWithdrawEnabled) revert EmergencyModeRequired();
         
         uint256 balance = depositToken.balanceOf(address(this));
-        require(balance > 0, "No funds to migrate");
+        if (balance == 0) revert NothingToRescue();
         
         // Transfer all deposit tokens
         depositToken.safeTransfer(recipient, balance);
@@ -1502,8 +1612,8 @@ contract CommunityPool is
         uint256 _defaultLeverage,
         uint256 _cooldownSeconds
     ) external onlyRole(AGENT_ROLE) {
-        require(_defaultLeverage >= 2 && _defaultLeverage <= 10, "Leverage must be 2-10");
-        require(_maxHedgeRatioBps <= 5000, "Max hedge ratio too high"); // Max 50%
+        if (_defaultLeverage < 2 || _defaultLeverage > 10) revert InvalidLeverage();
+        if (_maxHedgeRatioBps > 5000) revert MaxHedgeRatioExceeded();
         
         autoHedgeConfig = AutoHedgeConfig({
             enabled: _enabled,
@@ -1544,17 +1654,19 @@ contract CommunityPool is
         
         // Ensure we have enough collateral
         uint256 poolBalance = depositToken.balanceOf(address(this));
-        require(poolBalance >= collateralAmount, "Insufficient pool balance");
+        if (poolBalance < collateralAmount) revert InsufficientPoolBalance();
         
         // CRITICAL: Enforce minimum reserve ratio (20% of NAV must stay liquid)
         // This ensures members can always withdraw even when hedges are active
         uint256 nav = calculateTotalNAV();
         uint256 minReserve = (nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
-        require(poolBalance - collateralAmount >= minReserve, "Would breach minimum reserve ratio");
+        if (poolBalance - collateralAmount < minReserve) {
+            revert ReserveRatioBreached(poolBalance - collateralAmount, minReserve);
+        }
         
         // Check max hedge ratio
         uint256 maxHedgeAmount = (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR;
-        require(totalHedgedValue + collateralAmount <= maxHedgeAmount, "Exceeds max hedge ratio");
+        if (totalHedgedValue + collateralAmount > maxHedgeAmount) revert MaxHedgeRatioExceeded();
         
         // Generate ZK commitment for privacy
         bytes32 commitmentHash = keccak256(abi.encodePacked(
@@ -1602,7 +1714,7 @@ contract CommunityPool is
         
         // Get hedge details for PnL calculation
         (,,,, uint256 collateralAmount,,,,,,,, uint8 status) = IHedgeExecutor(hedgeExecutor).hedges(hedgeId);
-        require(status == 1, "Hedge not active"); // 1 = ACTIVE
+        if (status != 1) revert HedgeNotActive(); // 1 = ACTIVE
         
         // Close the hedge (no oracle fee needed - HedgeExecutor handles it)
         IHedgeExecutor(hedgeExecutor).closeHedge(hedgeId);
@@ -1657,31 +1769,16 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Check if pool should auto-hedge based on risk conditions
-     * @dev Called by off-chain AI agent to determine if hedge is needed
+     * @notice Check if pool can auto-hedge (simplified for gas)
+     * @dev Returns status codes: 0=ready, 1=disabled, 2=no executor, 3=cooldown, 4=max reached
      */
-    function shouldAutoHedge() external view returns (bool shouldHedge, string memory reason) {
-        if (!autoHedgeConfig.enabled) {
-            return (false, "Auto-hedge disabled");
-        }
-        
-        if (hedgeExecutor == address(0)) {
-            return (false, "HedgeExecutor not set");
-        }
-        
-        if (block.timestamp < autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds) {
-            return (false, "Cooldown active");
-        }
-        
-        // Check if already at max hedge ratio
+    function shouldAutoHedge() external view returns (uint8 status) {
+        if (!autoHedgeConfig.enabled) return 1;
+        if (hedgeExecutor == address(0)) return 2;
+        if (block.timestamp < autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds) return 3;
         uint256 nav = calculateTotalNAV();
-        uint256 maxHedgeAmount = (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR;
-        if (totalHedgedValue >= maxHedgeAmount) {
-            return (false, "Max hedge ratio reached");
-        }
-        
-        // Pool should hedge (actual risk calculation done off-chain by AI)
-        return (true, "Ready to hedge");
+        if (totalHedgedValue >= (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR) return 4;
+        return 0;
     }
 
     // ═══════════════════════════════════════════════════════════════

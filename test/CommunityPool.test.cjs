@@ -27,7 +27,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
   const USDC_DECIMALS = 6;
   const SHARE_DECIMALS = 18;
   const MIN_DEPOSIT = ethers.parseUnits('10', USDC_DECIMALS); // $10
-  const MIN_FIRST_DEPOSIT = ethers.parseUnits('1000', USDC_DECIMALS); // $1000 (security: anti-inflation attack)
+  const MIN_FIRST_DEPOSIT = ethers.parseUnits('100', USDC_DECIMALS); // $100 (security: anti-inflation attack)
   const INITIAL_BALANCE = ethers.parseUnits('100000', USDC_DECIMALS); // $100K each
   const VIRTUAL_SHARES = BigInt('1000000000000000000'); // 1e18
   const VIRTUAL_ASSETS = BigInt('1000000'); // 1e6 ($1 USDC)
@@ -67,6 +67,10 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       { initializer: 'initialize', kind: 'uups' }
     );
     await communityPool.waitForDeployment();
+
+    // Raise withdrawal limit for tests (allow 100% withdrawals in test env)
+    await communityPool.setMaxSingleWithdrawalBps(10000); // 100%
+    await communityPool.setDailyWithdrawalCapBps(10000); // 100%
 
     // Grant agent role
     const AGENT_ROLE = await communityPool.AGENT_ROLE();
@@ -129,8 +133,8 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
     });
 
     it('should reject first deposit below minimum first deposit', async function () {
-      // First deposit requires $1000, not just $10
-      const smallDeposit = ethers.parseUnits('100', USDC_DECIMALS); // $100 - below MIN_FIRST_DEPOSIT
+      // First deposit requires $100, not just $10
+      const smallDeposit = ethers.parseUnits('50', USDC_DECIMALS); // $50 - below MIN_FIRST_DEPOSIT
       
       await mockUSDC.connect(user1).approve(await communityPool.getAddress(), smallDeposit);
       
@@ -391,6 +395,9 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       const largeDeposit = ethers.parseUnits('1000000', USDC_DECIMALS); // $1M
       await mockUSDC.mint(user1.address, largeDeposit);
       
+      // Raise deposit limit for this test
+      await communityPool.setMaxSingleDeposit(largeDeposit);
+      
       await mockUSDC.connect(user1).approve(await communityPool.getAddress(), largeDeposit);
       await communityPool.connect(user1).deposit(largeDeposit);
       
@@ -444,8 +451,8 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
     });
 
     it('should enforce minimum first deposit to prevent inflation attack', async function () {
-      // Try to deposit less than MIN_FIRST_DEPOSIT ($1000)
-      const smallDeposit = ethers.parseUnits('999', USDC_DECIMALS);
+      // Try to deposit less than MIN_FIRST_DEPOSIT ($100)
+      const smallDeposit = ethers.parseUnits('99', USDC_DECIMALS);
       await mockUSDC.connect(user1).approve(await communityPool.getAddress(), smallDeposit);
       
       await expect(
@@ -644,6 +651,12 @@ describe('CommunityPool - Extreme Scale Tests', function () {
       { initializer: 'initialize', kind: 'uups' }
     );
     await communityPool.waitForDeployment();
+
+    // Raise limits for extreme scale tests (allow $10B deposits and 100% withdrawals)
+    // Note: agent is the admin per initialize(depositToken, assetTokens, treasury, admin)
+    await communityPool.connect(agent).setMaxSingleDeposit(tenBillion);
+    await communityPool.connect(agent).setMaxSingleWithdrawalBps(10000); // 100%
+    await communityPool.connect(agent).setDailyWithdrawalCapBps(10000); // 100%
   });
 
   it('should handle billion-dollar deposits without overflow', async function () {
