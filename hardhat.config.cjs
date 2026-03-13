@@ -75,6 +75,20 @@ const config = {
       gasPrice: 'auto',
       timeout: 60000,
     },
+    'arbitrum-sepolia': {
+      chainId: 421614,
+      url: process.env.ARBITRUM_SEPOLIA_RPC || 'https://sepolia-rollup.arbitrum.io/rpc',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 120000,
+    },
+    'arbitrum-one': {
+      chainId: 42161,
+      url: process.env.ARBITRUM_ONE_RPC || 'https://arb1.arbitrum.io/rpc',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 120000,
+    },
   },
   etherscan: {
     apiKey: {
@@ -84,6 +98,8 @@ const config = {
       'oasis-emerald-mainnet': 'no-api-key-needed',
       'oasis-sapphire-testnet': 'no-api-key-needed',
       'oasis-sapphire-mainnet': 'no-api-key-needed',
+      'arbitrum-sepolia': process.env.ARBISCAN_API_KEY || '',
+      'arbitrum-one': process.env.ARBISCAN_API_KEY || '',
     },
     customChains: [
       {
@@ -132,6 +148,22 @@ const config = {
         urls: {
           apiURL: 'https://explorer.oasis.io/mainnet/sapphire/api',
           browserURL: 'https://explorer.oasis.io/mainnet/sapphire/',
+        },
+      },
+      {
+        network: 'arbitrum-sepolia',
+        chainId: 421614,
+        urls: {
+          apiURL: 'https://api-sepolia.arbiscan.io/api',
+          browserURL: 'https://sepolia.arbiscan.io/',
+        },
+      },
+      {
+        network: 'arbitrum-one',
+        chainId: 42161,
+        urls: {
+          apiURL: 'https://api.arbiscan.io/api',
+          browserURL: 'https://arbiscan.io/',
         },
       },
     ],
