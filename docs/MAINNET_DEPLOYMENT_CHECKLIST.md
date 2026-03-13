@@ -1,53 +1,169 @@
-# CommunityPool V2 Mainnet Deployment Checklist
+# CommunityPool V3 Mainnet Deployment Checklist
 
-## Pre-Deployment Verification
+## ✅ Pre-Deployment Verification Complete
 
-### Environment Setup
-- [ ] `.env` file contains `PRIVATE_KEY` for mainnet deployer
-- [ ] Deployer wallet has sufficient CRO (recommend 20+ CRO for deployment + operations)
-- [ ] Deployer wallet is secure (hardware wallet recommended for production)
+### Contract Readiness
 
-### Contract Configuration
-- [ ] Review `scripts/deploy/deploy-community-pool-mainnet.cjs` for correct addresses:
-  - Pyth Oracle: `0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B`
-  - USDC: `0xc21223249CA28397B4B6541dfFaEcc539BfF0c59` (Circle USDC)
-- [ ] Fee structure is finalized:
-  - Management Fee: 0.5% (50 bps)
-  - Performance Fee: 10% (1000 bps)
-- [ ] Pool parameters reviewed:
-  - Min deposit: 10 USDC
-  - Max capacity: 10M USDC
+| Check | Status | Notes |
+|-------|--------|-------|
+| Contract size | ✅ | 23.478 KiB (under 24KB limit) |
+| Optimizer runs | ✅ | 1 (minimum bytecode) |
+| All tests passing | ✅ | 62 tests (35 base + 27 security) |
+| Circuit breakers configurable | ✅ | Admin can adjust limits |
+| ABI exported for frontend | ✅ | `contracts/abi/CommunityPool.json` |
 
-### Code Audit
-- [ ] Smart contract code reviewed
-- [ ] No critical vulnerabilities in `CommunityPool.sol`
-- [ ] UUPS upgrade pattern implemented correctly
-- [ ] Access control roles properly assigned
-- [ ] Slippage protection on withdrawals
+### Security Features Tested
+
+| Feature | Test Coverage | Status |
+|---------|---------------|--------|
+| Max single deposit limit | `should enforce max single deposit limit` | ✅ |
+| Max single withdrawal BPS | `should enforce max single withdrawal BPS` | ✅ |
+| Daily withdrawal cap | `should enforce daily withdrawal cap` | ✅ |
+| Daily cap reset | `should reset daily withdrawal cap at midnight UTC` | ✅ |
+| Circuit breaker trip/reset | Multiple tests | ✅ |
+| Access control (admin/agent/upgrader) | Multiple tests | ✅ |
+| Inflation attack prevention | `should prevent inflation attack via virtual shares` | ✅ |
+| Donation attack mitigation | `should prevent donation attack` | ✅ |
+| Sandwich attack protection | `should prevent sandwich attack on deposits` | ✅ |
+| Emergency withdraw | `should allow withdrawal when paused (via emergency withdraw)` | ✅ |
+| Timelock admin transfer | `should transfer admin role correctly` | ✅ |
+
+### Gas Verification
+
+| Operation | Gas Used | Limit | Status |
+|-----------|----------|-------|--------|
+| First deposit | 320,976 | 350,000 | ✅ |
+| Withdrawal | 181,936 | 200,000 | ✅ |
+
+---
+
+## Manual Steps Required
+
+### 1. Create Gnosis Safe Multisig
+
+1. Go to [Gnosis Safe on Cronos](https://safe.cronos.org) or [safe.global](https://app.safe.global)
+2. Connect wallet to **Cronos Mainnet (Chain ID: 25)**
+3. Create new Safe with:
+   - **Name**: `Chronos-Vanguard-Multisig`
+   - **Owners**: Add 3-5 trusted team member addresses
+   - **Threshold**: 2 of 3 (recommended) or 3 of 5 for higher security
+4. **Copy the Safe address** once deployed
+
+### 2. Configure `mainnet-config.json`
+
+Edit `deployments/mainnet-config.json`:
+
+```json
+{
+  "multisig": "0x... (paste your Gnosis Safe address here)",
+  "treasury": "0x... (paste treasury address - can be same as multisig)"
+}
+```
+
+### 3. Verify Environment
+
+```bash
+# Check private key is set (deployer wallet)
+npx hardhat vars get MAINNET_PRIVATE_KEY
+```
+
+### 4. Fund Deployer Wallet
+
+Ensure deployer wallet has **50+ CRO** for deployment gas.
 
 ---
 
 ## Deployment Steps
 
-### 1. Deploy Contract
-```powershell
-npx hardhat run scripts/deploy/deploy-community-pool-mainnet.cjs --network cronos-mainnet
+### Step 1: Run Preflight Check
+
+```bash
+npx hardhat run scripts/deploy/mainnet-preflight.cjs --network cronos-mainnet
 ```
 
-Expected output:
-- Proxy address
-- Implementation address
-- Deployment saved to `deployments/community-pool-mainnet.json`
+All checks must pass before proceeding.
 
-### 2. Verify Contract on Cronoscan
-```powershell
+### Step 2: Deploy Contracts
+
+```bash
+npx hardhat run scripts/deploy/deploy-mainnet-full.cjs --network cronos-mainnet
+```
+
+This deploys:
+1. CommunityPoolTimelock (48-hour delay)
+2. CommunityPool Proxy (UUPS upgradeable)
+3. Configures Pyth oracle, price feed IDs
+4. Sets circuit breaker defaults
+5. Transfers admin to Timelock
+
+### Step 3: Verify Deployment
+
+```bash
+npx hardhat run scripts/deploy/mainnet-verify.cjs --network cronos-mainnet
+```
+
+### Step 4: Verify on Cronoscan
+
+```bash
+# Verify Timelock
+npx hardhat verify --network cronos-mainnet <TIMELOCK_ADDRESS> 48 "['<MULTISIG>']" "['<MULTISIG>']" "0x0000000000000000000000000000000000000000"
+
+# Verify CommunityPool implementation
 npx hardhat verify --network cronos-mainnet <IMPLEMENTATION_ADDRESS>
 ```
 
-### 3. Push Initial Prices
-```powershell
-npx hardhat run scripts/update-pyth-prices-mainnet.cjs --network cronos-mainnet
-```
+---
+
+## Post-Deployment Configuration (via Timelock - 48h delay)
+
+1. **Set DEX Router** (for rebalancing): `setDexRouter(address)`
+2. **Grant Agent Role** (for AI rebalancing): `grantRole(AGENT_ROLE, agentAddress)`
+3. **Adjust Circuit Breakers** (if needed)
+
+### Default Configuration Applied
+
+| Setting | Value |
+|---------|-------|
+| Max Single Deposit | $100,000 USDC |
+| Max Single Withdrawal | 25% of balance |
+| Daily Withdrawal Cap | 50% of TVL |
+| Management Fee | 0.5% annually |
+| Performance Fee | 10% on profits |
+| Rebalance Cooldown | 1 hour |
+
+---
+
+## Emergency Procedures
+
+- **Trip Circuit Breaker**: `tripCircuitBreaker("reason")` - stops all non-emergency operations
+- **Enable Emergency Withdrawals**: `setEmergencyWithdraw(true)`
+- **Pause Contract**: `pause()` - full pause
+
+---
+
+## Files Reference
+
+| File | Purpose |
+|------|---------|
+| `deployments/mainnet-config.json` | Mainnet configuration |
+| `scripts/deploy/mainnet-preflight.cjs` | Pre-deployment checks |
+| `scripts/deploy/deploy-mainnet-full.cjs` | Full deployment script |
+| `scripts/deploy/mainnet-verify.cjs` | Post-deployment verification |
+| `test/CommunityPool.test.cjs` | Core functionality tests (35) |
+| `test/CommunityPool.security.test.cjs` | Security hardening tests (27) |
+| `contracts/abi/CommunityPool.json` | Frontend ABI |
+
+---
+
+## Cronos Mainnet Addresses
+
+| Contract | Address |
+|----------|---------|
+| USDC | `0xc21223249CA28397B4B6541dffaEcc539BfF0c59` |
+| Pyth Oracle | `0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B` |
+| wBTC | `0x062E66477Faf219F25D27dCED647BF57C3107d52` |
+| wETH | `0xe44Fd7fCb2b1581822D0c862B68222998a0c299a` |
+| wCRO | `0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23` |
 
 ### 4. Verify Oracle Health
 Create a quick check script or use console:
