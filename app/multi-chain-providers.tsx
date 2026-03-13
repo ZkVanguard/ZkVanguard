@@ -75,6 +75,21 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
       return sui.getExplorerUrl(type, value);
     }
 
+    // Arbitrum explorer
+    if (activeChain === 'arbitrum') {
+      const baseUrl = network === 'mainnet'
+        ? 'https://arbiscan.io'
+        : 'https://sepolia.arbiscan.io';
+      switch (type) {
+        case 'tx':
+          return `${baseUrl}/tx/${value}`;
+        case 'address':
+          return `${baseUrl}/address/${value}`;
+        default:
+          return baseUrl;
+      }
+    }
+
     // Oasis ParaTime explorers
     const oasisParaTimeMap: Record<string, string> = {
       'oasis-consensus': 'consensus',
@@ -223,6 +238,16 @@ export function ChainSelector({ className = '' }: ChainSelectorProps) {
           }`}
         >
           Cronos
+        </button>
+        <button
+          onClick={() => setActiveChain('arbitrum')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            activeChain === 'arbitrum'
+              ? 'bg-cyan-500 text-white'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          Arbitrum
         </button>
         <button
           onClick={() => setActiveChain('oasis-emerald')}
