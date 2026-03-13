@@ -17,7 +17,8 @@ import {
   BarChart3,
   ArrowRightLeft,
   Info,
-  Loader2
+  Loader2,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
@@ -26,6 +27,15 @@ import { RiskMetricsPanel } from './RiskMetricsPanel';
 import { AutoHedgePanel } from './AutoHedgePanel';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId, useSwitchChain, useSignMessage } from 'wagmi';
 import { parseUnits, erc20Abi } from 'viem';
+import { 
+  POOL_CHAIN_CONFIGS, 
+  getCommunityPoolAddress, 
+  getUsdcAddress,
+  getActiveChains,
+  isPoolDeployed,
+  COMMUNITY_POOL_ABI,
+  type PoolChainConfig
+} from '@/lib/contracts/community-pool-config';
 
 interface PoolAllocation {
   BTC: number;
@@ -86,32 +96,45 @@ const ASSET_ICONS: Record<string, string> = {
   ETH: 'Ξ',
   SUI: '~',
   CRO: 'C',
+  ARB: 'A',
 };
 
-// Contract addresses - Cronos Testnet
-const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as const; // MockUSDC on Cronos Testnet
-const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30' as const; // CommunityPool V3 proxy with auto-hedge
+// Get chain key from chainId
+function getChainKeyFromId(chainId: number): string | null {
+  switch (chainId) {
+    case 338:
+    case 25:
+      return 'cronos';
+    case 421614:
+    case 42161:
+      return 'arbitrum';
+    default:
+      return null;
+  }
+}
 
-// CommunityPool ABI (subset for deposit/withdraw)
-const COMMUNITY_POOL_ABI = [
-  {
-    name: 'deposit',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'amount', type: 'uint256' }],
-    outputs: [{ name: 'shares', type: 'uint256' }],
-  },
-  {
-    name: 'withdraw',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'shares', type: 'uint256' },
-      { name: 'minAmountOut', type: 'uint256' },
-    ],
-    outputs: [{ name: 'amount', type: 'uint256' }],
-  },
-] as const;
+// Get valid chain IDs for a chain key
+function getValidChainIds(chainKey: string): number[] {
+  switch (chainKey) {
+    case 'cronos':
+      return [338, 25];
+    case 'arbitrum':
+      return [421614, 42161];
+    default:
+      return [];
+  }
+}
+
+// Get network from chainId
+function getNetworkFromChainId(chainId: number): 'testnet' | 'mainnet' {
+  switch (chainId) {
+    case 25: // Cronos Mainnet
+    case 42161: // Arbitrum One
+      return 'mainnet';
+    default:
+      return 'testnet';
+  }
+}
 
 export const CommunityPool = memo(function CommunityPool({ address: propAddress, compact = false }: CommunityPoolProps) {
   const [poolData, setPoolData] = useState<PoolSummary | null>(null);
@@ -129,6 +152,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete'>('idle');
+  const [selectedChain, setSelectedChain] = useState<string>('cronos'); // Multi-chain: 'cronos', 'arbitrum', 'sui'
   const mountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   
@@ -144,6 +168,23 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
   });
+
+  // Get current chain config
+  const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
+  const network = chainId ? getNetworkFromChainId(chainId) : 'testnet';
+  const USDC_ADDRESS = getUsdcAddress(selectedChain, network);
+  const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
+  const poolDeployed = isPoolDeployed(selectedChain, network);
+
+  // Auto-detect chain from wallet
+  useEffect(() => {
+    if (chainId) {
+      const detectedChain = getChainKeyFromId(chainId);
+      if (detectedChain && detectedChain !== selectedChain) {
+        setSelectedChain(detectedChain);
+      }
+    }
+  }, [chainId, selectedChain]);
 
   // Helper: Sign message for API authentication (informative message)
   const signForApi = useCallback(async (action: 'deposit' | 'withdraw', amount: string): Promise<{ signature: string; message: string } | null> => {
@@ -168,12 +209,15 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
     lastFetchRef.current = now;
     
+    // Build chain query param
+    const chainParam = `&chain=${selectedChain}&network=${network}`;
+    
     try {
       // OPTIMIZATION: Fire all requests in parallel instead of sequentially
       const [poolRes, userRes, leaderRes] = await Promise.all([
-        fetch('/api/community-pool'),
-        address ? fetch(`/api/community-pool?user=${address}`) : Promise.resolve(null),
-        fetch('/api/community-pool?action=leaderboard&limit=5'),
+        fetch(`/api/community-pool?${chainParam.substring(1)}`),
+        address ? fetch(`/api/community-pool?user=${address}${chainParam}`) : Promise.resolve(null),
+        fetch(`/api/community-pool?action=leaderboard&limit=5${chainParam}`),
       ]);
       
       // Process results in parallel
@@ -205,12 +249,12 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         setLoading(false);
       }
     }
-  }, [address]);
+  }, [address, selectedChain, network]);
   
   // Fetch AI recommendation
   const fetchAIRecommendation = useCallback(async () => {
     try {
-      const res = await fetch('/api/community-pool/ai-decision');
+      const res = await fetch(`/api/community-pool/ai-decision?chain=${selectedChain}&network=${network}`);
       const json = await res.json();
       
       if (json.success && mountedRef.current) {
@@ -219,17 +263,18 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     } catch (err: any) {
       logger.error('[CommunityPool] AI fetch error:', err);
     }
-  }, []);
+  }, [selectedChain, network]);
   
-  // Initial fetch
+  // Initial fetch and refetch when chain changes
   useEffect(() => {
     mountedRef.current = true;
-    fetchPoolData();
+    setLoading(true);
+    fetchPoolData(true);
     
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchPoolData]);
+  }, [fetchPoolData, selectedChain]);
   
   // OPTIMIZATION: Increased polling interval from 30s to 60s (data changes slowly)
   usePolling(fetchPoolData, 60000);
@@ -427,26 +472,33 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       return;
     }
     
-    // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
-    // Use loose equality to handle potential string/number type mismatches
-    const isValidChain = chainId == 338 || chainId == 25;
-    console.log('[CommunityPool] Chain check:', { chainId, type: typeof chainId, isValidChain });
+    // Check if on correct chain for selected pool
+    const validChainIds = getValidChainIds(selectedChain);
+    const isValidChain = validChainIds.includes(chainId as number);
+    console.log('[CommunityPool] Chain check:', { chainId, selectedChain, validChainIds, isValidChain });
     if (!isValidChain) {
-      // Try to switch to Cronos Testnet automatically
+      // Try to switch to the correct chain automatically
       if (switchChain) {
         try {
-          setError('Switching to Cronos Testnet...');
-          await switchChain({ chainId: 338 });
+          const targetChainId = validChainIds[0]; // Use testnet by default
+          setError(`Switching to ${chainConfig?.name || selectedChain}...`);
+          await switchChain({ chainId: targetChainId });
           // After switch, let user retry the deposit
-          setError('Switched to Cronos Testnet. Please click Deposit again.');
+          setError(`Switched to ${chainConfig?.name || selectedChain}. Please click Deposit again.`);
           return;
         } catch (switchErr) {
           console.error('[CommunityPool] Chain switch failed:', switchErr);
-          setError(`Please switch to Cronos Testnet in your wallet. You are on chain ${chainId}.`);
+          setError(`Please switch to ${chainConfig?.name || selectedChain} in your wallet. You are on chain ${chainId}.`);
           return;
         }
       }
-      setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
+      setError(`Please switch to ${chainConfig?.name || selectedChain} network. Current chain: ${chainId}`);
+      return;
+    }
+    
+    // Check if pool is deployed on this chain
+    if (!poolDeployed) {
+      setError(`CommunityPool not yet deployed on ${chainConfig?.name || selectedChain} ${network}. Please select a different chain.`);
       return;
     }
     
@@ -504,25 +556,32 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       return;
     }
     
-    // Check if on correct chain (Cronos Testnet = 338, Mainnet = 25)
-    // Use loose equality to handle potential string/number type mismatches
-    const isValidChainW = chainId == 338 || chainId == 25;
-    console.log('[CommunityPool] Chain check (withdraw):', { chainId, type: typeof chainId, isValidChain: isValidChainW });
+    // Check if on correct chain for selected pool
+    const validChainIdsW = getValidChainIds(selectedChain);
+    const isValidChainW = validChainIdsW.includes(chainId as number);
+    console.log('[CommunityPool] Chain check (withdraw):', { chainId, selectedChain, validChainIdsW, isValidChain: isValidChainW });
     if (!isValidChainW) {
-      // Try to switch to Cronos Testnet automatically
+      // Try to switch to the correct chain automatically
       if (switchChain) {
         try {
-          setError('Switching to Cronos Testnet...');
-          await switchChain({ chainId: 338 });
-          setError('Switched to Cronos Testnet. Please click Withdraw again.');
+          const targetChainId = validChainIdsW[0]; // Use testnet by default
+          setError(`Switching to ${chainConfig?.name || selectedChain}...`);
+          await switchChain({ chainId: targetChainId });
+          setError(`Switched to ${chainConfig?.name || selectedChain}. Please click Withdraw again.`);
           return;
         } catch (switchErr) {
           console.error('[CommunityPool] Chain switch failed:', switchErr);
-          setError(`Please switch to Cronos Testnet in your wallet. You are on chain ${chainId}.`);
+          setError(`Please switch to ${chainConfig?.name || selectedChain} in your wallet. You are on chain ${chainId}.`);
           return;
         }
       }
-      setError(`Please switch to Cronos network (Chain ID 338 for testnet, 25 for mainnet). Current: ${chainId}`);
+      setError(`Please switch to ${chainConfig?.name || selectedChain} network. Current chain: ${chainId}`);
+      return;
+    }
+    
+    // Check if pool is deployed
+    if (!poolDeployed) {
+      setError(`CommunityPool not yet deployed on ${chainConfig?.name || selectedChain} ${network}.`);
       return;
     }
     
@@ -601,6 +660,31 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Chain Selector */}
+            <div className="flex bg-white/20 rounded-lg p-0.5">
+              {Object.entries(POOL_CHAIN_CONFIGS)
+                .filter(([_, config]) => config.status === 'live' || config.status === 'testing')
+                .map(([key, config]) => (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedChain(key)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+                      selectedChain === key
+                        ? 'bg-white text-indigo-600'
+                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                    }`}
+                    title={`${config.name} ${config.status === 'testing' ? '(Testing)' : ''}`}
+                  >
+                    <span>{config.icon}</span>
+                    <span>{config.shortName}</span>
+                    {config.status === 'testing' && (
+                      <span className="ml-1 px-1 py-0.5 text-[10px] bg-yellow-500 text-white rounded">
+                        TEST
+                      </span>
+                    )}
+                  </button>
+                ))}
+            </div>
             <button
               onClick={() => fetchPoolData(true)}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -616,6 +700,15 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
               <span className="text-sm text-white">AI Insights</span>
             </button>
           </div>
+        </div>
+        
+        {/* Network indicator */}
+        <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
+          <Globe className="w-3 h-3" />
+          <span>
+            {chainConfig?.name || 'Unknown'} • {network === 'mainnet' ? 'Mainnet' : 'Testnet'}
+            {!poolDeployed && <span className="ml-2 text-yellow-300">(Not Deployed)</span>}
+          </span>
         </div>
       </div>
       
