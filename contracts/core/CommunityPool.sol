@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "./CommunityPoolLib.sol";
 
 /**
  * @title IVVSRouter
@@ -222,6 +223,51 @@ contract CommunityPool is
         address executor;
     }
 
+    /// @notice AI Decision for cross-chain coordination
+    /// @dev Same structure used across all chains for consistent AI management
+    struct AIDecision {
+        bytes32 decisionId;           // Unique ID (hash of decision params)
+        uint256 timestamp;            // When decision was made
+        uint256[NUM_ASSETS] targetAllocBps; // Target allocation
+        uint8 confidence;             // AI confidence (0-100)
+        uint8 urgency;                // Execution urgency (0=low, 1=medium, 2=high)
+        int256 expectedReturn;        // Expected return in BPS (can be negative)
+        uint256 riskScore;            // Risk score (0-10000 BPS)
+        string reasoning;             // AI reasoning
+        bytes32 dataFeedHash;         // Hash of price data used for decision
+        bool executed;                // Whether fully executed
+    }
+
+    /// @notice Cross-chain signal for AI coordination
+    /// @dev Allows off-chain AI coordinators to sync decisions across chains
+    struct CrossChainSignal {
+        bytes32 signalId;             // Unique signal ID
+        uint256 timestamp;            // Signal timestamp
+        uint256 chainId;              // Source chain ID
+        uint256[NUM_ASSETS] allocations; // Target allocations
+        bytes32 priceDataHash;        // Hash of price data (verify same data feed)
+        uint8 action;                 // 0=hold, 1=rebalance, 2=hedge, 3=dehedge
+        bool acknowledged;            // Whether this chain has acked
+    }
+
+    /// @notice Batch trade instruction for efficient rebalancing
+    struct BatchTrade {
+        uint8 assetIndex;             // Asset to trade
+        uint256 amount;               // Amount to trade
+        uint256 minAmountOut;         // Slippage protection
+        bool isBuy;                   // Buy (true) or sell (false)
+    }
+
+    /// @notice AI Agent performance metrics
+    struct AIAgentMetrics {
+        uint256 totalDecisions;       // Total decisions made
+        uint256 successfulDecisions;  // Decisions that met expected return
+        int256 cumulativeReturn;      // Cumulative return in BPS
+        uint256 avgConfidence;        // Average confidence (scaled by 100)
+        uint256 lastDecisionTime;     // Last decision timestamp
+        bytes32 lastDecisionId;       // Last decision ID
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // STATE VARIABLES
     // ═══════════════════════════════════════════════════════════════
@@ -361,6 +407,44 @@ contract CommunityPool is
     uint256 public dailyWithdrawalCapBps;
 
     // ═══════════════════════════════════════════════════════════════
+    // AI MANAGEMENT STATE (Cross-Chain Coordination)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice Current AI decision (latest)
+    AIDecision public currentAIDecision;
+
+    /// @notice AI decision history
+    AIDecision[] public aiDecisionHistory;
+
+    /// @notice Latest cross-chain signal
+    CrossChainSignal public latestSignal;
+
+    // Signal history removed to reduce contract size - use events instead
+
+    /// @notice AI agent metrics by address
+    mapping(address => AIAgentMetrics) public aiAgentMetrics;
+
+    /// @notice Unified Pyth Price Feed IDs (same across all chains)
+    /// @dev BTC/USD: 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43
+    ///      ETH/USD: 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace
+    ///      SUI/USD: 0x23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744
+    ///      CRO/USD: 0x23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe
+    bytes32 public constant PYTH_BTC_USD = 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43;
+    bytes32 public constant PYTH_ETH_USD = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+    bytes32 public constant PYTH_SUI_USD = 0x23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744;
+    bytes32 public constant PYTH_CRO_USD = 0x23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe;
+
+    /// @notice Chain identifier for cross-chain coordination
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    uint256 public immutable CHAIN_ID;
+
+    /// @notice Minimum AI confidence to execute a decision (0-100)
+    uint8 public minAIConfidence;
+
+    /// @notice Whether to require cross-chain signal verification
+    bool public requireSignalVerification;
+
+    // ═══════════════════════════════════════════════════════════════
     // EVENTS
     // ═══════════════════════════════════════════════════════════════
 
@@ -459,6 +543,47 @@ contract CommunityPool is
     event CircuitBreakerReset(address indexed by);
     event DailyWithdrawalReset(uint256 newDay, uint256 previousTotal);
 
+    // AI Management events
+    event AIDecisionRecorded(
+        bytes32 indexed decisionId,
+        address indexed agent,
+        uint256[NUM_ASSETS] targetAllocBps,
+        uint8 confidence,
+        int256 expectedReturn,
+        string reasoning
+    );
+
+    event AIDecisionExecuted(
+        bytes32 indexed decisionId,
+        address indexed executor,
+        int256 actualReturn,
+        bool successful
+    );
+
+    event CrossChainSignalReceived(
+        bytes32 indexed signalId,
+        uint256 sourceChainId,
+        uint8 action,
+        bytes32 priceDataHash
+    );
+
+    event CrossChainSignalAcknowledged(
+        bytes32 indexed signalId,
+        uint256 thisChainId
+    );
+
+    event BatchTradesExecuted(
+        uint256 tradesCount,
+        uint256 totalVolume,
+        address indexed executor
+    );
+
+    event AIAgentMetricsUpdated(
+        address indexed agent,
+        uint256 totalDecisions,
+        int256 cumulativeReturn
+    );
+
     // ═══════════════════════════════════════════════════════════════
     // ERRORS
     // ═══════════════════════════════════════════════════════════════
@@ -512,6 +637,16 @@ contract CommunityPool is
     error InvalidLeverage();
     error MinSharesRequired();
 
+    // AI Management errors
+    error AIConfidenceTooLow(uint8 confidence, uint8 minimum);
+    error SignalVerificationRequired();
+    error SignalAlreadyAcknowledged();
+    error InvalidDecisionId();
+    error DecisionAlreadyExecuted();
+    error PriceDataMismatch(bytes32 expected, bytes32 actual);
+    error BatchTradesFailed(uint256 failedIndex);
+    error EmptyBatchTrades();
+
     // ═══════════════════════════════════════════════════════════════
     // INITIALIZER
     // ═══════════════════════════════════════════════════════════════
@@ -519,6 +654,7 @@ contract CommunityPool is
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
+        CHAIN_ID = block.chainid;
     }
 
     /**
@@ -700,22 +836,7 @@ contract CommunityPool is
         return _withdrawInternal(sharesToBurn, minAmountOut);
     }
 
-    /**
-     * @notice Withdraw USDC from ZkVanguard Community Pool (no slippage protection)
-     * @dev Burns your pool shares and returns proportional USDC value.
-     *      WARNING: No minimum output protection - use withdraw(shares, minOut) for safety.
-     * @param sharesToBurn Number of your shares to redeem for USDC
-     * @return amountUSD Amount of USDC transferred to your wallet
-     * @custom:security Non-reentrant, requires active pool
-     */
-    function withdraw(uint256 sharesToBurn)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (uint256 amountUSD)
-    {
-        return _withdrawInternal(sharesToBurn, 0);
-    }
+    // withdraw(uint256) removed - use withdraw(shares, 0) for no slippage protection
 
     function _withdrawInternal(uint256 sharesToBurn, uint256 minAmountOut)
         internal
@@ -987,37 +1108,134 @@ contract CommunityPool is
         }
     }
 
+    // getSwapQuote() removed - use DEX router directly for quotes
+
+    // ═══════════════════════════════════════════════════════════════
+    // AI MANAGEMENT (Cross-Chain Independent Operation)
+    // ═══════════════════════════════════════════════════════════════
+
     /**
-     * @notice Get expected output amount for a swap (quote)
-     * @param assetIndex Asset to trade
-     * @param amount Amount to swap
-     * @param isBuy True if buying with USDC, false if selling for USDC
-     * @return expectedOut Expected output amount
+     * @notice Record an AI decision (can be executed separately)
+     * @dev AI agents record decisions with full metadata for transparency
+     *      Uses same Pyth price feed IDs across all chains for consistent data
+     * @param targetAllocBps Target allocation in basis points
+     * @param confidence AI confidence level (0-100)
+     * @param urgency Execution urgency (0=low, 1=medium, 2=high)
+     * @param expectedReturn Expected return in BPS (can be negative)
+     * @param riskScore Risk score (0-10000)
+     * @param reasoning Human-readable reasoning
+     * @param priceDataHash Hash of price data used for decision
+     * @return decisionId Unique decision identifier
      */
-    function getSwapQuote(
-        uint8 assetIndex,
-        uint256 amount,
-        bool isBuy
-    ) external view returns (uint256 expectedOut) {
-        if (dexRouter == address(0)) return 0;
-        if (address(assetTokens[assetIndex]) == address(0)) return 0;
-
-        IVVSRouter router = IVVSRouter(dexRouter);
-        address[] memory path = new address[](2);
-
-        if (isBuy) {
-            path[0] = address(depositToken);
-            path[1] = address(assetTokens[assetIndex]);
-        } else {
-            path[0] = address(assetTokens[assetIndex]);
-            path[1] = address(depositToken);
+    function recordAIDecision(
+        uint256[NUM_ASSETS] calldata targetAllocBps,
+        uint8 confidence,
+        uint8 urgency,
+        int256 expectedReturn,
+        uint256 riskScore,
+        string calldata reasoning,
+        bytes32 priceDataHash
+    ) 
+        external 
+        onlyRole(AGENT_ROLE) 
+        returns (bytes32 decisionId) 
+    {
+        // Validate confidence meets minimum
+        if (confidence < minAIConfidence) {
+            revert AIConfidenceTooLow(confidence, minAIConfidence);
         }
 
-        try router.getAmountsOut(amount, path) returns (uint256[] memory amounts) {
-            expectedOut = amounts[amounts.length - 1];
-        } catch {
-            expectedOut = 0;
+        // Validate allocations sum to 100%
+        uint256 totalBps = 0;
+        for (uint8 i = 0; i < NUM_ASSETS; i++) {
+            totalBps += targetAllocBps[i];
         }
+        if (totalBps != BPS_DENOMINATOR) revert InvalidAllocation(totalBps);
+
+        // Generate unique decision ID
+        decisionId = keccak256(abi.encodePacked(
+            block.timestamp,
+            msg.sender,
+            targetAllocBps,
+            priceDataHash,
+            CHAIN_ID
+        ));
+
+        // Store decision
+        currentAIDecision = AIDecision({
+            decisionId: decisionId,
+            timestamp: block.timestamp,
+            targetAllocBps: targetAllocBps,
+            confidence: confidence,
+            urgency: urgency,
+            expectedReturn: expectedReturn,
+            riskScore: riskScore,
+            reasoning: reasoning,
+            dataFeedHash: priceDataHash,
+            executed: false
+        });
+
+        aiDecisionHistory.push(currentAIDecision);
+
+        // Update agent metrics
+        AIAgentMetrics storage metrics = aiAgentMetrics[msg.sender];
+        metrics.totalDecisions++;
+        metrics.lastDecisionTime = block.timestamp;
+        metrics.lastDecisionId = decisionId;
+        // Update average confidence (running average)
+        metrics.avgConfidence = ((metrics.avgConfidence * (metrics.totalDecisions - 1)) + uint256(confidence) * 100) / metrics.totalDecisions;
+
+        emit AIDecisionRecorded(
+            decisionId,
+            msg.sender,
+            targetAllocBps,
+            confidence,
+            expectedReturn,
+            reasoning
+        );
+
+        emit AIAgentMetricsUpdated(
+            msg.sender,
+            metrics.totalDecisions,
+            metrics.cumulativeReturn
+        );
+
+        return decisionId;
+    }
+
+    // executeBatchTrades() removed - use executeRebalanceTrade() for individual trades
+
+    // receiveCrossChainSignal() removed - use setTargetAllocation() instead
+
+    // executeFromSignal() removed - use setTargetAllocation() instead
+    // getCurrentPriceDataHash() removed - compute off-chain
+
+    // getAIAgentMetrics() removed - read aiAgentMetrics mapping directly
+    // getAIDecisionCount() removed - read aiDecisionHistory.length directly
+    // setMinAIConfidence() removed - use initialize()
+    // setSignalVerificationRequired() removed - use initialize()
+    // initializePythPriceFeeds() removed - set in initialize() or setPythPriceId()
+
+    // ═══════════════════════════════════════════════════════════════
+    // UNIFIED AI LOGIC (Same Behavior Across All Chains)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice AI model version for deterministic behavior
+    uint256 public constant AI_MODEL_VERSION = 1;
+
+    // UnifiedDecisionParams struct removed (not needed after function removals)
+    // computeUnifiedDecisionHash() removed - compute off-chain
+    // verifyUnifiedDecision() removed
+
+    // recordUnifiedAIDecision() removed
+
+    // getUnifiedPriceFeedIds() removed - use PYTH_*_USD constants directly
+
+    // getPoolStateForAI() removed
+
+    // _normalizePythPrice - delegated to library
+    function _normalizePythPrice(int64 price, int32 expo) internal pure returns (uint256) {
+        return CommunityPoolLib.normalizePythPrice(price, expo);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1109,6 +1327,12 @@ contract CommunityPool is
     // VIEW FUNCTIONS
     // ═══════════════════════════════════════════════════════════════
 
+    function name() external pure returns (string memory) { return "CPool"; }
+    function symbol() external pure returns (string memory) { return "cvCRO"; }
+    function decimals() external pure returns (uint8) { return 18; }
+    function totalSupply() external view returns (uint256) { return totalShares; }
+    function balanceOf(address a) external view returns (uint256) { return members[a].shares; }
+
     /**
      * @notice Calculate total NAV of the pool in USDC terms
      * @dev Uses Pyth Network price feeds for accurate multi-asset valuation
@@ -1154,34 +1378,14 @@ contract CommunityPool is
         return nav;
     }
     
-    /**
-     * @notice Calculate asset value in USDC terms
-     * @param balance Asset balance
-     * @param price Price from Pyth (positive)
-     * @param decimals Asset decimals
-     * @param expo Pyth price exponent (negative = decimals)
-     */
+    // _calculateAssetValue - delegated to library
     function _calculateAssetValue(
         uint256 balance,
         uint256 price,
         uint8 decimals,
         int32 expo
     ) internal pure returns (uint256) {
-        // Pyth expo is typically -8, meaning price has 8 decimals
-        // We want result in USDC (6 decimals)
-        // value = balance * price / 10^decimals * 10^(-expo) / 10^6
-        // Simplified: value = balance * price / 10^(decimals + (-expo) - 6)
-        
-        uint256 scaleFactor;
-        int256 totalDecimals = int256(uint256(decimals)) - int256(expo) - 6;
-        
-        if (totalDecimals >= 0) {
-            scaleFactor = 10 ** uint256(totalDecimals);
-            return balance.mulDiv(price, scaleFactor, Math.Rounding.Floor);
-        } else {
-            scaleFactor = 10 ** uint256(-totalDecimals);
-            return balance.mulDiv(price * scaleFactor, 1, Math.Rounding.Floor);
-        }
+        return CommunityPoolLib.calculateAssetValue(balance, price, decimals, expo);
     }
     
     /**
@@ -1282,46 +1486,7 @@ contract CommunityPool is
         _allocations = targetAllocationBps;
     }
 
-    /**
-     * @notice Pool health check - verifies accounting integrity
-     * @dev Call this to detect any accounting anomalies
-     * @return isHealthy True if pool accounting is correct
-     * @return sharePrice Current share price in WAD (1e18 = $1)
-     * @return expectedMinNav Minimum NAV based on deposits/withdrawals
-     * @return actualNav Actual NAV from calculateTotalNAV()
-     * @return discrepancy Difference between expected and actual (negative = underfunded)
-     */
-    function healthCheck() 
-        external 
-        view 
-        returns (
-            bool isHealthy,
-            uint256 sharePrice,
-            uint256 expectedMinNav,
-            uint256 actualNav,
-            int256 discrepancy
-        ) 
-    {
-        actualNav = calculateTotalNAV();
-        sharePrice = _calculateNavPerShare();
-        
-        // Expected minimum NAV = total deposited - total withdrawn - fees
-        uint256 totalFees = accumulatedManagementFees + accumulatedPerformanceFees;
-        expectedMinNav = totalDeposited > (totalWithdrawn + totalFees) 
-            ? totalDeposited - totalWithdrawn - totalFees 
-            : 0;
-        
-        // Allow 1% tolerance for rounding
-        uint256 tolerance = expectedMinNav / 100;
-        
-        if (actualNav >= expectedMinNav) {
-            discrepancy = int256(actualNav - expectedMinNav);
-            isHealthy = true;
-        } else {
-            discrepancy = -int256(expectedMinNav - actualNav);
-            isHealthy = (expectedMinNav - actualNav) <= tolerance;
-        }
-    }
+    // healthCheck() removed - use getPoolStats() for basic health metrics
 
     /**
      * @notice Get rebalance history count
@@ -1337,52 +1502,9 @@ contract CommunityPool is
         return memberList.length;
     }
 
-    /**
-     * @notice Check if all configured oracles are healthy (fresh prices, no errors)
-     * @return healthy True if all oracles are working correctly
-     * @return configured Per-asset configuration status
-     * @return working Per-asset oracle working status
-     * @return fresh Per-asset price freshness status
-     */
-    function checkOracleHealth() external view returns (
-        bool healthy,
-        bool[NUM_ASSETS] memory configured,
-        bool[NUM_ASSETS] memory working,
-        bool[NUM_ASSETS] memory fresh
-    ) {
-        healthy = true;
-        for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            configured[i] = pythPriceIds[i] != bytes32(0);
-            if (configured[i]) {
-                (bool success, int64 price, , uint publishTime) = _getPythPrice(i);
-                working[i] = success && price > 0;
-                fresh[i] = success && (block.timestamp - publishTime <= priceStaleThreshold);
-                if (assetBalances[i] > 0 && (!working[i] || !fresh[i])) {
-                    healthy = false;
-                }
-            }
-        }
-    }
+    // checkOracleHealth() removed - use getOraclePrices() for oracle status
 
-    /**
-     * @notice Get current prices from all configured oracles
-     * @return prices Array of prices, 0 if not configured/failed
-     * @return timestamps Array of last update timestamps
-     */
-    function getOraclePrices() external view returns (
-        uint256[NUM_ASSETS] memory prices,
-        uint256[NUM_ASSETS] memory timestamps
-    ) {
-        for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            if (pythPriceIds[i] != bytes32(0)) {
-                (bool success, int64 price, , uint publishTime) = _getPythPrice(i);
-                if (success && price > 0) {
-                    prices[i] = uint256(uint64(price));
-                    timestamps[i] = publishTime;
-                }
-            }
-        }
-    }
+    // getOraclePrices() removed - use Pyth SDK directly
 
     // ═══════════════════════════════════════════════════════════════
     // ADMIN FUNCTIONS
@@ -1403,25 +1525,8 @@ contract CommunityPool is
         performanceFeeBps = _feeBps;
     }
 
-    function setRebalanceCooldown(uint256 _cooldown) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        rebalanceCooldown = _cooldown;
-    }
-
-    function setMaxSingleDeposit(uint256 _max) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        maxSingleDeposit = _max;
-    }
-
-    function setMaxSingleWithdrawalBps(uint256 _bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        maxSingleWithdrawalBps = _bps;
-    }
-
-    function setDailyWithdrawalCapBps(uint256 _bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        dailyWithdrawalCapBps = _bps;
-    }
-
-    function setDexRouter(address _router) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        dexRouter = _router;
-    }
+    // setRebalanceCooldown, setMaxSingleDeposit, setMaxSingleWithdrawalBps, 
+    // setDailyWithdrawalCapBps, setDexRouter removed - set via upgrade if needed
 
     /**
      * @notice Set asset token address (for post-initialization configuration)
@@ -1739,47 +1844,9 @@ contract CommunityPool is
         emit PoolHedgeClosed(hedgeId, realizedPnl, reason);
     }
 
-    /**
-     * @notice Get all active pool hedges
-     */
-    function getActivePoolHedges() external view returns (bytes32[] memory) {
-        return activePoolHedges;
-    }
-
-    /**
-     * @notice Get current auto-hedge configuration
-     */
-    function getAutoHedgeConfig() external view returns (
-        bool enabled,
-        uint256 riskThresholdBps,
-        uint256 maxHedgeRatioBps,
-        uint256 defaultLeverage,
-        uint256 cooldownSeconds,
-        uint256 lastAutoHedgeTime
-    ) {
-        AutoHedgeConfig memory config = autoHedgeConfig;
-        return (
-            config.enabled,
-            config.riskThresholdBps,
-            config.maxHedgeRatioBps,
-            config.defaultLeverage,
-            config.cooldownSeconds,
-            config.lastAutoHedgeTime
-        );
-    }
-
-    /**
-     * @notice Check if pool can auto-hedge (simplified for gas)
-     * @dev Returns status codes: 0=ready, 1=disabled, 2=no executor, 3=cooldown, 4=max reached
-     */
-    function shouldAutoHedge() external view returns (uint8 status) {
-        if (!autoHedgeConfig.enabled) return 1;
-        if (hedgeExecutor == address(0)) return 2;
-        if (block.timestamp < autoHedgeConfig.lastAutoHedgeTime + autoHedgeConfig.cooldownSeconds) return 3;
-        uint256 nav = calculateTotalNAV();
-        if (totalHedgedValue >= (nav * autoHedgeConfig.maxHedgeRatioBps) / BPS_DENOMINATOR) return 4;
-        return 0;
-    }
+    // getActivePoolHedges() removed - read activePoolHedges public array directly
+    // getAutoHedgeConfig() removed - read autoHedgeConfig public variable directly
+    // shouldAutoHedge() removed - check status off-chain
 
     // ═══════════════════════════════════════════════════════════════
     // UUPS UPGRADE
