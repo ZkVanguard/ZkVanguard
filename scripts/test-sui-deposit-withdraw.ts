@@ -9,27 +9,36 @@
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Bech32-encoded SUI private key (from sui keystore - infallible-topaz / deployer)
+const SUI_PRIVKEY = 'suiprivkey1qpu6rlng3uzygjusfat4vrj6nvkc7uhx6zztnrg4l27z45k4qm8h2eq0qan';
 
 // SUI Testnet configuration
 const CONFIG = {
   network: 'testnet' as const,
   packageId: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6',
   // AdminCap for creating pool
-  adminCapId: '0x088fef47064d46e298b57214eb68d9c245f420989249978625b5fdd0f1afb28f',
+  adminCapId: '0xc2c7d106dbd7ace011e5bebbcce7487273933064f9d2497bf3fc54df7e92b1eb',
   // FeeManagerCap
-  feeManagerCapId: '0x13731b6f7852b9bfa5072ff4901abe11124b956cac62a9fea3e7568808931e70',
+  feeManagerCapId: '0x6809c18e6444a830197c53f8d4d8a0d7a73df34d51c9cbd38d4926999e9336c2',
   moduleName: 'community_pool',
   // Test amounts (in MIST - 1 SUI = 1e9 MIST)
-  depositAmount: 100_000_000_000n, // 100 SUI
-  withdrawShares: 50_000_000_000_000_000_000n, // 50 shares (scaled by 1e18)
+  depositAmount: 100_000_000n, // 0.1 SUI (small test amount)
+  withdrawShares: 50_000_000_000_000_000n, // 0.05 shares (scaled by 1e18)
 };
 
-// Load private key from env
+// Load private key from bech32 or env
 function getKeypair(): Ed25519Keypair {
   const privateKey = process.env.SUI_PRIVATE_KEY;
   if (privateKey) {
+    // If it's a bech32 string
+    if (privateKey.startsWith('suiprivkey')) {
+      const { secretKey } = decodeSuiPrivateKey(privateKey);
+      return Ed25519Keypair.fromSecretKey(secretKey);
+    }
     // If it's a hex string, convert to Uint8Array
     if (privateKey.startsWith('0x')) {
       const hexStr = privateKey.slice(2);
@@ -39,9 +48,9 @@ function getKeypair(): Ed25519Keypair {
     return Ed25519Keypair.fromSecretKey(Buffer.from(privateKey, 'base64'));
   }
   
-  // Generate new keypair for testing
-  console.log('⚠️  No SUI_PRIVATE_KEY set, generating new keypair...');
-  return new Ed25519Keypair();
+  // Use hardcoded bech32 key for testing
+  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
+  return Ed25519Keypair.fromSecretKey(secretKey);
 }
 
 async function main() {
@@ -60,7 +69,7 @@ async function main() {
   console.log(`💰 SUI Balance: ${Number(balance.totalBalance) / 1e9} SUI\n`);
 
   if (BigInt(balance.totalBalance) < CONFIG.depositAmount) {
-    console.log('❌ Insufficient SUI balance for test. Need at least 100 SUI.');
+    console.log('❌ Insufficient SUI balance for test. Need at least 0.1 SUI.');
     console.log('   Get testnet SUI from: https://faucet.sui.io/');
     return;
   }
@@ -84,14 +93,17 @@ async function main() {
     // Create pool using admin cap
     try {
       const tx = new Transaction();
+      // Using the shared clock (0x6) and passing object references correctly
       tx.moveCall({
         target: `${CONFIG.packageId}::${CONFIG.moduleName}::create_pool`,
         arguments: [
-          tx.object(CONFIG.adminCapId),
-          tx.pure.address(address), // treasury
-          tx.object('0x6'), // Clock
+          tx.object(CONFIG.adminCapId), // AdminCap (owned object)
+          tx.pure.address(address),     // treasury address
+          tx.object('0x6'),             // Clock (shared system object)
         ],
       });
+      
+      tx.setGasBudget(50_000_000); // Set explicit gas budget
 
       const result = await client.signAndExecuteTransaction({
         signer: keypair,
@@ -100,6 +112,10 @@ async function main() {
 
       console.log('   ✅ Pool created!');
       console.log(`   📝 TX: https://suiscan.xyz/testnet/tx/${result.digest}`);
+      
+      // Wait for transaction to be indexed
+      console.log('   Waiting for transaction to be indexed...');
+      await client.waitForTransaction({ digest: result.digest });
       
       // Get pool state from created objects
       const txDetails = await client.getTransactionBlock({

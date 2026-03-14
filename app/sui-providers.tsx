@@ -382,9 +382,18 @@ interface SuiWalletProvidersProps {
   skipQueryProvider?: boolean;
 }
 
+// Get default network from environment variable
+const getDefaultSuiNetwork = (): NetworkType => {
+  const envNetwork = process.env.NEXT_PUBLIC_SUI_NETWORK || process.env.SUI_NETWORK || 'testnet';
+  if (envNetwork === 'mainnet' || envNetwork === 'testnet' || envNetwork === 'devnet') {
+    return envNetwork as NetworkType;
+  }
+  return 'testnet';
+};
+
 export function SuiWalletProviders({ 
   children,
-  defaultNetwork = 'testnet',
+  defaultNetwork = getDefaultSuiNetwork(),
   skipQueryProvider = false,
 }: SuiWalletProvidersProps) {
   const [network, setNetwork] = useState<NetworkType>(defaultNetwork);
