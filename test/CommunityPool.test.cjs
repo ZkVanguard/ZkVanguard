@@ -195,7 +195,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       
       const balanceBefore = await mockUSDC.balanceOf(user1.address);
       
-      await communityPool.connect(user1).withdraw(sharesToBurn);
+      await communityPool.connect(user1).withdraw(sharesToBurn, 0);
       
       const balanceAfter = await mockUSDC.balanceOf(user1.address);
       const memberAfter = await communityPool.members(user1.address);
@@ -216,7 +216,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
     it('should allow full withdrawal and remove membership', async function () {
       const member = await communityPool.members(user1.address);
       
-      await communityPool.connect(user1).withdraw(member.shares);
+      await communityPool.connect(user1).withdraw(member.shares, 0);
       
       const memberAfter = await communityPool.members(user1.address);
       
@@ -229,7 +229,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       const excessShares = member.shares + BigInt(1e18);
       
       await expect(
-        communityPool.connect(user1).withdraw(excessShares)
+        communityPool.connect(user1).withdraw(excessShares, 0)
       ).to.be.revertedWithCustomError(communityPool, 'InsufficientShares');
     });
   });
@@ -272,7 +272,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
 
       // User2 withdraws half
       const member2 = await communityPool.members(user2.address);
-      await communityPool.connect(user2).withdraw(member2.shares / BigInt(2));
+      await communityPool.connect(user2).withdraw(member2.shares / BigInt(2), 0);
 
       // Check updated stats
       const statsAfter = await communityPool.getPoolStats();
@@ -320,13 +320,15 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
 
     it('should track rebalance history', async function () {
       const allocation = [4000, 3000, 2000, 1000];
-      await communityPool.connect(agent).setTargetAllocation(allocation, "test reasoning");
+      const reasoningText = "test reasoning";
+      await communityPool.connect(agent).setTargetAllocation(allocation, reasoningText);
 
       const historyCount = await communityPool.getRebalanceHistoryCount();
       expect(historyCount).to.equal(1);
 
       const record = await communityPool.rebalanceHistory(0);
-      expect(record.reasoning).to.equal("test reasoning");
+      // Now stores hash of reasoning instead of string
+      expect(record.reasonHash).to.equal(ethers.keccak256(ethers.toUtf8Bytes(reasoningText)));
       expect(record.executor).to.equal(agent.address);
     });
   });
@@ -480,7 +482,7 @@ describe('CommunityPool - AI-Managed Investment Pool', function () {
       const member = await communityPool.members(user1.address);
       
       // User tries to withdraw all shares - should work since USDC is still there
-      await communityPool.connect(user1).withdraw(member.shares);
+      await communityPool.connect(user1).withdraw(member.shares, 0);
       // If there was insufficient liquidity, it would have reverted with InsufficientLiquidity
     });
 
@@ -609,7 +611,7 @@ describe('CommunityPool - Stress Tests', function () {
     // Half withdraw
     for (let i = 0; i < users.length / 2; i++) {
       const member = await communityPool.members(users[i].address);
-      await communityPool.connect(users[i]).withdraw(member.shares / BigInt(2));
+      await communityPool.connect(users[i]).withdraw(member.shares / BigInt(2), 0);
     }
 
     // Verify pool still functional
@@ -734,7 +736,7 @@ describe('CommunityPool - Extreme Scale Tests', function () {
     const sharesToWithdraw = member.shares / BigInt(3); // ~1/3 of shares = $1B
 
     const balanceBefore = await mockUSDC.balanceOf(whale1.address);
-    await communityPool.connect(whale1).withdraw(sharesToWithdraw);
+    await communityPool.connect(whale1).withdraw(sharesToWithdraw, 0);
     const balanceAfter = await mockUSDC.balanceOf(whale1.address);
 
     const withdrawn = balanceAfter - balanceBefore;
@@ -766,7 +768,7 @@ describe('CommunityPool - Extreme Scale Tests', function () {
     // Full withdrawal should return approximately original amount
     const member = await communityPool.members(whale1.address);
     const balanceBefore = await mockUSDC.balanceOf(whale1.address);
-    await communityPool.connect(whale1).withdraw(member.shares);
+    await communityPool.connect(whale1).withdraw(member.shares, 0);
     const balanceAfter = await mockUSDC.balanceOf(whale1.address);
 
     const received = balanceAfter - balanceBefore;
