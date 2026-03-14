@@ -39,11 +39,13 @@ module zkvanguard::community_pool {
     const BPS_DENOMINATOR: u64 = 10000;
     const SECONDS_PER_YEAR: u64 = 31536000; // 365 days
     const MIN_DEPOSIT: u64 = 10_000_000_000; // 10 SUI (in MIST, 9 decimals)
-    const MIN_SHARES_FOR_WITHDRAWAL: u64 = 1_000_000_000_000_000; // 0.001 shares
+    const MIN_SHARES_FOR_WITHDRAWAL: u64 = 1_000_000; // 0.001 shares (9 decimals)
     const MIN_FIRST_DEPOSIT: u64 = 100_000_000_000; // 100 SUI
-    const VIRTUAL_SHARES: u64 = 1_000_000_000_000_000_000; // 1e18
+    // Virtual offset for ERC-4626 inflation protection
+    // Using 1:1 ratio to prevent overflow while maintaining protection
+    const VIRTUAL_SHARES: u64 = 1_000_000_000; // 1 share (9 decimals like SUI)
     const VIRTUAL_ASSETS: u64 = 1_000_000_000; // 1 SUI in MIST
-    const WAD: u64 = 1_000_000_000_000_000_000; // 1e18
+    const WAD: u64 = 1_000_000_000; // 1e9 (9 decimal precision for shares)
 
     // Reserve and safety limits
     const MIN_RESERVE_RATIO_BPS: u64 = 2000; // 20% must stay liquid
@@ -531,7 +533,7 @@ module zkvanguard::community_pool {
 
     // ============ View Functions ============
 
-    /// Calculate NAV per share (scaled by WAD = 1e18)
+    /// Calculate NAV per share (scaled by WAD = 1e9 for 9 decimal precision)
     public fun get_nav_per_share(state: &CommunityPoolState): u64 {
         if (state.total_shares == 0) {
             return WAD // 1.0
