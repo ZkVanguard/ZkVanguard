@@ -63,6 +63,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                   chain.type === 'evm' 
                     ? 'bg-gradient-to-r from-[#007AFF] to-[#5856D6]' 
+                    : chain.type === 'arbitrum'
+                    ? 'bg-gradient-to-r from-[#28A0F0] to-[#1A69AA]'
                     : chain.type === 'oasis-emerald'
                     ? 'bg-gradient-to-r from-[#00C853] to-[#009624]'
                     : chain.type === 'oasis-sapphire'
@@ -75,6 +77,8 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 }`}>
                   {chain.type === 'evm' ? (
                     <span className="text-white font-bold text-sm">CRO</span>
+                  ) : chain.type === 'arbitrum' ? (
+                    <span className="text-white font-bold text-sm">ARB</span>
                   ) : chain.type.startsWith('oasis') ? (
                     <span className="text-white font-bold text-[10px]">ROSE</span>
                   ) : (
@@ -89,6 +93,7 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                   <div className="text-[#1D1D1F] font-semibold">{chain.name}</div>
                   <div className="text-[#86868B] text-xs">
                     {chain.type === 'evm' ? 'EVM Compatible • x402 Gasless'
+                      : chain.type === 'arbitrum' ? 'L2 Rollup • Pyth Oracles'
                       : chain.type === 'oasis-emerald' ? 'Public EVM ParaTime'
                       : chain.type === 'oasis-sapphire' ? 'Confidential EVM • Privacy'
                       : chain.type === 'oasis-cipher' ? 'Confidential WASM ParaTime'
@@ -101,11 +106,13 @@ export function ChainSelector({ onChainChange, className = '' }: ChainSelectorPr
                 <div className={`px-2 py-1 rounded-full text-xs font-medium ${
                   chain.type === 'evm'
                     ? 'bg-[#34C759]/10 text-[#34C759]'
+                    : chain.type === 'arbitrum'
+                    ? 'bg-[#28A0F0]/10 text-[#28A0F0]'
                     : chain.type.startsWith('oasis')
                     ? 'bg-[#0092F6]/10 text-[#0092F6]'
                     : 'bg-[#32ADE6]/10 text-[#32ADE6]'
                 }`}>
-                  {chain.type === 'evm' ? 'Live' : 'Ready'}
+                  {chain.type === 'evm' || chain.type === 'arbitrum' ? 'Live' : 'Ready'}
                 </div>
 
                 {/* Check Icon */}

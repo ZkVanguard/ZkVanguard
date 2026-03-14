@@ -5,7 +5,7 @@ import './api-interceptor';
 
 import { ReactNode, useMemo } from 'react';
 import { WagmiProvider } from 'wagmi';
-import { CronosTestnet, CronosMainnet, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
+import { CronosTestnet, CronosMainnet, ArbitrumOne, ArbitrumSepolia, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
@@ -27,7 +27,7 @@ const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e0
 const config = getDefaultConfig({
   appName: 'ZkVanguard',
   projectId,
-  chains: [CronosTestnet, CronosMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
+  chains: [CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
   ssr: true,
 });
 
