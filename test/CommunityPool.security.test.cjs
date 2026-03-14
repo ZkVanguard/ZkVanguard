@@ -78,7 +78,7 @@ describe("CommunityPool - Security Hardening Tests", function () {
       
       // Try to withdraw 100% (should fail)
       await expect(
-        communityPool.connect(user1).withdraw(member.shares)
+        communityPool.connect(user1).withdraw(member.shares, 0)
       ).to.be.revertedWithCustomError(communityPool, "SingleWithdrawalTooLarge");
     });
     
@@ -97,12 +97,12 @@ describe("CommunityPool - Security Hardening Tests", function () {
       // Try to withdraw user1's full balance (~33% of pool) - exceeds 20% daily cap
       const member1 = await communityPool.members(user1.address);
       await expect(
-        communityPool.connect(user1).withdraw(member1.shares)
+        communityPool.connect(user1).withdraw(member1.shares, 0)
       ).to.be.reverted; // Should fail because single withdrawal > daily cap
       
       // Partial withdrawal within daily cap should work
       const partialShares = member1.shares / BigInt(2); // ~16% of pool
-      await communityPool.connect(user1).withdraw(partialShares);
+      await communityPool.connect(user1).withdraw(partialShares, 0);
     });
     
     it("should reset daily withdrawal cap at midnight UTC", async function () {
@@ -118,7 +118,7 @@ describe("CommunityPool - Security Hardening Tests", function () {
       
       // First full withdrawal (~50% of pool) - within daily cap of 60%
       const member1 = await communityPool.members(user1.address);
-      await communityPool.connect(user1).withdraw(member1.shares);
+      await communityPool.connect(user1).withdraw(member1.shares, 0);
       
       // Second withdrawal should fail (exceeded daily cap already)
       // Note: After user1 exits, user2 owns 100% but daily cap check uses original NAV
@@ -127,7 +127,7 @@ describe("CommunityPool - Security Hardening Tests", function () {
       
       // Withdraw small amount to test cap accumulation
       await expect(
-        communityPool.connect(user2).withdraw(halfShares)
+        communityPool.connect(user2).withdraw(halfShares, 0)
       ).to.be.reverted; // Daily cap exceeded
       
       // Fast forward 1 day
@@ -135,7 +135,7 @@ describe("CommunityPool - Security Hardening Tests", function () {
       await ethers.provider.send("evm_mine", []);
       
       // Daily cap resets, withdrawal should now work
-      await communityPool.connect(user2).withdraw(halfShares);
+      await communityPool.connect(user2).withdraw(halfShares, 0);
     });
     
     it("should allow admin to trip circuit breaker", async function () {
@@ -334,7 +334,7 @@ describe("CommunityPool - Security Hardening Tests", function () {
       
       // Emergency withdrawal should still work (circuit breaker doesn't block emergency)
       const member = await communityPool.members(user1.address);
-      await communityPool.connect(user1).withdraw(member.shares);
+      await communityPool.connect(user1).withdraw(member.shares, 0);
       
       const memberAfter = await communityPool.members(user1.address);
       expect(memberAfter.shares).to.equal(0);
@@ -437,7 +437,7 @@ describe("CommunityPool - Gas Optimization Verification", function () {
     await communityPool.connect(user1).deposit(deposit);
     
     const member = await communityPool.members(user1.address);
-    const tx = await communityPool.connect(user1).withdraw(member.shares);
+    const tx = await communityPool.connect(user1).withdraw(member.shares, 0);
     const receipt = await tx.wait();
     
     // Withdrawal should cost less than 200k gas

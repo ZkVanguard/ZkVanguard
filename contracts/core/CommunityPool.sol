@@ -219,7 +219,7 @@ contract CommunityPool is
         uint256 timestamp;
         uint256[NUM_ASSETS] previousAllocBps;
         uint256[NUM_ASSETS] newAllocBps;
-        string reasoning;
+        bytes32 reasonHash;
         address executor;
     }
 
@@ -233,7 +233,7 @@ contract CommunityPool is
         uint8 urgency;                // Execution urgency (0=low, 1=medium, 2=high)
         int256 expectedReturn;        // Expected return in BPS (can be negative)
         uint256 riskScore;            // Risk score (0-10000 BPS)
-        string reasoning;             // AI reasoning
+        bytes32 reasonHash;           // Hash of AI reasoning
         bytes32 dataFeedHash;         // Hash of price data used for decision
         bool executed;                // Whether fully executed
     }
@@ -468,7 +468,7 @@ contract CommunityPool is
         address indexed executor,
         uint256[NUM_ASSETS] previousBps,
         uint256[NUM_ASSETS] newBps,
-        string reasoning,
+        bytes32 reasonHash,
         uint256 timestamp
     );
 
@@ -520,13 +520,13 @@ contract CommunityPool is
         uint256 collateralAmount,
         uint256 leverage,
         bool isLong,
-        string reason
+        bytes32 reasonHash
     );
 
     event PoolHedgeClosed(
         bytes32 indexed hedgeId,
         int256 pnl,
-        string reason
+        bytes32 reasonHash
     );
 
     event AutoHedgeConfigUpdated(
@@ -539,8 +539,10 @@ contract CommunityPool is
     event HedgeExecutorSet(address indexed newExecutor);
     
     // Circuit breaker events
-    event CircuitBreakerTripped(address indexed by, string reason);
+    event CircuitBreakerTripped(address indexed by, bytes32 reasonHash);
     event CircuitBreakerReset(address indexed by);
+    event CircuitBreakerUpdated(uint8 paramId, uint256 newValue);
+    event DexRouterUpdated(address indexed newRouter);
     event DailyWithdrawalReset(uint256 newDay, uint256 previousTotal);
 
     // AI Management events
@@ -550,7 +552,7 @@ contract CommunityPool is
         uint256[NUM_ASSETS] targetAllocBps,
         uint8 confidence,
         int256 expectedReturn,
-        string reasoning
+        bytes32 reasonHash
     );
 
     event AIDecisionExecuted(
@@ -622,6 +624,7 @@ contract CommunityPool is
     error DepositTooLarge(uint256 amount, uint256 maximum);
     error SingleWithdrawalTooLarge(uint256 amount, uint256 maxBps);
     error DailyWithdrawalCapExceeded(uint256 requested, uint256 remainingCap);
+    error InvalidConfiguration();
     
     // Additional errors (saves bytecode vs require strings)
     error InvalidAssetIndex();
@@ -1000,17 +1003,18 @@ contract CommunityPool is
         }
 
         // Record rebalance
+        bytes32 reasonHash = keccak256(bytes(reasoning));
         rebalanceHistory.push(RebalanceRecord({
             timestamp: block.timestamp,
             previousAllocBps: previousBps,
             newAllocBps: newAllocationBps,
-            reasoning: reasoning,
+            reasonHash: reasonHash,
             executor: msg.sender
         }));
 
         lastRebalanceTime = block.timestamp;
 
-        emit Rebalanced(msg.sender, previousBps, newAllocationBps, reasoning, block.timestamp);
+        emit Rebalanced(msg.sender, previousBps, newAllocationBps, reasonHash, block.timestamp);
     }
 
     /**
@@ -1162,6 +1166,7 @@ contract CommunityPool is
         ));
 
         // Store decision
+        bytes32 reasonHash = keccak256(bytes(reasoning));
         currentAIDecision = AIDecision({
             decisionId: decisionId,
             timestamp: block.timestamp,
@@ -1170,7 +1175,7 @@ contract CommunityPool is
             urgency: urgency,
             expectedReturn: expectedReturn,
             riskScore: riskScore,
-            reasoning: reasoning,
+            reasonHash: reasonHash,
             dataFeedHash: priceDataHash,
             executed: false
         });
@@ -1191,7 +1196,7 @@ contract CommunityPool is
             targetAllocBps,
             confidence,
             expectedReturn,
-            reasoning
+            reasonHash
         );
 
         emit AIAgentMetricsUpdated(
@@ -1525,8 +1530,56 @@ contract CommunityPool is
         performanceFeeBps = _feeBps;
     }
 
-    // setRebalanceCooldown, setMaxSingleDeposit, setMaxSingleWithdrawalBps, 
-    // setDailyWithdrawalCapBps, setDexRouter removed - set via upgrade if needed
+    /**
+     * @notice Set maximum single deposit amount
+     * @dev Critical circuit breaker control for whale protection
+     * @param _maxDeposit Maximum deposit in USDC (6 decimals)
+     */
+    function setMaxSingleDeposit(uint256 _maxDeposit) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_maxDeposit < MIN_DEPOSIT) revert InvalidConfiguration();
+        maxSingleDeposit = _maxDeposit;
+        emit CircuitBreakerUpdated(0, _maxDeposit);
+    }
+
+    /**
+     * @notice Set maximum single withdrawal in basis points of total pool
+     * @dev Prevents large withdrawals that could destabilize the pool
+     * @param _maxBps Maximum withdrawal as percentage of pool (10000 = 100%)
+     */
+    function setMaxSingleWithdrawalBps(uint256 _maxBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_maxBps > BPS_DENOMINATOR) revert InvalidConfiguration();
+        maxSingleWithdrawalBps = _maxBps;
+        emit CircuitBreakerUpdated(1, _maxBps);
+    }
+
+    /**
+     * @notice Set daily withdrawal cap in basis points of total pool
+     * @dev Prevents bank run scenarios by limiting total daily withdrawals
+     * @param _dailyCapBps Daily cap as percentage of pool (10000 = 100%)
+     */
+    function setDailyWithdrawalCapBps(uint256 _dailyCapBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_dailyCapBps > BPS_DENOMINATOR) revert InvalidConfiguration();
+        dailyWithdrawalCapBps = _dailyCapBps;
+        emit CircuitBreakerUpdated(2, _dailyCapBps);
+    }
+
+    /**
+     * @notice Set DEX router for swaps
+     * @param _dexRouter Address of VVS or other DEX router
+     */
+    function setDexRouter(address _dexRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        dexRouter = _dexRouter;
+        emit DexRouterUpdated(_dexRouter);
+    }
+
+    /**
+     * @notice Set rebalance cooldown period
+     * @param _cooldown Minimum time between rebalances in seconds
+     */
+    function setRebalanceCooldown(uint256 _cooldown) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_cooldown > 7 days) revert InvalidConfiguration();
+        rebalanceCooldown = _cooldown;
+    }
 
     /**
      * @notice Set asset token address (for post-initialization configuration)
@@ -1593,7 +1646,7 @@ contract CommunityPool is
      */
     function tripCircuitBreaker(string calldata reason) external onlyRole(DEFAULT_ADMIN_ROLE) {
         circuitBreakerTripped = true;
-        emit CircuitBreakerTripped(msg.sender, reason);
+        emit CircuitBreakerTripped(msg.sender, keccak256(bytes(reason)));
     }
 
     /**
@@ -1803,7 +1856,7 @@ contract CommunityPool is
         totalHedgedValue += collateralAmount;
         autoHedgeConfig.lastAutoHedgeTime = block.timestamp;
         
-        emit PoolHedgeOpened(hedgeId, pairIndex, collateralAmount, leverage, isLong, reason);
+        emit PoolHedgeOpened(hedgeId, pairIndex, collateralAmount, leverage, isLong, keccak256(bytes(reason)));
     }
 
     /**
@@ -1841,7 +1894,7 @@ contract CommunityPool is
             }
         }
         
-        emit PoolHedgeClosed(hedgeId, realizedPnl, reason);
+        emit PoolHedgeClosed(hedgeId, realizedPnl, keccak256(bytes(reason)));
     }
 
     // getActivePoolHedges() removed - read activePoolHedges public array directly
