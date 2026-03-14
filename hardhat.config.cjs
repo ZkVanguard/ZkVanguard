@@ -26,6 +26,7 @@ const config = {
   networks: {
     hardhat: {
       chainId: 31337,
+      allowUnlimitedContractSize: true,  // Enable for testing large contracts
       forking: process.env.FORK_CRONOS
         ? {
             url: process.env.CRONOS_MAINNET_RPC || 'https://evm.cronos.org/',

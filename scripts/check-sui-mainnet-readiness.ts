@@ -54,17 +54,28 @@ async function checkSuiMainnetReadiness() {
   if (existsSync(moveTomlPath)) {
     const moveToml = readFileSync(moveTomlPath, 'utf-8');
     
-    if (moveToml.includes('testnet-v1')) {
-      console.log('   ⚠️  Move.toml is using TESTNET framework version:');
-      console.log('      Current: testnet-v1.46.0');
-      console.log('      Mainnet: Should use mainnet-compatible version or framework tag');
-      warnings.push('⚠️  Move.toml needs mainnet framework version update');
-    } else if (moveToml.includes('mainnet')) {
+    // Filter out comment lines and find the actual Sui dependency line
+    const nonCommentLines = moveToml.split('\n').filter(line => !line.trim().startsWith('#'));
+    const suiDepLine = nonCommentLines.find(line => line.includes('Sui') && line.includes('rev'));
+    const revMatch = suiDepLine?.match(/rev\s*=\s*"([^"]+)"/);
+    const revVersion = revMatch ? revMatch[1] : '';
+    
+    console.log(`   • Framework version: ${revVersion || 'NOT FOUND'}`);
+    
+    if (revVersion.includes('mainnet')) {
       console.log('   ✅ Move.toml configured for mainnet');
       ready.push('✅ Move.toml mainnet-ready');
-    } else {
+    } else if (revVersion.includes('testnet')) {
+      console.log('   ⚠️  Move.toml is using TESTNET framework version:');
+      console.log(`      Current: ${revVersion}`);
+      console.log('      Mainnet: Should use mainnet-v1.x.x');
+      warnings.push('⚠️  Move.toml needs mainnet framework version update');
+    } else if (revVersion) {
       console.log('   ⚠️  Move.toml framework version unclear');
       warnings.push('⚠️  Verify Move.toml framework version for mainnet');
+    } else {
+      console.log('   ❌ Could not parse Move.toml framework version');
+      warnings.push('⚠️  Move.toml framework version not parseable');
     }
   } else {
     console.log('   ❌ Move.toml not found at contracts/sui/Move.toml');
