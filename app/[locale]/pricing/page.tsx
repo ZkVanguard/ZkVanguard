@@ -97,8 +97,8 @@ export default async function PricingPage() {
                 What chains are supported?
               </h3>
               <p className="text-[15px] text-[#86868b] leading-[1.6]">
-                We currently support Cronos EVM and SUI, with more chains coming soon. 
-                All hedging operations use Moonlander perpetuals on Cronos.
+                We support Cronos EVM, Arbitrum, and SUI with unified AI management. 
+                Same portfolio strategy across all chains using Pyth Network oracles.
               </p>
             </div>
           </div>
