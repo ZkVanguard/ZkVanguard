@@ -13,9 +13,13 @@ dotenv.config({ path: '.env.local' });
 import { ethers } from 'ethers';
 import { query } from '../lib/db/postgres';
 
-const COMMUNITY_POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
+// Community Pool V3 Proxy Address (updated 2026-03-12)
+const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
+  'function getMemberCount() view returns (uint256)',
+  'function memberList(uint256) view returns (address)',
+  'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
 ];
 
 async function resetNavHistory() {
