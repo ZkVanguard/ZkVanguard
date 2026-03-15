@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "regions": ["sin1"],
+  "installCommand": "npm install --legacy-peer-deps",
   "crons": [
     {
       "path": "/api/cron/community-pool",
