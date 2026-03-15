@@ -23,8 +23,8 @@ import { COMMUNITY_POOL_PORTFOLIO_ID } from '../../lib/constants';
 // Known wallet → portfolio mappings from deployments/auto-hedge-configs.json
 const WALLET_TO_PORTFOLIO: Record<string, number> = {
   '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c': COMMUNITY_POOL_PORTFOLIO_ID, // Deployer/treasury → community pool
-  '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B': COMMUNITY_POOL_PORTFOLIO_ID, // Community pool contract address
-  '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30': COMMUNITY_POOL_PORTFOLIO_ID, // Community pool old proxy
+  '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30': COMMUNITY_POOL_PORTFOLIO_ID, // Community pool V3 proxy (current)
+  '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B': COMMUNITY_POOL_PORTFOLIO_ID, // Community pool V2 proxy (deprecated)
   '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1': 3, // Institutional portfolio
 };
 
