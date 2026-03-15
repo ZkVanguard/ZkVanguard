@@ -176,15 +176,24 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
 
-  // Auto-detect chain from wallet
+  // Track if user has manually selected a chain (don't override)
+  const userSelectedChainRef = useRef(false);
+
+  // Auto-detect chain from wallet (only on initial mount or wallet chain change, not user tab clicks)
   useEffect(() => {
-    if (chainId) {
+    if (chainId && !userSelectedChainRef.current) {
       const detectedChain = getChainKeyFromId(chainId);
       if (detectedChain && detectedChain !== selectedChain) {
         setSelectedChain(detectedChain);
       }
     }
-  }, [chainId, selectedChain]);
+  }, [chainId]); // Remove selectedChain from deps to avoid override loop
+
+  // Handler for manual chain tab selection
+  const handleChainSelect = useCallback((key: string) => {
+    userSelectedChainRef.current = true;
+    setSelectedChain(key);
+  }, []);
 
   // Helper: Sign message for API authentication (informative message)
   const signForApi = useCallback(async (action: 'deposit' | 'withdraw', amount: string): Promise<{ signature: string; message: string } | null> => {
@@ -667,7 +676,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
                 .map(([key, config]) => (
                   <button
                     key={key}
-                    onClick={() => setSelectedChain(key)}
+                    onClick={() => handleChainSelect(key)}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
                       selectedChain === key
                         ? 'bg-white text-indigo-600'
