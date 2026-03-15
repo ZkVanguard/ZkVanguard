@@ -31,6 +31,7 @@ import {
   validateLeverage,
   auditLog 
 } from '@/lib/security/production-guard';
+import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
 // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './AutoHedgingService';
 
@@ -291,63 +292,38 @@ export class CentralizedHedgeManager {
 
   /**
    * Community pool context using snapshot prices + on-chain pool stats.
-   * Uses the pre-fetched snapshot directly — does NOT call calculatePoolNAV()
+   * Uses CommunityPoolStatsService for on-chain data (single source of truth).
+   * Uses the pre-fetched snapshot for prices — does NOT call calculatePoolNAV()
    * which would independently fetch prices and defeat centralized single-fetch.
    */
   private async gatherCommunityPoolContext(
     config: AutoHedgeConfig,
     snapshot: MarketSnapshot
   ): Promise<PortfolioContext> {
-    // On-chain pool stats
-    const provider = new ethers.JsonRpcProvider(CENTRAL_CONFIG.RPC_URL);
-    const poolContract = new ethers.Contract(
-      CENTRAL_CONFIG.COMMUNITY_POOL_ADDRESS,
-      ['function getPoolStats() view returns (uint256, uint256, uint256, uint256, uint256[4])'],
-      provider
-    );
-    const stats = await poolContract.getPoolStats();
-    const totalShares = Number(ethers.formatUnits(stats[0], 18));
-    const onChainNAV = Number(ethers.formatUnits(stats[1], 6));
+    // Get on-chain pool stats via unified service (single source of truth)
+    const poolStats = await getUnifiedPoolStats();
+    const totalShares = poolStats.totalShares;
+    const onChainNAV = poolStats.totalNAV;
 
-    // Get pool state from DB for allocation amounts (no price fetch)
-    let allocationsFromDB: Record<string, { amount: number; percentage: number }> = {};
-    try {
-      const { getPoolState } = await import('@/lib/storage/community-pool-storage');
-      const poolState = await getPoolState();
-      for (const [asset, alloc] of Object.entries(poolState.allocations)) {
-        const rawAmount = (alloc as { amount: number }).amount;
-        const rawPercentage = (alloc as { percentage: number }).percentage;
-        
-        // PRODUCTION SAFETY: Validate allocation data
-        // Allow 0 (empty position) but not negative or NaN
-        const amount = Number.isFinite(rawAmount) && rawAmount >= 0 ? rawAmount : 0;
-        const percentage = Number.isFinite(rawPercentage) && rawPercentage >= 0 && rawPercentage <= 100 
-          ? rawPercentage 
-          : 0;
-        
-        allocationsFromDB[asset] = { amount, percentage };
-      }
-    } catch (error) {
-      logger.warn('[HedgeManager] Failed to load pool state from DB, using equal allocation estimates', { error });
-      // If DB unavailable, use equal allocation estimates from on-chain NAV
-      const symbols = ['CRO', 'ETH', 'BTC', 'SUI'];
-      const pct = 100 / symbols.length;
-      for (const sym of symbols) {
-        allocationsFromDB[sym] = { amount: 0, percentage: pct };
-      }
-    }
+    // Build allocations from on-chain data
+    const allocationsFromChain: Record<string, { amount: number; percentage: number }> = {
+      BTC: { amount: poolStats.assetBalances.BTC, percentage: poolStats.allocations.BTC.percentage },
+      ETH: { amount: poolStats.assetBalances.ETH, percentage: poolStats.allocations.ETH.percentage },
+      SUI: { amount: poolStats.assetBalances.SUI, percentage: poolStats.allocations.SUI.percentage },
+      CRO: { amount: poolStats.assetBalances.CRO, percentage: poolStats.allocations.CRO.percentage },
+    };
 
-    // Build positions from DB amounts + SNAPSHOT prices (no redundant fetch)
+    // Build positions from on-chain amounts + SNAPSHOT prices (no redundant fetch)
     const positions: Position[] = [];
     const allocationPcts: Record<string, number> = {};
     let totalValue = 0;
 
-    for (const [symbol, allocData] of Object.entries(allocationsFromDB)) {
+    for (const [symbol, allocData] of Object.entries(allocationsFromChain)) {
       const snapshotPrice = snapshot.prices.get(symbol);
       if (!snapshotPrice) continue;
 
       if (allocData.amount > 0) {
-        // DB has actual amounts — use them directly
+        // On-chain has actual amounts — use them directly
         const valueUSD = allocData.amount * snapshotPrice.price;
         totalValue += valueUSD;
         positions.push({
@@ -357,7 +333,7 @@ export class CentralizedHedgeManager {
           balance: allocData.amount,
         });
       } else if (allocData.percentage > 0 && onChainNAV > 0) {
-        // DB has percentages but no amounts — estimate from on-chain NAV
+        // On-chain has percentages but no amounts — estimate from on-chain NAV
         const valueUSD = onChainNAV * (allocData.percentage / 100);
         const estimatedBalance = valueUSD / snapshotPrice.price;
         totalValue += valueUSD;

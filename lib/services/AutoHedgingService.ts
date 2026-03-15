@@ -21,6 +21,7 @@ import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from './CommunityPoolService';
+import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import { PredictionAggregatorService, type AggregatedPrediction } from './PredictionAggregatorService';
@@ -617,27 +618,19 @@ class AutoHedgingService {
 
   /**
    * Assess risk specifically for CommunityPool TVL
-   * Uses market-adjusted NAV from CommunityPoolService for accurate pricing
+   * Uses unified stats service (single source of truth) + CommunityPoolService for allocations
    */
   private async assessCommunityPoolRisk(): Promise<RiskAssessment> {
-    // Use correct proxy address from community-pool.json
-    const COMMUNITY_POOL_CONTRACT = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
-    const COMMUNITY_POOL_ABI = [
-      'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
-    ];
-
     try {
+      // Get on-chain stats via unified service (single source of truth)
+      const poolStats = await getUnifiedPoolStats();
+      const totalShares = poolStats.totalShares;
+      const onChainNAV = poolStats.totalNAV;
+      
       // Get market-adjusted NAV and share price from CommunityPoolService
       // This uses actual token holdings multiplied by live prices
       const marketData = await calculatePoolNAV();
       const { totalValueUSD: marketNAV, sharePrice: marketSharePrice, allocations: marketAllocations } = marketData;
-      
-      // Also get on-chain stats for comparison
-      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
-      const poolContract = new ethers.Contract(COMMUNITY_POOL_CONTRACT, COMMUNITY_POOL_ABI, provider);
-      const stats = await poolContract.getPoolStats();
-      const totalShares = Number(ethers.formatUnits(stats._totalShares, 18));
-      const onChainNAV = Number(ethers.formatUnits(stats._totalNAV, 6));
 
       // Build positions from market allocations
       const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
@@ -831,7 +824,7 @@ class AutoHedgingService {
         // Run parallel agent analysis for comprehensive pool management
         const [riskAnalysis, hedgeAnalysis] = await Promise.all([
           orchestrator.assessRisk({
-            address: COMMUNITY_POOL_CONTRACT,
+            address: COMMUNITY_POOL_ADDRESS, // Use constant from @/lib/constants
             portfolioData: {
               portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
               type: 'community_pool',
