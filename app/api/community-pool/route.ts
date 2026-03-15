@@ -369,6 +369,7 @@ async function getOnChainUserPosition(userAddress: string): Promise<UserPosition
 /**
  * Fetch ALL on-chain members and their positions with request deduplication
  * TTL: 120 seconds (expensive query)
+ * NOTE: Contract memberList may have duplicate entries - we deduplicate by address
  */
 async function getAllOnChainMembers() {
   return dedupedFetch<Array<{
@@ -385,20 +386,36 @@ async function getAllOnChainMembers() {
         
         const memberCount = await pool.getMemberCount();
         const count = Number(memberCount);
-        logger.info(`[CommunityPool API] On-chain member count: ${count}`);
+        logger.info(`[CommunityPool API] On-chain member count (raw): ${count}`);
         
-        const members = [];
+        // Use a Map to deduplicate by address (contract memberList has duplicates)
+        const memberMap = new Map<string, {
+          walletAddress: string;
+          shares: number;
+          depositedUSD: number;
+          joinTime: number;
+        }>();
+        
         for (let i = 0; i < count; i++) {
           const addr = await pool.memberList(i);
-          const memberData = await pool.members(addr);
+          const normalizedAddr = addr.toLowerCase();
           
-          members.push({
-            walletAddress: addr.toLowerCase(),
+          // Skip if already processed this address
+          if (memberMap.has(normalizedAddr)) {
+            continue;
+          }
+          
+          const memberData = await pool.members(addr);
+          memberMap.set(normalizedAddr, {
+            walletAddress: normalizedAddr,
             shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
             depositedUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
             joinTime: Number(memberData.joinTime),
           });
         }
+        
+        const members = Array.from(memberMap.values());
+        logger.info(`[CommunityPool API] Unique members after deduplication: ${members.length}`);
         
         return members;
       } catch (err) {
@@ -794,6 +811,10 @@ export async function GET(request: NextRequest) {
       const onChainPool = await getOnChainPoolData();
       
       if (onChainPool && onChainPool.totalShares > 0) {
+        // Get deduplicated member count (contract memberList has duplicates)
+        const onChainMembers = await getAllOnChainMembers();
+        const uniqueActiveMembers = onChainMembers?.filter(m => m.shares > 0).length ?? onChainPool.totalMembers ?? 0;
+        
         // On-chain contract is the authoritative source - use it directly
         return cachedJsonResponse({
           success: true,
@@ -801,7 +822,7 @@ export async function GET(request: NextRequest) {
             totalValueUSD: onChainPool.totalValueUSD,
             totalShares: onChainPool.totalShares,
             sharePrice: onChainPool.sharePrice,
-            memberCount: onChainPool.totalMembers ?? 0,
+            memberCount: uniqueActiveMembers,
             allocations: onChainPool.allocations,
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
