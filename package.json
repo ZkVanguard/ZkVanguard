@@ -67,6 +67,7 @@
   },
   "dependencies": {
     "@bluefin-exchange/bluefin-v2-client": "^6.5.1",
+    "@bluefin-exchange/pro-sdk": "^1.13.0",
     "@crypto.com/ai-agent-client": "^1.0.2",
     "@crypto.com/developer-platform-client": "^1.1.2",
     "@crypto.com/facilitator-client": "^1.0.4",
@@ -75,6 +76,7 @@
     "@mysten/dapp-kit": "^0.14.0",
     "@mysten/sui": "^1.0.0",
     "@neondatabase/serverless": "^0.9.5",
+    "@noble/hashes": "^2.0.1",
     "@oasisprotocol/sapphire-paratime": "^2.3.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",
