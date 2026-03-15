@@ -66,20 +66,23 @@ interface PoolMonitorResult {
   error?: string;
 }
 
-// Thresholds
-const DRAWDOWN_WARNING_PERCENT = 5; // Warn at 5% drawdown
-const DRAWDOWN_CRITICAL_PERCENT = 10; // Critical at 10% drawdown
-const DRIFT_WARNING_PERCENT = 3; // Warn if allocation drifts 3%+ from target
-const HOURLY_LOSS_WARNING_PERCENT = 1; // Warn on 1%+ hourly loss
-const DAILY_LOSS_WARNING_PERCENT = 3; // Warn on 3%+ daily loss
-const AUTO_HEDGE_THRESHOLD_PERCENT = 2; // Trigger hedge at 2%+ loss
+// Thresholds - AGGRESSIVE for risk management
+const SHARE_PRICE_PAR = 1.00; // Target share price - $1.00 is baseline
+const SHARE_PRICE_HEDGE_THRESHOLD = 0.02; // Trigger hedge if share price drops 2%+ below par
+const SHARE_PRICE_CRITICAL_THRESHOLD = 0.05; // Critical alert if 5%+ below par
+const DRAWDOWN_WARNING_PERCENT = 3; // Warn at 3% drawdown (lowered from 5%)
+const DRAWDOWN_CRITICAL_PERCENT = 7; // Critical at 7% drawdown (lowered from 10%)
+const DRIFT_WARNING_PERCENT = 2; // Warn if allocation drifts 2%+ from target (lowered from 3%)
+const HOURLY_LOSS_WARNING_PERCENT = 0.5; // Warn on 0.5%+ hourly loss (lowered from 1%)
+const DAILY_LOSS_WARNING_PERCENT = 2; // Warn on 2%+ daily loss (lowered from 3%)
+const AUTO_HEDGE_THRESHOLD_PERCENT = 1.5; // Trigger hedge at 1.5%+ loss (lowered from 2%)
 
-// Pool contract addresses
+// Pool contract addresses - V3 upgraded 2026-03-12
 const POOLS = [
   {
     id: 'community-pool',
     name: 'Community Pool',
-    address: '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B',
+    address: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
     abi: [
       'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
       'function poolCreationTime() view returns (uint256)',
@@ -594,18 +597,69 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       await triggerRebalanceIfNeeded(pool, maxDrift);
     }
     
-    // AUTO-HEDGE: Trigger protective hedge if pool is down > 2%
-    if (navChangePercent <= -AUTO_HEDGE_THRESHOLD_PERCENT || drawdownPercent >= AUTO_HEDGE_THRESHOLD_PERCENT) {
+    // ============================================
+    // AGGRESSIVE AUTO-HEDGE RISK MANAGEMENT
+    // ============================================
+    // Check THREE conditions for hedging:
+    // 1. Share price deviation from $1.00 par (MOST IMPORTANT)
+    // 2. Hourly NAV change
+    // 3. Drawdown from peak
+    
+    const sharePriceDeviation = (SHARE_PRICE_PAR - stats.sharePrice) / SHARE_PRICE_PAR;
+    const sharePriceLoss = sharePriceDeviation * 100; // As percentage
+    
+    const shouldHedge = 
+      sharePriceDeviation >= SHARE_PRICE_HEDGE_THRESHOLD || // Share price below par by threshold
+      navChangePercent <= -AUTO_HEDGE_THRESHOLD_PERCENT ||  // Recent hourly loss
+      drawdownPercent >= AUTO_HEDGE_THRESHOLD_PERCENT;       // Drawdown from peak
+    
+    // Critical alert for severe share price deviation
+    if (sharePriceDeviation >= SHARE_PRICE_CRITICAL_THRESHOLD) {
+      alerts.push({
+        severity: 'CRITICAL',
+        type: 'PERFORMANCE',
+        message: `⚠️ CRITICAL: ${pool.name} share price $${stats.sharePrice.toFixed(4)} is ${sharePriceLoss.toFixed(2)}% BELOW $1.00 par value!`,
+        timestamp: Date.now(),
+      });
+      logger.error(`[PoolNAVMonitor] CRITICAL: Share price ${sharePriceLoss.toFixed(2)}% below par!`, {
+        sharePrice: stats.sharePrice,
+        par: SHARE_PRICE_PAR,
+        deviation: sharePriceDeviation,
+      });
+    } else if (sharePriceDeviation >= SHARE_PRICE_HEDGE_THRESHOLD) {
+      alerts.push({
+        severity: 'WARNING',
+        type: 'PERFORMANCE',
+        message: `⚠️ ${pool.name} share price $${stats.sharePrice.toFixed(4)} is ${sharePriceLoss.toFixed(2)}% below $1.00 par - HEDGING REQUIRED`,
+        timestamp: Date.now(),
+      });
+    }
+    
+    if (shouldHedge) {
       // Find largest allocation asset to hedge
       const largestAsset = Object.entries(stats.allocations)
         .sort((a, b) => b[1] - a[1])[0]?.[0] || 'BTC';
       
-      const hedged = await triggerPoolHedge(pool, stats.totalNAV, navChangePercent || -drawdownPercent, largestAsset);
+      const lossToReport = Math.max(sharePriceLoss, Math.abs(navChangePercent), drawdownPercent);
+      const hedgeReason = sharePriceDeviation >= SHARE_PRICE_HEDGE_THRESHOLD 
+        ? `share price ${sharePriceLoss.toFixed(2)}% below $1.00`
+        : navChangePercent <= -AUTO_HEDGE_THRESHOLD_PERCENT 
+          ? `hourly loss ${Math.abs(navChangePercent).toFixed(2)}%`
+          : `drawdown ${drawdownPercent.toFixed(2)}%`;
+      
+      logger.warn(`[PoolNAVMonitor] 🚨 AUTO-HEDGE TRIGGER: ${hedgeReason}`, {
+        sharePrice: stats.sharePrice,
+        sharePriceLoss,
+        navChangePercent,
+        drawdownPercent,
+      });
+      
+      const hedged = await triggerPoolHedge(pool, stats.totalNAV, lossToReport, largestAsset);
       if (hedged) {
         alerts.push({
           severity: 'WARNING',
           type: 'PERFORMANCE',
-          message: `${pool.name} auto-hedged: protective SHORT placed due to ${Math.abs(navChangePercent || drawdownPercent).toFixed(2)}% loss`,
+          message: `🛡️ ${pool.name} AUTO-HEDGED: Protective SHORT placed - ${hedgeReason}`,
           timestamp: Date.now(),
         });
       }
