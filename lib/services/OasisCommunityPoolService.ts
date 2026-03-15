@@ -9,8 +9,8 @@
  * - Contract addresses from OASIS_CONTRACT_ADDRESSES
  * - ROSE native token instead of CRO/tCRO
  * 
- * @see lib/services/CommunityPoolOnChainService.ts (Cronos equivalent)
- * @see lib/services/SuiCommunityPoolService.ts     (SUI equivalent)
+ * @see lib/services/CommunityPoolStatsService.ts (Cronos unified stats)
+ * @see lib/services/SuiCommunityPoolService.ts   (SUI equivalent)
  */
 
 import { ethers, type BrowserProvider, type Signer } from 'ethers';
