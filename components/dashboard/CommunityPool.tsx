@@ -171,7 +171,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
   // Get current chain config
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-  const network = chainId ? getNetworkFromChainId(chainId) : 'testnet';
+  // Detect network from wallet, but fallback to testnet if pool not deployed on detected network
+  const detectedNetwork = chainId ? getNetworkFromChainId(chainId) : 'testnet';
+  // Use testnet if pool isn't deployed on detected network (prefer showing deployed pool data)
+  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : 'testnet';
   const USDC_ADDRESS = getUsdcAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
