@@ -679,6 +679,22 @@ class AutoHedgingService {
         ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
         : 0;
 
+      // ==========================================
+      // CRITICAL: Share Price vs Par Value Check
+      // ==========================================
+      // Share price should be >= $1.00. Any deviation below is a LOSS.
+      const sharePriceDeviationFromPar = INCEPTION_SHARE_PRICE - marketSharePrice;
+      const sharePriceLossPercent = (sharePriceDeviationFromPar / INCEPTION_SHARE_PRICE) * 100;
+      const isBelowPar = marketSharePrice < INCEPTION_SHARE_PRICE;
+
+      if (isBelowPar) {
+        logger.warn('[AutoHedging] ⚠️ SHARE PRICE BELOW PAR - HEDGING REQUIRED', {
+          currentSharePrice: marketSharePrice.toFixed(6),
+          parValue: INCEPTION_SHARE_PRICE.toFixed(2),
+          deviationPercent: sharePriceLossPercent.toFixed(2) + '%',
+        });
+      }
+
       logger.info('[AutoHedging] Community Pool market NAV', { 
         onChainNAV,
         marketNAV,
@@ -687,22 +703,42 @@ class AutoHedgingService {
         peakSharePrice,
         inceptionPrice: INCEPTION_SHARE_PRICE, 
         drawdownPercent: drawdownPercent.toFixed(2) + '%',
+        sharePriceLossFromPar: sharePriceLossPercent.toFixed(2) + '%',
+        isBelowPar,
       });
 
       const volatility = this.calculateVolatility(positions);
       const concentrationRisk = this.calculateConcentrationRisk(positions, marketNAV);
 
-      // Calculate risk score — AGGRESSIVE thresholds for community funds
-      // Any loss in a community pool should trigger protective hedging
+      // ==========================================
+      // AGGRESSIVE Risk Score - Protect $1.00 Par
+      // ==========================================
+      // Goal: Keep share price at or above $1.00
+      // ANY deviation below $1.00 requires immediate hedging action
       let riskScore = 1;
+      
+      // MOST IMPORTANT: Share price below par
+      if (isBelowPar) {
+        if (sharePriceLossPercent >= 5) riskScore += 4;      // 5%+ below par = CRITICAL
+        else if (sharePriceLossPercent >= 3) riskScore += 3; // 3%+ below par = HIGH
+        else if (sharePriceLossPercent >= 2) riskScore += 3; // 2%+ below par = HIGH
+        else if (sharePriceLossPercent >= 1) riskScore += 2; // 1%+ below par = ELEVATED
+        else riskScore += 1;                                  // Any loss = WARNING
+      }
+      
+      // Drawdown from peak (additional)
       if (drawdownPercent > 0.5) riskScore += 1;  // Even small losses matter
-      if (drawdownPercent > 1.5) riskScore += 2;  // Moderate loss → high alert
-      if (drawdownPercent > 4) riskScore += 2;    // Significant loss → critical
-      if (drawdownPercent > 8) riskScore += 1;    // Severe loss → maximum
+      if (drawdownPercent > 1.5) riskScore += 1;  // Moderate loss
+      if (drawdownPercent > 4) riskScore += 1;    // Significant loss
+      
+      // Volatility
       if (volatility > 1.5) riskScore += 1;       // Lower vol threshold
       if (volatility > 3) riskScore += 1;         // High volatility
+      
+      // Concentration risk
       if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
       if (concentrationRisk > 45) riskScore += 1; // High concentration
+      
       // Any negative 24h change across positions adds risk
       const anyNegative = positions.some(p => p.change24h < -1);
       if (anyNegative) riskScore += 1;
