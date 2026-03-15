@@ -23,6 +23,11 @@ import {
   calculatePoolNAV,
 } from '@/lib/services/CommunityPoolService';
 import {
+  getPoolStats as getUnifiedPoolStats,
+  getMemberPosition as getUnifiedMemberPosition,
+  clearCaches as clearStatsCaches,
+} from '@/lib/services/CommunityPoolStatsService';
+import {
   getUserShares,
   getPoolHistory,
   getTopShareholders,
@@ -306,93 +311,59 @@ function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
 }
 
 /**
- * Fetch on-chain pool data with request deduplication
- * TTL: 60 seconds (pool data changes slowly)
+ * Fetch on-chain pool data (SINGLE SOURCE OF TRUTH)
  * 
- * IMPORTANT: Uses market-adjusted NAV and share price from calculatePoolNAV()
- * The on-chain contract only holds USDC (no actual trading), so on-chain NAV = USDC balance
- * We use virtual holdings × live prices for accurate market-based valuation
- * 
- * NOTE: memberCount is calculated from ACTIVE shareholders (shares > 0), not historical count
+ * Uses CommunityPoolStatsService which:
+ * - Always reads from on-chain contract
+ * - Has built-in caching (60s) and request deduplication
+ * - Returns consistent data across all services
  */
 async function getOnChainPoolData(): Promise<PoolDataCache | null> {
-  return dedupedFetch<PoolDataCache | null>(
-    'pool-data',
-    async () => {
-      try {
-        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-        
-        // Get on-chain data (totalShares) - authoritative
-        const stats = await pool.getPoolStats();
-        const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-        
-        // Get ACTIVE member count by fetching all members and counting those with shares > 0
-        // The on-chain _memberCount includes historical members who withdrew to 0
-        const allMembers = await getAllOnChainMembers();
-        const activeCount = allMembers?.filter(m => m.shares > 0).length || 0;
-        
-        // Get market-adjusted NAV and share price from calculatePoolNAV()
-        // This uses virtual holdings × live prices for accurate valuation
-        // Without this, share price would be stuck at $1.00 (USDC only)
-        const marketData = await calculatePoolNAV();
-        const marketNAV = marketData.totalValueUSD;
-        const marketSharePrice = marketData.sharePrice;
-        const marketAllocations = marketData.allocations;
-        
-        return {
-          totalValueUSD: marketNAV,
-          totalShares,
-          sharePrice: marketSharePrice,
-          totalMembers: activeCount, // Use ACTIVE count, not historical
-          allocations: {
-            BTC: { percentage: marketAllocations.BTC?.percentage || Number(stats._allocations[0]) / 100 },
-            ETH: { percentage: marketAllocations.ETH?.percentage || Number(stats._allocations[1]) / 100 },
-            CRO: { percentage: marketAllocations.CRO?.percentage || Number(stats._allocations[2]) / 100 },
-            SUI: { percentage: marketAllocations.SUI?.percentage || Number(stats._allocations[3]) / 100 },
-          },
-          onChain: true,
-        };
-      } catch (err) {
-        logger.error('[CommunityPool API] On-chain fetch error:', err);
-        return null;
-      }
-    },
-    POOL_DATA_TTL
-  );
+  try {
+    const stats = await getUnifiedPoolStats();
+    
+    return {
+      totalValueUSD: stats.totalNAV,
+      totalShares: stats.totalShares,
+      sharePrice: stats.sharePrice,
+      totalMembers: stats.memberCount,
+      allocations: {
+        BTC: { percentage: stats.allocations.BTC.percentage },
+        ETH: { percentage: stats.allocations.ETH.percentage },
+        CRO: { percentage: stats.allocations.CRO.percentage },
+        SUI: { percentage: stats.allocations.SUI.percentage },
+      },
+      onChain: true,
+    };
+  } catch (err) {
+    logger.error('[CommunityPool API] Unified stats service error:', err);
+    return null;
+  }
 }
 
 /**
- * Fetch on-chain user position with request deduplication
- * TTL: 30 seconds per user
+ * Fetch on-chain user position (SINGLE SOURCE OF TRUTH)
+ * 
+ * Uses CommunityPoolStatsService which:
+ * - Always reads from on-chain contract
+ * - Has built-in caching (30s) and request deduplication
  */
 async function getOnChainUserPosition(userAddress: string): Promise<UserPositionCache | null> {
-  const normalizedAddr = userAddress.toLowerCase();
-  
-  return dedupedFetch<UserPositionCache | null>(
-    `user-pos-${normalizedAddr}`,
-    async () => {
-      try {
-        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-        
-        const pos = await pool.getMemberPosition(userAddress);
-        
-        return {
-          walletAddress: userAddress,
-          shares: parseFloat(ethers.formatUnits(pos.shares, 18)),
-          valueUSD: parseFloat(ethers.formatUnits(pos.valueUSD, 6)),
-          percentage: parseFloat(ethers.formatUnits(pos.percentage, 2)),
-          isMember: pos.shares > 0n,
-          onChain: true,
-        };
-      } catch (err) {
-        logger.error('[CommunityPool API] On-chain user fetch error:', err);
-        return null;
-      }
-    },
-    USER_POSITION_TTL
-  );
+  try {
+    const pos = await getUnifiedMemberPosition(userAddress);
+    
+    return {
+      walletAddress: pos.walletAddress,
+      shares: pos.shares,
+      valueUSD: pos.valueUSD,
+      percentage: pos.percentage,
+      isMember: pos.isMember,
+      onChain: true,
+    };
+  } catch (err) {
+    logger.error('[CommunityPool API] Unified member position error:', err);
+    return null;
+  }
 }
 
 /**
