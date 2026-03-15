@@ -1,8 +1,8 @@
 /**
  * SUI Community Pool Service
  * 
- * Mirrors CommunityPoolOnChainService for Cronos, wrapping the deployed
- * rwa_manager.move contract on SUI for:
+ * SUI chain equivalent of CommunityPoolStatsService + CommunityPoolService,
+ * wrapping the deployed rwa_manager.move contract on SUI for:
  * - Portfolio creation & management
  * - Deposit/withdraw operations
  * - Pool stats and member positions
@@ -11,6 +11,7 @@
  * Uses the deployed RWA Manager state object on SUI testnet.
  * 
  * @see contracts/sui/sources/rwa_manager.move
+ * @see lib/services/CommunityPoolStatsService.ts (Cronos equivalent)
  */
 
 import { logger } from '@/lib/utils/logger';
