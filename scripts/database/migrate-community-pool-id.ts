@@ -29,8 +29,8 @@ const DRY_RUN = process.env.DRY_RUN !== 'false';
 // Community pool wallet addresses (case-insensitive matching)
 const COMMUNITY_POOL_WALLETS = [
   '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c', // Deployer/treasury
-  '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B', // CommunityPool contract
-  '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // Old proxy
+  '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // CommunityPool V3 proxy (current)
+  '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B', // CommunityPool V2 proxy (deprecated)
 ].map(w => w.toLowerCase());
 
 async function migrate() {
