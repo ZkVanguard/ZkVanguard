@@ -82,7 +82,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     },
     contracts: {
       testnet: {
-        communityPool: '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B',
+        // CommunityPool V3 Proxy (upgraded 2026-03-12)
+        communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
         usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
