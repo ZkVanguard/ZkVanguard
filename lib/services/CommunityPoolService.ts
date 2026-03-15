@@ -1,16 +1,17 @@
 /**
- * Community Pool Service (Off-Chain / Database-backed)
+ * Community Pool Service (Business Logic + DB Tracking)
  * 
- * ⚠️  FOR PRODUCTION: Use CommunityPoolOnChainService.ts instead!
- *     This service stores state in Neon PostgreSQL for UI/tracking.
- *     The on-chain contract (CommunityPool.sol) should be source of truth.
+ * ARCHITECTURE:
+ * - READS: Delegates to CommunityPoolStatsService.ts (single source of truth)
+ * - WRITES: Records deposits/withdrawals to Neon PostgreSQL for tracking
+ * - On-chain contract (CommunityPool.sol) is authoritative for NAV/shares
  * 
  * This service provides:
- * - Share-based ownership (deposit → shares, withdraw → burn shares)
+ * - Share-based ownership tracking (deposit → shares, withdraw → burn shares)
  * - ERC-4626 style virtual shares for inflation attack protection
  * - Fair proportional withdrawals with slippage protection
  * - AI-driven asset allocation decisions
- * - Real-time price tracking and NAV calculation
+ * - Transaction logging for analytics
  * 
  * FAIRNESS MECHANISMS (matching on-chain contract):
  * - Virtual shares offset to prevent first depositor attacks
@@ -19,14 +20,18 @@
  * - Slippage protection on withdrawals
  * 
  * MAINNET SAFETY:
- * - Uses on-chain contract as source of truth for NAV/sharePrice
- * - Never auto-modifies values - logs anomalies instead
+ * - All stats from on-chain via CommunityPoolStatsService
+ * - DB is for logging only - never used as source of truth for NAV
  * - Network-aware RPC and contract address handling
  */
 
 import { logger } from '../utils/logger';
 import { isMainnet, getCurrentChainId } from '../utils/network';
 import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataService';
+import {
+  getPoolStats as getOnChainPoolStats,
+  clearCaches as clearStatsCaches,
+} from './CommunityPoolStatsService';
 import {
   getPoolState,
   savePoolState,
@@ -177,131 +182,86 @@ export async function fetchExtendedMarketData(): Promise<Map<string, ExtendedMar
 /**
  * Calculate current NAV (Net Asset Value) of the pool
  * 
- * MAINNET SAFE: Uses on-chain contract data as source of truth.
- * Falls back to cached allocations only when on-chain call fails.
- * Never auto-modifies values - logs anomalies for investigation.
+ * SINGLE SOURCE OF TRUTH: Delegates to CommunityPoolStatsService
+ * which ALWAYS reads from on-chain contract.
+ * 
+ * Returns allocations in legacy format for backward compatibility
+ * with existing code that expects PoolState['allocations'].
  */
 export async function calculatePoolNAV(): Promise<{
   totalValueUSD: number;
   sharePrice: number;
   allocations: PoolState['allocations'];
 }> {
-  const poolState = await getPoolState();
-  const prices = await fetchLivePrices();
-  const allocations = { ...poolState.allocations };
-  
-  // MAINNET: Fetch NAV/sharePrice directly from on-chain contract (source of truth)
-  let onChainNAV: number | null = null;
-  let onChainSharePrice: number | null = null;
-  let onChainTotalShares: number | null = null;
-  
-  const config = getPoolConfig();
-  
-  if (!config.poolAddress) {
-    logger.warn('[CommunityPool] Pool not deployed, using cached allocations');
-  } else {
-    try {
-      const { ethers } = await import('ethers');
-      const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-      const poolContract = new ethers.Contract(
-        config.poolAddress,
-        [
-          'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
-          'function calculateTotalNAV() view returns (uint256)',
-          'function getNavPerShare() view returns (uint256)',
-        ],
-        provider
-      );
-      
-      const [stats, rawNav, rawSharePrice] = await Promise.all([
-        poolContract.getPoolStats(),
-        poolContract.calculateTotalNAV(),
-        poolContract.getNavPerShare(),
-      ]);
-      
-      onChainTotalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-      onChainNAV = parseFloat(ethers.formatUnits(rawNav, 6)); // USDC has 6 decimals
-      // Contract returns (USDC_6dec × WAD) / Shares_18dec = 6 decimal result
-      // e.g., $0.75 per share = 750000 raw (750000 / 1e6 = 0.75)
-      onChainSharePrice = parseFloat(ethers.formatUnits(rawSharePrice, 6));
-      
-      logger.info('[CommunityPool] On-chain NAV fetched successfully', {
-        network: isMainnet() ? 'mainnet' : 'testnet',
-        onChainNAV,
-        onChainSharePrice,
-        onChainTotalShares,
-      });
-    } catch (err) {
-      logger.warn('[CommunityPool] Failed to fetch on-chain NAV, using cached allocations', { 
-        err: err instanceof Error ? err.message : String(err) 
-      });
-    }
-  }
-  
-  // Calculate TVL from cached allocations (used as fallback or for comparison)
-  let cachedTVL = 0;
-  for (const asset of SUPPORTED_ASSETS) {
-    const amount = allocations[asset].amount || 0;
-    const price = prices[asset];
-    const valueUSD = amount * price;
-    allocations[asset].price = price;
-    allocations[asset].valueUSD = valueUSD;
-    cachedTVL += valueUSD;
-  }
-  
-  // Use on-chain data if available, otherwise fall back to cached
-  let totalValueUSD: number;
-  let sharePrice: number;
-  
-  if (onChainNAV !== null && onChainSharePrice !== null && onChainTotalShares !== null) {
-    // MAINNET: Use on-chain data as source of truth
-    totalValueUSD = onChainNAV;
-    sharePrice = onChainSharePrice;
+  try {
+    // Get authoritative on-chain stats
+    const stats = await getOnChainPoolStats();
+    const prices = await fetchLivePrices();
     
-    // Sync totalShares from on-chain
-    poolState.totalShares = onChainTotalShares;
+    // Build allocations in legacy format
+    const allocations: PoolState['allocations'] = {
+      BTC: {
+        percentage: stats.allocations.BTC.percentage,
+        valueUSD: stats.totalNAV * (stats.allocations.BTC.percentage / 100),
+        amount: (stats.totalNAV * (stats.allocations.BTC.percentage / 100)) / prices.BTC,
+        price: prices.BTC,
+      },
+      ETH: {
+        percentage: stats.allocations.ETH.percentage,
+        valueUSD: stats.totalNAV * (stats.allocations.ETH.percentage / 100),
+        amount: (stats.totalNAV * (stats.allocations.ETH.percentage / 100)) / prices.ETH,
+        price: prices.ETH,
+      },
+      SUI: {
+        percentage: stats.allocations.SUI.percentage,
+        valueUSD: stats.totalNAV * (stats.allocations.SUI.percentage / 100),
+        amount: (stats.totalNAV * (stats.allocations.SUI.percentage / 100)) / prices.SUI,
+        price: prices.SUI,
+      },
+      CRO: {
+        percentage: stats.allocations.CRO.percentage,
+        valueUSD: stats.totalNAV * (stats.allocations.CRO.percentage / 100),
+        amount: (stats.totalNAV * (stats.allocations.CRO.percentage / 100)) / prices.CRO,
+        price: prices.CRO,
+      },
+    };
     
-    // ANOMALY DETECTION: Log if cached differs significantly from on-chain
-    const discrepancy = Math.abs(cachedTVL - totalValueUSD) / Math.max(totalValueUSD, 1);
-    if (cachedTVL > 0 && discrepancy > 0.10) {
-      // More than 10% discrepancy - log for investigation, do NOT auto-fix
-      logger.error('[CommunityPool] ANOMALY DETECTED: Cached TVL differs from on-chain by >10%', {
-        cachedTVL,
-        onChainTVL: totalValueUSD,
-        discrepancyPercent: (discrepancy * 100).toFixed(2),
-        alert: 'MANUAL_INVESTIGATION_REQUIRED',
-      });
-    }
-    
-    // Update allocations to reflect on-chain NAV (distribute proportionally)
-    if (totalValueUSD > 0 && cachedTVL > 0) {
-      const scaleFactor = totalValueUSD / cachedTVL;
-      for (const asset of SUPPORTED_ASSETS) {
-        allocations[asset].valueUSD = allocations[asset].valueUSD * scaleFactor;
-        allocations[asset].amount = allocations[asset].valueUSD / prices[asset];
-      }
-    }
-  } else {
-    // FALLBACK: Use cached allocations when on-chain unavailable
-    totalValueUSD = cachedTVL;
-    const totalShares = poolState.totalShares || 1;
-    sharePrice = totalShares > 0 ? totalValueUSD / totalShares : 1.0;
-    
-    logger.warn('[CommunityPool] Using cached allocations (on-chain unavailable)', {
-      cachedTVL,
-      totalShares,
-      sharePrice,
+    logger.info('[CommunityPool] NAV from on-chain via unified service', {
+      totalValueUSD: stats.totalNAV,
+      sharePrice: stats.sharePrice,
+      source: 'on-chain',
     });
+    
+    return {
+      totalValueUSD: stats.totalNAV,
+      sharePrice: stats.sharePrice,
+      allocations,
+    };
+  } catch (err) {
+    // Fallback to legacy DB-based calculation if on-chain fails
+    logger.warn('[CommunityPool] On-chain stats failed, falling back to DB', {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    
+    const poolState = await getPoolState();
+    const prices = await fetchLivePrices();
+    const allocations = { ...poolState.allocations };
+    
+    let cachedTVL = 0;
+    for (const asset of SUPPORTED_ASSETS) {
+      const amount = allocations[asset].amount || 0;
+      const price = prices[asset];
+      const valueUSD = amount * price;
+      allocations[asset].price = price;
+      allocations[asset].valueUSD = valueUSD;
+      cachedTVL += valueUSD;
+    }
+    
+    const totalShares = poolState.totalShares || 1;
+    const sharePrice = totalShares > 0 ? cachedTVL / totalShares : 1.0;
+    
+    return { totalValueUSD: cachedTVL, sharePrice, allocations };
   }
-  
-  // Update percentages based on current values
-  for (const asset of SUPPORTED_ASSETS) {
-    allocations[asset].percentage = totalValueUSD > 0 
-      ? (allocations[asset].valueUSD / totalValueUSD) * 100 
-      : poolState.allocations[asset].percentage;
-  }
-  
-  return { totalValueUSD, sharePrice, allocations };
 }
 
 /**
@@ -735,6 +695,8 @@ export async function applyAIDecision(
 
 /**
  * Get pool summary for display
+ * 
+ * SINGLE SOURCE OF TRUTH: Uses on-chain data via CommunityPoolStatsService
  */
 export async function getPoolSummary(): Promise<{
   totalValueUSD: number;
@@ -749,11 +711,31 @@ export async function getPoolSummary(): Promise<{
     month: number | null;
   };
 }> {
+  // Get on-chain stats first (source of truth)
+  let onChainStats;
+  try {
+    onChainStats = await getOnChainPoolStats();
+  } catch (err) {
+    logger.warn('[CommunityPool] On-chain stats failed, falling back to DB', { err });
+    onChainStats = null;
+  }
+  
+  // Fallback to DB state if needed
   const poolState = await getPoolState();
   const { totalValueUSD, sharePrice, allocations } = await calculatePoolNAV();
-  const allUsers = await getAllUserShares();
   
-  const activeMembers = allUsers.filter(u => u.shares > 0).length;
+  // Use on-chain member count if available, otherwise count from DB
+  let totalMembers: number;
+  let totalShares: number;
+  
+  if (onChainStats) {
+    totalMembers = onChainStats.memberCount;
+    totalShares = onChainStats.totalShares;
+  } else {
+    const allUsers = await getAllUserShares();
+    totalMembers = allUsers.filter(u => u.shares > 0).length;
+    totalShares = poolState.totalShares;
+  }
   
   // Performance is calculated from real NAV history via RiskMetricsService
   // We return null here to indicate "use RiskMetrics API for real performance data"
@@ -766,9 +748,9 @@ export async function getPoolSummary(): Promise<{
   
   return {
     totalValueUSD,
-    totalShares: poolState.totalShares,
+    totalShares,
     sharePrice,
-    totalMembers: activeMembers,
+    totalMembers,
     allocations,
     lastAIDecision: poolState.lastAIDecision,
     performance,
