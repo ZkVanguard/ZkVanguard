@@ -12,7 +12,8 @@
 const { ethers } = require("hardhat");
 
 const CONFIG = {
-  communityPool: "0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B",
+  // CommunityPool V3 Proxy (upgraded 2026-03-12)
+  communityPool: "0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30",
   apiUrl: process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}/api/community-pool` 
     : "https://zkvanguard.xyz/api/community-pool",

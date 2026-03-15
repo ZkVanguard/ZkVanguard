@@ -1193,6 +1193,128 @@ export async function POST(request: NextRequest) {
         });
       }
       
+      case 'full-reset': {
+        // Admin only - COMPLETE reset of all pool data to match on-chain V3 contract
+        // Use this when stats are corrupted and need to start fresh
+        const cronSecret = request.headers.get('x-cron-secret');
+        const expectedSecret = process.env.CRON_SECRET;
+        
+        if (!cronSecret || cronSecret !== expectedSecret) {
+          return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        logger.info('[CommunityPool API] Starting full reset to on-chain V3 state');
+        
+        // Step 1: Get current on-chain data from V3 contract
+        const onChainData = await getOnChainPoolData();
+        if (!onChainData) {
+          return NextResponse.json({ success: false, error: 'Failed to fetch on-chain data' }, { status: 500 });
+        }
+        
+        // Step 2: Get all on-chain members
+        const onChainMembers = await getAllOnChainMembers();
+        if (!onChainMembers) {
+          return NextResponse.json({ success: false, error: 'Failed to fetch on-chain members' }, { status: 500 });
+        }
+        
+        // Step 3: Clear all user shares from database (removes stale/duplicate entries)
+        const { query: dbQuery } = await import('@/lib/db/postgres');
+        const deletedUsers = await dbQuery('DELETE FROM community_pool_shares RETURNING wallet_address');
+        logger.info(`[CommunityPool API] Deleted ${deletedUsers.length} users from database`);
+        
+        // Step 4: Re-sync only valid on-chain members
+        const syncedMembers: { address: string; shares: number }[] = [];
+        const activeMembers = onChainMembers.filter(m => m.shares > 0);
+        
+        for (const member of activeMembers) {
+          await saveUserSharesToDb({
+            walletAddress: member.walletAddress.toLowerCase(),
+            shares: member.shares,
+            costBasisUSD: member.depositedUSD,
+          });
+          syncedMembers.push({ address: member.walletAddress, shares: member.shares });
+          logger.info(`[CommunityPool API] Synced member: ${member.walletAddress} (${member.shares} shares)`);
+        }
+        
+        // Step 5: Build proper allocations object
+        const totalNAV = onChainData.totalValueUSD;
+        const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
+          BTC: { 
+            percentage: onChainData.allocations.BTC.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.BTC.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+          ETH: { 
+            percentage: onChainData.allocations.ETH.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.ETH.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+          CRO: { 
+            percentage: onChainData.allocations.CRO.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.CRO.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+          SUI: { 
+            percentage: onChainData.allocations.SUI.percentage, 
+            valueUSD: totalNAV * onChainData.allocations.SUI.percentage / 100,
+            amount: 0,
+            price: 0,
+          },
+        };
+        
+        // Step 6: Update pool state
+        await savePoolStateToDb({
+          totalValueUSD: onChainData.totalValueUSD,
+          totalShares: onChainData.totalShares,
+          sharePrice: onChainData.sharePrice,
+          allocations,
+          lastRebalance: Date.now(),
+          lastAIDecision: null,
+        });
+        
+        // Step 7: Reset NAV history completely with fresh on-chain data
+        const navReset = await resetNavHistory(
+          onChainData.totalValueUSD,
+          onChainData.sharePrice,
+          onChainData.totalShares,
+          activeMembers.length
+        );
+        
+        // Step 8: Clear all in-memory caches
+        clearStatsCaches();
+        rpcCache.clear();
+        pendingRequests.clear();
+        
+        logger.info('[CommunityPool API] Full reset completed successfully');
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Full reset completed - all data now matches on-chain V3 contract',
+          summary: {
+            deletedStaleUsers: deletedUsers.length,
+            syncedActiveMembers: syncedMembers.length,
+            navHistoryDeleted: navReset.deleted,
+            poolState: {
+              totalValueUSD: onChainData.totalValueUSD,
+              totalShares: onChainData.totalShares,
+              sharePrice: onChainData.sharePrice,
+              memberCount: activeMembers.length,
+              allocations: {
+                BTC: onChainData.allocations.BTC.percentage,
+                ETH: onChainData.allocations.ETH.percentage,
+                SUI: onChainData.allocations.SUI.percentage,
+                CRO: onChainData.allocations.CRO.percentage,
+              },
+            },
+            members: syncedMembers,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      
       default:
         return NextResponse.json(
           { success: false, error: 'Invalid action. Use: deposit, withdraw' },
