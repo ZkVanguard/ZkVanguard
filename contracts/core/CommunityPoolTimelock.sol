@@ -4,10 +4,14 @@ pragma solidity ^0.8.22;
 import "@openzeppelin/contracts/governance/TimelockController.sol";
 
 /**
- * @title CommunityPoolTimelock
+ * @title CommunityPoolTimelock (EVM Version)
  * @notice Hardened timelock controller for CommunityPool admin operations
  * @dev All admin functions (role grants, rebalancing, fee changes, upgrades)
  *      must pass through this timelock with an enforced minimum delay.
+ *
+ * NOTE: SUI is the DEFAULT and OPTIMIZED chain for CommunityPool.
+ * This EVM version is for Cronos/Ethereum compatibility.
+ * See contracts/sui/sources/community_pool_timelock.move for the primary implementation.
  *
  * SECURITY MODEL:
  * - Enforced 48-hour minimum delay on mainnet (cannot be bypassed by caller)
