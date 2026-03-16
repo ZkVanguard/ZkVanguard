@@ -293,7 +293,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             </div>
             {poolData && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Current share price: ${poolData.sharePrice.toFixed(4)} — You'll receive ~{depositAmount ? (parseFloat(depositAmount) / poolData.sharePrice).toFixed(4) : '0'} shares
+                Current share price: ${(Number(poolData.sharePrice) || 1).toFixed(4)} — You'll receive ~{depositAmount ? (parseFloat(depositAmount) / (Number(poolData.sharePrice) || 1)).toFixed(4) : '0'} shares
               </p>
             )}
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
@@ -317,11 +317,11 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 type="number"
                 value={withdrawShares}
                 onChange={(e) => onWithdrawSharesChange(e.target.value)}
-                placeholder={`Shares to burn (max ${userPosition.shares.toFixed(4)})`}
+                placeholder={`Shares to burn (max ${(Number(userPosition.shares) || 0).toFixed(4)})`}
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
               <button
-                onClick={() => onWithdrawSharesChange(userPosition.shares.toString())}
+                onClick={() => onWithdrawSharesChange(String(Number(userPosition.shares) || 0))}
                 className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg text-sm"
               >
                 Max
@@ -336,7 +336,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             </div>
             {poolData && withdrawShares && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                You'll receive: ~${(parseFloat(withdrawShares) * poolData.sharePrice).toFixed(2)} USD
+                You'll receive: ~${(parseFloat(withdrawShares) * (Number(poolData.sharePrice) || 0)).toFixed(2)} USD
               </p>
             )}
           </motion.div>

@@ -49,7 +49,7 @@ export const UserPositionCard = memo(function UserPositionCard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-              {userPosition.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+              {(Number(userPosition.shares) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Your Shares</p>
           </div>
