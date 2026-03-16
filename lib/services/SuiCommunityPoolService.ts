@@ -113,7 +113,7 @@ export interface SuiTransactionResult {
 
 export class SuiCommunityPoolService {
   private network: SuiNetworkType;
-  private config: typeof SUI_POOL_CONFIG.testnet;
+  private config: (typeof SUI_POOL_CONFIG)[SuiNetworkType];
   private cachedPoolStateId: string | null = null;
 
   constructor(network: SuiNetworkType = 'testnet') {
@@ -160,7 +160,7 @@ export class SuiCommunityPoolService {
       if (events.length > 0) {
         const event = events[0].parsedJson;
         this.cachedPoolStateId = event?.pool_id;
-        logger.info('[SuiCommunityPool] Found pool state ID:', this.cachedPoolStateId);
+        logger.info('[SuiCommunityPool] Found pool state ID:', { poolStateId: this.cachedPoolStateId });
         return this.cachedPoolStateId;
       }
     } catch (err) {
@@ -221,7 +221,7 @@ export class SuiCommunityPoolService {
         const priceData = await svc.getTokenPrice('SUI');
         suiPrice = priceData.price;
       } catch (e) {
-        logger.warn('[SuiCommunityPool] Failed to fetch SUI price:', e);
+        logger.warn('[SuiCommunityPool] Failed to fetch SUI price:', { error: e });
       }
 
       return {
