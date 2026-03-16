@@ -408,15 +408,27 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     const rawMemberCount = Number(memberCount);
     
     // Deduplicate member count (contract may have duplicate entries)
+    // OPTIMIZATION: Batch member lookups in parallel chunks of 5
     let uniqueMemberCount = rawMemberCount;
     try {
       const uniqueAddresses = new Set<string>();
-      for (let i = 0; i < Math.min(rawMemberCount, 100); i++) { // Cap at 100 for performance
-        const addr = await pool.memberList(i);
-        const memberData = await pool.members(addr);
-        const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
-        if (shares > 0) {
-          uniqueAddresses.add(addr.toLowerCase());
+      const cap = Math.min(rawMemberCount, 100);
+      const BATCH_SIZE = 5;
+
+      for (let batchStart = 0; batchStart < cap; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, cap);
+        const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
+
+        // Fetch addresses in parallel
+        const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
+        // Fetch member data in parallel
+        const memberDatas = await Promise.all(addrs.map(addr => pool.members(addr)));
+
+        for (let k = 0; k < addrs.length; k++) {
+          const shares = parseFloat(ethers.formatUnits(memberDatas[k].shares, 18));
+          if (shares > 0) {
+            uniqueAddresses.add(addrs[k].toLowerCase());
+          }
         }
       }
       uniqueMemberCount = uniqueAddresses.size;
@@ -507,29 +519,37 @@ async function getAllOnChainMembers(chainConfig: ChainConfig = getChainConfig())
         logger.info(`[CommunityPool API] On-chain member count (raw) for ${chainConfig.chainKey}: ${count}`);
         
         // Use a Map to deduplicate by address (contract memberList has duplicates)
+        // OPTIMIZATION: Batch all member lookups in parallel chunks of 5
         const memberMap = new Map<string, {
           walletAddress: string;
           shares: number;
           depositedUSD: number;
           joinTime: number;
         }>();
-        
-        for (let i = 0; i < count; i++) {
-          const addr = await pool.memberList(i);
-          const normalizedAddr = addr.toLowerCase();
-          
-          // Skip if already processed this address
-          if (memberMap.has(normalizedAddr)) {
-            continue;
+
+        const BATCH_SIZE = 5;
+        for (let batchStart = 0; batchStart < count; batchStart += BATCH_SIZE) {
+          const batchEnd = Math.min(batchStart + BATCH_SIZE, count);
+          const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
+
+          // Step 1: Fetch addresses in parallel
+          const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
+
+          // Step 2: Filter already-seen, fetch member data in parallel
+          const newAddrs = addrs.filter(addr => !memberMap.has(addr.toLowerCase()));
+          if (newAddrs.length === 0) continue;
+
+          const memberDatas = await Promise.all(newAddrs.map(addr => pool.members(addr)));
+
+          for (let k = 0; k < newAddrs.length; k++) {
+            const normalizedAddr = newAddrs[k].toLowerCase();
+            memberMap.set(normalizedAddr, {
+              walletAddress: normalizedAddr,
+              shares: parseFloat(ethers.formatUnits(memberDatas[k].shares, 18)),
+              depositedUSD: parseFloat(ethers.formatUnits(memberDatas[k].depositedUSD, 6)),
+              joinTime: Number(memberDatas[k].joinTime),
+            });
           }
-          
-          const memberData = await pool.members(addr);
-          memberMap.set(normalizedAddr, {
-            walletAddress: normalizedAddr,
-            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
-            depositedUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
-            joinTime: Number(memberData.joinTime),
-          });
         }
         
         const members = Array.from(memberMap.values());

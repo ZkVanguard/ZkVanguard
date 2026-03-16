@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
- * Custom hook for efficient API polling with automatic cleanup
- * Eliminates redundant polling logic across components
+ * Custom hook for efficient API polling with:
+ * - Automatic cleanup on unmount
+ * - Visibility-aware: pauses when tab is hidden, resumes when visible
+ * - Prevents wasted bandwidth when user isn't looking at the page
  * 
  * @param callback - Function to execute on each poll
  * @param interval - Polling interval in milliseconds
@@ -10,14 +12,6 @@ import { useEffect, useRef } from 'react';
  * 
  * @example
  * ```tsx
- * // Before: 25+ lines of interval logic
- * useEffect(() => {
- *   fetchData();
- *   const interval = setInterval(() => fetchData(false), 60000);
- *   return () => clearInterval(interval);
- * }, [fetchData]);
- * 
- * // After: 1 line
  * usePolling(fetchData, 60000);
  * ```
  */
@@ -28,15 +22,28 @@ export function usePolling(
 ): void {
   const savedCallback = useRef(callback);
   const intervalRef = useRef<NodeJS.Timeout>();
+  const [visible, setVisible] = useState(true);
 
   // Update callback ref on each render
   useEffect(() => {
     savedCallback.current = callback;
   }, [callback]);
 
+  // Track tab visibility
   useEffect(() => {
-    if (!enabled) {
-      // Clear interval if polling is disabled
+    if (typeof document === 'undefined') return;
+
+    const handleVisibility = () => {
+      setVisible(document.visibilityState === 'visible');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || !visible) {
+      // Clear interval if polling is disabled or tab is hidden
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = undefined;
@@ -44,7 +51,7 @@ export function usePolling(
       return;
     }
 
-    // Execute callback immediately on mount
+    // Execute callback immediately when becoming visible or on mount
     void savedCallback.current();
 
     // Setup interval
@@ -58,5 +65,5 @@ export function usePolling(
         clearInterval(intervalRef.current);
       }
     };
-  }, [interval, enabled]);
+  }, [interval, enabled, visible]);
 }

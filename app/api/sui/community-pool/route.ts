@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { getSuiCommunityPoolService } from '@/lib/services/SuiCommunityPoolService';
+import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,11 +24,24 @@ function getNetwork(request: NextRequest): NetworkType {
   return network === 'mainnet' ? 'mainnet' : 'testnet';
 }
 
+/** JSON response with CDN cache headers */
+function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
+  return NextResponse.json(data, {
+    headers: {
+      'Cache-Control': `s-maxage=${cdnTtlSeconds}, stale-while-revalidate=${cdnTtlSeconds * 2}`,
+    },
+  });
+}
+
 // ============================================================================
 // GET Handler
 // ============================================================================
 
 export async function GET(request: NextRequest) {
+  // Rate limit
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   const startTime = Date.now();
   
   try {
@@ -51,10 +65,10 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Get all members
+    // Get all members (cached 2m)
     if (action === 'members') {
       const members = await service.getAllMembers();
-      return NextResponse.json({
+      return cachedJsonResponse({
         success: true,
         data: {
           members,
@@ -62,20 +76,22 @@ export async function GET(request: NextRequest) {
         },
         chain: 'sui',
         network,
-      });
+      }, 60);
     }
     
-    // Get specific user's position
+    // Get specific user's position — single getPoolStats() call shared
     if (user) {
-      const position = await service.getMemberPosition(user);
-      const stats = await service.getPoolStats();
+      const [position, stats] = await Promise.all([
+        service.getMemberPosition(user),
+        service.getPoolStats(),
+      ]);
       
       // Calculate percentage of pool
       const percentage = stats.totalShares > 0 && position.shares > 0
         ? (position.shares / stats.totalShares) * 100
         : 0;
       
-      return NextResponse.json({
+      return cachedJsonResponse({
         success: true,
         data: {
           address: position.address,
@@ -98,13 +114,13 @@ export async function GET(request: NextRequest) {
         chain: 'sui',
         network,
         duration: Date.now() - startTime,
-      });
+      }, 15);
     }
     
-    // Default: Get pool summary
+    // Default: Get pool summary (cached 30s)
     const stats = await service.getPoolStats();
     
-    return NextResponse.json({
+    return cachedJsonResponse({
       success: true,
       data: {
         totalShares: stats.totalShares.toFixed(4),
@@ -121,7 +137,7 @@ export async function GET(request: NextRequest) {
       chain: 'sui',
       network,
       duration: Date.now() - startTime,
-    });
+    }, 30);
     
   } catch (error) {
     logger.error('[SUI-API] Error', { error });
@@ -144,6 +160,10 @@ export async function GET(request: NextRequest) {
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  // Rate limit mutations
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
@@ -173,7 +193,10 @@ export async function POST(request: NextRequest) {
       const amountSui = Number(amountMist) / 1_000_000_000;
       
       const params = service.buildDepositParams(amountSui);
-      
+
+      // Clear caches so next poll returns fresh data
+      service.clearCaches();
+
       return NextResponse.json({
         success: true,
         data: {
@@ -206,7 +229,10 @@ export async function POST(request: NextRequest) {
       const sharesNum = Number(sharesScaled) / 1e9;
       
       const params = service.buildWithdrawParams(sharesNum);
-      
+
+      // Clear caches so next poll returns fresh data
+      service.clearCaches();
+
       return NextResponse.json({
         success: true,
         data: {
