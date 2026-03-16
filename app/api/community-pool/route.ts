@@ -357,30 +357,101 @@ function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
 /**
  * Fetch on-chain pool data (SINGLE SOURCE OF TRUTH)
  * 
- * Uses CommunityPoolStatsService which:
- * - Always reads from on-chain contract
- * - Has built-in caching (60s) and request deduplication
- * - Returns consistent data across all services
+ * Multi-chain support:
+ * - For Cronos: uses CommunityPoolStatsService (with caching)
+ * - For other chains: fetches directly from that chain's RPC
+ * 
+ * @param chainConfig - Optional chain configuration. If not provided, uses Cronos testnet.
  */
-async function getOnChainPoolData(): Promise<PoolDataCache | null> {
+async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCache | null> {
+  const config = chainConfig || getChainConfig();
+  const cacheKey = `onchain-pool-${config.chainKey}-${config.network}`;
+  
+  // Check in-memory cache first
+  const cached = getCachedRpc<PoolDataCache>(cacheKey);
+  if (cached) return cached;
+  
   try {
-    const stats = await getUnifiedPoolStats();
+    // For Cronos testnet, use the unified stats service (has extra caching)
+    if (config.chainKey === 'cronos' && config.network === 'testnet') {
+      const stats = await getUnifiedPoolStats();
+      const result = {
+        totalValueUSD: stats.totalNAV,
+        totalShares: stats.totalShares,
+        sharePrice: stats.sharePrice,
+        totalMembers: stats.memberCount,
+        allocations: {
+          BTC: { percentage: stats.allocations.BTC.percentage },
+          ETH: { percentage: stats.allocations.ETH.percentage },
+          CRO: { percentage: stats.allocations.CRO.percentage },
+          SUI: { percentage: stats.allocations.SUI.percentage },
+        },
+        onChain: true,
+      };
+      setCachedRpc(cacheKey, result, POOL_DATA_TTL);
+      return result;
+    }
     
-    return {
-      totalValueUSD: stats.totalNAV,
-      totalShares: stats.totalShares,
-      sharePrice: stats.sharePrice,
-      totalMembers: stats.memberCount,
-      allocations: {
-        BTC: { percentage: stats.allocations.BTC.percentage },
-        ETH: { percentage: stats.allocations.ETH.percentage },
-        CRO: { percentage: stats.allocations.CRO.percentage },
-        SUI: { percentage: stats.allocations.SUI.percentage },
-      },
+    // For other chains, fetch directly from on-chain
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const pool = new ethers.Contract(config.poolAddress, POOL_ABI, provider);
+    
+    // Fetch pool stats
+    const [stats, memberCount] = await Promise.all([
+      pool.getPoolStats(),
+      pool.getMemberCount(),
+    ]);
+    
+    const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+    const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
+    const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+    const rawMemberCount = Number(memberCount);
+    
+    // Deduplicate member count (contract may have duplicate entries)
+    let uniqueMemberCount = rawMemberCount;
+    try {
+      const uniqueAddresses = new Set<string>();
+      for (let i = 0; i < Math.min(rawMemberCount, 100); i++) { // Cap at 100 for performance
+        const addr = await pool.memberList(i);
+        const memberData = await pool.members(addr);
+        const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
+        if (shares > 0) {
+          uniqueAddresses.add(addr.toLowerCase());
+        }
+      }
+      uniqueMemberCount = uniqueAddresses.size;
+    } catch (e) {
+      logger.warn(`[CommunityPool] Member dedup failed for ${config.chainKey}`, { error: e });
+    }
+    
+    // Parse allocations from contract (BPS to percentage)
+    const alloc = stats._allocations;
+    const allocations = {
+      BTC: { percentage: Number(alloc[0]) / 100 },
+      ETH: { percentage: Number(alloc[1]) / 100 },
+      CRO: { percentage: Number(alloc[3]) / 100 }, // Index 3 is CRO in contract
+      SUI: { percentage: Number(alloc[2]) / 100 }, // Index 2 is SUI in contract
+    };
+    
+    const result = {
+      totalValueUSD: totalNAV,
+      totalShares,
+      sharePrice,
+      totalMembers: uniqueMemberCount,
+      allocations,
       onChain: true,
     };
+    
+    logger.info(`[CommunityPool] Fetched on-chain data for ${config.chainKey}:${config.network}`, {
+      totalValueUSD: result.totalValueUSD,
+      totalShares: result.totalShares,
+      memberCount: result.totalMembers,
+    });
+    
+    setCachedRpc(cacheKey, result, POOL_DATA_TTL);
+    return result;
   } catch (err) {
-    logger.error('[CommunityPool API] Unified stats service error:', err);
+    logger.error(`[CommunityPool API] On-chain stats error for ${config.chainKey}:`, err);
     return null;
   }
 }
@@ -486,7 +557,7 @@ async function findOnChainMember(userAddress: string, chainConfig: ChainConfig =
   
   const found = members.find(m => m.walletAddress.toLowerCase() === normalizedUser);
   if (found) {
-    const onChainPool = await getOnChainPoolData();
+    const onChainPool = await getOnChainPoolData(chainConfig);
     const totalShares = onChainPool?.totalShares || members.reduce((sum, m) => sum + m.shares, 0);
     
     return {
@@ -541,7 +612,7 @@ export async function GET(request: NextRequest) {
         try {
           const userShares = await getUserShares(userAddress);
           if (userShares && userShares.shares > 0) {
-            const onChainPool = await getOnChainPoolData();
+            const onChainPool = await getOnChainPoolData(chainConfig);
             const poolData = onChainPool || await getPoolSummary();
             
             return NextResponse.json({
@@ -566,7 +637,7 @@ export async function GET(request: NextRequest) {
       
       // Fallback: Try on-chain via getMemberPosition
       let onChainUser = await getOnChainUserPosition(userAddress);
-      const onChainPool = await getOnChainPoolData();
+      const onChainPool = await getOnChainPoolData(chainConfig);
       
       // If getMemberPosition returned 0 shares, try searching the member list
       // This handles checksum mismatches between connected wallet and on-chain storage
@@ -673,7 +744,7 @@ export async function GET(request: NextRequest) {
     // Sync local storage with on-chain data for a specific user
     if (action === 'sync' && userAddress) {
       const onChainUser = await getOnChainUserPosition(userAddress);
-      const onChainPool = await getOnChainPoolData();
+      const onChainPool = await getOnChainPoolData(chainConfig);
       
       if (!onChainUser || !onChainPool) {
         return NextResponse.json({
@@ -836,7 +907,7 @@ export async function GET(request: NextRequest) {
       
       // Use market-adjusted NAV (virtual holdings × current prices)
       // This ensures reset starts with accurate market values
-      const onChainData = await getOnChainPoolData();
+      const onChainData = await getOnChainPoolData(chainConfig);
       const marketNAV = await calculatePoolNAV();
       
       // Use market-adjusted values but on-chain member count
@@ -869,7 +940,7 @@ export async function GET(request: NextRequest) {
     // ALWAYS use on-chain contract data as source of truth
     // On-chain contract has authoritative NAV, share price, and member count
     try {
-      const onChainPool = await getOnChainPoolData();
+      const onChainPool = await getOnChainPoolData(chainConfig);
       
       if (onChainPool && onChainPool.totalShares > 0) {
         // Get deduplicated member count (contract memberList has duplicates)
@@ -1028,7 +1099,7 @@ export async function POST(request: NextRequest) {
         // On-chain is authoritative - overwrite any local calculation errors
         try {
           const onChainUser = await getOnChainUserPosition(walletAddress);
-          const onChainPool = await getOnChainPoolData();
+          const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainUser && onChainPool) {
             // Save on-chain user state directly to DB
@@ -1122,7 +1193,7 @@ export async function POST(request: NextRequest) {
         // On-chain is authoritative - overwrite any local calculation errors
         try {
           const onChainUser = await getOnChainUserPosition(walletAddress);
-          const onChainPool = await getOnChainPoolData();
+          const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainPool) {
             // Update pool state in DB
@@ -1184,7 +1255,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Get on-chain pool data
-        const onChainData = await getOnChainPoolData();
+        const onChainData = await getOnChainPoolData(chainConfig);
         if (!onChainData) {
           return NextResponse.json({ success: false, error: 'Failed to fetch on-chain data' }, { status: 500 });
         }
@@ -1302,7 +1373,7 @@ export async function POST(request: NextRequest) {
         logger.info('[CommunityPool API] Starting full reset to on-chain V3 state');
         
         // Step 1: Get current on-chain data from V3 contract
-        const onChainData = await getOnChainPoolData();
+        const onChainData = await getOnChainPoolData(chainConfig);
         if (!onChainData) {
           return NextResponse.json({ success: false, error: 'Failed to fetch on-chain data' }, { status: 500 });
         }
