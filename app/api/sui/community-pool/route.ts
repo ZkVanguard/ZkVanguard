@@ -200,9 +200,10 @@ export async function POST(request: NextRequest) {
       // Fetch pool stats first to ensure poolStateId is cached
       await service.getPoolStats();
       
-      // Convert from scaled shares (10^18) to shares (number)
+      // SUI uses 9 decimals for shares (not 18 like EVM)
+      // shares param is already scaled by 10^9 from the UI
       const sharesScaled = BigInt(shares);
-      const sharesNum = Number(sharesScaled) / 1e18;
+      const sharesNum = Number(sharesScaled) / 1e9;
       
       const params = service.buildWithdrawParams(sharesNum);
       

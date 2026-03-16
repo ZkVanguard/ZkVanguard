@@ -797,8 +797,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       return;
     }
     
-    // Convert to wei (18 decimals for shares)
-    const sharesWei = BigInt(Math.floor(shares * 1e18));
+    // Convert to MIST decimals (9 decimals for SUI shares - NOT 18 like EVM)
+    const sharesScaled = BigInt(Math.floor(shares * 1e9));
     
     setSuiTxLoading(true);
     
@@ -807,7 +807,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shares: sharesWei.toString() }),
+        body: JSON.stringify({ shares: sharesScaled.toString() }),
       });
       
       const json = await res.json();

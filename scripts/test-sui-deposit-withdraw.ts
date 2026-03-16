@@ -27,7 +27,7 @@ const CONFIG = {
   moduleName: 'community_pool',
   // Test amounts (in MIST - 1 SUI = 1e9 MIST)
   depositAmount: 500_000_000n, // 0.5 SUI (min first deposit)
-  withdrawShares: 50_000_000_000_000_000n, // 0.05 shares (scaled by 1e18)
+  withdrawShares: 100_000_000n, // 0.1 shares (9 decimals, NOT 18 like EVM)
 };
 
 // Load private key from bech32 or env
@@ -206,7 +206,7 @@ async function main() {
     
     if (depositEvent) {
       const parsedEvent = depositEvent.parsedJson as any;
-      console.log(`   Shares Received: ${Number(parsedEvent.shares_received) / 1e18}`);
+      console.log(`   Shares Received: ${Number(parsedEvent.shares_received) / 1e9}`);
     }
   } catch (e: any) {
     console.log(`   ❌ Deposit failed: ${e.message}`);
@@ -225,8 +225,8 @@ async function main() {
     
     if (poolState.data?.content && 'fields' in poolState.data.content) {
       const fields = poolState.data.content.fields as any;
-      console.log(`   Total NAV: ${Number(fields.balance?.value || 0) / 1e9} SUI`);
-      console.log(`   Total Shares: ${Number(fields.total_shares || 0) / 1e18}`);
+      console.log(`   Total NAV: ${Number(fields.balance?.value || fields.balance || 0) / 1e9} SUI`);
+      console.log(`   Total Shares: ${Number(fields.total_shares || 0) / 1e9}`);
       console.log(`   Members: ${fields.member_count || 0}`);
     }
   } catch (e: any) {
@@ -234,7 +234,7 @@ async function main() {
   }
 
   // Test withdraw
-  console.log(`\n📤 STEP 3: Withdrawing 50 shares...`);
+  console.log(`\n📤 STEP 3: Withdrawing 0.1 shares...`);
   
   try {
     const tx = new Transaction();
