@@ -108,6 +108,52 @@ export interface SuiTransactionResult {
 }
 
 // ============================================
+// IN-MEMORY CACHE (matches EVM CommunityPoolStatsService)
+// ============================================
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const suiStatsCache = new Map<string, CacheEntry<unknown>>();
+const suiPendingRequests = new Map<string, Promise<unknown>>();
+
+const SUI_STATS_TTL = 60_000;    // 60s pool stats
+const SUI_MEMBER_TTL = 30_000;   // 30s member positions
+const SUI_MEMBERS_TTL = 120_000; // 2m all members (leaderboard)
+
+/**
+ * Deduplicated fetch with in-memory caching.
+ * Prevents thundering herd: 100 concurrent users = 1 RPC call.
+ */
+async function suiCachedFetch<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number
+): Promise<T> {
+  const cached = suiStatsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data as T;
+  }
+
+  const pending = suiPendingRequests.get(cacheKey) as Promise<T> | undefined;
+  if (pending) return pending;
+
+  const request = fetcher()
+    .then(result => {
+      suiStatsCache.set(cacheKey, { data: result, expiresAt: Date.now() + ttlMs });
+      return result;
+    })
+    .finally(() => {
+      suiPendingRequests.delete(cacheKey);
+    });
+
+  suiPendingRequests.set(cacheKey, request);
+  return request;
+}
+
+// ============================================
 // SUI COMMUNITY POOL SERVICE
 // ============================================
 
@@ -120,6 +166,13 @@ export class SuiCommunityPoolService {
     this.network = network;
     this.config = SUI_POOL_CONFIG[network];
     logger.info('[SuiCommunityPool] Initialized', { network, packageId: this.config.packageId });
+  }
+
+  /** Clear all SUI caches (call after deposit/withdraw) */
+  clearCaches(): void {
+    suiStatsCache.clear();
+    suiPendingRequests.clear();
+    logger.info('[SuiCommunityPool] Caches cleared');
   }
 
   // ============================================
@@ -175,7 +228,8 @@ export class SuiCommunityPoolService {
   // ============================================
 
   /**
-   * Get pool statistics from on-chain state
+   * Get pool statistics from on-chain state.
+   * Cached for 60s with request deduplication.
    */
   async getPoolStats(): Promise<SuiPoolStats> {
     const poolStateId = await this.getPoolStateId();
@@ -200,52 +254,56 @@ export class SuiCommunityPoolService {
       return defaultStats;
     }
 
-    try {
-      const fields = await this.fetchObjectFields(poolStateId);
-      if (!fields) return defaultStats;
-
-      // Parse balance - can be direct string or nested Balance<SUI> struct
-      const balanceValue = typeof fields.balance === 'string' 
-        ? fields.balance 
-        : (fields.balance?.fields?.value || fields.balance?.value || '0');
-      const totalNAV = Number(balanceValue) / Math.pow(10, SUI_DECIMALS);
-      const totalShares = Number(fields.total_shares || 0) / Math.pow(10, SHARE_DECIMALS);
-      
-      // Calculate share price
-      const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
-
-      // Get SUI price for USD conversion
-      let suiPrice = 0;
+    const cacheKey = `sui-pool-stats-${this.network}`;
+    return suiCachedFetch(cacheKey, async () => {
       try {
-        const svc = getMarketDataService();
-        const priceData = await svc.getTokenPrice('SUI');
-        suiPrice = priceData.price;
-      } catch (e) {
-        logger.warn('[SuiCommunityPool] Failed to fetch SUI price:', { error: e });
-      }
+        const fields = await this.fetchObjectFields(poolStateId);
+        if (!fields) return defaultStats;
 
-      return {
-        totalNAV,
-        totalNAVUsd: totalNAV * suiPrice,
-        totalShares,
-        sharePrice,
-        sharePriceUsd: sharePrice * suiPrice,
-        memberCount: Number(fields.member_count || 0),
-        managementFeeBps: Number(fields.management_fee_bps || 50),
-        performanceFeeBps: Number(fields.performance_fee_bps || 1000),
-        paused: fields.paused || false,
-        allTimeHighNav: Number(fields.all_time_high_nav_per_share || 1e9) / 1e9,
-        createdAt: Number(fields.created_at || 0),
-        poolStateId,
-      };
-    } catch (err) {
-      logger.error('[SuiCommunityPool] Failed to fetch pool stats:', err);
-      return defaultStats;
-    }
+        // Parse balance - can be direct string or nested Balance<SUI> struct
+        const balanceValue = typeof fields.balance === 'string' 
+          ? fields.balance 
+          : (fields.balance?.fields?.value || fields.balance?.value || '0');
+        const totalNAV = Number(balanceValue) / Math.pow(10, SUI_DECIMALS);
+        const totalShares = Number(fields.total_shares || 0) / Math.pow(10, SHARE_DECIMALS);
+        
+        // Calculate share price
+        const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+
+        // Get SUI price for USD conversion
+        let suiPrice = 0;
+        try {
+          const svc = getMarketDataService();
+          const priceData = await svc.getTokenPrice('SUI');
+          suiPrice = priceData.price;
+        } catch (e) {
+          logger.warn('[SuiCommunityPool] Failed to fetch SUI price:', { error: e });
+        }
+
+        return {
+          totalNAV,
+          totalNAVUsd: totalNAV * suiPrice,
+          totalShares,
+          sharePrice,
+          sharePriceUsd: sharePrice * suiPrice,
+          memberCount: Number(fields.member_count || 0),
+          managementFeeBps: Number(fields.management_fee_bps || 50),
+          performanceFeeBps: Number(fields.performance_fee_bps || 1000),
+          paused: fields.paused || false,
+          allTimeHighNav: Number(fields.all_time_high_nav_per_share || 1e9) / 1e9,
+          createdAt: Number(fields.created_at || 0),
+          poolStateId,
+        };
+      } catch (err) {
+        logger.error('[SuiCommunityPool] Failed to fetch pool stats:', err);
+        return defaultStats;
+      }
+    }, SUI_STATS_TTL);
   }
 
   /**
-   * Get member position from pool state
+   * Get member position from pool state.
+   * Cached for 30s with request deduplication.
    */
   async getMemberPosition(address: string): Promise<SuiMemberPosition> {
     const defaultPosition: SuiMemberPosition = {
@@ -265,6 +323,8 @@ export class SuiCommunityPoolService {
     const poolStateId = await this.getPoolStateId();
     if (!poolStateId) return defaultPosition;
 
+    const cacheKey = `sui-member-${this.network}-${address.toLowerCase()}`;
+    return suiCachedFetch(cacheKey, async () => {
     try {
       const stats = await this.getPoolStats();
       const poolFields = await this.fetchObjectFields(poolStateId);
@@ -328,12 +388,16 @@ export class SuiCommunityPoolService {
       logger.error('[SuiCommunityPool] Failed to fetch member position:', err);
       return defaultPosition;
     }
+    }, SUI_MEMBER_TTL);
   }
 
   /**
-   * Get all members (for leaderboard)
+   * Get all members (for leaderboard).
+   * Cached for 2m. Parallelized RPC calls.
    */
   async getAllMembers(): Promise<SuiMemberPosition[]> {
+    const cacheKey = `sui-all-members-${this.network}`;
+    return suiCachedFetch(cacheKey, async () => {
     const poolStateId = await this.getPoolStateId();
     if (!poolStateId) return [];
 
@@ -371,50 +435,58 @@ export class SuiCommunityPoolService {
         // Use 0
       }
 
+      // Parallelize member fetches in batches of 5 (avoid rate limiting)
+      const BATCH_SIZE = 5;
+      const memberAddresses = fields.map((f: any) => f.name?.value).filter(Boolean) as string[];
       const members: SuiMemberPosition[] = [];
 
-      for (const field of fields) {
-        const memberAddress = field.name?.value;
-        if (!memberAddress) continue;
+      for (let i = 0; i < memberAddresses.length; i += BATCH_SIZE) {
+        const batch = memberAddresses.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (memberAddress) => {
+            const memberRes = await fetch(this.config.rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'suix_getDynamicFieldObject',
+                params: [membersTableId, { type: 'address', value: memberAddress }],
+              }),
+            });
 
-        try {
-          const memberRes = await fetch(this.config.rpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'suix_getDynamicFieldObject',
-              params: [membersTableId, { type: 'address', value: memberAddress }],
-            }),
-          });
+            const memberData = await memberRes.json();
+            const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
+                                memberData.result?.data?.content?.fields;
 
-          const memberData = await memberRes.json();
-          const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
-                              memberData.result?.data?.content?.fields;
+            if (memberFields && memberFields.shares) {
+              const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+              const valueSui = shares * stats.sharePrice;
 
-          if (memberFields && memberFields.shares) {
-            const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
-            const valueSui = shares * stats.sharePrice;
-
-            if (shares > 0) {
-              members.push({
-                address: memberAddress,
-                shares,
-                depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
-                withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
-                joinedAt: Number(memberFields.joined_at || 0),
-                lastDepositAt: Number(memberFields.last_deposit_at || 0),
-                highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
-                valueSui,
-                valueUsd: valueSui * suiPrice,
-                percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
-                isMember: true,
-              });
+              if (shares > 0) {
+                return {
+                  address: memberAddress,
+                  shares,
+                  depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                  withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                  joinedAt: Number(memberFields.joined_at || 0),
+                  lastDepositAt: Number(memberFields.last_deposit_at || 0),
+                  highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+                  valueSui,
+                  valueUsd: valueSui * suiPrice,
+                  percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
+                  isMember: true,
+                } as SuiMemberPosition;
+              }
             }
+            return null;
+          })
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            members.push(result.value);
           }
-        } catch (err) {
-          logger.debug('[SuiCommunityPool] Failed to fetch member:', memberAddress);
         }
       }
 
@@ -423,6 +495,7 @@ export class SuiCommunityPoolService {
       logger.error('[SuiCommunityPool] Failed to fetch all members:', err);
       return [];
     }
+    }, SUI_MEMBERS_TTL);
   }
 
   // ============================================

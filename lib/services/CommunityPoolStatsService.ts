@@ -206,14 +206,22 @@ export async function getPoolStats(): Promise<PoolStats> {
     const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
     
     // Deduplicate member count (contract memberList has duplicate entries)
+    // OPTIMIZATION: batch memberList calls in parallel chunks of 5
     const rawMemberCount = Number(stats._memberCount);
     let memberCount = rawMemberCount;
     try {
       const uniqueAddresses = new Set<string>();
-      for (let i = 0; i < rawMemberCount; i++) {
-        const addr = await pool.memberList(i);
-        uniqueAddresses.add(addr.toLowerCase());
+      const BATCH_SIZE = 5;
+
+      for (let batchStart = 0; batchStart < rawMemberCount; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, rawMemberCount);
+        const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
+        const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
+        for (const addr of addrs) {
+          uniqueAddresses.add(addr.toLowerCase());
+        }
       }
+
       memberCount = uniqueAddresses.size;
       if (memberCount !== rawMemberCount) {
         logger.info(`[PoolStats] Deduplicated members: ${rawMemberCount} raw -> ${memberCount} unique`);

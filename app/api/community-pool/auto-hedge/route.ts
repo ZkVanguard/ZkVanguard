@@ -16,6 +16,11 @@ import { getAutoHedgeConfig, saveAutoHedgeConfig } from '@/lib/storage/auto-hedg
 import { getActiveHedges } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
+import { readLimiter } from '@/lib/security/rate-limiter';
+
+// In-memory cache for auto-hedge status (expensive risk assessment)
+let autoHedgeCache: { data: unknown; expiresAt: number } | null = null;
+const AUTO_HEDGE_CACHE_TTL = 60_000; // 60s — risk assessment is expensive
 
 interface AutoHedgeStatus {
   enabled: boolean;
@@ -73,7 +78,18 @@ interface AutoHedgeStatus {
   };
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Rate limit
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
+  // Return cached if fresh (prevents expensive re-assessment)
+  if (autoHedgeCache && Date.now() < autoHedgeCache.expiresAt) {
+    return NextResponse.json(autoHedgeCache.data, {
+      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+    });
+  }
+
   try {
     // Get auto-hedge config
     const config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
@@ -171,9 +187,16 @@ export async function GET(): Promise<NextResponse> {
       },
     };
     
-    return NextResponse.json({
+    const responseData = {
       success: true,
       ...status,
+    };
+
+    // Cache the response
+    autoHedgeCache = { data: responseData, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL };
+
+    return NextResponse.json(responseData, {
+      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
     });
   } catch (error) {
     logger.error('[AutoHedge API] Error fetching status', { error });

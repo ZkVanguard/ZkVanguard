@@ -10,7 +10,7 @@
  * ~280 lines vs previous ~1,632 lines
  */
 
-import { useState, memo, useEffect, useCallback } from 'react';
+import { useState, memo, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { RiskMetricsPanel } from './RiskMetricsPanel';
 import { AutoHedgePanel } from './AutoHedgePanel';
@@ -40,9 +40,17 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // TRANSACTION CONFIRMATION EFFECTS (tightly coupled to wagmi lifecycle)
   // ============================================================================
   
+  // Guard against duplicate isConfirmed fires (React Strict Mode / rapid tx)
+  const txProcessedRef = useRef<string | null>(null);
+
   // Handle transaction confirmation based on current status
   useEffect(() => {
     if (!pool.isConfirmed) return;
+
+    // Deduplicate: skip if we already processed this exact txStatus
+    const txKey = `${pool.txStatus}`;
+    if (txProcessedRef.current === txKey) return;
+    txProcessedRef.current = txKey;
     
     // Approval confirmed -> trigger deposit
     if (pool.txStatus === 'approving' && pool.depositAmount) {
@@ -166,6 +174,13 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       recordWithdrawal();
     }
   }, [pool.isConfirmed]);
+
+  // Reset tx guard when status returns to idle
+  useEffect(() => {
+    if (pool.txStatus === 'idle') {
+      txProcessedRef.current = null;
+    }
+  }, [pool.txStatus]);
 
   // Handle write errors
   useEffect(() => {
@@ -322,6 +337,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         successMessage={pool.successMessage}
         error={pool.error}
         lastTxHash={pool.lastTxHash}
+        selectedChain={pool.selectedChain}
+        network={pool.network}
       />
 
       {!compact && (
