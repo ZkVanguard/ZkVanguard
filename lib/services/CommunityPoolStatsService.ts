@@ -41,6 +41,7 @@ const POOL_ABI = [
   'function calculateTotalNAV() view returns (uint256)',
   'function getNavPerShare() view returns (uint256)',
   'function getMemberCount() view returns (uint256)',
+  'function memberList(uint256 index) view returns (address)',
   'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
   'function isMember(address) view returns (bool)',
   'function targetAllocationBps(uint256) view returns (uint256)',
@@ -203,7 +204,23 @@ export async function getPoolStats(): Promise<PoolStats> {
     
     // Parse values
     const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-    const memberCount = Number(stats._memberCount);
+    
+    // Deduplicate member count (contract memberList has duplicate entries)
+    const rawMemberCount = Number(stats._memberCount);
+    let memberCount = rawMemberCount;
+    try {
+      const uniqueAddresses = new Set<string>();
+      for (let i = 0; i < rawMemberCount; i++) {
+        const addr = await pool.memberList(i);
+        uniqueAddresses.add(addr.toLowerCase());
+      }
+      memberCount = uniqueAddresses.size;
+      if (memberCount !== rawMemberCount) {
+        logger.info(`[PoolStats] Deduplicated members: ${rawMemberCount} raw -> ${memberCount} unique`);
+      }
+    } catch (err) {
+      logger.warn('[PoolStats] Failed to deduplicate members, using raw count', { err });
+    }
     
     // NAV and sharePrice from dedicated functions (more accurate)
     const totalNAV = parseFloat(ethers.formatUnits(nav, 6));
