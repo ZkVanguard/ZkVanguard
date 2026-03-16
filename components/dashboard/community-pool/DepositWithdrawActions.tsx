@@ -199,19 +199,37 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   }
 
   // EVM chains
+  const evmConnected = !!address;
+
   return (
     <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+      {/* EVM connection prompt */}
+      {!evmConnected ? (
+        <div className="mb-3 flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+          <Wallet className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            Connect your EVM wallet to deposit and withdraw from the pool.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <Wallet className="w-4 h-4 text-green-500" />
+          <span>Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button
           onClick={() => { onShowDeposit(!showDeposit); }}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+          disabled={!evmConnected}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
           Deposit
         </button>
         <button
           onClick={() => { onShowWithdraw(!showWithdraw); }}
-          disabled={!userPosition?.isMember}
+          disabled={!evmConnected || !userPosition?.isMember}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
         >
           <Minus className="w-4 h-4" />
@@ -221,7 +239,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
 
       {/* EVM Deposit Form */}
       <AnimatePresence>
-        {showDeposit && (
+        {showDeposit && evmConnected && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -262,7 +280,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
 
       {/* EVM Withdraw Form */}
       <AnimatePresence>
-        {showWithdraw && userPosition?.isMember && (
+        {showWithdraw && evmConnected && userPosition?.isMember && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -285,7 +303,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </button>
               <button
                 onClick={onWithdraw}
-                disabled={actionLoading || !withdrawShares || txStatus === 'withdrawing'}
+                disabled={actionLoading || !withdrawShares || !address || txStatus === 'withdrawing'}
                 className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
               >
                 {txStatus === 'withdrawing' ? 'Withdrawing...' : actionLoading ? 'Processing...' : 'Confirm'}

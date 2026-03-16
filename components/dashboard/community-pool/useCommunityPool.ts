@@ -224,7 +224,7 @@ export function useCommunityPool(propAddress?: string) {
     lastFetchRef.current = now;
     
     if (selectedChain === 'sui') {
-      const userAddress = suiAddress || address;
+      const userAddress = suiAddress;  // Only use SUI address for SUI chain
       try {
         const [poolRes, userRes] = await Promise.all([
           fetch(`/api/sui/community-pool?network=${suiNetwork}`),
@@ -433,6 +433,23 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
+    // Validate chain ID (same as handleDeposit)
+    const validChainIds = getValidChainIds(selectedChain);
+    if (!validChainIds.includes(chainId as number)) {
+      if (switchChain) {
+        try {
+          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+          await switchChain({ chainId: validChainIds[0] });
+          dispatchPool({ type: 'SET_ERROR', payload: `Switched. Please click Withdraw again.` });
+          return;
+        } catch {
+          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name}` });
+          return;
+        }
+      }
+      return;
+    }
+    
     if (!poolDeployed) {
       dispatchPool({ type: 'SET_ERROR', payload: `Pool not deployed on ${chainConfig?.name} ${network}` });
       return;
@@ -455,7 +472,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.withdrawShares, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
+  }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, COMMUNITY_POOL_ADDRESS]);
   
   // SUI handlers
   const handleSuiDeposit = useCallback(async () => {
