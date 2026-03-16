@@ -340,6 +340,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         suiBalance={pool.suiBalance}
         suiDepositAmount={pool.suiDepositAmount}
         suiWithdrawShares={pool.suiWithdrawShares}
+        suiNetwork={pool.suiNetwork}
+        suiIsWrongNetwork={pool.suiIsWrongNetwork}
         onShowDeposit={pool.setShowDeposit}
         onShowWithdraw={pool.setShowWithdraw}
         onDepositAmountChange={pool.setDepositAmount}
@@ -350,6 +352,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         onWithdraw={pool.handleWithdraw}
         onSuiDeposit={pool.handleSuiDeposit}
         onSuiWithdraw={pool.handleSuiWithdraw}
+        onSwitchSuiNetwork={pool.handleSwitchSuiNetwork}
       />
 
       <StatusMessages

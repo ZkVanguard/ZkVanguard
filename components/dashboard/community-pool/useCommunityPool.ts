@@ -182,6 +182,8 @@ export function useCommunityPool(propAddress?: string) {
   const suiBalance = suiContext?.balance ?? '0';
   const suiExecuteTransaction = suiContext?.executeTransaction;
   const suiNetwork = suiContext?.network ?? 'testnet';
+  const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
+  const suiSetNetwork = suiContext?.setNetwork;
   
   // Derived values
   const { selectedChain } = poolState;
@@ -651,11 +653,20 @@ export function useCommunityPool(propAddress?: string) {
       suiAddress,
       suiIsConnected,
       suiBalance,
+      suiNetwork,
+      suiIsWrongNetwork,
       // Chain-aware helpers
       activeAddress,
       isActiveWalletConnected,
     };
-  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, selectedChain]);
+  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain]);
+  
+  // Handler to switch SUI network to testnet
+  const handleSwitchSuiNetwork = useCallback(() => {
+    if (suiSetNetwork) {
+      suiSetNetwork('testnet');
+    }
+  }, [suiSetNetwork]);
   
   // Memoize derived configuration values
   const configValues = useMemo(() => ({
@@ -693,6 +704,7 @@ export function useCommunityPool(propAddress?: string) {
     handleWithdraw,
     handleSuiDeposit,
     handleSuiWithdraw,
+    handleSwitchSuiNetwork,
     resetWrite,
     signForApi,
     

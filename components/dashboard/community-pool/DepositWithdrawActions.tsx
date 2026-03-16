@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { Plus, Minus, Wallet, ExternalLink, Loader2 } from 'lucide-react';
+import { Plus, Minus, Wallet, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { PoolSummary, UserPosition, ChainKey, TxStatus } from './types';
 
@@ -29,6 +29,8 @@ interface DepositWithdrawActionsProps {
   suiBalance: string;
   suiDepositAmount: string;
   suiWithdrawShares: string;
+  suiNetwork: string;
+  suiIsWrongNetwork: boolean;
   // Handlers
   onShowDeposit: (show: boolean) => void;
   onShowWithdraw: (show: boolean) => void;
@@ -40,6 +42,7 @@ interface DepositWithdrawActionsProps {
   onWithdraw: () => void;
   onSuiDeposit: () => void;
   onSuiWithdraw: () => void;
+  onSwitchSuiNetwork: () => void;
 }
 
 export const DepositWithdrawActions = memo(function DepositWithdrawActions({
@@ -64,6 +67,8 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   suiBalance,
   suiDepositAmount,
   suiWithdrawShares,
+  suiNetwork,
+  suiIsWrongNetwork,
   onShowDeposit,
   onShowWithdraw,
   onDepositAmountChange,
@@ -74,6 +79,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   onWithdraw,
   onSuiDeposit,
   onSuiWithdraw,
+  onSwitchSuiNetwork,
 }: DepositWithdrawActionsProps) {
   const isSui = selectedChain === 'sui';
 
@@ -114,11 +120,29 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             )}
           </div>
 
+          {/* Wrong Network Warning */}
+          {suiIsConnected && suiIsWrongNetwork && (
+            <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                <span className="text-sm text-amber-700 dark:text-amber-400">
+                  Your wallet is on {suiNetwork}. Please switch to Testnet.
+                </span>
+              </div>
+              <button
+                onClick={onSwitchSuiNetwork}
+                className="px-3 py-1 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
+              >
+                Switch to Testnet
+              </button>
+            </div>
+          )}
+
           {/* SUI Deposit/Withdraw Buttons */}
           <div className="flex gap-3">
             <button
               onClick={() => { onShowDeposit(!showDeposit); }}
-              disabled={!suiIsConnected || actionLoading}
+              disabled={!suiIsConnected || actionLoading || suiIsWrongNetwork}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -126,7 +150,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             </button>
             <button
               onClick={() => { onShowWithdraw(!showWithdraw); }}
-              disabled={!suiIsConnected || !userPosition?.isMember || actionLoading}
+              disabled={!suiIsConnected || !userPosition?.isMember || actionLoading || suiIsWrongNetwork}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Minus className="w-4 h-4" />
