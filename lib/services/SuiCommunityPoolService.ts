@@ -23,7 +23,7 @@ import { getMarketDataService } from './RealMarketDataService';
 
 export const SUI_POOL_CONFIG = {
   testnet: {
-    packageId: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6',
+    packageId: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
     adminCapId: '0xc2c7d106dbd7ace011e5bebbcce7487273933064f9d2497bf3fc54df7e92b1eb',
     feeManagerCapId: '0x6809c18e6444a830197c53f8d4d8a0d7a73df34d51c9cbd38d4926999e9336c2',
     moduleName: 'community_pool',

@@ -59,14 +59,14 @@ export const CRONOS_CONTRACT_ADDRESSES = {
 export const SUI_CONTRACT_ADDRESSES = {
   testnet: {
     // ZKVanguard Package ID (includes all modules: community_pool, zk_proxy_vault, etc.)
-    packageId: ((process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6').trim()) as string,
+    packageId: ((process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c').trim()) as string,
     // Shared object IDs
     rwaManagerState: ((process.env.NEXT_PUBLIC_SUI_RWA_MANAGER_STATE || '0x84925d623a658bc40a5821ef74458e7f8e8f5a2971c58ec9df6fb59277a8951d').trim()) as string,
     zkVerifierState: ((process.env.NEXT_PUBLIC_SUI_ZK_VERIFIER_STATE || '0x19f9c7a1ca761442180928f0efe982d414fd324948a1a092a258e8116c56213e').trim()) as string,
     paymentRouterState: ((process.env.NEXT_PUBLIC_SUI_PAYMENT_ROUTER_STATE || '0x08c0f37564f618162edc982d714b79dd946fbf7d387731f6c5ca3946d6cbe507').trim()) as string,
     zkProxyVaultState: ((process.env.NEXT_PUBLIC_SUI_ZK_PROXY_VAULT_STATE || '0x0738bb829009c6b2fd930e5e9adb1a7fdbf3f5180d41ad0bf091bebc611add35').trim()) as string,
     // Community Pool - requires create_pool call to create shared state
-    communityPoolPackage: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6' as string,
+    communityPoolPackage: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c' as string,
     // Capability object IDs (owned by admin)
     adminCap: ((process.env.NEXT_PUBLIC_SUI_ADMIN_CAP || '0x088fef47064d46e298b57214eb68d9c245f420989249978625b5fdd0f1afb28f').trim()) as string,
     feeManagerCap: '0x13731b6f7852b9bfa5072ff4901abe11124b956cac62a9fea3e7568808931e70' as string,
