@@ -19,14 +19,14 @@ const SUI_PRIVKEY = 'suiprivkey1qpu6rlng3uzygjusfat4vrj6nvkc7uhx6zztnrg4l27z45k4
 // SUI Testnet configuration
 const CONFIG = {
   network: 'testnet' as const,
-  packageId: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6',
+  packageId: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
   // AdminCap for creating pool
-  adminCapId: '0xc2c7d106dbd7ace011e5bebbcce7487273933064f9d2497bf3fc54df7e92b1eb',
+  adminCapId: '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
   // FeeManagerCap
-  feeManagerCapId: '0x6809c18e6444a830197c53f8d4d8a0d7a73df34d51c9cbd38d4926999e9336c2',
+  feeManagerCapId: '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6',
   moduleName: 'community_pool',
   // Test amounts (in MIST - 1 SUI = 1e9 MIST)
-  depositAmount: 100_000_000n, // 0.1 SUI (small test amount)
+  depositAmount: 500_000_000n, // 0.5 SUI (min first deposit)
   withdrawShares: 50_000_000_000_000_000n, // 0.05 shares (scaled by 1e18)
 };
 

@@ -156,7 +156,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         // Package ID - use create_pool to create CommunityPoolState shared object
-        communityPool: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6',
+        communityPool: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
         usdc: '0x0000000000000000000000000000000000000000', // Native SUI used
       },
       mainnet: {

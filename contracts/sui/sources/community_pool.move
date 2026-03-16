@@ -38,9 +38,10 @@ module zkvanguard::community_pool {
     // ============ Constants ============
     const BPS_DENOMINATOR: u64 = 10000;
     const SECONDS_PER_YEAR: u64 = 31536000; // 365 days
-    const MIN_DEPOSIT: u64 = 10_000_000_000; // 10 SUI (in MIST, 9 decimals)
+    // Testnet: Lower minimums for testing (0.1 SUI min, 0.5 SUI first deposit)
+    const MIN_DEPOSIT: u64 = 100_000_000; // 0.1 SUI (in MIST, 9 decimals)
     const MIN_SHARES_FOR_WITHDRAWAL: u64 = 1_000_000; // 0.001 shares (9 decimals)
-    const MIN_FIRST_DEPOSIT: u64 = 100_000_000_000; // 100 SUI
+    const MIN_FIRST_DEPOSIT: u64 = 500_000_000; // 0.5 SUI
     // Virtual offset for ERC-4626 inflation protection
     // Using 1:1 ratio to prevent overflow while maintaining protection
     const VIRTUAL_SHARES: u64 = 1_000_000_000; // 1 share (9 decimals like SUI)
