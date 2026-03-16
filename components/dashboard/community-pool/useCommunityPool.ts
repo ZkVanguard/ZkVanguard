@@ -196,18 +196,35 @@ export function useCommunityPool(propAddress?: string) {
   // CHAIN SELECTION
   // ============================================================================
   
-  // Auto-detect chain from wallet (only for EVM chains, don't override SUI default)
+  // Auto-detect chain based on connected wallet
+  // Priority: Connected wallet chain > SUI default
   useEffect(() => {
-    // Skip auto-detection if:
-    // 1. User has manually selected a chain
-    // 2. Current chain is SUI (SUI is default, don't auto-switch away)
-    if (chainId && !userSelectedChainRef.current && selectedChain !== 'sui') {
+    // Skip if user has manually selected a chain
+    if (userSelectedChainRef.current) return;
+    
+    // Check which wallet is connected
+    const suiWalletConnected = suiIsConnected && suiAddress;
+    const evmWalletConnected = isConnected && address;
+    
+    if (suiWalletConnected && !evmWalletConnected) {
+      // Only SUI wallet connected - use SUI
+      if (selectedChain !== 'sui') {
+        dispatchPool({ type: 'SET_CHAIN', payload: 'sui' });
+      }
+    } else if (evmWalletConnected && !suiWalletConnected) {
+      // Only EVM wallet connected - detect which EVM chain
       const detectedChain = getChainKeyFromId(chainId) as ChainKey | null;
       if (detectedChain && detectedChain !== selectedChain) {
         dispatchPool({ type: 'SET_CHAIN', payload: detectedChain });
       }
+    } else if (suiWalletConnected && evmWalletConnected) {
+      // Both wallets connected - prefer SUI (it's the default/optimized chain)
+      if (selectedChain !== 'sui') {
+        dispatchPool({ type: 'SET_CHAIN', payload: 'sui' });
+      }
     }
-  }, [chainId, selectedChain]);
+    // If no wallet connected, keep current selection (defaults to 'sui' in initialPoolState)
+  }, [chainId, selectedChain, suiIsConnected, suiAddress, isConnected, address]);
   
   const handleChainSelect = useCallback((key: ChainKey) => {
     userSelectedChainRef.current = true;
