@@ -159,18 +159,28 @@ export async function POST(request: NextRequest) {
       const { amount } = body;
       if (!amount) {
         return NextResponse.json(
-          { success: false, error: 'Amount required' },
+          { success: false, error: 'Amount required (in MIST or SUI)' },
           { status: 400 }
         );
       }
       
-      const params = await service.buildDepositParams(BigInt(amount));
+      // Fetch pool stats first to ensure poolStateId is cached
+      await service.getPoolStats();
+      
+      // Convert from MIST (string/bigint) to SUI (number)
+      // 1 SUI = 1,000,000,000 MIST (9 decimals)
+      const amountMist = BigInt(amount);
+      const amountSui = Number(amountMist) / 1_000_000_000;
+      
+      const params = service.buildDepositParams(amountSui);
       
       return NextResponse.json({
         success: true,
         data: {
-          ...params,
-          amount: params.amount.toString(),
+          target: params.target,
+          poolStateId: params.poolStateId,
+          amountMist: params.amountMist.toString(),
+          clockId: params.clockId,
         },
         chain: 'sui',
         network,
@@ -182,18 +192,27 @@ export async function POST(request: NextRequest) {
       const { shares } = body;
       if (!shares) {
         return NextResponse.json(
-          { success: false, error: 'Shares required' },
+          { success: false, error: 'Shares required (scaled by 10^18)' },
           { status: 400 }
         );
       }
       
-      const params = await service.buildWithdrawParams(BigInt(shares));
+      // Fetch pool stats first to ensure poolStateId is cached
+      await service.getPoolStats();
+      
+      // Convert from scaled shares (10^18) to shares (number)
+      const sharesScaled = BigInt(shares);
+      const sharesNum = Number(sharesScaled) / 1e18;
+      
+      const params = service.buildWithdrawParams(sharesNum);
       
       return NextResponse.json({
         success: true,
         data: {
-          ...params,
-          shares: params.shares.toString(),
+          target: params.target,
+          poolStateId: params.poolStateId,
+          sharesScaled: params.sharesScaled.toString(),
+          clockId: params.clockId,
         },
         chain: 'sui',
         network,
