@@ -3,9 +3,8 @@ name = "zkvanguard"
 version = "0.1.0"
 edition = "2024.beta"
 
+# No explicit Sui dependency - let the CLI auto-add the correct version
 [dependencies]
-# Use mainnet for production deployment
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet-v1.46.0" }
 
 [addresses]
 zkvanguard = "0x0"
