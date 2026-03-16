@@ -79,7 +79,7 @@ const initialPoolState: CommunityPoolState = {
   loading: true,
   error: null,
   successMessage: null,
-  selectedChain: 'cronos',
+  selectedChain: 'sui',  // SUI is the default and optimized chain
   suiPoolStateId: null,
 };
 
