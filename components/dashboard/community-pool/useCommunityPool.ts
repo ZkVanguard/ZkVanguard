@@ -534,7 +534,7 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
-    dispatchTx({ type: 'SET_TX_STATUS', payload: 'pending' });
+    dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
       // Step 1: Get transaction params from API
@@ -575,11 +575,10 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       // Step 3: Execute transaction
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing' });
       const result = await suiExecuteTransaction(tx);
       
       if (result.success) {
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'confirmed' });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
         dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited ${amount} SUI! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
@@ -621,7 +620,7 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
-    dispatchTx({ type: 'SET_TX_STATUS', payload: 'pending' });
+    dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
       // Step 1: Get transaction params from API
@@ -659,11 +658,10 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       // Step 3: Execute transaction
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing' });
       const result = await suiExecuteTransaction(tx);
       
       if (result.success) {
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'confirmed' });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
         dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ${shares} shares! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
         dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
