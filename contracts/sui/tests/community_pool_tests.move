@@ -20,6 +20,8 @@ module zkvanguard::community_pool_tests {
     const TEN_SUI: u64 = 10_000_000_000;
     const HUNDRED_SUI: u64 = 100_000_000_000;
     const THOUSAND_SUI: u64 = 1_000_000_000_000;
+    // Amounts below minimums (for testing failure cases)
+    const BELOW_MIN_FIRST: u64 = 100_000_000; // 0.1 SUI - below 0.5 SUI minimum first deposit
 
     // ============ Test Utilities ============
 
@@ -163,15 +165,15 @@ module zkvanguard::community_pool_tests {
             clock::destroy_for_testing(clock);
         };
         
-        // User1 tries to deposit only 10 SUI (below 100 SUI minimum)
+        // User1 tries to deposit only 0.1 SUI (below 0.5 SUI minimum for first deposit)
         test_scenario::next_tx(&mut scenario, USER1);
         {
             let mut state = test_scenario::take_shared<CommunityPoolState>(&scenario);
             let mut clock = create_clock(&mut scenario);
             
-            let deposit_coin = coin::mint_for_testing<SUI>(TEN_SUI, test_scenario::ctx(&mut scenario));
+            let deposit_coin = coin::mint_for_testing<SUI>(BELOW_MIN_FIRST, test_scenario::ctx(&mut scenario));
             
-            // This should fail - first deposit must be >= 100 SUI
+            // This should fail - first deposit must be >= 0.5 SUI
             community_pool::deposit(
                 &mut state,
                 deposit_coin,

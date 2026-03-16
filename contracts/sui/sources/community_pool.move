@@ -8,6 +8,9 @@
 /// - AI-driven allocation: Agent role can manage treasury
 /// - Self-sustaining: Management fee (0.5% annual) + Performance fee (10%)
 /// - High-water mark: Performance fee only on new highs
+/// - AI Decision tracking with cross-chain coordination
+/// - Auto-hedge integration with BlueFin
+/// - Timelock for admin operations
 #[allow(unused_const, unused_field, unused_use)]
 module zkvanguard::community_pool {
     use sui::coin::{Self, Coin};
@@ -17,6 +20,8 @@ module zkvanguard::community_pool {
     use sui::table::{Self, Table};
     use sui::clock::{Self, Clock};
     use sui::math;
+    use sui::hash;
+    use sui::bcs;
 
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
@@ -34,6 +39,18 @@ module zkvanguard::community_pool {
     const E_DAILY_WITHDRAWAL_EXCEEDED: u64 = 12;
     const E_FEE_TOO_HIGH: u64 = 13;
     const E_INVALID_ALLOCATION: u64 = 14;
+    const E_REBALANCE_COOLDOWN: u64 = 15;
+    const E_AI_CONFIDENCE_TOO_LOW: u64 = 16;
+    const E_DECISION_ALREADY_EXECUTED: u64 = 17;
+    const E_HEDGE_COOLDOWN: u64 = 18;
+    const E_RESERVE_RATIO_BREACHED: u64 = 19;
+    const E_MAX_HEDGE_EXCEEDED: u64 = 20;
+    const E_HEDGE_NOT_FOUND: u64 = 21;
+    const E_TIMELOCK_NOT_READY: u64 = 22;
+    const E_TIMELOCK_EXPIRED: u64 = 23;
+    const E_OPERATION_NOT_FOUND: u64 = 24;
+    const E_EMERGENCY_MODE_REQUIRED: u64 = 25;
+    const E_NOTHING_TO_RESCUE: u64 = 26;
 
     // ============ Constants ============
     const BPS_DENOMINATOR: u64 = 10000;
@@ -63,6 +80,18 @@ module zkvanguard::community_pool {
     const DEFAULT_MANAGEMENT_FEE_BPS: u64 = 50; // 0.5%
     const DEFAULT_PERFORMANCE_FEE_BPS: u64 = 1000; // 10%
 
+    // Timelock delays (milliseconds)
+    const MAINNET_TIMELOCK_DELAY: u64 = 172800000; // 48 hours
+    const TESTNET_TIMELOCK_DELAY: u64 = 300000;    // 5 minutes
+    const TIMELOCK_EXPIRY: u64 = 604800000;        // 7 days
+
+    // AI Management constants
+    const DEFAULT_MIN_AI_CONFIDENCE: u8 = 50; // 0-100 scale
+    const DEFAULT_REBALANCE_COOLDOWN: u64 = 3600000; // 1 hour in ms
+
+    // SUI Chain ID for cross-chain coordination
+    const SUI_CHAIN_ID: u64 = 101; // SUI mainnet identifier
+
     // ============ Structs ============
 
     /// Admin capability
@@ -81,6 +110,11 @@ module zkvanguard::community_pool {
         id: UID,
     }
 
+    /// Rebalancer capability
+    public struct RebalancerCap has key, store {
+        id: UID,
+    }
+
     /// Member data structure
     public struct MemberData has store, copy, drop {
         shares: u64,             // Number of shares owned
@@ -89,6 +123,82 @@ module zkvanguard::community_pool {
         joined_at: u64,          // Timestamp of first deposit
         last_deposit_at: u64,    // Timestamp of last deposit
         high_water_mark: u64,    // For performance fee calculation
+    }
+
+    /// AI Decision for cross-chain coordination
+    public struct AIDecision has store, copy, drop {
+        decision_id: vector<u8>,        // Unique ID (hash)
+        timestamp: u64,                 // When decision was made
+        target_alloc_bps: u64,          // Target allocation for SUI (0-10000)
+        confidence: u8,                 // AI confidence (0-100)
+        urgency: u8,                    // 0=low, 1=medium, 2=high
+        expected_return_bps: u64,       // Expected return in BPS
+        risk_score: u64,                // Risk score (0-10000)
+        reason_hash: vector<u8>,        // Hash of AI reasoning
+        data_feed_hash: vector<u8>,     // Hash of price data used
+        executed: bool,                 // Whether executed
+    }
+
+    /// Rebalance Record for history tracking
+    public struct RebalanceRecord has store, copy, drop {
+        timestamp: u64,
+        previous_alloc_bps: u64,
+        new_alloc_bps: u64,
+        reason_hash: vector<u8>,
+        executor: address,
+    }
+
+    /// Cross-chain signal for AI coordination
+    public struct CrossChainSignal has store, copy, drop {
+        signal_id: vector<u8>,
+        timestamp: u64,
+        source_chain_id: u64,
+        target_alloc_bps: u64,
+        price_data_hash: vector<u8>,
+        action: u8,                    // 0=hold, 1=rebalance, 2=hedge, 3=dehedge
+        acknowledged: bool,
+    }
+
+    /// AI Agent metrics
+    public struct AIAgentMetrics has store, copy, drop {
+        total_decisions: u64,
+        successful_decisions: u64,
+        cumulative_return_bps: u64,    // Can track as absolute value
+        avg_confidence: u64,           // Scaled by 100
+        last_decision_time: u64,
+        last_decision_id: vector<u8>,
+    }
+
+    /// Auto-hedge configuration
+    public struct AutoHedgeConfig has store, copy, drop {
+        enabled: bool,
+        risk_threshold_bps: u64,       // Risk level to trigger (e.g., 500 = 5%)
+        max_hedge_ratio_bps: u64,      // Max portion of NAV (e.g., 2500 = 25%)
+        default_leverage: u64,         // Default leverage (2-10)
+        cooldown_ms: u64,              // Min time between hedges
+        last_hedge_time: u64,
+    }
+
+    /// Active hedge position
+    public struct HedgePosition has store, copy, drop {
+        hedge_id: vector<u8>,
+        pair_index: u8,                // 0=BTC, 1=ETH, 2=SUI
+        collateral_amount: u64,
+        leverage: u64,
+        is_long: bool,
+        open_time: u64,
+        reason_hash: vector<u8>,
+    }
+
+    /// Timelock operation (for admin governance)
+    public struct TimelockOperation has store, copy, drop {
+        operation_id: vector<u8>,
+        operation_type: u8,            // 0=treasury, 1=fees, 2=limits, 3=agent
+        target_value: u64,
+        target_address: address,
+        scheduled_time: u64,           // When it can be executed
+        expiry_time: u64,              // When it expires
+        executed: bool,
     }
 
     /// Community Pool State (shared object)
@@ -134,10 +244,54 @@ module zkvanguard::community_pool {
         members: Table<address, MemberData>,
         /// Member list for enumeration
         member_count: u64,
-        /// AI Agent address (for off-chain tracking)
+        /// AI Agent addresses (for off-chain tracking)
         agent_addresses: vector<address>,
         /// Pool creation timestamp
         created_at: u64,
+        
+        // ═══ AI MANAGEMENT STATE ═══
+        /// Current AI decision
+        current_ai_decision: AIDecision,
+        /// AI decision history (last N decisions)
+        ai_decision_count: u64,
+        /// Latest cross-chain signal
+        latest_signal: CrossChainSignal,
+        /// AI agent metrics by index (simplified from Table)
+        agent_metrics: vector<AIAgentMetrics>,
+        /// Minimum AI confidence required (0-100)
+        min_ai_confidence: u8,
+        /// Whether signal verification is required
+        require_signal_verification: bool,
+        
+        // ═══ REBALANCING STATE ═══
+        /// Target allocation for SUI in BPS (0-10000)
+        target_allocation_bps: u64,
+        /// Last rebalance timestamp
+        last_rebalance_time: u64,
+        /// Rebalance cooldown in ms
+        rebalance_cooldown: u64,
+        /// Rebalance history (last N records)
+        rebalance_count: u64,
+        
+        // ═══ AUTO-HEDGE STATE ═══
+        /// Auto-hedge configuration
+        auto_hedge_config: AutoHedgeConfig,
+        /// Active hedge positions
+        active_hedges: vector<HedgePosition>,
+        /// Total value currently hedged
+        total_hedged_value: u64,
+        /// Daily hedge total
+        daily_hedge_total: u64,
+        /// Current hedge day
+        current_hedge_day: u64,
+        
+        // ═══ TIMELOCK STATE ═══
+        /// Pending timelock operations
+        pending_operations: vector<TimelockOperation>,
+        /// Timelock delay in ms (48h mainnet, 5min testnet)
+        timelock_delay: u64,
+        /// Emergency withdraw enabled (bypasses timelock)
+        emergency_withdraw_enabled: bool,
     }
 
     // ============ Events ============
@@ -203,9 +357,116 @@ module zkvanguard::community_pool {
         timestamp: u64,
     }
 
+    // ═══ AI MANAGEMENT EVENTS ═══
+    
+    public struct AIDecisionRecorded has copy, drop {
+        decision_id: vector<u8>,
+        agent: address,
+        target_alloc_bps: u64,
+        confidence: u8,
+        expected_return_bps: u64,
+        timestamp: u64,
+    }
+
+    public struct AIDecisionExecuted has copy, drop {
+        decision_id: vector<u8>,
+        executor: address,
+        successful: bool,
+        timestamp: u64,
+    }
+
+    public struct CrossChainSignalReceived has copy, drop {
+        signal_id: vector<u8>,
+        source_chain_id: u64,
+        action: u8,
+        timestamp: u64,
+    }
+
+    public struct AIAgentMetricsUpdated has copy, drop {
+        agent: address,
+        total_decisions: u64,
+        cumulative_return_bps: u64,
+        timestamp: u64,
+    }
+
+    // ═══ REBALANCE EVENTS ═══
+
+    public struct Rebalanced has copy, drop {
+        executor: address,
+        previous_bps: u64,
+        new_bps: u64,
+        reason_hash: vector<u8>,
+        timestamp: u64,
+    }
+
+    public struct AllocationUpdated has copy, drop {
+        old_bps: u64,
+        new_bps: u64,
+        timestamp: u64,
+    }
+
+    // ═══ AUTO-HEDGE EVENTS ═══
+
+    public struct PoolHedgeOpened has copy, drop {
+        hedge_id: vector<u8>,
+        pair_index: u8,
+        collateral_amount: u64,
+        leverage: u64,
+        is_long: bool,
+        timestamp: u64,
+    }
+
+    public struct PoolHedgeClosed has copy, drop {
+        hedge_id: vector<u8>,
+        pnl_amount: u64,
+        is_profit: bool,
+        timestamp: u64,
+    }
+
+    public struct AutoHedgeConfigUpdated has copy, drop {
+        enabled: bool,
+        risk_threshold_bps: u64,
+        max_hedge_ratio_bps: u64,
+        default_leverage: u64,
+        timestamp: u64,
+    }
+
+    // ═══ TIMELOCK EVENTS ═══
+
+    public struct TimelockOperationScheduled has copy, drop {
+        operation_id: vector<u8>,
+        operation_type: u8,
+        scheduled_time: u64,
+        timestamp: u64,
+    }
+
+    public struct TimelockOperationExecuted has copy, drop {
+        operation_id: vector<u8>,
+        operation_type: u8,
+        timestamp: u64,
+    }
+
+    public struct TimelockOperationCancelled has copy, drop {
+        operation_id: vector<u8>,
+        timestamp: u64,
+    }
+
+    // ═══ RESCUE EVENTS ═══
+
+    public struct TokensRescued has copy, drop {
+        amount: u64,
+        recipient: address,
+        timestamp: u64,
+    }
+
+    public struct CircuitBreakerReset has copy, drop {
+        pool_id: ID,
+        timestamp: u64,
+    }
+
     // ============ Init ============
 
-    /// Initialize module and create admin capability
+    /// Initialize module and create admin, fee manager, and rebalancer capabilities
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
             AdminCap { id: object::new(ctx) },
@@ -213,6 +474,10 @@ module zkvanguard::community_pool {
         );
         transfer::transfer(
             FeeManagerCap { id: object::new(ctx) },
+            ctx.sender()
+        );
+        transfer::transfer(
+            RebalancerCap { id: object::new(ctx) },
             ctx.sender()
         );
     }
@@ -227,6 +492,42 @@ module zkvanguard::community_pool {
         ctx: &mut TxContext
     ) {
         let timestamp = clock::timestamp_ms(clock);
+        
+        // Initialize empty AI decision
+        let empty_decision = AIDecision {
+            decision_id: vector::empty(),
+            timestamp: 0,
+            target_alloc_bps: 10000, // 100% SUI by default
+            confidence: 0,
+            urgency: 0,
+            expected_return_bps: 0,
+            risk_score: 0,
+            reason_hash: vector::empty(),
+            data_feed_hash: vector::empty(),
+            executed: true,
+        };
+
+        // Initialize empty cross-chain signal
+        let empty_signal = CrossChainSignal {
+            signal_id: vector::empty(),
+            timestamp: 0,
+            source_chain_id: 0,
+            target_alloc_bps: 10000,
+            price_data_hash: vector::empty(),
+            action: 0,
+            acknowledged: true,
+        };
+
+        // Initialize auto-hedge config (disabled by default)
+        let hedge_config = AutoHedgeConfig {
+            enabled: false,
+            risk_threshold_bps: 500,        // 5% drawdown triggers hedge
+            max_hedge_ratio_bps: 2500,      // Max 25% of NAV can be hedged
+            default_leverage: 3,            // 3x leverage default
+            cooldown_ms: 3600000,           // 1 hour cooldown
+            last_hedge_time: 0,
+        };
+        
         let state = CommunityPoolState {
             id: object::new(ctx),
             balance: balance::zero<SUI>(),
@@ -251,6 +552,32 @@ module zkvanguard::community_pool {
             member_count: 0,
             agent_addresses: vector::empty(),
             created_at: timestamp,
+            
+            // AI Management state
+            current_ai_decision: empty_decision,
+            ai_decision_count: 0,
+            latest_signal: empty_signal,
+            agent_metrics: vector::empty(),
+            min_ai_confidence: DEFAULT_MIN_AI_CONFIDENCE,
+            require_signal_verification: false, // Disabled for testnet
+            
+            // Rebalancing state
+            target_allocation_bps: 10000, // 100% SUI
+            last_rebalance_time: 0,
+            rebalance_cooldown: DEFAULT_REBALANCE_COOLDOWN,
+            rebalance_count: 0,
+            
+            // Auto-hedge state
+            auto_hedge_config: hedge_config,
+            active_hedges: vector::empty(),
+            total_hedged_value: 0,
+            daily_hedge_total: 0,
+            current_hedge_day: timestamp / 86400000,
+            
+            // Timelock state
+            pending_operations: vector::empty(),
+            timelock_delay: TESTNET_TIMELOCK_DELAY, // 5 minutes for testnet
+            emergency_withdraw_enabled: false,
         };
 
         event::emit(PoolCreated {
@@ -730,6 +1057,717 @@ module zkvanguard::community_pool {
             FeeManagerCap { id: object::new(ctx) },
             recipient
         );
+    }
+
+    /// Create rebalancer capability
+    public entry fun create_rebalancer_cap(
+        _admin: &AdminCap,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        transfer::transfer(
+            RebalancerCap { id: object::new(ctx) },
+            recipient
+        );
+    }
+
+    // ============ AI Management Functions ============
+
+    /// Record an AI decision (can be executed separately)
+    /// @param target_alloc_bps Target SUI allocation (0-10000 basis points)
+    /// @param confidence AI confidence level (0-100)
+    /// @param urgency Execution urgency (0=low, 1=medium, 2=high)
+    /// @param expected_return_bps Expected return in basis points
+    /// @param risk_score Risk score (0-10000)
+    /// @param reasoning Human-readable reasoning (will be hashed)
+    /// @param price_data_hash Hash of price data used for decision
+    public entry fun record_ai_decision(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+        target_alloc_bps: u64,
+        confidence: u8,
+        urgency: u8,
+        expected_return_bps: u64,
+        risk_score: u64,
+        reasoning: vector<u8>,
+        price_data_hash: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // Validate confidence meets minimum
+        assert!(confidence >= state.min_ai_confidence, E_AI_CONFIDENCE_TOO_LOW);
+        
+        // Validate allocation is valid
+        assert!(target_alloc_bps <= BPS_DENOMINATOR, E_INVALID_ALLOCATION);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        let sender = ctx.sender();
+        
+        // Generate unique decision ID
+        let mut id_data = bcs::to_bytes(&timestamp);
+        vector::append(&mut id_data, bcs::to_bytes(&sender));
+        vector::append(&mut id_data, bcs::to_bytes(&target_alloc_bps));
+        let decision_id = hash::keccak256(&id_data);
+        
+        // Hash the reasoning
+        let reason_hash = hash::keccak256(&reasoning);
+        
+        // Create decision
+        let decision = AIDecision {
+            decision_id,
+            timestamp,
+            target_alloc_bps,
+            confidence,
+            urgency,
+            expected_return_bps,
+            risk_score,
+            reason_hash,
+            data_feed_hash: price_data_hash,
+            executed: false,
+        };
+        
+        // Store as current decision
+        state.current_ai_decision = decision;
+        state.ai_decision_count = state.ai_decision_count + 1;
+        
+        // Update agent metrics
+        update_agent_metrics(state, sender, confidence);
+        
+        event::emit(AIDecisionRecorded {
+            decision_id,
+            agent: sender,
+            target_alloc_bps,
+            confidence,
+            expected_return_bps,
+            timestamp,
+        });
+    }
+
+    /// Execute the current AI decision (rebalance allocation)
+    public entry fun execute_ai_decision(
+        _rebalancer: &RebalancerCap,
+        state: &mut CommunityPoolState,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(!state.paused, E_PAUSED);
+        assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
+        assert!(!state.current_ai_decision.executed, E_DECISION_ALREADY_EXECUTED);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Check rebalance cooldown
+        assert!(
+            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            E_REBALANCE_COOLDOWN
+        );
+        
+        // Update allocation
+        let previous_bps = state.target_allocation_bps;
+        let new_bps = state.current_ai_decision.target_alloc_bps;
+        
+        state.target_allocation_bps = new_bps;
+        state.last_rebalance_time = timestamp;
+        state.rebalance_count = state.rebalance_count + 1;
+        state.current_ai_decision.executed = true;
+        
+        event::emit(Rebalanced {
+            executor: ctx.sender(),
+            previous_bps,
+            new_bps,
+            reason_hash: state.current_ai_decision.reason_hash,
+            timestamp,
+        });
+        
+        event::emit(AIDecisionExecuted {
+            decision_id: state.current_ai_decision.decision_id,
+            executor: ctx.sender(),
+            successful: true,
+            timestamp,
+        });
+    }
+
+    /// Receive cross-chain signal for coordination
+    public entry fun receive_cross_chain_signal(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+        signal_id: vector<u8>,
+        source_chain_id: u64,
+        target_alloc_bps: u64,
+        price_data_hash: vector<u8>,
+        action: u8,
+        clock: &Clock,
+        _ctx: &mut TxContext
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        
+        let signal = CrossChainSignal {
+            signal_id,
+            timestamp,
+            source_chain_id,
+            target_alloc_bps,
+            price_data_hash,
+            action,
+            acknowledged: false,
+        };
+        
+        state.latest_signal = signal;
+        
+        event::emit(CrossChainSignalReceived {
+            signal_id,
+            source_chain_id,
+            action,
+            timestamp,
+        });
+    }
+
+    /// Acknowledge cross-chain signal
+    public entry fun acknowledge_signal(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+    ) {
+        state.latest_signal.acknowledged = true;
+    }
+
+    /// Internal: Update agent metrics
+    fun update_agent_metrics(state: &mut CommunityPoolState, _agent: address, confidence: u8) {
+        // Add new metrics entry if needed (simplified - stores overall metrics)
+        if (vector::length(&state.agent_metrics) == 0) {
+            let metrics = AIAgentMetrics {
+                total_decisions: 1,
+                successful_decisions: 0,
+                cumulative_return_bps: 0,
+                avg_confidence: (confidence as u64) * 100,
+                last_decision_time: 0,
+                last_decision_id: vector::empty(),
+            };
+            vector::push_back(&mut state.agent_metrics, metrics);
+        } else {
+            let metrics = vector::borrow_mut(&mut state.agent_metrics, 0);
+            metrics.total_decisions = metrics.total_decisions + 1;
+            // Update average confidence (running average)
+            metrics.avg_confidence = ((metrics.avg_confidence * (metrics.total_decisions - 1)) + 
+                                      ((confidence as u64) * 100)) / metrics.total_decisions;
+        };
+    }
+
+    // ============ Rebalancing Functions ============
+
+    /// Set target allocation (direct, without AI decision)
+    public entry fun set_target_allocation(
+        _rebalancer: &RebalancerCap,
+        state: &mut CommunityPoolState,
+        new_alloc_bps: u64,
+        reasoning: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(!state.paused, E_PAUSED);
+        assert!(new_alloc_bps <= BPS_DENOMINATOR, E_INVALID_ALLOCATION);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Check cooldown
+        assert!(
+            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            E_REBALANCE_COOLDOWN
+        );
+        
+        let previous_bps = state.target_allocation_bps;
+        state.target_allocation_bps = new_alloc_bps;
+        state.last_rebalance_time = timestamp;
+        state.rebalance_count = state.rebalance_count + 1;
+        
+        let reason_hash = hash::keccak256(&reasoning);
+        
+        event::emit(Rebalanced {
+            executor: ctx.sender(),
+            previous_bps,
+            new_bps: new_alloc_bps,
+            reason_hash,
+            timestamp,
+        });
+    }
+
+    /// Set rebalance cooldown
+    public entry fun set_rebalance_cooldown(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        cooldown_ms: u64,
+    ) {
+        // Max 7 days cooldown
+        assert!(cooldown_ms <= 604800000, E_INVALID_ALLOCATION);
+        state.rebalance_cooldown = cooldown_ms;
+    }
+
+    /// Set minimum AI confidence
+    public entry fun set_min_ai_confidence(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        min_confidence: u8,
+    ) {
+        assert!(min_confidence <= 100, E_INVALID_ALLOCATION);
+        state.min_ai_confidence = min_confidence;
+    }
+
+    // ============ Auto-Hedge Functions ============
+
+    /// Configure auto-hedge settings
+    public entry fun set_auto_hedge_config(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+        enabled: bool,
+        risk_threshold_bps: u64,
+        max_hedge_ratio_bps: u64,
+        default_leverage: u64,
+        cooldown_ms: u64,
+        clock: &Clock,
+    ) {
+        // Validate parameters
+        assert!(default_leverage >= 2 && default_leverage <= 10, E_INVALID_ALLOCATION);
+        assert!(max_hedge_ratio_bps <= 5000, E_MAX_HEDGE_EXCEEDED); // Max 50%
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        state.auto_hedge_config = AutoHedgeConfig {
+            enabled,
+            risk_threshold_bps,
+            max_hedge_ratio_bps,
+            default_leverage,
+            cooldown_ms,
+            last_hedge_time: state.auto_hedge_config.last_hedge_time,
+        };
+        
+        event::emit(AutoHedgeConfigUpdated {
+            enabled,
+            risk_threshold_bps,
+            max_hedge_ratio_bps,
+            default_leverage,
+            timestamp,
+        });
+    }
+
+    /// Open a hedge position (AI-managed)
+    /// Note: In production, this would integrate with BlueFin or other SUI DEX
+    public entry fun open_pool_hedge(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+        pair_index: u8,
+        collateral_amount: u64,
+        leverage: u64,
+        is_long: bool,
+        reasoning: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(!state.paused, E_PAUSED);
+        assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
+        assert!(collateral_amount > 0, E_ZERO_AMOUNT);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Check hedge cooldown
+        assert!(
+            timestamp >= state.auto_hedge_config.last_hedge_time + state.auto_hedge_config.cooldown_ms,
+            E_HEDGE_COOLDOWN
+        );
+        
+        // Check we have enough balance
+        let pool_balance = balance::value(&state.balance);
+        assert!(pool_balance >= collateral_amount, E_INSUFFICIENT_BALANCE);
+        
+        // Enforce minimum reserve ratio (20%)
+        let nav = get_total_nav(state);
+        let min_reserve = (nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
+        assert!(pool_balance - collateral_amount >= min_reserve, E_RESERVE_RATIO_BREACHED);
+        
+        // Check max hedge ratio
+        let max_hedge = (nav * state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
+        assert!(state.total_hedged_value + collateral_amount <= max_hedge, E_MAX_HEDGE_EXCEEDED);
+        
+        // Reset daily tracker if new day
+        let current_day = timestamp / 86400000;
+        if (current_day > state.current_hedge_day) {
+            state.daily_hedge_total = 0;
+            state.current_hedge_day = current_day;
+        };
+        
+        // Check daily cap
+        let daily_cap = (nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
+        assert!(state.daily_hedge_total + collateral_amount <= daily_cap, E_MAX_HEDGE_EXCEEDED);
+        
+        // Generate hedge ID
+        let mut id_data = bcs::to_bytes(&timestamp);
+        vector::append(&mut id_data, bcs::to_bytes(&pair_index));
+        vector::append(&mut id_data, bcs::to_bytes(&collateral_amount));
+        let hedge_id = hash::keccak256(&id_data);
+        
+        let reason_hash = hash::keccak256(&reasoning);
+        
+        // Create hedge position
+        let hedge = HedgePosition {
+            hedge_id,
+            pair_index,
+            collateral_amount,
+            leverage,
+            is_long,
+            open_time: timestamp,
+            reason_hash,
+        };
+        
+        // Update state
+        vector::push_back(&mut state.active_hedges, hedge);
+        state.total_hedged_value = state.total_hedged_value + collateral_amount;
+        state.daily_hedge_total = state.daily_hedge_total + collateral_amount;
+        state.auto_hedge_config.last_hedge_time = timestamp;
+        
+        // Transfer collateral to treasury for external hedge execution
+        let collateral_balance = balance::split(&mut state.balance, collateral_amount);
+        let collateral_coin = coin::from_balance(collateral_balance, ctx);
+        transfer::public_transfer(collateral_coin, state.treasury);
+        
+        event::emit(PoolHedgeOpened {
+            hedge_id,
+            pair_index,
+            collateral_amount,
+            leverage,
+            is_long,
+            timestamp,
+        });
+    }
+
+    /// Close a hedge position and return funds
+    public entry fun close_pool_hedge(
+        _agent: &AgentCap,
+        state: &mut CommunityPoolState,
+        hedge_id: vector<u8>,
+        pnl_amount: u64,
+        is_profit: bool,
+        funds: Coin<SUI>,
+        clock: &Clock,
+        _ctx: &mut TxContext
+    ) {
+        assert!(!state.paused, E_PAUSED);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Find and remove hedge
+        let mut found_idx: u64 = 0;
+        let mut found = false;
+        let len = vector::length(&state.active_hedges);
+        let mut i: u64 = 0;
+        
+        while (i < len) {
+            let hedge = vector::borrow(&state.active_hedges, i);
+            if (hedge.hedge_id == hedge_id) {
+                found_idx = i;
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+        
+        assert!(found, E_HEDGE_NOT_FOUND);
+        
+        let hedge = vector::remove(&mut state.active_hedges, found_idx);
+        
+        // Update state
+        state.total_hedged_value = if (state.total_hedged_value > hedge.collateral_amount) {
+            state.total_hedged_value - hedge.collateral_amount
+        } else {
+            0
+        };
+        
+        // Add returned funds to pool
+        let fund_balance = coin::into_balance(funds);
+        balance::join(&mut state.balance, fund_balance);
+        
+        // Update all-time high if profit
+        if (is_profit) {
+            let current_nav = get_nav_per_share(state);
+            if (current_nav > state.all_time_high_nav_per_share) {
+                state.all_time_high_nav_per_share = current_nav;
+            };
+        };
+        
+        event::emit(PoolHedgeClosed {
+            hedge_id,
+            pnl_amount,
+            is_profit,
+            timestamp,
+        });
+    }
+
+    // ============ Timelock Functions ============
+
+    /// Schedule a timelock operation
+    public entry fun schedule_timelock_operation(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        operation_type: u8,
+        target_value: u64,
+        target_address: address,
+        clock: &Clock,
+        _ctx: &mut TxContext
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        let scheduled_time = timestamp + state.timelock_delay;
+        let expiry_time = scheduled_time + TIMELOCK_EXPIRY;
+        
+        // Generate operation ID
+        let mut id_data = bcs::to_bytes(&timestamp);
+        vector::append(&mut id_data, bcs::to_bytes(&operation_type));
+        vector::append(&mut id_data, bcs::to_bytes(&target_value));
+        let operation_id = hash::keccak256(&id_data);
+        
+        let operation = TimelockOperation {
+            operation_id,
+            operation_type,
+            target_value,
+            target_address,
+            scheduled_time,
+            expiry_time,
+            executed: false,
+        };
+        
+        vector::push_back(&mut state.pending_operations, operation);
+        
+        event::emit(TimelockOperationScheduled {
+            operation_id,
+            operation_type,
+            scheduled_time,
+            timestamp,
+        });
+    }
+
+    /// Execute a timelock operation after delay
+    public entry fun execute_timelock_operation(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        operation_id: vector<u8>,
+        clock: &Clock,
+        _ctx: &mut TxContext
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Find operation
+        let mut found_idx: u64 = 0;
+        let mut found = false;
+        let len = vector::length(&state.pending_operations);
+        let mut i: u64 = 0;
+        
+        while (i < len) {
+            let op = vector::borrow(&state.pending_operations, i);
+            if (op.operation_id == operation_id) {
+                found_idx = i;
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+        
+        assert!(found, E_OPERATION_NOT_FOUND);
+        
+        let op = vector::borrow(&state.pending_operations, found_idx);
+        assert!(!op.executed, E_DECISION_ALREADY_EXECUTED);
+        assert!(timestamp >= op.scheduled_time, E_TIMELOCK_NOT_READY);
+        assert!(timestamp <= op.expiry_time, E_TIMELOCK_EXPIRED);
+        
+        // Execute based on operation type
+        let operation_type = op.operation_type;
+        let target_value = op.target_value;
+        let target_address = op.target_address;
+        
+        // 0 = treasury update, 1 = fee update, 2 = limits update
+        if (operation_type == 0) {
+            state.treasury = target_address;
+        } else if (operation_type == 1) {
+            // target_value encodes both fees: high 32 bits = mgmt, low 32 bits = perf
+            let mgmt_fee = target_value >> 32;
+            let perf_fee = target_value & 0xFFFFFFFF;
+            if (mgmt_fee <= 500 && perf_fee <= 3000) {
+                state.management_fee_bps = mgmt_fee;
+                state.performance_fee_bps = perf_fee;
+            };
+        } else if (operation_type == 2) {
+            state.max_single_deposit = target_value;
+        };
+        
+        // Mark as executed
+        let op_mut = vector::borrow_mut(&mut state.pending_operations, found_idx);
+        op_mut.executed = true;
+        
+        event::emit(TimelockOperationExecuted {
+            operation_id,
+            operation_type,
+            timestamp,
+        });
+    }
+
+    /// Cancel a pending timelock operation
+    public entry fun cancel_timelock_operation(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        operation_id: vector<u8>,
+        clock: &Clock,
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        
+        // Find and remove operation
+        let mut found_idx: u64 = 0;
+        let mut found = false;
+        let len = vector::length(&state.pending_operations);
+        let mut i: u64 = 0;
+        
+        while (i < len) {
+            let op = vector::borrow(&state.pending_operations, i);
+            if (op.operation_id == operation_id && !op.executed) {
+                found_idx = i;
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+        
+        assert!(found, E_OPERATION_NOT_FOUND);
+        
+        vector::remove(&mut state.pending_operations, found_idx);
+        
+        event::emit(TimelockOperationCancelled {
+            operation_id,
+            timestamp,
+        });
+    }
+
+    /// Set timelock delay (for transitioning mainnet/testnet)
+    public entry fun set_timelock_delay(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        delay_ms: u64,
+    ) {
+        // Min 5 minutes, max 7 days
+        assert!(delay_ms >= 300000 && delay_ms <= 604800000, E_INVALID_ALLOCATION);
+        state.timelock_delay = delay_ms;
+    }
+
+    // ============ Rescue Functions ============
+
+    /// Rescue accidentally sent SUI to treasury
+    public entry fun rescue_sui(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        amount: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // Only works in emergency mode
+        assert!(state.emergency_withdraw_enabled || state.circuit_breaker_tripped, E_EMERGENCY_MODE_REQUIRED);
+        assert!(amount > 0, E_NOTHING_TO_RESCUE);
+        
+        let available = balance::value(&state.balance);
+        let rescue_amount = if (amount > available) { available } else { amount };
+        assert!(rescue_amount > 0, E_NOTHING_TO_RESCUE);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        
+        let rescue_balance = balance::split(&mut state.balance, rescue_amount);
+        let rescue_coin = coin::from_balance(rescue_balance, ctx);
+        transfer::public_transfer(rescue_coin, state.treasury);
+        
+        event::emit(TokensRescued {
+            amount: rescue_amount,
+            recipient: state.treasury,
+            timestamp,
+        });
+    }
+
+    /// Admin migration - transfer all funds to new contract
+    public entry fun admin_migrate_funds(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        recipient: address,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // Only works in emergency mode
+        assert!(state.emergency_withdraw_enabled, E_EMERGENCY_MODE_REQUIRED);
+        
+        let timestamp = clock::timestamp_ms(clock);
+        let amount = balance::value(&state.balance);
+        assert!(amount > 0, E_NOTHING_TO_RESCUE);
+        
+        // Transfer all funds
+        let all_balance = balance::split(&mut state.balance, amount);
+        let all_coin = coin::from_balance(all_balance, ctx);
+        transfer::public_transfer(all_coin, recipient);
+        
+        // Reset pool state
+        state.total_shares = 0;
+        
+        event::emit(TokensRescued {
+            amount,
+            recipient,
+            timestamp,
+        });
+    }
+
+    /// Enable/disable emergency withdrawal mode
+    public entry fun set_emergency_withdraw(
+        _admin: &AdminCap,
+        state: &mut CommunityPoolState,
+        enabled: bool,
+    ) {
+        state.emergency_withdraw_enabled = enabled;
+    }
+
+    // ============ Additional View Functions ============
+
+    /// Get AI decision info
+    public fun get_ai_decision_info(state: &CommunityPoolState): (vector<u8>, u64, u64, u8, bool) {
+        (
+            state.current_ai_decision.decision_id,
+            state.current_ai_decision.timestamp,
+            state.current_ai_decision.target_alloc_bps,
+            state.current_ai_decision.confidence,
+            state.current_ai_decision.executed
+        )
+    }
+
+    /// Get rebalance info
+    public fun get_rebalance_info(state: &CommunityPoolState): (u64, u64, u64) {
+        (
+            state.target_allocation_bps,
+            state.last_rebalance_time,
+            state.rebalance_count
+        )
+    }
+
+    /// Get auto-hedge config
+    public fun get_auto_hedge_config(state: &CommunityPoolState): (bool, u64, u64, u64, u64) {
+        (
+            state.auto_hedge_config.enabled,
+            state.auto_hedge_config.risk_threshold_bps,
+            state.auto_hedge_config.max_hedge_ratio_bps,
+            state.auto_hedge_config.default_leverage,
+            state.auto_hedge_config.cooldown_ms
+        )
+    }
+
+    /// Get hedge status
+    public fun get_hedge_status(state: &CommunityPoolState): (u64, u64) {
+        (
+            vector::length(&state.active_hedges),
+            state.total_hedged_value
+        )
+    }
+
+    /// Get timelock info
+    public fun get_timelock_info(state: &CommunityPoolState): (u64, u64, bool) {
+        (
+            state.timelock_delay,
+            vector::length(&state.pending_operations),
+            state.emergency_withdraw_enabled
+        )
     }
 
     // ============ Agent Functions ============
