@@ -1,65 +1,86 @@
 /**
  * SUI Community Pool Service
  * 
- * SUI chain equivalent of CommunityPoolStatsService + CommunityPoolService,
- * wrapping the deployed rwa_manager.move contract on SUI for:
- * - Portfolio creation & management
+ * Provides integration with the SUI Community Pool Move contract for:
+ * - Pool state queries
  * - Deposit/withdraw operations
- * - Pool stats and member positions
- * - AI allocation decisions
+ * - Member position queries
+ * - NAV calculations
  * 
- * Uses the deployed RWA Manager state object on SUI testnet.
+ * Uses @mysten/sui SDK for blockchain interactions.
+ * This is the SUI equivalent of CommunityPoolService.ts (Cronos/EVM).
  * 
- * @see contracts/sui/sources/rwa_manager.move
- * @see lib/services/CommunityPoolStatsService.ts (Cronos equivalent)
+ * @see contracts/sui/sources/community_pool.move
+ * @see lib/services/CommunityPoolService.ts (EVM equivalent)
  */
 
 import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from './RealMarketDataService';
-import { ProductionGuard } from '@/lib/security/production-guard';
 
 // ============================================
 // DEPLOYED CONTRACT ADDRESSES
 // ============================================
 
-const SUI_POOL_DEPLOYMENTS = {
+export const SUI_POOL_CONFIG = {
   testnet: {
-    packageId: '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a',
-    rwaManagerState: '0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97',
-    paymentRouterState: '0x1fba1a6a0be32f5d678da2910b99900f74af680531563fd7274d5059e1420678',
+    packageId: '0xe83b514dbb1769b69002811fd4438dfcdcd12a01623ea301db229ef05fc461d6',
+    adminCapId: '0xc2c7d106dbd7ace011e5bebbcce7487273933064f9d2497bf3fc54df7e92b1eb',
+    feeManagerCapId: '0x6809c18e6444a830197c53f8d4d8a0d7a73df34d51c9cbd38d4926999e9336c2',
+    moduleName: 'community_pool',
     rpcUrl: 'https://fullnode.testnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/testnet',
+    // Pool state will be discovered via PoolCreated event
+    poolStateId: null as string | null,
   },
   mainnet: {
     packageId: '',
-    rwaManagerState: '',
-    paymentRouterState: '',
+    adminCapId: '',
+    feeManagerCapId: '',
+    moduleName: 'community_pool',
     rpcUrl: 'https://fullnode.mainnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/mainnet',
+    poolStateId: null as string | null,
   },
 } as const;
+
+type SuiNetworkType = 'testnet' | 'mainnet';
+
+// SUI uses 9 decimals (MIST)
+const SUI_DECIMALS = 9;
+const SHARE_DECIMALS = 9;
+const CLOCK_OBJECT_ID = '0x6';
 
 // ============================================
 // TYPES
 // ============================================
 
 export interface SuiPoolStats {
-  totalPortfolios: number;
-  totalValueLocked: bigint;    // In MIST
-  totalValueLockedUsd: number;
+  totalNAV: number;            // In SUI
+  totalNAVUsd: number;         // In USD
+  totalShares: number;
+  sharePrice: number;          // NAV per share
+  sharePriceUsd: number;
   memberCount: number;
-  avgPortfolioSize: number;
+  managementFeeBps: number;
+  performanceFeeBps: number;
+  paused: boolean;
+  allTimeHighNav: number;
+  createdAt: number;
+  poolStateId: string | null;
 }
 
-export interface SuiPortfolio {
-  portfolioId: string;
-  owner: string;
-  totalValue: bigint;
-  targetYield: number;         // Basis points (e.g., 800 = 8%)
-  riskTolerance: number;       // 0-100
-  isActive: boolean;
-  lastRebalance: number;
-  allocations: SuiAllocation[];
+export interface SuiMemberPosition {
+  address: string;
+  shares: number;
+  depositedSui: number;
+  withdrawnSui: number;
+  joinedAt: number;
+  lastDepositAt: number;
+  highWaterMark: number;
+  valueSui: number;
+  valueUsd: number;
+  percentage: number;
+  isMember: boolean;
 }
 
 export interface SuiAllocation {
@@ -68,41 +89,22 @@ export interface SuiAllocation {
   percentage: number;
 }
 
-export interface SuiMemberPosition {
-  address: string;
-  portfolioIds: string[];
-  totalValue: bigint;
-  totalValueUsd: number;
-  portfolioCount: number;
-}
-
 export interface SuiDepositParams {
-  portfolioId: string;
-  amount: bigint;              // In MIST
+  amountSui: number;           // In SUI (will be converted to MIST)
 }
 
 export interface SuiWithdrawParams {
-  portfolioId: string;
-  amount: bigint;
+  shares: number;              // Shares to burn
 }
 
-export interface SuiCreatePortfolioParams {
-  targetYield: number;         // Basis points
-  riskTolerance: number;       // 0-100
-  initialDeposit: bigint;      // In MIST
-}
-
-export interface SuiRebalanceParams {
-  portfolioId: string;
-  newAllocations: number[];    // Basis points per asset
-  reasoning: string;
-}
-
-export interface SuiPoolTransactionResult {
+export interface SuiTransactionResult {
   success: boolean;
-  digest?: string;
-  portfolioId?: string;
+  txDigest?: string;
+  sharesReceived?: number;
+  amountSui?: number;
+  sharePrice?: number;
   error?: string;
+  explorerUrl?: string;
 }
 
 // ============================================
@@ -110,179 +112,34 @@ export interface SuiPoolTransactionResult {
 // ============================================
 
 export class SuiCommunityPoolService {
-  private network: keyof typeof SUI_POOL_DEPLOYMENTS;
-  private config: (typeof SUI_POOL_DEPLOYMENTS)[keyof typeof SUI_POOL_DEPLOYMENTS];
+  private network: SuiNetworkType;
+  private config: typeof SUI_POOL_CONFIG.testnet;
+  private cachedPoolStateId: string | null = null;
 
-  constructor(network: keyof typeof SUI_POOL_DEPLOYMENTS = 'testnet') {
+  constructor(network: SuiNetworkType = 'testnet') {
     this.network = network;
-    this.config = SUI_POOL_DEPLOYMENTS[network];
-    logger.info('[SuiPool] Initialized', { network });
+    this.config = SUI_POOL_CONFIG[network];
+    logger.info('[SuiCommunityPool] Initialized', { network, packageId: this.config.packageId });
   }
 
   // ============================================
-  // TRANSACTION BUILDERS
+  // POOL STATE DISCOVERY
   // ============================================
 
   /**
-   * Build transaction to create a new portfolio
+   * Get or discover the pool state ID from PoolCreated events
    */
-  buildCreatePortfolioTransaction(params: SuiCreatePortfolioParams): {
-    target: string;
-    arguments: unknown[];
-    coinAmount: bigint;
-  } {
-    return {
-      target: `${this.config.packageId}::rwa_manager::create_portfolio`,
-      arguments: [
-        this.config.rwaManagerState,
-        params.targetYield,
-        params.riskTolerance,
-        // Coin object will be split from gas in frontend
-        '0x6', // Clock
-      ],
-      coinAmount: params.initialDeposit,
-    };
-  }
-
-  /**
-   * Build transaction to deposit into a portfolio
-   */
-  buildDepositTransaction(params: SuiDepositParams): {
-    target: string;
-    arguments: unknown[];
-    coinAmount: bigint;
-  } {
-    return {
-      target: `${this.config.packageId}::rwa_manager::deposit`,
-      arguments: [
-        this.config.rwaManagerState,
-        params.portfolioId,
-        // Coin will be split in frontend
-        '0x6',
-      ],
-      coinAmount: params.amount,
-    };
-  }
-
-  /**
-   * Build transaction to withdraw from a portfolio
-   */
-  buildWithdrawTransaction(params: SuiWithdrawParams): {
-    target: string;
-    arguments: unknown[];
-  } {
-    return {
-      target: `${this.config.packageId}::rwa_manager::withdraw`,
-      arguments: [
-        this.config.rwaManagerState,
-        params.portfolioId,
-        params.amount.toString(),
-        '0x6',
-      ],
-    };
-  }
-
-  /**
-   * Build transaction to rebalance a portfolio (admin/AI only)
-   */
-  buildRebalanceTransaction(params: SuiRebalanceParams): {
-    target: string;
-    arguments: unknown[];
-  } {
-    return {
-      target: `${this.config.packageId}::rwa_manager::rebalance`,
-      arguments: [
-        this.config.rwaManagerState,
-        params.portfolioId,
-        params.newAllocations,
-        new TextEncoder().encode(params.reasoning),
-        '0x6',
-      ],
-    };
-  }
-
-  // ============================================
-  // READ OPERATIONS (via SUI RPC)
-  // ============================================
-
-  /**
-   * Get overall pool statistics
-   */
-  async getPoolStats(): Promise<SuiPoolStats> {
-    try {
-      const stateData = await this.fetchObjectFields(this.config.rwaManagerState);
-
-      if (!stateData) {
-        return {
-          totalPortfolios: 0,
-          totalValueLocked: 0n,
-          totalValueLockedUsd: 0,
-          memberCount: 0,
-          avgPortfolioSize: 0,
-        };
-      }
-
-      const totalPortfolios = Number(stateData.portfolio_count || 0);
-      const totalValueLocked = BigInt(String(stateData.total_value_locked || '0'));
-
-      // Fetch live SUI price from Crypto.com Exchange API
-      let suiPrice = 0;
-      try {
-        const svc = getMarketDataService();
-        const priceData = await svc.getTokenPrice('SUI');
-        suiPrice = priceData.price;
-      } catch (e) {
-        logger.warn('[SuiPool] Failed to fetch live SUI price', { error: e });
-      }
-      const tvlUsd = Number(totalValueLocked) / 1e9 * suiPrice;
-
-      return {
-        totalPortfolios,
-        totalValueLocked,
-        totalValueLockedUsd: tvlUsd,
-        memberCount: Number(stateData.member_count || totalPortfolios),
-        avgPortfolioSize: totalPortfolios > 0 ? tvlUsd / totalPortfolios : 0,
-      };
-    } catch (error) {
-      logger.error('[SuiPool] Failed to get pool stats', { error });
-      return {
-        totalPortfolios: 0,
-        totalValueLocked: 0n,
-        totalValueLockedUsd: 0,
-        memberCount: 0,
-        avgPortfolioSize: 0,
-      };
+  async getPoolStateId(): Promise<string | null> {
+    if (this.cachedPoolStateId) {
+      return this.cachedPoolStateId;
     }
-  }
 
-  /**
-   * Get portfolio details by ID
-   */
-  async getPortfolio(portfolioId: string): Promise<SuiPortfolio | null> {
-    try {
-      const fields = await this.fetchObjectFields(portfolioId);
-      if (!fields) return null;
-
-      return {
-        portfolioId,
-        owner: fields.owner as string,
-        totalValue: BigInt(String(fields.total_value || '0')),
-        targetYield: Number(fields.target_yield || 0),
-        riskTolerance: Number(fields.risk_tolerance || 50),
-        isActive: fields.is_active as boolean ?? true,
-        lastRebalance: Number(fields.last_rebalance || 0),
-        allocations: this.parseAllocations(fields.allocations),
-      };
-    } catch (error) {
-      logger.error('[SuiPool] Failed to get portfolio', { portfolioId, error });
-      return null;
+    if (this.config.poolStateId) {
+      this.cachedPoolStateId = this.config.poolStateId;
+      return this.cachedPoolStateId;
     }
-  }
 
-  /**
-   * Get all portfolios owned by an address
-   */
-  async getPortfoliosByOwner(ownerAddress: string): Promise<SuiPortfolio[]> {
+    // Search for PoolCreated event
     try {
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
@@ -290,115 +147,320 @@ export class SuiCommunityPoolService {
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 1,
-          method: 'suix_getOwnedObjects',
-          params: [
-            ownerAddress,
-            {
-              filter: {
-                StructType: `${this.config.packageId}::rwa_manager::Portfolio`,
-              },
-              options: { showContent: true },
-            },
-          ],
+          method: 'suix_queryEvents',
+          params: [{
+            MoveEventType: `${this.config.packageId}::${this.config.moduleName}::PoolCreated`,
+          }, null, 1, true], // descending order, limit 1
         }),
       });
 
       const data = await response.json();
-      const objects = data.result?.data || [];
+      const events = data.result?.data || [];
 
-      return objects.map((obj: Record<string, unknown>) => {
-        const objData = obj as { data?: { objectId?: string; content?: { fields?: Record<string, unknown> } } };
-        const fields = objData.data?.content?.fields || {};
-        return {
-          portfolioId: objData.data?.objectId || '',
-          owner: ownerAddress,
-          totalValue: BigInt(String(fields.total_value || '0')),
-          targetYield: Number(fields.target_yield || 0),
-          riskTolerance: Number(fields.risk_tolerance || 50),
-          isActive: fields.is_active as boolean ?? true,
-          lastRebalance: Number(fields.last_rebalance || 0),
-          allocations: this.parseAllocations(fields.allocations),
-        } as SuiPortfolio;
+      if (events.length > 0) {
+        const event = events[0].parsedJson;
+        this.cachedPoolStateId = event?.pool_id;
+        logger.info('[SuiCommunityPool] Found pool state ID:', this.cachedPoolStateId);
+        return this.cachedPoolStateId;
+      }
+    } catch (err) {
+      logger.error('[SuiCommunityPool] Failed to query pool events:', err);
+    }
+
+    return null;
+  }
+
+  // ============================================
+  // READ OPERATIONS
+  // ============================================
+
+  /**
+   * Get pool statistics from on-chain state
+   */
+  async getPoolStats(): Promise<SuiPoolStats> {
+    const poolStateId = await this.getPoolStateId();
+    
+    const defaultStats: SuiPoolStats = {
+      totalNAV: 0,
+      totalNAVUsd: 0,
+      totalShares: 0,
+      sharePrice: 1.0,
+      sharePriceUsd: 0,
+      memberCount: 0,
+      managementFeeBps: 50,
+      performanceFeeBps: 1000,
+      paused: false,
+      allTimeHighNav: 1.0,
+      createdAt: 0,
+      poolStateId,
+    };
+
+    if (!poolStateId) {
+      logger.warn('[SuiCommunityPool] No pool state found - pool may need to be created');
+      return defaultStats;
+    }
+
+    try {
+      const fields = await this.fetchObjectFields(poolStateId);
+      if (!fields) return defaultStats;
+
+      // Parse balance from Balance<SUI> struct
+      const balanceValue = fields.balance?.fields?.value || fields.balance?.value || '0';
+      const totalNAV = Number(balanceValue) / Math.pow(10, SUI_DECIMALS);
+      const totalShares = Number(fields.total_shares || 0) / Math.pow(10, SHARE_DECIMALS);
+      
+      // Calculate share price
+      const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+
+      // Get SUI price for USD conversion
+      let suiPrice = 0;
+      try {
+        const svc = getMarketDataService();
+        const priceData = await svc.getTokenPrice('SUI');
+        suiPrice = priceData.price;
+      } catch (e) {
+        logger.warn('[SuiCommunityPool] Failed to fetch SUI price:', e);
+      }
+
+      return {
+        totalNAV,
+        totalNAVUsd: totalNAV * suiPrice,
+        totalShares,
+        sharePrice,
+        sharePriceUsd: sharePrice * suiPrice,
+        memberCount: Number(fields.member_count || 0),
+        managementFeeBps: Number(fields.management_fee_bps || 50),
+        performanceFeeBps: Number(fields.performance_fee_bps || 1000),
+        paused: fields.paused || false,
+        allTimeHighNav: Number(fields.all_time_high_nav_per_share || 1e9) / 1e9,
+        createdAt: Number(fields.created_at || 0),
+        poolStateId,
+      };
+    } catch (err) {
+      logger.error('[SuiCommunityPool] Failed to fetch pool stats:', err);
+      return defaultStats;
+    }
+  }
+
+  /**
+   * Get member position from pool state
+   */
+  async getMemberPosition(address: string): Promise<SuiMemberPosition> {
+    const defaultPosition: SuiMemberPosition = {
+      address,
+      shares: 0,
+      depositedSui: 0,
+      withdrawnSui: 0,
+      joinedAt: 0,
+      lastDepositAt: 0,
+      highWaterMark: 0,
+      valueSui: 0,
+      valueUsd: 0,
+      percentage: 0,
+      isMember: false,
+    };
+
+    const poolStateId = await this.getPoolStateId();
+    if (!poolStateId) return defaultPosition;
+
+    try {
+      const stats = await this.getPoolStats();
+      const poolFields = await this.fetchObjectFields(poolStateId);
+      
+      if (!poolFields) return defaultPosition;
+
+      // Get members table ID
+      const membersTableId = poolFields.members?.fields?.id?.id;
+      if (!membersTableId) {
+        logger.warn('[SuiCommunityPool] Members table not found');
+        return defaultPosition;
+      }
+
+      // Query dynamic field for this address
+      const response = await fetch(this.config.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'suix_getDynamicFieldObject',
+          params: [membersTableId, { type: 'address', value: address }],
+        }),
       });
-    } catch (error) {
-      logger.error('[SuiPool] Failed to get portfolios by owner', { ownerAddress, error });
+
+      const data = await response.json();
+      const memberFields = data.result?.data?.content?.fields?.value?.fields ||
+                          data.result?.data?.content?.fields;
+
+      if (!memberFields || !memberFields.shares) {
+        return defaultPosition; // Member not found
+      }
+
+      const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+      const valueSui = shares * stats.sharePrice;
+
+      // Get SUI price
+      let suiPrice = 0;
+      try {
+        const svc = getMarketDataService();
+        const priceData = await svc.getTokenPrice('SUI');
+        suiPrice = priceData.price;
+      } catch {
+        // Use 0
+      }
+
+      return {
+        address,
+        shares,
+        depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
+        withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+        joinedAt: Number(memberFields.joined_at || 0),
+        lastDepositAt: Number(memberFields.last_deposit_at || 0),
+        highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+        valueSui,
+        valueUsd: valueSui * suiPrice,
+        percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
+        isMember: shares > 0,
+      };
+    } catch (err) {
+      logger.error('[SuiCommunityPool] Failed to fetch member position:', err);
+      return defaultPosition;
+    }
+  }
+
+  /**
+   * Get all members (for leaderboard)
+   */
+  async getAllMembers(): Promise<SuiMemberPosition[]> {
+    const poolStateId = await this.getPoolStateId();
+    if (!poolStateId) return [];
+
+    try {
+      const stats = await this.getPoolStats();
+      const poolFields = await this.fetchObjectFields(poolStateId);
+      
+      if (!poolFields) return [];
+
+      const membersTableId = poolFields.members?.fields?.id?.id;
+      if (!membersTableId) return [];
+
+      // Get all dynamic fields (members)
+      const response = await fetch(this.config.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'suix_getDynamicFields',
+          params: [membersTableId, null, 100], // limit 100
+        }),
+      });
+
+      const data = await response.json();
+      const fields = data.result?.data || [];
+
+      // Get SUI price once
+      let suiPrice = 0;
+      try {
+        const svc = getMarketDataService();
+        const priceData = await svc.getTokenPrice('SUI');
+        suiPrice = priceData.price;
+      } catch {
+        // Use 0
+      }
+
+      const members: SuiMemberPosition[] = [];
+
+      for (const field of fields) {
+        const memberAddress = field.name?.value;
+        if (!memberAddress) continue;
+
+        try {
+          const memberRes = await fetch(this.config.rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'suix_getDynamicFieldObject',
+              params: [membersTableId, { type: 'address', value: memberAddress }],
+            }),
+          });
+
+          const memberData = await memberRes.json();
+          const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
+                              memberData.result?.data?.content?.fields;
+
+          if (memberFields && memberFields.shares) {
+            const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+            const valueSui = shares * stats.sharePrice;
+
+            if (shares > 0) {
+              members.push({
+                address: memberAddress,
+                shares,
+                depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                joinedAt: Number(memberFields.joined_at || 0),
+                lastDepositAt: Number(memberFields.last_deposit_at || 0),
+                highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+                valueSui,
+                valueUsd: valueSui * suiPrice,
+                percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
+                isMember: true,
+              });
+            }
+          }
+        } catch (err) {
+          logger.debug('[SuiCommunityPool] Failed to fetch member:', memberAddress);
+        }
+      }
+
+      return members.sort((a, b) => b.shares - a.shares);
+    } catch (err) {
+      logger.error('[SuiCommunityPool] Failed to fetch all members:', err);
       return [];
     }
   }
 
-  /**
-   * Get member position summary
-   * 
-   * PRODUCTION: Fetches live SUI price from market data service.
-   * Never uses hardcoded prices for financial calculations.
-   */
-  async getMemberPosition(ownerAddress: string): Promise<SuiMemberPosition> {
-    const portfolios = await this.getPortfoliosByOwner(ownerAddress);
-    const totalValue = portfolios.reduce((sum, p) => sum + p.totalValue, 0n);
-    
-    // CRITICAL: Fetch live SUI price - never use hardcoded values
-    let suiPrice: number;
-    try {
-      const marketService = getMarketDataService();
-      const priceData = await marketService.getTokenPrice('SUI');
-      
-      // Validate price is reasonable
-      const validatedPrice = ProductionGuard.requireLivePrice(
-        'SUI',
-        priceData.price,
-        priceData.timestamp,
-        priceData.source
-      );
-      
-      suiPrice = validatedPrice.price;
-      logger.debug('[SuiPool] Using live SUI price', { price: suiPrice, source: priceData.source });
-    } catch (error) {
-      // PRODUCTION: Fail safely - do not use stale/fake prices
-      logger.error('[SuiPool] CRITICAL: Failed to fetch SUI price', { error });
-      
-      if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
-        throw new Error('Unable to fetch live SUI price. Member position calculation halted for safety.');
-      }
-      
-      // In development ONLY - use a clearly marked fallback
-      logger.warn('[SuiPool] DEV MODE: Using fallback SUI price of $0 (calculations will be zero)');
-      suiPrice = 0; // Will result in 0 USD value, making it obvious something is wrong
-    }
+  // ============================================
+  // TRANSACTION BUILDERS (for frontend signing)
+  // ============================================
 
+  /**
+   * Build deposit transaction data for frontend
+   * Returns the Move call parameters - frontend will construct Transaction
+   */
+  buildDepositParams(amountSui: number): {
+    target: string;
+    poolStateId: string | null;
+    amountMist: bigint;
+    clockId: string;
+  } {
+    const amountMist = BigInt(Math.floor(amountSui * Math.pow(10, SUI_DECIMALS)));
     return {
-      address: ownerAddress,
-      portfolioIds: portfolios.map(p => p.portfolioId),
-      totalValue,
-      totalValueUsd: Number(totalValue) / 1e9 * suiPrice,
-      portfolioCount: portfolios.length,
+      target: `${this.config.packageId}::${this.config.moduleName}::deposit`,
+      poolStateId: this.cachedPoolStateId,
+      amountMist,
+      clockId: CLOCK_OBJECT_ID,
     };
   }
 
-  // ============================================
-  // PAYMENT ROUTING
-  // ============================================
-
   /**
-   * Build transaction to route a payment via PaymentRouter
+   * Build withdraw transaction data for frontend
    */
-  buildPaymentTransaction(
-    amount: bigint,
-    recipient: string,
-    reference?: string,
-  ): {
+  buildWithdrawParams(sharesToBurn: number): {
     target: string;
-    arguments: unknown[];
-    coinAmount: bigint;
+    poolStateId: string | null;
+    sharesScaled: bigint;
+    clockId: string;
   } {
+    const sharesScaled = BigInt(Math.floor(sharesToBurn * Math.pow(10, SHARE_DECIMALS)));
     return {
-      target: `${this.config.packageId}::payment_router::route_payment`,
-      arguments: [
-        this.config.paymentRouterState,
-        recipient,
-        reference ? new TextEncoder().encode(reference) : [],
-        '0x6',
-      ],
-      coinAmount: amount,
+      target: `${this.config.packageId}::${this.config.moduleName}::withdraw`,
+      poolStateId: this.cachedPoolStateId,
+      sharesScaled,
+      clockId: CLOCK_OBJECT_ID,
     };
   }
 
@@ -409,7 +471,7 @@ export class SuiCommunityPoolService {
   /**
    * Fetch object fields from SUI RPC
    */
-  private async fetchObjectFields(objectId: string): Promise<Record<string, unknown> | null> {
+  private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
     try {
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
@@ -425,28 +487,39 @@ export class SuiCommunityPoolService {
       const data = await response.json();
       return data.result?.data?.content?.fields || null;
     } catch (error) {
-      logger.error('[SuiPool] Failed to fetch object', { objectId, error });
+      logger.error('[SuiCommunityPool] Failed to fetch object:', { objectId, error });
       return null;
     }
   }
 
   /**
-   * Parse allocation data from Move struct
+   * Get explorer URL for a transaction
    */
-  private parseAllocations(allocData: unknown): SuiAllocation[] {
-    if (!allocData || !Array.isArray(allocData)) return [];
-    return allocData.map((a: Record<string, unknown>) => ({
-      assetType: String(a.asset_type || ''),
-      amount: BigInt(String(a.amount || '0')),
-      percentage: Number(a.percentage || 0),
-    }));
+  getExplorerUrl(txDigest: string): string {
+    return `${this.config.explorerUrl}/tx/${txDigest}`;
   }
 
   /**
    * Get deployment config
    */
   getDeploymentConfig() {
-    return { ...this.config };
+    return { ...this.config, network: this.network };
+  }
+
+  /**
+   * Get the contract addresses for frontend
+   */
+  getContractInfo() {
+    return {
+      packageId: this.config.packageId,
+      moduleName: this.config.moduleName,
+      poolStateId: this.cachedPoolStateId,
+      adminCapId: this.config.adminCapId,
+      feeManagerCapId: this.config.feeManagerCapId,
+      network: this.network,
+      rpcUrl: this.config.rpcUrl,
+      explorerUrl: this.config.explorerUrl,
+    };
   }
 }
 
@@ -454,13 +527,21 @@ export class SuiCommunityPoolService {
 // SINGLETON
 // ============================================
 
-let suiPoolServiceInstance: SuiCommunityPoolService | null = null;
+let testnetServiceInstance: SuiCommunityPoolService | null = null;
+let mainnetServiceInstance: SuiCommunityPoolService | null = null;
 
 export function getSuiCommunityPoolService(
-  network: keyof typeof SUI_POOL_DEPLOYMENTS = 'testnet'
+  network: SuiNetworkType = 'testnet'
 ): SuiCommunityPoolService {
-  if (!suiPoolServiceInstance || suiPoolServiceInstance['network'] !== network) {
-    suiPoolServiceInstance = new SuiCommunityPoolService(network);
+  if (network === 'mainnet') {
+    if (!mainnetServiceInstance) {
+      mainnetServiceInstance = new SuiCommunityPoolService('mainnet');
+    }
+    return mainnetServiceInstance;
   }
-  return suiPoolServiceInstance;
+  
+  if (!testnetServiceInstance) {
+    testnetServiceInstance = new SuiCommunityPoolService('testnet');
+  }
+  return testnetServiceInstance;
 }
