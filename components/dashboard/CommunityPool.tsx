@@ -221,7 +221,57 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
     lastFetchRef.current = now;
     
-    // Build chain query param
+    // SUI uses different API endpoint
+    if (selectedChain === 'sui') {
+      try {
+        const [poolRes, userRes] = await Promise.all([
+          fetch(`/api/sui/community-pool?network=${network}`),
+          address ? fetch(`/api/sui/community-pool?user=${address}&network=${network}`) : Promise.resolve(null),
+        ]);
+        
+        const [poolJson, userJson] = await Promise.all([
+          poolRes.json(),
+          userRes ? userRes.json() : null,
+        ]);
+        
+        if (!mountedRef.current) return;
+        
+        if (poolJson.success) {
+          // Map SUI pool data to PoolSummary format
+          setPoolData({
+            totalShares: parseFloat(poolJson.data.totalShares) || 0,
+            totalNAV: parseFloat(poolJson.data.totalNAV) || 0,
+            totalValueUSD: parseFloat(poolJson.data.totalNAVUsd) || 0,
+            sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
+            memberCount: poolJson.data.memberCount || 0,
+            allocations: { SUI: parseFloat(poolJson.data.totalNAVUsd) || 0 },
+          });
+        }
+        
+        if (userJson?.success) {
+          // Map SUI user data to UserPosition format
+          setUserPosition({
+            shares: parseFloat(userJson.data.shares) || 0,
+            valueUSD: parseFloat(userJson.data.valueUsd) || 0,
+            percentage: parseFloat(userJson.data.percentage) || 0,
+            isMember: userJson.data.isMember || false,
+          });
+        }
+        
+        // No leaderboard for SUI yet
+        setLeaderboard([]);
+        setLoading(false);
+      } catch (err: any) {
+        logger.error('[CommunityPool] SUI fetch error:', err);
+        if (mountedRef.current) {
+          setError(err.message);
+          setLoading(false);
+        }
+      }
+      return;
+    }
+    
+    // EVM chains (Cronos, Arbitrum)
     const chainParam = `&chain=${selectedChain}&network=${network}`;
     
     try {
@@ -838,6 +888,17 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       
       {/* Actions */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+        {/* SUI: Show different deposit/withdraw UI */}
+        {selectedChain === 'sui' ? (
+          <div className="text-center py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              SUI deposits and withdrawals require a SUI wallet (e.g., Sui Wallet, Suiet).
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Native SUI integration coming soon. View stats above.
+            </p>
+          </div>
+        ) : (
         <div className="flex gap-3">
           <button
             onClick={() => { setShowDeposit(!showDeposit); setShowWithdraw(false); }}
@@ -855,8 +916,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             Withdraw
           </button>
         </div>
+        )}
         
-        {/* Deposit Form */}
+        {/* Deposit Form - EVM chains only */}
+        {selectedChain !== 'sui' && (
         <AnimatePresence>
           {showDeposit && (
             <motion.div
@@ -896,8 +959,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             </motion.div>
           )}
         </AnimatePresence>
+        )}
         
-        {/* Withdraw Form */}
+        {/* Withdraw Form - EVM chains only */}
+        {selectedChain !== 'sui' && (
         <AnimatePresence>
           {showWithdraw && userPosition?.isMember && (
             <motion.div
@@ -936,6 +1001,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
       
       {/* Success/Error Messages */}
