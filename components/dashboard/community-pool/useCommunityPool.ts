@@ -661,13 +661,6 @@ export function useCommunityPool(propAddress?: string) {
     };
   }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain]);
   
-  // Handler to switch SUI network to testnet
-  const handleSwitchSuiNetwork = useCallback(() => {
-    if (suiSetNetwork) {
-      suiSetNetwork('testnet');
-    }
-  }, [suiSetNetwork]);
-  
   // Memoize derived configuration values
   const configValues = useMemo(() => ({
     chainConfig,
@@ -704,7 +697,6 @@ export function useCommunityPool(propAddress?: string) {
     handleWithdraw,
     handleSuiDeposit,
     handleSuiWithdraw,
-    handleSwitchSuiNetwork,
     resetWrite,
     signForApi,
     
