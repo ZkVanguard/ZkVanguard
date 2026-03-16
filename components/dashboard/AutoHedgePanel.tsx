@@ -124,8 +124,13 @@ export function AutoHedgePanel() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!interval) interval = setInterval(fetchData, 30000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVis = () => document.hidden ? stop() : start();
+    document.addEventListener('visibilitychange', onVis);
+    if (!document.hidden) start();
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchData]);
 
   const toggleAutoHedge = async () => {

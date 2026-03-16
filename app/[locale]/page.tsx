@@ -1,12 +1,15 @@
+import dynamic from 'next/dynamic';
 import { Hero } from '../../components/Hero';
-import { Features } from '../../components/Features';
-import { Stats } from '../../components/Stats';
-import { AgentShowcase } from '../../components/AgentShowcase';
-import { HowItWorks } from '../../components/HowItWorks';
-import { MarketOpportunity } from '../../components/MarketOpportunity';
-import { Roadmap } from '../../components/Roadmap';
-import { CTASection } from '../../components/CTASection';
-import { LiveMetrics } from '../../components/LiveMetrics';
+
+// Below-fold components: lazy-loaded for faster initial page load
+const Stats = dynamic(() => import('../../components/Stats').then(m => ({ default: m.Stats })), { ssr: true });
+const Features = dynamic(() => import('../../components/Features').then(m => ({ default: m.Features })), { ssr: true });
+const AgentShowcase = dynamic(() => import('../../components/AgentShowcase').then(m => ({ default: m.AgentShowcase })));
+const HowItWorks = dynamic(() => import('../../components/HowItWorks').then(m => ({ default: m.HowItWorks })));
+const MarketOpportunity = dynamic(() => import('../../components/MarketOpportunity').then(m => ({ default: m.MarketOpportunity })));
+const Roadmap = dynamic(() => import('../../components/Roadmap').then(m => ({ default: m.Roadmap })));
+const CTASection = dynamic(() => import('../../components/CTASection').then(m => ({ default: m.CTASection })));
+const LiveMetrics = dynamic(() => import('../../components/LiveMetrics').then(m => ({ default: m.LiveMetrics })), { ssr: false });
 
 export default function HomePage() {
   return (

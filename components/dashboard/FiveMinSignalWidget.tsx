@@ -273,27 +273,34 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
     }
   }, []);
 
-  // ── Lifecycle: poll + countdown ─────────────────────────
+  // ── Lifecycle: poll + countdown (visibility-aware) ──────
   useEffect(() => {
     mountedRef.current = true;
     fetchSignal();
-    intervalRef.current = setInterval(fetchSignal, POLL_INTERVAL_MS);
 
-    countdownRef.current = setInterval(() => {
-      if (!mountedRef.current) return;
-      if (windowEndRef.current > 0) {
-        const remaining = Math.max(0, Math.floor((windowEndRef.current - Date.now()) / 1000));
-        setCountdown(remaining);
-        if (remaining === 0 && lastMarketIdRef.current) {
-          fetchSignal();
+    const startTimers = () => {
+      if (!intervalRef.current) intervalRef.current = setInterval(fetchSignal, POLL_INTERVAL_MS);
+      if (!countdownRef.current) countdownRef.current = setInterval(() => {
+        if (!mountedRef.current) return;
+        if (windowEndRef.current > 0) {
+          const remaining = Math.max(0, Math.floor((windowEndRef.current - Date.now()) / 1000));
+          setCountdown(remaining);
+          if (remaining === 0 && lastMarketIdRef.current) fetchSignal();
         }
-      }
-    }, COUNTDOWN_INTERVAL_MS);
+      }, COUNTDOWN_INTERVAL_MS);
+    };
+    const stopTimers = () => {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    };
+    const onVis = () => document.hidden ? stopTimers() : startTimers();
+    document.addEventListener('visibilitychange', onVis);
+    if (!document.hidden) startTimers();
 
     return () => {
       mountedRef.current = false;
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      stopTimers();
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [fetchSignal]);
 
