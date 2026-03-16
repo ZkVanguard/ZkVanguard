@@ -234,9 +234,14 @@ function SuiContextProvider({
 
     fetchBalance();
     
-    // Refresh balance every 30 seconds
-    const interval = setInterval(fetchBalance, 30000);
-    return () => clearInterval(interval);
+    // Refresh balance every 30 seconds — only when tab is visible
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!interval) interval = setInterval(fetchBalance, 30000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVis = () => document.hidden ? stop() : start();
+    document.addEventListener('visibilitychange', onVis);
+    if (!document.hidden) start();
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [address, suiClient]);
 
   const connectWallet = useCallback(() => {

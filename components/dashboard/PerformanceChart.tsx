@@ -284,7 +284,7 @@ export default function PerformanceChart({
     }
     
     fetchHistory();
-  }, [walletAddress, timeRange, currentValue, assets, onMetricsLoaded]);
+  }, [walletAddress, timeRange]); // Only re-fetch when wallet or time range changes
 
   // Record snapshot removed - handled by PositionsContext
 

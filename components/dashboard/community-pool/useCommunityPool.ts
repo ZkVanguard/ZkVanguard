@@ -547,6 +547,19 @@ export function useCommunityPool(propAddress?: string) {
   }, [suiIsConnected, suiAddress, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
   
   // ============================================================================
+  // Stable dispatcher callbacks (avoid re-creating on every render)
+  const setShowDeposit = useCallback((show: boolean) => dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: show }), []);
+  const setShowWithdraw = useCallback((show: boolean) => dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: show }), []);
+  const setDepositAmount = useCallback((amount: string) => dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: amount }), []);
+  const setWithdrawShares = useCallback((shares: string) => dispatchTx({ type: 'SET_WITHDRAW_SHARES', payload: shares }), []);
+  const setSuiDepositAmount = useCallback((amount: string) => dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: amount }), []);
+  const setSuiWithdrawShares = useCallback((shares: string) => dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: shares }), []);
+  const setError = useCallback((error: string | null) => dispatchPool({ type: 'SET_ERROR', payload: error }), []);
+  const setSuccess = useCallback((msg: string | null) => dispatchPool({ type: 'SET_SUCCESS', payload: msg }), []);
+  const setTxStatus = useCallback((status: TxStatus) => dispatchTx({ type: 'SET_TX_STATUS', payload: status }), []);
+  const setActionLoading = useCallback((loading: boolean) => dispatchTx({ type: 'SET_ACTION_LOADING', payload: loading }), []);
+  const setLastTxHash = useCallback((hash: string | null) => dispatchTx({ type: 'SET_LAST_TX_HASH', payload: hash }), []);
+
   // RETURN
   // ============================================================================
   
@@ -586,17 +599,17 @@ export function useCommunityPool(propAddress?: string) {
     resetWrite,
     signForApi,
     
-    // Dispatchers for direct state updates
-    setShowDeposit: (show: boolean) => dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: show }),
-    setShowWithdraw: (show: boolean) => dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: show }),
-    setDepositAmount: (amount: string) => dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: amount }),
-    setWithdrawShares: (shares: string) => dispatchTx({ type: 'SET_WITHDRAW_SHARES', payload: shares }),
-    setSuiDepositAmount: (amount: string) => dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: amount }),
-    setSuiWithdrawShares: (shares: string) => dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: shares }),
-    setError: (error: string | null) => dispatchPool({ type: 'SET_ERROR', payload: error }),
-    setSuccess: (msg: string | null) => dispatchPool({ type: 'SET_SUCCESS', payload: msg }),
-    setTxStatus: (status: TxStatus) => dispatchTx({ type: 'SET_TX_STATUS', payload: status }),
-    setActionLoading: (loading: boolean) => dispatchTx({ type: 'SET_ACTION_LOADING', payload: loading }),
-    setLastTxHash: (hash: string | null) => dispatchTx({ type: 'SET_LAST_TX_HASH', payload: hash }),
+    // Stable dispatchers
+    setShowDeposit,
+    setShowWithdraw,
+    setDepositAmount,
+    setWithdrawShares,
+    setSuiDepositAmount,
+    setSuiWithdrawShares,
+    setError,
+    setSuccess,
+    setTxStatus,
+    setActionLoading,
+    setLastTxHash,
   };
 }

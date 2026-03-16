@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, ReactNode } from 'react';
 import { ConnectButton as RainbowConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount as useWagmiAccount, useDisconnect as useWagmiDisconnect } from 'wagmi';
 import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut } from 'lucide-react';
@@ -79,20 +79,27 @@ export function MultiWalletProvider({ children, defaultChain = 'evm' }: MultiWal
 
     checkSuiWallet();
     
-    // Listen for account changes
-    const interval = setInterval(checkSuiWallet, 5000);
-    return () => clearInterval(interval);
+    // Listen for account changes — only poll when tab is visible
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => { if (!interval) interval = setInterval(checkSuiWallet, 10000); };
+    const stopPolling = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVisibility = () => document.hidden ? stopPolling() : startPolling();
+    document.addEventListener('visibilitychange', onVisibility);
+    startPolling();
+    return () => { stopPolling(); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
 
-  const value: MultiWalletContextType = {
+  const evmAddr = evmAddress || null;
+  const isAnyConnected = isEvmConnected || isSuiConnected;
+  const value = useMemo<MultiWalletContextType>(() => ({
     activeChain,
     setActiveChain,
-    evmAddress: evmAddress || null,
+    evmAddress: evmAddr,
     suiAddress,
     isEvmConnected,
     isSuiConnected,
-    isAnyConnected: isEvmConnected || isSuiConnected,
-  };
+    isAnyConnected,
+  }), [activeChain, evmAddr, suiAddress, isEvmConnected, isSuiConnected, isAnyConnected]);
 
   return (
     <MultiWalletContext.Provider value={value}>

@@ -390,10 +390,6 @@ h1, h2, h3, h4, h5, h6 {
       0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
-  .text-balance {
-    text-wrap: balance;
-  }
-  
   .parallax-slow {
     transform: translateZ(-1px) scale(2);
   }
@@ -743,33 +739,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.card-yang {
-  background: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  color: #1D1D1F;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.dark .card-yang {
-  background: #2C2C2E;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-
-.glass-light {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  color: #1D1D1F;
-}
-
-.dark .glass-light {
-  background: rgba(28, 28, 30, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #FFFFFF;
-}
-
 /* Glow effects */
 .glow-blue {
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
@@ -843,15 +812,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Shimmer animation for loading states */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
 .animate-shimmer {
   animation: shimmer 2s infinite linear;
   background: linear-gradient(
