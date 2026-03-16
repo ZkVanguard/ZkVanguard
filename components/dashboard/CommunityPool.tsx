@@ -49,7 +49,9 @@ interface PoolAllocation {
 interface PoolSummary {
   totalValueUSD: number;
   totalShares: number;
-  sharePrice: number;
+  sharePrice: number;  // For EVM: USD, For SUI: native SUI price
+  sharePriceUSD?: number; // For SUI: converted to USD
+  totalNAV?: number;  // Native asset NAV (SUI tokens for SUI chain)
   memberCount: number;
   allocations: PoolAllocation;
   aiLastUpdate: string | null;
@@ -60,6 +62,7 @@ interface UserPosition {
   walletAddress: string;
   shares: number;
   valueUSD: number;
+  valueSUI?: number;  // SUI chain: value in native SUI tokens
   percentage: number;
   isMember: boolean;
   joinedAt?: string;
@@ -240,12 +243,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
     lastFetchRef.current = now;
     
-    // SUI uses different API endpoint
+    // SUI uses different API endpoint and wallet address
     if (selectedChain === 'sui') {
+      // Use SUI wallet address for SUI chain, not EVM address
+      const userAddress = suiAddress || address;
       try {
         const [poolRes, userRes] = await Promise.all([
-          fetch(`/api/sui/community-pool?network=${network}`),
-          address ? fetch(`/api/sui/community-pool?user=${address}&network=${network}`) : Promise.resolve(null),
+          fetch(`/api/sui/community-pool?network=${suiNetwork}`),
+          userAddress ? fetch(`/api/sui/community-pool?user=${userAddress}&network=${suiNetwork}`) : Promise.resolve(null),
         ]);
         
         const [poolJson, userJson] = await Promise.all([
@@ -261,26 +266,37 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             setSuiPoolStateId(poolJson.data.poolStateId);
           }
           // Map SUI pool data to PoolSummary format
-          // SUI pool primarily holds SUI tokens, show 100% SUI allocation
-          const totalValue = parseFloat(poolJson.data.totalNAVUsd) || 0;
+          // SUI pool primarily holds SUI tokens
+          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || 0;
+          const totalNAV = parseFloat(poolJson.data.totalNAV) || 0; // In native SUI
+          const nativeSharePrice = parseFloat(poolJson.data.sharePrice) || 1.0; // SUI per share
+          const usdSharePrice = parseFloat(poolJson.data.sharePriceUsd) || 1.0; // USD per share
+          
           setPoolData({
             totalShares: parseFloat(poolJson.data.totalShares) || 0,
-            totalNAV: parseFloat(poolJson.data.totalNAV) || 0,
-            totalValueUSD: totalValue,
-            sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
+            totalNAV: totalNAV,
+            totalValueUSD: totalValueUSD,
+            sharePrice: nativeSharePrice,  // Native SUI per share
+            sharePriceUSD: usdSharePrice,  // USD per share (for display)
             memberCount: poolJson.data.memberCount || 0,
-            // SUI pool allocation: 100% SUI (or show actual breakdown if available)
-            allocations: totalValue > 0 ? { SUI: 100 } : {},
+            // SUI pool allocation: 100% SUI
+            allocations: { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0 },
+            aiLastUpdate: null,
+            aiReasoning: null,
           });
         }
         
         if (userJson?.success) {
           // Map SUI user data to UserPosition format
           setUserPosition({
+            walletAddress: userAddress || '',
             shares: parseFloat(userJson.data.shares) || 0,
             valueUSD: parseFloat(userJson.data.valueUsd) || 0,
+            valueSUI: parseFloat(userJson.data.valueSui) || 0, // Native SUI value
             percentage: parseFloat(userJson.data.percentage) || 0,
             isMember: userJson.data.isMember || false,
+            totalDeposited: parseFloat(userJson.data.depositedSui) || 0,
+            totalWithdrawn: parseFloat(userJson.data.withdrawnSui) || 0,
           });
         }
         
@@ -337,7 +353,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         setLoading(false);
       }
     }
-  }, [address, selectedChain, network]);
+  }, [address, suiAddress, selectedChain, network, suiNetwork]);
   
   // Fetch AI recommendation
   const fetchAIRecommendation = useCallback(async () => {
@@ -353,16 +369,36 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
   }, [selectedChain, network]);
   
-  // Initial fetch and refetch when chain changes
+  // Reset state and refetch when chain changes
   useEffect(() => {
     mountedRef.current = true;
+    
+    // Reset all chain-specific state to prevent showing stale data from previous chain
+    setPoolData(null);
+    setUserPosition(null);
+    setLeaderboard([]);
+    setAiRecommendation(null);
+    setError(null);
+    setSuccessMessage(null);
+    setSuiPoolStateId(null);
+    
+    // Reset transaction state
+    setTxStatus('idle');
+    setActionLoading(false);
+    setShowDeposit(false);
+    setShowWithdraw(false);
+    setDepositAmount('');
+    setWithdrawShares('');
+    setSuiDepositAmount('');
+    setSuiWithdrawShares('');
+    
     setLoading(true);
     fetchPoolData(true);
     
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchPoolData, selectedChain]);
+  }, [selectedChain]); // Only depend on selectedChain, fetchPoolData is memoized
   
   // OPTIMIZATION: Increased polling interval from 30s to 60s (data changes slowly)
   usePolling(fetchPoolData, 60000);
@@ -842,22 +878,128 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     }
   };
   
+  // Loading state - still show header with chain selector
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 animate-pulse">
-        <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
-        <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+      >
+        {/* Header with Chain Selector - always visible */}
+        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Community Pool</h2>
+                <p className="text-sm text-white/80">AI-Managed Collective Investment</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Chain Selector */}
+              <div className="flex bg-white/20 rounded-lg p-0.5">
+                {Object.entries(POOL_CHAIN_CONFIGS)
+                  .filter(([_, config]) => config.status === 'live' || config.status === 'testing')
+                  .map(([key, config]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleChainSelect(key)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+                        selectedChain === key
+                          ? 'bg-white text-indigo-600'
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                      title={`${config.name} ${config.status === 'testing' ? '(Testing)' : ''}`}
+                    >
+                      <span>{config.icon}</span>
+                      <span>{config.shortName}</span>
+                      {config.status === 'testing' && (
+                        <span className="ml-1 px-1 py-0.5 text-[10px] bg-yellow-500 text-white rounded">
+                          TEST
+                        </span>
+                      )}
+                    </button>
+                  ))}
+              </div>
+              <div className="p-2 rounded-lg">
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Loading skeleton for content */}
+        <div className="p-6 animate-pulse">
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
+          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </motion.div>
     );
   }
   
   if (!poolData) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-        <p className="text-gray-500 dark:text-gray-400 text-center">
-          Unable to load community pool data
-        </p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+      >
+        {/* Header with Chain Selector */}
+        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Community Pool</h2>
+                <p className="text-sm text-white/80">AI-Managed Collective Investment</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Chain Selector */}
+              <div className="flex bg-white/20 rounded-lg p-0.5">
+                {Object.entries(POOL_CHAIN_CONFIGS)
+                  .filter(([_, config]) => config.status === 'live' || config.status === 'testing')
+                  .map(([key, config]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleChainSelect(key)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+                        selectedChain === key
+                          ? 'bg-white text-indigo-600'
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                      title={`${config.name} ${config.status === 'testing' ? '(Testing)' : ''}`}
+                    >
+                      <span>{config.icon}</span>
+                      <span>{config.shortName}</span>
+                      {config.status === 'testing' && (
+                        <span className="ml-1 px-1 py-0.5 text-[10px] bg-yellow-500 text-white rounded">
+                          TEST
+                        </span>
+                      )}
+                    </button>
+                  ))}
+              </div>
+              <button
+                onClick={() => { setLoading(true); fetchPoolData(true); }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title="Retry"
+              >
+                <RefreshCw className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-500 dark:text-gray-400 text-center">
+            {error ? error : `Unable to load ${chainConfig?.name || selectedChain} pool data. Try refreshing or selecting a different chain.`}
+          </p>
+        </div>
+      </motion.div>
     );
   }
   
@@ -936,9 +1078,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b border-gray-100 dark:border-gray-700">
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {formatUSD(poolData.totalValueUSD)}
+            {selectedChain === 'sui' && poolData.totalNAV 
+              ? `${poolData.totalNAV.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`
+              : formatUSD(poolData.totalValueUSD)
+            }
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Total Value Locked</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Total Value {selectedChain === 'sui' && poolData.totalValueUSD > 0 && `(~${formatUSD(poolData.totalValueUSD)})`}
+          </p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -949,12 +1096,12 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
             {selectedChain === 'sui' 
-              ? `${poolData.sharePrice.toFixed(6)} SUI`
+              ? `${poolData.sharePrice.toFixed(4)} SUI`
               : `$${poolData.sharePrice.toFixed(4)}`
             }
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Share Price {selectedChain === 'sui' ? '(in SUI)' : '(USD)'}
+            Share Price {selectedChain === 'sui' && poolData.sharePriceUSD && `(~$${poolData.sharePriceUSD.toFixed(2)})`}
           </p>
         </div>
         <div className="text-center">
@@ -1041,12 +1188,12 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
               <div>
                 <p className="text-xl font-bold text-green-600 dark:text-green-400">
                   {selectedChain === 'sui' 
-                    ? `${(userPosition.valueUSD / (poolData?.sharePrice || 1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`
+                    ? `${(userPosition.valueSUI ?? userPosition.shares).toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`
                     : formatUSD(userPosition.valueUSD)
                   }
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Current Value {selectedChain === 'sui' && `(~${formatUSD(userPosition.valueUSD)})`}
+                  Current Value {selectedChain === 'sui' && userPosition.valueUSD > 0 && `(~${formatUSD(userPosition.valueUSD)})`}
                 </p>
               </div>
               <div>
