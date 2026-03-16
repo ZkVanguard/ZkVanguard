@@ -832,7 +832,8 @@ class AutoHedgingService {
         allocationPercentages,
         activeHedges,
         drawdownPercent,
-        concentrationRisk
+        concentrationRisk,
+        aggregatedPrediction
       );
 
       logger.info('[AutoHedging] CommunityPool risk assessment', {
@@ -1128,9 +1129,10 @@ class AutoHedgingService {
     positions: Array<{ symbol: string; value: number; change24h: number }>,
     totalValue: number,
     allocations: Record<string, number>,
-    activeHedges: Array<{ asset: string }>,
+    activeHedges: Array<{ asset: string; side?: string }>,
     drawdownPercent: number,
-    concentrationRisk: number
+    concentrationRisk: number,
+    prediction?: AggregatedPrediction | null
   ): HedgeRecommendation[] {
     const recommendations: HedgeRecommendation[] = [];
     const hedgedAssets = new Set(activeHedges.map(h => h.asset));
@@ -1183,6 +1185,72 @@ class AutoHedgingService {
           leverage: CONFIG.DEFAULT_LEVERAGE,
           confidence: 0.75,
         });
+      }
+    }
+
+    // ═══ PREDICTION-DRIVEN HEDGES ═══
+    // Use multi-source aggregated prediction (Polymarket, Delphi, Crypto.com, Funding Rate)
+    // to create hedge recommendations when signal is strong enough
+    if (prediction && prediction.consensus >= 60 && prediction.confidence >= 60) {
+      const isHedgeSignal = prediction.recommendation !== 'WAIT';
+      const direction: 'LONG' | 'SHORT' = prediction.direction === 'DOWN' ? 'SHORT' : 'LONG';
+      
+      // Map recommendation strength to confidence
+      const predConfidence = prediction.recommendation.startsWith('STRONG_') ? 0.90 :
+                             prediction.recommendation.startsWith('LIGHT_') ? 0.72 : 0.82;
+      
+      if (isHedgeSignal && totalValue > 0) {
+        // Determine the primary asset to hedge (largest position or BTC as default)
+        const primaryAsset = positions.length > 0
+          ? positions.reduce((a, b) => b.value > a.value ? b : a).symbol
+          : 'BTC';
+        
+        // Check if we already have a hedge in the SAME direction for this asset
+        const alreadyHedgedSameDirection = activeHedges.some(
+          h => h.asset === primaryAsset && h.side === direction
+        );
+        
+        if (!alreadyHedgedSameDirection) {
+          // Scale hedge size by prediction sizeMultiplier and pool value
+          // Base: 15% of pool value, scaled by sizeMultiplier (0.5-2.0)
+          const baseHedgeRatio = 0.15;
+          const hedgeSize = Math.max(
+            CONFIG.MIN_HEDGE_SIZE_USD,
+            totalValue * baseHedgeRatio * prediction.sizeMultiplier
+          );
+          
+          const leverage = direction === 'LONG'
+            ? Math.min(CONFIG.DEFAULT_LEVERAGE, 3)  // Conservative for longs
+            : CONFIG.DEFAULT_LEVERAGE;
+          
+          recommendations.push({
+            asset: primaryAsset,
+            side: direction,
+            reason: `[PREDICTION] ${prediction.recommendation.replace(/_/g, ' ')} — ` +
+                    `${prediction.sources.length} sources, ${prediction.consensus.toFixed(0)}% consensus, ` +
+                    `${prediction.confidence.toFixed(0)}% confidence (${prediction.reasoning})`,
+            suggestedSize: hedgeSize,
+            leverage,
+            confidence: predConfidence,
+          });
+          
+          logger.info('[AutoHedging] Prediction-driven hedge recommendation created', {
+            asset: primaryAsset,
+            direction,
+            recommendation: prediction.recommendation,
+            hedgeSize: `$${hedgeSize.toFixed(2)}`,
+            sizeMultiplier: prediction.sizeMultiplier,
+            consensus: prediction.consensus,
+            confidence: prediction.confidence,
+            sources: prediction.sources.length,
+          });
+        } else {
+          logger.info('[AutoHedging] Skipping prediction hedge — already hedged same direction', {
+            asset: primaryAsset,
+            direction,
+            recommendation: prediction.recommendation,
+          });
+        }
       }
     }
 

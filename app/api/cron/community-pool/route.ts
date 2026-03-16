@@ -284,6 +284,35 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       reasoning: 'Risk within acceptable parameters, no rebalancing needed',
       executed: false,
     };
+
+    // Check if prediction-driven hedges were generated
+    const predictionRecs = riskAssessment.recommendations.filter(r => r.reason.startsWith('[PREDICTION]'));
+    const hedgeRecs = riskAssessment.recommendations.filter(r => r.confidence >= 0.7);
+    
+    if (predictionRecs.length > 0 && hedgeRecs.length > 0) {
+      // Prediction-driven hedges were created and will be executed by triggerRiskAssessment
+      const topRec = predictionRecs[0];
+      aiDecision = {
+        action: topRec.side === 'LONG' ? 'HEDGE_LONG' : 'HEDGE_SHORT',
+        reasoning: topRec.reason,
+        executed: true, // triggerRiskAssessment already executed these
+      };
+      logger.info('[CommunityPool Cron] Prediction-driven hedge action taken', {
+        recommendations: predictionRecs.length,
+        topAsset: topRec.asset,
+        topSide: topRec.side,
+        topSize: topRec.suggestedSize,
+        topConfidence: topRec.confidence,
+      });
+    } else if (hedgeRecs.length > 0) {
+      // Risk-driven hedges (drawdown, concentration, etc.)
+      const topRec = hedgeRecs[0];
+      aiDecision = {
+        action: 'HEDGE_SHORT',
+        reasoning: topRec.reason,
+        executed: true,
+      };
+    }
     
     // Track price validation results
     let priceValidation: CronResult['priceValidation'] = {};
