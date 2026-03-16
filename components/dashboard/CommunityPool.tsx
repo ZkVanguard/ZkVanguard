@@ -87,16 +87,19 @@ interface CommunityPoolProps {
 const ASSET_COLORS: Record<string, string> = {
   BTC: 'bg-orange-500',
   ETH: 'bg-blue-500',
-  SUI: 'bg-cyan-500',
+  SUI: 'bg-cyan-400',
   CRO: 'bg-indigo-500',
+  ARB: 'bg-sky-500',
+  USDC: 'bg-emerald-500',
 };
 
 const ASSET_ICONS: Record<string, string> = {
   BTC: '₿',
   ETH: 'Ξ',
-  SUI: '~',
-  CRO: 'C',
-  ARB: 'A',
+  SUI: '💧',
+  CRO: '🔷',
+  ARB: '🔵',
+  USDC: '$',
 };
 
 // Get chain key from chainId
@@ -238,13 +241,16 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         
         if (poolJson.success) {
           // Map SUI pool data to PoolSummary format
+          // SUI pool primarily holds SUI tokens, show 100% SUI allocation
+          const totalValue = parseFloat(poolJson.data.totalNAVUsd) || 0;
           setPoolData({
             totalShares: parseFloat(poolJson.data.totalShares) || 0,
             totalNAV: parseFloat(poolJson.data.totalNAV) || 0,
-            totalValueUSD: parseFloat(poolJson.data.totalNAVUsd) || 0,
+            totalValueUSD: totalValue,
             sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
             memberCount: poolJson.data.memberCount || 0,
-            allocations: { SUI: parseFloat(poolJson.data.totalNAVUsd) || 0 },
+            // SUI pool allocation: 100% SUI (or show actual breakdown if available)
+            allocations: totalValue > 0 ? { SUI: 100 } : {},
           });
         }
         
@@ -790,13 +796,18 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            ${poolData.sharePrice.toFixed(4)}
+            {selectedChain === 'sui' 
+              ? `${poolData.sharePrice.toFixed(6)} SUI`
+              : `$${poolData.sharePrice.toFixed(4)}`
+            }
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Share Price</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Share Price {selectedChain === 'sui' ? '(in SUI)' : '(USD)'}
+          </p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {poolData.totalShares.toLocaleString()}
+            {poolData.totalShares.toLocaleString(undefined, { maximumFractionDigits: 4 })}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Total Shares</p>
         </div>
@@ -809,38 +820,51 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             <PieChart className="w-4 h-4" />
             Current Allocation
           </h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {chainConfig?.assets?.join(' • ') || 'Multi-Asset'}
+          </span>
         </div>
         
         {/* Allocation Bar */}
-        <div className="h-6 rounded-full overflow-hidden flex mb-3">
-          {Object.entries(poolData.allocations).map(([asset, alloc]) => {
-            const percent = typeof alloc === 'number' ? alloc : alloc.percentage;
-            return (
-              <div
-                key={asset}
-                className={`${ASSET_COLORS[asset]} flex items-center justify-center text-xs text-white font-semibold transition-all duration-500`}
-                style={{ width: `${percent}%` }}
-              >
-                {percent >= 10 && `${asset} ${Math.round(percent)}%`}
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4">
-          {Object.entries(poolData.allocations).map(([asset, alloc]) => {
-            const percent = typeof alloc === 'number' ? alloc : alloc.percentage;
-            return (
-              <div key={asset} className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${ASSET_COLORS[asset]}`}></div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">
-                  <span className="font-medium">{asset}</span> {Math.round(percent)}%
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {Object.keys(poolData.allocations || {}).length > 0 ? (
+          <>
+            <div className="h-6 rounded-full overflow-hidden flex mb-3 bg-gray-200 dark:bg-gray-700">
+              {Object.entries(poolData.allocations).map(([asset, alloc]) => {
+                const percent = typeof alloc === 'number' ? alloc : (alloc?.percentage ?? 0);
+                if (percent <= 0) return null;
+                return (
+                  <div
+                    key={asset}
+                    className={`${ASSET_COLORS[asset] || 'bg-gray-500'} flex items-center justify-center text-xs text-white font-semibold transition-all duration-500`}
+                    style={{ width: `${Math.max(percent, 5)}%` }}
+                  >
+                    {percent >= 10 && `${asset} ${Math.round(percent)}%`}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(poolData.allocations).map(([asset, alloc]) => {
+                const percent = typeof alloc === 'number' ? alloc : (alloc?.percentage ?? 0);
+                if (percent <= 0) return null;
+                return (
+                  <div key={asset} className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${ASSET_COLORS[asset] || 'bg-gray-500'}`}></div>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      <span className="font-medium">{ASSET_ICONS[asset] || ''} {asset}</span> {Math.round(percent)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+            No allocations yet. Deposit to start earning.
+          </div>
+        )}
       </div>
       
       {/* User Position */}
@@ -849,21 +873,29 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
           <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
             <Wallet className="w-4 h-4" />
             Your Position
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
+              on {chainConfig?.name || selectedChain}
+            </span>
           </h3>
           
           {userPosition.isMember ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {userPosition.shares.toFixed(4)}
+                  {userPosition.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Your Shares</p>
               </div>
               <div>
                 <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                  {formatUSD(userPosition.valueUSD)}
+                  {selectedChain === 'sui' 
+                    ? `${(userPosition.valueUSD / (poolData?.sharePrice || 1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`
+                    : formatUSD(userPosition.valueUSD)
+                  }
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Current Value</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Current Value {selectedChain === 'sui' && `(~${formatUSD(userPosition.valueUSD)})`}
+                </p>
               </div>
               <div>
                 <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
@@ -880,7 +912,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             </div>
           ) : (
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              You haven't joined the pool yet. Deposit to receive shares.
+              You haven't joined the {chainConfig?.name || selectedChain} pool yet. Deposit to receive shares.
             </p>
           )}
         </div>
@@ -890,13 +922,29 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
         {/* SUI: Show different deposit/withdraw UI */}
         {selectedChain === 'sui' ? (
-          <div className="text-center py-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              SUI deposits and withdrawals require a SUI wallet (e.g., Sui Wallet, Suiet).
+          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">💧</span>
+              <h4 className="font-semibold text-gray-900 dark:text-white">SUI Pool</h4>
+              <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">Live on Testnet</span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              The SUI Community Pool is deployed and operational. Connect a SUI wallet (Sui Wallet, Suiet, or Ethos) to deposit and withdraw.
             </p>
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              Native SUI integration coming soon. View stats above.
-            </p>
+            <div className="flex items-center gap-3">
+              <a
+                href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${chainConfig?.contracts?.testnet?.communityPool}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                View Contract
+              </a>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Pool ID: {COMMUNITY_POOL_ADDRESS?.slice(0, 10)}...{COMMUNITY_POOL_ADDRESS?.slice(-6)}
+              </span>
+            </div>
           </div>
         ) : (
         <div className="flex gap-3">
