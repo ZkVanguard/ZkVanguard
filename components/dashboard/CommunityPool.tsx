@@ -309,7 +309,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         assets={pool.chainConfig?.assets}
       />
 
-      {pool.address && pool.userPosition && (
+      {/* Show user position if wallet is connected for the selected chain */}
+      {(pool.activeAddress && pool.userPosition) && (
         <UserPositionCard
           userPosition={pool.userPosition}
           selectedChain={pool.selectedChain}
