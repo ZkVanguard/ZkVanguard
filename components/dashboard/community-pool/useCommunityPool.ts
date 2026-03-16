@@ -621,15 +621,24 @@ export function useCommunityPool(propAddress?: string) {
     lastTxHash: txState.lastTxHash,
   }), [txState]);
   
-  // Memoize wallet-related values
-  const walletValues = useMemo(() => ({
-    address,
-    isConnected,
-    chainId,
-    suiAddress,
-    suiIsConnected,
-    suiBalance,
-  }), [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance]);
+  // Memoize wallet-related values with chain-aware active address
+  const walletValues = useMemo(() => {
+    const isSui = selectedChain === 'sui';
+    const activeAddress = isSui ? suiAddress : address;
+    const isActiveWalletConnected = isSui ? suiIsConnected : isConnected;
+    
+    return {
+      address,
+      isConnected,
+      chainId,
+      suiAddress,
+      suiIsConnected,
+      suiBalance,
+      // Chain-aware helpers
+      activeAddress,
+      isActiveWalletConnected,
+    };
+  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, selectedChain]);
   
   // Memoize derived configuration values
   const configValues = useMemo(() => ({
