@@ -79,7 +79,9 @@ export async function GET(): Promise<NextResponse> {
     const config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
     
     // Get active hedges
+    logger.info('[AutoHedge API] Fetching hedges for portfolio_id:', { portfolioId: COMMUNITY_POOL_PORTFOLIO_ID });
     const hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
+    logger.info('[AutoHedge API] Hedges found:', { count: hedges.length, hedgeIds: hedges.map(h => h.id) });
     
     // Get recent AI decisions from database
     let recentDecisions: AutoHedgeStatus['recentDecisions'] = [];
