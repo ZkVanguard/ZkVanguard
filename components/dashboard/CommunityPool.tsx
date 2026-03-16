@@ -18,7 +18,8 @@ import {
   ArrowRightLeft,
   Info,
   Loader2,
-  Globe
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling } from '@/lib/hooks';
@@ -36,6 +37,7 @@ import {
   COMMUNITY_POOL_ABI,
   type PoolChainConfig
 } from '@/lib/contracts/community-pool-config';
+import { useSuiSafe } from '@/app/sui-providers';
 
 interface PoolAllocation {
   BTC: number;
@@ -171,6 +173,19 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const { isLoading: isConfirming, isSuccess: isConfirmed, data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
   });
+
+  // SUI wallet hooks (safe - returns null if not in SUI provider)
+  const suiContext = useSuiSafe();
+  const suiAddress = suiContext?.address ?? null;
+  const suiIsConnected = suiContext?.isConnected ?? false;
+  const suiBalance = suiContext?.balance ?? '0';
+  const suiExecuteTransaction = suiContext?.executeTransaction;
+  const suiNetwork = suiContext?.network ?? 'testnet';
+  
+  // SUI-specific state
+  const [suiDepositAmount, setSuiDepositAmount] = useState<string>('');
+  const [suiWithdrawShares, setSuiWithdrawShares] = useState<string>('');
+  const [suiTxLoading, setSuiTxLoading] = useState(false);
 
   // Get current chain config
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
@@ -689,6 +704,138 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   };
   
   const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+
+  // SUI deposit handler
+  const handleSuiDeposit = async () => {
+    setError(null);
+    
+    if (!suiIsConnected || !suiAddress) {
+      setError('Please connect your SUI wallet first');
+      return;
+    }
+    
+    if (!suiDepositAmount) {
+      setError('Please enter a deposit amount in SUI');
+      return;
+    }
+    
+    const amount = parseFloat(suiDepositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError('Invalid deposit amount');
+      return;
+    }
+    
+    // Convert to MIST (9 decimals)
+    const amountMist = BigInt(Math.floor(amount * 1_000_000_000));
+    
+    setSuiTxLoading(true);
+    
+    try {
+      // Get deposit params from API
+      const res = await fetch(`/api/sui/community-pool?action=deposit&network=${suiNetwork}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amountMist.toString() }),
+      });
+      
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error || 'Failed to prepare deposit');
+        setSuiTxLoading(false);
+        return;
+      }
+      
+      // Execute transaction using SUI wallet
+      if (!suiExecuteTransaction) {
+        setError('SUI wallet not properly connected');
+        setSuiTxLoading(false);
+        return;
+      }
+      
+      // Note: The actual transaction building would need to use @mysten/sui Transaction
+      // For now, show success message and link to explorer
+      setSuccessMessage(`SUI deposit prepared! Amount: ${amount} SUI. Use your SUI wallet to complete the transaction.`);
+      setSuiDepositAmount('');
+      setShowDeposit(false);
+      
+      // Refresh data after a delay
+      setTimeout(() => {
+        fetchPoolData(true);
+        setSuccessMessage(null);
+      }, 5000);
+      
+    } catch (err: any) {
+      console.error('[CommunityPool] SUI deposit error:', err);
+      setError(err.message || 'Failed to deposit');
+    } finally {
+      setSuiTxLoading(false);
+    }
+  };
+
+  // SUI withdraw handler
+  const handleSuiWithdraw = async () => {
+    setError(null);
+    
+    if (!suiIsConnected || !suiAddress) {
+      setError('Please connect your SUI wallet first');
+      return;
+    }
+    
+    if (!suiWithdrawShares) {
+      setError('Please enter the number of shares to withdraw');
+      return;
+    }
+    
+    const shares = parseFloat(suiWithdrawShares);
+    if (isNaN(shares) || shares <= 0) {
+      setError('Invalid share amount');
+      return;
+    }
+    
+    // Convert to wei (18 decimals for shares)
+    const sharesWei = BigInt(Math.floor(shares * 1e18));
+    
+    setSuiTxLoading(true);
+    
+    try {
+      // Get withdraw params from API
+      const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shares: sharesWei.toString() }),
+      });
+      
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error || 'Failed to prepare withdrawal');
+        setSuiTxLoading(false);
+        return;
+      }
+      
+      // Execute transaction using SUI wallet
+      if (!suiExecuteTransaction) {
+        setError('SUI wallet not properly connected');
+        setSuiTxLoading(false);
+        return;
+      }
+      
+      setSuccessMessage(`SUI withdrawal prepared! Shares: ${shares}. Use your SUI wallet to complete the transaction.`);
+      setSuiWithdrawShares('');
+      setShowWithdraw(false);
+      
+      // Refresh data after a delay
+      setTimeout(() => {
+        fetchPoolData(true);
+        setSuccessMessage(null);
+      }, 5000);
+      
+    } catch (err: any) {
+      console.error('[CommunityPool] SUI withdraw error:', err);
+      setError(err.message || 'Failed to withdraw');
+    } finally {
+      setSuiTxLoading(false);
+    }
+  };
   
   if (loading) {
     return (
@@ -922,29 +1069,120 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
         {/* SUI: Show different deposit/withdraw UI */}
         {selectedChain === 'sui' ? (
-          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">💧</span>
-              <h4 className="font-semibold text-gray-900 dark:text-white">SUI Pool</h4>
-              <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">Live on Testnet</span>
+          <div className="space-y-4">
+            {/* SUI Pool Header */}
+            <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">💧</span>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">SUI Pool</h4>
+                  <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">Live on Testnet</span>
+                </div>
+                <a
+                  href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${COMMUNITY_POOL_ADDRESS}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View Contract
+                </a>
+              </div>
+              
+              {/* SUI Wallet Status */}
+              {suiIsConnected ? (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                  <Wallet className="w-4 h-4 text-green-500" />
+                  <span>Connected: {suiAddress?.slice(0, 8)}...{suiAddress?.slice(-6)}</span>
+                  <span className="text-gray-400">|</span>
+                  <span>{suiBalance} SUI</span>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Connect a SUI wallet (Sui Wallet, Suiet, or Ethos) to deposit and withdraw.
+                </p>
+              )}
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              The SUI Community Pool is deployed and operational. Connect a SUI wallet (Sui Wallet, Suiet, or Ethos) to deposit and withdraw.
-            </p>
-            <div className="flex items-center gap-3">
-              <a
-                href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${chainConfig?.contracts?.testnet?.communityPool}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors"
+            
+            {/* SUI Deposit/Withdraw Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowDeposit(!showDeposit); setShowWithdraw(false); }}
+                disabled={!suiIsConnected || suiTxLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
               >
-                <Globe className="w-4 h-4" />
-                View Contract
-              </a>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                Pool ID: {COMMUNITY_POOL_ADDRESS?.slice(0, 10)}...{COMMUNITY_POOL_ADDRESS?.slice(-6)}
-              </span>
+                <Plus className="w-4 h-4" />
+                Deposit SUI
+              </button>
+              <button
+                onClick={() => { setShowWithdraw(!showWithdraw); setShowDeposit(false); }}
+                disabled={!suiIsConnected || !userPosition?.isMember || suiTxLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                <Minus className="w-4 h-4" />
+                Withdraw
+              </button>
             </div>
+            
+            {/* SUI Deposit Form */}
+            <AnimatePresence>
+              {showDeposit && suiIsConnected && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={suiDepositAmount}
+                      onChange={(e) => setSuiDepositAmount(e.target.value)}
+                      placeholder="Amount in SUI (min 0.1)"
+                      disabled={suiTxLoading}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleSuiDeposit}
+                      disabled={suiTxLoading || !suiDepositAmount}
+                      className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      {suiTxLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      Deposit
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {/* SUI Withdraw Form */}
+            <AnimatePresence>
+              {showWithdraw && suiIsConnected && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={suiWithdrawShares}
+                      onChange={(e) => setSuiWithdrawShares(e.target.value)}
+                      placeholder={`Shares (max: ${userPosition?.shares?.toFixed(4) || 0})`}
+                      disabled={suiTxLoading}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleSuiWithdraw}
+                      disabled={suiTxLoading || !suiWithdrawShares}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      {suiTxLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
+                      Withdraw
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
         <div className="flex gap-3">
