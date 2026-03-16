@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import { ReactNode, createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { WalletProviders } from './wallet-providers';
 import { SuiWalletProviders, useSui } from './sui-providers';
 import { ChainType, NetworkType } from '../lib/contracts/addresses';
@@ -51,9 +51,30 @@ export function useMultiChain(): MultiChainContextType {
 // INTERNAL MULTI-CHAIN PROVIDER
 // ============================================
 
+// Map EVM chainId to ChainType
+function getChainTypeFromEvmId(chainId: number): ChainType | null {
+  switch (chainId) {
+    case 25:      // Cronos mainnet
+    case 338:     // Cronos testnet
+      return 'evm';
+    case 42161:   // Arbitrum One
+    case 421614:  // Arbitrum Sepolia
+      return 'arbitrum';
+    case 42262:   // Oasis Emerald mainnet
+    case 42261:   // Oasis Emerald testnet
+      return 'oasis-emerald';
+    case 23294:   // Oasis Sapphire mainnet
+    case 23295:   // Oasis Sapphire testnet
+      return 'oasis-sapphire';
+    default:
+      return null;
+  }
+}
+
 function MultiChainContextProvider({ children }: { children: ReactNode }) {
-  const [activeChain, setActiveChain] = useState<ChainType>('sui'); // Default to SUI for testnet
+  const [activeChain, setActiveChain] = useState<ChainType>('sui'); // Default to SUI
   const [network, setNetwork] = useState<NetworkType>('testnet');
+  const userSelectedChainRef = useRef(false); // Track if user manually selected
   
   // EVM (Cronos) wallet state
   const evmChainId = useChainId();
@@ -61,6 +82,43 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
   
   // SUI wallet state
   const sui = useSui();
+  
+  // ============================================
+  // AUTO-DETECT CHAIN BASED ON CONNECTED WALLET
+  // ============================================
+  // Priority: Connected wallet > SUI default
+  // Once user manually selects, don't auto-switch
+  useEffect(() => {
+    if (userSelectedChainRef.current) return;
+    
+    const suiWalletConnected = sui.isConnected && sui.address;
+    const evmWalletConnected = evmConnected && evmAddress;
+    
+    if (suiWalletConnected && !evmWalletConnected) {
+      // Only SUI wallet connected → use SUI
+      if (activeChain !== 'sui') {
+        setActiveChain('sui');
+      }
+    } else if (evmWalletConnected && !suiWalletConnected) {
+      // Only EVM wallet connected → detect which EVM chain
+      const detectedChain = getChainTypeFromEvmId(evmChainId);
+      if (detectedChain && detectedChain !== activeChain) {
+        setActiveChain(detectedChain);
+      }
+    } else if (suiWalletConnected && evmWalletConnected) {
+      // Both wallets connected → prefer SUI (default/optimized)
+      if (activeChain !== 'sui') {
+        setActiveChain('sui');
+      }
+    }
+    // If no wallet connected, keep current selection (defaults to 'sui')
+  }, [evmChainId, evmConnected, evmAddress, sui.isConnected, sui.address, activeChain]);
+  
+  // Wrap setActiveChain to track manual selections
+  const handleSetActiveChain = useCallback((chain: ChainType) => {
+    userSelectedChainRef.current = true;
+    setActiveChain(chain);
+  }, []);
   
   // Determine active connection based on chain
   // Oasis Emerald & Sapphire are EVM-compatible, reuse the EVM wallet connection
@@ -127,8 +185,9 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
     }
   }, [activeChain, network, sui]);
 
-  // Switch active chain
+  // Switch active chain (marks as user-selected)
   const switchChain = useCallback((chain: ChainType) => {
+    userSelectedChainRef.current = true;
     setActiveChain(chain);
     // If switching to SUI testnet
     if (chain === 'sui') {
@@ -145,7 +204,7 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
 
   const contextValue: MultiChainContextType = useMemo(() => ({
     activeChain,
-    setActiveChain,
+    setActiveChain: handleSetActiveChain,  // Use wrapped setter to track manual selection
     network,
     setNetwork,
     isConnected,
@@ -157,6 +216,7 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
     switchChain,
   }), [
     activeChain,
+    handleSetActiveChain,
     network,
     isConnected,
     address,
