@@ -3,9 +3,14 @@
  * 
  * ARCHITECTURE:
  * - ALL stats come from on-chain contract (totalShares, NAV, sharePrice, allocations)
- * - No DB caching for pool stats - eliminates inconsistency
- * - In-memory caching (60s) for performance during high concurrency
- * - DB is ONLY used for: transaction history, user activity logs
+ * - DB read-through cache: checks DB first if updated < 60s ago (shared across serverless instances)
+ * - In-memory caching (60s) for performance during high concurrency (per-instance)
+ * - After RPC fetch, writes to DB so other instances can use cached data
+ * 
+ * Cache Layers (priority order):
+ * 1. In-memory cache (60s TTL) - fastest, per-instance
+ * 2. DB cache (checks updated_at < 60s) - shared across instances/serverless
+ * 3. On-chain RPC - source of truth, updates DB after fetch
  * 
  * This is the SINGLE SOURCE OF TRUTH for all pool statistics.
  * Other services (CommunityPoolService, AutoHedgingService, etc.) delegate here.
@@ -15,6 +20,7 @@ import { ethers, type BrowserProvider, type JsonRpcProvider } from 'ethers';
 import { logger } from '../utils/logger';
 import { isMainnet } from '../utils/network';
 import { getMarketDataService } from './RealMarketDataService';
+import { getPoolStateFromDb, savePoolStateToDb } from '../db/community-pool';
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -118,6 +124,7 @@ const pendingRequests = new Map<string, Promise<unknown>>();
 
 const STATS_CACHE_TTL = 60_000;        // 60 seconds
 const MEMBER_CACHE_TTL = 30_000;       // 30 seconds
+const DB_FRESHNESS_TTL = 60_000;       // 60 seconds - DB considered fresh if updated within this window
 
 /**
  * Deduplicated fetch with in-memory caching
@@ -178,7 +185,12 @@ function getPoolContract(provider: JsonRpcProvider | BrowserProvider) {
 }
 
 /**
- * Get pool statistics - ALWAYS from on-chain
+ * Get pool statistics - with DB read-through cache
+ * 
+ * Cache layers (in priority order):
+ * 1. In-memory cache (60s TTL) - fastest, per-instance
+ * 2. DB cache (checks updated_at < 60s) - shared across instances/serverless
+ * 3. On-chain RPC - source of truth, updates DB after fetch
  * 
  * This is the SINGLE SOURCE OF TRUTH for pool stats.
  * All other services should call this instead of implementing their own.
@@ -187,7 +199,62 @@ export async function getPoolStats(): Promise<PoolStats> {
   const config = getConfig();
   const cacheKey = `pool-stats-${config.chainId}`;
   
-  return cachedFetch(cacheKey, statsCache, async () => {
+  // Layer 1: Check in-memory cache first
+  const cachedEntry = statsCache.get(cacheKey);
+  if (cachedEntry && Date.now() < cachedEntry.expiresAt) {
+    return cachedEntry.data;
+  }
+  
+  // Check pending request (prevent thundering herd)
+  const pending = pendingRequests.get(cacheKey) as Promise<PoolStats> | undefined;
+  if (pending) {
+    return pending;
+  }
+  
+  // Create a single request that all concurrent callers will share
+  const request = (async (): Promise<PoolStats> => {
+    // Layer 2: Check DB cache (shared across serverless instances)
+    try {
+      const dbState = await getPoolStateFromDb();
+      if (dbState && dbState.updated_at) {
+        const dbAge = Date.now() - new Date(dbState.updated_at).getTime();
+        if (dbAge < DB_FRESHNESS_TTL) {
+          // DB is fresh, convert to PoolStats format
+          const allocations = dbState.allocations || {};
+          const result: PoolStats = {
+            totalShares: dbState.total_shares,
+            totalNAV: dbState.total_value_usd,
+            sharePrice: dbState.share_price,
+            memberCount: 0, // DB doesn't store member count, will be filled on next RPC fetch
+            allocations: {
+              BTC: { percentage: allocations.BTC?.percentage ?? 0, targetBps: (allocations.BTC?.percentage ?? 0) * 100 },
+              ETH: { percentage: allocations.ETH?.percentage ?? 0, targetBps: (allocations.ETH?.percentage ?? 0) * 100 },
+              SUI: { percentage: allocations.SUI?.percentage ?? 0, targetBps: (allocations.SUI?.percentage ?? 0) * 100 },
+              CRO: { percentage: allocations.CRO?.percentage ?? 0, targetBps: (allocations.CRO?.percentage ?? 0) * 100 },
+            },
+            assetBalances: {
+              BTC: allocations.BTC?.amount ?? 0,
+              ETH: allocations.ETH?.amount ?? 0,
+              SUI: allocations.SUI?.amount ?? 0,
+              CRO: allocations.CRO?.amount ?? 0,
+            },
+            lastUpdated: new Date(dbState.updated_at).getTime(),
+            source: 'on-chain', // Still considered on-chain as DB is synced from chain
+            chainId: config.chainId,
+          };
+          
+          logger.info('[PoolStats] Served from DB cache', { ageMs: dbAge, totalNAV: result.totalNAV });
+          
+          // Store in in-memory cache for this instance
+          statsCache.set(cacheKey, { data: result, expiresAt: Date.now() + STATS_CACHE_TTL });
+          return result;
+        }
+      }
+    } catch (dbErr) {
+      logger.warn('[PoolStats] DB cache check failed, falling back to RPC', { err: dbErr });
+    }
+    
+    // Layer 3: Fetch from on-chain RPC
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
     const pool = getPoolContract(provider);
     
@@ -276,15 +343,45 @@ export async function getPoolStats(): Promise<PoolStats> {
       chainId: config.chainId,
     };
     
-    logger.info('[PoolStats] Fetched from on-chain', {
+    logger.info('[PoolStats] Fetched from on-chain RPC', {
       totalNAV: result.totalNAV,
       sharePrice: result.sharePrice,
       totalShares: result.totalShares,
       memberCount: result.memberCount,
     });
     
+    // Update DB cache asynchronously (don't block the response)
+    savePoolStateToDb({
+      totalValueUSD: result.totalNAV,
+      totalShares: result.totalShares,
+      sharePrice: result.sharePrice,
+      allocations: {
+        BTC: { percentage: btcBps / 100, valueUSD: 0, amount: assetBalances.BTC, price: 0 },
+        ETH: { percentage: ethBps / 100, valueUSD: 0, amount: assetBalances.ETH, price: 0 },
+        SUI: { percentage: suiBps / 100, valueUSD: 0, amount: assetBalances.SUI, price: 0 },
+        CRO: { percentage: croBps / 100, valueUSD: 0, amount: assetBalances.CRO, price: 0 },
+      },
+      lastRebalance: Date.now(),
+      lastAIDecision: null,
+    }).catch(err => {
+      logger.warn('[PoolStats] Failed to update DB cache', { err });
+    });
+    
+    // Store in in-memory cache
+    statsCache.set(cacheKey, { data: result, expiresAt: Date.now() + STATS_CACHE_TTL });
+    
     return result;
-  }, STATS_CACHE_TTL);
+  })();
+  
+  // Register pending request for deduplication
+  pendingRequests.set(cacheKey, request);
+  
+  // Cleanup pending request after completion
+  request.finally(() => {
+    pendingRequests.delete(cacheKey);
+  });
+  
+  return request;
 }
 
 /**
