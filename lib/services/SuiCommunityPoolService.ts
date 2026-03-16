@@ -24,13 +24,13 @@ import { getMarketDataService } from './RealMarketDataService';
 export const SUI_POOL_CONFIG = {
   testnet: {
     packageId: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
-    adminCapId: '0xc2c7d106dbd7ace011e5bebbcce7487273933064f9d2497bf3fc54df7e92b1eb',
-    feeManagerCapId: '0x6809c18e6444a830197c53f8d4d8a0d7a73df34d51c9cbd38d4926999e9336c2',
+    adminCapId: '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
+    feeManagerCapId: '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6',
     moduleName: 'community_pool',
     rpcUrl: 'https://fullnode.testnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/testnet',
-    // Pool state will be discovered via PoolCreated event
-    poolStateId: null as string | null,
+    // Pool state ID (created via create_pool)
+    poolStateId: '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56' as string | null,
   },
   mainnet: {
     packageId: '',
@@ -204,8 +204,10 @@ export class SuiCommunityPoolService {
       const fields = await this.fetchObjectFields(poolStateId);
       if (!fields) return defaultStats;
 
-      // Parse balance from Balance<SUI> struct
-      const balanceValue = fields.balance?.fields?.value || fields.balance?.value || '0';
+      // Parse balance - can be direct string or nested Balance<SUI> struct
+      const balanceValue = typeof fields.balance === 'string' 
+        ? fields.balance 
+        : (fields.balance?.fields?.value || fields.balance?.value || '0');
       const totalNAV = Number(balanceValue) / Math.pow(10, SUI_DECIMALS);
       const totalShares = Number(fields.total_shares || 0) / Math.pow(10, SHARE_DECIMALS);
       

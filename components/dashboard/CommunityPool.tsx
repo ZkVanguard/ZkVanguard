@@ -158,6 +158,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete'>('idle');
   const [selectedChain, setSelectedChain] = useState<string>('cronos'); // Multi-chain: 'cronos', 'arbitrum', 'sui'
+  const [suiPoolStateId, setSuiPoolStateId] = useState<string | null>(null); // SUI pool state object ID
   const mountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   
@@ -255,6 +256,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         if (!mountedRef.current) return;
         
         if (poolJson.success) {
+          // Store SUI pool state ID for explorer link
+          if (poolJson.data.poolStateId) {
+            setSuiPoolStateId(poolJson.data.poolStateId);
+          }
           // Map SUI pool data to PoolSummary format
           // SUI pool primarily holds SUI tokens, show 100% SUI allocation
           const totalValue = parseFloat(poolJson.data.totalNAVUsd) || 0;
@@ -1079,13 +1084,13 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
                   <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">Live on Testnet</span>
                 </div>
                 <a
-                  href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${COMMUNITY_POOL_ADDRESS}`}
+                  href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${suiPoolStateId || COMMUNITY_POOL_ADDRESS}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  View Contract
+                  View Pool
                 </a>
               </div>
               
