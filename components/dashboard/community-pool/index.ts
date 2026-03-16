@@ -7,5 +7,6 @@ export { StatusMessages } from './StatusMessages';
 export { Leaderboard } from './Leaderboard';
 export { AIInsightsModal } from './AIInsightsModal';
 export { useCommunityPool } from './useCommunityPool';
+export * from './Skeletons';
 export type * from './types';
 export * from './utils';

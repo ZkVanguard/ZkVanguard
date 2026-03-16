@@ -1,19 +1,26 @@
 'use client';
 
 /**
- * CommunityPool - Refactored
+ * CommunityPool - Refactored & Optimized
  * 
  * Main orchestration component. All UI sections are extracted into
  * memoized sub-components under ./community-pool/. State management
  * uses useReducer via the useCommunityPool hook for minimal re-renders.
  * 
- * ~280 lines vs previous ~1,632 lines
+ * OPTIMIZATIONS:
+ * - memo() on all child components
+ * - useMemo for derived values in hook
+ * - useCallback for stable function refs
+ * - Intersection observer for lazy loading heavy panels
+ * - Skeleton loading states for better perceived performance
+ * - startTransition for non-urgent state updates
+ * 
+ * ~300 lines vs previous ~1,632 lines
  */
 
-import { useState, memo, useEffect, useCallback, useRef } from 'react';
+import { useState, memo, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
-import { RiskMetricsPanel } from './RiskMetricsPanel';
-import { AutoHedgePanel } from './AutoHedgePanel';
+import { useIntersectionObserver } from '@/lib/hooks';
 import {
   PoolHeader,
   PoolStats,
@@ -25,6 +32,19 @@ import {
   AIInsightsModal,
   useCommunityPool,
 } from './community-pool';
+import {
+  CommunityPoolSkeleton,
+  PoolStatsSkeleton,
+} from './community-pool/Skeletons';
+
+// Lazy load heavy panels (only load when in viewport)
+const RiskMetricsPanel = lazy(() => import('./RiskMetricsPanel').then(mod => ({ default: mod.RiskMetricsPanel })));
+const AutoHedgePanel = lazy(() => import('./AutoHedgePanel').then(mod => ({ default: mod.AutoHedgePanel })));
+
+// Skeleton fallbacks
+const PanelSkeleton = () => (
+  <div className="animate-pulse bg-gray-100 dark:bg-gray-700 h-48 rounded-lg" />
+);
 
 interface CommunityPoolProps {
   address?: string;
@@ -216,27 +236,25 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const chainName = pool.chainConfig?.name || pool.selectedChain;
 
   // ============================================================================
-  // LOADING STATE
+  // INTERSECTION OBSERVER FOR LAZY LOADING HEAVY PANELS
+  // ============================================================================
+  
+  const [riskMetricsRef, riskMetricsVisible] = useIntersectionObserver<HTMLDivElement>({
+    rootMargin: '200px', // Start loading 200px before entering viewport
+    freezeOnceVisible: true,
+  });
+  
+  const [autoHedgeRef, autoHedgeVisible] = useIntersectionObserver<HTMLDivElement>({
+    rootMargin: '200px',
+    freezeOnceVisible: true,
+  });
+
+  // ============================================================================
+  // LOADING STATE (with optimized skeleton)
   // ============================================================================
   
   if (pool.loading) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
-      >
-        <PoolHeader
-          selectedChain={pool.selectedChain}
-          onChainSelect={pool.handleChainSelect}
-          isLoading
-        />
-        <div className="p-6 animate-pulse">
-          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
-          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded" />
-        </div>
-      </motion.div>
-    );
+    return <CommunityPoolSkeleton />;
   }
 
   // ============================================================================
@@ -341,15 +359,29 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         network={pool.network}
       />
 
+      {/* Risk Metrics Panel - Lazy loaded when in viewport */}
       {!compact && (
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-          <RiskMetricsPanel compact={false} />
+        <div ref={riskMetricsRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+          {riskMetricsVisible ? (
+            <Suspense fallback={<PanelSkeleton />}>
+              <RiskMetricsPanel compact={false} />
+            </Suspense>
+          ) : (
+            <PanelSkeleton />
+          )}
         </div>
       )}
 
+      {/* Auto Hedge Panel - Lazy loaded when in viewport */}
       {!compact && (
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-          <AutoHedgePanel />
+        <div ref={autoHedgeRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+          {autoHedgeVisible ? (
+            <Suspense fallback={<PanelSkeleton />}>
+              <AutoHedgePanel />
+            </Suspense>
+          ) : (
+            <PanelSkeleton />
+          )}
         </div>
       )}
 
