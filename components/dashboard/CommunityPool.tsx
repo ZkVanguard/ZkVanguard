@@ -330,7 +330,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
           }
           setError(null);
           
-          const res = await fetch('/api/community-pool?action=deposit', {
+          const res = await fetch(`/api/community-pool?action=deposit&chain=${selectedChain}&network=${network}`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -392,7 +392,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
           }
           setError(null);
           
-          const res = await fetch('/api/community-pool?action=withdraw', {
+          const res = await fetch(`/api/community-pool?action=withdraw&chain=${selectedChain}&network=${network}`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',

@@ -39,11 +39,50 @@ import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { COMMUNITY_POOL_ADDRESS } from '@/lib/constants';
+import { POOL_CHAIN_CONFIGS, getCommunityPoolAddress } from '@/lib/contracts/community-pool-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// On-chain contract addresses (using constants for V3 proxy)
+// Multi-chain configuration
+type NetworkType = 'testnet' | 'mainnet';
+type ChainKey = 'cronos' | 'arbitrum' | 'sui';
+
+interface ChainConfig {
+  rpcUrl: string;
+  poolAddress: string;
+  chainKey: ChainKey;
+  network: NetworkType;
+}
+
+/**
+ * Get RPC URL and pool address for a given chain/network
+ * Falls back to Cronos testnet if invalid
+ */
+function getChainConfig(chain?: string | null, network?: string | null): ChainConfig {
+  const chainKey = (chain as ChainKey) || 'cronos';
+  const networkType: NetworkType = network === 'mainnet' ? 'mainnet' : 'testnet';
+  
+  const config = POOL_CHAIN_CONFIGS[chainKey];
+  if (!config) {
+    // Fallback to Cronos testnet
+    return {
+      rpcUrl: 'https://evm-t3.cronos.org',
+      poolAddress: COMMUNITY_POOL_ADDRESS,
+      chainKey: 'cronos',
+      network: 'testnet',
+    };
+  }
+  
+  const rpcUrl = networkType === 'mainnet' ? config.rpcUrls.mainnet : config.rpcUrls.testnet;
+  const poolAddress = networkType === 'mainnet' 
+    ? config.contracts.mainnet.communityPool 
+    : config.contracts.testnet.communityPool;
+  
+  return { rpcUrl, poolAddress, chainKey, network: networkType };
+}
+
+// Legacy constant for default chain (Cronos testnet)
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
 
 // Minimal ABI for reading pool stats
@@ -166,14 +205,17 @@ const WITHDRAW_EVENT_TOPIC = ethers.id('Withdrawn(address,uint256,uint256,uint25
  * 
  * @param txHash - The transaction hash to verify
  * @param expectedWallet - The wallet address that should have made the deposit
+ * @param chainConfig - Chain configuration for RPC and contract address
  * @returns Verified deposit amount in USD (from on-chain), or null if invalid
  */
 async function verifyOnChainDeposit(
   txHash: string,
-  expectedWallet: string
+  expectedWallet: string,
+  chainConfig: ChainConfig = getChainConfig()
 ): Promise<{ verified: boolean; amountUSD: number; sharesReceived: number; error?: string }> {
   try {
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    const poolAddress = chainConfig.poolAddress;
     
     // Fetch transaction receipt
     const receipt = await provider.getTransactionReceipt(txHash);
@@ -187,14 +229,14 @@ async function verifyOnChainDeposit(
     }
     
     // Verify transaction was to the CommunityPool contract
-    if (receipt.to?.toLowerCase() !== COMMUNITY_POOL_ADDRESS.toLowerCase()) {
+    if (receipt.to?.toLowerCase() !== poolAddress.toLowerCase()) {
       return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction not to CommunityPool contract' };
     }
     
     // Find the Deposited event in the logs
     const depositLog = receipt.logs.find(log => 
       log.topics[0] === DEPOSIT_EVENT_TOPIC &&
-      log.address.toLowerCase() === COMMUNITY_POOL_ADDRESS.toLowerCase()
+      log.address.toLowerCase() === poolAddress.toLowerCase()
     );
     
     if (!depositLog) {
@@ -239,10 +281,12 @@ async function verifyOnChainDeposit(
  */
 async function verifyOnChainWithdraw(
   txHash: string,
-  expectedWallet: string
+  expectedWallet: string,
+  chainConfig: ChainConfig = getChainConfig()
 ): Promise<{ verified: boolean; amountUSD: number; sharesBurned: number; error?: string }> {
   try {
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    const poolAddress = chainConfig.poolAddress;
     
     const receipt = await provider.getTransactionReceipt(txHash);
     if (!receipt) {
@@ -253,14 +297,14 @@ async function verifyOnChainWithdraw(
       return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction failed on-chain' };
     }
     
-    if (receipt.to?.toLowerCase() !== COMMUNITY_POOL_ADDRESS.toLowerCase()) {
+    if (receipt.to?.toLowerCase() !== poolAddress.toLowerCase()) {
       return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction not to CommunityPool contract' };
     }
     
     // Find the Withdrawn event: Withdrawn(address member, uint256 shares, uint256 amountOut, uint256 fee)
     const withdrawLog = receipt.logs.find(log => 
       log.topics[0] === WITHDRAW_EVENT_TOPIC &&
-      log.address.toLowerCase() === COMMUNITY_POOL_ADDRESS.toLowerCase()
+      log.address.toLowerCase() === poolAddress.toLowerCase()
     );
     
     if (!withdrawLog) {
@@ -371,22 +415,25 @@ async function getOnChainUserPosition(userAddress: string): Promise<UserPosition
  * TTL: 120 seconds (expensive query)
  * NOTE: Contract memberList may have duplicate entries - we deduplicate by address
  */
-async function getAllOnChainMembers() {
+async function getAllOnChainMembers(chainConfig: ChainConfig = getChainConfig()) {
+  // Include chain in cache key to avoid mixing data between chains
+  const cacheKey = `all-members-${chainConfig.chainKey}-${chainConfig.network}`;
+  
   return dedupedFetch<Array<{
     walletAddress: string;
     shares: number;
     depositedUSD: number;
     joinTime: number;
   }> | null>(
-    'all-members',
+    cacheKey,
     async () => {
       try {
-        const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
-        const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
         
         const memberCount = await pool.getMemberCount();
         const count = Number(memberCount);
-        logger.info(`[CommunityPool API] On-chain member count (raw): ${count}`);
+        logger.info(`[CommunityPool API] On-chain member count (raw) for ${chainConfig.chainKey}: ${count}`);
         
         // Use a Map to deduplicate by address (contract memberList has duplicates)
         const memberMap = new Map<string, {
@@ -431,9 +478,9 @@ async function getAllOnChainMembers() {
  * Find user in on-chain members by searching the member list
  * This handles cases where the user's wallet address checksum differs from on-chain storage
  */
-async function findOnChainMember(userAddress: string) {
+async function findOnChainMember(userAddress: string, chainConfig: ChainConfig = getChainConfig()) {
   const normalizedUser = userAddress.toLowerCase();
-  const members = await getAllOnChainMembers();
+  const members = await getAllOnChainMembers(chainConfig);
   
   if (!members) return null;
   
@@ -468,6 +515,20 @@ export async function GET(request: NextRequest) {
   const action = searchParams.get('action');
   const userAddress = searchParams.get('user');
   const forceOnChain = searchParams.get('source') === 'onchain';
+  
+  // Multi-chain support: parse chain and network params
+  const chainParam = searchParams.get('chain');
+  const networkParam = searchParams.get('network');
+  const chainConfig = getChainConfig(chainParam, networkParam);
+  
+  // SUI chain requires different handling (not EVM-compatible)
+  if (chainConfig.chainKey === 'sui') {
+    return NextResponse.json({
+      success: false,
+      error: 'SUI chain requires the SUI-specific API endpoint',
+      hint: 'Use /api/sui/community-pool for SUI chain operations',
+    }, { status: 400 });
+  }
   
   try {
     // Get user's position
@@ -510,7 +571,7 @@ export async function GET(request: NextRequest) {
       // If getMemberPosition returned 0 shares, try searching the member list
       // This handles checksum mismatches between connected wallet and on-chain storage
       if (onChainUser && onChainUser.shares === 0) {
-        const memberSearch = await findOnChainMember(userAddress);
+        const memberSearch = await findOnChainMember(userAddress, chainConfig);
         if (memberSearch && memberSearch.shares > 0) {
           logger.info(`[CommunityPool API] Found user ${userAddress} via member list search: ${memberSearch.shares} shares`);
           onChainUser = memberSearch;
@@ -685,7 +746,7 @@ export async function GET(request: NextRequest) {
       const limit = parseInt(searchParams.get('limit') || '10');
       
       // On-chain is authoritative - always use it
-      const onChainMembers = await getAllOnChainMembers();
+      const onChainMembers = await getAllOnChainMembers(chainConfig);
       if (onChainMembers && onChainMembers.length > 0) {
         // Filter to only active members (shares > 0)
         const activeMembers = onChainMembers.filter(m => m.shares > 0);
@@ -812,7 +873,7 @@ export async function GET(request: NextRequest) {
       
       if (onChainPool && onChainPool.totalShares > 0) {
         // Get deduplicated member count (contract memberList has duplicates)
-        const onChainMembers = await getAllOnChainMembers();
+        const onChainMembers = await getAllOnChainMembers(chainConfig);
         const uniqueActiveMembers = onChainMembers?.filter(m => m.shares > 0).length ?? onChainPool.totalMembers ?? 0;
         
         // On-chain contract is the authoritative source - use it directly
@@ -876,6 +937,20 @@ export async function POST(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
   
+  // Multi-chain support: parse chain and network params
+  const chainParam = searchParams.get('chain');
+  const networkParam = searchParams.get('network');
+  const chainConfig = getChainConfig(chainParam, networkParam);
+  
+  // SUI chain requires different handling (not EVM-compatible)
+  if (chainConfig.chainKey === 'sui') {
+    return NextResponse.json({
+      success: false,
+      error: 'SUI chain requires the SUI-specific API endpoint',
+      hint: 'Use /api/sui/community-pool for SUI chain operations',
+    }, { status: 400 });
+  }
+  
   try {
     const body = await request.json();
     const { walletAddress, amount, shares, txHash } = body;
@@ -923,7 +998,7 @@ export async function POST(request: NextRequest) {
         }
         
         // SECURITY: Verify the on-chain deposit before recording
-        const verification = await verifyOnChainDeposit(txHash, walletAddress);
+        const verification = await verifyOnChainDeposit(txHash, walletAddress, chainConfig);
         if (!verification.verified) {
           logger.warn(`[CommunityPool] Deposit verification failed: ${verification.error}`, { txHash, walletAddress });
           return NextResponse.json(
@@ -1018,7 +1093,7 @@ export async function POST(request: NextRequest) {
         }
         
         // SECURITY: Verify the on-chain withdrawal before recording
-        const verification = await verifyOnChainWithdraw(txHash, walletAddress);
+        const verification = await verifyOnChainWithdraw(txHash, walletAddress, chainConfig);
         if (!verification.verified) {
           logger.warn(`[CommunityPool] Withdrawal verification failed: ${verification.error}`, { txHash, walletAddress });
           return NextResponse.json(
@@ -1154,7 +1229,7 @@ export async function POST(request: NextRequest) {
         });
         
         // CRITICAL: Sync ALL on-chain members to database
-        const onChainMembers = await getAllOnChainMembers();
+        const onChainMembers = await getAllOnChainMembers(chainConfig);
         const syncedMembers: string[] = [];
         
         if (onChainMembers && onChainMembers.length > 0) {
@@ -1233,7 +1308,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Step 2: Get all on-chain members
-        const onChainMembers = await getAllOnChainMembers();
+        const onChainMembers = await getAllOnChainMembers(chainConfig);
         if (!onChainMembers) {
           return NextResponse.json({ success: false, error: 'Failed to fetch on-chain members' }, { status: 500 });
         }
