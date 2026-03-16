@@ -41,6 +41,16 @@ build/
 *.tsbuildinfo
 build-error.txt
 build-output.txt
+build-now.txt
+
+# -------------------------------------------
+# Flattened Solidity & Verification Artifacts
+# -------------------------------------------
+*_flat.sol
+*-input.json
+*-metadata.json
+*_standard-input.json
+*_minimal-input.json
 
 # -------------------------------------------
 # Hardhat / Solidity
@@ -101,6 +111,8 @@ bun-debug.log*
 # Temporary/Debug Scripts (one-off migration helpers)
 # -------------------------------------------
 check-old-contracts.js
+check-db.js
+check-ownership.js
 scripts/check-nav.js
 scripts/complete-migration.js
 scripts/debug-*.js
@@ -216,6 +228,11 @@ mnemonic.txt
 .cache/
 tmp/
 temp/
+body.json
+git-status.txt
+deploy-v2-output.txt
+test-deposit-output.txt
+test-output.txt
 
 # -------------------------------------------
 # Database
