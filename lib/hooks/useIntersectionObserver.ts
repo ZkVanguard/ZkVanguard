@@ -4,7 +4,7 @@
  * Use for heavy dashboard panels to defer rendering until visible.
  * Reduces initial bundle load and improves TTV (time to visible).
  */
-import { useState, useEffect, useRef, useCallback, RefCallback, RefObject } from 'react';
+import { useState, useEffect, useCallback, RefCallback, RefObject } from 'react';
 
 interface UseIntersectionObserverOptions {
   threshold?: number;
@@ -16,16 +16,16 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLDivElement>(
   options: UseIntersectionObserverOptions = {}
 ): [RefCallback<T>, boolean] {
   const { threshold = 0.1, rootMargin = '100px', freezeOnceVisible = true } = options;
-  const elementRef = useRef<T | null>(null);
+  // Use state for element so useEffect re-runs when element is assigned
+  const [element, setElement] = useState<T | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const frozenRef = useRef(false);
+  const [frozen, setFrozen] = useState(false);
 
   useEffect(() => {
-    const element = elementRef.current;
     if (!element) return;
 
     // Skip if already frozen
-    if (frozenRef.current) return;
+    if (frozen) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -33,7 +33,7 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLDivElement>(
         if (visible) {
           setIsVisible(true);
           if (freezeOnceVisible) {
-            frozenRef.current = true;
+            setFrozen(true);
             observer.unobserve(element);
           }
         } else if (!freezeOnceVisible) {
@@ -48,11 +48,11 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLDivElement>(
     return () => {
       observer.disconnect();
     };
-  }, [threshold, rootMargin, freezeOnceVisible]);
+  }, [element, threshold, rootMargin, freezeOnceVisible, frozen]);
 
-  // Callback ref to handle element assignment
+  // Callback ref to handle element assignment - triggers re-render via state
   const setRef = useCallback((node: T | null) => {
-    elementRef.current = node;
+    setElement(node);
   }, []);
 
   return [setRef, isVisible];
