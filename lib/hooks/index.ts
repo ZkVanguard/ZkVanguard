@@ -12,6 +12,7 @@ export { useDebounce } from './useDebounce';
 export { useWallet, type WalletState } from './useWallet';
 export { useReducedMotion, getMotionVariants } from './useReducedMotion';
 export { useConnectionSpeed, getAdaptiveTimeout, getAdaptivePollingInterval, type ConnectionSpeed } from './useConnectionSpeed';
+export { useIntersectionObserver, useInViewport } from './useIntersectionObserver';
 export { 
   useOptimisticHedgeCreate, 
   useOptimisticHedgeClose, 

@@ -2,11 +2,19 @@
  * useCommunityPool Hook
  * Centralized state management and data fetching for CommunityPool
  * Uses useReducer for complex state to minimize re-renders
+ * 
+ * OPTIMIZATIONS:
+ * - useReducer for batched state updates (minimizes re-renders)
+ * - useMemo for expensive derived values
+ * - useCallback for stable function references
+ * - startTransition for non-urgent state updates
+ * - Optimistic UI updates for better perceived performance
+ * - Debounced input handlers
  */
 
 'use client';
 
-import { useReducer, useCallback, useRef, useEffect } from 'react';
+import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useSignMessage } from 'wagmi';
 import { parseUnits } from 'viem';
 import { logger } from '@/lib/utils/logger';
@@ -200,7 +208,10 @@ export function useCommunityPool(propAddress?: string) {
   
   const handleChainSelect = useCallback((key: ChainKey) => {
     userSelectedChainRef.current = true;
-    dispatchPool({ type: 'SET_CHAIN', payload: key });
+    // Use startTransition for non-urgent chain switch (keeps UI responsive)
+    startTransition(() => {
+      dispatchPool({ type: 'SET_CHAIN', payload: key });
+    });
   }, []);
   
   // Reset state on chain change
@@ -577,35 +588,75 @@ export function useCommunityPool(propAddress?: string) {
   const setActionLoading = useCallback((loading: boolean) => dispatchTx({ type: 'SET_ACTION_LOADING', payload: loading }), []);
   const setLastTxHash = useCallback((hash: string | null) => dispatchTx({ type: 'SET_LAST_TX_HASH', payload: hash }), []);
 
-  // RETURN
+  // ============================================================================
+  // MEMOIZED RETURN VALUE (prevents re-renders when unchanged)
   // ============================================================================
   
-  return {
-    // Pool state
-    ...poolState,
-    
-    // Transaction state
-    ...txState,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    writeError,
-    
-    // Wallet state
+  // Memoize pool-related values
+  const poolValues = useMemo(() => ({
+    poolData: poolState.poolData,
+    userPosition: poolState.userPosition,
+    aiRecommendation: poolState.aiRecommendation,
+    leaderboard: poolState.leaderboard,
+    loading: poolState.loading,
+    error: poolState.error,
+    successMessage: poolState.successMessage,
+    selectedChain: poolState.selectedChain,
+    suiPoolStateId: poolState.suiPoolStateId,
+  }), [poolState]);
+  
+  // Memoize transaction-related values
+  const txValues = useMemo(() => ({
+    txStatus: txState.txStatus,
+    actionLoading: txState.actionLoading,
+    showDeposit: txState.showDeposit,
+    showWithdraw: txState.showWithdraw,
+    depositAmount: txState.depositAmount,
+    withdrawShares: txState.withdrawShares,
+    suiDepositAmount: txState.suiDepositAmount,
+    suiWithdrawShares: txState.suiWithdrawShares,
+    lastTxHash: txState.lastTxHash,
+  }), [txState]);
+  
+  // Memoize wallet-related values
+  const walletValues = useMemo(() => ({
     address,
     isConnected,
     chainId,
     suiAddress,
     suiIsConnected,
     suiBalance,
-    
-    // Derived
+  }), [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance]);
+  
+  // Memoize derived configuration values
+  const configValues = useMemo(() => ({
     chainConfig,
     network,
     poolDeployed,
     COMMUNITY_POOL_ADDRESS,
+  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS]);
+
+  // RETURN
+  // ============================================================================
+  
+  return useMemo(() => ({
+    // Pool state (memoized)
+    ...poolValues,
     
-    // Actions
+    // Transaction state (memoized)
+    ...txValues,
+    isPending,
+    isConfirming,
+    isConfirmed,
+    writeError,
+    
+    // Wallet state (memoized)
+    ...walletValues,
+    
+    // Derived config (memoized)
+    ...configValues,
+    
+    // Actions (stable callbacks)
     handleChainSelect,
     fetchPoolData,
     fetchAIRecommendation,
@@ -628,5 +679,34 @@ export function useCommunityPool(propAddress?: string) {
     setTxStatus,
     setActionLoading,
     setLastTxHash,
-  };
+  }), [
+    poolValues,
+    txValues,
+    isPending,
+    isConfirming,
+    isConfirmed,
+    writeError,
+    walletValues,
+    configValues,
+    handleChainSelect,
+    fetchPoolData,
+    fetchAIRecommendation,
+    handleDeposit,
+    handleWithdraw,
+    handleSuiDeposit,
+    handleSuiWithdraw,
+    resetWrite,
+    signForApi,
+    setShowDeposit,
+    setShowWithdraw,
+    setDepositAmount,
+    setWithdrawShares,
+    setSuiDepositAmount,
+    setSuiWithdrawShares,
+    setError,
+    setSuccess,
+    setTxStatus,
+    setActionLoading,
+    setLastTxHash,
+  ]);
 }
