@@ -42,7 +42,6 @@ interface DepositWithdrawActionsProps {
   onWithdraw: () => void;
   onSuiDeposit: () => void;
   onSuiWithdraw: () => void;
-  onSwitchSuiNetwork: () => void;
 }
 
 export const DepositWithdrawActions = memo(function DepositWithdrawActions({
@@ -79,7 +78,6 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   onWithdraw,
   onSuiDeposit,
   onSuiWithdraw,
-  onSwitchSuiNetwork,
 }: DepositWithdrawActionsProps) {
   const isSui = selectedChain === 'sui';
 
@@ -122,19 +120,22 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
 
           {/* Wrong Network Warning */}
           {suiIsConnected && suiIsWrongNetwork && (
-            <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
-              <div className="flex items-center gap-2">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+              <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <span className="text-sm text-amber-700 dark:text-amber-400">
-                  Your wallet is on {suiNetwork}. Please switch to Testnet.
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  Wrong Network: Your wallet is on {suiNetwork}
                 </span>
               </div>
-              <button
-                onClick={onSwitchSuiNetwork}
-                className="px-3 py-1 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
-              >
-                Switch to Testnet
-              </button>
+              <p className="text-xs text-amber-600 dark:text-amber-500 mb-2">
+                SUI wallets require manual network switching. Please open your wallet extension 
+                and switch to <strong>Testnet</strong> in Settings → Network.
+              </p>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>Supported wallets: Sui Wallet, Suiet, Ethos</span>
+                <span className="text-amber-500">•</span>
+                <span>The app will detect when you switch</span>
+              </div>
             </div>
           )}
 
