@@ -196,9 +196,12 @@ export function useCommunityPool(propAddress?: string) {
   // CHAIN SELECTION
   // ============================================================================
   
-  // Auto-detect chain from wallet
+  // Auto-detect chain from wallet (only for EVM chains, don't override SUI default)
   useEffect(() => {
-    if (chainId && !userSelectedChainRef.current) {
+    // Skip auto-detection if:
+    // 1. User has manually selected a chain
+    // 2. Current chain is SUI (SUI is default, don't auto-switch away)
+    if (chainId && !userSelectedChainRef.current && selectedChain !== 'sui') {
       const detectedChain = getChainKeyFromId(chainId) as ChainKey | null;
       if (detectedChain && detectedChain !== selectedChain) {
         dispatchPool({ type: 'SET_CHAIN', payload: detectedChain });
