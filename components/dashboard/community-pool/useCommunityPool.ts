@@ -386,6 +386,73 @@ export function useCommunityPool(propAddress?: string) {
   // TRANSACTION HANDLERS
   // ============================================================================
   
+  // Handle EVM approval confirmation -> trigger deposit
+  useEffect(() => {
+    if (isConfirmed && txState.txStatus === 'approving' && txState.depositAmount) {
+      // Approval confirmed - now trigger the deposit transaction
+      const amount = parseFloat(txState.depositAmount);
+      if (!isNaN(amount) && COMMUNITY_POOL_ADDRESS) {
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
+        resetWrite(); // Reset to allow new transaction
+        
+        // Small delay to ensure state updates
+        setTimeout(() => {
+          const amountInUnits = parseUnits(amount.toString(), 6);
+          writeContract({
+            address: COMMUNITY_POOL_ADDRESS,
+            abi: [{ name: 'deposit', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'nonpayable' }],
+            functionName: 'deposit',
+            args: [amountInUnits],
+          });
+        }, 500);
+      }
+    }
+  }, [isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, writeContract, resetWrite]);
+
+  // Handle EVM deposit confirmation -> success
+  useEffect(() => {
+    if (isConfirmed && txState.txStatus === 'depositing') {
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful! Tx: ${txHash?.slice(0, 10)}...` });
+      dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
+      dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+      dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+      
+      // Refresh pool data after short delay
+      setTimeout(() => {
+        fetchPoolData(true);
+        dispatchPool({ type: 'SET_SUCCESS', payload: null });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+      }, 3000);
+    }
+  }, [isConfirmed, txState.txStatus, txHash, fetchPoolData]);
+
+  // Handle EVM withdraw confirmation -> success
+  useEffect(() => {
+    if (isConfirmed && txState.txStatus === 'withdrawing') {
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrawal successful! Tx: ${txHash?.slice(0, 10)}...` });
+      dispatchTx({ type: 'SET_WITHDRAW_SHARES', payload: '' });
+      dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
+      dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+      
+      setTimeout(() => {
+        fetchPoolData(true);
+        dispatchPool({ type: 'SET_SUCCESS', payload: null });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+      }, 3000);
+    }
+  }, [isConfirmed, txState.txStatus, txHash, fetchPoolData]);
+
+  // Handle transaction errors
+  useEffect(() => {
+    if (writeError && txState.txStatus !== 'idle') {
+      dispatchPool({ type: 'SET_ERROR', payload: writeError.message || 'Transaction failed' });
+      dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+    }
+  }, [writeError, txState.txStatus]);
+  
   const signForApi = useCallback(async (action: 'deposit' | 'withdraw', amount: string) => {
     if (!address) return null;
     const timestamp = Math.floor(Date.now() / 1000);
