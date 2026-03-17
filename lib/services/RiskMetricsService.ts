@@ -957,8 +957,9 @@ export async function calculateRealTimeVolatility(chain: string): Promise<{
       weights: [0.40, 0.30, 0.25, 0.05] 
     },
     'sui': { 
-      symbols: ['SUI', 'BTC', 'ETH', 'USDC'], 
-      weights: [0.40, 0.30, 0.25, 0.05] 
+      // SUI pool uses native SUI - no separate USDC stablecoin
+      symbols: ['SUI', 'BTC', 'ETH'], 
+      weights: [0.50, 0.30, 0.20] 
     },
     'arbitrum': { 
       symbols: ['ETH', 'BTC', 'ARB', 'USDC'], 
