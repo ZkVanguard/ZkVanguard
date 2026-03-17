@@ -607,7 +607,7 @@ export function useCommunityPool(propAddress?: string) {
     }
   }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, COMMUNITY_POOL_ADDRESS]);
   
-  // SUI handlers
+  // SUI handlers - Accept USDC (USD) and convert to SUI for deposit
   const handleSuiDeposit = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
     
@@ -621,15 +621,15 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    const amount = parseFloat(txState.suiDepositAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const usdAmount = parseFloat(txState.suiDepositAmount);
+    if (isNaN(usdAmount) || usdAmount <= 0) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Invalid deposit amount' });
       return;
     }
     
-    // Minimum deposit: 0.1 SUI
-    if (amount < 0.1) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is 0.1 SUI' });
+    // Minimum deposit: $10 USDC
+    if (usdAmount < 10) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10 USDC' });
       return;
     }
     
@@ -637,16 +637,33 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // Step 1: Get transaction params from API
+      // Step 1: Get current SUI price and calculate SUI amount
+      const priceRes = await fetch('/api/prices?symbols=SUI');
+      const priceData = await priceRes.json();
+      const suiPrice = priceData?.prices?.SUI || 3.50; // fallback price
+      const suiAmount = usdAmount / suiPrice;
+      
+      // Check if user has enough SUI (including 0.1 reserve for gas)
+      const userSuiBalance = parseFloat(suiBalance);
+      if (userSuiBalance < suiAmount + 0.1) {
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI. Need ${(suiAmount + 0.1).toFixed(4)} SUI (${suiAmount.toFixed(4)} + gas). You have ${suiBalance} SUI.` });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      // Step 2: Get transaction params from API
       const res = await fetch(`/api/sui/community-pool?action=deposit&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: BigInt(Math.floor(amount * 1e9)).toString() }),
+        body: JSON.stringify({ amount: BigInt(Math.floor(suiAmount * 1e9)).toString() }),
       });
       
       const json = await res.json();
       if (!json.success) {
         dispatchPool({ type: 'SET_ERROR', payload: json.error });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
@@ -679,7 +696,7 @@ export function useCommunityPool(propAddress?: string) {
       
       if (result.success) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited ${amount} SUI! Tx: ${result.digest.slice(0, 10)}...` });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
         
@@ -698,7 +715,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, suiBalance, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -719,6 +736,10 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
+    // Calculate estimated USD value
+    const sharePrice = Number(poolState.poolData?.sharePriceUSD || poolState.poolData?.sharePrice) || 1;
+    const estimatedUsd = shares * sharePrice;
+    
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
@@ -733,6 +754,8 @@ export function useCommunityPool(propAddress?: string) {
       const json = await res.json();
       if (!json.success) {
         dispatchPool({ type: 'SET_ERROR', payload: json.error });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
@@ -740,6 +763,8 @@ export function useCommunityPool(propAddress?: string) {
       
       if (!poolStateId) {
         dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
@@ -762,7 +787,7 @@ export function useCommunityPool(propAddress?: string) {
       
       if (result.success) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ${shares} shares! Tx: ${result.digest.slice(0, 10)}...` });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USD! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
         dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
         
@@ -781,7 +806,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.poolData, fetchPoolData]);
   
   // ============================================================================
   // Stable dispatcher callbacks (avoid re-creating on every render)
