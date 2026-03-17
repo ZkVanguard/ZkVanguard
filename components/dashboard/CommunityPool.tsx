@@ -368,7 +368,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         <div ref={riskMetricsRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {riskMetricsVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
-              <RiskMetricsPanel compact={false} />
+              <RiskMetricsPanel compact={false} chain={pool.selectedChain} />
             </Suspense>
           ) : (
             <PanelSkeleton />

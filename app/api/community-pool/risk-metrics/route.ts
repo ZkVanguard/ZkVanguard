@@ -3,17 +3,18 @@
  * 
  * Provides professional hedge fund-style risk analytics
  * 
- * GET /api/community-pool/risk-metrics
+ * GET /api/community-pool/risk-metrics?chain=cronos|sui|arbitrum
  *   Returns comprehensive risk metrics including:
- *   - Sharpe/Sortino ratios
- *   - Maximum drawdown
+ *   - Real-time volatility (from market data)
+ *   - Sharpe/Sortino ratios (from NAV history)
+ *   - Maximum drawdown (from NAV history)
  *   - Value at Risk (VaR)
  *   - Beta/Alpha
  *   - Win rate and profit factor
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateRiskMetrics, getRiskRating } from '@/lib/services/RiskMetricsService';
+import { calculateRiskMetrics, getRiskRating, calculateRealTimeVolatility } from '@/lib/services/RiskMetricsService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
@@ -22,29 +23,55 @@ export const dynamic = 'force-dynamic';
 
 // Cache duration for risk metrics (5 minutes)
 const CACHE_DURATION_MS = 5 * 60 * 1000;
-let cachedMetrics: { data: any; timestamp: number } | null = null;
+const cachedMetricsByChain = new Map<string, { data: any; timestamp: number }>();
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const forceRefresh = searchParams.get('refresh') === 'true';
+    const chain = searchParams.get('chain') || 'all';
     
-    // Check cache
-    if (!forceRefresh && cachedMetrics && (Date.now() - cachedMetrics.timestamp) < CACHE_DURATION_MS) {
+    // Check cache for this chain
+    const cacheKey = `risk-metrics-${chain}`;
+    const cached = cachedMetricsByChain.get(cacheKey);
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp) < CACHE_DURATION_MS) {
       return NextResponse.json({
         success: true,
-        ...cachedMetrics.data,
+        ...cached.data,
+        chain,
         cached: true,
-        cacheAge: Math.round((Date.now() - cachedMetrics.timestamp) / 1000),
+        cacheAge: Math.round((Date.now() - cached.timestamp) / 1000),
       });
     }
     
-    // Calculate fresh metrics
+    // Calculate fresh metrics (historical from NAV)
     const metrics = await calculateRiskMetrics();
     const riskRating = getRiskRating(metrics);
     
+    // Calculate real-time volatility from market data (chain-specific)
+    const liveVolatility = await calculateRealTimeVolatility(chain);
+    
+    // Merge real-time volatility into metrics
+    const enhancedMetrics = {
+      ...metrics,
+      // Override with real-time data if historical data is insufficient
+      volatilityAnnualized: metrics.insufficientData 
+        ? liveVolatility.weightedVolatility * 100 
+        : metrics.volatilityAnnualized,
+      volatilityDaily: metrics.insufficientData
+        ? (liveVolatility.weightedVolatility / Math.sqrt(365)) * 100
+        : metrics.volatilityDaily,
+      // Add live market data
+      liveMarketData: {
+        weightedVolatility: liveVolatility.weightedVolatility,
+        assets: liveVolatility.assets,
+        source: liveVolatility.source,
+        timestamp: liveVolatility.timestamp,
+      },
+    };
+    
     const responseData = {
-      metrics,
+      metrics: enhancedMetrics,
       riskRating,
       benchmark: 'BTC',
       riskFreeRate: '5.0%',
@@ -79,21 +106,23 @@ export async function GET(request: NextRequest) {
       },
     };
     
-    // Update cache
-    cachedMetrics = {
+    // Update chain-specific cache
+    cachedMetricsByChain.set(cacheKey, {
       data: responseData,
       timestamp: Date.now(),
-    };
+    });
     
     logger.info('[RiskMetrics API] Calculated fresh metrics', { 
-      sharpe: metrics.sharpeRatio,
-      maxDD: metrics.maxDrawdown,
-      beta: metrics.beta,
+      chain,
+      sharpe: enhancedMetrics.sharpeRatio,
+      maxDD: enhancedMetrics.maxDrawdown,
+      liveVolatility: (liveVolatility.weightedVolatility * 100).toFixed(1) + '%',
     });
     
     return NextResponse.json({
       success: true,
       ...responseData,
+      chain,
       cached: false,
     });
     
