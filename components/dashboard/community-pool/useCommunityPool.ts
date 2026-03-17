@@ -637,11 +637,15 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // Step 1: Get current SUI price and calculate SUI amount
-      const priceRes = await fetch('/api/prices?symbols=SUI');
+      // Step 1: Get current SUI price (fresh from Crypto.com) and calculate SUI amount
+      const priceRes = await fetch('/api/prices?symbols=SUI&source=exchange');
       const priceData = await priceRes.json();
-      const suiPrice = priceData?.prices?.SUI || 3.50; // fallback price
+      // API returns { success, data: [{ symbol, price, ... }] }
+      const suiPriceEntry = priceData?.data?.find((p: { symbol: string }) => p.symbol === 'SUI');
+      const suiPrice = suiPriceEntry?.price || 3.50; // fallback price
       const suiAmount = usdAmount / suiPrice;
+      
+      logger.info(`[SUI Deposit] Fresh price: $${suiPrice}, converting $${usdAmount} → ${suiAmount.toFixed(6)} SUI`);
       
       // Check if user has enough SUI (including 0.1 reserve for gas)
       const userSuiBalance = parseFloat(suiBalance);
