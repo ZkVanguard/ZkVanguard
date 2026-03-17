@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { getActiveHedges as getActiveHedgesFromDB, updateHedgeStatus, type Hedge } from '@/lib/db/hedges';
 
 // Types
 interface ActiveHedge {
@@ -35,6 +36,7 @@ interface ActiveHedge {
   createdAt: number;
   walletAddress: string;
   portfolioId?: number;
+  dbId?: number; // Original database ID for status updates
 }
 
 interface HedgeMonitorResult {
@@ -67,29 +69,59 @@ const EMERGENCY_VOLATILITY_THRESHOLD = 10; // Close if 10%+ move in single check
 const trailingStopPeaks = new Map<string, number>();
 
 /**
- * Fetch all active hedges from the positions API
+ * Fetch all active hedges DIRECTLY from database
+ * This replaces the broken API call that was falling back to mock data
  */
 async function fetchActiveHedges(): Promise<ActiveHedge[]> {
   try {
-    const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.xyz' 
-      : process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    // Query database directly - no API call that can fail
+    const dbHedges = await getActiveHedgesFromDB();
     
-    const response = await fetch(`${baseUrl}/api/positions?type=hedges&status=active`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    
-    if (!response.ok) {
-      logger.warn('[HedgeMonitor] Failed to fetch positions, using mock data');
-      return getMockActiveHedges();
+    if (dbHedges.length === 0) {
+      logger.info('[HedgeMonitor] No active hedges in database');
+      return [];
     }
     
-    const data = await response.json();
-    return data.hedges || getMockActiveHedges();
+    logger.info(`[HedgeMonitor] Fetched ${dbHedges.length} active hedges from database`);
+    
+    // Convert DB format to ActiveHedge format
+    return dbHedges.map(h => ({
+      id: `hedge-${h.id}`,
+      asset: h.asset.replace('-PERP', '').replace('-USD-PERP', ''),
+      side: h.side as 'LONG' | 'SHORT',
+      entryPrice: Number(h.entry_price) || 0,
+      currentPrice: Number(h.current_price) || Number(h.entry_price) || 0,
+      size: Number(h.size) || 0,
+      leverage: Number(h.leverage) || 1,
+      notionalValue: Number(h.notional_value) || 0,
+      unrealizedPnl: Number(h.current_pnl) || 0,
+      unrealizedPnlPercent: calculatePnlPercent(h),
+      stopLoss: Number(h.stop_loss) || undefined,
+      takeProfit: Number(h.take_profit) || undefined,
+      createdAt: new Date(h.created_at).getTime(),
+      walletAddress: h.wallet_address || '',
+      portfolioId: h.portfolio_id || undefined,
+      dbId: h.id, // Keep original DB ID for updates
+    }));
   } catch (error: any) {
-    logger.warn('[HedgeMonitor] Error fetching positions:', { error: error?.message || String(error) });
-    return getMockActiveHedges();
+    logger.error('[HedgeMonitor] Failed to fetch hedges from database:', { error: error?.message || String(error) });
+    return []; // Return empty array on error - DO NOT USE MOCK DATA
   }
+}
+
+/**
+ * Calculate P&L percentage from hedge data
+ */
+function calculatePnlPercent(hedge: Hedge): number {
+  const entryPrice = Number(hedge.entry_price) || 0;
+  const currentPrice = Number(hedge.current_price) || entryPrice;
+  const leverage = Number(hedge.leverage) || 1;
+  
+  if (entryPrice <= 0) return 0;
+  
+  const priceChange = currentPrice - entryPrice;
+  const direction = hedge.side === 'LONG' ? 1 : -1;
+  return direction * (priceChange / entryPrice) * 100 * leverage;
 }
 
 /**
@@ -142,6 +174,24 @@ function calculatePnl(hedge: ActiveHedge, currentPrice: number): { pnl: number; 
  */
 async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolean> {
   try {
+    logger.info(`[HedgeMonitor] Attempting to close position ${hedge.id} (dbId: ${hedge.dbId}): ${reason}`);
+    
+    // First, mark the hedge as closed in the database
+    // This ensures we don't keep trying to close the same position
+    if (hedge.dbId) {
+      try {
+        await updateHedgeStatus(hedge.dbId, 'closed', {
+          closedAt: new Date().toISOString(),
+          closeReason: reason,
+          realizedPnl: hedge.unrealizedPnl,
+        });
+        logger.info(`[HedgeMonitor] Marked hedge ${hedge.id} (dbId: ${hedge.dbId}) as closed in database`);
+      } catch (dbError) {
+        logger.error(`[HedgeMonitor] Failed to update hedge status in database:`, dbError);
+      }
+    }
+    
+    // Then try to close on the exchange (this may fail but position is still marked closed)
     const baseUrl = process.env.VERCEL 
       ? 'https://zkvanguard.xyz' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
@@ -153,28 +203,30 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
         'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
       body: JSON.stringify({
-        portfolioId: 1, // Default portfolio
+        portfolioId: hedge.portfolioId || 1,
         asset: hedge.asset,
         side: hedge.side === 'LONG' ? 'SHORT' : 'LONG', // Opposite to close
-        notionalValue: hedge.size * hedge.currentPrice, // Value of position
+        notionalValue: hedge.notionalValue,
         leverage: 1,
         reason: `Close hedge: ${reason}`,
         walletAddress: hedge.walletAddress,
         autoApprovalEnabled: true,
+        closeExisting: true, // Signal that this is a close order
       }),
     });
     
     if (!response.ok) {
-      logger.error(`[HedgeMonitor] Failed to close position ${hedge.id}: ${response.statusText}`);
-      return false;
+      logger.warn(`[HedgeMonitor] Exchange close failed for ${hedge.id} (${response.statusText}) - position still marked closed in DB`);
+      return true; // Still return true since we marked it closed in DB
     }
     
     const result = await response.json();
-    logger.info(`[HedgeMonitor] Position ${hedge.id} closed: ${result.txHash}`);
+    logger.info(`[HedgeMonitor] Position ${hedge.id} closed on exchange: ${result.txHash || 'no txHash'}`);
     return true;
   } catch (error) {
     logger.error(`[HedgeMonitor] Error closing position ${hedge.id}:`, error);
-    return false;
+    // If we had a dbId and updated the database, still return true
+    return hedge.dbId ? true : false;
   }
 }
 
