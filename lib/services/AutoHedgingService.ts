@@ -632,30 +632,36 @@ class AutoHedgingService {
       const marketData = await calculatePoolNAV();
       const { totalValueUSD: marketNAV, sharePrice: marketSharePrice, allocations: marketAllocations } = marketData;
 
-      // Build positions from market allocations
-      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+      // Build positions from market allocations with REAL volatility
+      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number; volatility?: number }> = [];
       const marketDataService = getMarketDataService();
+      
+      // Fetch extended prices with high/low for real volatility calculation
+      const allocKeys = Object.keys(marketAllocations) as Array<keyof typeof marketAllocations>;
+      const symbols = allocKeys.filter(sym => marketAllocations[sym].valueUSD > 0);
+      const extendedPrices = await marketDataService.getExtendedPrices(symbols);
       
       for (const [symbol, data] of Object.entries(marketAllocations)) {
         const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
         if (alloc.valueUSD > 0) {
-          try {
-            const priceData = await marketDataService.getTokenPrice(symbol);
-            positions.push({
-              symbol,
-              value: alloc.valueUSD,
-              change24h: priceData.change24h || 0,
-              balance: alloc.amount,
-            });
-          } catch (err) {
-            // Use stored price data if real-time fails
-            positions.push({
-              symbol,
-              value: alloc.valueUSD,
-              change24h: 0,
-              balance: alloc.amount,
-            });
+          const priceData = extendedPrices.get(symbol.toUpperCase());
+          
+          // Calculate real volatility from 24h range if available
+          let volatility = 0.30; // Default 30%
+          if (priceData && priceData.price > 0 && priceData.high24h > 0 && priceData.low24h > 0) {
+            const range = priceData.high24h - priceData.low24h;
+            const intradayVol = range / priceData.price;
+            volatility = intradayVol * Math.sqrt(365); // Annualized
+            volatility = Math.max(0.01, Math.min(2.0, volatility)); // Clamp 1%-200%
           }
+          
+          positions.push({
+            symbol,
+            value: alloc.valueUSD,
+            change24h: priceData?.change24h || 0,
+            balance: alloc.amount,
+            volatility,
+          });
         }
       }
 
@@ -1104,10 +1110,28 @@ class AutoHedgingService {
   }
 
   /**
-   * Calculate volatility from position changes
+   * Calculate weighted portfolio volatility
+   * Uses real market volatility from 24h high/low when available
+   * Falls back to change24h-based estimation if volatility field missing
    */
-  private calculateVolatility(positions: Array<{ change24h: number }>): number {
+  private calculateVolatility(positions: Array<{ change24h: number; value?: number; volatility?: number }>): number {
     if (!positions.length) return 0;
+    
+    // If positions have real volatility data, use weighted average
+    const hasRealVolatility = positions.some(p => p.volatility !== undefined && p.volatility > 0);
+    const totalValue = positions.reduce((sum, p) => sum + (p.value || 0), 0);
+    
+    if (hasRealVolatility && totalValue > 0) {
+      // Weighted portfolio volatility (annualized %)
+      const weightedVol = positions.reduce((acc, pos) => {
+        const weight = (pos.value || 0) / totalValue;
+        const vol = pos.volatility || 0.30; // Default 30% if missing
+        return acc + vol * weight;
+      }, 0);
+      return weightedVol * 100; // Return as percentage
+    }
+    
+    // Fallback: estimate from 24h changes (RMSE approach)
     return Math.sqrt(
       positions.reduce((acc, pos) => acc + Math.pow(pos.change24h / 100, 2), 0) / positions.length
     ) * 100;

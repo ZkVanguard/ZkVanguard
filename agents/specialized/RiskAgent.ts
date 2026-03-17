@@ -285,55 +285,69 @@ REC3: [third recommendation]`;
 
   /**
    * Internal volatility calculation using real market data
+   * Uses 24h high/low from Exchange API to calculate annualized volatility
    */
   private async calculateVolatilityInternal(portfolioId: number): Promise<number> {
     try {
-      // Import RealMarketDataService for historical price data
+      // Import RealMarketDataService for extended price data with high/low
       const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
       const realMarketDataService = getMarketDataService();
       
       // Get portfolio exposures to determine which assets to analyze
       const exposures = await this.calculateExposures(portfolioId);
       
+      // Get symbols for batch fetch
+      const symbols = exposures.map(e => e.asset).filter(s => !['CASH', 'UNKNOWN'].includes(s));
+      
+      if (symbols.length === 0) {
+        logger.info('No tradeable assets in portfolio for volatility calculation');
+        return 0.05; // Low volatility for cash-only portfolio
+      }
+      
+      // Fetch extended prices with 24h high/low data
+      const extendedPrices = await realMarketDataService.getExtendedPrices(symbols);
+      
       // Calculate weighted volatility based on portfolio composition
       let weightedVolatility = 0;
       let totalWeight = 0;
       
       for (const exposure of exposures) {
-        try {
-          // Get historical prices and calculate volatility for each asset
-          const historicalPrices = await realMarketDataService.getHistoricalPrices(exposure.asset, 30);
-          
-          if (historicalPrices.length >= 2) {
-            // Calculate daily returns
-            const returns: number[] = [];
-            for (let i = 1; i < historicalPrices.length; i++) {
-              const dailyReturn = (historicalPrices[i].price - historicalPrices[i - 1].price) / historicalPrices[i - 1].price;
-              returns.push(dailyReturn);
-            }
-            
-            // Calculate standard deviation of returns
-            const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-            const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-            const assetVolatility = Math.sqrt(variance) * Math.sqrt(365); // Annualized
-            
-            weightedVolatility += assetVolatility * (exposure.exposure / 100);
-            totalWeight += exposure.exposure / 100;
-          }
-        } catch (error) {
-          logger.warn(`Failed to get volatility for ${exposure.asset}, using market estimate`, { error });
-          // Use market-based estimate for crypto assets
-          const marketVolatility = exposure.asset === 'USDC' || exposure.asset === 'USDT' ? 0.01 : 0.35;
-          weightedVolatility += marketVolatility * (exposure.exposure / 100);
-          totalWeight += exposure.exposure / 100;
+        const symbol = exposure.asset;
+        if (['CASH', 'UNKNOWN'].includes(symbol)) continue;
+        
+        const priceData = extendedPrices.get(symbol.toUpperCase());
+        let assetVolatility: number;
+        
+        if (priceData && priceData.high24h && priceData.low24h && priceData.price > 0) {
+          // Calculate volatility from 24h range: (high - low) / price * sqrt(365)
+          const dailyRange = (priceData.high24h - priceData.low24h) / priceData.price;
+          assetVolatility = dailyRange * Math.sqrt(365); // Annualized
+          logger.debug(`[RiskAgent] ${symbol} volatility from 24h range`, {
+            high: priceData.high24h,
+            low: priceData.low24h,
+            price: priceData.price,
+            volatility: assetVolatility,
+          });
+        } else {
+          // Fallback to asset-type-based estimate
+          const isStablecoin = ['USDC', 'USDT', 'DAI', 'DEVUSDC'].includes(symbol.toUpperCase());
+          assetVolatility = isStablecoin ? 0.01 : 0.35;
+          logger.warn(`[RiskAgent] ${symbol} using fallback volatility: ${assetVolatility}`);
         }
+        
+        weightedVolatility += assetVolatility * (exposure.exposure / 100);
+        totalWeight += exposure.exposure / 100;
       }
       
       const portfolioVolatility = totalWeight > 0 ? weightedVolatility / totalWeight : 0.25;
-      logger.info('Calculated real portfolio volatility', { portfolioId, volatility: portfolioVolatility });
+      logger.info('[RiskAgent] Calculated real portfolio volatility', { 
+        portfolioId, 
+        volatility: portfolioVolatility,
+        assetsAnalyzed: symbols.length,
+      });
       return portfolioVolatility;
     } catch (error) {
-      logger.error('Failed to calculate real volatility, using market estimate', { error });
+      logger.error('[RiskAgent] Failed to calculate real volatility, using market estimate', { error });
       // Fallback to reasonable crypto market estimate
       return 0.30; // 30% annualized - typical crypto volatility
     }
