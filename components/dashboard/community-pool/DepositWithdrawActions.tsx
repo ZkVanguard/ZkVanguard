@@ -177,21 +177,35 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
                   <button
+                    onClick={() => {
+                      // Reserve 0.1 SUI for gas
+                      const maxDeposit = Math.max(0, parseFloat(suiBalance) - 0.1);
+                      onSuiDepositAmountChange(maxDeposit.toFixed(4));
+                    }}
+                    disabled={actionLoading}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 rounded-lg text-sm"
+                  >
+                    Max
+                  </button>
+                  <button
                     onClick={onSuiDeposit}
                     disabled={actionLoading || !suiDepositAmount}
                     className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
                   >
                     {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Deposit
+                    {txStatus === 'depositing' ? 'Depositing...' : txStatus === 'complete' ? 'Complete!' : 'Deposit'}
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Balance: {suiBalance} SUI • Min deposit: 0.1 SUI
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* SUI Withdraw Form */}
           <AnimatePresence>
-            {showWithdraw && suiIsConnected && (
+            {showWithdraw && suiIsConnected && userPosition?.isMember && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -202,19 +216,31 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                     type="number"
                     value={suiWithdrawShares}
                     onChange={(e) => onSuiWithdrawSharesChange(e.target.value)}
-                    placeholder={`Shares (max: ${userPosition?.shares?.toFixed(4) || 0})`}
+                    placeholder={`Shares (max: ${(Number(userPosition?.shares) || 0).toFixed(4)})`}
                     disabled={actionLoading}
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
+                  <button
+                    onClick={() => onSuiWithdrawSharesChange(String(Number(userPosition?.shares) || 0))}
+                    disabled={actionLoading}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 rounded-lg text-sm"
+                  >
+                    Max
+                  </button>
                   <button
                     onClick={onSuiWithdraw}
                     disabled={actionLoading || !suiWithdrawShares}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
                   >
                     {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
-                    Withdraw
+                    {txStatus === 'withdrawing' ? 'Withdrawing...' : txStatus === 'complete' ? 'Complete!' : 'Withdraw'}
                   </button>
                 </div>
+                {poolData && suiWithdrawShares && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    You'll receive: ~{(parseFloat(suiWithdrawShares) * (Number(poolData.sharePrice) || 0)).toFixed(4)} SUI
+                  </p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -286,8 +312,10 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
-                {txStatus === 'approving' ? 'Approve USDC...' :
-                 txStatus === 'depositing' ? 'Deposit to Pool...' :
+                {txStatus === 'approving' ? 'Approving USDC...' :
+                 txStatus === 'approved' ? 'Approved! Starting deposit...' :
+                 txStatus === 'depositing' ? 'Depositing...' :
+                 txStatus === 'complete' ? 'Complete!' :
                  'Deposit USDC'}
               </button>
             </div>
@@ -318,20 +346,25 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 value={withdrawShares}
                 onChange={(e) => onWithdrawSharesChange(e.target.value)}
                 placeholder={`Shares to burn (max ${(Number(userPosition.shares) || 0).toFixed(4)})`}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                disabled={actionLoading || txStatus === 'withdrawing'}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               />
               <button
                 onClick={() => onWithdrawSharesChange(String(Number(userPosition.shares) || 0))}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg text-sm"
+                disabled={actionLoading || txStatus === 'withdrawing'}
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 rounded-lg text-sm"
               >
                 Max
               </button>
               <button
                 onClick={onWithdraw}
-                disabled={actionLoading || !withdrawShares || !address || txStatus === 'withdrawing'}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                disabled={actionLoading || !withdrawShares || !address || txStatus === 'withdrawing' || isPending || isConfirming}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
               >
-                {txStatus === 'withdrawing' ? 'Withdrawing...' : actionLoading ? 'Processing...' : 'Confirm'}
+                {(actionLoading || isPending || isConfirming || txStatus === 'withdrawing') && <Loader2 className="w-4 h-4 animate-spin" />}
+                {txStatus === 'withdrawing' ? 'Withdrawing...' : 
+                 txStatus === 'complete' ? 'Complete!' : 
+                 'Withdraw'}
               </button>
             </div>
             {poolData && withdrawShares && (
