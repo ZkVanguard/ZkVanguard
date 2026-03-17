@@ -67,38 +67,53 @@ export async function GET(request: NextRequest) {
     
     logger.info(`[Positions API] Found ${portfolioData.tokens.length} tokens, total value: $${portfolioData.totalValue}`);
     
-    // Get prices with 24h change for each token - PARALLEL for speed
+    // Get extended prices with 24h high/low for volatility calculation - SINGLE BATCH
     // Using multi-source fallback: Crypto.com Exchange API → MCP → VVS → Cache → Mock
     const pricesStart = Date.now();
-    const pricePromises = portfolioData.tokens.map(async (token) => {
-      const tokenStart = Date.now();
-      try {
-        const priceData = await marketData.getTokenPrice(token.symbol);
-        logger.info(`[Positions API] ${token.symbol}: $${priceData.price} from [${priceData.source}] (${Date.now() - tokenStart}ms)`);
+    const symbols = portfolioData.tokens.map(t => t.symbol);
+    const extendedPrices = await marketData.getExtendedPrices(symbols);
+    
+    const positionsWithPrices = portfolioData.tokens.map((token) => {
+      const priceData = extendedPrices.get(token.symbol.toUpperCase());
+      
+      if (priceData && priceData.price > 0) {
+        // Calculate real volatility from 24h price range
+        // Intraday volatility = (high - low) / price (annualized ≈ × √252)
+        const range = priceData.high24h - priceData.low24h;
+        const intradayVol = priceData.price > 0 ? range / priceData.price : 0;
+        const annualizedVol = intradayVol * Math.sqrt(252); // Annualize
+        
+        logger.info(`[Positions API] ${token.symbol}: $${priceData.price} vol=${(annualizedVol * 100).toFixed(1)}% from [${priceData.source}]`);
+        
         return {
           symbol: token.symbol,
           balance: token.balance,
           balanceUSD: token.usdValue.toFixed(2),
           price: priceData.price.toFixed(2),
           change24h: priceData.change24h,
+          high24h: priceData.high24h,
+          low24h: priceData.low24h,
+          volatility: annualizedVol, // Real volatility from market data
           token: token.token,
           source: priceData.source,
         };
-      } catch {
-        logger.info(`[Positions API] ${token.symbol}: fallback (${Date.now() - tokenStart}ms)`);
-        return {
-          symbol: token.symbol,
-          balance: token.balance,
-          balanceUSD: token.usdValue.toFixed(2),
-          price: (token.usdValue / parseFloat(token.balance || '1')).toFixed(2),
-          change24h: 0,
-          token: token.token,
-          source: 'fallback',
-        };
       }
+      
+      // Fallback with default volatility
+      logger.info(`[Positions API] ${token.symbol}: fallback (no market data)`);
+      return {
+        symbol: token.symbol,
+        balance: token.balance,
+        balanceUSD: token.usdValue.toFixed(2),
+        price: (token.usdValue / parseFloat(token.balance || '1')).toFixed(2),
+        change24h: 0,
+        high24h: 0,
+        low24h: 0,
+        volatility: 0.30, // Default 30% for unknown tokens
+        token: token.token,
+        source: 'fallback',
+      };
     });
-    
-    const positionsWithPrices = await Promise.all(pricePromises);
     logger.info(`[Positions API] All prices fetched in ${Date.now() - pricesStart}ms`);
     
     // Sort by USD value descending

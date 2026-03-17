@@ -34,6 +34,9 @@ interface Position {
   balanceUSD: string;
   price: string;
   change24h: number;
+  high24h?: number;
+  low24h?: number;
+  volatility?: number; // Real volatility from market data
 }
 
 interface PositionsData {
@@ -359,8 +362,8 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
         }, 0)
       : 0;
 
-    // Volatility estimates per asset type
-    const volatilityMap: Record<string, number> = {
+    // Fallback volatility estimates (only used if real data unavailable)
+    const fallbackVolatilityMap: Record<string, number> = {
       'BTC': 0.45, 'WBTC': 0.45,
       'ETH': 0.50, 'WETH': 0.50,
       'CRO': 0.55, 'WCRO': 0.55,
@@ -368,11 +371,12 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       'USDC': 0.01, 'USDT': 0.01, 'DAI': 0.01,
     };
 
-    // Weighted portfolio volatility
+    // Weighted portfolio volatility - USE REAL DATA when available
     const weightedVolatility = totalValue > 0
       ? positions.reduce((acc, pos) => {
           const weight = parseFloat(pos.balanceUSD || '0') / totalValue;
-          const vol = volatilityMap[pos.symbol] || 0.30;
+          // Use real volatility from market data, fallback to estimates
+          const vol = pos.volatility ?? fallbackVolatilityMap[pos.symbol] ?? 0.30;
           return acc + (vol * weight);
         }, 0)
       : 0;

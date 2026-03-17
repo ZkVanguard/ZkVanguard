@@ -61,6 +61,7 @@ interface RiskRating {
 
 interface RiskMetricsPanelProps {
   compact?: boolean;
+  chain?: 'cronos' | 'sui' | 'arbitrum' | 'all';
 }
 
 // Color classes for metric values
@@ -136,7 +137,7 @@ const MetricCard = memo(function MetricCard({
   );
 });
 
-export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false }: RiskMetricsPanelProps) {
+export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false, chain = 'all' }: RiskMetricsPanelProps) {
   const [metrics, setMetrics] = useState<RiskMetrics | null>(null);
   const [riskRating, setRiskRating] = useState<RiskRating | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,7 +154,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
     lastFetchRef.current = now;
     
     try {
-      const res = await fetch('/api/community-pool/risk-metrics');
+      const res = await fetch(`/api/community-pool/risk-metrics?chain=${chain}`);
       const json = await res.json();
       
       if (json.success) {
@@ -169,11 +170,12 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [chain]);
   
   useEffect(() => {
-    fetchMetrics(true); // Force initial fetch
-  }, [fetchMetrics]);
+    setLoading(true);
+    fetchMetrics(true); // Force fetch when chain changes
+  }, [fetchMetrics, chain]);
   
   // Refresh every 5 minutes
   usePolling(fetchMetrics, 5 * 60 * 1000);

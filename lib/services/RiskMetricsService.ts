@@ -933,3 +933,97 @@ export function getRiskRating(metrics: RiskMetrics): { rating: string; color: st
     return { rating: 'High', color: 'text-red-500', description: 'Aggressive exposure with elevated volatility and drawdown risk' };
   }
 }
+
+/**
+ * Calculate real-time volatility from live market data
+ * Uses 24h high/low range to estimate intraday volatility, annualized
+ * 
+ * @param chain - 'cronos' | 'sui' | 'arbitrum' | 'all'
+ * @returns Weighted volatility based on chain's typical portfolio allocation
+ */
+export async function calculateRealTimeVolatility(chain: string): Promise<{
+  weightedVolatility: number;
+  assets: Array<{ symbol: string; volatility: number; weight: number }>;
+  source: string;
+  timestamp: string;
+}> {
+  // Import dynamically to avoid circular dependencies
+  const { getMarketDataService } = await import('./RealMarketDataService');
+  
+  // Chain-specific assets and target allocations
+  const chainAssets: Record<string, { symbols: string[]; weights: number[] }> = {
+    'cronos': { 
+      symbols: ['CRO', 'BTC', 'ETH', 'USDC'], 
+      weights: [0.40, 0.30, 0.25, 0.05] 
+    },
+    'sui': { 
+      symbols: ['SUI', 'BTC', 'ETH', 'USDC'], 
+      weights: [0.40, 0.30, 0.25, 0.05] 
+    },
+    'arbitrum': { 
+      symbols: ['ETH', 'BTC', 'ARB', 'USDC'], 
+      weights: [0.35, 0.30, 0.30, 0.05] 
+    },
+    'all': { 
+      symbols: ['BTC', 'ETH', 'SUI', 'CRO', 'USDC'], 
+      weights: [0.30, 0.30, 0.20, 0.15, 0.05] 
+    },
+  };
+  
+  const config = chainAssets[chain] || chainAssets['all'];
+  const { symbols, weights } = config;
+  
+  try {
+    const marketData = getMarketDataService();
+    const extendedPrices = await marketData.getExtendedPrices(symbols);
+    
+    let totalWeightedVol = 0;
+    const assets: Array<{ symbol: string; volatility: number; weight: number }> = [];
+    
+    for (let i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
+      const weight = weights[i];
+      const data = extendedPrices.get(symbol.toUpperCase());
+      
+      let vol = 0.30; // Default 30% if no data
+      
+      if (data && data.price > 0) {
+        // Calculate volatility from 24h range: (high - low) / price
+        // Then annualize: × √252 for crypto (or √365 for 24/7 markets)
+        const range = data.high24h - data.low24h;
+        const intradayVol = range / data.price;
+        vol = intradayVol * Math.sqrt(365); // Annualized
+        
+        // Clamp to reasonable range (1% - 200% annualized)
+        vol = Math.max(0.01, Math.min(2.0, vol));
+      }
+      
+      totalWeightedVol += vol * weight;
+      assets.push({ symbol, volatility: vol, weight });
+    }
+    
+    logger.info('[RiskMetrics] Real-time volatility calculated', { 
+      chain, 
+      weightedVol: (totalWeightedVol * 100).toFixed(1) + '%',
+      assetCount: assets.length,
+    });
+    
+    return {
+      weightedVolatility: totalWeightedVol,
+      assets,
+      source: 'live-market-data',
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    logger.error('[RiskMetrics] Failed to calculate real-time volatility', error);
+    
+    // Return fallback volatility based on typical crypto volatility
+    const fallbackVol = chain === 'all' ? 0.45 : 0.50;
+    return {
+      weightedVolatility: fallbackVol,
+      assets: symbols.map((sym, i) => ({ symbol: sym, volatility: 0.50, weight: weights[i] })),
+      source: 'fallback',
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
