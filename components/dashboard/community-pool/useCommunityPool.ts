@@ -386,32 +386,56 @@ export function useCommunityPool(propAddress?: string) {
   // TRANSACTION HANDLERS
   // ============================================================================
   
+  // Track processed transaction hashes to prevent duplicate handling
+  const processedHashRef = useRef<string | null>(null);
+  const pendingDepositRef = useRef<{ amount: string } | null>(null);
+  
   // Handle EVM approval confirmation -> trigger deposit
   useEffect(() => {
-    if (isConfirmed && txState.txStatus === 'approving' && txState.depositAmount) {
-      // Approval confirmed - now trigger the deposit transaction
+    if (!txHash || !isConfirmed) return;
+    if (processedHashRef.current === txHash) return; // Already processed
+    
+    if (txState.txStatus === 'approving' && txState.depositAmount) {
+      processedHashRef.current = txHash; // Mark as processed
+      
       const amount = parseFloat(txState.depositAmount);
       if (!isNaN(amount) && COMMUNITY_POOL_ADDRESS) {
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
-        resetWrite(); // Reset to allow new transaction
+        // Store the deposit amount for the next transaction
+        pendingDepositRef.current = { amount: txState.depositAmount };
         
-        // Small delay to ensure state updates
+        // Set status to approved (intermediate state)
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
+        
+        // Reset write state and trigger deposit after a delay
+        resetWrite();
+        
         setTimeout(() => {
-          const amountInUnits = parseUnits(amount.toString(), 6);
-          writeContract({
-            address: COMMUNITY_POOL_ADDRESS,
-            abi: [{ name: 'deposit', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'nonpayable' }],
-            functionName: 'deposit',
-            args: [amountInUnits],
-          });
-        }, 500);
+          if (pendingDepositRef.current && COMMUNITY_POOL_ADDRESS) {
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
+            const depositAmount = parseFloat(pendingDepositRef.current.amount);
+            const amountInUnits = parseUnits(depositAmount.toString(), 6);
+            
+            writeContract({
+              address: COMMUNITY_POOL_ADDRESS,
+              abi: [{ name: 'deposit', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'nonpayable' }],
+              functionName: 'deposit',
+              args: [amountInUnits],
+            });
+          }
+        }, 1000);
       }
     }
-  }, [isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, writeContract, resetWrite]);
+  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, writeContract, resetWrite]);
 
   // Handle EVM deposit confirmation -> success
   useEffect(() => {
-    if (isConfirmed && txState.txStatus === 'depositing') {
+    if (!txHash || !isConfirmed) return;
+    if (processedHashRef.current === txHash) return; // Already processed
+    
+    if (txState.txStatus === 'depositing') {
+      processedHashRef.current = txHash; // Mark as processed
+      pendingDepositRef.current = null; // Clear pending deposit
+      
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful! Tx: ${txHash?.slice(0, 10)}...` });
       dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
@@ -425,11 +449,16 @@ export function useCommunityPool(propAddress?: string) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
       }, 3000);
     }
-  }, [isConfirmed, txState.txStatus, txHash, fetchPoolData]);
+  }, [txHash, isConfirmed, txState.txStatus, fetchPoolData]);
 
   // Handle EVM withdraw confirmation -> success
   useEffect(() => {
-    if (isConfirmed && txState.txStatus === 'withdrawing') {
+    if (!txHash || !isConfirmed) return;
+    if (processedHashRef.current === txHash) return; // Already processed
+    
+    if (txState.txStatus === 'withdrawing') {
+      processedHashRef.current = txHash; // Mark as processed
+      
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrawal successful! Tx: ${txHash?.slice(0, 10)}...` });
       dispatchTx({ type: 'SET_WITHDRAW_SHARES', payload: '' });
@@ -442,14 +471,18 @@ export function useCommunityPool(propAddress?: string) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
       }, 3000);
     }
-  }, [isConfirmed, txState.txStatus, txHash, fetchPoolData]);
+  }, [txHash, isConfirmed, txState.txStatus, fetchPoolData]);
 
   // Handle transaction errors
   useEffect(() => {
-    if (writeError && txState.txStatus !== 'idle') {
-      dispatchPool({ type: 'SET_ERROR', payload: writeError.message || 'Transaction failed' });
+    if (writeError && txState.txStatus !== 'idle' && txState.txStatus !== 'complete') {
+      const errorMsg = writeError.message?.includes('User rejected') 
+        ? 'Transaction cancelled by user'
+        : writeError.message || 'Transaction failed';
+      dispatchPool({ type: 'SET_ERROR', payload: errorMsg });
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+      pendingDepositRef.current = null;
     }
   }, [writeError, txState.txStatus]);
   
