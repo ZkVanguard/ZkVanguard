@@ -1,9 +1,10 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Plus, Minus, Wallet, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { PoolSummary, UserPosition, ChainKey, TxStatus } from './types';
+import { getDepositTokenInfo } from '@/lib/contracts/community-pool-config';
 
 interface DepositWithdrawActionsProps {
   selectedChain: ChainKey;
@@ -13,6 +14,7 @@ interface DepositWithdrawActionsProps {
   poolDeployed: boolean;
   communityPoolAddress: string;
   suiPoolStateId: string | null;
+  network: 'mainnet' | 'testnet';
   // EVM state
   showDeposit: boolean;
   showWithdraw: boolean;
@@ -52,6 +54,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   poolDeployed,
   communityPoolAddress,
   suiPoolStateId,
+  network = 'testnet',
   showDeposit,
   showWithdraw,
   depositAmount,
@@ -80,6 +83,13 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   onSuiWithdraw,
 }: DepositWithdrawActionsProps) {
   const isSui = selectedChain === 'sui';
+  
+  // Get deposit token info based on chain and network (USDT for mainnet, USDC for testnet)
+  const tokenInfo = useMemo(() => 
+    getDepositTokenInfo(selectedChain, network),
+    [selectedChain, network]
+  );
+
 
   if (isSui) {
     return (
@@ -91,7 +101,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               <div className="flex items-center gap-2">
                 <span className="text-2xl">💧</span>
                 <h4 className="font-semibold text-gray-900 dark:text-white">SUI Community Pool</h4>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC Deposits</span>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">{tokenInfo.symbol} Deposits</span>
               </div>
               <a
                 href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${suiPoolStateId || communityPoolAddress}`}
@@ -147,7 +157,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Deposit USDC
+              Deposit {tokenInfo.symbol}
             </button>
             <button
               onClick={() => { onShowWithdraw(!showWithdraw); }}
@@ -186,10 +196,10 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Min deposit: $10 USDC • Pool internally converts to portfolio assets
+                  Min deposit: $10 {tokenInfo.symbol} • Pool internally converts to portfolio assets
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Deposits are denominated in USDC. Your share value reflects the portfolio NAV.
+                  Deposits are denominated in {tokenInfo.symbol}. Your share value reflects the portfolio NAV.
                 </p>
               </motion.div>
             )}
@@ -304,11 +314,11 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
-                {txStatus === 'approving' ? 'Approving USDC...' :
+                {txStatus === 'approving' ? `Approving ${tokenInfo.symbol}...` :
                  txStatus === 'approved' ? 'Approved! Starting deposit...' :
                  txStatus === 'depositing' ? 'Depositing...' :
                  txStatus === 'complete' ? 'Complete!' :
-                 'Deposit USDC'}
+                 `Deposit ${tokenInfo.symbol}`}
               </button>
             </div>
             {poolData && (

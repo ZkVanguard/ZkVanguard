@@ -84,12 +84,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // CommunityPool V3 Proxy (upgraded 2026-03-12)
         communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
-        usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
+        usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDC on testnet (6 decimals)
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
       mainnet: {
-        communityPool: '0x0000000000000000000000000000000000000000',
-        usdc: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59',
+        communityPool: '0x0000000000000000000000000000000000000000', // Not deployed yet
+        usdc: '0x66e428c3f67a68878562e79A0234c1F83c208770', // Official Tether USDT on Cronos
         pythOracle: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',
       },
     },
@@ -121,12 +121,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-        usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1',
+        usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // MockUSDC on Arbitrum Sepolia (6 decimals)
         pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF',
       },
       mainnet: {
-        communityPool: '0x0000000000000000000000000000000000000000',
-        usdc: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+        communityPool: '0x0000000000000000000000000000000000000000', // Not deployed yet
+        usdc: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Official Tether USDT on Arbitrum
         pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C',
       },
     },
@@ -219,6 +219,49 @@ export function getUsdcAddress(
     return '0x0000000000000000000000000000000000000000';
   }
   return config.contracts[network === 'mainnet' ? 'mainnet' : 'testnet'].usdc as `0x${string}`;
+}
+
+/**
+ * Get deposit token symbol based on chain and network
+ * - Mainnet: USDT (Official Tether)
+ * - Testnet: USDC (Mock stable for development)
+ */
+export function getDepositTokenSymbol(
+  chainKey: string,
+  network: NetworkType = 'testnet'
+): string {
+  // SUI uses USDC across all networks
+  if (chainKey === 'sui') return 'USDC';
+  // EVM chains: USDT on mainnet, USDC on testnet
+  return network === 'mainnet' ? 'USDT' : 'USDC';
+}
+
+/**
+ * Get full deposit token info
+ */
+export function getDepositTokenInfo(
+  chainKey: string,
+  network: NetworkType = 'testnet'
+): { symbol: string; name: string; decimals: number; logo?: string } {
+  const isMainnet = network === 'mainnet';
+  const isSui = chainKey === 'sui';
+  
+  if (isSui || !isMainnet) {
+    return {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      decimals: 6,
+      logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg',
+    };
+  }
+  
+  // Mainnet EVM chains use official Tether USDT
+  return {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    decimals: 6,
+    logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
+  };
 }
 
 /**
