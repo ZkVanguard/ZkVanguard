@@ -133,8 +133,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         pythOracle: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',
       },
     },
-    // Pool tracks BTC, ETH, SUI, CRO allocations for cross-chain strategy
-    assets: ['BTC', 'ETH', 'SUI', 'CRO'],
+    // Pool accepts USDT deposits only (via Tether WDK)
+    assets: ['BTC', 'ETH', 'USDT'],
     status: 'live',
   },
   
@@ -170,8 +170,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C',
       },
     },
-    // Pool tracks BTC, ETH, SUI, ARB allocations for cross-chain strategy
-    assets: ['BTC', 'ETH', 'SUI', 'ARB'],
+    // Pool accepts USDT deposits only (via Tether WDK)
+    assets: ['BTC', 'ETH', 'USDT'],
     status: 'testing',
   },
   

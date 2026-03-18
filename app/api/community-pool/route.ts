@@ -373,17 +373,20 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     // For Cronos testnet, use the unified stats service (has extra caching)
     if (config.chainKey === 'cronos' && config.network === 'testnet') {
       const stats = await getUnifiedPoolStats();
+      
+      // Pool accepts USDT deposits only - show 100% USDT allocation
+      const allocations: Record<string, { percentage: number }> = {
+        BTC: { percentage: 0 },
+        ETH: { percentage: 0 },
+        USDT: { percentage: 100 },
+      };
+      
       const result = {
         totalValueUSD: stats.totalNAV,
         totalShares: stats.totalShares,
         sharePrice: stats.sharePrice,
         totalMembers: stats.memberCount,
-        allocations: {
-          BTC: { percentage: stats.allocations.BTC.percentage },
-          ETH: { percentage: stats.allocations.ETH.percentage },
-          CRO: { percentage: stats.allocations.CRO.percentage },
-          SUI: { percentage: stats.allocations.SUI.percentage },
-        },
+        allocations,
         onChain: true,
       };
       setCachedRpc(cacheKey, result, POOL_DATA_TTL);
