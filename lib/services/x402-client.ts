@@ -178,8 +178,8 @@ export class X402Client {
       nonce,
     };
 
-    // Sign with EIP-712
-    const signature = await (this.signer as ethers.Wallet)._signTypedData(domain, types, message);
+    // Sign with EIP-712 (ethers v6 uses signTypedData)
+    const signature = await (this.signer as ethers.Wallet).signTypedData(domain, types, message);
     const { v, r, s } = ethers.Signature.from(signature);
 
     return {

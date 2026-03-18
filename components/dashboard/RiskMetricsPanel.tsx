@@ -61,7 +61,7 @@ interface RiskRating {
 
 interface RiskMetricsPanelProps {
   compact?: boolean;
-  chain?: 'cronos' | 'sui' | 'arbitrum' | 'all';
+  chain?: 'ethereum' | 'cronos' | 'arbitrum' | 'sepolia' | 'sui' | 'all';
 }
 
 // Color classes for metric values
