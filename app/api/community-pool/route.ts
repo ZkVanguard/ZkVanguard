@@ -53,6 +53,7 @@ interface ChainConfig {
   poolAddress: string;
   chainKey: ChainKey;
   network: NetworkType;
+  assets: string[]; // Chain-specific assets (e.g., ['BTC', 'ETH', 'USDT'] for Sepolia)
 }
 
 /**
@@ -66,11 +67,13 @@ function getChainConfig(chain?: string | null, network?: string | null): ChainCo
   const config = POOL_CHAIN_CONFIGS[chainKey];
   if (!config) {
     // Fallback to Cronos testnet
+    const fallbackConfig = POOL_CHAIN_CONFIGS['cronos'];
     return {
       rpcUrl: 'https://evm-t3.cronos.org',
       poolAddress: COMMUNITY_POOL_ADDRESS,
       chainKey: 'cronos',
       network: 'testnet',
+      assets: fallbackConfig?.assets || ['BTC', 'ETH', 'SUI', 'CRO'],
     };
   }
   
@@ -79,7 +82,7 @@ function getChainConfig(chain?: string | null, network?: string | null): ChainCo
     ? config.contracts.mainnet.communityPool 
     : config.contracts.testnet.communityPool;
   
-  return { rpcUrl, poolAddress, chainKey, network: networkType };
+  return { rpcUrl, poolAddress, chainKey, network: networkType, assets: config.assets };
 }
 
 // Legacy constant for default chain (Cronos testnet)
@@ -438,12 +441,31 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     
     // Parse allocations from contract (BPS to percentage)
     const alloc = stats._allocations;
-    const allocations = {
-      BTC: { percentage: Number(alloc[0]) / 100 },
-      ETH: { percentage: Number(alloc[1]) / 100 },
-      CRO: { percentage: Number(alloc[3]) / 100 }, // Index 3 is CRO in contract
-      SUI: { percentage: Number(alloc[2]) / 100 }, // Index 2 is SUI in contract
-    };
+    
+    // Build chain-specific allocations based on config.assets
+    // For USDT-based pools (Sepolia, Ethereum), show actual holdings (100% USDT)
+    // For multi-asset pools (Cronos), use contract allocations
+    let allocations: Record<string, { percentage: number }>;
+    
+    if (config.assets.includes('USDT') && totalNAV > 0) {
+      // USDT-focused pool: all deposits are in USDT
+      allocations = {};
+      for (const asset of config.assets) {
+        if (asset === 'USDT') {
+          allocations[asset] = { percentage: 100 };
+        } else {
+          allocations[asset] = { percentage: 0 };
+        }
+      }
+    } else {
+      // Standard multi-asset pool: use contract allocations
+      allocations = {
+        BTC: { percentage: Number(alloc[0]) / 100 },
+        ETH: { percentage: Number(alloc[1]) / 100 },
+        CRO: { percentage: Number(alloc[3]) / 100 }, // Index 3 is CRO in contract
+        SUI: { percentage: Number(alloc[2]) / 100 }, // Index 2 is SUI in contract
+      };
+    }
     
     const result = {
       totalValueUSD: totalNAV,
@@ -471,24 +493,69 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
 /**
  * Fetch on-chain user position (SINGLE SOURCE OF TRUTH)
  * 
- * Uses CommunityPoolStatsService which:
- * - Always reads from on-chain contract
- * - Has built-in caching (30s) and request deduplication
+ * Now accepts chainConfig to query the correct chain's contract.
+ * For default chain (cronos), uses CommunityPoolStatsService.
+ * For other chains, queries the contract directly.
  */
-async function getOnChainUserPosition(userAddress: string): Promise<UserPositionCache | null> {
+async function getOnChainUserPosition(userAddress: string, chainConfig?: ChainConfig): Promise<UserPositionCache | null> {
   try {
-    const pos = await getUnifiedMemberPosition(userAddress);
+    // For cronos (default), use the unified service for better caching
+    if (!chainConfig || chainConfig.chainKey === 'cronos') {
+      const pos = await getUnifiedMemberPosition(userAddress);
+      return {
+        walletAddress: pos.walletAddress,
+        shares: pos.shares,
+        valueUSD: pos.valueUSD,
+        percentage: pos.percentage,
+        isMember: pos.isMember,
+        onChain: true,
+      };
+    }
     
-    return {
-      walletAddress: pos.walletAddress,
-      shares: pos.shares,
-      valueUSD: pos.valueUSD,
-      percentage: pos.percentage,
-      isMember: pos.isMember,
-      onChain: true,
-    };
+    // For other chains, query the contract directly
+    const cacheKey = `user-pos-${chainConfig.chainKey}-${chainConfig.network}-${userAddress.toLowerCase()}`;
+    
+    return dedupedFetch<UserPositionCache | null>(
+      cacheKey,
+      async () => {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
+        
+        // Get pool stats for share price calculation
+        const poolData = await getOnChainPoolData(chainConfig);
+        if (!poolData) return null;
+        
+        // Get user's member data
+        const memberData = await pool.members(userAddress);
+        const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
+        
+        if (shares === 0) {
+          return {
+            walletAddress: userAddress,
+            shares: 0,
+            valueUSD: 0,
+            percentage: 0,
+            isMember: false,
+            onChain: true,
+          };
+        }
+        
+        const valueUSD = shares * poolData.sharePrice;
+        const percentage = poolData.totalShares > 0 ? (shares / poolData.totalShares) * 100 : 0;
+        
+        return {
+          walletAddress: userAddress,
+          shares,
+          valueUSD,
+          percentage,
+          isMember: true,
+          onChain: true,
+        };
+      },
+      USER_POSITION_TTL
+    );
   } catch (err) {
-    logger.error('[CommunityPool API] Unified member position error:', err);
+    logger.error('[CommunityPool API] On-chain user position error:', err);
     return null;
   }
 }
@@ -655,8 +722,8 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // Fallback: Try on-chain via getMemberPosition
-      let onChainUser = await getOnChainUserPosition(userAddress);
+      // Fallback: Try on-chain via getMemberPosition (use chainConfig for correct chain)
+      let onChainUser = await getOnChainUserPosition(userAddress, chainConfig);
       const onChainPool = await getOnChainPoolData(chainConfig);
       
       // If getMemberPosition returned 0 shares, try searching the member list
@@ -763,7 +830,7 @@ export async function GET(request: NextRequest) {
     
     // Sync local storage with on-chain data for a specific user
     if (action === 'sync' && userAddress) {
-      const onChainUser = await getOnChainUserPosition(userAddress);
+      const onChainUser = await getOnChainUserPosition(userAddress, chainConfig);
       const onChainPool = await getOnChainPoolData(chainConfig);
       
       if (!onChainUser || !onChainPool) {
@@ -979,7 +1046,7 @@ export async function GET(request: NextRequest) {
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
           },
-          supportedAssets: SUPPORTED_ASSETS,
+          supportedAssets: chainConfig.assets,
           timestamp: Date.now(),
           source: 'onchain',
         }, 30); // CDN cache for 30 seconds
@@ -998,7 +1065,7 @@ export async function GET(request: NextRequest) {
           ...summary,
           memberCount: summary.totalMembers, // Map to frontend expected field name
         },
-        supportedAssets: SUPPORTED_ASSETS,
+        supportedAssets: chainConfig.assets,
         timestamp: Date.now(),
         source: 'calculated',
       });

@@ -97,6 +97,13 @@ const config = {
       gasPrice: 'auto',
       timeout: 120000,
     },
+    'ethereum': {
+      chainId: 1,
+      url: process.env.ETHEREUM_RPC || 'https://eth.drpc.org',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 120000,
+    },
   },
   etherscan: {
     apiKey: {
@@ -109,6 +116,7 @@ const config = {
       'arbitrum-sepolia': process.env.ARBISCAN_API_KEY || '',
       'arbitrum-one': process.env.ARBISCAN_API_KEY || '',
       'sepolia': process.env.ETHERSCAN_API_KEY || '',
+      'ethereum': process.env.ETHERSCAN_API_KEY || '',
     },
     customChains: [
       {
