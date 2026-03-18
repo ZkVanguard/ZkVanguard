@@ -212,10 +212,10 @@ export async function getAllUserSharesFromDb(): Promise<DbUserShares[]> {
 }
 
 /**
- * Get user shares by wallet address
+ * Get user shares by wallet address and chain
  * Security: Validates wallet address format
  */
-export async function getUserSharesFromDb(walletAddress: string): Promise<DbUserShares | null> {
+export async function getUserSharesFromDb(walletAddress: string, chain: string = 'cronos'): Promise<DbUserShares | null> {
   // Security: Validate wallet address format
   if (!isValidWalletAddress(walletAddress)) {
     logger.warn('[CommunityPool DB] Invalid wallet address format', { wallet: walletAddress?.slice(0, 10) });
@@ -224,8 +224,8 @@ export async function getUserSharesFromDb(walletAddress: string): Promise<DbUser
 
   try {
     return await queryOne<DbUserShares>(
-      `SELECT * FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
-      [walletAddress]
+      `SELECT * FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
+      [walletAddress, chain]
     );
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get user shares', error);
@@ -234,14 +234,17 @@ export async function getUserSharesFromDb(walletAddress: string): Promise<DbUser
 }
 
 /**
- * Upsert user shares
+ * Upsert user shares for a specific chain
  * Security: Validates wallet address and numeric inputs
  */
 export async function saveUserSharesToDb(userShares: {
   walletAddress: string;
   shares: number;
   costBasisUSD: number;
+  chain?: string;
 }): Promise<void> {
+  const chain = userShares.chain || 'cronos';
+  
   // Security: Validate wallet address
   if (!isValidWalletAddress(userShares.walletAddress)) {
     throw new Error('Invalid wallet address format');
@@ -256,10 +259,10 @@ export async function saveUserSharesToDb(userShares: {
 
   try {
     // Use explicit check-then-update/insert pattern for case-insensitive deduplication
-    // First check if user exists (case-insensitive)
+    // First check if user exists (case-insensitive) for this chain
     const existing = await queryOne<{ id: number }>(
-      `SELECT id FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
-      [userShares.walletAddress]
+      `SELECT id FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
+      [userShares.walletAddress, chain]
     );
     
     if (existing) {
@@ -270,18 +273,18 @@ export async function saveUserSharesToDb(userShares: {
            shares = $2,
            cost_basis_usd = $3,
            last_action_at = NOW()
-         WHERE LOWER(wallet_address) = LOWER($1)`,
-        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD]
+         WHERE LOWER(wallet_address) = LOWER($1) AND chain = $4`,
+        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD, chain]
       );
     } else {
       // Insert new record
       await query(
-        `INSERT INTO community_pool_shares (wallet_address, shares, cost_basis_usd, joined_at, last_action_at)
-         VALUES ($1, $2, $3, NOW(), NOW())`,
-        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD]
+        `INSERT INTO community_pool_shares (wallet_address, chain, shares, cost_basis_usd, joined_at, last_action_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+        [userShares.walletAddress.toLowerCase(), chain, userShares.shares, userShares.costBasisUSD]
       );
     }
-    logger.info('[CommunityPool DB] User shares saved', { wallet: userShares.walletAddress, shares: userShares.shares });
+    logger.info('[CommunityPool DB] User shares saved', { wallet: userShares.walletAddress, chain, shares: userShares.shares });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to save user shares', error);
     throw error;
@@ -289,10 +292,10 @@ export async function saveUserSharesToDb(userShares: {
 }
 
 /**
- * Delete user shares (when fully withdrawn)
+ * Delete user shares for a specific chain (when fully withdrawn)
  * Security: Validates wallet address format
  */
-export async function deleteUserSharesFromDb(walletAddress: string): Promise<void> {
+export async function deleteUserSharesFromDb(walletAddress: string, chain: string = 'cronos'): Promise<void> {
   // Security: Validate wallet address
   if (!isValidWalletAddress(walletAddress)) {
     throw new Error('Invalid wallet address format');
@@ -300,10 +303,10 @@ export async function deleteUserSharesFromDb(walletAddress: string): Promise<voi
 
   try {
     await query(
-      `DELETE FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1)`,
-      [walletAddress]
+      `DELETE FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
+      [walletAddress, chain]
     );
-    logger.info('[CommunityPool DB] User shares deleted', { wallet: walletAddress });
+    logger.info('[CommunityPool DB] User shares deleted', { wallet: walletAddress, chain });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to delete user shares', error);
     throw error;
@@ -653,17 +656,25 @@ export async function initCommunityPoolTables(): Promise<void> {
       )
     `);
 
-    // User shares table
+    // User shares table (with chain support for multi-chain)
     await query(`
       CREATE TABLE IF NOT EXISTS community_pool_shares (
         id SERIAL PRIMARY KEY,
-        wallet_address VARCHAR(255) NOT NULL UNIQUE,
+        wallet_address VARCHAR(255) NOT NULL,
+        chain VARCHAR(50) NOT NULL DEFAULT 'cronos',
         shares DECIMAL(20, 8) NOT NULL DEFAULT 0,
         cost_basis_usd DECIMAL(20, 2) NOT NULL DEFAULT 0,
         joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        last_action_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        last_action_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(wallet_address, chain)
       )
     `);
+    
+    // Migration: Add chain column if table already exists without it
+    await query(`
+      ALTER TABLE community_pool_shares 
+      ADD COLUMN IF NOT EXISTS chain VARCHAR(50) NOT NULL DEFAULT 'cronos'
+    `).catch(() => {}); // Ignore if column exists
 
     // Transaction history table
     await query(`

@@ -34,7 +34,7 @@ import {
   SUPPORTED_ASSETS,
   getUserTransactionCounts,
 } from '@/lib/storage/community-pool-storage';
-import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
+import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb, getUserSharesFromDb } from '@/lib/db/community-pool';
 import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
@@ -688,13 +688,13 @@ export async function GET(request: NextRequest) {
     if (userAddress) {
       // Get transaction counts for user (used in multiple responses)
       const txCounts = await getUserTransactionCounts(userAddress);
+      const chainKey = chainConfig.chainKey;
       
       // Try DB first (faster for UI) unless forceOnChain
-      // NOTE: DB storage is only for Cronos chain - other chains should use on-chain data
-      const isDefaultChain = chainConfig.chainKey === 'cronos';
-      if (!forceOnChain && isDefaultChain) {
+      // DB storage is now chain-aware and works for all chains
+      if (!forceOnChain) {
         try {
-          const userShares = await getUserShares(userAddress);
+          const userShares = await getUserSharesFromDb(userAddress, chainKey);
           if (userShares && userShares.shares > 0) {
             const onChainPool = await getOnChainPoolData(chainConfig);
             const poolData = onChainPool || await getPoolSummary();
@@ -702,7 +702,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({
               success: true,
               user: {
-                walletAddress: userShares.walletAddress,
+                walletAddress: userShares.wallet_address,
                 shares: userShares.shares,
                 valueUSD: userShares.shares * (poolData?.sharePrice || 1),
                 percentage: poolData?.totalShares > 0 ? (userShares.shares / poolData.totalShares) * 100 : 0,
@@ -767,7 +767,7 @@ export async function GET(request: NextRequest) {
       
       // Fallback to local storage (only if on-chain fails AND we're on the default chain)
       // Non-default chains (Sepolia, Arbitrum, etc.) should only use on-chain data
-      if (isDefaultChain) {
+      if (chainKey === 'cronos') {
         try {
           const userShares = await getUserShares(userAddress);
           const poolSummary = await getPoolSummary();
@@ -1187,15 +1187,16 @@ export async function POST(request: NextRequest) {
         // CRITICAL: Sync from on-chain immediately after deposit
         // On-chain is authoritative - overwrite any local calculation errors
         try {
-          const onChainUser = await getOnChainUserPosition(walletAddress);
+          const onChainUser = await getOnChainUserPosition(walletAddress, chainConfig);
           const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainUser && onChainPool) {
-            // Save on-chain user state directly to DB
+            // Save on-chain user state directly to DB with chain info
             await saveUserSharesToDb({
               walletAddress: walletAddress.toLowerCase(),
               shares: onChainUser.shares,
               costBasisUSD: onChainUser.valueUSD,
+              chain: chainConfig.chainKey,
             });
             
             // Update pool state in DB
@@ -1281,7 +1282,7 @@ export async function POST(request: NextRequest) {
         // CRITICAL: Sync from on-chain immediately after withdrawal
         // On-chain is authoritative - overwrite any local calculation errors
         try {
-          const onChainUser = await getOnChainUserPosition(walletAddress);
+          const onChainUser = await getOnChainUserPosition(walletAddress, chainConfig);
           const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainPool) {
@@ -1304,15 +1305,16 @@ export async function POST(request: NextRequest) {
           }
           
           if (onChainUser && onChainUser.shares > 0) {
-            // User still has shares - update
+            // User still has shares - update with chain info
             await saveUserSharesToDb({
               walletAddress: walletAddress.toLowerCase(),
               shares: onChainUser.shares,
               costBasisUSD: onChainUser.valueUSD,
+              chain: chainConfig.chainKey,
             });
           } else {
-            // User fully withdrew - delete from DB
-            await deleteUserSharesFromDb(walletAddress);
+            // User fully withdrew - delete from DB for this chain
+            await deleteUserSharesFromDb(walletAddress, chainConfig.chainKey);
           }
           
           logger.info(`[CommunityPool] Post-withdraw on-chain sync: ${walletAddress} has ${onChainUser?.shares || 0} shares`);
@@ -1400,6 +1402,7 @@ export async function POST(request: NextRequest) {
               walletAddress: member.walletAddress,
               shares: member.shares,
               costBasisUSD: member.depositedUSD,
+              chain: chainConfig.chainKey,
             });
             syncedMembers.push(member.walletAddress);
             logger.info(`[CommunityPool API] Synced member ${member.walletAddress}: ${member.shares} shares`);
@@ -1441,11 +1444,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'walletAddress required' }, { status: 400 });
         }
         
-        await deleteUserSharesFromDb(walletAddress.toLowerCase());
+        await deleteUserSharesFromDb(walletAddress.toLowerCase(), chainConfig.chainKey);
         
         return NextResponse.json({
           success: true,
-          message: `Deleted user ${walletAddress} from database`,
+          message: `Deleted user ${walletAddress} from database for chain ${chainConfig.chainKey}`,
         });
       }
       
@@ -1473,10 +1476,10 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'Failed to fetch on-chain members' }, { status: 500 });
         }
         
-        // Step 3: Clear all user shares from database (removes stale/duplicate entries)
+        // Step 3: Clear all user shares from database for this chain (removes stale/duplicate entries)
         const { query: dbQuery } = await import('@/lib/db/postgres');
-        const deletedUsers = await dbQuery('DELETE FROM community_pool_shares RETURNING wallet_address');
-        logger.info(`[CommunityPool API] Deleted ${deletedUsers.length} users from database`);
+        const deletedUsers = await dbQuery('DELETE FROM community_pool_shares WHERE chain = $1 RETURNING wallet_address', [chainConfig.chainKey]);
+        logger.info(`[CommunityPool API] Deleted ${deletedUsers.length} users from database for chain ${chainConfig.chainKey}`);
         
         // Step 4: Re-sync only valid on-chain members
         const syncedMembers: { address: string; shares: number }[] = [];
@@ -1487,6 +1490,7 @@ export async function POST(request: NextRequest) {
             walletAddress: member.walletAddress.toLowerCase(),
             shares: member.shares,
             costBasisUSD: member.depositedUSD,
+            chain: chainConfig.chainKey,
           });
           syncedMembers.push({ address: member.walletAddress, shares: member.shares });
           logger.info(`[CommunityPool API] Synced member: ${member.walletAddress} (${member.shares} shares)`);
