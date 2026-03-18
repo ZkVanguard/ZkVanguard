@@ -1,0 +1,93 @@
+{
+  "network": "cronos-mainnet",
+  "chainId": 25,
+  "status": "NOT_DEPLOYED",
+  
+  "addresses": {
+    "multisig": {
+      "admin": "REPLACE_WITH_GNOSIS_SAFE_ADDRESS",
+      "treasury": "REPLACE_WITH_TREASURY_SAFE_ADDRESS",
+      "description": "Use Gnosis Safe on Cronos: https://safe.cronos.org"
+    },
+    "tokens": {
+      "usdt": "0x66e428c3f67a68878562e79A0234c1F83c208770",
+      "usdc": "0xc21223249CA28397B4B6541dffaEcc539BfF0c59",
+      "wbtc": "0x062E66477Faf219F25D27dCED647BF57C3107d52",
+      "weth": "0xe44Fd7fCb2b1581822D0c862B68222998a0c299a",
+      "wcro": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"
+    },
+    "oracles": {
+      "pyth": "0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B"
+    },
+    "dex": {
+      "moonlanderRouter": "REPLACE_WITH_MOONLANDER_MAINNET_ROUTER"
+    }
+  },
+  
+  "tetherWDK": {
+    "description": "Tether WDK USDT integration - https://docs.wdk.tether.io/",
+    "cronos": {
+      "mainnet": "0x66e428c3f67a68878562e79A0234c1F83c208770",
+      "testnet": null
+    },
+    "arbitrum": {
+      "mainnet": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      "testnet": "0xE877EB76c0818fA6D25eCDd7A3A7E2F21cCC44fD"
+    }
+  },
+  
+  "priceIds": {
+    "BTC": "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+    "ETH": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+    "SUI": "0x23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744",
+    "CRO": "0x23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe"
+  },
+  
+  "timelock": {
+    "minDelay": 172800,
+    "minDelayHuman": "48 hours",
+    "proposers": ["MULTISIG_ADDRESS_GOES_HERE"],
+    "executors": ["0x0000000000000000000000000000000000000000"],
+    "admin": "0x0000000000000000000000000000000000000000"
+  },
+  
+  "circuitBreakers": {
+    "maxSingleDeposit": "100000000000",
+    "maxSingleDepositHuman": "$100,000",
+    "maxSingleWithdrawalBps": 2500,
+    "maxSingleWithdrawalHuman": "25% of pool",
+    "dailyWithdrawalCapBps": 5000,
+    "dailyWithdrawalCapHuman": "50% of pool per day"
+  },
+  
+  "fees": {
+    "managementFeeBps": 50,
+    "managementFeeHuman": "0.5% annual",
+    "performanceFeeBps": 1000,
+    "performanceFeeHuman": "10% on profits"
+  },
+  
+  "deployment": {
+    "communityPool": {
+      "proxy": null,
+      "implementation": null,
+      "deployedAt": null
+    },
+    "timelock": {
+      "address": null,
+      "deployedAt": null
+    }
+  },
+  
+  "preflightChecklist": {
+    "multisigCreated": false,
+    "treasuryAddressSet": false,
+    "moonlanderRouterObtained": false,
+    "deployerHasCRO": false,
+    "timelockDeployed": false,
+    "communityPoolDeployed": false,
+    "adminTransferredToTimelock": false,
+    "verifiedOnExplorer": false,
+    "testDepositSuccessful": false
+  }
+}

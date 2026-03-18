@@ -1,0 +1,31 @@
+{
+  "network": "Arbitrum Sepolia",
+  "chainId": 421614,
+  "deployedAt": "2026-03-13T18:07:13.065Z",
+  "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
+  "contracts": {
+    "CommunityPool": {
+      "proxy": "0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B",
+      "implementation": "0xd38A271Af05Cd09325f6758067d43457797Ff654"
+    },
+    "MockUSDC": "0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1"
+  },
+  "tetherWDK": {
+    "description": "Tether WDK USDT integration",
+    "usdt": "0xE877EB76c0818fA6D25eCDd7A3A7E2F21cCC44fD",
+    "note": "Sepolia testnet USDT for development"
+  },
+  "configuration": {
+    "depositToken": "0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1",
+    "pythOracle": "0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF",
+    "priceIds": {
+      "BTC": "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+      "ETH": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+      "SUI": "0x23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744",
+      "ARB": "0x3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5"
+    },
+    "priceStaleThreshold": 3600,
+    "treasury": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
+    "admin": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c"
+  }
+}
