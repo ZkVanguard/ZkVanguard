@@ -90,6 +90,13 @@ const config = {
       gasPrice: 'auto',
       timeout: 120000,
     },
+    'sepolia': {
+      chainId: 11155111,
+      url: process.env.SEPOLIA_RPC || 'https://sepolia.drpc.org',
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 120000,
+    },
   },
   etherscan: {
     apiKey: {
@@ -101,6 +108,7 @@ const config = {
       'oasis-sapphire-mainnet': 'no-api-key-needed',
       'arbitrum-sepolia': process.env.ARBISCAN_API_KEY || '',
       'arbitrum-one': process.env.ARBISCAN_API_KEY || '',
+      'sepolia': process.env.ETHERSCAN_API_KEY || '',
     },
     customChains: [
       {
@@ -165,6 +173,14 @@ const config = {
         urls: {
           apiURL: 'https://api.arbiscan.io/api',
           browserURL: 'https://arbiscan.io/',
+        },
+      },
+      {
+        network: 'sepolia',
+        chainId: 11155111,
+        urls: {
+          apiURL: 'https://api-sepolia.etherscan.io/api',
+          browserURL: 'https://sepolia.etherscan.io/',
         },
       },
     ],
