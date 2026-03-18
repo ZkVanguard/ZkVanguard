@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { getActiveHedges as getActiveHedgesFromDB, updateHedgeStatus, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges as getActiveHedgesFromDB, closeHedge, type Hedge } from '@/lib/db/hedges';
 
 // Types
 interface ActiveHedge {
@@ -37,6 +37,7 @@ interface ActiveHedge {
   walletAddress: string;
   portfolioId?: number;
   dbId?: number; // Original database ID for status updates
+  orderId?: string; // Original order_id for closeHedge
 }
 
 interface HedgeMonitorResult {
@@ -101,7 +102,8 @@ async function fetchActiveHedges(): Promise<ActiveHedge[]> {
       createdAt: new Date(h.created_at).getTime(),
       walletAddress: h.wallet_address || '',
       portfolioId: h.portfolio_id || undefined,
-      dbId: h.id, // Keep original DB ID for updates
+      dbId: h.id, // Keep original DB ID for status updates
+      orderId: h.order_id, // Original order_id for closeHedge
     }));
   } catch (error: any) {
     logger.error('[HedgeMonitor] Failed to fetch hedges from database:', { error: error?.message || String(error) });
@@ -174,18 +176,14 @@ function calculatePnl(hedge: ActiveHedge, currentPrice: number): { pnl: number; 
  */
 async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolean> {
   try {
-    logger.info(`[HedgeMonitor] Attempting to close position ${hedge.id} (dbId: ${hedge.dbId}): ${reason}`);
+    logger.info(`[HedgeMonitor] Attempting to close position ${hedge.id} (orderId: ${hedge.orderId}): ${reason}`);
     
     // First, mark the hedge as closed in the database
     // This ensures we don't keep trying to close the same position
-    if (hedge.dbId) {
+    if (hedge.orderId) {
       try {
-        await updateHedgeStatus(hedge.dbId, 'closed', {
-          closedAt: new Date().toISOString(),
-          closeReason: reason,
-          realizedPnl: hedge.unrealizedPnl,
-        });
-        logger.info(`[HedgeMonitor] Marked hedge ${hedge.id} (dbId: ${hedge.dbId}) as closed in database`);
+        await closeHedge(hedge.orderId, hedge.unrealizedPnl, 'closed');
+        logger.info(`[HedgeMonitor] Marked hedge ${hedge.id} (orderId: ${hedge.orderId}) as closed in database with P&L: $${hedge.unrealizedPnl.toFixed(2)}`);
       } catch (dbError) {
         logger.error(`[HedgeMonitor] Failed to update hedge status in database:`, dbError);
       }
@@ -225,8 +223,8 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
     return true;
   } catch (error) {
     logger.error(`[HedgeMonitor] Error closing position ${hedge.id}:`, error);
-    // If we had a dbId and updated the database, still return true
-    return hedge.dbId ? true : false;
+    // If we had an orderId and updated the database, still return true
+    return hedge.orderId ? true : false;
   }
 }
 
