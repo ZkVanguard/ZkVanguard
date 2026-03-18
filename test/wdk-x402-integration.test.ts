@@ -278,7 +278,7 @@ describe('WDK x402 Full Integration', () => {
         network: 'testnet' as const,
         poolAddress: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
         tokenAddress: USDT_ADDRESSES.cronos.testnet,
-        tokenSymbol: 'USDC', // MockUSDC on testnet
+        tokenSymbol: 'USDT', // USDT via WDK (Mock on testnet)
       };
       
       expect(depositConfig.tokenAddress).toBe('0x28217DAddC55e3C4831b4A48A00Ce04880786967');
@@ -291,20 +291,18 @@ describe('WDK x402 Full Integration', () => {
         network: 'testnet' as const,
         poolAddress: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
         tokenAddress: USDT_ADDRESSES.arbitrum.testnet,
-        tokenSymbol: 'USDC', // MockUSDC on testnet
+        tokenSymbol: 'USDT', // USDT via WDK (Mock on testnet)
       };
       
       expect(depositConfig.tokenAddress).toBe('0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1');
       expect(depositConfig.poolAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
 
-    it('should use USDT on mainnet, MockUSDC on testnet', () => {
-      const getTokenSymbol = (network: 'mainnet' | 'testnet') => {
-        return network === 'mainnet' ? 'USDT' : 'USDC';
-      };
+    it('should use USDT for all EVM chains via WDK', () => {
+      // WDK provides USDT across all networks (mock on testnet, real on mainnet)
+      const getEVMTokenSymbol = () => 'USDT';
       
-      expect(getTokenSymbol('mainnet')).toBe('USDT');
-      expect(getTokenSymbol('testnet')).toBe('USDC');
+      expect(getEVMTokenSymbol()).toBe('USDT');
     });
 
     it('should calculate correct deposit amounts', () => {
@@ -322,7 +320,9 @@ describe('WDK x402 Full Integration', () => {
   });
 
   // ===========================================
-  // ON-CHAIN TOKEN VERIFICATION (Integration)
+  // ON-CHAIN TOKEN VERIFICATION (Integration) 
+  // Note: On-chain contracts return 'USDC' (MockUSDC symbol)
+  // but we label them 'USDT' in UI for WDK consistency
   // ===========================================
   describe('On-Chain Token Verification', () => {
     const testCases = [
@@ -330,14 +330,14 @@ describe('WDK x402 Full Integration', () => {
         name: 'Cronos Testnet',
         rpcUrl: 'https://evm-t3.cronos.org',
         tokenAddress: USDT_ADDRESSES.cronos.testnet,
-        expectedSymbol: 'USDC', // MockUSDC
+        expectedSymbol: 'USDC', // On-chain MockUSDC (labeled USDT in app)
         expectedDecimals: 6,
       },
       {
         name: 'Arbitrum Sepolia',
         rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
         tokenAddress: USDT_ADDRESSES.arbitrum.testnet,
-        expectedSymbol: 'USDC', // MockUSDC
+        expectedSymbol: 'USDC', // On-chain MockUSDC (labeled USDT in app)
         expectedDecimals: 6,
       },
     ];
@@ -455,7 +455,7 @@ describe('WDK x402 Full Integration', () => {
       expect(tokenAddress).toBe(USDT_ADDRESSES.cronos.testnet);
       
       // Step 3: Create x402 payment challenge
-      const depositAmount = 10.0; // 10 USDC
+      const depositAmount = 10.0; // 10 USDT
       const baseUnits = BigInt(Math.floor(depositAmount * 1_000_000));
       const challenge = {
         x402Version: 1,
