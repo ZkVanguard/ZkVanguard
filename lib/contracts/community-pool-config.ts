@@ -2,9 +2,11 @@
  * Multi-Chain Community Pool Configuration
  * 
  * Manages CommunityPool contract addresses and configurations across:
- * - Cronos (EVM) - Live on testnet
+ * - Ethereum Mainnet - Production with USDT (via Tether WDK)
+ * - Sepolia Testnet - Hackathon testing with WDK USDT
+ * - Cronos - Live on testnet, mainnet ready
  * - Arbitrum - Live on Sepolia testnet
- * - SUI - Planned
+ * - SUI - Testing
  */
 
 import { ChainType, NetworkType } from './addresses';
@@ -60,6 +62,44 @@ export interface MultiChainPoolConfig {
 // ============================================
 
 export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
+  // Ethereum Mainnet - PRODUCTION deployment with official Tether USDT
+  ethereum: {
+    chainId: 1,
+    chainType: 'evm',
+    name: 'Ethereum',
+    shortName: 'ETH',
+    icon: '⟠',
+    color: 'bg-indigo-600',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    rpcUrls: {
+      testnet: 'https://sepolia.drpc.org', // Sepolia for testnet
+      mainnet: 'https://eth.drpc.org',
+    },
+    blockExplorer: {
+      testnet: 'https://sepolia.etherscan.io',
+      mainnet: 'https://etherscan.io',
+    },
+    contracts: {
+      testnet: {
+        // Use Sepolia deployment for testnet
+        communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
+        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT Sepolia
+        pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
+      },
+      mainnet: {
+        communityPool: '0x0000000000000000000000000000000000000000', // Deploy after hackathon
+        usdc: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Official Tether USDT on Ethereum
+        pythOracle: '0x4305FB66699C3B2702D4d05CF36551390A4c69C6',
+      },
+    },
+    assets: ['BTC', 'ETH', 'USDT'],
+    status: 'planned', // Mainnet planned, testnet uses sepolia config
+  },
+
   cronos: {
     chainId: 338,
     chainType: 'evm',
@@ -135,6 +175,44 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     status: 'testing',
   },
   
+  sepolia: {
+    chainId: 11155111,
+    chainType: 'evm',
+    name: 'Sepolia',
+    shortName: 'SEP',
+    icon: '🟣',
+    color: 'bg-purple-500',
+    nativeCurrency: {
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+    rpcUrls: {
+      testnet: 'https://sepolia.drpc.org',
+      mainnet: 'https://sepolia.drpc.org', // Sepolia is testnet-only
+    },
+    blockExplorer: {
+      testnet: 'https://sepolia.etherscan.io',
+      mainnet: 'https://sepolia.etherscan.io',
+    },
+    contracts: {
+      testnet: {
+        // CommunityPool deployed via hardhat (2026-03-18)
+        communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
+        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Official WDK USDT on Sepolia
+        pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
+      },
+      mainnet: {
+        communityPool: '0x0000000000000000000000000000000000000000',
+        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT
+        pythOracle: '0x0000000000000000000000000000000000000000',
+      },
+    },
+    // Pool tracks BTC, ETH, USDT allocations - Tether WDK Hackathon focused
+    assets: ['BTC', 'ETH', 'USDT'],
+    status: 'live',
+  },
+  
   sui: {
     chainId: 'sui:testnet',
     chainType: 'sui',
@@ -178,7 +256,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
 
 export const MULTI_CHAIN_POOL_CONFIG: MultiChainPoolConfig = {
   chains: POOL_CHAIN_CONFIGS,
-  defaultChain: 'cronos',
+  defaultChain: 'sepolia',
   defaultNetwork: 'testnet',
 };
 

@@ -48,12 +48,16 @@ export function truncateAddress(address: string, startChars = 6, endChars = 4): 
  */
 export function getChainKeyFromId(chainId: number): string | null {
   switch (chainId) {
+    case 1:
+      return 'ethereum';
     case 338:
     case 25:
       return 'cronos';
     case 421614:
     case 42161:
       return 'arbitrum';
+    case 11155111:
+      return 'sepolia';
     default:
       return null;
   }
@@ -64,10 +68,14 @@ export function getChainKeyFromId(chainId: number): string | null {
  */
 export function getValidChainIds(chainKey: string): number[] {
   switch (chainKey) {
+    case 'ethereum':
+      return [1];
     case 'cronos':
       return [338, 25];
     case 'arbitrum':
       return [421614, 42161];
+    case 'sepolia':
+      return [11155111];
     default:
       return [];
   }
@@ -78,9 +86,11 @@ export function getValidChainIds(chainKey: string): number[] {
  */
 export function getNetworkFromChainId(chainId: number): 'testnet' | 'mainnet' {
   switch (chainId) {
+    case 1: // Ethereum Mainnet
     case 25: // Cronos Mainnet
     case 42161: // Arbitrum One
       return 'mainnet';
+    case 11155111: // Sepolia is always testnet
     default:
       return 'testnet';
   }
@@ -97,6 +107,7 @@ export const ASSET_COLORS: Record<string, string> = {
   CRO: 'bg-indigo-500',
   ARB: 'bg-sky-500',
   USDC: 'bg-emerald-500',
+  USDT: 'bg-teal-500',
 };
 
 export const ASSET_ICONS: Record<string, string> = {

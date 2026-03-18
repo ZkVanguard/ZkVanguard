@@ -46,7 +46,7 @@ export const dynamic = 'force-dynamic';
 
 // Multi-chain configuration
 type NetworkType = 'testnet' | 'mainnet';
-type ChainKey = 'cronos' | 'arbitrum' | 'sui';
+type ChainKey = 'ethereum' | 'cronos' | 'arbitrum' | 'sepolia' | 'sui';
 
 interface ChainConfig {
   rpcUrl: string;

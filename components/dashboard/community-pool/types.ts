@@ -62,9 +62,9 @@ export interface CommunityPoolProps {
   compact?: boolean;
 }
 
-export type TxStatus = 'idle' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete';
+export type TxStatus = 'idle' | 'resetting_approval' | 'approving' | 'approved' | 'depositing' | 'withdrawing' | 'complete';
 
-export type ChainKey = 'cronos' | 'arbitrum' | 'sui';
+export type ChainKey = 'ethereum' | 'cronos' | 'arbitrum' | 'sepolia' | 'sui';
 
 export interface CommunityPoolState {
   poolData: PoolSummary | null;

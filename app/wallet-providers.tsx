@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
-import { CronosTestnet, CronosMainnet, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet, ArbitrumOne, ArbitrumSepolia } from '../lib/chains';
+import { EthereumMainnet, CronosTestnet, CronosMainnet, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet, ArbitrumOne, ArbitrumSepolia, Sepolia } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { PositionsProvider } from '../contexts/PositionsContext';
@@ -14,10 +14,11 @@ const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
 const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e03fd167375f597f59';
 
 // Use RainbowKit's getDefaultConfig for proper wallet configuration
+// Sepolia first for hackathon testing, Ethereum Mainnet for production
 const config = getDefaultConfig({
   appName: 'ZkVanguard',
   projectId,
-  chains: [CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
+  chains: [Sepolia, EthereumMainnet, CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
   ssr: false, // Client-only for lazy loading
 });
 

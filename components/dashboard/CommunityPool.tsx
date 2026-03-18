@@ -327,6 +327,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         communityPoolAddress={pool.COMMUNITY_POOL_ADDRESS}
         suiPoolStateId={pool.suiPoolStateId}
         network={pool.network}
+        isFirstDeposit={pool.isFirstDeposit}
         showDeposit={pool.showDeposit}
         showWithdraw={pool.showWithdraw}
         depositAmount={pool.depositAmount}

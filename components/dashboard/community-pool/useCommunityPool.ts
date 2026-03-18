@@ -15,8 +15,8 @@
 'use client';
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useSignMessage } from 'wagmi';
-import { parseUnits } from 'viem';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useSignMessage, useReadContract } from 'wagmi';
+import { parseUnits, formatUnits } from 'viem';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
@@ -79,7 +79,7 @@ const initialPoolState: CommunityPoolState = {
   loading: true,
   error: null,
   successMessage: null,
-  selectedChain: 'sui',  // SUI is the default and optimized chain
+  selectedChain: 'sepolia',  // Sepolia with WDK USDT for Tether Hackathon
   suiPoolStateId: null,
 };
 
@@ -193,6 +193,29 @@ export function useCommunityPool(propAddress?: string) {
   const USDC_ADDRESS = getUsdcAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
+  
+  // ERC20 allowance check (for USDT reset-to-zero pattern)
+  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+    functionName: 'allowance',
+    args: address && COMMUNITY_POOL_ADDRESS ? [address, COMMUNITY_POOL_ADDRESS] : undefined,
+    query: { enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
+  });
+  
+  // Pool total shares (to detect first deposit)
+  const { data: poolTotalShares } = useReadContract({
+    address: COMMUNITY_POOL_ADDRESS,
+    abi: [{ name: 'totalShares', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+    functionName: 'totalShares',
+    query: { enabled: !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
+  });
+  
+  // Derived: is first deposit (requires $100 minimum for inflation attack protection)
+  const isFirstDeposit = useMemo(() => {
+    if (!poolTotalShares) return true;
+    return BigInt(poolTotalShares.toString()) === BigInt(0);
+  }, [poolTotalShares]);
   
   // ============================================================================
   // CHAIN SELECTION
@@ -390,6 +413,34 @@ export function useCommunityPool(propAddress?: string) {
   const processedHashRef = useRef<string | null>(null);
   const pendingDepositRef = useRef<{ amount: string } | null>(null);
   
+  // Handle USDT reset approval confirmation -> trigger actual approval
+  useEffect(() => {
+    if (!txHash || !isConfirmed) return;
+    if (processedHashRef.current === txHash) return; // Already processed
+    
+    if (txState.txStatus === 'resetting_approval' && txState.depositAmount) {
+      processedHashRef.current = txHash; // Mark as processed
+      logger.info('[CommunityPool] USDT allowance reset confirmed, proceeding with approval');
+      
+      const amount = parseFloat(txState.depositAmount);
+      if (!isNaN(amount) && COMMUNITY_POOL_ADDRESS && USDC_ADDRESS) {
+        resetWrite();
+        
+        setTimeout(() => {
+          dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
+          const amountInUnits = parseUnits(amount.toString(), 6);
+          
+          writeContract({
+            address: USDC_ADDRESS,
+            abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
+            functionName: 'approve',
+            args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
+          });
+        }, 1000);
+      }
+    }
+  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, USDC_ADDRESS, writeContract, resetWrite]);
+  
   // Handle EVM approval confirmation -> trigger deposit
   useEffect(() => {
     if (!txHash || !isConfirmed) return;
@@ -507,8 +558,11 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     const amount = parseFloat(txState.depositAmount);
-    if (isNaN(amount) || amount < 10) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10' });
+    
+    // Check minimum deposit amount (first deposit requires $100 for inflation attack protection)
+    const minDeposit = isFirstDeposit ? 100 : 10;
+    if (isNaN(amount) || amount < minDeposit) {
+      dispatchPool({ type: 'SET_ERROR', payload: `Minimum deposit is $${minDeposit}${isFirstDeposit ? ' (first deposit)' : ''}` });
       return;
     }
     
@@ -534,9 +588,29 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
-    dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
     
     try {
+      // Refetch current allowance
+      await refetchAllowance();
+      const allowance = currentAllowance ? BigInt(currentAllowance.toString()) : BigInt(0);
+      
+      // USDT requires reset-to-zero before changing allowance (non-standard ERC20)
+      // Check if we need to reset allowance first
+      if (allowance > BigInt(0)) {
+        logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
+        
+        writeContract({
+          address: USDC_ADDRESS,
+          abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
+          functionName: 'approve',
+          args: [COMMUNITY_POOL_ADDRESS, BigInt(0)],
+        });
+        return; // Wait for reset to confirm, then approve in effect
+      }
+      
+      // Allowance is 0, proceed with approval
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
       const amountInUnits = parseUnits(amount.toString(), 6);
       
       writeContract({
@@ -550,7 +624,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, USDC_ADDRESS, COMMUNITY_POOL_ADDRESS]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, USDC_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -883,7 +957,8 @@ export function useCommunityPool(propAddress?: string) {
     network,
     poolDeployed,
     COMMUNITY_POOL_ADDRESS,
-  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS]);
+    isFirstDeposit,
+  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS, isFirstDeposit]);
 
   // RETURN
   // ============================================================================

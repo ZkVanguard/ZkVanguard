@@ -15,6 +15,7 @@ interface DepositWithdrawActionsProps {
   communityPoolAddress: string;
   suiPoolStateId: string | null;
   network: 'mainnet' | 'testnet';
+  isFirstDeposit?: boolean;
   // EVM state
   showDeposit: boolean;
   showWithdraw: boolean;
@@ -55,6 +56,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   communityPoolAddress,
   suiPoolStateId,
   network = 'testnet',
+  isFirstDeposit = false,
   showDeposit,
   showWithdraw,
   depositAmount,
@@ -83,6 +85,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   onSuiWithdraw,
 }: DepositWithdrawActionsProps) {
   const isSui = selectedChain === 'sui';
+  const minDeposit = isFirstDeposit ? 100 : 10;
   
   // Get deposit token info based on chain and network (USDT for mainnet, USDC for testnet)
   const tokenInfo = useMemo(() => 
@@ -304,7 +307,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 type="number"
                 value={depositAmount}
                 onChange={(e) => onDepositAmountChange(e.target.value)}
-                placeholder="Amount in USD (min $10)"
+                placeholder={`Amount in USD (min $${minDeposit}${isFirstDeposit ? ' first deposit' : ''})`}
                 disabled={actionLoading}
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               />
@@ -314,7 +317,8 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
-                {txStatus === 'approving' ? `Approving ${tokenInfo.symbol}...` :
+                {txStatus === 'resetting_approval' ? 'Resetting allowance...' :
+                 txStatus === 'approving' ? `Approving ${tokenInfo.symbol}...` :
                  txStatus === 'approved' ? 'Approved! Starting deposit...' :
                  txStatus === 'depositing' ? 'Depositing...' :
                  txStatus === 'complete' ? 'Complete!' :
@@ -327,7 +331,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </p>
             )}
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Deposits to on-chain CommunityPool contract. Requires 2 signatures: approve + deposit.
+              Deposits to on-chain CommunityPool contract. {tokenInfo.symbol === 'USDT' ? 'May require 3 signatures: reset allowance + approve + deposit.' : 'Requires 2 signatures: approve + deposit.'}
             </p>
           </motion.div>
         )}

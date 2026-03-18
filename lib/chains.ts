@@ -1,6 +1,32 @@
 import { defineChain } from 'viem';
 
 // ============================================
+// ETHEREUM MAINNET (Production with USDT)
+// ============================================
+
+export const EthereumMainnet = defineChain({
+  id: 1,
+  name: 'Ethereum',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://eth.drpc.org', 'https://cloudflare-eth.com'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Etherscan',
+      url: 'https://etherscan.io',
+    },
+  },
+  testnet: false,
+});
+
+// ============================================
 // CRONOS CHAINS (EVM-Compatible)
 // ============================================
 
@@ -95,6 +121,29 @@ export const ArbitrumSepolia = defineChain({
     default: {
       name: 'Arbiscan Sepolia',
       url: 'https://sepolia.arbiscan.io',
+    },
+  },
+  testnet: true,
+});
+
+// Ethereum Sepolia (Testnet) - WDK USDT Primary Test Network
+export const Sepolia = defineChain({
+  id: 11155111,
+  name: 'Sepolia',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Sepolia Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Etherscan Sepolia',
+      url: 'https://sepolia.etherscan.io',
     },
   },
   testnet: true,
