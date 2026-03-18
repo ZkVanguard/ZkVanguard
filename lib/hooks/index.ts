@@ -21,3 +21,15 @@ export {
   type CreateHedgeInput,
   type CloseHedgeInput,
 } from './useOptimisticMutations';
+
+// Tether WDK USDT Hooks
+export {
+  useUSDT,
+  useUSDTApproval,
+  useUSDTTransfer,
+  useUSDTAllowance,
+  useIsWDKSupported,
+  parseUSDTAmount,
+  formatUSDTAmount,
+  type USDTState,
+} from './useUSDT';
