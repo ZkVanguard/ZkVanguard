@@ -16,6 +16,8 @@
  * 
  * Source: https://tether.to/en/transparency/#usdt
  * Testnet: Uses MockUSDT/MockUSDC for development
+ * 
+ * For x402 payments: Use USD₮0 on Plasma/Stable chains
  */
 export const USDT_ADDRESSES = {
   // Cronos Mainnet - Official USDT
@@ -31,6 +33,15 @@ export const USDT_ADDRESSES = {
   // Ethereum Mainnet (for reference)
   ethereum: {
     mainnet: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+    testnet: null,
+  },
+  // x402 Recommended Chains - USD₮0 (bridge token)
+  plasma: {
+    mainnet: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USD₮0 on Plasma
+    testnet: null,
+  },
+  stable: {
+    mainnet: '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', // USD₮0 on Stable
     testnet: null,
   },
 } as const;
@@ -124,6 +135,38 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
       decimals: 18,
     },
   },
+  // ============================================
+  // x402 RECOMMENDED CHAINS (Plasma & Stable)
+  // Purpose-built for USD₮ transfers with near-instant finality
+  // ============================================
+  // Plasma - Primary recommended chain for x402 payments
+  'plasma': {
+    chainId: 9745,
+    name: 'Plasma',
+    network: 'mainnet',
+    rpcUrl: 'https://rpc.plasma.to',
+    usdtAddress: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USD₮0 on Plasma
+    explorerUrl: 'https://plasmascan.to',
+    nativeCurrency: {
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+  // Stable - Secondary recommended chain for x402 payments
+  'stable': {
+    chainId: 988,
+    name: 'Stable',
+    network: 'mainnet',
+    rpcUrl: 'https://rpc.stable.xyz',
+    usdtAddress: '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', // USD₮0 on Stable
+    explorerUrl: 'https://stablescan.xyz',
+    nativeCurrency: {
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
 } as const;
 
 // ============================================
@@ -195,12 +238,15 @@ export function getWDKEvmConfig(chainId: number) {
 
 /**
  * Default supported chain IDs for WDK integration.
+ * Includes x402 recommended chains (Plasma, Stable)
  */
 export const WDK_SUPPORTED_CHAINS = [
   25,     // Cronos Mainnet
   338,    // Cronos Testnet
   42161,  // Arbitrum One
   421614, // Arbitrum Sepolia
+  9745,   // Plasma (x402 primary)
+  988,    // Stable (x402 secondary)
 ] as const;
 
 export type WDKSupportedChainId = typeof WDK_SUPPORTED_CHAINS[number];
