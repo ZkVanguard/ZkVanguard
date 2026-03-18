@@ -1,0 +1,205 @@
+/**
+ * Tether WDK (Wallet Development Kit) Configuration
+ * 
+ * This module configures the Tether WDK for USDT integration across
+ * supported EVM chains: Cronos and Arbitrum.
+ * 
+ * @see https://docs.wdk.tether.io/
+ */
+
+// ============================================
+// USDT Contract Addresses (Official Tether)
+// ============================================
+
+/**
+ * Official USDT contract addresses per chain.
+ * 
+ * Source: https://tether.to/en/transparency/#usdt
+ */
+export const USDT_ADDRESSES = {
+  // Cronos Mainnet - Official USDT
+  cronos: {
+    mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    testnet: null, // Use MockUSDT for testnet
+  },
+  // Arbitrum - Official USDT  
+  arbitrum: {
+    mainnet: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    testnet: '0xE877EB76c0818fA6D25eCDd7A3A7E2F21cCC44fD', // Sepolia testnet USDT
+  },
+  // Ethereum Mainnet (for reference)
+  ethereum: {
+    mainnet: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+    testnet: null,
+  },
+} as const;
+
+// ============================================
+// USDT Token Metadata
+// ============================================
+
+export const USDT_METADATA = {
+  name: 'Tether USD',
+  symbol: 'USDT',
+  decimals: 6,
+  logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
+} as const;
+
+// ============================================
+// WDK Chain Configuration
+// ============================================
+
+export interface WDKChainConfig {
+  chainId: number;
+  name: string;
+  network: 'mainnet' | 'testnet';
+  rpcUrl: string;
+  usdtAddress: string | null;
+  explorerUrl: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+}
+
+/**
+ * WDK-compatible chain configurations for Cronos and Arbitrum.
+ */
+export const WDK_CHAINS: Record<string, WDKChainConfig> = {
+  // Cronos Mainnet
+  'cronos-mainnet': {
+    chainId: 25,
+    name: 'Cronos',
+    network: 'mainnet',
+    rpcUrl: 'https://evm.cronos.org',
+    usdtAddress: USDT_ADDRESSES.cronos.mainnet,
+    explorerUrl: 'https://cronoscan.com',
+    nativeCurrency: {
+      name: 'Cronos',
+      symbol: 'CRO',
+      decimals: 18,
+    },
+  },
+  // Cronos Testnet
+  'cronos-testnet': {
+    chainId: 338,
+    name: 'Cronos Testnet',
+    network: 'testnet',
+    rpcUrl: 'https://evm-t3.cronos.org',
+    usdtAddress: null, // Will use MockUSDT
+    explorerUrl: 'https://explorer.cronos.org/testnet',
+    nativeCurrency: {
+      name: 'Test Cronos',
+      symbol: 'tCRO',
+      decimals: 18,
+    },
+  },
+  // Arbitrum One (Mainnet)
+  'arbitrum-mainnet': {
+    chainId: 42161,
+    name: 'Arbitrum One',
+    network: 'mainnet',
+    rpcUrl: 'https://arb1.arbitrum.io/rpc',
+    usdtAddress: USDT_ADDRESSES.arbitrum.mainnet,
+    explorerUrl: 'https://arbiscan.io',
+    nativeCurrency: {
+      name: 'Ethereum',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+  // Arbitrum Sepolia (Testnet)
+  'arbitrum-sepolia': {
+    chainId: 421614,
+    name: 'Arbitrum Sepolia',
+    network: 'testnet',
+    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
+    usdtAddress: USDT_ADDRESSES.arbitrum.testnet,
+    explorerUrl: 'https://sepolia.arbiscan.io',
+    nativeCurrency: {
+      name: 'Sepolia ETH',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
+} as const;
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Get the USDT address for a specific chain.
+ * Returns null if USDT is not available on that chain (use MockUSDT for testnet).
+ */
+export function getUSDTAddress(chainId: number): string | null {
+  const chain = Object.values(WDK_CHAINS).find(c => c.chainId === chainId);
+  return chain?.usdtAddress ?? null;
+}
+
+/**
+ * Get chain configuration by chain ID.
+ */
+export function getChainConfig(chainId: number): WDKChainConfig | undefined {
+  return Object.values(WDK_CHAINS).find(c => c.chainId === chainId);
+}
+
+/**
+ * Check if a chain is a mainnet (production) chain.
+ */
+export function isMainnet(chainId: number): boolean {
+  const chain = getChainConfig(chainId);
+  return chain?.network === 'mainnet';
+}
+
+/**
+ * Get the appropriate deposit token address for a chain.
+ * On mainnet: returns official USDT address
+ * On testnet: returns the MockUSDC address from deployment config
+ */
+export function getDepositTokenAddress(
+  chainId: number,
+  mockUsdcAddress?: string
+): string {
+  const usdtAddress = getUSDTAddress(chainId);
+  if (usdtAddress) {
+    return usdtAddress;
+  }
+  // Fallback to MockUSDC for testnets
+  if (mockUsdcAddress) {
+    return mockUsdcAddress;
+  }
+  throw new Error(`No deposit token configured for chain ${chainId}`);
+}
+
+// ============================================
+// WDK Provider Configuration
+// ============================================
+
+/**
+ * Get WDK EVM wallet configuration for a chain.
+ */
+export function getWDKEvmConfig(chainId: number) {
+  const chain = getChainConfig(chainId);
+  if (!chain) {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+  
+  return {
+    provider: chain.rpcUrl,
+    chainId: chain.chainId,
+  };
+}
+
+/**
+ * Default supported chain IDs for WDK integration.
+ */
+export const WDK_SUPPORTED_CHAINS = [
+  25,     // Cronos Mainnet
+  338,    // Cronos Testnet
+  42161,  // Arbitrum One
+  421614, // Arbitrum Sepolia
+] as const;
+
+export type WDKSupportedChainId = typeof WDK_SUPPORTED_CHAINS[number];

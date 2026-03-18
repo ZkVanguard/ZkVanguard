@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useChainId } from 'wagmi';
 import { parseUnits, formatUnits, parseEther } from 'viem';
@@ -8,12 +8,24 @@ import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
+import { getUSDTAddress, getChainConfig, USDT_METADATA } from '../../lib/config/wdk';
 
 // WCRO contract address for wrapping native CRO
 const WCRO_ADDRESS = '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4' as `0x${string}`;
 
+// Token interface
+interface TokenConfig {
+  symbol: string;
+  name: string;
+  address: `0x${string}`;
+  decimals: number;
+  description: string;
+  isNative: boolean;
+  logo?: string;
+}
+
 // Cronos Testnet tokens ONLY (verified contract addresses)
-const TESTNET_TOKENS = [
+const TESTNET_TOKENS: TokenConfig[] = [
   {
     symbol: 'tCRO',
     name: 'Native CRO (Testnet)',
@@ -39,6 +51,41 @@ const TESTNET_TOKENS = [
     isNative: false,
   },
 ];
+
+// Mainnet tokens with USDT via Tether WDK
+function getMainnetTokens(chainId: number): TokenConfig[] {
+  const usdtAddress = getUSDTAddress(chainId);
+  const chainConfig = getChainConfig(chainId);
+  
+  const tokens: TokenConfig[] = [];
+  
+  // Add USDT if available on this chain
+  if (usdtAddress) {
+    tokens.push({
+      symbol: 'USDT',
+      name: 'Tether USD',
+      address: usdtAddress as `0x${string}`,
+      decimals: USDT_METADATA.decimals,
+      description: 'Official Tether USDT stablecoin',
+      isNative: false,
+      logo: USDT_METADATA.logo,
+    });
+  }
+  
+  // Add native token for the chain
+  if (chainConfig) {
+    tokens.push({
+      symbol: chainConfig.nativeCurrency.symbol,
+      name: `Native ${chainConfig.nativeCurrency.name}`,
+      address: 'native' as `0x${string}`,
+      decimals: chainConfig.nativeCurrency.decimals,
+      description: `Native ${chainConfig.name} token`,
+      isNative: true,
+    });
+  }
+  
+  return tokens;
+}
 
 // WCRO ABI for wrapping
 const WCRO_ABI = [
@@ -103,13 +150,26 @@ export function DepositModal({
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[338];
-  const [selectedToken, setSelectedToken] = useState(TESTNET_TOKENS[0]);
+  
+  // Determine available tokens based on network (mainnet vs testnet)
+  const chainConfig = getChainConfig(chainId);
+  const isMainnetNetwork = chainConfig?.network === 'mainnet';
+  const availableTokens = useMemo(() => {
+    return isMainnetNetwork ? getMainnetTokens(chainId) : TESTNET_TOKENS;
+  }, [chainId, isMainnetNetwork]);
+  
+  const [selectedToken, setSelectedToken] = useState<TokenConfig>(availableTokens[0]);
   const [amount, setAmount] = useState('');
   const [tokenBalance, setTokenBalance] = useState<string>('0');
   const [nativeBalance, setNativeBalance] = useState<string>('0');
   const [allowance, setAllowance] = useState<bigint>(0n);
   const [step, setStep] = useState<'input' | 'wrapping' | 'approve' | 'deposit' | 'success' | 'error'>('input');
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Reset selected token when chain changes
+  useEffect(() => {
+    setSelectedToken(availableTokens[0]);
+  }, [chainId, availableTokens]);
 
   const addresses = getContractAddresses(chainId);
   const rwaManagerAddress = addresses.rwaManager as `0x${string}`;
@@ -396,10 +456,10 @@ export function DepositModal({
               {/* Token Selection */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
-                  Select Token
+                  Select Token {isMainnetNetwork && <span className="text-[#34C759] text-xs ml-1">(Mainnet)</span>}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {TESTNET_TOKENS.slice(0, 6).map((token) => (
+                  {availableTokens.slice(0, 6).map((token) => (
                     <button
                       key={token.symbol}
                       onClick={() => setSelectedToken(token)}
@@ -409,7 +469,12 @@ export function DepositModal({
                           : 'border-[#e8e8ed] hover:border-[#86868b] bg-[#f5f5f7]'
                       }`}
                     >
-                      <div className="text-sm font-semibold text-[#1d1d1f]">{token.symbol}</div>
+                      <div className="flex items-center gap-2">
+                        {token.symbol === 'USDT' && (
+                          <img src={USDT_METADATA.logo} alt="USDT" className="w-4 h-4" />
+                        )}
+                        <span className="text-sm font-semibold text-[#1d1d1f]">{token.symbol}</span>
+                      </div>
                     </button>
                   ))}
                 </div>
