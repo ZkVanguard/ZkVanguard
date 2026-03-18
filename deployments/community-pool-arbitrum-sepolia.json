@@ -12,8 +12,8 @@
   },
   "tetherWDK": {
     "description": "Tether WDK USDT integration",
-    "usdt": "0xE877EB76c0818fA6D25eCDd7A3A7E2F21cCC44fD",
-    "note": "Sepolia testnet USDT for development"
+    "usdt": "0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1",
+    "note": "MockUSDT on Arbitrum Sepolia (6 decimals, 1M+ supply)"
   },
   "configuration": {
     "depositToken": "0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1",

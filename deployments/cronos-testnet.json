@@ -9,6 +9,11 @@
     "PaymentRouter": "0xe40AbC51A100Fa19B5CddEea637647008Eb0eA0b",
     "MockGroth16Verifier": "0x1dDb2A6b64beF9E9435be251c78C84ACaEd94953"
   },
+  "tetherWDK": {
+    "description": "Tether WDK USDT integration",
+    "usdt": "0x28217DAddC55e3C4831b4A48A00Ce04880786967",
+    "note": "MockUSDT on Cronos Testnet (6 decimals, verified on-chain)"
+  },
   "UniversalRelayer": "0x9E5512b683d92290ccD20F483D20699658bcb9f3",
   "GaslessZKVerifier": "0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F",
   "zkCommitmentVerifier": "0x76Faf645C0B3c1e37fbf3EF189EdAfB0D4Fc2a8E",

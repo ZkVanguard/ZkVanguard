@@ -15,17 +15,18 @@
  * Official USDT contract addresses per chain.
  * 
  * Source: https://tether.to/en/transparency/#usdt
+ * Testnet: Uses MockUSDT/MockUSDC for development
  */
 export const USDT_ADDRESSES = {
   // Cronos Mainnet - Official USDT
   cronos: {
     mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
-    testnet: null, // Use MockUSDT for testnet
+    testnet: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDT on Cronos Testnet (6 decimals)
   },
   // Arbitrum - Official USDT  
   arbitrum: {
     mainnet: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-    testnet: '0xE877EB76c0818fA6D25eCDd7A3A7E2F21cCC44fD', // Sepolia testnet USDT
+    testnet: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // MockUSDT on Arbitrum Sepolia
   },
   // Ethereum Mainnet (for reference)
   ethereum: {
@@ -87,7 +88,7 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
     name: 'Cronos Testnet',
     network: 'testnet',
     rpcUrl: 'https://evm-t3.cronos.org',
-    usdtAddress: null, // Will use MockUSDT
+    usdtAddress: USDT_ADDRESSES.cronos.testnet, // MockUSDT for testnet
     explorerUrl: 'https://explorer.cronos.org/testnet',
     nativeCurrency: {
       name: 'Test Cronos',
