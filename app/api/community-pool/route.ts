@@ -690,7 +690,9 @@ export async function GET(request: NextRequest) {
       const txCounts = await getUserTransactionCounts(userAddress);
       
       // Try DB first (faster for UI) unless forceOnChain
-      if (!forceOnChain) {
+      // NOTE: DB storage is only for Cronos chain - other chains should use on-chain data
+      const isDefaultChain = chainConfig.chainKey === 'cronos';
+      if (!forceOnChain && isDefaultChain) {
         try {
           const userShares = await getUserShares(userAddress);
           if (userShares && userShares.shares > 0) {
@@ -763,49 +765,55 @@ export async function GET(request: NextRequest) {
         });
       }
       
-      // Fallback to local storage (only if on-chain fails)
-      try {
-        const userShares = await getUserShares(userAddress);
-        const poolSummary = await getPoolSummary();
-        
-        if (!userShares) {
+      // Fallback to local storage (only if on-chain fails AND we're on the default chain)
+      // Non-default chains (Sepolia, Arbitrum, etc.) should only use on-chain data
+      if (isDefaultChain) {
+        try {
+          const userShares = await getUserShares(userAddress);
+          const poolSummary = await getPoolSummary();
+          
+          if (!userShares) {
+            return NextResponse.json({
+              success: true,
+              user: {
+                walletAddress: userAddress,
+                shares: 0,
+                valueUSD: 0,
+                percentage: 0,
+                isMember: false,
+                depositCount: txCounts.depositCount,
+                withdrawalCount: txCounts.withdrawalCount,
+              },
+              pool: poolSummary,
+              source: 'local',
+            });
+          }
+          
           return NextResponse.json({
             success: true,
             user: {
-              walletAddress: userAddress,
-              shares: 0,
-              valueUSD: 0,
-              percentage: 0,
-              isMember: false,
-              depositCount: txCounts.depositCount,
-              withdrawalCount: txCounts.withdrawalCount,
+              walletAddress: userShares.walletAddress,
+              shares: userShares.shares,
+              valueUSD: userShares.shares * poolSummary.sharePrice,
+              percentage: userShares.percentage,
+              isMember: true,
+              joinedAt: userShares.joinedAt,
+              totalDeposited: userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0),
+              totalWithdrawn: userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0),
+              depositCount: txCounts.depositCount || userShares.deposits.length,
+              withdrawalCount: txCounts.withdrawalCount || userShares.withdrawals.length,
             },
             pool: poolSummary,
             source: 'local',
           });
+        } catch (dbError) {
+          // Database unavailable - return not found response
+          logger.warn('[CommunityPool API] DB fallback failed, user not found on-chain', { userAddress });
         }
-        
-        return NextResponse.json({
-          success: true,
-          user: {
-            walletAddress: userShares.walletAddress,
-            shares: userShares.shares,
-            valueUSD: userShares.shares * poolSummary.sharePrice,
-            percentage: userShares.percentage,
-            isMember: true,
-            joinedAt: userShares.joinedAt,
-            totalDeposited: userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0),
-            totalWithdrawn: userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0),
-            depositCount: txCounts.depositCount || userShares.deposits.length,
-            withdrawalCount: txCounts.withdrawalCount || userShares.withdrawals.length,
-          },
-          pool: poolSummary,
-          source: 'local',
-        });
-      } catch (dbError) {
-        // Database unavailable - return not found response
-        logger.warn('[CommunityPool API] DB fallback failed, user not found on-chain', { userAddress });
-        return NextResponse.json({
+      }
+      
+      // For non-default chains or when DB fails, return user not found
+      return NextResponse.json({
           success: true,
           user: {
             walletAddress: userAddress,
@@ -820,7 +828,6 @@ export async function GET(request: NextRequest) {
           source: 'none',
           warning: 'User not found on-chain or in database',
         });
-      }
     }
     
     // Sync local storage with on-chain data for a specific user
