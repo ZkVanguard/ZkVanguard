@@ -84,7 +84,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // CommunityPool V3 Proxy (upgraded 2026-03-12)
         communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
-        usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDC on testnet (6 decimals)
+        usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // USDT via WDK (Mock on testnet, 6 decimals)
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
       mainnet: {
@@ -121,7 +121,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-        usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // MockUSDC on Arbitrum Sepolia (6 decimals)
+        usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // USDT via WDK (Mock on Arbitrum Sepolia, 6 decimals)
         pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF',
       },
       mainnet: {
@@ -223,8 +223,8 @@ export function getUsdcAddress(
 
 /**
  * Get deposit token symbol based on chain and network
- * - Mainnet: USDT (Official Tether)
- * - Testnet: USDC (Mock stable for development)
+ * - EVM chains: USDT (via Tether WDK)
+ * - SUI: USDC
  */
 export function getDepositTokenSymbol(
   chainKey: string,
@@ -232,21 +232,20 @@ export function getDepositTokenSymbol(
 ): string {
   // SUI uses USDC across all networks
   if (chainKey === 'sui') return 'USDC';
-  // EVM chains: USDT on mainnet, USDC on testnet
-  return network === 'mainnet' ? 'USDT' : 'USDC';
+  // EVM chains: USDT on both mainnet and testnet (WDK integration)
+  return 'USDT';
 }
 
 /**
  * Get full deposit token info
+ * Uses Tether WDK USDT for EVM chains, USDC for SUI
  */
 export function getDepositTokenInfo(
   chainKey: string,
   network: NetworkType = 'testnet'
 ): { symbol: string; name: string; decimals: number; logo?: string } {
-  const isMainnet = network === 'mainnet';
-  const isSui = chainKey === 'sui';
-  
-  if (isSui || !isMainnet) {
+  // SUI uses USDC
+  if (chainKey === 'sui') {
     return {
       symbol: 'USDC',
       name: 'USD Coin',
@@ -255,7 +254,7 @@ export function getDepositTokenInfo(
     };
   }
   
-  // Mainnet EVM chains use official Tether USDT
+  // EVM chains use USDT via Tether WDK (both mainnet and testnet)
   return {
     symbol: 'USDT',
     name: 'Tether USD',
