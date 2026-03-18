@@ -199,7 +199,7 @@ export function useCommunityPool(propAddress?: string) {
     address: USDC_ADDRESS,
     abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'allowance',
-    args: address && COMMUNITY_POOL_ADDRESS ? [address, COMMUNITY_POOL_ADDRESS] : undefined,
+    args: address && COMMUNITY_POOL_ADDRESS ? [address as `0x${string}`, COMMUNITY_POOL_ADDRESS] : undefined,
     query: { enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
   });
   

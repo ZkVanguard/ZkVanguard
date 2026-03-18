@@ -166,12 +166,7 @@ interface PoolDataCache {
   totalShares: number;
   sharePrice: number;
   totalMembers: number;
-  allocations: {
-    BTC: { percentage: number };
-    ETH: { percentage: number };
-    CRO: { percentage: number };
-    SUI: { percentage: number };
-  };
+  allocations: Record<string, { percentage: number }>;
   onChain: boolean;
 }
 
