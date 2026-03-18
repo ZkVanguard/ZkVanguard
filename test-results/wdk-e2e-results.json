@@ -1,0 +1,181 @@
+{
+  "timestamp": "2026-03-18T13:13:50.876Z",
+  "summary": {
+    "passed": 28,
+    "failed": 6,
+    "skipped": 0,
+    "total": 34
+  },
+  "tests": [
+    {
+      "name": "[cronos-testnet] balanceOf()",
+      "status": "PASS",
+      "details": "Balance: 155455108.357291 USDT"
+    },
+    {
+      "name": "[cronos-testnet] decimals()",
+      "status": "PASS",
+      "details": "Decimals: 6 (expected 6)"
+    },
+    {
+      "name": "[cronos-testnet] symbol()",
+      "status": "PASS",
+      "details": "Symbol: USDC"
+    },
+    {
+      "name": "[cronos-testnet] totalSupply()",
+      "status": "PASS",
+      "details": "Supply: 2785426069.05732"
+    },
+    {
+      "name": "[cronos-testnet] allowance()",
+      "status": "PASS",
+      "details": "Current allowance for Pool: 1000.0"
+    },
+    {
+      "name": "[cronos-testnet] approve() gas estimate",
+      "status": "PASS",
+      "details": "Estimated gas: 26033"
+    },
+    {
+      "name": "[cronos-testnet] transfer() gas estimate",
+      "status": "PASS",
+      "details": "Estimated gas: 29754"
+    },
+    {
+      "name": "[cronos-testnet] approve() - already approved",
+      "status": "PASS",
+      "details": "Existing allowance: 1000.0"
+    },
+    {
+      "name": "[cronos-testnet] transfer() - on-chain",
+      "status": "PASS",
+      "details": "Tx: 0xa4557516c39426e52bcd174bf8c870b575e0e28f664eb13e3517ce37b6bb8d27, Gas: 29351"
+    },
+    {
+      "name": "[cronos-testnet] pool.depositToken()",
+      "status": "PASS",
+      "details": "Pool uses: 0x28217DAddC55e3C4831b4A48A00Ce04880786967, WDK uses: 0x28217DAddC55e3C4831b4A48A00Ce04880786967"
+    },
+    {
+      "name": "[cronos-testnet] pool.calculateTotalNAV()",
+      "status": "PASS",
+      "details": "Total NAV: 15759.437692 USDC"
+    },
+    {
+      "name": "[cronos-testnet] pool.totalShares()",
+      "status": "PASS",
+      "details": "Total Shares: 16257.467189530865952986"
+    },
+    {
+      "name": "[cronos-testnet] pool.getNavPerShare()",
+      "status": "PASS",
+      "details": "NAV/Share: $0.969367"
+    },
+    {
+      "name": "[cronos-testnet] pool.status()",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x18531d77\", \"to\": \"0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    },
+    {
+      "name": "[cronos-testnet] pool.maxSingleDeposit()",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x6c4c2d56\", \"to\": \"0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    },
+    {
+      "name": "[cronos-testnet] pool.balanceOf(user)",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x70a08231000000000000000000000000b9966f1007e4ad3a37d29949162d68b0df8eb51c\", \"to\": \"0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    },
+    {
+      "name": "[cronos-testnet] pool.deposit() - on-chain",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x70a08231000000000000000000000000b9966f1007e4ad3a37d29949162d68b0df8eb51c\", \"to\": \"0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    },
+    {
+      "name": "[arbitrum-sepolia] balanceOf()",
+      "status": "PASS",
+      "details": "Balance: 1009720.0 USDT"
+    },
+    {
+      "name": "[arbitrum-sepolia] decimals()",
+      "status": "PASS",
+      "details": "Decimals: 6 (expected 6)"
+    },
+    {
+      "name": "[arbitrum-sepolia] symbol()",
+      "status": "PASS",
+      "details": "Symbol: USDC"
+    },
+    {
+      "name": "[arbitrum-sepolia] totalSupply()",
+      "status": "PASS",
+      "details": "Supply: 1010000.0"
+    },
+    {
+      "name": "[arbitrum-sepolia] allowance()",
+      "status": "PASS",
+      "details": "Current allowance for Pool: 115792089237316195423570985008687907853269984665640564039457584007913129.639935"
+    },
+    {
+      "name": "[arbitrum-sepolia] approve() gas estimate",
+      "status": "PASS",
+      "details": "Estimated gas: 29193"
+    },
+    {
+      "name": "[arbitrum-sepolia] transfer() gas estimate",
+      "status": "PASS",
+      "details": "Estimated gas: 30084"
+    },
+    {
+      "name": "[arbitrum-sepolia] approve() - already approved",
+      "status": "PASS",
+      "details": "Existing allowance: 115792089237316195423570985008687907853269984665640564039457584007913129.639935"
+    },
+    {
+      "name": "[arbitrum-sepolia] transfer() - on-chain",
+      "status": "PASS",
+      "details": "Tx: 0xc99e90a3125863801364549a3c7b284a6e72943c635259169079f65f03d6c5e1, Gas: 26584"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.depositToken()",
+      "status": "PASS",
+      "details": "Pool uses: 0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1, WDK uses: 0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.calculateTotalNAV()",
+      "status": "PASS",
+      "details": "Total NAV: 200.0 USDC"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.totalShares()",
+      "status": "PASS",
+      "details": "Total Shares: 200.0"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.getNavPerShare()",
+      "status": "PASS",
+      "details": "NAV/Share: $1.0"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.status()",
+      "status": "PASS",
+      "details": "Paused: false, Circuit Breaker: false"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.maxSingleDeposit()",
+      "status": "PASS",
+      "details": "Max Single Deposit: 100000.0 USDC"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.balanceOf(user)",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x70a08231000000000000000000000000b9966f1007e4ad3a37d29949162d68b0df8eb51c\", \"to\": \"0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    },
+    {
+      "name": "[arbitrum-sepolia] pool.deposit() - on-chain",
+      "status": "FAIL",
+      "details": "execution reverted (no data present; likely require(false) occurred (action=\"call\", data=\"0x\", reason=\"require(false)\", transaction={ \"data\": \"0x70a08231000000000000000000000000b9966f1007e4ad3a37d29949162d68b0df8eb51c\", \"to\": \"0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B\" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.16.0)"
+    }
+  ]
+}
