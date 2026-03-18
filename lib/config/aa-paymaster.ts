@@ -147,15 +147,61 @@ export const PIMLICO_ARBITRUM_SEPOLIA: AAPaymasterConfig = {
 };
 
 /**
- * Pimlico - Cronos (if supported)
+ * Cronos zkEVM Mainnet
+ * Uses Gelato as bundler (Pimlico doesn't support Cronos)
+ * Docs: https://docs.cronos.org/cronos-zkevm
  */
-export const PIMLICO_CRONOS: AAPaymasterConfig = {
+export const CRONOS_ZKEVM_MAINNET: AAPaymasterConfig = {
+  chainId: 388,
+  chainName: 'Cronos zkEVM',
+  provider: 'https://mainnet.zkevm.cronos.org',
+  bundlerUrl: 'https://api.gelato.digital/bundler/388',
+  paymasterUrl: 'https://api.gelato.digital/paymaster/388',
+  paymasterAddress: '0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD', // Gelato paymaster
+  entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  safeModulesVersion: '0.3.0',
+  paymasterToken: {
+    address: '0x7a6B3C88A2F34C0D2345A8D1E8F2E9B3C4D5E6F7', // zkUSDT on Cronos zkEVM (placeholder)
+    symbol: 'USDT',
+    decimals: 6,
+  },
+  transferMaxFee: 100000,
+  isTestnet: false,
+};
+
+/**
+ * Cronos zkEVM Testnet
+ */
+export const CRONOS_ZKEVM_TESTNET: AAPaymasterConfig = {
+  chainId: 282,
+  chainName: 'Cronos zkEVM Testnet',
+  provider: 'https://testnet.zkevm.cronos.org',
+  bundlerUrl: 'https://api.gelato.digital/bundler/282',
+  paymasterUrl: 'https://api.gelato.digital/paymaster/282',
+  paymasterAddress: '0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD',
+  entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  safeModulesVersion: '0.3.0',
+  paymasterToken: {
+    address: '0x1234567890123456789012345678901234567890', // Test USDT (placeholder)
+    symbol: 'USDT',
+    decimals: 6,
+  },
+  transferMaxFee: 100000,
+  isTestnet: true,
+};
+
+/**
+ * Cronos EVM Mainnet - NOTE: Use x402 instead of AA
+ * Pimlico/Candide don't support Cronos EVM chain.
+ * For gasless USDT on Cronos EVM, use x402 protocol instead.
+ */
+export const CRONOS_EVM_FALLBACK: AAPaymasterConfig = {
   chainId: 25,
-  chainName: 'Cronos',
+  chainName: 'Cronos EVM (use x402)',
   provider: 'https://evm.cronos.org',
-  bundlerUrl: 'https://public.pimlico.io/v2/25/rpc',
-  paymasterUrl: 'https://public.pimlico.io/v2/25/rpc',
-  paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
+  bundlerUrl: '', // Not supported - use x402
+  paymasterUrl: '', // Not supported - use x402
+  paymasterAddress: '0x0000000000000000000000000000000000000000',
   entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
   safeModulesVersion: '0.3.0',
   paymasterToken: {
@@ -165,6 +211,27 @@ export const PIMLICO_CRONOS: AAPaymasterConfig = {
   },
   transferMaxFee: 100000,
   isTestnet: false,
+};
+
+/**
+ * Cronos EVM Testnet - NOTE: Use x402 instead of AA
+ */
+export const CRONOS_EVM_TESTNET_FALLBACK: AAPaymasterConfig = {
+  chainId: 338,
+  chainName: 'Cronos Testnet (use x402)',
+  provider: 'https://evm-t3.cronos.org',
+  bundlerUrl: '', // Not supported - use x402
+  paymasterUrl: '', // Not supported - use x402
+  paymasterAddress: '0x0000000000000000000000000000000000000000',
+  entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  safeModulesVersion: '0.3.0',
+  paymasterToken: {
+    address: '0xc01efAAF7C5c61BEBFAEB358E1161b537b8bC0E0', // DevUSDC as USDT proxy
+    symbol: 'USDT',
+    decimals: 6,
+  },
+  transferMaxFee: 100000,
+  isTestnet: true,
 };
 
 // ============================================================================
@@ -195,12 +262,40 @@ export const AA_CONFIGS: Record<number, Record<PaymasterProvider, AAPaymasterCon
     pimlico: PIMLICO_ARBITRUM_SEPOLIA,
     candide: PIMLICO_ARBITRUM_SEPOLIA,
   },
-  // Cronos
+  // Cronos zkEVM Mainnet (full AA support)
+  388: {
+    pimlico: CRONOS_ZKEVM_MAINNET,
+    candide: CRONOS_ZKEVM_MAINNET,
+  },
+  // Cronos zkEVM Testnet (full AA support)
+  282: {
+    pimlico: CRONOS_ZKEVM_TESTNET,
+    candide: CRONOS_ZKEVM_TESTNET,
+  },
+  // Cronos EVM - fallback (use x402 instead)
   25: {
-    pimlico: PIMLICO_CRONOS,
-    candide: PIMLICO_CRONOS,
+    pimlico: CRONOS_EVM_FALLBACK,
+    candide: CRONOS_EVM_FALLBACK,
+  },
+  // Cronos Testnet - fallback (use x402 instead)
+  338: {
+    pimlico: CRONOS_EVM_TESTNET_FALLBACK,
+    candide: CRONOS_EVM_TESTNET_FALLBACK,
   },
 };
+
+/**
+ * Chains that should use x402 instead of ERC-4337 AA
+ * These chains don't have bundler/paymaster support
+ */
+export const X402_PREFERRED_CHAINS = [25, 338] as const;
+
+/**
+ * Check if a chain should use x402 instead of AA
+ */
+export function shouldUseX402(chainId: number): boolean {
+  return (X402_PREFERRED_CHAINS as readonly number[]).includes(chainId);
+}
 
 /**
  * Get AA paymaster configuration for a chain

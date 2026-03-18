@@ -26,6 +26,7 @@ import {
   getSupportedAAChains,
   formatUSDT,
   parseUSDT,
+  shouldUseX402,
   type PaymasterProvider,
 } from '@/lib/config/aa-paymaster';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
@@ -41,8 +42,10 @@ const DEFAULT_CHAIN_ID = 11155111;
 // Community pool addresses per chain
 const COMMUNITY_POOL_ADDRESSES: Record<number, string> = {
   11155111: '0x...', // Sepolia - TODO: Deploy
-  25: '0x2fBD41568d63B0D31c4FFc074c9a2e0c71AE5F29', // Cronos mainnet
-  338: '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos testnet
+  25: '0x2fBD41568d63B0D31c4FFc074c9a2e0c71AE5F29', // Cronos EVM mainnet (use x402)
+  338: '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos EVM testnet (use x402)
+  388: '0x...', // Cronos zkEVM mainnet - TODO: Deploy
+  282: '0x...', // Cronos zkEVM testnet - TODO: Deploy
   42161: '0x...', // Arbitrum - TODO: Deploy
 };
 
@@ -60,6 +63,18 @@ export async function GET(request: NextRequest) {
   const provider = (searchParams.get('provider') || 'pimlico') as PaymasterProvider;
   
   try {
+    // Check if this chain should use x402 instead of AA
+    if (shouldUseX402(chainId)) {
+      return NextResponse.json({
+        success: false,
+        error: `Chain ${chainId} doesn't support ERC-4337 bundlers`,
+        useX402: true,
+        x402Endpoint: '/api/x402/deposit',
+        hint: 'Cronos EVM uses x402 protocol for gasless USDT deposits. Use the x402 endpoint instead.',
+        supportedAAChains: getSupportedAAChains().filter(id => !shouldUseX402(id)),
+      }, { status: 400 });
+    }
+    
     // Check if chain is supported
     if (!isAASupported(chainId)) {
       return NextResponse.json({
@@ -78,6 +93,16 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
     
+    // Check if bundler URL is empty (fallback chain)
+    if (!config.bundlerUrl) {
+      return NextResponse.json({
+        success: false,
+        error: `Chain ${config.chainName} doesn't have bundler support`,
+        useX402: true,
+        x402Endpoint: '/api/x402/deposit',
+        hint: 'Use x402 protocol for this chain',
+      }, { status: 400 });
+    }
     // Estimate deposit cost
     const costEstimate = await estimateDepositCost(chainId, amount);
     

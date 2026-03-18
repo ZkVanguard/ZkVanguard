@@ -18,12 +18,18 @@ import {
   formatUSDT,
   parseUSDT,
   getUSDTAddress,
+  shouldUseX402,
+  X402_PREFERRED_CHAINS,
   ENTRY_POINT_V07,
   SAFE_4337_MODULE,
   PIMLICO_SEPOLIA,
   CANDIDE_SEPOLIA,
   PIMLICO_MAINNET,
   PIMLICO_ARBITRUM,
+  CRONOS_ZKEVM_MAINNET,
+  CRONOS_ZKEVM_TESTNET,
+  CRONOS_EVM_FALLBACK,
+  CRONOS_EVM_TESTNET_FALLBACK,
   type PaymasterProvider,
 } from '@/lib/config/aa-paymaster';
 
@@ -107,6 +113,83 @@ describe('AA Paymaster Configuration', () => {
       expect(PIMLICO_ARBITRUM.paymasterToken.address).toBe('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9');
     });
   });
+
+  describe('Cronos Configs', () => {
+    describe('Cronos zkEVM (full AA support)', () => {
+      it('should have Cronos zkEVM mainnet config', () => {
+        expect(CRONOS_ZKEVM_MAINNET.chainId).toBe(388);
+        expect(CRONOS_ZKEVM_MAINNET.chainName).toBe('Cronos zkEVM');
+        expect(CRONOS_ZKEVM_MAINNET.isTestnet).toBe(false);
+      });
+
+      it('should have Cronos zkEVM testnet config', () => {
+        expect(CRONOS_ZKEVM_TESTNET.chainId).toBe(282);
+        expect(CRONOS_ZKEVM_TESTNET.chainName).toBe('Cronos zkEVM Testnet');
+        expect(CRONOS_ZKEVM_TESTNET.isTestnet).toBe(true);
+      });
+
+      it('should use Gelato bundler for zkEVM', () => {
+        expect(CRONOS_ZKEVM_MAINNET.bundlerUrl).toContain('gelato.digital');
+        expect(CRONOS_ZKEVM_TESTNET.bundlerUrl).toContain('gelato.digital');
+      });
+
+      it('should have non-empty bundler URLs', () => {
+        expect(CRONOS_ZKEVM_MAINNET.bundlerUrl.length).toBeGreaterThan(0);
+        expect(CRONOS_ZKEVM_TESTNET.bundlerUrl.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Cronos EVM (x402 fallback)', () => {
+      it('should have Cronos EVM mainnet fallback config', () => {
+        expect(CRONOS_EVM_FALLBACK.chainId).toBe(25);
+        expect(CRONOS_EVM_FALLBACK.chainName).toContain('x402');
+      });
+
+      it('should have Cronos EVM testnet fallback config', () => {
+        expect(CRONOS_EVM_TESTNET_FALLBACK.chainId).toBe(338);
+        expect(CRONOS_EVM_TESTNET_FALLBACK.chainName).toContain('x402');
+      });
+
+      it('should have empty bundler URLs (use x402 instead)', () => {
+        expect(CRONOS_EVM_FALLBACK.bundlerUrl).toBe('');
+        expect(CRONOS_EVM_TESTNET_FALLBACK.bundlerUrl).toBe('');
+      });
+
+      it('should have USDT addresses configured', () => {
+        expect(CRONOS_EVM_FALLBACK.paymasterToken.address).toBe('0x66e428c3f67a68878562e79A0234c1F83c208770');
+        expect(CRONOS_EVM_TESTNET_FALLBACK.paymasterToken.symbol).toBe('USDT');
+      });
+    });
+  });
+
+  describe('x402 Fallback Logic', () => {
+    it('should identify Cronos EVM mainnet as x402 preferred', () => {
+      expect(shouldUseX402(25)).toBe(true);
+    });
+
+    it('should identify Cronos EVM testnet as x402 preferred', () => {
+      expect(shouldUseX402(338)).toBe(true);
+    });
+
+    it('should NOT identify Cronos zkEVM as x402 preferred', () => {
+      expect(shouldUseX402(388)).toBe(false);
+      expect(shouldUseX402(282)).toBe(false);
+    });
+
+    it('should NOT identify Sepolia as x402 preferred', () => {
+      expect(shouldUseX402(11155111)).toBe(false);
+    });
+
+    it('should NOT identify Arbitrum as x402 preferred', () => {
+      expect(shouldUseX402(42161)).toBe(false);
+    });
+
+    it('should have X402_PREFERRED_CHAINS constant', () => {
+      expect(X402_PREFERRED_CHAINS).toContain(25);
+      expect(X402_PREFERRED_CHAINS).toContain(338);
+      expect(X402_PREFERRED_CHAINS.length).toBe(2);
+    });
+  });
 });
 
 describe('AA Config Lookup Functions', () => {
@@ -152,6 +235,20 @@ describe('AA Config Lookup Functions', () => {
       expect(isAASupported(42161)).toBe(true);
     });
 
+    it('should return true for Cronos zkEVM mainnet', () => {
+      expect(isAASupported(388)).toBe(true);
+    });
+
+    it('should return true for Cronos zkEVM testnet', () => {
+      expect(isAASupported(282)).toBe(true);
+    });
+
+    it('should return true for Cronos EVM (but use x402)', () => {
+      // These are "supported" but should redirect to x402
+      expect(isAASupported(25)).toBe(true);
+      expect(isAASupported(338)).toBe(true);
+    });
+
     it('should return false for unsupported chain', () => {
       expect(isAASupported(999999)).toBe(false);
     });
@@ -164,6 +261,14 @@ describe('AA Config Lookup Functions', () => {
       expect(chains).toContain(11155111); // Sepolia
       expect(chains).toContain(1); // Mainnet
       expect(chains).toContain(42161); // Arbitrum
+    });
+
+    it('should include Cronos chains', () => {
+      const chains = getSupportedAAChains();
+      expect(chains).toContain(388); // Cronos zkEVM mainnet
+      expect(chains).toContain(282); // Cronos zkEVM testnet
+      expect(chains).toContain(25); // Cronos EVM mainnet (x402 fallback)
+      expect(chains).toContain(338); // Cronos EVM testnet (x402 fallback)
     });
 
     it('should return numbers not strings', () => {
