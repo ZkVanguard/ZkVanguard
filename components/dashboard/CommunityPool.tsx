@@ -393,7 +393,13 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         </div>
       )}
 
-      {!compact && <Leaderboard entries={pool.leaderboard} />}
+      {!compact && (
+        <Leaderboard 
+          entries={pool.leaderboard} 
+          poolTVL={pool.poolData?.totalValueUSD}
+          chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
+        />
+      )}
 
       <AIInsightsModal
         isOpen={showAI}

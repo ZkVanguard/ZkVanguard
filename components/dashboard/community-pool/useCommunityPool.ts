@@ -259,18 +259,19 @@ export function useCommunityPool(propAddress?: string) {
         dispatchPool({ type: 'SET_CHAIN', payload: 'sui' });
       }
     } else if (evmWalletConnected && !suiWalletConnected) {
-      // Only EVM wallet connected - detect which EVM chain
-      const detectedChain = getChainKeyFromId(chainId) as ChainKey | null;
-      if (detectedChain && detectedChain !== selectedChain) {
-        dispatchPool({ type: 'SET_CHAIN', payload: detectedChain });
+      // Only EVM wallet connected - prefer Sepolia (WDK USDT) for hackathon demo
+      // Only switch if user is actually on Sepolia, otherwise keep default
+      if (chainId === 11155111 && selectedChain !== 'sepolia') {
+        dispatchPool({ type: 'SET_CHAIN', payload: 'sepolia' });
       }
+      // Don't auto-switch away from Sepolia if user is on another chain
     } else if (suiWalletConnected && evmWalletConnected) {
-      // Both wallets connected - prefer SUI (it's the default/optimized chain)
-      if (selectedChain !== 'sui') {
-        dispatchPool({ type: 'SET_CHAIN', payload: 'sui' });
+      // Both wallets connected - prefer Sepolia/WDK for Tether hackathon
+      if (selectedChain !== 'sepolia') {
+        dispatchPool({ type: 'SET_CHAIN', payload: 'sepolia' });
       }
     }
-    // If no wallet connected, keep current selection (defaults to 'sui' in initialPoolState)
+    // If no wallet connected, keep current selection (defaults to 'sepolia' for WDK)
   }, [chainId, selectedChain, suiIsConnected, suiAddress, isConnected, address]);
   
   const handleChainSelect = useCallback((key: ChainKey) => {
