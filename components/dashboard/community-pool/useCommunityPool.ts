@@ -950,7 +950,7 @@ export function useCommunityPool(propAddress?: string) {
       // Clear pending action BEFORE executing to prevent re-triggering
       pendingChainSwitchRef.current = null;
       
-      logger.info('[CommunityPool] Chain switch completed! Auto-executing:', action, 'chainId:', chainId);
+      logger.info(`[CommunityPool] Chain switch completed! Auto-executing: ${action}, chainId: ${chainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: null });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to chain! Processing ${action}...` });
       
