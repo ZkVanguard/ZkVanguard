@@ -606,7 +606,9 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
-      console.log(`[CommunityPool] Chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}, selectedChain: ${selectedChain}`);
+      console.warn(`%c[CHAIN SWITCH] Chain mismatch detected!`, 'background: #ff0; color: #000; font-size: 16px; padding: 4px');
+      console.warn(`[CHAIN SWITCH] Wallet: ${chainId}, Target: ${targetChainId}, Selected: ${selectedChain}`);
+      alert(`DEBUG: Chain switch starting - wallet chainId=${chainId}, target=${targetChainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
@@ -680,7 +682,7 @@ export function useCommunityPool(propAddress?: string) {
         }
       }, 15000);
       
-      console.log('[CommunityPool] Adding and switching chain...');
+      console.warn('%c[CHAIN SWITCH] About to call addAndSwitchChain()', 'background: #0f0; color: #000; font-size: 14px;');
       addAndSwitchChain()
         .then(() => {
           console.log('[CommunityPool] Chain switch successful!');
