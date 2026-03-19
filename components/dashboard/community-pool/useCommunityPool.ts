@@ -15,7 +15,7 @@
 'use client';
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, useSignMessage, useReadContract } from 'wagmi';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSignMessage, useReadContract } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
@@ -172,7 +172,6 @@ export function useCommunityPool(propAddress?: string) {
   const address = propAddress || connectedAddress;
   const wagmiChainId = useChainId();
   const chainId = chain?.id ?? wagmiChainId;
-  const { switchChain, switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
@@ -606,42 +605,98 @@ export function useCommunityPool(propAddress?: string) {
     
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
-      if (switchChainAsync) {
-        const targetChainId = validChainIds[0];
-        console.log(`[CommunityPool] Chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}, selectedChain: ${selectedChain}`);
-        dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-        pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
+      const targetChainId = validChainIds[0];
+      console.log(`[CommunityPool] Chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}, selectedChain: ${selectedChain}`);
+      dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+      pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
+      
+      // Chain parameters for adding to wallet
+      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
+        11155111: { // Sepolia
+          chainId: '0xaa36a7',
+          chainName: 'Sepolia',
+          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+          blockExplorerUrls: ['https://sepolia.etherscan.io'],
+          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        },
+        338: { // Cronos Testnet
+          chainId: '0x152',
+          chainName: 'Cronos Testnet',
+          rpcUrls: ['https://evm-t3.cronos.org'],
+          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
+          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
+        },
+        421614: { // Arbitrum Sepolia
+          chainId: '0x66eee',
+          chainName: 'Arbitrum Sepolia',
+          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        },
+      };
+      
+      // Try to add and switch chain using native wallet API
+      const addAndSwitchChain = async () => {
+        const ethereum = (window as any).ethereum;
+        if (!ethereum) {
+          throw new Error('No wallet detected');
+        }
         
-        // Set a timeout to show manual switch message if wallet doesn't respond
-        const timeoutId = setTimeout(() => {
-          if (pendingChainSwitchRef.current?.action === 'deposit') {
-            console.log('[CommunityPool] Switch timeout - showing manual message');
-            dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet settings, then click Deposit again.` });
-            pendingChainSwitchRef.current = null;
-          }
-        }, 10000);
+        const params = chainParams[targetChainId];
+        if (!params) {
+          throw new Error(`Chain ${targetChainId} not configured`);
+        }
         
-        // Call switchChainAsync (returns a promise)
-        console.log('[CommunityPool] Calling switchChainAsync...');
-        switchChainAsync({ chainId: targetChainId })
-          .then(() => {
-            console.log('[CommunityPool] switchChainAsync resolved!');
-            clearTimeout(timeoutId);
-            // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
-          })
-          .catch((err: any) => {
-            console.error('[CommunityPool] switchChainAsync failed:', err);
-            clearTimeout(timeoutId);
-            pendingChainSwitchRef.current = null;
-            if (err?.code === 4001 || err?.message?.includes('rejected')) {
-              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
-            } else {
-              dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} manually in your wallet` });
-            }
+        try {
+          // First try to just switch (chain might already be added)
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: params.chainId }],
           });
-        return;
-      }
-      dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to deposit` });
+        } catch (switchError: any) {
+          // 4902 = Chain not added, try to add it
+          if (switchError.code === 4902) {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [params],
+            });
+            // After adding, switch to it
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: params.chainId }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      };
+      
+      // Set a timeout to show manual switch message if wallet doesn't respond
+      const timeoutId = setTimeout(() => {
+        if (pendingChainSwitchRef.current?.action === 'deposit') {
+          console.log('[CommunityPool] Switch timeout - showing manual message');
+          dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Deposit again.` });
+          pendingChainSwitchRef.current = null;
+        }
+      }, 15000);
+      
+      console.log('[CommunityPool] Adding and switching chain...');
+      addAndSwitchChain()
+        .then(() => {
+          console.log('[CommunityPool] Chain switch successful!');
+          clearTimeout(timeoutId);
+          // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
+        })
+        .catch((err: any) => {
+          console.error('[CommunityPool] Chain switch failed:', err);
+          clearTimeout(timeoutId);
+          pendingChainSwitchRef.current = null;
+          if (err?.code === 4001 || err?.message?.includes('rejected')) {
+            dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please add the chain manually in your wallet.' });
+          } else {
+            dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it manually.` });
+          }
+        });
       return;
     }
     
@@ -687,7 +742,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, switchChainAsync, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -706,41 +761,97 @@ export function useCommunityPool(propAddress?: string) {
     // Validate chain ID (same as handleDeposit)
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
-      if (switchChainAsync) {
-        const targetChainId = validChainIds[0];
-        console.log(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
-        dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-        pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
+      const targetChainId = validChainIds[0];
+      console.log(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
+      dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+      pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
+      
+      // Chain parameters for adding to wallet (same as deposit)
+      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
+        11155111: { // Sepolia
+          chainId: '0xaa36a7',
+          chainName: 'Sepolia',
+          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+          blockExplorerUrls: ['https://sepolia.etherscan.io'],
+          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        },
+        338: { // Cronos Testnet
+          chainId: '0x152',
+          chainName: 'Cronos Testnet',
+          rpcUrls: ['https://evm-t3.cronos.org'],
+          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
+          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
+        },
+        421614: { // Arbitrum Sepolia
+          chainId: '0x66eee',
+          chainName: 'Arbitrum Sepolia',
+          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        },
+      };
+      
+      // Try to add and switch chain using native wallet API
+      const addAndSwitchChain = async () => {
+        const ethereum = (window as any).ethereum;
+        if (!ethereum) {
+          throw new Error('No wallet detected');
+        }
         
-        // Set a timeout to show manual switch message if wallet doesn't respond
-        const timeoutId = setTimeout(() => {
-          if (pendingChainSwitchRef.current?.action === 'withdraw') {
-            console.log('[CommunityPool] Switch timeout - showing manual message');
-            dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet settings, then click Withdraw again.` });
-            pendingChainSwitchRef.current = null;
-          }
-        }, 10000);
+        const params = chainParams[targetChainId];
+        if (!params) {
+          throw new Error(`Chain ${targetChainId} not configured`);
+        }
         
-        // Call switchChainAsync (returns a promise)
-        console.log('[CommunityPool] Calling switchChainAsync for withdraw...');
-        switchChainAsync({ chainId: targetChainId })
-          .then(() => {
-            console.log('[CommunityPool] switchChainAsync resolved for withdraw');
-            clearTimeout(timeoutId);
-          })
-          .catch((err: any) => {
-            console.error('[CommunityPool] switchChainAsync failed:', err);
-            clearTimeout(timeoutId);
-            pendingChainSwitchRef.current = null;
-            if (err?.code === 4001 || err?.message?.includes('rejected')) {
-              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
-            } else {
-              dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} manually in your wallet` });
-            }
+        try {
+          // First try to just switch (chain might already be added)
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: params.chainId }],
           });
-        return;
-      }
-      dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to withdraw` });
+        } catch (switchError: any) {
+          // 4902 = Chain not added, try to add it
+          if (switchError.code === 4902) {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [params],
+            });
+            // After adding, switch to it
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: params.chainId }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      };
+      
+      // Set a timeout to show manual switch message if wallet doesn't respond
+      const timeoutId = setTimeout(() => {
+        if (pendingChainSwitchRef.current?.action === 'withdraw') {
+          console.log('[CommunityPool] Switch timeout - showing manual message');
+          dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Withdraw again.` });
+          pendingChainSwitchRef.current = null;
+        }
+      }, 15000);
+      
+      console.log('[CommunityPool] Adding and switching chain for withdraw...');
+      addAndSwitchChain()
+        .then(() => {
+          console.log('[CommunityPool] Chain switch successful for withdraw!');
+          clearTimeout(timeoutId);
+        })
+        .catch((err: any) => {
+          console.error('[CommunityPool] Chain switch failed:', err);
+          clearTimeout(timeoutId);
+          pendingChainSwitchRef.current = null;
+          if (err?.code === 4001 || err?.message?.includes('rejected')) {
+            dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please add the chain manually in your wallet.' });
+          } else {
+            dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it manually.` });
+          }
+        });
       return;
     }
     
@@ -766,7 +877,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, switchChainAsync, writeContract, COMMUNITY_POOL_ADDRESS]);
+  }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
   
   // SUI handlers - Accept USDC (USD) and convert to SUI for deposit
   const handleSuiDeposit = useCallback(async () => {
