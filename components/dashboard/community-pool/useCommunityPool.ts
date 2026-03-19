@@ -609,11 +609,11 @@ export function useCommunityPool(propAddress?: string) {
       if (switchChain) {
         const targetChainId = validChainIds[0];
         try {
+          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+          // switchChain triggers wallet prompt - don't await, let the chainId effect handle continuation
+          switchChain({ chainId: targetChainId });
           // Store pending action for auto-retry after chain switch
           pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
-          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          await switchChain({ chainId: targetChainId });
-          // The useEffect watching chainId will auto-continue the deposit
           return;
         } catch (err) {
           pendingChainSwitchRef.current = null;
@@ -689,11 +689,11 @@ export function useCommunityPool(propAddress?: string) {
       if (switchChain) {
         const targetChainId = validChainIds[0];
         try {
+          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+          // switchChain triggers wallet prompt - don't await, let the chainId effect handle continuation
+          switchChain({ chainId: targetChainId });
           // Store pending action for auto-retry after chain switch
           pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
-          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          await switchChain({ chainId: targetChainId });
-          // The useEffect watching chainId will auto-continue the withdraw
           return;
         } catch (err) {
           pendingChainSwitchRef.current = null;
@@ -936,31 +936,37 @@ export function useCommunityPool(propAddress?: string) {
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH
-  // This effect runs AFTER handlers are defined so it can call them
+  // This effect runs when chainId changes and checks for pending actions
   // ============================================================================
   useEffect(() => {
-    if (!pendingChainSwitchRef.current) return;
+    const pending = pendingChainSwitchRef.current;
+    if (!pending) return;
     if (!chainId) return;
     
-    const { action, targetChainId } = pendingChainSwitchRef.current;
+    const { action, targetChainId } = pending;
     
     // Execute only when we're on the target chain
     if (chainId === targetChainId) {
-      // Clear pending action BEFORE executing to prevent infinite loops
+      // Clear pending action BEFORE executing to prevent re-triggering
       pendingChainSwitchRef.current = null;
       
-      logger.info('[CommunityPool] Auto-executing pending action after chain switch', { action });
+      logger.info('[CommunityPool] Chain switch completed! Auto-executing:', action, 'chainId:', chainId);
+      dispatchPool({ type: 'SET_ERROR', payload: null });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to chain! Processing ${action}...` });
       
-      // Small delay to let UI update, then execute the action
-      setTimeout(() => {
+      // Delay to let state settle, then execute
+      const timer = setTimeout(() => {
+        dispatchPool({ type: 'SET_SUCCESS', payload: null });
         if (action === 'deposit') {
           handleDeposit();
         } else if (action === 'withdraw') {
           handleWithdraw();
         }
-      }, 800);
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [chainId, handleDeposit, handleWithdraw]);
+  }, [chainId]); // Only depend on chainId - handlers are stable enough
   
   // ============================================================================
   // Stable dispatcher callbacks (avoid re-creating on every render)
