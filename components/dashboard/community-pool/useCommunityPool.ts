@@ -637,17 +637,21 @@ export function useCommunityPool(propAddress?: string) {
         },
       };
       
-      // Try to add and switch chain using native wallet API
+      // Try to add and switch chain using native wallet API (DEPOSIT)
       const addAndSwitchChain = async () => {
+        console.log('[DEPOSIT SWITCH] Step 1: checking window.ethereum');
         const ethereum = (window as any).ethereum;
         if (!ethereum) {
+          console.error('[DEPOSIT SWITCH] No ethereum!');
           throw new Error('No wallet detected');
         }
+        console.log('[DEPOSIT SWITCH] Step 2: got ethereum, getting params for chain', targetChainId);
         
         const params = chainParams[targetChainId];
         if (!params) {
           throw new Error(`Chain ${targetChainId} not configured`);
         }
+        console.log('[DEPOSIT SWITCH] Step 3: calling wallet_switchEthereumChain...');
         
         try {
           // First try to just switch (chain might already be added)
@@ -655,18 +659,23 @@ export function useCommunityPool(propAddress?: string) {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: params.chainId }],
           });
+          console.log('[DEPOSIT SWITCH] Step 4: SUCCESS!');
         } catch (switchError: any) {
+          console.log('[DEPOSIT SWITCH] Step 4: error', switchError?.code, switchError?.message);
           // 4902 = Chain not added, try to add it
           if (switchError.code === 4902) {
+            console.log('[DEPOSIT SWITCH] Adding chain...');
             await ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [params],
             });
+            console.log('[DEPOSIT SWITCH] Chain added, switching...');
             // After adding, switch to it
             await ethereum.request({
               method: 'wallet_switchEthereumChain',
               params: [{ chainId: params.chainId }],
             });
+            console.log('[DEPOSIT SWITCH] Done!');
           } else {
             throw switchError;
           }
