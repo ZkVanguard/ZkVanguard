@@ -15,15 +15,22 @@
  * Official USDT contract addresses per chain.
  * 
  * Source: https://tether.to/en/transparency/#usdt
- * Testnet: Uses MockUSDT/MockUSDC for development
+ * 
+ * IMPORTANT: For Tether WDK Hackathon, use Sepolia which has OFFICIAL WDK USDT.
+ * Cronos testnet only has MockUSDC (not official WDK).
  * 
  * For x402 payments: Use USD₮0 on Plasma/Stable chains
  */
 export const USDT_ADDRESSES = {
+  // Sepolia Testnet - OFFICIAL WDK USDT (use this for hackathon!)
+  sepolia: {
+    mainnet: null, // Sepolia is testnet only
+    testnet: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL Tether WDK USDT
+  },
   // Cronos Mainnet - Official USDT
   cronos: {
     mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
-    testnet: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDT on Cronos Testnet (6 decimals)
+    testnet: null, // Cronos testnet has MockUSDC, NOT official WDK USDT
   },
   // Arbitrum - Official USDT  
   arbitrum: {
@@ -76,11 +83,29 @@ export interface WDKChainConfig {
 }
 
 /**
- * WDK-compatible chain configurations for Cronos and Arbitrum.
+ * WDK-compatible chain configurations.
+ * 
+ * PRIORITY: Sepolia has official WDK USDT - use for Tether Hackathon demo!
  */
 export const WDK_CHAINS: Record<string, WDKChainConfig> = {
+  // ============================================
+  // SEPOLIA - PRIMARY CHAIN FOR TETHER WDK HACKATHON
+  // Has OFFICIAL WDK USDT token
+  // ============================================
+  'sepolia': {
+    chainId: 11155111,
+    name: 'Sepolia',
+    network: 'testnet',
+    rpcUrl: 'https://sepolia.drpc.org',
+    usdtAddress: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL WDK USDT
+    explorerUrl: 'https://sepolia.etherscan.io',
+    nativeCurrency: {
+      name: 'Sepolia ETH',
+      symbol: 'ETH',
+      decimals: 18,
+    },
+  },
   // Cronos Mainnet
-  'cronos-mainnet': {
     chainId: 25,
     name: 'Cronos',
     network: 'mainnet',
@@ -93,13 +118,13 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
       decimals: 18,
     },
   },
-  // Cronos Testnet
+  // Cronos Testnet - NOTE: Does NOT have official WDK USDT
   'cronos-testnet': {
     chainId: 338,
     name: 'Cronos Testnet',
     network: 'testnet',
     rpcUrl: 'https://evm-t3.cronos.org',
-    usdtAddress: USDT_ADDRESSES.cronos.testnet, // MockUSDT for testnet
+    usdtAddress: null, // NO official WDK USDT - use Sepolia instead
     explorerUrl: 'https://explorer.cronos.org/testnet',
     nativeCurrency: {
       name: 'Test Cronos',
@@ -239,14 +264,16 @@ export function getWDKEvmConfig(chainId: number) {
 /**
  * Default supported chain IDs for WDK integration.
  * Includes x402 recommended chains (Plasma, Stable)
+ * 
+ * PRIORITY: Sepolia (11155111) has official WDK USDT for hackathon!
  */
 export const WDK_SUPPORTED_CHAINS = [
-  25,     // Cronos Mainnet
-  338,    // Cronos Testnet
-  42161,  // Arbitrum One
-  421614, // Arbitrum Sepolia
-  9745,   // Plasma (x402 primary)
-  988,    // Stable (x402 secondary)
+  11155111, // Sepolia - OFFICIAL WDK USDT (primary for hackathon)
+  25,       // Cronos Mainnet
+  42161,    // Arbitrum One
+  421614,   // Arbitrum Sepolia
+  9745,     // Plasma (x402 primary)
+  988,      // Stable (x402 secondary)
 ] as const;
 
 export type WDKSupportedChainId = typeof WDK_SUPPORTED_CHAINS[number];

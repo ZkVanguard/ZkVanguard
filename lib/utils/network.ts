@@ -8,16 +8,22 @@
 // ============================================
 
 export const CHAIN_IDS = {
+  SEPOLIA: 11155111, // Primary for WDK USDT hackathon
   CRONOS_MAINNET: 25,
   CRONOS_TESTNET: 338,
   CRONOS_ZKEVM: 388,
+  ARBITRUM_MAINNET: 42161,
+  ARBITRUM_SEPOLIA: 421614,
   HARDHAT: 31337,
 } as const;
 
 export const EXPLORER_URLS = {
+  [CHAIN_IDS.SEPOLIA]: 'https://sepolia.etherscan.io',
   [CHAIN_IDS.CRONOS_MAINNET]: 'https://explorer.cronos.org',
   [CHAIN_IDS.CRONOS_TESTNET]: 'https://explorer.cronos.org/testnet',
   [CHAIN_IDS.CRONOS_ZKEVM]: 'https://explorer.zkevm.cronos.org',
+  [CHAIN_IDS.ARBITRUM_MAINNET]: 'https://arbiscan.io',
+  [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://sepolia.arbiscan.io',
   [CHAIN_IDS.HARDHAT]: '',
 } as const;
 
@@ -133,21 +139,32 @@ export function getSuiNetwork(): 'mainnet' | 'testnet' | 'devnet' {
 
 /**
  * Get USDT address for current network (via Tether WDK)
+ * 
+ * PRIORITY: Sepolia has OFFICIAL WDK USDT - use for hackathon!
  */
 export function getUsdtAddress(chainId?: number): `0x${string}` {
   const id = chainId ?? getCurrentChainId();
   switch (id) {
+    // OFFICIAL WDK USDT - Tether Hackathon primary
+    case CHAIN_IDS.SEPOLIA:
+      return '0xd077a400968890eacc75cdc901f0356c943e4fdb';
+    // Arbitrum Sepolia - Mock USDT
+    case CHAIN_IDS.ARBITRUM_SEPOLIA:
+      return '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1';
+    // Cronos Mainnet - Official Tether USDT
     case CHAIN_IDS.CRONOS_MAINNET:
-      // Official Tether USDT on Cronos Mainnet
       return '0x66e428c3f67a68878562e79A0234c1F83c208770';
     case CHAIN_IDS.CRONOS_TESTNET:
-      // USDT Mock on Cronos Testnet (via WDK)
+      // MockUSDC (NOT official WDK USDT)
       return '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+    case CHAIN_IDS.ARBITRUM_MAINNET:
+      // Official Tether USDT on Arbitrum
+      return '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9';
     case CHAIN_IDS.CRONOS_ZKEVM:
-      // USDT on Cronos zkEVM
-      return '0x0000000000000000000000000000000000000000'; // Not deployed yet
+      return '0x0000000000000000000000000000000000000000';
     default:
-      return '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+      // Default to Sepolia WDK USDT for hackathon
+      return '0xd077a400968890eacc75cdc901f0356c943e4fdb';
   }
 }
 
