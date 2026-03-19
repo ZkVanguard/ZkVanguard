@@ -106,6 +106,7 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
     },
   },
   // Cronos Mainnet
+  'cronos-mainnet': {
     chainId: 25,
     name: 'Cronos',
     network: 'mainnet',
