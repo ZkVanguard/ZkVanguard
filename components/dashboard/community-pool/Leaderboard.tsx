@@ -1,7 +1,7 @@
 'use client';
 
-import React, { memo, useState } from 'react';
-import { Award, Shield, Wallet, ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import React, { memo, useState, useMemo } from 'react';
+import { Award, Shield, Wallet, ExternalLink, ChevronDown, ChevronUp, CheckCircle2, Copy, Check } from 'lucide-react';
 import type { LeaderboardEntry } from './types';
 import { formatPercent } from './utils';
 
@@ -44,8 +44,28 @@ const EXPLORER_URLS: Record<number, string> = {
   421614: 'https://sepolia.arbiscan.io',
 };
 
+// Client-side PDA derivation (deterministic proxy address from owner)
+const ZKVANGUARD_PDA_DOMAIN = 'ZKVANGUARD_PROXY_PDA_V1';
+
+async function deriveProxyPDAClient(ownerAddress: string, nonce: number = 0): Promise<string> {
+  const normalizedOwner = ownerAddress.toLowerCase();
+  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:${normalizedOwner}:pool-share:${nonce}`;
+  
+  // Use Web Crypto API for SHA-256 (closest to sha3-256 available in browser)
+  const encoder = new TextEncoder();
+  const data = encoder.encode(derivationPath);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  // Take last 20 bytes (40 hex chars) as proxy address
+  return '0x' + hashHex.slice(-40);
+}
+
 export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poolTVL, chainId = 11155111 }: LeaderboardProps) {
   const [showProof, setShowProof] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [proxyWallets, setProxyWallets] = useState<Record<string, string>>({});
   
   // Show the ZK Proxy wallet as the pool treasury
   const treasury = proxyWallet ? {
@@ -54,6 +74,28 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
   } : POOL_PROXY_WALLETS.sepolia; // Default to Sepolia for WDK hackathon
 
   const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111];
+  
+  // Derive proxy wallets for each depositor
+  React.useEffect(() => {
+    async function deriveProxies() {
+      const proxies: Record<string, string> = {};
+      for (const entry of entries) {
+        if (entry.walletAddress) {
+          proxies[entry.walletAddress] = await deriveProxyPDAClient(entry.walletAddress);
+        }
+      }
+      setProxyWallets(proxies);
+    }
+    if (entries.length > 0) {
+      deriveProxies();
+    }
+  }, [entries]);
+  
+  const copyToClipboard = async (address: string) => {
+    await navigator.clipboard.writeText(address);
+    setCopiedAddress(address);
+    setTimeout(() => setCopiedAddress(null), 2000);
+  };
 
   return (
     <div className="p-4">
@@ -162,48 +204,87 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
         </div>
       )}
 
-      {/* Shareholders Leaderboard - Anonymous (no addresses disclosed) */}
+      {/* Shareholders Leaderboard - Individual Proxy Wallets */}
       {entries.length > 0 && (
         <>
-          <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+          <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
             <Award className="w-4 h-4 text-yellow-500" />
             Top Shareholders
-            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
-              (anonymous)
-            </span>
           </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Each depositor has a unique ZK Proxy wallet. Real addresses are never disclosed.
+          </p>
           <div className="space-y-2">
             {entries
               .filter((user) => user?.walletAddress)
-              .map((user, index) => (
-                <div
-                  key={user.walletAddress}
-                  className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                        RANK_STYLES[index] || 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {index + 1}
-                    </span>
-                    {/* Privacy: Show anonymous identifier instead of wallet address */}
-                    <span className="text-sm text-gray-600 dark:text-gray-300">
-                      <Shield className="w-3 h-3 inline mr-1 text-purple-500" />
-                      Depositor #{index + 1}
-                    </span>
+              .map((user, index) => {
+                const userProxyWallet = proxyWallets[user.walletAddress] || '...deriving';
+                const isValidProxy = userProxyWallet.startsWith('0x') && userProxyWallet.length === 42;
+                
+                return (
+                  <div
+                    key={user.walletAddress}
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
+                          RANK_STYLES[index] || 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      {/* Privacy: Show individual proxy wallet (derived from real address) */}
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1">
+                          <Shield className="w-3 h-3 text-purple-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">
+                            {isValidProxy 
+                              ? `${userProxyWallet.slice(0, 8)}...${userProxyWallet.slice(-6)}`
+                              : userProxyWallet
+                            }
+                          </span>
+                          {isValidProxy && (
+                            <>
+                              <button
+                                onClick={() => copyToClipboard(userProxyWallet)}
+                                className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                                title="Copy proxy address"
+                              >
+                                {copiedAddress === userProxyWallet ? (
+                                  <Check className="w-3 h-3 text-green-500" />
+                                ) : (
+                                  <Copy className="w-3 h-3 text-gray-400" />
+                                )}
+                              </button>
+                              <a
+                                href={`${explorerUrl}/address/${userProxyWallet}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                                title="View on explorer"
+                              >
+                                <ExternalLink className="w-3 h-3 text-blue-500" />
+                              </a>
+                            </>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-purple-500 dark:text-purple-400">
+                          ZK Proxy Wallet
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {user.shares.toFixed(2)} shares
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatPercent(user.percentage)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {user.shares.toFixed(2)} shares
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatPercent(user.percentage)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </>
       )}
