@@ -133,8 +133,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         pythOracle: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',
       },
     },
-    // Pool accepts USDT deposits only (via Tether WDK)
-    assets: ['BTC', 'ETH', 'USDT'],
+    // Pool accepts USDT deposits, hedges into BTC/ETH/SUI/CRO
+    assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'live',
   },
   
