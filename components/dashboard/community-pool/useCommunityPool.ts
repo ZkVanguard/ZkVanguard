@@ -670,6 +670,14 @@ export function useCommunityPool(propAddress?: string) {
         .then(() => {
           console.error('🔴🔴🔴 CHAIN SWITCH v3 - SUCCESS!');
           clearTimeout(timeoutId);
+          // Clear error and continue deposit after wagmi updates
+          dispatchPool({ type: 'SET_ERROR', payload: null });
+          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Will retry deposit in 1s');
+          setTimeout(() => {
+            console.error('🔴🔴🔴 CHAIN SWITCH v3 - Retrying deposit now');
+            pendingChainSwitchRef.current = null; // Clear so we don't loop
+            handleDeposit();
+          }, 1000);
         })
         .catch((switchError: any) => {
           console.error('🔴🔴🔴 CHAIN SWITCH v3 - Error:', switchError?.code, switchError?.message);
@@ -682,6 +690,14 @@ export function useCommunityPool(propAddress?: string) {
               .then(() => {
                 console.error('🔴🔴🔴 Chain added!');
                 clearTimeout(timeoutId);
+                // Clear error and continue deposit after wagmi updates
+                dispatchPool({ type: 'SET_ERROR', payload: null });
+                console.error('🔴🔴🔴 Will retry deposit in 1s after chain add');
+                setTimeout(() => {
+                  console.error('🔴🔴🔴 Retrying deposit after chain add');
+                  pendingChainSwitchRef.current = null;
+                  handleDeposit();
+                }, 1000);
               })
               .catch((addError: any) => {
                 console.error('🔴🔴🔴 Add chain failed:', addError);
@@ -1091,17 +1107,21 @@ export function useCommunityPool(propAddress?: string) {
   // This effect runs when chainId changes and checks for pending actions
   // ============================================================================
   useEffect(() => {
+    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - chainId changed to:', chainId);
     const pending = pendingChainSwitchRef.current;
+    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - pending action:', pending);
     if (!pending) return;
     if (!chainId) return;
     
     const { action, targetChainId } = pending;
+    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - comparing chainId:', chainId, 'with target:', targetChainId);
     
     // Execute only when we're on the target chain
     if (chainId === targetChainId) {
       // Clear pending action BEFORE executing to prevent re-triggering
       pendingChainSwitchRef.current = null;
       
+      console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - MATCH! Executing:', action);
       logger.info(`[CommunityPool] Chain switch completed! Auto-executing: ${action}, chainId: ${chainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: null });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to chain! Processing ${action}...` });
