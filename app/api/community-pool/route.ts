@@ -374,11 +374,13 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     if (config.chainKey === 'cronos' && config.network === 'testnet') {
       const stats = await getUnifiedPoolStats();
       
-      // Pool accepts USDT deposits only - show 100% USDT allocation
+      // Use actual on-chain allocations for BTC/ETH/SUI/CRO hedging
+      // The pool accepts USDT deposits but allocates to multiple assets
       const allocations: Record<string, { percentage: number }> = {
-        BTC: { percentage: 0 },
-        ETH: { percentage: 0 },
-        USDT: { percentage: 100 },
+        BTC: { percentage: stats.allocations.BTC.percentage },
+        ETH: { percentage: stats.allocations.ETH.percentage },
+        SUI: { percentage: stats.allocations.SUI.percentage },
+        CRO: { percentage: stats.allocations.CRO.percentage },
       };
       
       const result = {
