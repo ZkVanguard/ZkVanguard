@@ -280,7 +280,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         await savePoolStateToDb({
           totalValueUSD: onChainNAV,
           totalShares: totalShares,
-          sharePrice: onChainSharePrice,
+          sharePrice: baseSharePrice,
           allocations: poolAllocRecord,
           lastRebalance: Date.now(),
           lastAIDecision: null,
