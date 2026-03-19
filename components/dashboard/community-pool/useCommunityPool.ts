@@ -172,7 +172,7 @@ export function useCommunityPool(propAddress?: string) {
   const address = propAddress || connectedAddress;
   const wagmiChainId = useChainId();
   const chainId = chain?.id ?? wagmiChainId;
-  const { switchChain } = useSwitchChain();
+  const { switchChain, switchChainAsync } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
@@ -606,20 +606,40 @@ export function useCommunityPool(propAddress?: string) {
     
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
-      if (switchChain) {
+      if (switchChainAsync) {
         const targetChainId = validChainIds[0];
-        try {
-          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          // switchChain triggers wallet prompt - don't await, let the chainId effect handle continuation
-          switchChain({ chainId: targetChainId });
-          // Store pending action for auto-retry after chain switch
-          pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
-          return;
-        } catch (err) {
-          pendingChainSwitchRef.current = null;
-          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet` });
-          return;
-        }
+        console.log(`[CommunityPool] Chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}, selectedChain: ${selectedChain}`);
+        dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+        pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
+        
+        // Set a timeout to show manual switch message if wallet doesn't respond
+        const timeoutId = setTimeout(() => {
+          if (pendingChainSwitchRef.current?.action === 'deposit') {
+            console.log('[CommunityPool] Switch timeout - showing manual message');
+            dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet settings, then click Deposit again.` });
+            pendingChainSwitchRef.current = null;
+          }
+        }, 10000);
+        
+        // Call switchChainAsync (returns a promise)
+        console.log('[CommunityPool] Calling switchChainAsync...');
+        switchChainAsync({ chainId: targetChainId })
+          .then(() => {
+            console.log('[CommunityPool] switchChainAsync resolved!');
+            clearTimeout(timeoutId);
+            // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
+          })
+          .catch((err: any) => {
+            console.error('[CommunityPool] switchChainAsync failed:', err);
+            clearTimeout(timeoutId);
+            pendingChainSwitchRef.current = null;
+            if (err?.code === 4001 || err?.message?.includes('rejected')) {
+              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
+            } else {
+              dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} manually in your wallet` });
+            }
+          });
+        return;
       }
       dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to deposit` });
       return;
@@ -667,7 +687,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, switchChainAsync, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -686,20 +706,39 @@ export function useCommunityPool(propAddress?: string) {
     // Validate chain ID (same as handleDeposit)
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
-      if (switchChain) {
+      if (switchChainAsync) {
         const targetChainId = validChainIds[0];
-        try {
-          dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          // switchChain triggers wallet prompt - don't await, let the chainId effect handle continuation
-          switchChain({ chainId: targetChainId });
-          // Store pending action for auto-retry after chain switch
-          pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
-          return;
-        } catch (err) {
-          pendingChainSwitchRef.current = null;
-          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet` });
-          return;
-        }
+        console.log(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
+        dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
+        pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
+        
+        // Set a timeout to show manual switch message if wallet doesn't respond
+        const timeoutId = setTimeout(() => {
+          if (pendingChainSwitchRef.current?.action === 'withdraw') {
+            console.log('[CommunityPool] Switch timeout - showing manual message');
+            dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet settings, then click Withdraw again.` });
+            pendingChainSwitchRef.current = null;
+          }
+        }, 10000);
+        
+        // Call switchChainAsync (returns a promise)
+        console.log('[CommunityPool] Calling switchChainAsync for withdraw...');
+        switchChainAsync({ chainId: targetChainId })
+          .then(() => {
+            console.log('[CommunityPool] switchChainAsync resolved for withdraw');
+            clearTimeout(timeoutId);
+          })
+          .catch((err: any) => {
+            console.error('[CommunityPool] switchChainAsync failed:', err);
+            clearTimeout(timeoutId);
+            pendingChainSwitchRef.current = null;
+            if (err?.code === 4001 || err?.message?.includes('rejected')) {
+              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
+            } else {
+              dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} manually in your wallet` });
+            }
+          });
+        return;
       }
       dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to withdraw` });
       return;
@@ -727,7 +766,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, switchChain, writeContract, COMMUNITY_POOL_ADDRESS]);
+  }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, switchChainAsync, writeContract, COMMUNITY_POOL_ADDRESS]);
   
   // SUI handlers - Accept USDC (USD) and convert to SUI for deposit
   const handleSuiDeposit = useCallback(async () => {
