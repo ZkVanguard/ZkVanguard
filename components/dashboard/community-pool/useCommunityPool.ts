@@ -168,6 +168,8 @@ export function useCommunityPool(propAddress?: string) {
   const pendingChainSwitchRef = useRef<{ action: 'deposit' | 'withdraw'; targetChainId: number } | null>(null);
   // Skip chain check after successful wallet switch (wagmi may not sync immediately)
   const skipChainCheckRef = useRef(false);
+  // Preserve deposit amount during chain switch (UI state may be lost)
+  const pendingDepositAmountRef = useRef<string>('');
   
   // Wagmi hooks
   const { address: connectedAddress, isConnected, chain } = useAccount();
@@ -457,19 +459,26 @@ export function useCommunityPool(propAddress?: string) {
     if (!txHash || !isConfirmed) return;
     if (processedHashRef.current === txHash) return; // Already processed
     
-    if (txState.txStatus === 'resetting_approval' && txState.depositAmount) {
+    const depositAmountStr = pendingDepositAmountRef.current || txState.depositAmount;
+    if (txState.txStatus === 'resetting_approval' && depositAmountStr) {
       processedHashRef.current = txHash; // Mark as processed
       logger.info('[CommunityPool] USDT allowance reset confirmed, proceeding with approval');
       
-      const amount = parseFloat(txState.depositAmount);
+      const amount = parseFloat(depositAmountStr);
       if (!isNaN(amount) && COMMUNITY_POOL_ADDRESS && USDT_ADDRESS) {
         resetWrite();
+        
+        // Get target chain for approval
+        const validChainIds = getValidChainIds(selectedChain);
+        const targetChainId = validChainIds[0];
+        console.error('🔴🔴🔴 RESET CONFIRMED - Will approve in 1s', { targetChainId });
         
         setTimeout(() => {
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
           const amountInUnits = parseUnits(amount.toString(), 6);
           
           writeContract({
+            chainId: targetChainId,
             address: USDT_ADDRESS,
             abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
             functionName: 'approve',
@@ -478,20 +487,21 @@ export function useCommunityPool(propAddress?: string) {
         }, 1000);
       }
     }
-  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, USDT_ADDRESS, writeContract, resetWrite]);
+  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, USDT_ADDRESS, writeContract, resetWrite, selectedChain]);
   
   // Handle EVM approval confirmation -> trigger deposit
   useEffect(() => {
     if (!txHash || !isConfirmed) return;
     if (processedHashRef.current === txHash) return; // Already processed
     
-    if (txState.txStatus === 'approving' && txState.depositAmount) {
+    const depositAmountStr = pendingDepositAmountRef.current || txState.depositAmount;
+    if (txState.txStatus === 'approving' && depositAmountStr) {
       processedHashRef.current = txHash; // Mark as processed
       
-      const amount = parseFloat(txState.depositAmount);
+      const amount = parseFloat(depositAmountStr);
       if (!isNaN(amount) && COMMUNITY_POOL_ADDRESS) {
         // Store the deposit amount for the next transaction
-        pendingDepositRef.current = { amount: txState.depositAmount };
+        pendingDepositRef.current = { amount: depositAmountStr };
         
         // Set status to approved (intermediate state)
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
@@ -499,13 +509,20 @@ export function useCommunityPool(propAddress?: string) {
         // Reset write state and trigger deposit after a delay
         resetWrite();
         
+        // Get target chain for deposit
+        const validChainIds = getValidChainIds(selectedChain);
+        const targetChainId = validChainIds[0];
+        console.error('🔴🔴🔴 APPROVAL CONFIRMED - Will deposit in 1s', { targetChainId });
+        
         setTimeout(() => {
           if (pendingDepositRef.current && COMMUNITY_POOL_ADDRESS) {
             dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
             const depositAmount = parseFloat(pendingDepositRef.current.amount);
             const amountInUnits = parseUnits(depositAmount.toString(), 6);
+            console.error('🔴🔴🔴 DEPOSITING NOW', { amount: depositAmount, amountInUnits: amountInUnits.toString() });
             
             writeContract({
+              chainId: targetChainId,
               address: COMMUNITY_POOL_ADDRESS,
               abi: [{ name: 'deposit', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'nonpayable' }],
               functionName: 'deposit',
@@ -515,7 +532,7 @@ export function useCommunityPool(propAddress?: string) {
         }, 1000);
       }
     }
-  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, writeContract, resetWrite]);
+  }, [txHash, isConfirmed, txState.txStatus, txState.depositAmount, COMMUNITY_POOL_ADDRESS, writeContract, resetWrite, selectedChain]);
 
   // Handle EVM deposit confirmation -> success
   useEffect(() => {
@@ -525,6 +542,7 @@ export function useCommunityPool(propAddress?: string) {
     if (txState.txStatus === 'depositing') {
       processedHashRef.current = txHash; // Mark as processed
       pendingDepositRef.current = null; // Clear pending deposit
+      pendingDepositAmountRef.current = ''; // Clear preserved amount from chain switch
       
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful! Tx: ${txHash?.slice(0, 10)}...` });
@@ -596,7 +614,10 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    const amount = parseFloat(txState.depositAmount);
+    // Use preserved amount from ref if available (survives chain switch), else use UI state
+    const depositAmountStr = pendingDepositAmountRef.current || txState.depositAmount;
+    const amount = parseFloat(depositAmountStr);
+    console.error('🔴🔴🔴 DEPOSIT - Amount context:', { fromRef: pendingDepositAmountRef.current, fromState: txState.depositAmount, using: depositAmountStr });
     
     // Check minimum deposit amount (first deposit requires $100 for inflation attack protection)
     const minDeposit = isFirstDeposit ? 100 : 10;
@@ -615,6 +636,9 @@ export function useCommunityPool(propAddress?: string) {
     } else if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
       console.error('🔴🔴🔴 CHAIN SWITCH v3 - Mismatch detected!', { chainId, targetChainId, selectedChain });
+      // Preserve the deposit amount in ref before chain switch (UI state may be lost during switch)
+      pendingDepositAmountRef.current = txState.depositAmount;
+      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Saving deposit amount to ref:', txState.depositAmount);
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
@@ -733,20 +757,34 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
+    // Get the target chain ID for this deposit (use selected chain, not wagmi's stale value)
+    const targetChainId = validChainIds[0];
+    console.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
+      amount, 
+      targetChainId, 
+      wagmiChainId: chainId, 
+      USDT_ADDRESS, 
+      COMMUNITY_POOL_ADDRESS,
+      poolDeployed 
+    });
+    
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     
     try {
       // Refetch current allowance
       await refetchAllowance();
       const allowance = currentAllowance ? BigInt(currentAllowance.toString()) : BigInt(0);
+      console.error('🔴🔴🔴 DEPOSIT - Current allowance:', allowance.toString());
       
       // USDT requires reset-to-zero before changing allowance (non-standard ERC20)
       // Check if we need to reset allowance first
       if (allowance > BigInt(0)) {
         logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
+        console.error('🔴🔴🔴 DEPOSIT - Calling writeContract for reset approval');
         
         writeContract({
+          chainId: targetChainId,
           address: USDT_ADDRESS,
           abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
           functionName: 'approve',
@@ -758,14 +796,18 @@ export function useCommunityPool(propAddress?: string) {
       // Allowance is 0, proceed with approval
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
       const amountInUnits = parseUnits(amount.toString(), 6);
+      console.error('🔴🔴🔴 DEPOSIT - Calling writeContract for approval', { amountInUnits: amountInUnits.toString() });
       
       writeContract({
+        chainId: targetChainId,
         address: USDT_ADDRESS,
         abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
         functionName: 'approve',
         args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
       });
     } catch (err: any) {
+      console.error('🔴🔴🔴 DEPOSIT - Error:', err);
+      pendingDepositAmountRef.current = ''; // Clear on error
       dispatchPool({ type: 'SET_ERROR', payload: err.message });
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
