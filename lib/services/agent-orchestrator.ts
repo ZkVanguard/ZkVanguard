@@ -13,6 +13,7 @@ import { LeadAgent } from '@/agents/core/LeadAgent';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import type { MarketSnapshot } from './CentralizedHedgeManager';
+import type { HedgeExecutorConfig } from '@/integrations/hedge-executor/HedgeExecutorClient';
 
 export interface AgentOrchestrationResult {
   success: boolean;
@@ -148,10 +149,52 @@ export class AgentOrchestrator {
       );
 
       logger.info('Creating HedgingAgent...');
+      
+      // Configure on-chain hedge execution via HedgeExecutor + MockMoonlander (Cronos testnet)
+      let hedgeExecutorConfig: HedgeExecutorConfig | undefined;
+      try {
+        // Get addresses from centralized address config
+        const { CRONOS_CONTRACT_ADDRESSES } = await import('@/lib/contracts/addresses');
+        const network = process.env.NEXT_PUBLIC_CHAIN_ID === '25' ? 'mainnet' : 'testnet';
+        const addresses = CRONOS_CONTRACT_ADDRESSES[network];
+        
+        const hedgeExecutorAddress = addresses.hedgeExecutor;
+        // MockUSDC on Cronos Testnet (same address as USDT for now)
+        const collateralTokenAddress = process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+        
+        // Only enable on-chain if we have a real signer (not demo) and valid HedgeExecutor address
+        const isValidHedgeExecutor = hedgeExecutorAddress && hedgeExecutorAddress !== '0x0000000000000000000000000000000000000000';
+        
+        if (isValidHedgeExecutor && collateralTokenAddress && this.signer) {
+          hedgeExecutorConfig = {
+            contractAddress: hedgeExecutorAddress,
+            collateralTokenAddress: collateralTokenAddress,
+            provider: this.provider,
+            signer: this.signer,
+          };
+          logger.info('HedgeExecutor config loaded for on-chain execution', {
+            hedgeExecutor: hedgeExecutorAddress,
+            collateralToken: collateralTokenAddress,
+            network,
+          });
+        } else {
+          logger.warn('HedgeExecutor config incomplete - using off-chain mode', {
+            hasHedgeExecutor: isValidHedgeExecutor,
+            hasCollateral: !!collateralTokenAddress,
+            hasSigner: !!this.signer,
+          });
+        }
+      } catch (e) {
+        logger.warn('Could not load HedgeExecutor config - using off-chain mode', { 
+          error: e instanceof Error ? e.message : String(e) 
+        });
+      }
+      
       this.hedgingAgent = new HedgingAgent(
         'hedging-agent-001',
         this.provider,
-        signerToUse
+        signerToUse,
+        hedgeExecutorConfig
       );
 
       logger.info('Creating SettlementAgent...');
