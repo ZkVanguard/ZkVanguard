@@ -132,24 +132,27 @@ export function getSuiNetwork(): 'mainnet' | 'testnet' | 'devnet' {
 // ============================================
 
 /**
- * Get USDC address for current network
+ * Get USDT address for current network (via Tether WDK)
  */
-export function getUsdcAddress(chainId?: number): `0x${string}` {
+export function getUsdtAddress(chainId?: number): `0x${string}` {
   const id = chainId ?? getCurrentChainId();
   switch (id) {
     case CHAIN_IDS.CRONOS_MAINNET:
-      // Real USDC on Cronos Mainnet
-      return '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59';
+      // Official Tether USDT on Cronos Mainnet
+      return '0x66e428c3f67a68878562e79A0234c1F83c208770';
     case CHAIN_IDS.CRONOS_TESTNET:
-      // DevUSDCe on Cronos Testnet
-      return '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0';
+      // USDT Mock on Cronos Testnet (via WDK)
+      return '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
     case CHAIN_IDS.CRONOS_ZKEVM:
-      // zkUSDC on Cronos zkEVM
-      return '0xaa5b845F8C9c047779bEDf64829601d8B264076c';
+      // USDT on Cronos zkEVM
+      return '0x0000000000000000000000000000000000000000'; // Not deployed yet
     default:
-      return '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0';
+      return '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
   }
 }
+
+// Legacy alias for backward compatibility
+export const getUsdcAddress = getUsdtAddress;
 
 /**
  * Get Moonlander contract address for current network

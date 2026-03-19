@@ -38,12 +38,12 @@ export interface PoolChainConfig {
   contracts: {
     testnet: {
       communityPool: `0x${string}`;
-      usdc: `0x${string}`;
+      usdt: `0x${string}`;
       pythOracle?: `0x${string}`;
     };
     mainnet: {
       communityPool: `0x${string}`;
-      usdc: `0x${string}`;
+      usdt: `0x${string}`;
       pythOracle?: `0x${string}`;
     };
   };
@@ -87,12 +87,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // Use Sepolia deployment for testnet
         communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
-        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT Sepolia
+        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT Sepolia
         pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000', // Deploy after hackathon
-        usdc: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Official Tether USDT on Ethereum
+        usdt: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Official Tether USDT on Ethereum
         pythOracle: '0x4305FB66699C3B2702D4d05CF36551390A4c69C6',
       },
     },
@@ -124,12 +124,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // CommunityPool V3 Proxy (upgraded 2026-03-12)
         communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
-        usdc: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // USDT via WDK (Mock on testnet, 6 decimals)
+        usdt: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // USDT via WDK (Mock on testnet, 6 decimals)
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000', // Not deployed yet
-        usdc: '0x66e428c3f67a68878562e79A0234c1F83c208770', // Official Tether USDT on Cronos
+        usdt: '0x66e428c3f67a68878562e79A0234c1F83c208770', // Official Tether USDT on Cronos
         pythOracle: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',
       },
     },
@@ -161,12 +161,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-        usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // USDT via WDK (Mock on Arbitrum Sepolia, 6 decimals)
+        usdt: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // USDT via WDK (Mock on Arbitrum Sepolia, 6 decimals)
         pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF',
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000', // Not deployed yet
-        usdc: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Official Tether USDT on Arbitrum
+        usdt: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Official Tether USDT on Arbitrum
         pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C',
       },
     },
@@ -199,12 +199,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // CommunityPool deployed via hardhat (2026-03-18)
         communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
-        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Official WDK USDT on Sepolia
+        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Official WDK USDT on Sepolia
         pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000',
-        usdc: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT
+        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT
         pythOracle: '0x0000000000000000000000000000000000000000',
       },
     },
@@ -237,11 +237,11 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // Package ID - use create_pool to create CommunityPoolState shared object
         communityPool: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
-        usdc: '0x0000000000000000000000000000000000000000', // Native SUI used
+        usdt: '0x0000000000000000000000000000000000000000', // Native SUI used
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000',
-        usdc: '0x0000000000000000000000000000000000000000',
+        usdt: '0x0000000000000000000000000000000000000000',
       },
     },
     // SUI Move chain - native SUI pool with BTC/ETH tracking
@@ -286,9 +286,9 @@ export function getCommunityPoolAddress(
 }
 
 /**
- * Get USDC token address for a specific chain and network
+ * Get USDT token address for a specific chain and network
  */
-export function getUsdcAddress(
+export function getUsdtAddress(
   chainKey: string,
   network: NetworkType = 'testnet'
 ): `0x${string}` {
@@ -296,7 +296,7 @@ export function getUsdcAddress(
   if (!config) {
     return '0x0000000000000000000000000000000000000000';
   }
-  return config.contracts[network === 'mainnet' ? 'mainnet' : 'testnet'].usdc as `0x${string}`;
+  return config.contracts[network === 'mainnet' ? 'mainnet' : 'testnet'].usdt as `0x${string}`;
 }
 
 /**
