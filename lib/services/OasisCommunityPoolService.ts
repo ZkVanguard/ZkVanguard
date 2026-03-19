@@ -51,7 +51,7 @@ const ERC20_ABI = [
 
 interface OasisPoolAddresses {
   communityPool: string;
-  usdc: string;
+  usdt: string;
 }
 
 const OASIS_POOL_ADDRESSES: Record<string, OasisPoolAddresses> = {
@@ -59,11 +59,11 @@ const OASIS_POOL_ADDRESSES: Record<string, OasisPoolAddresses> = {
   // Using PaymentRouter as placeholder until CommunityPool specific deployment
   testnet: {
     communityPool: process.env.NEXT_PUBLIC_OASIS_COMMUNITY_POOL_ADDRESS || '',
-    usdc: process.env.NEXT_PUBLIC_OASIS_USDC_ADDRESS || '0x0000000000000000000000000000000000000000',
+    usdt: process.env.NEXT_PUBLIC_OASIS_USDT_ADDRESS || '0x0000000000000000000000000000000000000000',
   },
   mainnet: {
     communityPool: process.env.NEXT_PUBLIC_OASIS_MAINNET_COMMUNITY_POOL_ADDRESS || '',
-    usdc: process.env.NEXT_PUBLIC_OASIS_MAINNET_USDC_ADDRESS || '0x0000000000000000000000000000000000000000',
+    usdt: process.env.NEXT_PUBLIC_OASIS_MAINNET_USDT_ADDRESS || '0x0000000000000000000000000000000000000000',
   },
 };
 
@@ -221,13 +221,13 @@ export async function depositOasisPool(
 
     const amount = ethers.parseUnits(amountUSD.toString(), 6);
 
-    // Approve USDC spending if needed
-    if (addresses.usdc !== '0x0000000000000000000000000000000000000000') {
-      const usdc = new ethers.Contract(addresses.usdc, ERC20_ABI, signer);
+    // Approve USDT spending if needed
+    if (addresses.usdt !== '0x0000000000000000000000000000000000000000') {
+      const usdt = new ethers.Contract(addresses.usdt, ERC20_ABI, signer);
       const signerAddress = await signer.getAddress();
-      const allowance = await usdc.allowance(signerAddress, addresses.communityPool);
+      const allowance = await usdt.allowance(signerAddress, addresses.communityPool);
       if (allowance < amount) {
-        const approveTx = await usdc.approve(addresses.communityPool, amount);
+        const approveTx = await usdt.approve(addresses.communityPool, amount);
         await approveTx.wait();
       }
     }
