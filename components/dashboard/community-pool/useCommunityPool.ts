@@ -164,6 +164,8 @@ export function useCommunityPool(propAddress?: string) {
   const mountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   const userSelectedChainRef = useRef(false);
+  // Track pending action after chain switch (auto-retry)
+  const pendingChainSwitchRef = useRef<{ action: 'deposit' | 'withdraw'; targetChainId: number } | null>(null);
   
   // Wagmi hooks
   const { address: connectedAddress, isConnected, chain } = useAccount();
@@ -217,6 +219,14 @@ export function useCommunityPool(propAddress?: string) {
     return BigInt(poolTotalShares.toString()) === BigInt(0);
   }, [poolTotalShares]);
   
+  // Derived: Check if wallet chain matches selected chain (for EVM only)
+  const validChainIds = useMemo(() => getValidChainIds(selectedChain), [selectedChain]);
+  const isChainMismatch = useMemo(() => {
+    if (selectedChain === 'sui') return false; // SUI has its own network check
+    if (!isConnected || !chainId) return false;
+    return !validChainIds.includes(chainId);
+  }, [selectedChain, isConnected, chainId, validChainIds]);
+  
   // ============================================================================
   // CHAIN SELECTION
   // ============================================================================
@@ -269,6 +279,33 @@ export function useCommunityPool(propAddress?: string) {
       mountedRef.current = false;
     };
   }, [selectedChain]);
+  
+  // Auto-retry pending action after successful chain switch
+  // This creates a seamless UX where deposit continues automatically
+  useEffect(() => {
+    if (!pendingChainSwitchRef.current) return;
+    if (!chainId) return;
+    
+    const { action, targetChainId } = pendingChainSwitchRef.current;
+    
+    // Check if we're now on the target chain
+    if (chainId === targetChainId) {
+      logger.info('[CommunityPool] Chain switch completed, auto-continuing action', { action, chainId });
+      pendingChainSwitchRef.current = null;
+      dispatchPool({ type: 'SET_ERROR', payload: null });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to ${chainConfig?.name}! Processing ${action}...` });
+      
+      // Use setTimeout to let state settle, then trigger the action
+      setTimeout(() => {
+        if (action === 'deposit') {
+          // Re-trigger deposit - the handleDeposit will now pass chain validation
+          dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: true });
+        } else if (action === 'withdraw') {
+          dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: true });
+        }
+      }, 500);
+    }
+  }, [chainId, chainConfig?.name]);
   
   // ============================================================================
   // DATA FETCHING
@@ -569,16 +606,21 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       if (switchChain) {
+        const targetChainId = validChainIds[0];
         try {
+          // Store pending action for auto-retry after chain switch
+          pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
           dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          await switchChain({ chainId: validChainIds[0] });
-          dispatchPool({ type: 'SET_ERROR', payload: `Switched. Please click Deposit again.` });
+          await switchChain({ chainId: targetChainId });
+          // The useEffect watching chainId will auto-continue the deposit
           return;
-        } catch {
-          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name}` });
+        } catch (err) {
+          pendingChainSwitchRef.current = null;
+          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet` });
           return;
         }
       }
+      dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to deposit` });
       return;
     }
     
@@ -644,16 +686,21 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       if (switchChain) {
+        const targetChainId = validChainIds[0];
         try {
+          // Store pending action for auto-retry after chain switch
+          pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
           dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
-          await switchChain({ chainId: validChainIds[0] });
-          dispatchPool({ type: 'SET_ERROR', payload: `Switched. Please click Withdraw again.` });
+          await switchChain({ chainId: targetChainId });
+          // The useEffect watching chainId will auto-continue the withdraw
           return;
-        } catch {
-          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name}` });
+        } catch (err) {
+          pendingChainSwitchRef.current = null;
+          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet` });
           return;
         }
       }
+      dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} to withdraw` });
       return;
     }
     
@@ -958,7 +1005,8 @@ export function useCommunityPool(propAddress?: string) {
     poolDeployed,
     COMMUNITY_POOL_ADDRESS,
     isFirstDeposit,
-  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS, isFirstDeposit]);
+    isChainMismatch,
+  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS, isFirstDeposit, isChainMismatch]);
 
   // RETURN
   // ============================================================================

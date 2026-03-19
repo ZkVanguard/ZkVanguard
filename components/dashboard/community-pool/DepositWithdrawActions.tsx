@@ -16,6 +16,7 @@ interface DepositWithdrawActionsProps {
   suiPoolStateId: string | null;
   network: 'mainnet' | 'testnet';
   isFirstDeposit?: boolean;
+  isChainMismatch?: boolean;
   // EVM state
   showDeposit: boolean;
   showWithdraw: boolean;
@@ -57,6 +58,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   suiPoolStateId,
   network = 'testnet',
   isFirstDeposit = false,
+  isChainMismatch = false,
   showDeposit,
   showWithdraw,
   depositAmount,
@@ -271,6 +273,16 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
         <div className="mb-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <Wallet className="w-4 h-4 text-green-500" />
           <span>Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
+        </div>
+      )}
+
+      {/* Chain mismatch warning - wallet on different chain than selected pool */}
+      {evmConnected && isChainMismatch && (
+        <div className="mb-3 flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+          <AlertTriangle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          <p className="text-sm text-blue-700 dark:text-blue-400">
+            Your wallet is on a different network. Click Deposit/Withdraw to switch to <strong>{chainConfig?.name}</strong> automatically.
+          </p>
         </div>
       )}
 
