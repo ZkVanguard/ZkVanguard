@@ -205,6 +205,15 @@ export function useCommunityPool(propAddress?: string) {
     query: { enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
   });
   
+  // User's USDT balance (show how much they can deposit)
+  const { data: userUsdtBalance } = useReadContract({
+    address: USDT_ADDRESS,
+    abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+    functionName: 'balanceOf',
+    args: address ? [address as `0x${string}`] : undefined,
+    query: { enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' },
+  });
+  
   // Pool total shares (to detect first deposit)
   const { data: poolTotalShares } = useReadContract({
     address: COMMUNITY_POOL_ADDRESS,
@@ -282,6 +291,8 @@ export function useCommunityPool(propAddress?: string) {
   
   // Auto-retry pending action after successful chain switch
   // This creates a seamless UX where deposit continues automatically
+  // Note: We just mark the action as ready - the actual execution happens
+  // in a separate effect after the handlers are defined
   useEffect(() => {
     if (!pendingChainSwitchRef.current) return;
     if (!chainId) return;
@@ -290,20 +301,10 @@ export function useCommunityPool(propAddress?: string) {
     
     // Check if we're now on the target chain
     if (chainId === targetChainId) {
-      logger.info('[CommunityPool] Chain switch completed, auto-continuing action', { action, chainId });
-      pendingChainSwitchRef.current = null;
+      logger.info('[CommunityPool] Chain switch completed, preparing to auto-continue', { action, chainId });
+      // Keep the pending info - it will be executed by the post-handler effect
       dispatchPool({ type: 'SET_ERROR', payload: null });
-      dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to ${chainConfig?.name}! Processing ${action}...` });
-      
-      // Use setTimeout to let state settle, then trigger the action
-      setTimeout(() => {
-        if (action === 'deposit') {
-          // Re-trigger deposit - the handleDeposit will now pass chain validation
-          dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: true });
-        } else if (action === 'withdraw') {
-          dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: true });
-        }
-      }, 500);
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to ${chainConfig?.name}! Starting ${action}...` });
     }
   }, [chainId, chainConfig?.name]);
   
@@ -934,6 +935,34 @@ export function useCommunityPool(propAddress?: string) {
   }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.poolData, fetchPoolData]);
   
   // ============================================================================
+  // AUTO-EXECUTE AFTER CHAIN SWITCH
+  // This effect runs AFTER handlers are defined so it can call them
+  // ============================================================================
+  useEffect(() => {
+    if (!pendingChainSwitchRef.current) return;
+    if (!chainId) return;
+    
+    const { action, targetChainId } = pendingChainSwitchRef.current;
+    
+    // Execute only when we're on the target chain
+    if (chainId === targetChainId) {
+      // Clear pending action BEFORE executing to prevent infinite loops
+      pendingChainSwitchRef.current = null;
+      
+      logger.info('[CommunityPool] Auto-executing pending action after chain switch', { action });
+      
+      // Small delay to let UI update, then execute the action
+      setTimeout(() => {
+        if (action === 'deposit') {
+          handleDeposit();
+        } else if (action === 'withdraw') {
+          handleWithdraw();
+        }
+      }, 800);
+    }
+  }, [chainId, handleDeposit, handleWithdraw]);
+  
+  // ============================================================================
   // Stable dispatcher callbacks (avoid re-creating on every render)
   const setShowDeposit = useCallback((show: boolean) => dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: show }), []);
   const setShowWithdraw = useCallback((show: boolean) => dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: show }), []);
@@ -999,14 +1028,22 @@ export function useCommunityPool(propAddress?: string) {
   }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain]);
   
   // Memoize derived configuration values
-  const configValues = useMemo(() => ({
-    chainConfig,
-    network,
-    poolDeployed,
-    COMMUNITY_POOL_ADDRESS,
-    isFirstDeposit,
-    isChainMismatch,
-  }), [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS, isFirstDeposit, isChainMismatch]);
+  const configValues = useMemo(() => {
+    // Format user's USDT balance (6 decimals)
+    const userBalance = userUsdtBalance 
+      ? parseFloat(formatUnits(BigInt(userUsdtBalance.toString()), 6))
+      : 0;
+    
+    return {
+      chainConfig,
+      network,
+      poolDeployed,
+      COMMUNITY_POOL_ADDRESS,
+      isFirstDeposit,
+      isChainMismatch,
+      userUsdtBalance: userBalance,
+    };
+  }, [chainConfig, network, poolDeployed, COMMUNITY_POOL_ADDRESS, isFirstDeposit, isChainMismatch, userUsdtBalance]);
 
   // RETURN
   // ============================================================================
