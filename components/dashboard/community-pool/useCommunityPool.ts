@@ -692,22 +692,31 @@ export function useCommunityPool(propAddress?: string) {
       }, 15000);
       
       console.warn('%c[CHAIN SWITCH] About to call addAndSwitchChain()', 'background: #0f0; color: #000; font-size: 14px;');
-      addAndSwitchChain()
-        .then(() => {
-          console.log('[CommunityPool] Chain switch successful!');
-          clearTimeout(timeoutId);
-          // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
-        })
-        .catch((err: any) => {
-          console.error('[CommunityPool] Chain switch failed:', err);
-          clearTimeout(timeoutId);
-          pendingChainSwitchRef.current = null;
-          if (err?.code === 4001 || err?.message?.includes('rejected')) {
-            dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please add the chain manually in your wallet.' });
-          } else {
-            dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it manually.` });
-          }
-        });
+      
+      // Wrap in immediate try-catch to see any sync errors
+      try {
+        console.log('[CHAIN SWITCH] Creating promise...');
+        const switchPromise = addAndSwitchChain();
+        console.log('[CHAIN SWITCH] Promise created, attaching handlers...');
+        switchPromise
+          .then(() => {
+            console.log('[CommunityPool] Chain switch successful!');
+            clearTimeout(timeoutId);
+            // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
+          })
+          .catch((err: any) => {
+            console.error('[CommunityPool] Chain switch failed:', err);
+            clearTimeout(timeoutId);
+            pendingChainSwitchRef.current = null;
+            if (err?.code === 4001 || err?.message?.includes('rejected')) {
+              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please add the chain manually in your wallet.' });
+            } else {
+              dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it manually.` });
+            }
+          });
+      } catch (syncError) {
+        console.error('[CHAIN SWITCH] Synchronous error:', syncError);
+      }
       return;
     }
     
