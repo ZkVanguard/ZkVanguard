@@ -166,6 +166,8 @@ export function useCommunityPool(propAddress?: string) {
   const userSelectedChainRef = useRef(false);
   // Track pending action after chain switch (auto-retry)
   const pendingChainSwitchRef = useRef<{ action: 'deposit' | 'withdraw'; targetChainId: number } | null>(null);
+  // Skip chain check after successful wallet switch (wagmi may not sync immediately)
+  const skipChainCheckRef = useRef(false);
   
   // Wagmi hooks
   const { address: connectedAddress, isConnected, chain } = useAccount();
@@ -604,7 +606,13 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     const validChainIds = getValidChainIds(selectedChain);
-    if (!validChainIds.includes(chainId as number)) {
+    
+    // Skip chain check if we just did a successful wallet switch (wagmi lags behind native API)
+    if (skipChainCheckRef.current) {
+      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Skipping chain check (just switched), proceeding with deposit');
+      skipChainCheckRef.current = false;
+      // Fall through to actual deposit logic below
+    } else if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
       console.error('🔴🔴🔴 CHAIN SWITCH v3 - Mismatch detected!', { chainId, targetChainId, selectedChain });
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
@@ -670,14 +678,15 @@ export function useCommunityPool(propAddress?: string) {
         .then(() => {
           console.error('🔴🔴🔴 CHAIN SWITCH v3 - SUCCESS!');
           clearTimeout(timeoutId);
-          // Clear error and continue deposit after wagmi updates
+          // Set flag to skip chain check on retry (wagmi doesn't sync immediately)
+          skipChainCheckRef.current = true;
+          pendingChainSwitchRef.current = null;
           dispatchPool({ type: 'SET_ERROR', payload: null });
-          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Will retry deposit in 1s');
+          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Will retry deposit in 500ms (skip chain check)');
           setTimeout(() => {
-            console.error('🔴🔴🔴 CHAIN SWITCH v3 - Retrying deposit now');
-            pendingChainSwitchRef.current = null; // Clear so we don't loop
+            console.error('🔴🔴🔴 CHAIN SWITCH v3 - Retrying deposit now (skipChainCheck=true)');
             handleDeposit();
-          }, 1000);
+          }, 500);
         })
         .catch((switchError: any) => {
           console.error('🔴🔴🔴 CHAIN SWITCH v3 - Error:', switchError?.code, switchError?.message);
@@ -690,14 +699,15 @@ export function useCommunityPool(propAddress?: string) {
               .then(() => {
                 console.error('🔴🔴🔴 Chain added!');
                 clearTimeout(timeoutId);
-                // Clear error and continue deposit after wagmi updates
+                // Set flag to skip chain check on retry (wagmi doesn't sync immediately)
+                skipChainCheckRef.current = true;
+                pendingChainSwitchRef.current = null;
                 dispatchPool({ type: 'SET_ERROR', payload: null });
-                console.error('🔴🔴🔴 Will retry deposit in 1s after chain add');
+                console.error('🔴🔴🔴 Will retry deposit in 500ms after chain add (skip chain check)');
                 setTimeout(() => {
-                  console.error('🔴🔴🔴 Retrying deposit after chain add');
-                  pendingChainSwitchRef.current = null;
+                  console.error('🔴🔴🔴 Retrying deposit after chain add (skipChainCheck=true)');
                   handleDeposit();
-                }, 1000);
+                }, 500);
               })
               .catch((addError: any) => {
                 console.error('🔴🔴🔴 Add chain failed:', addError);
