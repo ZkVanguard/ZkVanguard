@@ -17,6 +17,7 @@ interface DepositWithdrawActionsProps {
   network: 'mainnet' | 'testnet';
   isFirstDeposit?: boolean;
   isChainMismatch?: boolean;
+  userUsdtBalance?: number;
   // EVM state
   showDeposit: boolean;
   showWithdraw: boolean;
@@ -59,6 +60,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   network = 'testnet',
   isFirstDeposit = false,
   isChainMismatch = false,
+  userUsdtBalance = 0,
   showDeposit,
   showWithdraw,
   depositAmount,
@@ -270,9 +272,16 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
           </p>
         </div>
       ) : (
-        <div className="mb-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-          <Wallet className="w-4 h-4 text-green-500" />
-          <span>Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
+        <div className="mb-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-green-500" />
+            <span>Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
+          </div>
+          {!isChainMismatch && userUsdtBalance >= 0 && (
+            <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded">
+              Balance: ${userUsdtBalance.toFixed(2)} {tokenInfo.symbol}
+            </span>
+          )}
         </div>
       )}
 
@@ -282,6 +291,16 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
           <AlertTriangle className="w-4 h-4 text-blue-500 flex-shrink-0" />
           <p className="text-sm text-blue-700 dark:text-blue-400">
             Your wallet is on a different network. Click Deposit/Withdraw to switch to <strong>{chainConfig?.name}</strong> automatically.
+          </p>
+        </div>
+      )}
+
+      {/* No USDT warning */}
+      {evmConnected && !isChainMismatch && userUsdtBalance === 0 && (
+        <div className="mb-3 flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            You have no {tokenInfo.symbol} on {chainConfig?.name}. Get some WDK USDT from <a href="https://wdk.tether.io" target="_blank" rel="noopener noreferrer" className="underline font-medium">wdk.tether.io</a> to deposit.
           </p>
         </div>
       )}
