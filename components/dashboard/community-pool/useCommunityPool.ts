@@ -606,9 +606,7 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
-      console.warn(`%c[CHAIN SWITCH] Chain mismatch detected!`, 'background: #ff0; color: #000; font-size: 16px; padding: 4px');
-      console.warn(`[CHAIN SWITCH] Wallet: ${chainId}, Target: ${targetChainId}, Selected: ${selectedChain}`);
-      alert(`DEBUG: Chain switch starting - wallet chainId=${chainId}, target=${targetChainId}`);
+      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Mismatch detected!', { chainId, targetChainId, selectedChain });
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
@@ -637,86 +635,70 @@ export function useCommunityPool(propAddress?: string) {
         },
       };
       
-      // Try to add and switch chain using native wallet API (DEPOSIT)
-      const addAndSwitchChain = async () => {
-        console.log('[DEPOSIT SWITCH] Step 1: checking window.ethereum');
-        const ethereum = (window as any).ethereum;
-        if (!ethereum) {
-          console.error('[DEPOSIT SWITCH] No ethereum!');
-          throw new Error('No wallet detected');
-        }
-        console.log('[DEPOSIT SWITCH] Step 2: got ethereum, getting params for chain', targetChainId);
-        
-        const params = chainParams[targetChainId];
-        if (!params) {
-          throw new Error(`Chain ${targetChainId} not configured`);
-        }
-        console.log('[DEPOSIT SWITCH] Step 3: calling wallet_switchEthereumChain...');
-        
-        try {
-          // First try to just switch (chain might already be added)
-          await ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: params.chainId }],
-          });
-          console.log('[DEPOSIT SWITCH] Step 4: SUCCESS!');
-        } catch (switchError: any) {
-          console.log('[DEPOSIT SWITCH] Step 4: error', switchError?.code, switchError?.message);
-          // 4902 = Chain not added, try to add it
-          if (switchError.code === 4902) {
-            console.log('[DEPOSIT SWITCH] Adding chain...');
-            await ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [params],
-            });
-            console.log('[DEPOSIT SWITCH] Chain added, switching...');
-            // After adding, switch to it
-            await ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: params.chainId }],
-            });
-            console.log('[DEPOSIT SWITCH] Done!');
-          } else {
-            throw switchError;
-          }
-        }
-      };
-      
-      // Set a timeout to show manual switch message if wallet doesn't respond
+      // Set timeout first
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'deposit') {
-          console.log('[CommunityPool] Switch timeout - showing manual message');
+          console.log('[CommunityPool] Switch timeout');
           dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Deposit again.` });
           pendingChainSwitchRef.current = null;
         }
       }, 15000);
       
-      console.warn('%c[CHAIN SWITCH] About to call addAndSwitchChain()', 'background: #0f0; color: #000; font-size: 14px;');
+      // Native wallet API chain switch
+      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Starting wallet request');
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) {
+        console.error('🔴🔴🔴 No ethereum object!');
+        clearTimeout(timeoutId);
+        dispatchPool({ type: 'SET_ERROR', payload: 'No wallet detected. Please install MetaMask.' });
+        return;
+      }
       
-      // Wrap in immediate try-catch to see any sync errors
-      try {
-        console.log('[CHAIN SWITCH] Creating promise...');
-        const switchPromise = addAndSwitchChain();
-        console.log('[CHAIN SWITCH] Promise created, attaching handlers...');
-        switchPromise
-          .then(() => {
-            console.log('[CommunityPool] Chain switch successful!');
-            clearTimeout(timeoutId);
-            // Chain switch successful - the AUTO-EXECUTE effect will handle continuation
-          })
-          .catch((err: any) => {
-            console.error('[CommunityPool] Chain switch failed:', err);
+      const params = chainParams[targetChainId];
+      if (!params) {
+        console.error('🔴🔴🔴 No params for chain', targetChainId);
+        clearTimeout(timeoutId);
+        dispatchPool({ type: 'SET_ERROR', payload: `Chain ${targetChainId} not supported` });
+        return;
+      }
+      
+      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Calling wallet_switchEthereumChain', params.chainId);
+      ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: params.chainId }],
+      })
+        .then(() => {
+          console.error('🔴🔴🔴 CHAIN SWITCH v3 - SUCCESS!');
+          clearTimeout(timeoutId);
+        })
+        .catch((switchError: any) => {
+          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Error:', switchError?.code, switchError?.message);
+          if (switchError.code === 4902) {
+            console.error('🔴🔴🔴 Chain not added, adding...');
+            ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [params],
+            })
+              .then(() => {
+                console.error('🔴🔴🔴 Chain added!');
+                clearTimeout(timeoutId);
+              })
+              .catch((addError: any) => {
+                console.error('🔴🔴🔴 Add chain failed:', addError);
+                clearTimeout(timeoutId);
+                pendingChainSwitchRef.current = null;
+                dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet manually.` });
+              });
+          } else if (switchError.code === 4001) {
             clearTimeout(timeoutId);
             pendingChainSwitchRef.current = null;
-            if (err?.code === 4001 || err?.message?.includes('rejected')) {
-              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please add the chain manually in your wallet.' });
-            } else {
-              dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it manually.` });
-            }
-          });
-      } catch (syncError) {
-        console.error('[CHAIN SWITCH] Synchronous error:', syncError);
-      }
+            dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
+          } else {
+            clearTimeout(timeoutId);
+            pendingChainSwitchRef.current = null;
+            dispatchPool({ type: 'SET_ERROR', payload: `Error: ${switchError?.message || 'Unknown error'}` });
+          }
+        });
       return;
     }
     
