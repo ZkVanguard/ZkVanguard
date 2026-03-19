@@ -52,11 +52,16 @@ export const PoolHeader = memo(function PoolHeader({
                       ? 'bg-white text-indigo-600'
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
-                  title={`${config.name} ${config.status === 'testing' ? '(Testing)' : ''}`}
+                  title={`${config.name} ${key === 'sepolia' ? '(Official WDK USDT)' : config.status === 'testing' ? '(Testing)' : ''}`}
                 >
                   <span>{config.icon}</span>
                   <span>{config.shortName}</span>
-                  {config.status === 'testing' && (
+                  {key === 'sepolia' && (
+                    <span className="ml-1 px-1 py-0.5 text-[10px] bg-emerald-500 text-white rounded font-bold">
+                      USDT
+                    </span>
+                  )}
+                  {config.status === 'testing' && key !== 'sepolia' && (
                     <span className="ml-1 px-1 py-0.5 text-[10px] bg-yellow-500 text-white rounded">
                       TEST
                     </span>

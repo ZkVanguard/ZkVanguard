@@ -123,8 +123,9 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         // CommunityPool V3 Proxy (upgraded 2026-03-12)
+        // NOTE: Cronos testnet does NOT have official WDK USDT - use Sepolia for hackathon!
         communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
-        usdt: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // USDT via WDK (Mock on testnet, 6 decimals)
+        usdt: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDC (NOT official WDK USDT)
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
       mainnet: {
@@ -175,13 +176,17 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     status: 'testing',
   },
   
+  // ============================================
+  // SEPOLIA - PRIMARY CHAIN FOR TETHER WDK HACKATHON
+  // Has OFFICIAL WDK USDT token
+  // ============================================
   sepolia: {
     chainId: 11155111,
     chainType: 'evm',
-    name: 'Sepolia',
-    shortName: 'SEP',
-    icon: '🟣',
-    color: 'bg-purple-500',
+    name: 'Sepolia (WDK)',
+    shortName: 'WDK',
+    icon: '💎',
+    color: 'bg-emerald-500',
     nativeCurrency: {
       name: 'Ethereum',
       symbol: 'ETH',
@@ -198,17 +203,19 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         // CommunityPool deployed via hardhat (2026-03-18)
+        // OFFICIAL WDK USDT - use this for Tether Hackathon!
         communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
-        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Official WDK USDT on Sepolia
+        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL Tether WDK USDT
         pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000',
-        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // WDK USDT
+        usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL WDK USDT
         pythOracle: '0x0000000000000000000000000000000000000000',
       },
     },
-    // Pool tracks BTC, ETH, USDT allocations - Tether WDK Hackathon focused
+    // Pool tracks BTC, ETH, USDT allocations
+    // PRIMARY for Tether WDK Hackathon - has official USDT
     assets: ['BTC', 'ETH', 'USDT'],
     status: 'live',
   },
