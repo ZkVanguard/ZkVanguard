@@ -383,12 +383,20 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
         CRO: { percentage: stats.allocations.CRO.percentage },
       };
       
+      // Check if hedging is active (has non-zero allocations)
+      const hasHedging = stats.allocations.BTC.percentage > 0 || stats.allocations.ETH.percentage > 0;
+      const actualHoldings = hasHedging 
+        ? allocations  // Show target allocations when hedging
+        : { USDT: { percentage: 100 } };  // Show USDT when not hedged
+      
       const result = {
         totalValueUSD: stats.totalNAV,
         totalShares: stats.totalShares,
         sharePrice: stats.sharePrice,
         totalMembers: stats.memberCount,
         allocations,
+        actualHoldings,
+        depositAsset: 'USDT',
         onChain: true,
       };
       setCachedRpc(cacheKey, result, POOL_DATA_TTL);
@@ -1041,6 +1049,18 @@ export async function GET(request: NextRequest) {
         const onChainMembers = await getAllOnChainMembers(chainConfig);
         const uniqueActiveMembers = onChainMembers?.filter(m => m.shares > 0).length ?? onChainPool.totalMembers ?? 0;
         
+        // Check if pool has actual asset holdings or just USDT
+        // If all allocations are 0 or assetBalances are 0, pool is holding USDT
+        const hasTargetAllocations = 
+          (onChainPool.allocations.BTC?.percentage || 0) > 0 || 
+          (onChainPool.allocations.ETH?.percentage || 0) > 0;
+        
+        // Determine actual holdings vs target allocations
+        // Pool accepts USDT deposits, may or may not have hedged into assets
+        const actualHoldings = hasTargetAllocations 
+          ? onChainPool.allocations  // Show target allocations when hedging is active
+          : { USDT: { percentage: 100 } };  // Show USDT when not hedged
+        
         // On-chain contract is the authoritative source - use it directly
         return cachedJsonResponse({
           success: true,
@@ -1049,11 +1069,13 @@ export async function GET(request: NextRequest) {
             totalShares: onChainPool.totalShares,
             sharePrice: onChainPool.sharePrice,
             memberCount: uniqueActiveMembers,
-            allocations: onChainPool.allocations,
+            allocations: onChainPool.allocations,  // Target allocations from contract
+            actualHoldings,  // What the pool is actually holding
+            depositAsset: 'USDT',  // Pool accepts USDT via Tether WDK
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
           },
-          supportedAssets: chainConfig.assets,
+          supportedAssets: [...chainConfig.assets, 'USDT'],  // Include USDT as deposit asset
           timestamp: Date.now(),
           source: 'onchain',
         }, 30); // CDN cache for 30 seconds
