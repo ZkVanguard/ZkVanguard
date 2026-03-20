@@ -119,16 +119,16 @@ export function useUserPortfolios(userAddress?: string) {
         return;
       }
 
-      // If wagmi is still loading portfolioCount, wait — don't proceed yet
+      // If hook is still loading portfolioCount, wait — don't proceed yet
       if (countLoading) {
-        logger.info(`[useUserPortfolios] Waiting for wagmi portfolioCount to resolve...`, { component: 'hooks' });
+        logger.info(`[useUserPortfolios] Waiting for portfolioCount to resolve...`, { component: 'hooks' });
         return; // Effect will re-run when countLoading changes
       }
 
-      // If wagmi returned an error or totalCount is still undefined after loading,
+      // If hook returned an error or totalCount is still undefined after loading,
       // use server-side API to fetch portfolios (avoids ethers in browser issues)
       if (totalCount === undefined || totalCount === null) {
-        logger.info(`[useUserPortfolios] wagmi portfolioCount unavailable (error: ${countError?.message ?? 'none'}), using API fallback`, { component: 'hooks' });
+        logger.info(`[useUserPortfolios] portfolioCount unavailable (error: ${countError?.message ?? 'none'}), using API fallback`, { component: 'hooks' });
         try {
           const res = await fetch(`/api/portfolio/list?address=${encodeURIComponent(userAddress)}`);
           if (res.ok) {
@@ -177,7 +177,7 @@ export function useUserPortfolios(userAddress?: string) {
         }
       }
 
-      // Use wagmi totalCount if available, otherwise it was already handled via fallback above
+      // Use totalCount if available, otherwise it was already handled via fallback above
       await fetchWithCount(Number(totalCount));
     }
 

@@ -10,7 +10,7 @@
  * - GET /api/community-pool/treasury/status (treasury wallet status)
  * - POST /api/community-pool/treasury/transfer (execute transfers)
  * 
- * Users deposit via their own wallets (MetaMask, OKX) using wagmi/RainbowKit.
+ * Users deposit via their own wallets using WDK.
  * The AI agent's treasury wallet is managed securely on the server.
  */
 

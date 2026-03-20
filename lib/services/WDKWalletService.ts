@@ -10,7 +10,7 @@
  * ARCHITECTURE:
  * - WDK handles wallet creation, key management, and signing
  * - This service provides high-level USDT operations
- * - Integrates with existing viem/wagmi wallet connections
+ * - Integrates with existing viem wallet connections
  */
 
 import { logger } from '../utils/logger';
@@ -128,7 +128,7 @@ const ERC20_ABI = [
  * Service for Tether WDK-powered USDT operations.
  * 
  * This service can be used standalone or integrated with
- * existing wallet connections (viem/wagmi).
+ * existing wallet connections (viem).
  */
 export class WDKWalletService {
   private static instance: WDKWalletService | null = null;

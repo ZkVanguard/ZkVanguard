@@ -5,7 +5,7 @@ import { useSuiSafe } from '@/app/sui-providers';
 
 /**
  * Unified wallet hook that works with both EVM (Cronos) and SUI wallets.
- * Use this hook instead of wagmi's useAccount when you need to support both chains.
+ * Use this hook when you need to support both chains.
  * 
  * Priority: SUI wallet takes precedence if connected, otherwise falls back to EVM.
  */
