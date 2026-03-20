@@ -3,7 +3,7 @@ import { logger } from '../../lib/utils/logger';
 
 import { useState } from 'react';
 import { Shield, ExternalLink, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient } from '@/lib/wdk/wdk-wagmi-compat';
 
 interface VerificationResult {
   onChain: boolean;

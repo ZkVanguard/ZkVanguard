@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
-import { useWalletClient, useChainId } from 'wagmi';
+import { useWalletClient, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getExplorerUrl, getNetworkName, CHAIN_IDS } from '@/lib/utils/network';
 

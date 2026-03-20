@@ -5,7 +5,7 @@ import { Shield, CheckCircle, Loader2, ExternalLink, XCircle, Cpu, Zap, ChevronD
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useVerifyProof, useContractAddresses } from '../../lib/contracts/hooks';
 import { generateProofForOnChain } from '../../lib/api/zk';
-import { useWalletClient } from 'wagmi';
+import { useWalletClient } from '@/lib/wdk/wdk-wagmi-compat';
 import { logger } from '../../lib/utils/logger';
 
 interface StoredCommitment {
