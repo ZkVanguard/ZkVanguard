@@ -9,7 +9,7 @@ const nextConfig = {
   
   // Performance optimizations
   experimental: {
-    optimizePackageImports: ['@rainbow-me/rainbowkit', 'wagmi', 'viem', 'lucide-react', '@heroicons/react', 'framer-motion', 'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui'],
+    optimizePackageImports: ['viem', 'lucide-react', '@heroicons/react', 'framer-motion', 'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui'],
   },
   
   // Compiler optimizations
