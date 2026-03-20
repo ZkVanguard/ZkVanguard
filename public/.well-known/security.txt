@@ -14,7 +14,7 @@ Preferred-Languages: en
 # - Create wallets in the browser
 # - Store any sensitive wallet credentials
 #
-# Users connect their OWN wallets (MetaMask, OKX, etc.) via standard WalletConnect/wagmi.
+# Users connect their OWN wallets via WDK self-custodial wallet.
 # 
 # Source Code: https://github.com/[YOUR-REPO]
 # Hackathon: https://dorahacks.io/hackathon/wdk1
