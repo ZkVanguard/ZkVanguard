@@ -446,8 +446,53 @@ export function usePublicClient(): any {
     const chainConfig = WDK_CHAINS[state.chainKey];
     if (!chainConfig) return null;
     
-    // Return an ethers provider as the "public client"
-    return new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    
+    // Wrap ethers provider with viem-compatible method signatures
+    return {
+      _provider: provider,
+      
+      async getChainId(): Promise<number> {
+        const network = await provider.getNetwork();
+        return Number(network.chainId);
+      },
+      
+      async getTransaction({ hash }: { hash: string }) {
+        const tx = await provider.getTransaction(hash);
+        if (!tx) return null;
+        return {
+          hash: tx.hash,
+          from: tx.from,
+          to: tx.to,
+          value: tx.value,
+          data: tx.data,
+          blockNumber: tx.blockNumber ? BigInt(tx.blockNumber) : null,
+        };
+      },
+      
+      async getTransactionReceipt({ hash }: { hash: string }) {
+        const receipt = await provider.getTransactionReceipt(hash);
+        if (!receipt) return null;
+        return {
+          status: receipt.status === 1 ? 'success' : 'reverted',
+          to: receipt.to,
+          from: receipt.from,
+          blockNumber: BigInt(receipt.blockNumber),
+          logs: receipt.logs.map(log => ({
+            address: log.address,
+            topics: log.topics as string[],
+            data: log.data,
+          })),
+        };
+      },
+      
+      async readContract({ address, abi, functionName, args }: {
+        address: string; abi: any[]; functionName: string; args?: any[];
+      }) {
+        const contract = new ethers.Contract(address, abi, provider);
+        return await contract[functionName](...(args || []));
+      },
+    };
   }, [state.chainKey]);
 }
 
