@@ -1062,6 +1062,14 @@ export async function GET(request: NextRequest) {
           : { USDT: { percentage: 100 } };  // Show USDT when not hedged
         
         // On-chain contract is the authoritative source - use it directly
+        // Dedupe supported assets (Sepolia config already includes USDT)
+        const supportedAssets = [...new Set([...chainConfig.assets, 'USDT'])];
+        
+        // Get native USDT token address for this chain from full config
+        const fullChainConfig = POOL_CHAIN_CONFIGS[chainConfig.chainKey];
+        const networkKey = chainConfig.network as 'testnet' | 'mainnet';
+        const usdtAddress = fullChainConfig?.contracts?.[networkKey]?.usdt || fullChainConfig?.contracts?.testnet?.usdt || null;
+        
         return cachedJsonResponse({
           success: true,
           pool: {
@@ -1072,10 +1080,11 @@ export async function GET(request: NextRequest) {
             allocations: onChainPool.allocations,  // Target allocations from contract
             actualHoldings,  // What the pool is actually holding
             depositAsset: 'USDT',  // Pool accepts USDT via Tether WDK
+            depositTokenAddress: usdtAddress,  // Native USDT contract address
             lastAIDecision: null,
             performance: { day: null, week: null, month: null },
           },
-          supportedAssets: [...chainConfig.assets, 'USDT'],  // Include USDT as deposit asset
+          supportedAssets,  // Deduplicated chain assets + USDT
           timestamp: Date.now(),
           source: 'onchain',
         }, 30); // CDN cache for 30 seconds
@@ -1088,11 +1097,18 @@ export async function GET(request: NextRequest) {
     try {
       const summary = await getPoolSummary();
       
+      // Get native USDT token address for this chain from full config
+      const fullChainConfig = POOL_CHAIN_CONFIGS[chainConfig.chainKey];
+      const networkKey = chainConfig.network as 'testnet' | 'mainnet';
+      const usdtAddress = fullChainConfig?.contracts?.[networkKey]?.usdt || fullChainConfig?.contracts?.testnet?.usdt || null;
+      
       return NextResponse.json({
         success: true,
         pool: {
           ...summary,
           memberCount: summary.totalMembers, // Map to frontend expected field name
+          depositAsset: 'USDT',
+          depositTokenAddress: usdtAddress,  // Native USDT contract address
         },
         supportedAssets: chainConfig.assets,
         timestamp: Date.now(),
