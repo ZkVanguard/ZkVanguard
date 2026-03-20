@@ -139,7 +139,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
       if (txHash && !normalizedProofHash) {
         logger.debug('🔍 Extracting proof hash from transaction...');
         const receipt = await publicClient?.getTransactionReceipt({ hash: txHash as `0x${string}` });
-        const commitmentLog = receipt?.logs.find(log => 
+        const commitmentLog = receipt?.logs.find((log: any) => 
           log.address.toLowerCase() === GASLESS_VERIFIER_ADDRESS.toLowerCase()
         );
         
@@ -331,7 +331,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
             
             // Look for CommitmentStored event (first topic is event signature, second is indexed proofHash)
             // Try to find the log from ANY contract that has the right structure
-            const commitmentStoredLog = receipt.logs.find(log => 
+            const commitmentStoredLog = receipt.logs.find((log: any) =>        
               log.topics.length >= 2
             );
             
@@ -348,7 +348,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
                 logger.debug('📍 Using contract address', { component: 'ProofVerification', data: contractAddress });
               }
             } else {
-              logger.debug('⚠️ No event logs with topics found', { component: 'ProofVerification', data: receipt.logs.map(l => ({ address: l.address, topics: l.topics.length })) });
+              logger.debug('⚠️ No event logs with topics found', { component: 'ProofVerification', data: receipt.logs.map((l: any) => ({ address: l.address, topics: l.topics.length })) });
             }
           }
           
