@@ -70,6 +70,9 @@ export function ConnectButton() {
   const [importPhrase, setImportPhrase] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => { setMounted(true); }, []);
   
   // WDK wallet hooks (replaces RainbowKit)
   const { state: wdkState, createWallet, importWallet, disconnect: wdkDisconnect } = useWdk();
@@ -422,7 +425,7 @@ export function ConnectButton() {
       </div>
 
       {/* WDK Modal - rendered via portal to escape Navbar stacking context */}
-      {showWdkModal !== 'none' && typeof document !== 'undefined' && createPortal(
+      {showWdkModal !== 'none' && mounted && createPortal(
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4" onClick={() => setShowWdkModal('none')}>
           <div className="bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-800" onClick={e => e.stopPropagation()}>
             {showWdkModal === 'connect' && (
