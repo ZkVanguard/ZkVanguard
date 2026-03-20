@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { usePublicClient, useAccount } from 'wagmi';
+import { usePublicClient, useAccount } from '@/lib/wdk/wdk-wagmi-compat';
 import { logger } from '@/lib/utils/logger';
 import { addTransactionToCache } from '../utils/transactionCache';
 
