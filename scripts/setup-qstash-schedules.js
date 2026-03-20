@@ -65,6 +65,12 @@ const MASTER_SCHEDULE = {
 
 const INDIVIDUAL_SCHEDULES = [
   {
+    name: 'Pyth Price Update',
+    destination: `${BASE_URL}/api/cron/pyth-update`,
+    cron: '*/30 * * * *', // Every 30 minutes - keep oracle prices fresh
+    retries: 3,
+  },
+  {
     name: 'Community Pool',
     destination: `${BASE_URL}/api/cron/community-pool`,
     cron: '*/30 * * * *', // Every 30 minutes
