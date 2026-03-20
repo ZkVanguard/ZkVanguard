@@ -5,23 +5,23 @@
   "crons": [
     {
       "path": "/api/cron/master",
-      "schedule": "0 */2 * * *"
-    },
-    {
-      "path": "/api/cron/hedge-monitor",
-      "schedule": "30 * * * *"
-    },
-    {
-      "path": "/api/cron/auto-rebalance",
-      "schedule": "15 */3 * * *"
-    },
-    {
-      "path": "/api/cron/community-pool",
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/cron/pool-nav-monitor",
+      "path": "/api/cron/hedge-monitor",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/auto-rebalance",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/community-pool",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/pool-nav-monitor",
+      "schedule": "0 8 * * *"
     }
   ],
   "build": {
