@@ -180,6 +180,18 @@ export function useCommunityPool(propAddress?: string) {
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
   
+  // Debug: Track transaction state changes
+  useEffect(() => {
+    console.error('🟡🟡🟡 TX STATE:', {
+      txHash: txHash ? `${txHash.slice(0, 10)}...` : null,
+      isPending,
+      isConfirming,
+      isConfirmed,
+      txStatus: txState.txStatus,
+      writeError: writeError?.message || null,
+    });
+  }, [txHash, isPending, isConfirming, isConfirmed, txState.txStatus, writeError]);
+  
   // SUI hooks
   const suiContext = useSuiSafe();
   const suiAddress = suiContext?.address ?? null;
