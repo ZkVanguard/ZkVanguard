@@ -1,0 +1,33 @@
+*** Begin Patch
+*** Update File: src/memory-safe/signing-key.js
+@@
+-// eslint-disable-next-line camelcase
+-import { sodium_memzero } from 'sodium-universal'
++// NOTE: avoid importing native `sodium-*` packages directly in files
++// that may be bundled for the browser. Provide a small, explicit
++// synchronous memzero fallback that works in both Node and browser
++// bundlers. This preserves behavior (zeroing sensitive buffers) while
++// preventing native module bundling errors (sodium-native).
++
++function memzeroSync (buf) {
++  if (!buf) return
++  // Buffer and Uint8Array both implement `fill` in modern environments
++  if (typeof buf.fill === 'function') {
++    buf.fill(0)
++    return
++  }
++
++  // Fallback for older or unusual environments
++  for (let i = 0; i < buf.length; i++) buf[i] = 0
++}
+@@
+   dispose () {
+-    sodium_memzero(this._privateKeyBuffer)
+-
+-    this._privateKeyBuffer = undefined
++    // Zero sensitive memory using safe fallback to avoid bundling native libs
++    memzeroSync(this._privateKeyBuffer)
++
++    this._privateKeyBuffer = undefined
+   }
+*** End Patch
