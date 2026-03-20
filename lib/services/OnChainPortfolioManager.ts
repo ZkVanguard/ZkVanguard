@@ -1,15 +1,15 @@
 /**
  * On-Chain Portfolio Manager
  * 
- * Manages positions using ACTUAL MockUSDC on Cronos Testnet
+ * Manages positions using ACTUAL USDT on Cronos Testnet
  * 
  * Contract Addresses:
- * - MockUSDC: 0x28217DAddC55e3C4831b4A48A00Ce04880786967
+ * - USDT: 0x28217DAddC55e3C4831b4A48A00Ce04880786967
  * - MockMoonlander: 0xAb4946d7BD583a74F5E5051b22332fA674D7BE54
  * - HedgeExecutor: 0x090b6221137690EbB37667E4644287487CE462B9
  * 
  * Features:
- * - Uses real MockUSDC balance from testnet
+ * - Uses real USDT balance from testnet
  * - Creates hedges via HedgeExecutor contract
  * - AI Risk management with RiskAgent
  * - Real API price tracking
@@ -26,7 +26,7 @@ import * as path from 'path';
 
 // Deployment addresses from cronos-testnet.json
 interface DeploymentConfig {
-  MockUSDC: string;
+  USDT: string;
   MockMoonlander: string;
   HedgeExecutor: string;
   RWAManager: string;
@@ -73,8 +73,8 @@ const RWA_MANAGER_ABI = [
   }
 ];
 
-// Extended ERC20 ABI with mint function (MockUSDC has this)
-const MOCK_USDC_ABI = [
+// Extended ERC20 ABI with mint function (USDT testnet has this)
+const USDT_ABI = [
   ...ERC20_ABI,
   {
     "inputs": [
@@ -133,8 +133,8 @@ export interface OnChainPosition {
 export interface OnChainPortfolioSummary {
   portfolioId: string;
   walletAddress: string;
-  mockUSDCBalance: string;
-  mockUSDCBalanceFormatted: number;
+  usdtBalance: string;
+  usdtBalanceFormatted: number;
   targetAllocation: number; // Total we want to allocate
   allocatedValue: number;
   positions: OnChainPosition[];
@@ -145,7 +145,7 @@ export interface OnChainPortfolioSummary {
     aiRecommendations: string[];
   };
   contracts: {
-    mockUSDC: string;
+    usdt: string;
     mockMoonlander: string;
     hedgeExecutor: string;
   };
@@ -167,7 +167,7 @@ class OnChainPortfolioManager {
   private provider: ethers.JsonRpcProvider;
   private signer: ethers.Wallet | null = null;
   private deployment: DeploymentConfig;
-  private mockUSDCContract: ethers.Contract | null = null;
+  private usdtContract: ethers.Contract | null = null;
   private allocations: OnChainAllocation[];
   private positions: Map<string, OnChainPosition> = new Map();
   private isInitialized: boolean = false;
@@ -188,7 +188,7 @@ class OnChainPortfolioManager {
     logger.info('📦 OnChainPortfolioManager created', {
       network: this.deployment.network,
       chainId: this.deployment.chainId,
-      mockUSDC: this.deployment.MockUSDC,
+      usdt: this.deployment.USDT,
     });
   }
 
@@ -201,7 +201,7 @@ class OnChainPortfolioManager {
       const deploymentData = JSON.parse(fs.readFileSync(deploymentPath, 'utf-8'));
       
       return {
-        MockUSDC: deploymentData.MockUSDC,
+        USDT: deploymentData.USDT,
         MockMoonlander: deploymentData.MockMoonlander,
         HedgeExecutor: deploymentData.HedgeExecutor || deploymentData.HedgeExecutorV2,
         RWAManager: deploymentData.RWAManager || '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
@@ -212,7 +212,7 @@ class OnChainPortfolioManager {
       logger.warn('Failed to load deployment config, using defaults', { error: error instanceof Error ? error.message : String(error) });
       // Fallback to hardcoded addresses
       return {
-        MockUSDC: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
+        USDT: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
         MockMoonlander: '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54',
         HedgeExecutor: '0x090b6221137690EbB37667E4644287487CE462B9',
         RWAManager: '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
@@ -238,27 +238,27 @@ class OnChainPortfolioManager {
     if (privateKey && privateKey.length === 66) {
       this.signer = new ethers.Wallet(privateKey, this.provider);
       this.walletAddress = await this.signer.getAddress();
-      this.mockUSDCContract = new ethers.Contract(
-        this.deployment.MockUSDC,
-        MOCK_USDC_ABI,
+      this.usdtContract = new ethers.Contract(
+        this.deployment.USDT,
+        USDT_ABI,
         this.signer
       );
       logger.info('✅ Wallet connected for signing', { address: this.walletAddress });
     } else {
       // Use provided address or deployer address for read-only
       this.walletAddress = walletAddressOrPrivateKey || '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';
-      this.mockUSDCContract = new ethers.Contract(
-        this.deployment.MockUSDC,
-        MOCK_USDC_ABI,
+      this.usdtContract = new ethers.Contract(
+        this.deployment.USDT,
+        USDT_ABI,
         this.provider
       );
       logger.info('📖 Read-only mode', { address: this.walletAddress });
     }
 
-    // Fetch initial MockUSDC balance
-    await this.refreshMockUSDCBalance();
+    // Fetch initial USDT balance
+    await this.refreshUSDTBalance();
     
-    // Create position allocations based on MockUSDC balance
+    // Create position allocations based on USDT balance
     await this.calculatePositions();
     
     this.isInitialized = true;
@@ -266,43 +266,43 @@ class OnChainPortfolioManager {
   }
 
   /**
-   * Get MockUSDC balance from the blockchain
+   * Get USDT balance from the blockchain
    */
-  async getMockUSDCBalance(): Promise<{ raw: bigint; formatted: number }> {
-    if (!this.mockUSDCContract) {
+  async getUSDTBalance(): Promise<{ raw: bigint; formatted: number }> {
+    if (!this.usdtContract) {
       throw new Error('Contract not initialized');
     }
 
-    const balance = await this.mockUSDCContract.balanceOf(this.walletAddress);
-    const decimals = await this.mockUSDCContract.decimals();
+    const balance = await this.usdtContract.balanceOf(this.walletAddress);
+    const decimals = await this.usdtContract.decimals();
     const formatted = Number(ethers.formatUnits(balance, decimals));
 
     return { raw: balance, formatted };
   }
 
   /**
-   * Refresh MockUSDC balance
+   * Refresh USDT balance
    */
-  private async refreshMockUSDCBalance(): Promise<number> {
-    const { formatted } = await this.getMockUSDCBalance();
-    logger.info(`💰 MockUSDC Balance: ${formatted.toLocaleString()} USDC`, {
+  private async refreshUSDTBalance(): Promise<number> {
+    const { formatted } = await this.getUSDTBalance();
+    logger.info(`💰 USDT Balance: ${formatted.toLocaleString()} USDT`, {
       address: this.walletAddress,
-      contract: this.deployment.MockUSDC,
+      contract: this.deployment.USDT,
     });
     return formatted;
   }
 
   /**
-   * Calculate positions based on MockUSDC balance and allocations
+   * Calculate positions based on USDT balance and allocations
    */
   private async calculatePositions(): Promise<void> {
-    const mockUSDCBalance = await this.refreshMockUSDCBalance();
+    const usdtBalance = await this.refreshUSDTBalance();
     const marketService = getMarketDataService();
     
-    logger.info('📊 Calculating positions from MockUSDC balance...');
+    logger.info('📊 Calculating positions from USDT balance...');
 
     for (const allocation of this.allocations) {
-      const allocationUSD = mockUSDCBalance * (allocation.percentage / 100);
+      const allocationUSD = usdtBalance * (allocation.percentage / 100);
       
       try {
         const priceData = await marketService.getTokenPrice(allocation.symbol);
@@ -338,39 +338,39 @@ class OnChainPortfolioManager {
   }
 
   /**
-   * Mint MockUSDC (if we have signing capability)
+   * Mint USDT (if we have signing capability)
    */
-  async mintMockUSDC(amount: number): Promise<string | null> {
-    if (!this.signer || !this.mockUSDCContract) {
+  async mintUSDT(amount: number): Promise<string | null> {
+    if (!this.signer || !this.usdtContract) {
       logger.warn('Cannot mint: No signer available');
       return null;
     }
 
-    const amountWei = ethers.parseUnits(amount.toString(), 6); // USDC has 6 decimals
+    const amountWei = ethers.parseUnits(amount.toString(), 6); // USDT has 6 decimals
     
-    logger.info(`🪙 Minting ${amount.toLocaleString()} MockUSDC...`);
+    logger.info(`🪙 Minting ${amount.toLocaleString()} USDT...`);
     
     try {
-      const tx = await this.mockUSDCContract.mint(this.walletAddress, amountWei);
+      const tx = await this.usdtContract.mint(this.walletAddress, amountWei);
       const receipt = await tx.wait();
       
-      logger.info(`✅ Minted ${amount.toLocaleString()} MockUSDC`, {
+      logger.info(`✅ Minted ${amount.toLocaleString()} USDT`, {
         txHash: receipt.hash,
       });
       
       // Refresh balance and recalculate positions
-      await this.refreshMockUSDCBalance();
+      await this.refreshUSDTBalance();
       await this.calculatePositions();
       
       return receipt.hash;
     } catch (error) {
-      logger.error('Failed to mint MockUSDC', error instanceof Error ? error : undefined);
+      logger.error('Failed to mint USDT', error instanceof Error ? error : undefined);
       return null;
     }
   }
 
   /**
-   * Create a portfolio on RWAManager and deposit MockUSDC
+   * Create a portfolio on RWAManager and deposit USDT
    * This creates the on-chain portfolio with 4 virtual allocations
    */
   async createPortfolioOnRWAManager(depositAmount: number): Promise<{
@@ -413,24 +413,24 @@ class OnChainPortfolioManager {
 
       logger.info(`✅ Portfolio #${portfolioId} created`, { txHash: txHashes.create });
 
-      // Step 2: Approve MockUSDC for RWAManager
+      // Step 2: Approve USDT for RWAManager
       const amountWei = ethers.parseUnits(depositAmount.toString(), 6);
-      const approveTx = await this.mockUSDCContract!.approve(this.deployment.RWAManager, amountWei);
+      const approveTx = await this.usdtContract!.approve(this.deployment.RWAManager, amountWei);
       const approveReceipt = await approveTx.wait();
       txHashes.approve = approveReceipt.hash;
 
-      logger.info(`✅ MockUSDC approved`, { txHash: txHashes.approve });
+      logger.info(`✅ USDT approved`, { txHash: txHashes.approve });
 
-      // Step 3: Deposit MockUSDC into portfolio
+      // Step 3: Deposit USDT into portfolio
       const depositTx = await rwaManager.depositAsset(
         portfolioId,
-        this.deployment.MockUSDC,
+        this.deployment.USDT,
         amountWei
       );
       const depositReceipt = await depositTx.wait();
       txHashes.deposit = depositReceipt.hash;
 
-      logger.info(`✅ MockUSDC deposited`, { txHash: txHashes.deposit });
+      logger.info(`✅ USDT deposited`, { txHash: txHashes.deposit });
 
       // Calculate virtual allocations based on real prices
       const marketService = getMarketDataService();
@@ -534,7 +534,7 @@ class OnChainPortfolioManager {
           ...(result.data as Record<string, unknown>),
           realAgent: true,
           onChain: true,
-          mockUSDCBacked: true,
+          usdtBacked: true,
         };
       }
     } catch (error) {
@@ -548,7 +548,7 @@ class OnChainPortfolioManager {
     return {
       ...riskAssessment,
       onChain: true,
-      mockUSDCBacked: true,
+      usdtBacked: true,
     };
   }
 
@@ -558,7 +558,7 @@ class OnChainPortfolioManager {
   async getSummary(): Promise<OnChainPortfolioSummary> {
     await this.refreshPrices();
     
-    const { raw, formatted: mockUSDCBalance } = await this.getMockUSDCBalance();
+    const { raw, formatted: usdtBalance } = await this.getUSDTBalance();
     const positions = Array.from(this.positions.values());
     const allocatedValue = positions.reduce((sum, p) => sum + p.valueUSD, 0);
     
@@ -576,9 +576,9 @@ class OnChainPortfolioManager {
     return {
       portfolioId: `ONCHAIN-${this.walletAddress.slice(0, 8)}`,
       walletAddress: this.walletAddress,
-      mockUSDCBalance: raw.toString(),
-      mockUSDCBalanceFormatted: mockUSDCBalance,
-      targetAllocation: mockUSDCBalance,
+      usdtBalance: raw.toString(),
+      usdtBalanceFormatted: usdtBalance,
+      targetAllocation: usdtBalance,
       allocatedValue,
       positions,
       riskMetrics: {
@@ -588,7 +588,7 @@ class OnChainPortfolioManager {
         aiRecommendations: (riskData.recommendations as string[]) || [],
       },
       contracts: {
-        mockUSDC: this.deployment.MockUSDC,
+        usdt: this.deployment.USDT,
         mockMoonlander: this.deployment.MockMoonlander,
         hedgeExecutor: this.deployment.HedgeExecutor,
       },
