@@ -1,15 +1,16 @@
 /**
  * WDK Wallet Context (Browser-Safe)
  * 
- * Full WDK wallet implementation for self-custodial wallet management.
- * This replaces wagmi/RainbowKit with native Tether WDK.
+ * SECURITY: This provider does NOT handle native WDK bindings in the browser.
+ * The actual @tetherto/wdk-wallet-evm package uses sodium-native which
+ * requires native Node.js bindings that can't be bundled for Vercel/browser.
  * 
- * Features:
- * - Create new wallets (BIP-39 seed phrase)
- * - Import existing wallets
- * - Encrypted local storage
- * - Multi-chain support (Cronos, Arbitrum, Sepolia)
- * - ERC-20 token transfers (USDT)
+ * All sensitive WDK operations are handled server-side via:
+ * - GET /api/community-pool/treasury/status (treasury wallet status)
+ * - POST /api/community-pool/treasury/transfer (execute transfers)
+ * 
+ * This module provides the same API surface as the full implementation
+ * (wdk-context-native.tsx) so all consumer imports work unchanged.
  * 
  * @see https://docs.wdk.tether.io/
  */
@@ -17,10 +18,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { WDK_CHAINS, USDT_ADDRESSES } from '@/lib/config/wdk';
+import { WDK_CHAINS } from '@/lib/config/wdk';
 
 // ============================================
-// TYPES
+// TYPES (same exports as native context)
 // ============================================
 
 export interface WdkAccount {
@@ -50,7 +51,7 @@ export interface WdkContextValue {
   state: WdkWalletState;
   
   // Wallet Management
-  createWallet: () => Promise<string | null>; // Returns mnemonic for user to backup
+  createWallet: () => Promise<string | null>;
   importWallet: (mnemonic: string) => Promise<boolean>;
   lockWallet: () => void;
   unlockWallet: (password: string) => Promise<boolean>;
@@ -73,75 +74,13 @@ export interface WdkContextValue {
 
 const initialState: WdkWalletState = {
   isConnected: false,
-  isLoading: true,
+  isLoading: false,
   address: null,
   chainId: null,
   chainKey: null,
   accounts: [],
   error: null,
 };
-
-// ============================================
-// STORAGE HELPERS
-// ============================================
-
-const STORAGE_KEY = 'wdk_wallet_v1';
-
-interface StoredWallet {
-  encryptedMnemonic: string;
-  addresses: Record<string, string>;
-  lastChain: string;
-}
-
-// Simple XOR encryption for demo - in production use Web Crypto API
-function encryptMnemonic(mnemonic: string, password: string): string {
-  const encoder = new TextEncoder();
-  const mnemonicBytes = encoder.encode(mnemonic);
-  const keyBytes = encoder.encode(password.padEnd(mnemonicBytes.length, password));
-  
-  const encrypted = new Uint8Array(mnemonicBytes.length);
-  for (let i = 0; i < mnemonicBytes.length; i++) {
-    encrypted[i] = mnemonicBytes[i] ^ keyBytes[i % keyBytes.length];
-  }
-  
-  return btoa(String.fromCharCode(...encrypted));
-}
-
-function decryptMnemonic(encryptedData: string, password: string): string | null {
-  try {
-    const encrypted = new Uint8Array(
-      atob(encryptedData).split('').map(c => c.charCodeAt(0))
-    );
-    const keyBytes = new TextEncoder().encode(password.padEnd(encrypted.length, password));
-    
-    const decrypted = new Uint8Array(encrypted.length);
-    for (let i = 0; i < encrypted.length; i++) {
-      decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
-    }
-    
-    return new TextDecoder().decode(decrypted);
-  } catch {
-    return null;
-  }
-}
-
-function saveWallet(wallet: StoredWallet): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(wallet));
-  }
-}
-
-function loadWallet(): StoredWallet | null {
-  if (typeof window === 'undefined') return null;
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : null;
-}
-
-function clearWallet(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-}
 
 // ============================================
 // CONTEXT
@@ -155,396 +94,84 @@ interface WdkProviderProps {
 }
 
 /**
- * WDK Provider - Full wallet management
+ * WDK Provider (Browser-Safe)
+ * 
+ * Provides chain support info and stub wallet operations.
+ * All sensitive operations happen server-side via API routes.
  */
 export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderProps) {
-  const [state, setState] = useState<WdkWalletState>(initialState);
-  const [wdkInstance, setWdkInstance] = useState<any>(null);
-  const [walletManager, setWalletManager] = useState<any>(null);
-  const [unlockPassword, setUnlockPassword] = useState<string | null>(null);
-  
-  // Initialize WDK on mount
-  useEffect(() => {
-    async function initWdk() {
-      try {
-        // Dynamic import to avoid SSR issues with native deps
-        const [WDK, WalletManagerEvm] = await Promise.all([
-          import('@tetherto/wdk').then(m => m.default),
-          import('@tetherto/wdk-wallet-evm').then(m => m.default),
-        ]);
-        
-        // Check for existing wallet
-        const stored = loadWallet();
-        if (stored) {
-          setState(prev => ({
-            ...prev,
-            isLoading: false,
-            // Show as "locked" - needs password to unlock
-            isConnected: false,
-            chainKey: stored.lastChain,
-            chainId: WDK_CHAINS[stored.lastChain]?.chainId ?? null,
-          }));
-        } else {
-          setState(prev => ({ ...prev, isLoading: false }));
-        }
-        
-        // Store module refs for later use
-        setWdkInstance({ WDK, WalletManagerEvm });
-      } catch (err) {
-        console.error('[WDK] Init error:', err);
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: 'Failed to initialize WDK',
-        }));
-      }
-    }
-    
-    initWdk();
-  }, []);
-  
-  // Generate random mnemonic using WDK
-  const generateMnemonic = useCallback(async (): Promise<string | null> => {
-    if (!wdkInstance) return null;
-    try {
-      return wdkInstance.WDK.getRandomSeedPhrase();
-    } catch (err) {
-      console.error('[WDK] Mnemonic generation failed:', err);
-      return null;
-    }
-  }, [wdkInstance]);
-  
-  // Initialize wallet from mnemonic
-  const initializeFromMnemonic = useCallback(async (
-    mnemonic: string,
-    chainKey: string = defaultChain
-  ): Promise<boolean> => {
-    if (!wdkInstance) return false;
-    
-    try {
-      const { WDK, WalletManagerEvm } = wdkInstance;
-      const chainConfig = WDK_CHAINS[chainKey];
-      
-      if (!chainConfig) {
-        console.error('[WDK] Unknown chain:', chainKey);
-        return false;
-      }
-      
-      // Create WDK instance with mnemonic
-      const wdk = new WDK(mnemonic);
-      
-      // Register EVM wallet for each supported chain
-      const supportedChains = ['sepolia', 'cronos-mainnet', 'arbitrum-mainnet'];
-      const accounts: WdkAccount[] = [];
-      
-      for (const chain of supportedChains) {
-        const config = WDK_CHAINS[chain];
-        if (config) {
-          wdk.registerWallet(chain, WalletManagerEvm, {
-            provider: config.rpcUrl,
-          });
-          
-          // Get account and address
-          const account = await wdk.getAccount(chain, 0);
-          const address = await account.getAddress();
-          
-          accounts.push({
-            address,
-            chainKey: chain,
-            chainId: config.chainId,
-          });
-        }
-      }
-      
-      setWalletManager(wdk);
-      
-      // Get address for selected chain
-      const selectedAccount = accounts.find(a => a.chainKey === chainKey);
-      
-      setState(prev => ({
-        ...prev,
-        isConnected: true,
-        isLoading: false,
-        address: selectedAccount?.address ?? accounts[0]?.address ?? null,
-        chainId: chainConfig.chainId,
-        chainKey,
-        accounts,
-        error: null,
-      }));
-      
-      return true;
-    } catch (err) {
-      console.error('[WDK] Wallet init failed:', err);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Failed to initialize wallet',
-      }));
-      return false;
-    }
-  }, [wdkInstance, defaultChain]);
-  
-  // Create new wallet
-  const createWallet = useCallback(async (): Promise<string | null> => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-    
-    const mnemonic = await generateMnemonic();
-    if (!mnemonic) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Failed to generate seed phrase',
-      }));
-      return null;
-    }
-    
-    const success = await initializeFromMnemonic(mnemonic);
-    if (!success) return null;
-    
-    // Default password for demo - in production, prompt user
-    const password = 'wdk-demo-password';
-    setUnlockPassword(password);
-    
-    // Save encrypted wallet
-    const storedWallet: StoredWallet = {
-      encryptedMnemonic: encryptMnemonic(mnemonic, password),
-      addresses: {},
-      lastChain: defaultChain,
-    };
-    
-    state.accounts.forEach(acc => {
-      storedWallet.addresses[acc.chainKey] = acc.address;
-    });
-    
-    saveWallet(storedWallet);
-    
-    return mnemonic;
-  }, [generateMnemonic, initializeFromMnemonic, defaultChain, state.accounts]);
-  
-  // Import existing wallet
-  const importWallet = useCallback(async (mnemonic: string): Promise<boolean> => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-    
-    // Validate mnemonic format (12 or 24 words)
-    const words = mnemonic.trim().split(/\s+/);
-    if (words.length !== 12 && words.length !== 24) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Invalid seed phrase. Must be 12 or 24 words.',
-      }));
-      return false;
-    }
-    
-    const success = await initializeFromMnemonic(mnemonic);
-    if (!success) return false;
-    
-    // Default password for demo
-    const password = 'wdk-demo-password';
-    setUnlockPassword(password);
-    
-    // Save encrypted wallet
-    const storedWallet: StoredWallet = {
-      encryptedMnemonic: encryptMnemonic(mnemonic, password),
-      addresses: {},
-      lastChain: defaultChain,
-    };
-    
-    state.accounts.forEach(acc => {
-      storedWallet.addresses[acc.chainKey] = acc.address;
-    });
-    
-    saveWallet(storedWallet);
-    
-    return true;
-  }, [initializeFromMnemonic, defaultChain, state.accounts]);
-  
-  // Lock wallet (clear from memory)
-  const lockWallet = useCallback(() => {
-    setWalletManager(null);
-    setUnlockPassword(null);
-    
-    const stored = loadWallet();
-    setState({
-      ...initialState,
-      isLoading: false,
-      chainKey: stored?.lastChain ?? null,
-      chainId: stored?.lastChain ? WDK_CHAINS[stored.lastChain]?.chainId ?? null : null,
-    });
-  }, []);
-  
-  // Unlock wallet with password
-  const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
-    const stored = loadWallet();
-    if (!stored) {
-      setState(prev => ({ ...prev, error: 'No wallet found' }));
-      return false;
-    }
-    
-    const mnemonic = decryptMnemonic(stored.encryptedMnemonic, password);
-    if (!mnemonic) {
-      setState(prev => ({ ...prev, error: 'Invalid password' }));
-      return false;
-    }
-    
-    setUnlockPassword(password);
-    return await initializeFromMnemonic(mnemonic, stored.lastChain);
-  }, [initializeFromMnemonic]);
-  
-  // Disconnect wallet (clear storage)
-  const disconnect = useCallback(() => {
-    setWalletManager(null);
-    setUnlockPassword(null);
-    clearWallet();
-    setState(initialState);
-  }, []);
-  
-  // Switch chain
+  const [state, setState] = useState<WdkWalletState>({
+    ...initialState,
+    chainKey: defaultChain,
+    chainId: WDK_CHAINS[defaultChain]?.chainId ?? null,
+  });
+
+  const supportedChainKeys = Object.keys(WDK_CHAINS);
+
+  const getSupportedChains = useCallback(() => supportedChainKeys, []);
+
+  const isChainSupported = useCallback(
+    (chainKey: string) => chainKey in WDK_CHAINS,
+    []
+  );
+
   const switchChain = useCallback(async (chainKey: string): Promise<boolean> => {
-    if (!walletManager) return false;
-    
-    const chainConfig = WDK_CHAINS[chainKey];
-    if (!chainConfig) {
-      setState(prev => ({ ...prev, error: `Unknown chain: ${chainKey}` }));
-      return false;
-    }
-    
-    try {
-      const account = await walletManager.getAccount(chainKey, 0);
-      const address = await account.getAddress();
-      
-      setState(prev => ({
-        ...prev,
-        address,
-        chainId: chainConfig.chainId,
-        chainKey,
-      }));
-      
-      // Update saved wallet
-      const stored = loadWallet();
-      if (stored) {
-        stored.lastChain = chainKey;
-        saveWallet(stored);
-      }
-      
-      return true;
-    } catch (err) {
-      console.error('[WDK] Chain switch failed:', err);
-      setState(prev => ({ ...prev, error: 'Failed to switch chain' }));
-      return false;
-    }
-  }, [walletManager]);
-  
-  // Get native balance
-  const getBalance = useCallback(async (chainKey?: string): Promise<string> => {
-    if (!walletManager) return '0';
-    
-    const chain = chainKey ?? state.chainKey;
-    if (!chain) return '0';
-    
-    try {
-      const account = await walletManager.getAccount(chain, 0);
-      const balance = await account.getBalance();
-      return balance.toString();
-    } catch (err) {
-      console.error('[WDK] Balance fetch failed:', err);
-      return '0';
-    }
-  }, [walletManager, state.chainKey]);
-  
-  // Get USDT balance
-  const getUsdtBalance = useCallback(async (chainKey?: string): Promise<string> => {
-    if (!walletManager) return '0';
-    
-    const chain = chainKey ?? state.chainKey;
-    if (!chain) return '0';
-    
-    try {
-      const account = await walletManager.getAccount(chain, 0);
-      // WDK has built-in token balance support
-      const balance = await account.getTokenBalance?.() ?? await account.getBalance();
-      return balance.toString();
-    } catch (err) {
-      console.error('[WDK] USDT balance fetch failed:', err);
-      return '0';
-    }
-  }, [walletManager, state.chainKey]);
-  
-  // Send transaction
-  const sendTransaction = useCallback(async (tx: WdkTransactionRequest): Promise<string | null> => {
-    if (!walletManager || !state.chainKey) return null;
-    
-    try {
-      const account = await walletManager.getAccount(state.chainKey, 0);
-      const result = await account.sendTransaction({
-        to: tx.to,
-        value: tx.value ?? 0n,
-        data: tx.data,
-      });
-      
-      return result.hash;
-    } catch (err) {
-      console.error('[WDK] Transaction failed:', err);
-      setState(prev => ({ ...prev, error: 'Transaction failed' }));
-      return null;
-    }
-  }, [walletManager, state.chainKey]);
-  
-  // Send USDT
-  const sendUsdt = useCallback(async (to: string, amount: string): Promise<string | null> => {
-    if (!walletManager || !state.chainKey) return null;
-    
-    const chainConfig = WDK_CHAINS[state.chainKey];
-    const usdtAddress = chainConfig?.usdtAddress;
-    
-    if (!usdtAddress) {
-      setState(prev => ({ ...prev, error: 'USDT not supported on this chain' }));
-      return null;
-    }
-    
-    try {
-      const account = await walletManager.getAccount(state.chainKey, 0);
-      // Convert amount to smallest unit (6 decimals for USDT)
-      const amountWei = BigInt(Math.floor(parseFloat(amount) * 1e6));
-      
-      const result = await account.sendToken?.({
-        to,
-        amount: amountWei,
-        tokenAddress: usdtAddress,
-      });
-      
-      return result?.hash ?? null;
-    } catch (err) {
-      console.error('[WDK] USDT transfer failed:', err);
-      setState(prev => ({ ...prev, error: 'USDT transfer failed' }));
-      return null;
-    }
-  }, [walletManager, state.chainKey]);
-  
-  // Sign message
-  const signMessage = useCallback(async (message: string): Promise<string | null> => {
-    if (!walletManager || !state.chainKey) return null;
-    
-    try {
-      const account = await walletManager.getAccount(state.chainKey, 0);
-      const signature = await account.signMessage?.(message);
-      return signature ?? null;
-    } catch (err) {
-      console.error('[WDK] Sign message failed:', err);
-      return null;
-    }
-  }, [walletManager, state.chainKey]);
-  
-  // Get supported chains
-  const getSupportedChains = useCallback((): string[] => {
-    return Object.keys(WDK_CHAINS);
+    if (!(chainKey in WDK_CHAINS)) return false;
+    setState(prev => ({
+      ...prev,
+      chainKey,
+      chainId: WDK_CHAINS[chainKey]?.chainId ?? null,
+    }));
+    return true;
   }, []);
-  
-  // Check if chain is supported
-  const isChainSupported = useCallback((chainKey: string): boolean => {
-    return chainKey in WDK_CHAINS;
+
+  // Stub wallet operations - these are handled server-side
+  const createWallet = useCallback(async (): Promise<string | null> => {
+    console.warn('[WDK] createWallet is not available in browser-safe mode. Use server API.');
+    return null;
   }, []);
-  
+
+  const importWallet = useCallback(async (_mnemonic: string): Promise<boolean> => {
+    console.warn('[WDK] importWallet is not available in browser-safe mode. Use server API.');
+    return false;
+  }, []);
+
+  const lockWallet = useCallback(() => {
+    setState(prev => ({ ...prev, isConnected: false, address: null }));
+  }, []);
+
+  const unlockWallet = useCallback(async (_password: string): Promise<boolean> => {
+    console.warn('[WDK] unlockWallet is not available in browser-safe mode. Use server API.');
+    return false;
+  }, []);
+
+  const disconnect = useCallback(() => {
+    setState({ ...initialState, chainKey: defaultChain, chainId: WDK_CHAINS[defaultChain]?.chainId ?? null });
+  }, [defaultChain]);
+
+  const getBalance = useCallback(async (_chainKey?: string): Promise<string> => {
+    return '0';
+  }, []);
+
+  const getUsdtBalance = useCallback(async (_chainKey?: string): Promise<string> => {
+    return '0';
+  }, []);
+
+  const sendTransaction = useCallback(async (_tx: WdkTransactionRequest): Promise<string | null> => {
+    console.warn('[WDK] sendTransaction is not available in browser-safe mode. Use server API.');
+    return null;
+  }, []);
+
+  const sendUsdt = useCallback(async (_to: string, _amount: string): Promise<string | null> => {
+    console.warn('[WDK] sendUsdt is not available in browser-safe mode. Use server API.');
+    return null;
+  }, []);
+
+  const signMessage = useCallback(async (_message: string): Promise<string | null> => {
+    console.warn('[WDK] signMessage is not available in browser-safe mode. Use server API.');
+    return null;
+  }, []);
+
   const value: WdkContextValue = {
     state,
     createWallet,
@@ -561,7 +188,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     getSupportedChains,
     isChainSupported,
   };
-  
+
   return (
     <WdkContext.Provider value={value}>
       {children}
@@ -570,7 +197,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
 }
 
 // ============================================
-// HOOKS
+// HOOKS (same exports as native context)
 // ============================================
 
 export function useWdk(): WdkContextValue {
