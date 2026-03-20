@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
 import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut, AlertTriangle } from 'lucide-react';
 import { 
@@ -18,12 +17,6 @@ import { WDK_CHAINS } from '@/lib/config/wdk';
 
 // Safe hook wrapper for Sui wallet functionality
 function useSuiWalletSafe() {
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  
   let wallets: WalletWithRequiredFeatures[] = [];
   let suiAccount: WalletAccount | null = null;
   let currentWallet: WalletWithRequiredFeatures | null = null;
@@ -55,27 +48,180 @@ function useSuiWalletSafe() {
     connectSui,
     disconnectSui,
     isConnectingSui,
-    isClient,
   };
 }
 
-export function ConnectButton() {
-  const [showSelector, setShowSelector] = useState(false);
-  const [showWdkModal, setShowWdkModal] = useState<'none' | 'connect' | 'create' | 'import' | 'backup'>('none');
-  const [copied, setCopied] = useState(false);
-  const [showNetworkHelp, setShowNetworkHelp] = useState(false);
+// WDK Modal rendered as a separate component to isolate from Navbar stacking context
+function WdkModal({ 
+  mode, 
+  onClose, 
+  onModeChange 
+}: { 
+  mode: 'connect' | 'import' | 'backup';
+  onClose: () => void;
+  onModeChange: (mode: 'none' | 'connect' | 'import' | 'backup') => void;
+}) {
+  const { state: wdkState, createWallet, importWallet } = useWdk();
   const [seedPhrase, setSeedPhrase] = useState('');
   const [seedCopied, setSeedCopied] = useState(false);
   const [seedConfirmed, setSeedConfirmed] = useState(false);
   const [importPhrase, setImportPhrase] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    setLoading(true);
+    setError(null);
+    const mnemonic = await createWallet();
+    if (mnemonic) {
+      setSeedPhrase(mnemonic);
+      onModeChange('backup');
+    } else {
+      setError('Failed to create wallet');
+    }
+    setLoading(false);
+  };
+
+  const handleImport = async () => {
+    if (!importPhrase.trim()) {
+      setError('Please enter your seed phrase');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const success = await importWallet(importPhrase.trim());
+    if (success) {
+      onClose();
+    } else {
+      setError(wdkState.error || 'Failed to import wallet');
+    }
+    setLoading(false);
+  };
+
+  const handleCopySeed = () => {
+    navigator.clipboard.writeText(seedPhrase);
+    setSeedCopied(true);
+    setTimeout(() => setSeedCopied(false), 2000);
+  };
+
+  const handleSeedConfirmed = () => {
+    if (!seedConfirmed) {
+      setError('Please confirm you have saved your seed phrase');
+      return;
+    }
+    onClose();
+  };
+
+  // Use inline styles for the overlay to escape any CSS stacking context
+  return (
+    <div 
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      className="bg-black/60"
+      onClick={onClose}
+    >
+      <div className="bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-800" onClick={e => e.stopPropagation()}>
+        {mode === 'connect' && (
+          <>
+            <h2 className="text-xl font-bold text-white mb-2">Connect Wallet</h2>
+            <p className="text-gray-400 text-sm mb-4">Powered by Tether WDK - Self-custodial multi-chain wallet</p>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
+            )}
+            
+            <div className="space-y-3">
+              <button onClick={handleCreate} disabled={loading} className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">
+                {loading ? 'Creating...' : 'Create New Wallet'}
+              </button>
+              <button onClick={() => onModeChange('import')} className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium">
+                Import Existing Wallet
+              </button>
+              <button onClick={onClose} className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium">
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'import' && (
+          <>
+            <h2 className="text-xl font-bold text-white mb-2">Import Wallet</h2>
+            <p className="text-gray-400 text-sm mb-4">Enter your 12 or 24 word seed phrase</p>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
+            )}
+            
+            <textarea
+              value={importPhrase}
+              onChange={(e) => setImportPhrase(e.target.value)}
+              placeholder="word1 word2 word3 ... word12"
+              rows={4}
+              className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 mb-4 resize-none"
+            />
+            
+            <div className="space-y-3">
+              <button onClick={handleImport} disabled={loading || !importPhrase.trim()} className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium">
+                {loading ? 'Importing...' : 'Import Wallet'}
+              </button>
+              <button onClick={() => onModeChange('connect')} className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium">
+                Back
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'backup' && (
+          <>
+            <h2 className="text-xl font-bold text-white mb-2">🔐 Backup Seed Phrase</h2>
+            <p className="text-gray-400 text-sm mb-4">Write down these words. This is the ONLY way to recover your wallet.</p>
+            
+            <div className="p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg mb-4">
+              <p className="text-yellow-300 text-sm font-medium">⚠️ Never share your seed phrase!</p>
+            </div>
+            
+            <div className="p-4 bg-gray-800 rounded-lg mb-4 font-mono text-sm text-white">
+              {seedPhrase.split(' ').map((word, i) => (
+                <span key={i} className="inline-block mr-2 mb-2">
+                  <span className="text-gray-500">{i + 1}.</span> {word}
+                </span>
+              ))}
+            </div>
+            
+            <button onClick={handleCopySeed} className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium mb-4">
+              {seedCopied ? '✓ Copied!' : 'Copy to Clipboard'}
+            </button>
+            
+            <label className="flex items-center gap-2 text-sm text-gray-300 mb-4">
+              <input type="checkbox" checked={seedConfirmed} onChange={(e) => setSeedConfirmed(e.target.checked)} className="w-4 h-4 rounded" />
+              I have securely saved my seed phrase
+            </label>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
+            )}
+            
+            <button onClick={handleSeedConfirmed} className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">
+              Continue
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ConnectButton() {
+  const [showSelector, setShowSelector] = useState(false);
+  const [showWdkModal, setShowWdkModal] = useState<'none' | 'connect' | 'import' | 'backup'>('none');
+  const [copied, setCopied] = useState(false);
+  const [showNetworkHelp, setShowNetworkHelp] = useState(false);
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => { setMounted(true); }, []);
   
-  // WDK wallet hooks (replaces RainbowKit)
-  const { state: wdkState, createWallet, importWallet, disconnect: wdkDisconnect } = useWdk();
+  // WDK wallet hooks
+  const { disconnect: wdkDisconnect } = useWdk();
   const { address: wdkAddress, isConnected: wdkIsConnected, chainKey } = useWdkAccount();
   const currentChain = chainKey ? WDK_CHAINS[chainKey] : null;
   
@@ -104,15 +250,15 @@ export function ConnectButton() {
     w.chains?.some?.((c: string) => c.includes('sui'))
   );
 
-  const copyAddress = (addr: string) => {
+  const copyAddress = useCallback((addr: string) => {
     navigator.clipboard.writeText(addr);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, []);
 
   const truncate = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   
-  const handleConnectSui = () => {
+  const handleConnectSui = useCallback(() => {
     if (suiWallets.length > 0) {
       connectSui({ wallet: suiWallets[0] });
     } else {
@@ -121,61 +267,13 @@ export function ConnectButton() {
       }
     }
     setShowSelector(false);
-  };
+  }, [suiWallets, connectSui]);
 
-  // WDK wallet handlers
-  const handleWdkCreate = async () => {
-    setLoading(true);
-    setError(null);
-    const mnemonic = await createWallet();
-    if (mnemonic) {
-      setSeedPhrase(mnemonic);
-      setShowWdkModal('backup');
-    } else {
-      setError('Failed to create wallet');
-    }
-    setLoading(false);
-  };
-
-  const handleWdkImport = async () => {
-    if (!importPhrase.trim()) {
-      setError('Please enter your seed phrase');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const success = await importWallet(importPhrase.trim());
-    if (success) {
-      setImportPhrase('');
-      setShowWdkModal('none');
-      setShowSelector(false);
-    } else {
-      setError(wdkState.error || 'Failed to import wallet');
-    }
-    setLoading(false);
-  };
-
-  const handleCopySeed = () => {
-    navigator.clipboard.writeText(seedPhrase);
-    setSeedCopied(true);
-    setTimeout(() => setSeedCopied(false), 2000);
-  };
-
-  const handleSeedConfirmed = () => {
-    if (!seedConfirmed) {
-      setError('Please confirm you have saved your seed phrase');
-      return;
-    }
-    setSeedPhrase('');
-    setSeedConfirmed(false);
-    setShowWdkModal('none');
-    setShowSelector(false);
-  };
-
-  // Determine connection state
-  const showWdk = wdkIsConnected && wdkAddress;
-  const showSui = !showWdk && isSuiConnected;
-  const showConnect = !showWdk && !isSuiConnected;
+  // Wait for client mount to avoid hydration mismatch
+  // Server always renders the "Connect" button, client may show connected state
+  const showWdk = mounted && wdkIsConnected && wdkAddress;
+  const showSui = mounted && !showWdk && isSuiConnected;
+  const showConnect = !showWdk && !showSui;
 
   return (
     <>
@@ -197,7 +295,6 @@ export function ConnectButton() {
                 <div className="fixed inset-0 z-40" onClick={() => setShowSelector(false)} />
                 <div className="absolute top-full mt-2 right-0 w-64 bg-white dark:bg-[#1c1c1e] border border-[#E5E5EA] dark:border-[#38383a] rounded-xl shadow-lg overflow-hidden z-50">
                   <div className="p-2">
-                    {/* WDK - Native Tether Wallet */}
                     <button
                       onClick={() => { setShowWdkModal('connect'); setShowSelector(false); }}
                       className="w-full p-2.5 rounded-lg hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] transition-colors text-left flex items-center gap-3"
@@ -211,7 +308,6 @@ export function ConnectButton() {
                       </div>
                     </button>
 
-                    {/* SUI - dapp-kit */}
                     <button
                       onClick={handleConnectSui}
                       disabled={isConnectingSui}
@@ -291,10 +387,7 @@ export function ConnectButton() {
                     </div>
 
                     <button
-                      onClick={() => {
-                        wdkDisconnect();
-                        setShowSelector(false);
-                      }}
+                      onClick={() => { wdkDisconnect(); setShowSelector(false); }}
                       className="w-full py-2 text-[#FF3B30] hover:bg-[#FF3B30]/5 rounded-lg text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <LogOut className="w-3.5 h-3.5" />
@@ -336,10 +429,7 @@ export function ConnectButton() {
                       
                       <div className="flex gap-2">
                         <button
-                          onClick={() => {
-                            disconnectSui();
-                            setShowNetworkHelp(false);
-                          }}
+                          onClick={() => { disconnectSui(); setShowNetworkHelp(false); }}
                           className="flex-1 py-2 bg-[#F5F5F7] dark:bg-[#2c2c2e] rounded-lg text-[12px] font-medium"
                         >
                           Disconnect
@@ -405,10 +495,7 @@ export function ConnectButton() {
                         </div>
 
                         <button
-                          onClick={() => {
-                            disconnectSui();
-                            setShowSelector(false);
-                          }}
+                          onClick={() => { disconnectSui(); setShowSelector(false); }}
                           className="w-full py-2 text-[#FF3B30] hover:bg-[#FF3B30]/5 rounded-lg text-[13px] font-medium flex items-center justify-center gap-1.5"
                         >
                           <LogOut className="w-3.5 h-3.5" />
@@ -424,130 +511,13 @@ export function ConnectButton() {
         )}
       </div>
 
-      {/* WDK Modal - rendered via portal to escape Navbar stacking context */}
-      {showWdkModal !== 'none' && mounted && createPortal(
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4" onClick={() => setShowWdkModal('none')}>
-          <div className="bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-800" onClick={e => e.stopPropagation()}>
-            {showWdkModal === 'connect' && (
-              <>
-                <h2 className="text-xl font-bold text-white mb-2">Connect Wallet</h2>
-                <p className="text-gray-400 text-sm mb-4">Powered by Tether WDK - Self-custodial multi-chain wallet</p>
-                
-                {error && (
-                  <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
-                )}
-                
-                <div className="space-y-3">
-                  <button
-                    onClick={handleWdkCreate}
-                    disabled={loading}
-                    className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
-                  >
-                    {loading ? 'Creating...' : 'Create New Wallet'}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowWdkModal('import')}
-                    className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium"
-                  >
-                    Import Existing Wallet
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowWdkModal('none')}
-                    className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-
-            {showWdkModal === 'import' && (
-              <>
-                <h2 className="text-xl font-bold text-white mb-2">Import Wallet</h2>
-                <p className="text-gray-400 text-sm mb-4">Enter your 12 or 24 word seed phrase</p>
-                
-                {error && (
-                  <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
-                )}
-                
-                <textarea
-                  value={importPhrase}
-                  onChange={(e) => setImportPhrase(e.target.value)}
-                  placeholder="word1 word2 word3 ... word12"
-                  rows={4}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 mb-4 resize-none"
-                />
-                
-                <div className="space-y-3">
-                  <button
-                    onClick={handleWdkImport}
-                    disabled={loading || !importPhrase.trim()}
-                    className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium"
-                  >
-                    {loading ? 'Importing...' : 'Import Wallet'}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowWdkModal('connect')}
-                    className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
-                  >
-                    Back
-                  </button>
-                </div>
-              </>
-            )}
-
-            {showWdkModal === 'backup' && (
-              <>
-                <h2 className="text-xl font-bold text-white mb-2">🔐 Backup Seed Phrase</h2>
-                <p className="text-gray-400 text-sm mb-4">Write down these words. This is the ONLY way to recover your wallet.</p>
-                
-                <div className="p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg mb-4">
-                  <p className="text-yellow-300 text-sm font-medium">⚠️ Never share your seed phrase!</p>
-                </div>
-                
-                <div className="p-4 bg-gray-800 rounded-lg mb-4 font-mono text-sm text-white">
-                  {seedPhrase.split(' ').map((word, i) => (
-                    <span key={i} className="inline-block mr-2 mb-2">
-                      <span className="text-gray-500">{i + 1}.</span> {word}
-                    </span>
-                  ))}
-                </div>
-                
-                <button
-                  onClick={handleCopySeed}
-                  className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium mb-4"
-                >
-                  {seedCopied ? '✓ Copied!' : 'Copy to Clipboard'}
-                </button>
-                
-                <label className="flex items-center gap-2 text-sm text-gray-300 mb-4">
-                  <input
-                    type="checkbox"
-                    checked={seedConfirmed}
-                    onChange={(e) => setSeedConfirmed(e.target.checked)}
-                    className="w-4 h-4 rounded"
-                  />
-                  I have securely saved my seed phrase
-                </label>
-                
-                {error && (
-                  <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">{error}</div>
-                )}
-                
-                <button
-                  onClick={handleSeedConfirmed}
-                  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
-                >
-                  Continue
-                </button>
-              </>
-            )}
-          </div>
-        </div>,
-        document.body
+      {/* WDK Modal - uses inline styles to escape Navbar's backdrop-blur stacking context */}
+      {showWdkModal !== 'none' && (
+        <WdkModal 
+          mode={showWdkModal as 'connect' | 'import' | 'backup'} 
+          onClose={() => setShowWdkModal('none')}
+          onModeChange={setShowWdkModal}
+        />
       )}
     </>
   );
