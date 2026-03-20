@@ -318,7 +318,7 @@
 - Address: `0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9`
 - Network: Cronos Testnet
 - 6 ABI methods exposed
-- Wagmi Core integration
+- WDK Core integration
 
 ### ✅ Storage Methods
 - `storeCommitmentGasless()` - Single commitment

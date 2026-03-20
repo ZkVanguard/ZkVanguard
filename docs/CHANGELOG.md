@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Real-time portfolio monitoring
   - Interactive risk metrics visualization
   - Agent activity tracking with ZK proof verification
-  - Wallet connection with RainbowKit (MetaMask, Coinbase, WalletConnect)
+  - Wallet connection with WDK (self-custodial EVM wallet)
   - Dark/Light theme support
 
 - 📊 **Smart Contract Suite**

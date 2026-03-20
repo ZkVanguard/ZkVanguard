@@ -9,7 +9,7 @@
 - ✅ ZK-STARK privacy layer with CUDA acceleration (521-bit security)
 - ✅ x402 gasless protocol integration (97.4% coverage)
 - ✅ Smart contract suite deployed on Cronos testnet
-- ✅ Modern dashboard with RainbowKit wallet connection
+ - ✅ Modern dashboard with WDK self-custodial wallet
 - ✅ Comprehensive test suite (70/70 tests passing)
 - ✅ VVS Finance DEX integration for swaps
 - ✅ Moonlander perpetuals client integration

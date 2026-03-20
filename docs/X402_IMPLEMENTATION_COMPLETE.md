@@ -365,7 +365,7 @@ if (recommendation.shouldUse) {
 - No performance degradation vs regular transactions
 
 ### **Compatibility:**
-- Works with all Wagmi-based wallets
+- Works with all WDK-based wallets
 - Compatible with WalletConnect
 - Supports MetaMask, Coinbase Wallet, etc.
 - No special wallet features required

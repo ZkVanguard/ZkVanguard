@@ -352,7 +352,6 @@ npm run build:next
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Vercel Deployment Docs](https://vercel.com/docs)
-- [Wagmi Documentation](https://wagmi.sh)
 - [Tailwind CSS Docs](https://tailwindcss.com/docs)
 - [Cronos zkEVM Docs](https://docs.cronos.org)
 
