@@ -323,7 +323,7 @@ export class VVSFinanceService {
 
   /**
    * Get contract data for executing a swap
-   * Returns the contract address, ABI, function name, and args for wagmi
+   * Returns the contract address, ABI, function name, and args for contract call
    */
   getSwapContractCall(params: SwapParams, quote: SwapQuote) {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 minutes
