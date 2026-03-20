@@ -9,6 +9,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./CommunityPoolLib.sol";
 
@@ -741,6 +742,59 @@ contract CommunityPool is
         whenNotPaused 
         returns (uint256 shares) 
     {
+        return _depositInternal(amount);
+    }
+
+    /**
+     * @notice Deposit USDT into pool using EIP-2612 permit (WDK USDT compatible)
+     * @dev Single-transaction approve+deposit. Uses permit for gasless approval.
+     *      If token doesn't support permit, call approve() + deposit() separately.
+     * @param amount Amount of USDT to deposit (6 decimals)
+     * @param deadline Timestamp after which permit expires
+     * @param v Signature recovery byte
+     * @param r ECDSA signature r value
+     * @param s ECDSA signature s value
+     * @return shares Number of pool shares minted
+     */
+    function depositWithPermit(
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) 
+        external 
+        nonReentrant 
+        whenNotPaused 
+        returns (uint256 shares) 
+    {
+        // Use permit to set allowance (gasless approval via signature)
+        // This will revert if token doesn't support EIP-2612
+        try IERC20Permit(address(depositToken)).permit(
+            msg.sender,
+            address(this),
+            amount,
+            deadline,
+            v,
+            r,
+            s
+        ) {} catch {
+            // Permit failed - allowance might already exist or token doesn't support permit
+            // Check if allowance is sufficient, if not revert with helpful message
+            uint256 currentAllowance = depositToken.allowance(msg.sender, address(this));
+            if (currentAllowance < amount) {
+                revert("Permit failed and insufficient allowance. Use approve() + deposit() instead.");
+            }
+        }
+        
+        // Now execute deposit with the allowance set by permit
+        return _depositInternal(amount);
+    }
+
+    /**
+     * @dev Internal deposit implementation shared by deposit() and depositWithPermit()
+     */
+    function _depositInternal(uint256 amount) internal returns (uint256 shares) {
         // Circuit breaker check
         if (circuitBreakerTripped) revert CircuitBreakerActive();
         
@@ -754,10 +808,9 @@ contract CommunityPool is
         if (amount < MIN_DEPOSIT) revert DepositTooSmall(amount, MIN_DEPOSIT);
 
         // SAFEGUARD: Verify pool isn't undercollateralized before accepting deposits
-        // This prevents new depositors from getting unfair share dilution
         if (totalShares > 0) {
             uint256 currentSharePrice = _calculateNavPerShare();
-            uint256 minSharePrice = 9e5; // $0.90 in 6 decimals (USDC-scaled)
+            uint256 minSharePrice = 9e5; // $0.90 in 6 decimals
             if (currentSharePrice < minSharePrice) {
                 revert SharePriceTooLow(currentSharePrice, minSharePrice);
             }
@@ -766,21 +819,15 @@ contract CommunityPool is
         // Collect any pending fees first
         _collectFees();
 
-        // Calculate shares using virtual offset to prevent first depositor attack
-        // This is the standard ERC-4626 defense against share inflation attacks
-        // Virtual shares/assets are added to prevent manipulation
+        // Calculate shares using ERC-4626 virtual offset
         uint256 currentNav = calculateTotalNAV();
         uint256 totalAssetsWithOffset = currentNav + VIRTUAL_ASSETS;
         uint256 totalSharesWithOffset = totalShares + VIRTUAL_SHARES;
-        
-        // shares = (amount * totalSharesWithOffset) / totalAssetsWithOffset
-        // Using mulDiv for overflow safety
         shares = amount.mulDiv(totalSharesWithOffset, totalAssetsWithOffset, Math.Rounding.Floor);
         
-        // Ensure minimum shares to prevent dust attacks
         if (shares < MIN_SHARES_FOR_WITHDRAWAL) revert MinSharesRequired();
 
-        // Transfer USDC from user
+        // Transfer USDT from user
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Update member state
@@ -801,19 +848,14 @@ contract CommunityPool is
         totalShares += shares;
         totalDeposited += amount;
 
-        // SAFEGUARD: Verify share price didn't drop below $0.90 after deposit
-        // This catches any accounting anomalies or exploits
+        // Verify share price didn't drop
         uint256 newSharePrice = _calculateNavPerShare();
-        uint256 minSharePrice = 9e5; // $0.90 in 6 decimals (USDC-scaled)
+        uint256 minSharePrice = 9e5;
         if (newSharePrice < minSharePrice) {
             revert SharePriceTooLow(newSharePrice, minSharePrice);
         }
 
-        // Add to cash balance (will be deployed by rebalancer)
-        // For now, USDC stays in contract until rebalanced
-
         uint256 sharePrice = _calculateNavPerShare();
-
         emit Deposited(msg.sender, amount, shares, sharePrice, block.timestamp);
 
         return shares;

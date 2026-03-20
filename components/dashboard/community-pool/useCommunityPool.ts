@@ -15,8 +15,8 @@
 'use client';
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSignMessage, useReadContract } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSignMessage, useReadContract, useSwitchChain, useSignTypedData } from 'wagmi';
+import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
@@ -179,6 +179,7 @@ export function useCommunityPool(propAddress?: string) {
   const { signMessageAsync } = useSignMessage();
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+  const { switchChainAsync } = useSwitchChain();
   
   // Debug: Track transaction state changes
   useEffect(() => {
@@ -228,6 +229,41 @@ export function useCommunityPool(propAddress?: string) {
     args: address ? [address as `0x${string}`] : undefined,
     query: { enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' },
   });
+  
+  // EIP-2612 Permit Support Check - check if token has nonces() function
+  // If nonces exists, token likely supports EIP-2612 permit
+  const { data: permitNonce, isError: permitNonceError } = useReadContract({
+    address: USDT_ADDRESS,
+    abi: [{ name: 'nonces', type: 'function', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+    functionName: 'nonces',
+    args: address ? [address as `0x${string}`] : undefined,
+    query: { enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' },
+  });
+  
+  // EIP-2612: Get token name for permit signing
+  const { data: tokenName } = useReadContract({
+    address: USDT_ADDRESS,
+    abi: [{ name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' }],
+    functionName: 'name',
+    query: { enabled: !!USDT_ADDRESS && selectedChain !== 'sui' },
+  });
+  
+  // EIP-2612: Get DOMAIN_SEPARATOR (cached on-chain)
+  const { data: domainSeparator } = useReadContract({
+    address: USDT_ADDRESS,
+    abi: [{ name: 'DOMAIN_SEPARATOR', type: 'function', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' }],
+    functionName: 'DOMAIN_SEPARATOR',
+    query: { enabled: !!USDT_ADDRESS && selectedChain !== 'sui' },
+  });
+  
+  // Check if permit is supported
+  const permitSupported = useMemo(() => {
+    // Permit is supported if nonces function exists and didn't error
+    return !permitNonceError && permitNonce !== undefined && domainSeparator !== undefined;
+  }, [permitNonceError, permitNonce, domainSeparator]);
+  
+  // Typed data signing hook for EIP-2612 permit
+  const { signTypedDataAsync } = useSignTypedData();
   
   // Pool total shares (to detect first deposit)
   const { data: poolTotalShares } = useReadContract({
@@ -680,86 +716,93 @@ export function useCommunityPool(propAddress?: string) {
         },
       };
       
-      // Set timeout first
+      // Use wagmi's switchChainAsync - this properly syncs wagmi state
+      console.error('🔴🔴🔴 CHAIN SWITCH v4 - Using wagmi switchChainAsync to', targetChainId);
+      
+      // Set timeout for user feedback
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'deposit') {
           console.log('[CommunityPool] Switch timeout');
-          dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Deposit again.` });
+          dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet, then click Deposit again.` });
           pendingChainSwitchRef.current = null;
         }
-      }, 15000);
+      }, 20000);
       
-      // Native wallet API chain switch
-      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Starting wallet request');
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) {
-        console.error('🔴🔴🔴 No ethereum object!');
-        clearTimeout(timeoutId);
-        dispatchPool({ type: 'SET_ERROR', payload: 'No wallet detected. Please install MetaMask.' });
-        return;
-      }
-      
-      const params = chainParams[targetChainId];
-      if (!params) {
-        console.error('🔴🔴🔴 No params for chain', targetChainId);
-        clearTimeout(timeoutId);
-        dispatchPool({ type: 'SET_ERROR', payload: `Chain ${targetChainId} not supported` });
-        return;
-      }
-      
-      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Calling wallet_switchEthereumChain', params.chainId);
-      ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: params.chainId }],
-      })
+      // Try wagmi's switchChainAsync (syncs wagmi state properly)
+      switchChainAsync({ chainId: targetChainId })
         .then(() => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v3 - SUCCESS!');
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - wagmi switchChainAsync SUCCESS!');
           clearTimeout(timeoutId);
-          // Set flag to skip chain check on retry (wagmi doesn't sync immediately)
-          skipChainCheckRef.current = true;
           pendingChainSwitchRef.current = null;
           dispatchPool({ type: 'SET_ERROR', payload: null });
-          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Will retry deposit in 500ms (skip chain check)');
+          // Wagmi state is now synced, proceed immediately
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - Proceeding with deposit (wagmi synced)');
           setTimeout(() => {
-            console.error('🔴🔴🔴 CHAIN SWITCH v3 - Retrying deposit now (skipChainCheck=true)');
             handleDeposit();
-          }, 500);
+          }, 100);
         })
-        .catch((switchError: any) => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v3 - Error:', switchError?.code, switchError?.message);
-          if (switchError.code === 4902) {
-            console.error('🔴🔴🔴 Chain not added, adding...');
-            ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [params],
-            })
-              .then(() => {
-                console.error('🔴🔴🔴 Chain added!');
+        .catch(async (switchError: any) => {
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - wagmi error:', switchError?.message);
+          // Fallback to native API if wagmi fails (e.g., chain not in wagmi config)
+          const ethereum = (window as any).ethereum;
+          if (!ethereum) {
+            clearTimeout(timeoutId);
+            dispatchPool({ type: 'SET_ERROR', payload: 'No wallet detected.' });
+            return;
+          }
+          
+          const params = chainParams[targetChainId];
+          if (!params) {
+            clearTimeout(timeoutId);
+            dispatchPool({ type: 'SET_ERROR', payload: `Chain ${targetChainId} not supported` });
+            return;
+          }
+          
+          try {
+            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Falling back to native API');
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: params.chainId }],
+            });
+            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Native switch SUCCESS');
+            clearTimeout(timeoutId);
+            skipChainCheckRef.current = true;
+            pendingChainSwitchRef.current = null;
+            dispatchPool({ type: 'SET_ERROR', payload: null });
+            // Wait a bit longer for wagmi to sync via chainChanged event
+            setTimeout(() => {
+              console.error('🔴🔴🔴 CHAIN SWITCH v4 - Retrying deposit after native switch');
+              handleDeposit();
+            }, 1000);
+          } catch (nativeError: any) {
+            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Native error:', nativeError?.code, nativeError?.message);
+            if (nativeError?.code === 4902) {
+              // Chain not added - try to add it
+              try {
+                await ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [params],
+                });
+                console.error('🔴🔴🔴 CHAIN SWITCH v4 - Chain added');
                 clearTimeout(timeoutId);
-                // Set flag to skip chain check on retry (wagmi doesn't sync immediately)
                 skipChainCheckRef.current = true;
                 pendingChainSwitchRef.current = null;
                 dispatchPool({ type: 'SET_ERROR', payload: null });
-                console.error('🔴🔴🔴 Will retry deposit in 500ms after chain add (skip chain check)');
-                setTimeout(() => {
-                  console.error('🔴🔴🔴 Retrying deposit after chain add (skipChainCheck=true)');
-                  handleDeposit();
-                }, 500);
-              })
-              .catch((addError: any) => {
-                console.error('🔴🔴🔴 Add chain failed:', addError);
+                setTimeout(() => handleDeposit(), 1000);
+              } catch (addError: any) {
                 clearTimeout(timeoutId);
                 pendingChainSwitchRef.current = null;
                 dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet manually.` });
-              });
-          } else if (switchError.code === 4001) {
-            clearTimeout(timeoutId);
-            pendingChainSwitchRef.current = null;
-            dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
-          } else {
-            clearTimeout(timeoutId);
-            pendingChainSwitchRef.current = null;
-            dispatchPool({ type: 'SET_ERROR', payload: `Error: ${switchError?.message || 'Unknown error'}` });
+              }
+            } else if (nativeError?.code === 4001) {
+              clearTimeout(timeoutId);
+              pendingChainSwitchRef.current = null;
+              dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
+            } else {
+              clearTimeout(timeoutId);
+              pendingChainSwitchRef.current = null;
+              dispatchPool({ type: 'SET_ERROR', payload: nativeError?.message || 'Chain switch failed' });
+            }
           }
         });
       return;
@@ -778,10 +821,105 @@ export function useCommunityPool(propAddress?: string) {
       wagmiChainId: chainId, 
       USDT_ADDRESS, 
       COMMUNITY_POOL_ADDRESS,
-      poolDeployed 
+      poolDeployed,
+      permitSupported,
     });
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
+    
+    // =========================================
+    // TRY EIP-2612 PERMIT FLOW (Single TX!)
+    // =========================================
+    if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync) {
+      console.error('🟢🟢🟢 PERMIT - Token supports EIP-2612, trying gasless approval');
+      
+      try {
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' });
+        
+        const amountInUnits = parseUnits(amount.toString(), 6);
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+        const nonce = BigInt(permitNonce.toString());
+        
+        // EIP-712 Permit typed data
+        const domain = {
+          name: tokenName as string,
+          version: '1',
+          chainId: targetChainId,
+          verifyingContract: USDT_ADDRESS as `0x${string}`,
+        };
+        
+        const types = {
+          Permit: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' },
+          ],
+        };
+        
+        const message = {
+          owner: address as `0x${string}`,
+          spender: COMMUNITY_POOL_ADDRESS as `0x${string}`,
+          value: amountInUnits,
+          nonce: nonce,
+          deadline: deadline,
+        };
+        
+        console.error('🟢🟢🟢 PERMIT - Signing permit message', { domain, message });
+        
+        // Sign the permit (gasless - just a signature!)
+        const signature = await signTypedDataAsync({
+          domain,
+          types,
+          primaryType: 'Permit',
+          message,
+        });
+        
+        console.error('🟢🟢🟢 PERMIT - Signature obtained', { signature: signature.slice(0, 20) + '...' });
+        
+        // Parse signature into v, r, s
+        const r = signature.slice(0, 66) as `0x${string}`;
+        const s = ('0x' + signature.slice(66, 130)) as `0x${string}`;
+        const v = parseInt(signature.slice(130, 132), 16);
+        
+        console.error('🟢🟢🟢 PERMIT - Calling depositWithPermit (single TX!)', { amount: amountInUnits.toString(), deadline: deadline.toString(), v, r: r.slice(0, 10) + '...' });
+        
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
+        
+        // Call depositWithPermit - single transaction!
+        writeContract({
+          chainId: targetChainId,
+          address: COMMUNITY_POOL_ADDRESS,
+          abi: [{
+            name: 'depositWithPermit',
+            type: 'function',
+            inputs: [
+              { name: 'amount', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+              { name: 'v', type: 'uint8' },
+              { name: 'r', type: 'bytes32' },
+              { name: 's', type: 'bytes32' },
+            ],
+            outputs: [{ type: 'uint256' }],
+            stateMutability: 'nonpayable',
+          }],
+          functionName: 'depositWithPermit',
+          args: [amountInUnits, deadline, v, r, s],
+        });
+        
+        return; // Wait for depositWithPermit to confirm
+        
+      } catch (permitError: any) {
+        console.error('🟠🟠🟠 PERMIT - Failed, falling back to approve+deposit', permitError?.message);
+        // Fall through to regular approve+deposit flow
+      }
+    }
+    
+    // =========================================
+    // FALLBACK: Regular Approve + Deposit (2 TXs)
+    // =========================================
+    console.error('🔴🔴🔴 DEPOSIT - Using regular approve+deposit flow');
     
     try {
       // Refetch current allowance
@@ -825,7 +963,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit, permitSupported, permitNonce, tokenName, signTypedDataAsync, switchChainAsync]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });

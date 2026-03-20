@@ -349,6 +349,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               >
                 {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
                 {txStatus === 'resetting_approval' ? 'Resetting allowance...' :
+                 txStatus === 'signing_permit' ? 'Sign permit (gasless)...' :
                  txStatus === 'approving' ? `Approving ${tokenInfo.symbol}...` :
                  txStatus === 'approved' ? 'Approved! Starting deposit...' :
                  txStatus === 'depositing' ? 'Depositing...' :
@@ -362,7 +363,8 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </p>
             )}
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Deposits to on-chain CommunityPool contract. {tokenInfo.symbol === 'USDT' ? 'May require 3 signatures: reset allowance + approve + deposit.' : 'Requires 2 signatures: approve + deposit.'}
+              {/* Permit-enabled tokens need only 1 signature! */}
+              Deposits to on-chain CommunityPool contract. WDK USDT supports gasless permit - just 1 signature!
             </p>
           </motion.div>
         )}
