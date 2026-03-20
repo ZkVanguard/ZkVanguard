@@ -130,7 +130,7 @@ POST /api/agents/hedging/tracker
 ### Environment Variables
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/zkvanguard
-MOONLANDER_PRIVATE_KEY=0x7af57dd2889cb16393ff945b87a8ce670aea2950179c425a572059017636b18d
+MOONLANDER_PRIVATE_KEY=your_private_key_here
 NEXT_PUBLIC_CRONOS_TESTNET_RPC=https://evm-t3.cronos.org
 ```
 
