@@ -407,16 +407,80 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
     const pool = new ethers.Contract(config.poolAddress, POOL_ABI, provider);
     
-    // Fetch pool stats
-    const [stats, memberCount] = await Promise.all([
-      pool.getPoolStats(),
-      pool.getMemberCount(),
-    ]);
+    // Extended ABI for fallback methods
+    const FALLBACK_ABI = [
+      'function totalShares() view returns (uint256)',
+      'function depositToken() view returns (address)',
+    ];
+    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
     
-    const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-    const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
-    const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
-    const rawMemberCount = Number(memberCount);
+    let totalShares = 0;
+    let totalNAV = 0;
+    let sharePrice = 1.0;
+    let rawMemberCount = 0;
+    let allocations: number[] = [25, 25, 25, 25]; // Default 25% each
+    
+    // Try getPoolStats first
+    try {
+      const [stats, memberCount] = await Promise.all([
+        pool.getPoolStats(),
+        pool.getMemberCount(),
+      ]);
+      
+      totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+      totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
+      sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+      rawMemberCount = Number(memberCount);
+      allocations = (stats._allocations || []).map((a: bigint) => Number(a) / 100);
+      
+      logger.info(`[CommunityPool] getPoolStats succeeded for ${config.chainKey}`, {
+        totalShares, totalNAV, rawMemberCount
+      });
+    } catch (statsError) {
+      // Fallback: Read totalShares and USDT balance directly
+      logger.warn(`[CommunityPool] getPoolStats failed for ${config.chainKey}, using fallback`, { 
+        error: statsError instanceof Error ? statsError.message.substring(0, 100) : String(statsError)
+      });
+      
+      try {
+        const poolFallback = new ethers.Contract(config.poolAddress, FALLBACK_ABI, provider);
+        
+        // Get total shares
+        const rawShares = await poolFallback.totalShares();
+        totalShares = parseFloat(ethers.formatUnits(rawShares, 18));
+        
+        // Get deposit token (USDT) address and its balance as TVL
+        const fullChainConfig = POOL_CHAIN_CONFIGS[config.chainKey];
+        const networkKey = config.network as 'testnet' | 'mainnet';
+        const usdtAddress = fullChainConfig?.contracts?.[networkKey]?.usdt;
+        
+        if (usdtAddress) {
+          const usdt = new ethers.Contract(usdtAddress, ERC20_ABI, provider);
+          const usdtBalance = await usdt.balanceOf(config.poolAddress);
+          totalNAV = parseFloat(ethers.formatUnits(usdtBalance, 6)); // USDT has 6 decimals
+        }
+        
+        // Calculate share price
+        sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+        
+        // Try to get member count
+        try {
+          const mc = await pool.getMemberCount();
+          rawMemberCount = Number(mc);
+        } catch {
+          rawMemberCount = 1; // Minimum 1 member if we can't read
+        }
+        
+        logger.info(`[CommunityPool] Fallback succeeded for ${config.chainKey}`, {
+          totalShares, totalNAV, sharePrice, rawMemberCount
+        });
+      } catch (fallbackError) {
+        logger.error(`[CommunityPool] Fallback also failed for ${config.chainKey}`, { 
+          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        });
+        return null;
+      }
+    }
     
     // Deduplicate member count (contract may have duplicate entries)
     // OPTIMIZATION: Batch member lookups in parallel chunks of 5
@@ -448,23 +512,20 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     }
     
     // Parse allocations from contract (BPS to percentage)
-    const alloc = stats._allocations;
-    
-    // Always use actual on-chain allocations from contract
-    // The contract stores target allocations in BPS (basis points - 10000 = 100%)
-    const btcAlloc = Number(alloc[0]) / 100;
-    const ethAlloc = Number(alloc[1]) / 100;
-    const suiAlloc = Number(alloc[2]) / 100;
-    const croAlloc = Number(alloc[3]) / 100;
+    // rawAllocations array was set above from getPoolStats or defaults to [25, 25, 25, 25]
+    const btcAlloc = allocations[0] || 25;
+    const ethAlloc = allocations[1] || 25;
+    const suiAlloc = allocations[2] || 25;
+    const croAlloc = allocations[3] || 25;
     
     // Check if pool has diversified allocations or is holding just USDT
     const hasAllocations = btcAlloc > 0 || ethAlloc > 0 || suiAlloc > 0 || croAlloc > 0;
     
-    let allocations: Record<string, { percentage: number }>;
+    let allocationResult: Record<string, { percentage: number }>;
     
     if (hasAllocations) {
       // Multi-asset pool: use on-chain target allocations
-      allocations = {
+      allocationResult = {
         BTC: { percentage: btcAlloc },
         ETH: { percentage: ethAlloc },
         SUI: { percentage: suiAlloc },
@@ -472,12 +533,12 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       };
     } else {
       // No allocations set - pool is holding USDT only
-      allocations = {};
+      allocationResult = {};
       for (const asset of config.assets) {
         if (asset === 'USDT') {
-          allocations[asset] = { percentage: 100 };
+          allocationResult[asset] = { percentage: 100 };
         } else {
-          allocations[asset] = { percentage: 0 };
+          allocationResult[asset] = { percentage: 0 };
         }
       }
     }
@@ -487,7 +548,7 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       totalShares,
       sharePrice,
       totalMembers: uniqueMemberCount,
-      allocations,
+      allocations: allocationResult,
       onChain: true,
     };
     
