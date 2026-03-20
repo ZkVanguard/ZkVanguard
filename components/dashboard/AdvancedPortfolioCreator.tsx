@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSignMessage } from 'wagmi';
+import { useSignMessage } from '@/lib/wdk/wdk-wagmi-compat';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio } from '../../lib/contracts/hooks';
 import { useRWAManager } from '../../lib/contracts/suiHooks';
