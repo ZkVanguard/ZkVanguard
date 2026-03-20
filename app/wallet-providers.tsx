@@ -1,27 +1,11 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { WagmiProvider } from 'wagmi';
-import { EthereumMainnet, CronosTestnet, CronosMainnet, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet, ArbitrumOne, ArbitrumSepolia, Sepolia } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { WdkProvider } from '@/lib/wdk/wdk-context';
 import { PositionsProvider } from '../contexts/PositionsContext';
-import '@rainbow-me/rainbowkit/styles.css';
 
-// Production-ready configuration for Cronos x402 Paytech Hackathon
-// Trim and sanitize to remove any accidental whitespace/newlines/special chars from env vars
-const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
-const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e03fd167375f597f59';
-
-// Use RainbowKit's getDefaultConfig for proper wallet configuration
-// Sepolia first for hackathon testing, Ethereum Mainnet for production
-const config = getDefaultConfig({
-  appName: 'ZkVanguard',
-  projectId,
-  chains: [Sepolia, EthereumMainnet, CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
-  ssr: false, // Client-only for lazy loading
-});
-
+// Production-ready configuration for Tether WDK Hackathon
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -35,25 +19,12 @@ const queryClient = new QueryClient({
 
 export function WalletProviders({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          modalSize="compact"
-          theme={darkTheme({
-            accentColor: '#007aff',
-            accentColorForeground: 'white',
-            borderRadius: 'large',
-            fontStack: 'system',
-          })}
-        >
-          <PositionsProvider>
-            {children}
-          </PositionsProvider>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <QueryClientProvider client={queryClient}>
+      <WdkProvider>
+        <PositionsProvider>
+          {children}
+        </PositionsProvider>
+      </WdkProvider>
+    </QueryClientProvider>
   );
 }
-
-// Export config for use in contract interactions
-export { config };

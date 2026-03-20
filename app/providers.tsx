@@ -3,35 +3,16 @@
 // MUST be imported first - sets up BigInt serialization and fetch interceptor
 import './api-interceptor';
 
-import { ReactNode, useMemo } from 'react';
-import { WagmiProvider } from 'wagmi';
-import { CronosTestnet, CronosMainnet, ArbitrumOne, ArbitrumSepolia, Sepolia, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
+import { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
 import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
-// Use stub provider (browser-safe) - actual WDK uses native Node.js deps
-import { WdkProvider } from '../lib/wdk/wdk-provider-stub';
-import '@rainbow-me/rainbowkit/styles.css';
+// WDK Provider - Native Tether wallet (replaces wagmi/RainbowKit)
+import { WdkProvider } from '../lib/wdk/wdk-context';
 
 // Sui - use the complete provider that includes SuiContext
 import { SuiWalletProviders } from './sui-providers';
-
-// Production-ready configuration for Cronos x402 Paytech Hackathon
-// Trim and sanitize to remove any accidental whitespace/newlines/special chars from env vars
-const rawProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
-// Remove any non-alphanumeric characters and ensure valid ID
-const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e03fd167375f597f59';
-
-// Create config and queryClient OUTSIDE component to prevent recreation
-// This fixes the "WalletConnect Core is already initialized" warning
-const config = getDefaultConfig({
-  appName: 'ZkVanguard',
-  projectId,
-  chains: [Sepolia, CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
-  ssr: true,
-});
 
 // Singleton QueryClient instance
 let queryClientInstance: QueryClient | null = null;
@@ -41,10 +22,9 @@ function getQueryClient() {
       defaultOptions: {
         queries: {
           refetchOnWindowFocus: false,
-          retry: 2, // Reduced from 3 to fail faster
-          staleTime: 120_000, // Increased from 60s to 2min
-          gcTime: 600_000, // Increased from 5min to 10min
-          // Add deduplication
+          retry: 2,
+          staleTime: 120_000,
+          gcTime: 600_000,
           refetchOnMount: false,
           refetchOnReconnect: false,
         },
@@ -55,42 +35,23 @@ function getQueryClient() {
 }
 
 export function Providers({ children }: { children: ReactNode }) {
-  // Memoize the theme to prevent recreation
-  const rainbowKitTheme = useMemo(() => darkTheme({
-    accentColor: '#007aff',
-    accentColorForeground: 'white',
-    borderRadius: 'large',
-    fontStack: 'system',
-  }), []);
-
   const queryClient = getQueryClient();
 
   return (
     <CustomThemeProvider>
       <QueryClientProvider client={queryClient}>
-        {/* Tether WDK Provider for native USDT wallet */}
-        <WdkProvider>
+        {/* Tether WDK Provider - Native self-custodial wallet */}
+        <WdkProvider defaultChain="sepolia">
           {/* Sui Provider with full context support */}
           <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
-            {/* EVM Provider */}
-            <WagmiProvider config={config}>
-              <RainbowKitProvider
-                modalSize="compact"
-                theme={rainbowKitTheme}
-              >
-                <PositionsProvider>
-                  <AIDecisionsProvider>
-                    {children}
-                  </AIDecisionsProvider>
-                </PositionsProvider>
-              </RainbowKitProvider>
-            </WagmiProvider>
+            <PositionsProvider>
+              <AIDecisionsProvider>
+                {children}
+              </AIDecisionsProvider>
+            </PositionsProvider>
           </SuiWalletProviders>
         </WdkProvider>
       </QueryClientProvider>
     </CustomThemeProvider>
   );
 }
-
-// Export config for use in contract interactions
-export { config };
