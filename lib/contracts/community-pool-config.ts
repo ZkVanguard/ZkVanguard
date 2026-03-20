@@ -215,9 +215,10 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         pythOracle: '0x0000000000000000000000000000000000000000',
       },
     },
-    // Pool tracks BTC, ETH, USDT allocations
+    // Pool accepts USDT deposits, manages diversified portfolio of 4 assets
+    // On-chain allocations: 25% BTC, 25% ETH, 25% SUI, 25% CRO
     // PRIMARY for Tether WDK Hackathon - has official USDT
-    assets: ['BTC', 'ETH', 'USDT'],
+    assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'live',
   },
   

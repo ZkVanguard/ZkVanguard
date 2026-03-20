@@ -450,13 +450,28 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     // Parse allocations from contract (BPS to percentage)
     const alloc = stats._allocations;
     
-    // Build chain-specific allocations based on config.assets
-    // For USDT-based pools (Sepolia, Ethereum), show actual holdings (100% USDT)
-    // For multi-asset pools (Cronos), use contract allocations
+    // Always use actual on-chain allocations from contract
+    // The contract stores target allocations in BPS (basis points - 10000 = 100%)
+    const btcAlloc = Number(alloc[0]) / 100;
+    const ethAlloc = Number(alloc[1]) / 100;
+    const suiAlloc = Number(alloc[2]) / 100;
+    const croAlloc = Number(alloc[3]) / 100;
+    
+    // Check if pool has diversified allocations or is holding just USDT
+    const hasAllocations = btcAlloc > 0 || ethAlloc > 0 || suiAlloc > 0 || croAlloc > 0;
+    
     let allocations: Record<string, { percentage: number }>;
     
-    if (config.assets.includes('USDT') && totalNAV > 0) {
-      // USDT-focused pool: all deposits are in USDT
+    if (hasAllocations) {
+      // Multi-asset pool: use on-chain target allocations
+      allocations = {
+        BTC: { percentage: btcAlloc },
+        ETH: { percentage: ethAlloc },
+        SUI: { percentage: suiAlloc },
+        CRO: { percentage: croAlloc },
+      };
+    } else {
+      // No allocations set - pool is holding USDT only
       allocations = {};
       for (const asset of config.assets) {
         if (asset === 'USDT') {
@@ -465,14 +480,6 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
           allocations[asset] = { percentage: 0 };
         }
       }
-    } else {
-      // Standard multi-asset pool: use contract allocations
-      allocations = {
-        BTC: { percentage: Number(alloc[0]) / 100 },
-        ETH: { percentage: Number(alloc[1]) / 100 },
-        CRO: { percentage: Number(alloc[3]) / 100 }, // Index 3 is CRO in contract
-        SUI: { percentage: Number(alloc[2]) / 100 }, // Index 2 is SUI in contract
-      };
     }
     
     const result = {
