@@ -1100,7 +1100,7 @@ Frontend:      Next.js 14 + React 18 + Tailwind
 Backend:       Next.js API Routes
 Storage:       File-based JSON
 Cron:          Vercel Cron Jobs
-Blockchain:    ethers.js + wagmi
+Blockchain:    ethers.js + WDK
 ZK Proofs:     Python (subprocess)
 Deployment:    Vercel FREE tier
 ```
@@ -1114,7 +1114,7 @@ Cache:         Redis (Upstash)
 Auth:          Supabase Auth
 Monitoring:    Axiom + Better Uptime
 Cron:          Vercel Cron Jobs
-Blockchain:    ethers.js + wagmi
+Blockchain:    ethers.js + WDK
 ZK Proofs:     Python (subprocess)
 Deployment:    Vercel Pro ($20/month)
 ```

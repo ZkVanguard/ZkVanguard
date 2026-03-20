@@ -204,8 +204,9 @@ function executeStrategy(
 
 #### Update 2.1: Add Signature Hook
 ```typescript
+
 // Add at line 4
-import { useSignMessage } from 'wagmi';
+import { useSignMessage } from '@/lib/wdk/wdk-wagmi-compat';
 
 // Add in component (line 27)
 const { signMessageAsync } = useSignMessage();

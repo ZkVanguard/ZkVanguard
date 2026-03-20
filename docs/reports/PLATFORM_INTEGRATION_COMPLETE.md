@@ -64,8 +64,9 @@ const result = await storeCommitmentTrueGasless(proofHash, merkleRoot, 521, sign
 
 **Changes**:
 ```typescript
-// Added wagmi and ethers
-import { useWalletClient } from 'wagmi';
+
+// Added WDK and ethers
+import { useWalletClient } from '@/lib/wdk/wdk-wagmi-compat';
 import { ethers } from 'ethers';
 
 // Updated state type

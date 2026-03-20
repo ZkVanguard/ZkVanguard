@@ -390,7 +390,7 @@ ZkVanguard/
 - **Framework**: React 18 with TypeScript
 - **Styling**: Tailwind CSS
 - **State Management**: Zustand
-- **Web3**: ethers.js, wagmi
+- **Web3**: ethers.js, WDK
 
 ### Backend/APIs
 - **Runtime**: Node.js 18+
