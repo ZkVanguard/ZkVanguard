@@ -68,7 +68,7 @@ export interface Position {
 
 export interface OpenTradeParams {
   pairIndex: number;          // Use PAIR_INDEX mapping
-  collateralAmount: string;   // Amount in USDC (6 decimals)
+  collateralAmount: string;   // Amount in USDT/USDC (6 decimals)
   leverage: number;           // 2-1000x
   isLong: boolean;           
   takeProfit?: string;        // TP price (optional)
@@ -135,9 +135,9 @@ export class MoonlanderOnChainClient {
         }
       }
 
-      // Initialize collateral contract (USDC)
+      // Initialize collateral contract (USDT on Cronos mainnet, USDC on zkEVM/testnet)
       const signerOrProvider = this.signer || this.provider;
-      const collateralAddress = this.contracts.USDC;
+      const collateralAddress = this.contracts.COLLATERAL || this.contracts.USDC;
       
       this.collateralContract = new Contract(
         collateralAddress,
@@ -197,7 +197,7 @@ export class MoonlanderOnChainClient {
       // Get trader address
       const trader = await this.signer!.getAddress();
 
-      // Parse collateral (USDC has 6 decimals)
+      // Parse collateral (USDT/USDC - both have 6 decimals)
       const collateralDecimals = await this.collateralContract!.decimals();
       const collateralWei = parseUnits(collateralAmount, collateralDecimals);
 
@@ -230,7 +230,7 @@ export class MoonlanderOnChainClient {
       // - pythUpdateData (bytes[])
 
       const referrer = '0x0000000000000000000000000000000000000000';
-      const collateralToken = this.contracts.USDC;
+      const collateralToken = this.contracts.COLLATERAL || this.contracts.USDC;
       
       // Calculate leveraged position value (collateral * leverage)
       const leveragedAmount = collateralWei * BigInt(leverage);
