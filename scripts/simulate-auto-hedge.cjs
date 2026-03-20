@@ -20,16 +20,16 @@ async function main() {
   // Contract addresses
   const HEDGE_EXECUTOR = deployment.HedgeExecutorV2 || deployment.HedgeExecutor;
   const MOCK_MOONLANDER = deployment.MockMoonlander;
-  const MOCK_USDC = deployment.MockUSDC;
+  const USDT_ADDRESS = deployment.USDT;
 
   console.log("=== Contract Addresses ===");
   console.log("HedgeExecutor:", HEDGE_EXECUTOR);
   console.log("MockMoonlander:", MOCK_MOONLANDER);
-  console.log("MockUSDC:", MOCK_USDC);
+  console.log("USDT:", USDT_ADDRESS);
 
   // Get contract instances - use V1 ABI (7 params) since that's what's deployed
   const hedgeExecutor = await ethers.getContractAt("HedgeExecutor", HEDGE_EXECUTOR);
-  const mockUsdc = await ethers.getContractAt("MockUSDC", MOCK_USDC);
+  const usdt = await ethers.getContractAt("MockUSDC", USDT_ADDRESS);
   const mockMoonlander = await ethers.getContractAt("MockMoonlander", MOCK_MOONLANDER);
 
   // Check configuration
@@ -39,7 +39,7 @@ async function main() {
   const paused = await hedgeExecutor.paused();
   
   console.log("Router set correctly:", router.toLowerCase() === MOCK_MOONLANDER.toLowerCase() ? "✅" : "❌");
-  console.log("Collateral correct:", collateral.toLowerCase() === MOCK_USDC.toLowerCase() ? "✅" : "❌");
+  console.log("Collateral correct:", collateral.toLowerCase() === USDT_ADDRESS.toLowerCase() ? "✅" : "❌");
   console.log("Contract active:", !paused ? "✅" : "❌ (PAUSED)");
 
   if (paused) {
@@ -47,25 +47,25 @@ async function main() {
     return;
   }
 
-  // Check signer's USDC balance
-  let signerUsdcBalance = await mockUsdc.balanceOf(signer.address);
-  console.log("\nSigner USDC balance:", ethers.formatUnits(signerUsdcBalance, 6), "USDC");
+  // Check signer's USDT balance
+  let signerUsdtBalance = await usdt.balanceOf(signer.address);
+  console.log("\nSigner USDT balance:", ethers.formatUnits(signerUsdtBalance, 6), "USDT");
 
-  // Mint USDC if needed
-  const requiredUsdc = ethers.parseUnits("1000", 6); // 1000 USDC for test
-  if (signerUsdcBalance < requiredUsdc) {
-    console.log("\n📦 Minting test USDC...");
-    const mintTx = await mockUsdc.mint(signer.address, ethers.parseUnits("10000", 6));
+  // Mint USDT if needed
+  const requiredUsdt = ethers.parseUnits("1000", 6); // 1000 USDT for test
+  if (signerUsdtBalance < requiredUsdt) {
+    console.log("\n📦 Minting test USDT...");
+    const mintTx = await usdt.mint(signer.address, ethers.parseUnits("10000", 6));
     await mintTx.wait();
-    signerUsdcBalance = await mockUsdc.balanceOf(signer.address);
-    console.log("New USDC balance:", ethers.formatUnits(signerUsdcBalance, 6), "USDC ✅");
+    signerUsdtBalance = await usdt.balanceOf(signer.address);
+    console.log("New USDT balance:", ethers.formatUnits(signerUsdtBalance, 6), "USDT ✅");
   }
 
   // Approve HedgeExecutor
-  console.log("\n📝 Approving HedgeExecutor for USDC...");
-  const allowance = await mockUsdc.allowance(signer.address, HEDGE_EXECUTOR);
-  if (allowance < requiredUsdc) {
-    const approveTx = await mockUsdc.approve(HEDGE_EXECUTOR, ethers.MaxUint256);
+  console.log("\n📝 Approving HedgeExecutor for USDT...");
+  const allowance = await usdt.allowance(signer.address, HEDGE_EXECUTOR);
+  if (allowance < requiredUsdt) {
+    const approveTx = await usdt.approve(HEDGE_EXECUTOR, ethers.MaxUint256);
     await approveTx.wait();
     console.log("Approval granted ✅");
   } else {

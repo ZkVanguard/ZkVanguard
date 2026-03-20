@@ -25,20 +25,20 @@ async function main() {
   const deployment = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
   
   const HEDGE_EXECUTOR = deployment.HedgeExecutor;
-  const MOCK_USDC = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
+  const USDT_ADDRESS = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
   
   // Connect to contracts
   const hedgeExecutor = await ethers.getContractAt("HedgeExecutor", HEDGE_EXECUTOR);
-  const mockUsdc = await ethers.getContractAt("MockUSDC", MOCK_USDC);
+  const usdt = await ethers.getContractAt("MockUSDC", USDT_ADDRESS);
   
   console.log("HedgeExecutor:", HEDGE_EXECUTOR);
-  console.log("MockUSDC:", MOCK_USDC);
+  console.log("USDT:", USDT_ADDRESS);
   
   // Check balances
-  const usdcBalance = await mockUsdc.balanceOf(deployer.address);
-  const usdcDecimals = await mockUsdc.decimals();
-  const balance = Number(usdcBalance) / Math.pow(10, Number(usdcDecimals));
-  console.log(`\nMockUSDC Balance: ${balance.toLocaleString()} USDC`);
+  const usdtBalance = await usdt.balanceOf(deployer.address);
+  const usdtDecimals = await usdt.decimals();
+  const balance = Number(usdtBalance) / Math.pow(10, Number(usdtDecimals));
+  console.log(`\nUSDT Balance: ${balance.toLocaleString()} USDT`);
   
   // Portfolio #3 Hedges - scaled to testnet amounts (using 0.01% of notional)
   // Real: $52.5M BTC, $45M ETH, $30M CRO, $22.5M SUI
@@ -84,11 +84,11 @@ async function main() {
   console.log(`Total collateral required: $${totalRequired.toLocaleString()}`);
   
   if (balance < totalRequired) {
-    console.log(`\n⚠️  Insufficient balance. Minting ${totalRequired} USDC...`);
+    console.log(`\n⚠️  Insufficient balance. Minting ${totalRequired} USDT...`);
     try {
-      const mintTx = await mockUsdc.mint(deployer.address, ethers.parseUnits(totalRequired.toString(), 6));
+      const mintTx = await usdt.mint(deployer.address, ethers.parseUnits(totalRequired.toString(), 6));
       await mintTx.wait();
-      console.log("✅ Minted", totalRequired, "USDC");
+      console.log("✅ Minted", totalRequired, "USDT");
     } catch (e) {
       console.log("❌ Mint failed:", e.message);
       console.log("Continuing with available balance...");
@@ -96,8 +96,8 @@ async function main() {
   }
   
   // Approve HedgeExecutor
-  console.log("\nApproving HedgeExecutor to spend USDC...");
-  const approveTx = await mockUsdc.approve(HEDGE_EXECUTOR, ethers.MaxUint256);
+  console.log("\nApproving HedgeExecutor to spend USDT...");
+  const approveTx = await usdt.approve(HEDGE_EXECUTOR, ethers.MaxUint256);
   await approveTx.wait();
   console.log("✅ Approved");
   

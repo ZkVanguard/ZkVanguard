@@ -1,7 +1,7 @@
 /**
  * Recapitalize Community Pool
  * 
- * Adds USDC directly to the pool contract WITHOUT minting new shares.
+ * Adds USDT directly to the pool contract WITHOUT minting new shares.
  * This restores the share price to $1.00 by increasing NAV.
  * 
  * Usage: node scripts/utils/recapitalize-pool.cjs [--execute]
@@ -13,7 +13,7 @@ require('dotenv').config({ path: '.env.local', override: true });
 
 const RPC = 'https://evm-t3.cronos.org';
 const POOL_ADDRESS = '0x97F77f8A4A625B68BDDc23Bb7783Bbd7cf5cb21B';
-const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967'; // MockUSDC on Cronos Testnet
+const USDT_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967'; // USDT on Cronos Testnet
 
 const POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
@@ -41,15 +41,15 @@ async function main() {
   
   const provider = new ethers.JsonRpcProvider(RPC);
   const pool = new ethers.Contract(POOL_ADDRESS, POOL_ABI, provider);
-  const usdcRead = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
+  const usdtRead = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
   
   // Get current state first (doesn't need wallet)
   const [stats, totalShares, nav, decimals, symbol] = await Promise.all([
     pool.getPoolStats(),
     pool.totalShares(),
     pool.calculateTotalNAV(),
-    usdcRead.decimals(),
-    usdcRead.symbol(),
+    usdtRead.decimals(),
+    usdtRead.symbol(),
   ]);
 
   const sharesNum = parseFloat(ethers.formatUnits(totalShares, 18));
@@ -90,14 +90,14 @@ async function main() {
     console.log('  MANUAL TRANSFER REQUIRED');
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('');
-    console.log(`  Transfer $${shortfall.toFixed(2)} USDC directly to the pool contract:`);
+    console.log(`  Transfer $${shortfall.toFixed(2)} USDT directly to the pool contract:`);
     console.log('');
     console.log(`  Pool Address: ${POOL_ADDRESS}`);
-    console.log(`  USDC Address: ${USDC_ADDRESS}`);
-    console.log(`  Amount:       ${shortfall.toFixed(6)} USDC`);
+    console.log(`  USDT Address: ${USDT_ADDRESS}`);
+    console.log(`  Amount:       ${shortfall.toFixed(6)} USDT`);
     console.log('');
     console.log('  You can do this via:');
-    console.log('  1. MetaMask: Send USDC to the pool address');
+    console.log('  1. MetaMask: Send USDT to the pool address');
     console.log('  2. Cronoscan: Write contract -> transfer(pool, amount)');
     console.log('  3. Set DEPLOYER_PRIVATE_KEY in .env.local and run with --execute');
     console.log('');
@@ -105,8 +105,8 @@ async function main() {
   }
 
   const wallet = new ethers.Wallet(privateKey, provider);
-  const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, wallet);
-  const walletBalance = await usdc.balanceOf(wallet.address);
+  const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, wallet);
+  const walletBalance = await usdt.balanceOf(wallet.address);
   const walletBalNum = parseFloat(ethers.formatUnits(walletBalance, decimals));
 
   console.log(`Wallet: ${wallet.address}`);
@@ -131,7 +131,7 @@ async function main() {
   console.log('─────────────────────────────────────────');
   
   try {
-    const tx = await usdc.transfer(POOL_ADDRESS, shortfallRaw);
+    const tx = await usdt.transfer(POOL_ADDRESS, shortfallRaw);
     console.log(`  Tx Hash: ${tx.hash}`);
     console.log('  Waiting for confirmation...');
     

@@ -1,9 +1,9 @@
 /**
- * Upgrade HedgeExecutor and Configure for MockUSDC
+ * Upgrade HedgeExecutor and Configure for USDT
  * 
  * This script:
  * 1. Upgrades the HedgeExecutor proxy to the new implementation
- * 2. Sets the collateral token to MockUSDC (0x28217DAddC55e3C4831b4A48A00Ce04880786967)
+ * 2. Sets the collateral token to USDT (0x28217DAddC55e3C4831b4A48A00Ce04880786967)
  * 3. Sets the Moonlander router to MockMoonlander (0xAb4946d7BD583a74F5E5051b22332fA674D7BE54)
  */
 
@@ -21,11 +21,11 @@ async function main() {
   const deployment = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
   
   const HEDGE_EXECUTOR_PROXY = deployment.HedgeExecutor;
-  const NEW_MOCK_USDC = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
+  const USDT_ADDRESS = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
   const MOCK_MOONLANDER = deployment.MockMoonlander || "0xAb4946d7BD583a74F5E5051b22332fA674D7BE54";
   
   console.log("Current HedgeExecutor proxy:", HEDGE_EXECUTOR_PROXY);
-  console.log("Target MockUSDC:", NEW_MOCK_USDC);
+  console.log("Target USDT:", USDT_ADDRESS);
   console.log("Target MockMoonlander:", MOCK_MOONLANDER);
   console.log("");
 
@@ -57,12 +57,12 @@ async function main() {
   console.log("Current Moonlander router:", currentRouter);
   
   // Set collateral token if different
-  if (currentCollateral.toLowerCase() !== NEW_MOCK_USDC.toLowerCase()) {
-    console.log("\nUpdating collateral token to MockUSDC...");
+  if (currentCollateral.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+    console.log("\nUpdating collateral token to USDT...");
     try {
-      const tx1 = await hedgeExecutor.setCollateralToken(NEW_MOCK_USDC);
+      const tx1 = await hedgeExecutor.setCollateralToken(USDT_ADDRESS);
       await tx1.wait();
-      console.log("✅ Collateral token updated to:", NEW_MOCK_USDC);
+      console.log("✅ Collateral token updated to:", USDT_ADDRESS);
     } catch (err) {
       console.log("❌ Failed to update collateral token:", err.message);
     }
@@ -93,7 +93,7 @@ async function main() {
   console.log("Max Leverage:", (await hedgeExecutor.maxLeverage()).toString() + "x");
   console.log("Fee Rate:", (await hedgeExecutor.feeRateBps()).toString(), "bps");
   
-  console.log("\n✅ HedgeExecutor is now configured for on-chain hedging with MockUSDC!");
+  console.log("\n✅ HedgeExecutor is now configured for on-chain hedging with USDT!");
 }
 
 main()
