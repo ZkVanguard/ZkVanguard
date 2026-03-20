@@ -5,12 +5,13 @@ import './api-interceptor';
 
 import { ReactNode, useMemo } from 'react';
 import { WagmiProvider } from 'wagmi';
-import { CronosTestnet, CronosMainnet, ArbitrumOne, ArbitrumSepolia, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
+import { CronosTestnet, CronosMainnet, ArbitrumOne, ArbitrumSepolia, Sepolia, OasisSapphireTestnet, OasisSapphireMainnet, OasisEmeraldTestnet, OasisEmeraldMainnet } from '../lib/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
 import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
+import { WdkProvider } from '../lib/wdk/wdk-context';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Sui - use the complete provider that includes SuiContext
@@ -27,7 +28,7 @@ const projectId = rawProjectId.replace(/[^a-zA-Z0-9]/g, '') || 'a3b7532423dc88e0
 const config = getDefaultConfig({
   appName: 'ZkVanguard',
   projectId,
-  chains: [CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
+  chains: [Sepolia, CronosTestnet, CronosMainnet, ArbitrumSepolia, ArbitrumOne, OasisEmeraldTestnet, OasisEmeraldMainnet, OasisSapphireTestnet, OasisSapphireMainnet],
   ssr: true,
 });
 
@@ -66,22 +67,25 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <CustomThemeProvider>
       <QueryClientProvider client={queryClient}>
-        {/* Sui Provider with full context support */}
-        <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
-          {/* EVM Provider */}
-          <WagmiProvider config={config}>
-            <RainbowKitProvider
-              modalSize="compact"
-              theme={rainbowKitTheme}
-            >
-              <PositionsProvider>
-                <AIDecisionsProvider>
-                  {children}
-                </AIDecisionsProvider>
-              </PositionsProvider>
-            </RainbowKitProvider>
-          </WagmiProvider>
-        </SuiWalletProviders>
+        {/* Tether WDK Provider for native USDT wallet */}
+        <WdkProvider>
+          {/* Sui Provider with full context support */}
+          <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
+            {/* EVM Provider */}
+            <WagmiProvider config={config}>
+              <RainbowKitProvider
+                modalSize="compact"
+                theme={rainbowKitTheme}
+              >
+                <PositionsProvider>
+                  <AIDecisionsProvider>
+                    {children}
+                  </AIDecisionsProvider>
+                </PositionsProvider>
+              </RainbowKitProvider>
+            </WagmiProvider>
+          </SuiWalletProviders>
+        </WdkProvider>
       </QueryClientProvider>
     </CustomThemeProvider>
   );
