@@ -151,6 +151,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 
 ---
 
+
 ## Tech Stack
 
 - **Frontend:** Next.js 14, TypeScript, TailwindCSS
@@ -158,7 +159,15 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 - **Blockchain:** Cronos (EVM/Solidity), SUI (Move)
 - **ZK:** ZK-STARK proofs, Post-quantum 521-bit curves
 - **AI:** Crypto.com AI SDK, Multi-agent orchestration
-- **Wallets:** WDK (EVM), @mysten/dapp-kit (SUI)
+- **Wallets:**
+	- **EVM:** WDK (Tether self-custodial wallet, seed phrase stored locally)
+	- **SUI:** @mysten/dapp-kit
+
+---
+
+## ⚡ WDK Migration
+
+> **2026-03:** All EVM wallet interactions now use [WDK](https://github.com/tetherto/wdk) (Tether self-custodial wallet). wagmi and RainbowKit have been fully removed. See `/lib/wdk/` for context and `/components/MultiChainConnectButton.tsx` for usage.
 
 
 ---
