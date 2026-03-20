@@ -11,6 +11,9 @@
  * Fully non-custodial for users - they use their own wallets.
  */
 
+// CRITICAL: This must only run server-side - contains sensitive operations
+import 'server-only';
+
 import WdkManager from '@tetherto/wdk';
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm';
 import { WDK_CHAINS } from '@/lib/config/wdk';

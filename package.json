@@ -109,6 +109,7 @@
     "react-markdown": "^10.1.0",
     "redis": "^4.6.12",
     "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1",
     "uuid": "^9.0.1",
     "viem": "^2.42.0",
     "wagmi": "^2.19.5",
