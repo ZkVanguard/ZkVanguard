@@ -116,6 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
   const subTasks: SubCronResult[] = [];
   
   const cronJobs = [
+    { name: 'Pyth Price Update',      path: '/api/cron/pyth-update' },        // Update oracle prices first
     { name: 'Community Pool Snapshot', path: '/api/cron/community-pool' },
     { name: 'Pool NAV Monitor',       path: '/api/cron/pool-nav-monitor' },
     { name: 'Auto Rebalance',         path: '/api/cron/auto-rebalance' },
