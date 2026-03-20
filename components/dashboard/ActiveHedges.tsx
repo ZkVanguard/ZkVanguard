@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
-import { useWalletClient, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
+import { useWalletClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getExplorerUrl, getNetworkName, CHAIN_IDS } from '@/lib/utils/network';
 
@@ -115,14 +115,14 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
     verifyingContract: contractAddresses.hedgeExecutor,
   }), [chainId, contractAddresses.hedgeExecutor]);
   
-  // EIP-712 signature helper for closing hedges - uses wagmi walletClient for correct wallet
+  // EIP-712 signature helper for closing hedges - uses WDK walletClient for correct wallet
   // NO fallback to window.ethereum - that causes conflicts with multiple wallets (OKX vs MetaMask)
   const signCloseHedge = async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
     try {
-      // IMPORTANT: Only use wagmi walletClient - no window.ethereum fallback
+      // IMPORTANT: Only use WDK walletClient - no window.ethereum fallback
       // Multiple wallet extensions conflict over window.ethereum
       if (!walletClient) {
-        logger.error('❌ No walletClient available - ensure wallet is fully connected via wagmi', { 
+        logger.error('❌ No walletClient available - ensure wallet is fully connected via WDK', { 
           component: 'ActiveHedges',
           hint: 'If using OKX, ensure it is selected as the active wallet in the connect modal'
         });
@@ -142,7 +142,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       } as const;
       const message = { hedgeId: hedgeId as `0x${string}`, action: 'close', timestamp: BigInt(timestamp) };
 
-      logger.info('🔑 Signing with connected wallet via wagmi', { 
+      logger.info('🔑 Signing with connected wallet via WDK', { 
         component: 'ActiveHedges', 
         wallet: walletClient.account?.address,
         connector: walletClient.transport?.name || 'unknown'

@@ -30,7 +30,7 @@ interface DepositWithdrawActionsProps {
   txStatus: TxStatus;
   address: string | undefined;
   // Wallet type
-  activeWalletType?: 'wagmi' | 'sui' | null;
+  activeWalletType?: 'evm' | 'sui' | null;
   // SUI state
   suiIsConnected: boolean;
   suiAddress: string | null;
@@ -95,7 +95,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   const isSui = selectedChain === 'sui';
   const minDeposit = isFirstDeposit ? 100 : 10;
   
-  // User connects via wagmi (MetaMask, OKX, etc.)
+  // User connects via WDK self-custodial wallet
   const effectiveAddress = address;
   const evmConnected = !!effectiveAddress;
   

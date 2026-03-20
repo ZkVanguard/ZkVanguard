@@ -121,7 +121,7 @@ function OverviewSection() {
       <h3 className="text-2xl font-semibold text-[#1D1D1F] mb-3">Tech Stack</h3>
       <ul className="list-disc list-inside text-[#424245] space-y-2 mb-6">
         <li><strong>Frontend:</strong> Next.js 14.2.35, React 18.2, TypeScript 5.3.3, Tailwind CSS</li>
-        <li><strong>Blockchain:</strong> Cronos zkEVM Testnet (Chain ID: 282), Wagmi 1.4.12, Viem 1.21.4</li>
+        <li><strong>Blockchain:</strong> Cronos zkEVM Testnet (Chain ID: 282), Ethers.js 6.16.0, WDK</li>
         <li><strong>AI Agents:</strong> TypeScript with EventEmitter3 and MessageBus coordination</li>
         <li><strong>ZK Proofs:</strong> Python STARK implementation (AIR + FRI) with TypeScript integration layer</li>
         <li><strong>Smart Contracts:</strong> Solidity 0.8.20 (PaymentRouter, RWAManager, ZKVerifier) - undeployed</li>

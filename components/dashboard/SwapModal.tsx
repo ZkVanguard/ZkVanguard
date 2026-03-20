@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, RefreshCw, ArrowDownUp, Shield } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from '@/lib/wdk/wdk-hooks';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
 import { getVVSFinanceService } from '@/lib/services/VVSFinanceService';
@@ -412,7 +412,7 @@ export function SwapModal({
         throw new Error(tradeData.error || 'Failed to get swap quote');
       }
 
-      // Use VVS SDK approach: get quote then execute with wagmi
+      // Use VVS SDK approach: get quote then execute with WDK
       // For testnet (338), VVS SDK will route through available pools
       const swapCall = dexService.getSwapContractCall(
         {

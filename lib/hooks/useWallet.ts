@@ -1,6 +1,6 @@
 'use client';
 
-import { useAccount } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount } from '@/lib/wdk/wdk-hooks';
 import { useSuiSafe } from '@/app/sui-providers';
 
 /**

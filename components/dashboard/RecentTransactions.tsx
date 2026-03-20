@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo, useEffect } from 'react';
-import { usePublicClient, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
+import { usePublicClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { formatEther } from 'viem';
 import { 
   ArrowDownUp, 

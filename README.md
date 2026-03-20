@@ -167,7 +167,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 
 ## ⚡ WDK Migration
 
-> **2026-03:** All EVM wallet interactions now use [WDK](https://github.com/tetherto/wdk) (Tether self-custodial wallet). wagmi and RainbowKit have been fully removed. See `/lib/wdk/` for context and `/components/MultiChainConnectButton.tsx` for usage.
+> **2026-03:** All EVM wallet interactions now use [WDK](https://github.com/tetherto/wdk) (Tether self-custodial wallet). See `/lib/wdk/` for context and `/components/MultiChainConnectButton.tsx` for usage.
 
 
 ---

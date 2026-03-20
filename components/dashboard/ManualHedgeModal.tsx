@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId, useWalletClient } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId, useWalletClient } from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';

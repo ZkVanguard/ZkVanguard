@@ -1,16 +1,9 @@
 /**
- * WDK Wagmi Compatibility Hooks
+ * WDK Hooks
  * 
- * These hooks provide a wagmi-compatible API using WDK under the hood.
- * This allows existing components to work without major refactoring.
- * 
- * Drop-in replacements for:
- * - useAccount
- * - useChainId
- * - useWriteContract
- * - useWaitForTransactionReceipt
- * - useSignMessage
- * - useSwitchChain
+ * React hooks for Tether WDK wallet operations.
+ * Provides useAccount, useChainId, useWriteContract,
+ * useWaitForTransactionReceipt, useSignMessage, useSwitchChain, etc.
  */
 
 'use client';
@@ -353,7 +346,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     ? CHAIN_ID_TO_KEY[args.chainId] 
     : state.chainKey;
 
-  // Backwards compatibility: accept `query` options (like wagmi) inside args
+  // Accept `query` options inside args for backwards compatibility
   const legacyQuery = (args as any).query ?? {};
   const enabledFlag = args.enabled ?? legacyQuery.enabled ?? true;
   const refetchInterval = (args as any).refetchInterval ?? legacyQuery.refetchInterval;
@@ -396,7 +389,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     refetch();
   }, [refetch]);
 
-  // Optional polling if refetchInterval supplied (supports wagmi-like `query.refetchInterval`)
+  // Optional polling if refetchInterval supplied
   useEffect(() => {
     if (!refetchInterval || enabledFlag === false) return;
     const id = setInterval(() => {
@@ -565,7 +558,7 @@ export function useDisconnect(): {
 }
 
 // ============================================
-// EXPORTS - Drop-in wagmi replacements
+// EXPORTS
 // ============================================
 
 export {

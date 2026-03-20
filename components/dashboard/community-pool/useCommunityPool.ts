@@ -11,13 +11,13 @@
  * - Optimistic UI updates for better perceived performance
  * - Debounced input handlers
  * 
- * NOTE: Now uses Tether WDK instead of wagmi/RainbowKit
+ * NOTE: Now uses Tether WDK natively
  */
 
 'use client';
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
-// WDK-compatible hooks (drop-in replacements for wagmi)
+// WDK hooks
 import { 
   useAccount, 
   useChainId, 
@@ -27,7 +27,7 @@ import {
   useReadContract, 
   useSwitchChain, 
   useSignTypedData 
-} from '@/lib/wdk/wdk-wagmi-compat';
+} from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
@@ -180,16 +180,16 @@ export function useCommunityPool(propAddress?: string) {
   const userSelectedChainRef = useRef(false);
   // Track pending action after chain switch (auto-retry)
   const pendingChainSwitchRef = useRef<{ action: 'deposit' | 'withdraw'; targetChainId: number } | null>(null);
-  // Skip chain check after successful wallet switch (wagmi may not sync immediately)
+  // Skip chain check after successful wallet switch (WDK may not sync immediately)
   const skipChainCheckRef = useRef(false);
   // Preserve deposit amount during chain switch (UI state may be lost)
   const pendingDepositAmountRef = useRef<string>('');
   
-  // Wagmi hooks
+  // WDK hooks
   const { address: connectedAddress, isConnected, chain } = useAccount();
   const address = propAddress || connectedAddress;
-  const wagmiChainId = useChainId();
-  const chainId = chain?.id ?? wagmiChainId;
+  const wdkChainId = useChainId();
+  const chainId = chain?.id ?? wdkChainId;
   const { signMessageAsync } = useSignMessage();
   const { writeContract, writeContractAsync, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
@@ -230,11 +230,11 @@ export function useCommunityPool(propAddress?: string) {
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
   
-  // Determine active wallet type: 'wagmi' | 'sui' | null
-  // Note: WDK treasury is server-side, users connect via wagmi
-  const activeWalletType = useMemo((): 'wagmi' | 'sui' | null => {
+  // Determine active wallet type: 'evm' | 'sui' | null
+  // Note: WDK treasury is server-side, users connect via WDK self-custodial wallet
+  const activeWalletType = useMemo((): 'evm' | 'sui' | null => {
     if (selectedChain === 'sui' && suiIsConnected) return 'sui';
-    if (isConnected && address) return 'wagmi';
+    if (isConnected && address) return 'evm';
     return null;
   }, [selectedChain, suiIsConnected, isConnected, address]);
   
@@ -709,7 +709,7 @@ export function useCommunityPool(propAddress?: string) {
     
     const validChainIds = getValidChainIds(selectedChain);
     
-    // Skip chain check if we just did a successful wallet switch (wagmi lags behind native API)
+    // Skip chain check if we just did a successful wallet switch (WDK lags behind native API)
     if (skipChainCheckRef.current) {
       console.error('🔴🔴🔴 CHAIN SWITCH v3 - Skipping chain check (just switched), proceeding with deposit');
       skipChainCheckRef.current = false;
@@ -748,8 +748,8 @@ export function useCommunityPool(propAddress?: string) {
         },
       };
       
-      // Use wagmi's switchChainAsync - this properly syncs wagmi state
-      console.error('🔴🔴🔴 CHAIN SWITCH v4 - Using wagmi switchChainAsync to', targetChainId);
+      // Use WDK switchChainAsync - this properly syncs state
+      console.error('🔴🔴🔴 CHAIN SWITCH v4 - Using WDK switchChainAsync to', targetChainId);
       
       // Set timeout for user feedback
       const timeoutId = setTimeout(() => {
@@ -760,22 +760,22 @@ export function useCommunityPool(propAddress?: string) {
         }
       }, 20000);
       
-      // Try wagmi's switchChainAsync (syncs wagmi state properly)
+      // Try WDK switchChainAsync (syncs state properly)
       switchChainAsync({ chainId: targetChainId })
         .then(() => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - wagmi switchChainAsync SUCCESS!');
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - switchChainAsync SUCCESS!');
           clearTimeout(timeoutId);
           pendingChainSwitchRef.current = null;
           dispatchPool({ type: 'SET_ERROR', payload: null });
-          // Wagmi state is now synced, proceed immediately
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - Proceeding with deposit (wagmi synced)');
+          // State is now synced, proceed immediately
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - Proceeding with deposit (synced)');
           setTimeout(() => {
             handleDeposit();
           }, 100);
         })
         .catch(async (switchError: any) => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - wagmi error:', switchError?.message);
-          // Fallback to native API if wagmi fails (e.g., chain not in wagmi config)
+          console.error('🔴🔴🔴 CHAIN SWITCH v4 - WDK error:', switchError?.message);
+          // Fallback to native API if WDK fails (e.g., chain not in config)
           const ethereum = (window as any).ethereum;
           if (!ethereum) {
             clearTimeout(timeoutId);
@@ -801,7 +801,7 @@ export function useCommunityPool(propAddress?: string) {
             skipChainCheckRef.current = true;
             pendingChainSwitchRef.current = null;
             dispatchPool({ type: 'SET_ERROR', payload: null });
-            // Wait a bit longer for wagmi to sync via chainChanged event
+            // Wait a bit longer for WDK to sync via chainChanged event
             setTimeout(() => {
               console.error('🔴🔴🔴 CHAIN SWITCH v4 - Retrying deposit after native switch');
               handleDeposit();
@@ -845,12 +845,12 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    // Get the target chain ID for this deposit (use selected chain, not wagmi's stale value)
+    // Get the target chain ID for this deposit (use selected chain, not WDK's stale value)
     const targetChainId = validChainIds[0];
     console.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
       amount, 
       targetChainId, 
-      wagmiChainId: chainId, 
+      wdkChainId: chainId, 
       USDT_ADDRESS, 
       COMMUNITY_POOL_ADDRESS,
       poolDeployed,
@@ -1488,8 +1488,8 @@ export function useCommunityPool(propAddress?: string) {
     const isSui = selectedChain === 'sui';
     
     // Determine active address based on wallet type
-    // Priority: SUI (for sui chain) > Wagmi
-    // Note: WDK treasury is server-side, users connect via wagmi
+    // Priority: SUI (for sui chain) > EVM
+    // Note: WDK treasury is server-side, users connect via WDK self-custodial wallet
     let activeAddress: string | null = null;
     let isActiveWalletConnected = false;
     
