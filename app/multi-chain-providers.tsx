@@ -4,7 +4,7 @@ import { ReactNode, createContext, useContext, useState, useMemo, useCallback, u
 import { WalletProviders } from './wallet-providers';
 import { SuiWalletProviders, useSui } from './sui-providers';
 import { ChainType, NetworkType } from '../lib/contracts/addresses';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
 
 // ============================================
 // MULTI-CHAIN CONTEXT TYPES
