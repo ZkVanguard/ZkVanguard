@@ -47,6 +47,7 @@
     "typechain-types",
     "test",
     "scripts",
-    "archive"
+    "archive",
+    "lib/wdk/wdk-context-native.tsx"
   ]
 }
