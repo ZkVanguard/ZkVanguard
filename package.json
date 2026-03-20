@@ -83,8 +83,6 @@
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@shazow/whatsabi": "^0.25.0",
     "@tanstack/react-query": "^5.90.12",
-    "@tetherto/wdk": "^1.0.0-beta.6",
-    "@tetherto/wdk-wallet-evm": "^1.0.0-beta.8",
     "@upstash/qstash": "^2.9.0",
     "@vvs-finance/swap-sdk": "^0.0.5",
     "axios": "^1.6.2",
