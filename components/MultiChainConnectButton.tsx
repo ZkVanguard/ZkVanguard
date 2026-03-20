@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext, ReactNode } from 'react';
-import { ConnectButton as RainbowConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount as useWagmiAccount, useDisconnect as useWagmiDisconnect } from 'wagmi';
-import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut } from 'lucide-react';
+import { useState, useEffect, useMemo, createContext, useContext, ReactNode } from 'react';
+import { useAccount, useDisconnect } from '@/lib/wdk/wdk-wagmi-compat';
+import { useWdk } from '@/lib/wdk/wdk-context';
+import { Wallet, ChevronDown, Copy, Check, LogOut, Plus, Key, Loader2 } from 'lucide-react';
 
 // ============================================
 // MULTI-CHAIN WALLET CONTEXT
@@ -26,7 +26,6 @@ const MultiWalletContext = createContext<MultiWalletContextType | null>(null);
 export function useMultiWallet() {
   const context = useContext(MultiWalletContext);
   if (!context) {
-    // Return defaults if not in provider
     return {
       activeChain: 'evm' as ChainType,
       setActiveChain: () => {},
@@ -54,16 +53,14 @@ export function MultiWalletProvider({ children, defaultChain = 'evm' }: MultiWal
   const [suiAddress, setSuiAddress] = useState<string | null>(null);
   const [isSuiConnected, setIsSuiConnected] = useState(false);
 
-  // Get EVM connection status from wagmi
-  const { address: evmAddress, isConnected: isEvmConnected } = useWagmiAccount();
+  // Get EVM connection status from WDK
+  const { address: evmAddress, isConnected: isEvmConnected } = useAccount();
 
-  // Check for Sui wallet connection (client-side only)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const checkSuiWallet = async () => {
       try {
-        // Check if Sui wallet is available
         const suiWallet = (window as unknown as { suiWallet?: { getAccounts?: () => Promise<string[]> } }).suiWallet;
         if (suiWallet?.getAccounts) {
           const accounts = await suiWallet.getAccounts();
@@ -73,13 +70,11 @@ export function MultiWalletProvider({ children, defaultChain = 'evm' }: MultiWal
           }
         }
       } catch {
-        // Sui wallet not available or not connected
+        // Sui wallet not available
       }
     };
 
     checkSuiWallet();
-    
-    // Listen for account changes — only poll when tab is visible
     let interval: ReturnType<typeof setInterval> | null = null;
     const startPolling = () => { if (!interval) interval = setInterval(checkSuiWallet, 10000); };
     const stopPolling = () => { if (interval) { clearInterval(interval); interval = null; } };
@@ -108,6 +103,218 @@ export function MultiWalletProvider({ children, defaultChain = 'evm' }: MultiWal
   );
 }
 
+async function connectSuiWallet() {
+  if (typeof window === 'undefined') return;
+  try {
+    const suiWallet = (window as unknown as { 
+      suiWallet?: { requestPermissions?: () => Promise<boolean>; connect?: () => Promise<void>; } 
+    }).suiWallet;
+    if (suiWallet?.requestPermissions) {
+      await suiWallet.requestPermissions();
+    } else if (suiWallet?.connect) {
+      await suiWallet.connect();
+    } else {
+      window.open('https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil', '_blank');
+    }
+  } catch (error) {
+    console.error('Failed to connect Sui wallet:', error);
+  }
+}
+
+// ============================================
+// WDK CONNECT MODAL
+// ============================================
+
+interface WdkConnectModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  chainType: ChainType;
+}
+
+function WdkConnectModal({ isOpen, onClose, chainType }: WdkConnectModalProps) {
+  const { createWallet, importWallet } = useWdk();
+  const [mode, setMode] = useState<'select' | 'create' | 'import'>('select');
+  const [mnemonic, setMnemonic] = useState('');
+  const [generatedMnemonic, setGeneratedMnemonic] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleCreate = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const newMnemonic = await createWallet();
+      if (newMnemonic) {
+        setGeneratedMnemonic(newMnemonic);
+        setMode('create');
+      } else {
+        setError('Failed to create wallet');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create wallet');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!mnemonic.trim()) {
+      setError('Please enter your recovery phrase');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const success = await importWallet(mnemonic.trim());
+      if (success) {
+        onClose();
+      } else {
+        setError('Invalid recovery phrase');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import wallet');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const copyMnemonic = () => {
+    if (generatedMnemonic) {
+      navigator.clipboard.writeText(generatedMnemonic);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const getChainInfo = () => {
+    switch (chainType) {
+      case 'evm':
+        return { name: 'Cronos & Arbitrum', color: 'from-[#002D74] to-[#0052CC]' };
+      case 'oasis-emerald':
+        return { name: 'Oasis Emerald', color: 'from-[#00C853] to-[#009624]' };
+      case 'oasis-sapphire':
+        return { name: 'Oasis Sapphire', color: 'from-[#0092F6] to-[#0500E1]' };
+      default:
+        return { name: 'EVM Chain', color: 'from-[#007AFF] to-[#0052CC]' };
+    }
+  };
+
+  const chainInfo = getChainInfo();
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50 overflow-hidden">
+        <div className={`p-6 bg-gradient-to-r ${chainInfo.color} text-white`}>
+          <h2 className="text-xl font-bold">Connect to {chainInfo.name}</h2>
+          <p className="text-white/80 text-sm mt-1">Powered by Tether WDK</p>
+        </div>
+
+        <div className="p-6">
+          {mode === 'select' && (
+            <div className="space-y-4">
+              <button
+                onClick={handleCreate}
+                disabled={isLoading}
+                className="w-full p-4 rounded-xl border border-[#E5E5EA] hover:border-[#007AFF] hover:bg-[#F5F5F7] transition-all flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-full bg-[#007AFF]/10 flex items-center justify-center">
+                  <Plus className="w-6 h-6 text-[#007AFF]" />
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-[#1D1D1F]">Create New Wallet</div>
+                  <div className="text-sm text-[#86868B]">Generate a new self-custodial wallet</div>
+                </div>
+                {isLoading && <Loader2 className="w-5 h-5 animate-spin text-[#007AFF]" />}
+              </button>
+
+              <button
+                onClick={() => setMode('import')}
+                className="w-full p-4 rounded-xl border border-[#E5E5EA] hover:border-[#007AFF] hover:bg-[#F5F5F7] transition-all flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-full bg-[#34C759]/10 flex items-center justify-center">
+                  <Key className="w-6 h-6 text-[#34C759]" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-[#1D1D1F]">Import Existing Wallet</div>
+                  <div className="text-sm text-[#86868B]">Use your recovery phrase</div>
+                </div>
+              </button>
+
+              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            </div>
+          )}
+
+          {mode === 'create' && generatedMnemonic && (
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-amber-800 text-sm font-medium mb-2">⚠️ Save your recovery phrase!</p>
+                <p className="text-amber-700 text-xs">Write these words down safely. You'll need them to recover your wallet.</p>
+              </div>
+
+              <div className="p-4 bg-[#F5F5F7] rounded-xl font-mono text-sm break-words">
+                {generatedMnemonic}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={copyMnemonic}
+                  className="flex-1 py-3 border border-[#E5E5EA] rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-[#F5F5F7] transition-colors"
+                >
+                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3 bg-[#007AFF] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
+                >
+                  I've Saved It
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'import' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Recovery Phrase</label>
+                <textarea
+                  value={mnemonic}
+                  onChange={(e) => setMnemonic(e.target.value)}
+                  placeholder="Enter your 12 or 24 word recovery phrase..."
+                  className="w-full p-4 border border-[#E5E5EA] rounded-xl resize-none h-32 focus:outline-none focus:border-[#007AFF]"
+                />
+              </div>
+
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMode('select')}
+                  className="flex-1 py-3 border border-[#E5E5EA] rounded-xl font-medium hover:bg-[#F5F5F7] transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={isLoading}
+                  className="flex-1 py-3 bg-[#007AFF] text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                >
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Import Wallet
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ============================================
 // UNIFIED CONNECT BUTTON COMPONENT
 // ============================================
@@ -118,9 +325,11 @@ interface UnifiedConnectButtonProps {
 
 export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonProps) {
   const [showWalletSelector, setShowWalletSelector] = useState(false);
+  const [showWdkModal, setShowWdkModal] = useState(false);
+  const [selectedChainType, setSelectedChainType] = useState<ChainType>('evm');
   const [copiedAddress, setCopiedAddress] = useState(false);
   const { activeChain, setActiveChain, evmAddress, suiAddress, isEvmConnected, isSuiConnected } = useMultiWallet();
-  const { disconnect: disconnectEvm } = useWagmiDisconnect();
+  const { disconnect } = useDisconnect();
 
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
@@ -128,11 +337,15 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const truncateAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  const openWdkConnect = (chainType: ChainType) => {
+    setSelectedChainType(chainType);
+    setActiveChain(chainType);
+    setShowWdkModal(true);
+    setShowWalletSelector(false);
   };
 
-  // If neither wallet is connected, show connection options
   if (!isEvmConnected && !isSuiConnected) {
     return (
       <div className={`relative ${className}`}>
@@ -151,38 +364,28 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
             <div className="absolute top-full mt-2 right-0 w-80 bg-white border border-[#E5E5EA] rounded-2xl shadow-2xl overflow-hidden z-50">
               <div className="p-4 border-b border-[#E5E5EA]">
                 <h3 className="text-lg font-semibold text-[#1D1D1F]">Connect Wallet</h3>
-                <p className="text-sm text-[#86868B] mt-1">Choose your preferred blockchain</p>
+                <p className="text-sm text-[#86868B] mt-1">Self-custodial wallet powered by Tether WDK</p>
               </div>
 
               <div className="p-3 space-y-2">
-                {/* EVM Option */}
                 <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#007AFF] transition-colors">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#002D74] to-[#0052CC] flex items-center justify-center">
-                      <span className="text-white font-bold text-xs">CRO</span>
+                      <span className="text-white font-bold text-xs">EVM</span>
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-[#1D1D1F]">Cronos (EVM)</div>
-                      <div className="text-xs text-[#86868B]">MetaMask, WalletConnect, etc.</div>
+                      <div className="font-semibold text-[#1D1D1F]">Cronos & Arbitrum</div>
+                      <div className="text-xs text-[#86868B]">WDK Self-Custodial Wallet</div>
                     </div>
                   </div>
-                  <RainbowConnectButton.Custom>
-                    {({ openConnectModal }) => (
-                      <button
-                        onClick={() => {
-                          setActiveChain('evm');
-                          openConnectModal();
-                          setShowWalletSelector(false);
-                        }}
-                        className="w-full py-2.5 bg-[#007AFF] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
-                      >
-                        Connect EVM Wallet
-                      </button>
-                    )}
-                  </RainbowConnectButton.Custom>
+                  <button
+                    onClick={() => openWdkConnect('evm')}
+                    className="w-full py-2.5 bg-[#007AFF] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
+                  >
+                    Connect EVM Wallet
+                  </button>
                 </div>
 
-                {/* SUI Option */}
                 <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#4DA2FF] transition-colors">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#4DA2FF] to-[#6FBCFF] flex items-center justify-center">
@@ -194,107 +397,36 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setActiveChain('sui');
-                      // Open Sui wallet connection
-                      connectSuiWallet();
-                      setShowWalletSelector(false);
-                    }}
+                    onClick={() => { setActiveChain('sui'); connectSuiWallet(); setShowWalletSelector(false); }}
                     className="w-full py-2.5 bg-[#4DA2FF] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
                   >
                     Connect SUI Wallet
                   </button>
                 </div>
-
-                {/* Oasis ParaTimes Header */}
-                <div className="px-1 pt-2">
-                  <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Oasis Network ParaTimes</p>
-                </div>
-
-                {/* Oasis Emerald Option (Public EVM) */}
-                <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#00C853] transition-colors">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#00C853] to-[#009624] flex items-center justify-center">
-                      <span className="text-white font-bold text-[10px]">ROSE</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-semibold text-[#1D1D1F]">Emerald</div>
-                      <div className="text-xs text-[#86868B]">Public EVM • MetaMask</div>
-                    </div>
-                  </div>
-                  <RainbowConnectButton.Custom>
-                    {({ openConnectModal }) => (
-                      <button
-                        onClick={() => {
-                          setActiveChain('oasis-emerald');
-                          openConnectModal();
-                          setShowWalletSelector(false);
-                        }}
-                        className="w-full py-2.5 bg-[#00C853] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
-                      >
-                        Connect Emerald
-                      </button>
-                    )}
-                  </RainbowConnectButton.Custom>
-                </div>
-
-                {/* Oasis Sapphire Option (Confidential EVM) */}
-                <div className="p-3 rounded-xl border border-[#E5E5EA] hover:border-[#0092F6] transition-colors">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0092F6] to-[#0500E1] flex items-center justify-center">
-                      <span className="text-white font-bold text-[10px]">ROSE</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-semibold text-[#1D1D1F]">Sapphire</div>
-                      <div className="text-xs text-[#86868B]">Confidential EVM • MetaMask</div>
-                    </div>
-                  </div>
-                  <RainbowConnectButton.Custom>
-                    {({ openConnectModal }) => (
-                      <button
-                        onClick={() => {
-                          setActiveChain('oasis-sapphire');
-                          openConnectModal();
-                          setShowWalletSelector(false);
-                        }}
-                        className="w-full py-2.5 bg-[#0092F6] hover:opacity-90 text-white rounded-lg font-medium text-sm transition-opacity"
-                      >
-                        Connect Sapphire
-                      </button>
-                    )}
-                  </RainbowConnectButton.Custom>
-                </div>
               </div>
 
               <div className="p-3 border-t border-[#E5E5EA] bg-[#F5F5F7]">
-                <p className="text-xs text-[#86868B] text-center">
-                  Connect to both chains for full multi-chain support
-                </p>
+                <p className="text-xs text-[#86868B] text-center">🔒 Your keys, your crypto. Fully self-custodial.</p>
               </div>
             </div>
           </>
         )}
+
+        <WdkConnectModal isOpen={showWdkModal} onClose={() => setShowWdkModal(false)} chainType={selectedChainType} />
       </div>
     );
   }
 
-  // Show connected wallet(s)
   return (
     <div className={`relative ${className}`}>
       <button
         onClick={() => setShowWalletSelector(!showWalletSelector)}
         className="px-4 h-11 bg-[#f5f5f7] hover:bg-[#e5e5ea] border border-black/10 rounded-[12px] transition-colors flex items-center gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
       >
-        {/* Show connected chain indicators */}
         <div className="flex items-center -space-x-1">
           {isEvmConnected && (
             <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#002D74] to-[#0052CC] flex items-center justify-center border-2 border-white">
-              <span className="text-white font-bold text-[8px]">CRO</span>
-            </div>
-          )}
-          {isEvmConnected && activeChain.startsWith('oasis') && (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#0092F6] to-[#0500E1] flex items-center justify-center border-2 border-white">
-              <span className="text-white font-bold text-[7px]">ROSE</span>
+              <span className="text-white font-bold text-[8px]">EVM</span>
             </div>
           )}
           {isSuiConnected && (
@@ -303,13 +435,9 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
             </div>
           )}
         </div>
-        
-        <span className="text-[#1d1d1f] font-medium text-[14px]">
-          {(activeChain === 'evm' || activeChain.startsWith('oasis')) && evmAddress && truncateAddress(evmAddress)}
-          {activeChain === 'sui' && suiAddress && truncateAddress(suiAddress)}
-          {!evmAddress && !suiAddress && 'Connected'}
+        <span className="text-[#1D1D1F] font-medium text-sm">
+          {activeChain === 'sui' && suiAddress ? truncateAddress(suiAddress) : evmAddress ? truncateAddress(evmAddress) : 'Connected'}
         </span>
-        
         <ChevronDown className={`w-4 h-4 text-[#86868B] transition-transform ${showWalletSelector ? 'rotate-180' : ''}`} />
       </button>
 
@@ -322,145 +450,69 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
             </div>
 
             <div className="p-3 space-y-2">
-              {/* EVM Wallet */}
               {isEvmConnected && evmAddress && (
-                <div 
-                  className={`p-3 rounded-xl border transition-colors cursor-pointer ${
-                    activeChain === 'evm' 
-                      ? 'border-[#007AFF] bg-[#007AFF]/5' 
-                      : 'border-[#E5E5EA] hover:border-[#007AFF]/50'
-                  }`}
-                  onClick={() => setActiveChain('evm')}
-                >
+                <div className={`p-3 rounded-xl border ${activeChain !== 'sui' ? 'border-[#007AFF] bg-[#007AFF]/5' : 'border-[#E5E5EA]'}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#002D74] to-[#0052CC] flex items-center justify-center">
-                      <span className="text-white font-bold text-xs">CRO</span>
+                      <span className="text-white font-bold text-xs">EVM</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[#1D1D1F]">Cronos</span>
-                        {activeChain === 'evm' && (
-                          <span className="text-xs px-1.5 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-full">Active</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-[#86868B] font-mono truncate">{truncateAddress(evmAddress)}</div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-[#1D1D1F]">EVM Wallet</div>
+                      <div className="text-xs text-[#86868B] font-mono">{truncateAddress(evmAddress)}</div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyAddress(evmAddress); }}
-                        className="p-1.5 hover:bg-[#F5F5F7] rounded-lg transition-colors"
-                        title="Copy address"
-                      >
-                        {copiedAddress ? <Check className="w-4 h-4 text-[#34C759]" /> : <Copy className="w-4 h-4 text-[#86868B]" />}
-                      </button>
-                      <a
-                        href={`https://explorer.cronos.org/testnet/address/${evmAddress}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 hover:bg-[#F5F5F7] rounded-lg transition-colors"
-                        title="View on explorer"
-                      >
-                        <ExternalLink className="w-4 h-4 text-[#86868B]" />
-                      </a>
-                    </div>
+                    <button onClick={() => copyAddress(evmAddress)} className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors">
+                      {copiedAddress ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-[#86868B]" />}
+                    </button>
                   </div>
+                  {activeChain !== 'sui' && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => disconnect()}
+                        className="flex-1 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* SUI Wallet */}
               {isSuiConnected && suiAddress && (
-                <div 
-                  className={`p-3 rounded-xl border transition-colors cursor-pointer ${
-                    activeChain === 'sui' 
-                      ? 'border-[#4DA2FF] bg-[#4DA2FF]/5' 
-                      : 'border-[#E5E5EA] hover:border-[#4DA2FF]/50'
-                  }`}
-                  onClick={() => setActiveChain('sui')}
-                >
+                <div className={`p-3 rounded-xl border ${activeChain === 'sui' ? 'border-[#4DA2FF] bg-[#4DA2FF]/5' : 'border-[#E5E5EA]'}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#4DA2FF] to-[#6FBCFF] flex items-center justify-center">
                       <span className="text-white font-bold text-xs">SUI</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[#1D1D1F]">SUI</span>
-                        {activeChain === 'sui' && (
-                          <span className="text-xs px-1.5 py-0.5 bg-[#4DA2FF]/10 text-[#4DA2FF] rounded-full">Active</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-[#86868B] font-mono truncate">{truncateAddress(suiAddress)}</div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-[#1D1D1F]">SUI Wallet</div>
+                      <div className="text-xs text-[#86868B] font-mono">{truncateAddress(suiAddress)}</div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyAddress(suiAddress); }}
-                        className="p-1.5 hover:bg-[#F5F5F7] rounded-lg transition-colors"
-                        title="Copy address"
-                      >
-                        {copiedAddress ? <Check className="w-4 h-4 text-[#34C759]" /> : <Copy className="w-4 h-4 text-[#86868B]" />}
-                      </button>
-                      <a
-                        href={`https://suiscan.xyz/testnet/address/${suiAddress}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 hover:bg-[#F5F5F7] rounded-lg transition-colors"
-                        title="View on explorer"
-                      >
-                        <ExternalLink className="w-4 h-4 text-[#86868B]" />
-                      </a>
-                    </div>
+                    <button onClick={() => copyAddress(suiAddress)} className="p-2 hover:bg-[#F5F5F7] rounded-lg transition-colors">
+                      {copiedAddress ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-[#86868B]" />}
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Connect additional wallet */}
-              {(!isEvmConnected || !isSuiConnected) && (
-                <div className="pt-2 border-t border-[#E5E5EA]">
-                  <p className="text-xs text-[#86868B] mb-2">Connect additional wallet:</p>
-                  {!isEvmConnected && (
-                    <RainbowConnectButton.Custom>
-                      {({ openConnectModal }) => (
-                        <button
-                          onClick={() => {
-                            setActiveChain('evm');
-                            openConnectModal();
-                          }}
-                          className="w-full py-2 text-sm text-[#007AFF] hover:bg-[#007AFF]/5 rounded-lg transition-colors"
-                        >
-                          + Connect Cronos Wallet
-                        </button>
-                      )}
-                    </RainbowConnectButton.Custom>
-                  )}
-                  {!isSuiConnected && (
-                    <button
-                      onClick={() => {
-                        setActiveChain('sui');
-                        connectSuiWallet();
-                      }}
-                      className="w-full py-2 text-sm text-[#4DA2FF] hover:bg-[#4DA2FF]/5 rounded-lg transition-colors"
-                    >
-                      + Connect SUI Wallet
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Disconnect section */}
-            <div className="p-3 border-t border-[#E5E5EA] bg-[#F5F5F7]">
-              <button
-                onClick={() => {
-                  if (isEvmConnected) disconnectEvm();
-                  if (isSuiConnected) disconnectSuiWallet();
-                  setShowWalletSelector(false);
-                }}
-                className="w-full py-2 text-sm text-[#FF3B30] hover:bg-[#FF3B30]/5 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Disconnect All Wallets
-              </button>
+              <div className="flex gap-2 pt-2">
+                {isEvmConnected && (
+                  <button
+                    onClick={() => setActiveChain('evm')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${activeChain !== 'sui' ? 'bg-[#007AFF] text-white' : 'bg-[#F5F5F7] text-[#1D1D1F]'}`}
+                  >
+                    Use EVM
+                  </button>
+                )}
+                {isSuiConnected && (
+                  <button
+                    onClick={() => setActiveChain('sui')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${activeChain === 'sui' ? 'bg-[#4DA2FF] text-white' : 'bg-[#F5F5F7] text-[#1D1D1F]'}`}
+                  >
+                    Use SUI
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -469,67 +521,4 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
   );
 }
 
-// ============================================
-// SUI WALLET HELPERS
-// ============================================
-
-async function connectSuiWallet() {
-  if (typeof window === 'undefined') return;
-
-  try {
-    // Check for Sui Wallet
-    const suiWallet = (window as unknown as { 
-      suiWallet?: { 
-        requestPermissions?: () => Promise<boolean>;
-        connect?: () => Promise<{ accounts: string[] }>;
-      } 
-    }).suiWallet;
-
-    if (suiWallet) {
-      if (suiWallet.requestPermissions) {
-        await suiWallet.requestPermissions();
-      } else if (suiWallet.connect) {
-        await suiWallet.connect();
-      }
-      return;
-    }
-
-    // Check for Ethos wallet
-    const ethosWallet = (window as unknown as { 
-      ethosWallet?: { 
-        connect?: () => Promise<void>;
-      } 
-    }).ethosWallet;
-
-    if (ethosWallet?.connect) {
-      await ethosWallet.connect();
-      return;
-    }
-
-    // No Sui wallet found, open installation page
-    window.open('https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil', '_blank');
-  } catch (error) {
-    console.error('Failed to connect Sui wallet:', error);
-  }
-}
-
-function disconnectSuiWallet() {
-  if (typeof window === 'undefined') return;
-
-  try {
-    const suiWallet = (window as unknown as { 
-      suiWallet?: { 
-        disconnect?: () => Promise<void>;
-      } 
-    }).suiWallet;
-
-    if (suiWallet?.disconnect) {
-      suiWallet.disconnect();
-    }
-  } catch (error) {
-    console.error('Failed to disconnect Sui wallet:', error);
-  }
-}
-
-// Export the original ConnectButton for backward compatibility
 export { UnifiedConnectButton as MultiChainConnectButton };
