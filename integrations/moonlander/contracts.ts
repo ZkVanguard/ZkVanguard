@@ -25,9 +25,13 @@ export const MOONLANDER_CONTRACTS = {
     STAKED_MLP_TRACKER: '0x071788084370497ED1Ac19C6711bd1d4Af0E9034',
     STAKED_MLP_DISTRIBUTOR: '0x8Dbebe40e6bE35cF1bE07b22Aa5fa11f4768917E',
     
-    // Common tokens
+    // Collateral tokens - USDT is primary (Tether WDK)
+    USDT: '0x66e428c3f67a68878562e79A0234c1F83c208770',  // Official Tether USDT on Cronos
     USDC: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59',  // Native USDC on Cronos
     WCRO: '0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23',  // Wrapped CRO
+    
+    // Default collateral for hedging (use USDT for Tether WDK integration)
+    COLLATERAL: '0x66e428c3f67a68878562e79A0234c1F83c208770',  // → USDT
   },
   
   // Cronos zkEVM
@@ -40,6 +44,9 @@ export const MOONLANDER_CONTRACTS = {
     MOONLANDER: '0x02ae2e56bfDF1ee4667405eE7e959CD3fE717A05',
     MLP: '0xe8E4A973Bb36E1714c805F88e2eb3A89f195D04f',
     USDC: '0xaa5b845F8C9c047779bEDf64829601d8B264076c',  // zkUSDC on Cronos zkEVM
+    
+    // Default collateral for hedging (USDC until USDT available on zkEVM)
+    COLLATERAL: '0xaa5b845F8C9c047779bEDf64829601d8B264076c',  // → USDC
   },
   
   // Cronos Testnet
@@ -52,6 +59,9 @@ export const MOONLANDER_CONTRACTS = {
     MOONLANDER: '0xE6F6351fb66f3a35313fEEFF9116698665FBEeC9',
     MLP: '0xb4c70008528227e0545Db5BA4836d1466727DF13',
     USDC: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',  // devUSDC on Cronos Testnet
+    
+    // Default collateral for hedging (devUSDC on testnet)
+    COLLATERAL: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',  // → devUSDC
   },
 } as const;
 
