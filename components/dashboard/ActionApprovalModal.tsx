@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, AlertTriangle, CheckCircle, XCircle, FileSignature, Loader2 } from 'lucide-react';
-import { useSignMessage } from 'wagmi';
+import { useSignMessage } from '@/lib/wdk/wdk-wagmi-compat';
 import { logger } from '@/lib/utils/logger';
 
 export interface ActionPreview {
