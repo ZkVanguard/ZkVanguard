@@ -9,12 +9,15 @@
  * 4. Contract sponsors CRO gas from its balance
  * 
  * Result: User needs ZERO CRO, only USDC!
+ * 
+ * Uses ethers.js for direct contract interactions (WDK migration)
  */
 
-import { config } from '../../app/providers';
-import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
 import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
+
+// RPC URL for Cronos Testnet
+const CRONOS_TESTNET_RPC = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
 
 // Import X402Client only on server-side to avoid node:crypto issues in browser
 const getX402Client = async () => {
@@ -119,6 +122,38 @@ const USDC_ABI = [
   }
 ] as const;
 
+// Get ethers provider for read operations
+function getProvider() {
+  return new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+}
+
+// Get contract instance for read operations
+function getVerifierContract() {
+  const provider = getProvider();
+  return new ethers.Contract(X402_VERIFIER_ADDRESS, X402_VERIFIER_ABI, provider);
+}
+
+function getUsdcContract() {
+  const provider = getProvider();
+  return new ethers.Contract(USDC_TOKEN, USDC_ABI, provider);
+}
+
+// Get signer for write operations (requires PRIVATE_KEY in env)
+function getSigner() {
+  const privateKey = process.env.PRIVATE_KEY || process.env.MOONLANDER_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error('No private key found in environment variables');
+  }
+  const provider = getProvider();
+  return new ethers.Wallet(privateKey, provider);
+}
+
+// Get contract with signer for write operations
+function getSignedVerifierContract() {
+  const signer = getSigner();
+  return new ethers.Contract(X402_VERIFIER_ADDRESS, X402_VERIFIER_ABI, signer);
+}
+
 export interface TrueGaslessResult {
   txHash: string;
   trueGasless: true;
@@ -143,22 +178,15 @@ export async function storeCommitmentTrueGasless(
   });
 
   // Get fee amount
-  const feePerCommitment = await readContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'feePerCommitment',
-  });
+  const verifierContract = getVerifierContract();
+  const feePerCommitment = await verifierContract.feePerCommitment();
 
   logger.info('USDC fee calculated', { usdcFee: (Number(feePerCommitment) / 1e6).toFixed(2) });
 
   // Step 1: Check USDC balance
   const userAddress = await signer.getAddress();
-  const usdcBalance = await readContract(config, {
-    address: USDC_TOKEN as `0x${string}`,
-    abi: USDC_ABI,
-    functionName: 'balanceOf',
-    args: [userAddress as `0x${string}`],
-  });
+  const usdcContract = getUsdcContract();
+  const usdcBalance = await usdcContract.balanceOf(userAddress);
 
   if (usdcBalance < feePerCommitment) {
     throw new Error(`Insufficient USDC. Need ${(Number(feePerCommitment) / 1e6).toFixed(2)} USDC`);
@@ -184,27 +212,23 @@ export async function storeCommitmentTrueGasless(
   // Step 3: Store commitment (contract pays CRO gas)
   logger.info('Step 2: Store commitment on-chain');
   
-  const hash = await writeContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'storeCommitmentWithUSDC',
-    args: [proofHash as `0x${string}`, merkleRoot as `0x${string}`, securityLevel],
-  });
+  const signedContract = getSignedVerifierContract();
+  const tx = await signedContract.storeCommitmentWithUSDC(proofHash, merkleRoot, securityLevel);
 
-  logger.info('Transaction submitted', { hash });
+  logger.info('Transaction submitted', { hash: tx.hash });
   logger.info('Waiting for TRUE gasless confirmation');
 
-  const receipt = await waitForTransactionReceipt(config, { hash });
+  const receipt = await tx.wait();
 
-  if (receipt.status === 'success') {
+  if (receipt && receipt.status === 1) {
     logger.info('Commitment stored with TRUE GASLESS', {
-      transaction: hash,
+      transaction: tx.hash,
       usdcPaid: (Number(feePerCommitment) / 1e6).toFixed(2) + ' USDC',
       croGasPaid: '$0.00',
     });
     
     return {
-      txHash: hash,
+      txHash: tx.hash,
       trueGasless: true,
       x402Powered: true,
       usdcFee: (Number(feePerCommitment) / 1e6).toFixed(2) + ' USDC',
@@ -232,11 +256,8 @@ export async function storeCommitmentsBatchTrueGasless(
     userPaysZeroCRO: true,
   });
 
-  const feePerCommitment = await readContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'feePerCommitment',
-  });
+  const verifierContract = getVerifierContract();
+  const feePerCommitment = await verifierContract.feePerCommitment();
 
   const totalFee = feePerCommitment * BigInt(commitments.length);
   logger.info('Total USDC fee calculated', {
@@ -257,28 +278,24 @@ export async function storeCommitmentsBatchTrueGasless(
   });
 
   // Store batch
-  const proofHashes = commitments.map(c => c.proofHash as `0x${string}`);
-  const merkleRoots = commitments.map(c => c.merkleRoot as `0x${string}`);
+  const proofHashes = commitments.map(c => c.proofHash);
+  const merkleRoots = commitments.map(c => c.merkleRoot);
   const securityLevels = commitments.map(c => c.securityLevel);
 
-  const hash = await writeContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'storeCommitmentsBatchWithUSDC',
-    args: [proofHashes, merkleRoots, securityLevels],
-  });
+  const signedContract = getSignedVerifierContract();
+  const tx = await signedContract.storeCommitmentsBatchWithUSDC(proofHashes, merkleRoots, securityLevels);
 
-  logger.info('Batch transaction submitted', { hash });
-  const receipt = await waitForTransactionReceipt(config, { hash });
+  logger.info('Batch transaction submitted', { hash: tx.hash });
+  const receipt = await tx.wait();
 
-  if (receipt.status === 'success') {
+  if (receipt && receipt.status === 1) {
     logger.info('Batch stored with TRUE GASLESS', {
       commitments: commitments.length,
-      txHash: hash,
+      txHash: tx.hash,
     });
     
     return {
-      txHash: hash,
+      txHash: tx.hash,
       trueGasless: true,
       x402Powered: true,
       usdcFee: (Number(totalFee) / 1e6).toFixed(2) + ' USDC',
@@ -294,13 +311,8 @@ export async function storeCommitmentsBatchTrueGasless(
  * Verify a commitment exists on-chain
  */
 export async function verifyCommitmentOnChain(proofHash: string) {
-  const commitment = await readContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'verifyCommitment',
-    args: [proofHash as `0x${string}`],
-  });
-
+  const verifierContract = getVerifierContract();
+  const commitment = await verifierContract.verifyCommitment(proofHash);
   return commitment;
 }
 
@@ -308,11 +320,8 @@ export async function verifyCommitmentOnChain(proofHash: string) {
  * Get TRUE gasless statistics
  */
 export async function getTrueGaslessStats() {
-  const stats = await readContract(config, {
-    address: X402_VERIFIER_ADDRESS,
-    abi: X402_VERIFIER_ABI,
-    functionName: 'getStats',
-  });
+  const verifierContract = getVerifierContract();
+  const stats = await verifierContract.getStats();
 
   return {
     totalCommitments: stats[0],
