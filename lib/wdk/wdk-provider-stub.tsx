@@ -25,7 +25,7 @@ export interface WdkWalletState {
   isInitialized: boolean;
   isCreating: boolean;
   address: string | null;
-  seedPhrase: string | null;
+  recoveryPhrase: string | null;
   balance: string;
   error: string | null;
 }
@@ -33,7 +33,7 @@ export interface WdkWalletState {
 export interface WdkContextValue {
   wallet: WdkWalletState;
   createWallet: () => Promise<string | null>;
-  importWallet: (seedPhrase: string) => Promise<boolean>;
+  importWallet: (recoveryPhrase: string) => Promise<boolean>;
   disconnectWallet: () => void;
   getUsdtBalance: (chainId: number) => Promise<string>;
   transfer: (to: string, amount: string, chainId: number) => Promise<string | null>;
@@ -46,7 +46,7 @@ const defaultWalletState: WdkWalletState = {
   isInitialized: false,
   isCreating: false,
   address: null,
-  seedPhrase: null,
+  recoveryPhrase: null,
   balance: '0',
   error: null,
 };
@@ -80,7 +80,7 @@ export function WdkProvider({ children }: WdkProviderProps) {
     return null;
   }, []);
 
-  const importWallet = useCallback(async (_seedPhrase: string): Promise<boolean> => {
+  const importWallet = useCallback(async (_recoveryPhrase: string): Promise<boolean> => {
     setWallet(prev => ({ 
       ...prev, 
       error: 'WDK embedded wallet not available. Please use MetaMask, OKX, or another wallet.' 
