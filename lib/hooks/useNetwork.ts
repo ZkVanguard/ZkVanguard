@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useChainId } from 'wagmi';
+import { useChainId } from '@/lib/wdk/wdk-wagmi-compat';
 import { useMemo } from 'react';
 
 // ============================================

@@ -10,19 +10,29 @@
  * - startTransition for non-urgent state updates
  * - Optimistic UI updates for better perceived performance
  * - Debounced input handlers
+ * 
+ * NOTE: Now uses Tether WDK instead of wagmi/RainbowKit
  */
 
 'use client';
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSignMessage, useReadContract, useSwitchChain, useSignTypedData } from 'wagmi';
-import { waitForTransactionReceipt } from '@wagmi/core';
+// WDK-compatible hooks (drop-in replacements for wagmi)
+import { 
+  useAccount, 
+  useChainId, 
+  useWriteContract, 
+  useWaitForTransactionReceipt, 
+  useSignMessage, 
+  useReadContract, 
+  useSwitchChain, 
+  useSignTypedData 
+} from '@/lib/wdk/wdk-wagmi-compat';
 import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
-import { config } from '@/app/providers';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
-import { useWdkSafe } from '@/lib/wdk/wdk-provider-stub';
+import { useWdkSafe } from '@/lib/wdk/wdk-context';
 import { 
   POOL_CHAIN_CONFIGS, 
   getCommunityPoolAddress, 
