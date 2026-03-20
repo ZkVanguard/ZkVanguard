@@ -155,7 +155,7 @@ export const ARBITRUM_CONTRACT_ADDRESSES = {
   testnet: {
     // Arbitrum Sepolia (Chain ID: 421614)
     communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B' as `0x${string}`,
-    usdcToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // MockUSDC
+    usdcToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // Test USDT
     pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,

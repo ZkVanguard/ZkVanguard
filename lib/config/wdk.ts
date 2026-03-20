@@ -17,7 +17,7 @@
  * Source: https://tether.to/en/transparency/#usdt
  * 
  * IMPORTANT: For Tether WDK Hackathon, use Sepolia which has OFFICIAL WDK USDT.
- * Cronos testnet only has MockUSDC (not official WDK).
+ * Cronos testnet uses testnet USDT (not official WDK).
  * 
  * For x402 payments: Use USD₮0 on Plasma/Stable chains
  */
@@ -30,7 +30,7 @@ export const USDT_ADDRESSES = {
   // Cronos Mainnet - Official USDT
   cronos: {
     mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
-    testnet: null, // Cronos testnet has MockUSDC, NOT official WDK USDT
+    testnet: null, // Cronos testnet uses separate testnet USDT
   },
   // Arbitrum - Official USDT  
   arbitrum: {
@@ -226,19 +226,19 @@ export function isMainnet(chainId: number): boolean {
 /**
  * Get the appropriate deposit token address for a chain.
  * On mainnet: returns official USDT address
- * On testnet: returns the MockUSDC address from deployment config
+ * On testnet: returns the testnet USDT address from deployment config
  */
 export function getDepositTokenAddress(
   chainId: number,
-  mockUsdcAddress?: string
+  testnetUsdtAddress?: string
 ): string {
   const usdtAddress = getUSDTAddress(chainId);
   if (usdtAddress) {
     return usdtAddress;
   }
-  // Fallback to MockUSDC for testnets
-  if (mockUsdcAddress) {
-    return mockUsdcAddress;
+  // Fallback to testnet USDT
+  if (testnetUsdtAddress) {
+    return testnetUsdtAddress;
   }
   throw new Error(`No deposit token configured for chain ${chainId}`);
 }

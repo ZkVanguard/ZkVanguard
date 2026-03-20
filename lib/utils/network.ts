@@ -155,7 +155,7 @@ export function getUsdtAddress(chainId?: number): `0x${string}` {
     case CHAIN_IDS.CRONOS_MAINNET:
       return '0x66e428c3f67a68878562e79A0234c1F83c208770';
     case CHAIN_IDS.CRONOS_TESTNET:
-      // MockUSDC (NOT official WDK USDT)
+      // USDT on Cronos Testnet
       return '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
     case CHAIN_IDS.ARBITRUM_MAINNET:
       // Official Tether USDT on Arbitrum
