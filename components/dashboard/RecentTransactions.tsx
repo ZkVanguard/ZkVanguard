@@ -211,7 +211,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               from: address as `0x${string}`
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('Sent logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('Sent logs error', { data: e }); return []; }),
           // Received transfers (to user)
           publicClient.getLogs({
             fromBlock,
@@ -229,7 +229,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               to: address as `0x${string}`
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('Received logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('Received logs error', { data: e }); return []; }),
           // Swap events from VVS Router
           publicClient.getLogs({
             fromBlock,
@@ -241,7 +241,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               inputs: []
             },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('Swap logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('Swap logs error', { data: e }); return []; }),
           // Approval events
           publicClient.getLogs({
             fromBlock,
@@ -259,56 +259,56 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
               owner: address as `0x${string}`
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('Approval logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('Approval logs error', { data: e }); return []; }),
           // RWAManager events (Portfolio deposits, withdrawals, rebalances)
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: RWA_MANAGER as `0x${string}`,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('RWA logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('RWA logs error', { data: e }); return []; }),
           // X402 Gasless transactions
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: X402_CONTRACT as `0x${string}`,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('X402 logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('X402 logs error', { data: e }); return []; }),
           // PaymentRouter events
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: PAYMENT_ROUTER as `0x${string}`,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('Payment logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('Payment logs error', { data: e }); return []; }),
           // ZKVerifier events
           publicClient.getLogs({
             fromBlock,
             toBlock: currentBlock,
             address: ZK_VERIFIER as `0x${string}`,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).catch((e) => { logger.debug('ZK logs error', { data: e }); return []; }),
+          } as any).catch((e: any) => { logger.debug('ZK logs error', { data: e }); return []; }),
         ]);
 
         logger.debug(`Found logs - Sent: ${sentLogs.length}, Received: ${receivedLogs.length}, Swaps: ${swapLogs.length}, Approvals: ${approvalLogs.length}, RWA: ${rwaLogs.length}, X402: ${x402Logs.length}, Payment: ${paymentLogs.length}, ZK: ${zkLogs.length}`, { component: 'RecentTransactions' });
 
         // Filter swap logs to only include those where user was involved
-        const userSwapLogs = swapLogs.filter(log => 
-          log.topics.some(topic => 
+        const userSwapLogs = swapLogs.filter((log: any) =>
+          log.topics.some((topic: any) =>
             topic?.toLowerCase().includes(address.slice(2).toLowerCase())
           )
         );
 
         // Filter RWA logs for user transactions
-        const userRWALogs = rwaLogs.filter(log =>
-          log.topics.some(topic =>
+        const userRWALogs = rwaLogs.filter((log: any) =>
+          log.topics.some((topic: any) =>
             topic?.toLowerCase().includes(address.slice(2).toLowerCase())
           ) || log.data.toLowerCase().includes(address.slice(2).toLowerCase())
         );
 
         // Filter X402 logs for user transactions
-        const userX402Logs = x402Logs.filter(log =>
-          log.topics.some(topic =>
+        const userX402Logs = x402Logs.filter((log: any) =>
+          log.topics.some((topic: any) =>
             topic?.toLowerCase().includes(address.slice(2).toLowerCase())
           ) || log.data.toLowerCase().includes(address.slice(2).toLowerCase())
         );

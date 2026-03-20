@@ -22,7 +22,7 @@ export function useTransactionTracker() {
     // Track wallet transaction receipts — throttled to every 3rd block
     const unwatch = publicClient.watchBlockNumber({
       pollingInterval: 15_000, // Poll every 15 seconds instead of every block
-      onBlockNumber: async (blockNumber) => {
+      onBlockNumber: async (blockNumber: bigint) => {
         try {
           // Skip if we've already processed this block or a nearby one
           if (blockNumber <= lastProcessedBlock.current + 2n) return;

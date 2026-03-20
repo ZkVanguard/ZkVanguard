@@ -92,7 +92,7 @@ export function SwapModal({
 
   // Check if on testnet for badge display
   useEffect(() => {
-    publicClient?.getChainId().then(chainId => {
+    publicClient?.getChainId().then((chainId: any) => {
       setIsTestnet(chainId === 338);
       if (chainId === 338) {
         logger.warn('⚠️ VVS Finance contracts only exist on Cronos MAINNET (chain 25)', { component: 'SwapModal' });

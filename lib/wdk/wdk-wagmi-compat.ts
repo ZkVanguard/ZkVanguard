@@ -15,7 +15,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useWdk, useWdkAccount, useWdkChain } from './wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { ethers } from 'ethers';
@@ -198,11 +198,12 @@ export function useSignMessage(): UseSignMessageReturn {
 
 export interface WriteContractArgs {
   address: `0x${string}`;
-  abi: any[];
+  abi: readonly any[];
   functionName: string;
   args?: any[];
   value?: bigint;
   chainId?: number;
+  gas?: bigint;
 }
 
 export interface UseWriteContractReturn {
@@ -327,15 +328,19 @@ export function useWaitForTransactionReceipt(args?: { hash?: `0x${string}` }): U
 
 export interface ReadContractArgs {
   address: `0x${string}`;
-  abi: any[];
+  abi: readonly any[];
   functionName: string;
   args?: any[];
   chainId?: number;
+  enabled?: boolean;
+  query?: { enabled?: boolean; refetchInterval?: number };
 }
 
 export function useReadContract<T = any>(args: ReadContractArgs): {
   data: T | undefined;
   isLoading: boolean;
+  isError: boolean;
+  isSuccess: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
 } {
@@ -347,9 +352,19 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
   const chainKey = args.chainId 
     ? CHAIN_ID_TO_KEY[args.chainId] 
     : state.chainKey;
+
+  // Backwards compatibility: accept `query` options (like wagmi) inside args
+  const legacyQuery = (args as any).query ?? {};
+  const enabledFlag = args.enabled ?? legacyQuery.enabled ?? true;
+  const refetchInterval = (args as any).refetchInterval ?? legacyQuery.refetchInterval;
   
   const refetch = useCallback(async () => {
     if (!chainKey) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (enabledFlag === false) {
       setIsLoading(false);
       return;
     }
@@ -380,8 +395,20 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
   useMemo(() => {
     refetch();
   }, [refetch]);
+
+  // Optional polling if refetchInterval supplied (supports wagmi-like `query.refetchInterval`)
+  useEffect(() => {
+    if (!refetchInterval || enabledFlag === false) return;
+    const id = setInterval(() => {
+      refetch().catch(() => {});
+    }, refetchInterval);
+    return () => clearInterval(id);
+  }, [refetchInterval, enabledFlag, refetch]);
   
-  return { data, isLoading, error, refetch };
+  const isError = error !== null;
+  const isSuccess = data !== undefined && !isError;
+
+  return { data, isLoading, isError, isSuccess, error, refetch };
 }
 
 // ============================================

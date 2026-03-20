@@ -29,6 +29,7 @@ import {
   useSignTypedData 
 } from '@/lib/wdk/wdk-wagmi-compat';
 import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
+import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
@@ -249,7 +250,7 @@ export function useCommunityPool(propAddress?: string) {
     abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'allowance',
     args: address && COMMUNITY_POOL_ADDRESS ? [address as `0x${string}`, COMMUNITY_POOL_ADDRESS] : undefined,
-    query: { enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui',
   });
   
   // User's USDT balance (show how much they can deposit)
@@ -258,7 +259,7 @@ export function useCommunityPool(propAddress?: string) {
     abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'balanceOf',
     args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui',
   });
   
   // EIP-2612 Permit Support Check - check if token has nonces() function
@@ -268,7 +269,7 @@ export function useCommunityPool(propAddress?: string) {
     abi: [{ name: 'nonces', type: 'function', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'nonces',
     args: address ? [address as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui',
   });
   
   // EIP-2612: Get token name for permit signing
@@ -276,7 +277,7 @@ export function useCommunityPool(propAddress?: string) {
     address: USDT_ADDRESS,
     abi: [{ name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' }],
     functionName: 'name',
-    query: { enabled: !!USDT_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!USDT_ADDRESS && selectedChain !== 'sui',
   });
   
   // EIP-2612: Get DOMAIN_SEPARATOR (cached on-chain)
@@ -284,7 +285,7 @@ export function useCommunityPool(propAddress?: string) {
     address: USDT_ADDRESS,
     abi: [{ name: 'DOMAIN_SEPARATOR', type: 'function', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' }],
     functionName: 'DOMAIN_SEPARATOR',
-    query: { enabled: !!USDT_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!USDT_ADDRESS && selectedChain !== 'sui',
   });
   
   // Check if permit is supported
@@ -301,7 +302,7 @@ export function useCommunityPool(propAddress?: string) {
     address: COMMUNITY_POOL_ADDRESS,
     abi: [{ name: 'totalShares', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'totalShares',
-    query: { enabled: !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' },
+    enabled: !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui',
   });
   
   // Derived: is first deposit (requires $100 minimum for inflation attack protection)
@@ -906,7 +907,9 @@ export function useCommunityPool(propAddress?: string) {
           primaryType: 'Permit',
           message,
         });
-        
+
+        if (!signature) throw new Error('Failed to obtain signature');
+
         console.error('🟢🟢🟢 PERMIT - Signature obtained', { signature: signature.slice(0, 20) + '...' });
         
         // Parse signature into v, r, s
@@ -940,7 +943,10 @@ export function useCommunityPool(propAddress?: string) {
         });
         
         console.error('🟢🟢🟢 PERMIT - depositWithPermit tx submitted:', permitDepositTxHash);
-        await waitForTransactionReceipt(config, { hash: permitDepositTxHash });
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(permitDepositTxHash, 1, 60000);
+        }
         console.error('🟢🟢🟢 PERMIT - Deposit confirmed!');
         
         // SUCCESS!
@@ -989,7 +995,10 @@ export function useCommunityPool(propAddress?: string) {
         });
         
         console.error('🔴🔴🔴 DEPOSIT - Reset tx submitted:', resetTxHash);
-        await waitForTransactionReceipt(config, { hash: resetTxHash });
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(resetTxHash, 1, 60000);
+        }
         console.error('🔴🔴🔴 DEPOSIT - Reset confirmed!');
       }
       
@@ -1007,7 +1016,10 @@ export function useCommunityPool(propAddress?: string) {
       
       console.error('🔴🔴🔴 DEPOSIT - Approve tx submitted:', approveTxHash);
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
-      await waitForTransactionReceipt(config, { hash: approveTxHash });
+      {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+        await provider.waitForTransaction(approveTxHash, 1, 60000);
+      }
       console.error('🔴🔴🔴 DEPOSIT - Approve confirmed!');
       
       // STEP 3: Deposit to pool
@@ -1023,7 +1035,10 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       console.error('🔴🔴🔴 DEPOSIT - Deposit tx submitted:', depositTxHash);
-      await waitForTransactionReceipt(config, { hash: depositTxHash });
+      {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+        await provider.waitForTransaction(depositTxHash, 1, 60000);
+      }
       console.error('🔴🔴🔴 DEPOSIT - Deposit confirmed!');
       
       // SUCCESS!
