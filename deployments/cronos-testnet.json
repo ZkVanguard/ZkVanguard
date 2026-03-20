@@ -10,12 +10,12 @@
     "MockGroth16Verifier": "0x1dDb2A6b64beF9E9435be251c78C84ACaEd94953"
   },
   "depositToken": {
-    "description": "Mock stablecoin for Cronos testnet (NOT official WDK USDT)",
+    "description": "USDT stablecoin for Cronos testnet",
     "address": "0x28217DAddC55e3C4831b4A48A00Ce04880786967",
-    "name": "Mock USDC",
-    "symbol": "USDC",
+    "name": "Tether USD",
+    "symbol": "USDT",
     "decimals": 6,
-    "note": "For official WDK USDT, use Sepolia: 0xd077a400968890eacc75cdc901f0356c943e4fdb"
+    "note": "Testnet USDT - For mainnet use official WDK USDT"
   },
   "UniversalRelayer": "0x9E5512b683d92290ccD20F483D20699658bcb9f3",
   "GaslessZKVerifier": "0x7747e2D3e8fc092A0bd0d6060Ec8d56294A5b73F",
@@ -23,13 +23,13 @@
   "deployedAt": "2025-12-16T04:44:46.011Z",
   "zkPaymaster": "0x81E2d8d860847Ca1b3ADd950dBeED6191be23D87",
   "X402GaslessZKCommitmentVerifier": "0x44098d0dE36e157b4C1700B48d615285C76fdE47",
-  "usdcToken": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+  "usdtToken": "0x28217DAddC55e3C4831b4A48A00Ce04880786967",
   "GaslessZKCommitmentVerifier": "0x76Faf645C0B3c1e37fbf3EF189EdAfB0D4Fc2a8E",
   "MockMoonlander": "0xf63B712013500117c866e33194Ef5e2d327977C9",
   "ZKHedgeCommitment": "0xa1FF9dFeB4fF9d815FDE34d5F3c61a893806A93E",
   "lastDeployment": "2026-03-19T13:13:29.895Z",
   "HedgeExecutor": "0x090b6221137690EbB37667E4644287487CE462B9",
-  "MockUSDC": "0x28217DAddC55e3C4831b4A48A00Ce04880786967",
+  "USDT": "0x28217DAddC55e3C4831b4A48A00Ce04880786967",
   "HedgeExecutorV2": "0x090b6221137690EbB37667E4644287487CE462B9",
   "lastTestTimestamp": "2026-02-08T02:42:23.819Z",
   "testResults": {
@@ -89,5 +89,4 @@
     }
   ],
   "lastDemoTimestamp": "2026-02-08T02:50:09.576Z",
-  "MockUSDT": "0x4dE1Df85E2F11Ef78Ed542Ff837e747D82604356"
 }
