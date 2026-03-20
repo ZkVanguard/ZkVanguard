@@ -1,13 +1,14 @@
 /**
  * Tether WDK Context & Provider
  * 
- * Provides WDK wallet functionality alongside wagmi for:
- * 1. Users without external wallets (create USDT-native wallet)
- * 2. Gasless transactions via EIP-2612 permit
+ * DEPRECATED: This file is no longer used in production.
+ * Use wdk-provider-stub.tsx instead for browser-safe operations.
+ * The actual WDK operations should go through server-side API routes.
  * 
  * @see https://docs.wdk.tether.io/
  */
 
+// @ts-nocheck - Deprecated file, types may not match WDK runtime API
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';

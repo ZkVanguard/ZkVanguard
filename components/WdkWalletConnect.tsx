@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useWdkSafe } from '@/lib/wdk/wdk-context';
+import { useWdkSafe } from '@/lib/wdk/wdk-provider-stub';
 
 interface WdkWalletConnectProps {
   onConnect?: (address: string) => void;

@@ -22,7 +22,7 @@ import { config } from '@/app/providers';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
-import { useWdkSafe } from '@/lib/wdk/wdk-context';
+import { useWdkSafe } from '@/lib/wdk/wdk-provider-stub';
 import { 
   POOL_CHAIN_CONFIGS, 
   getCommunityPoolAddress, 
@@ -222,7 +222,7 @@ export function useCommunityPool(propAddress?: string) {
   const poolDeployed = isPoolDeployed(selectedChain, network);
   
   // Determine active wallet type: 'wagmi' | 'wdk' | 'sui' | null
-  const activeWalletType = useMemo(() => {
+  const activeWalletType = useMemo((): 'wagmi' | 'wdk' | 'sui' | null => {
     if (selectedChain === 'sui' && suiIsConnected) return 'sui';
     if (wdkIsConnected && wdkAddress) return 'wdk';
     if (isConnected && address) return 'wagmi';
