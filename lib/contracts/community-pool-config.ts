@@ -412,6 +412,19 @@ export const COMMUNITY_POOL_ABI = [
     outputs: [{ name: 'shares', type: 'uint256' }],
   },
   {
+    name: 'depositWithPermit',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amount', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'v', type: 'uint8' },
+      { name: 'r', type: 'bytes32' },
+      { name: 's', type: 'bytes32' },
+    ],
+    outputs: [{ name: 'shares', type: 'uint256' }],
+  },
+  {
     name: 'withdraw',
     type: 'function',
     stateMutability: 'nonpayable',
@@ -420,6 +433,13 @@ export const COMMUNITY_POOL_ABI = [
       { name: 'minAmountOut', type: 'uint256' },
     ],
     outputs: [{ name: 'amount', type: 'uint256' }],
+  },
+  {
+    name: 'depositToken',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
   },
   {
     name: 'getPoolStats',

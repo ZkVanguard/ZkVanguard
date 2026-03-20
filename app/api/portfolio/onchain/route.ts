@@ -46,15 +46,15 @@ export async function GET(request: NextRequest) {
         break;
       
       case 'balance':
-        const balance = await manager.getMockUSDCBalance();
+        const balance = await manager.getUSDTBalance();
         result = {
-          mockUSDC: {
+          usdt: {
             raw: balance.raw.toString(),
             formatted: balance.formatted,
-            symbol: 'MockUSDC',
+            symbol: 'USDT',
             decimals: 6,
           },
-          contract: manager.getContractAddresses().MockUSDC,
+          contract: manager.getContractAddresses().USDT,
         };
         break;
       
@@ -125,10 +125,10 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        const txHash = await manager.mintMockUSDC(amount);
+        const txHash = await manager.mintUSDT(amount);
         if (txHash) {
           result = { 
-            message: `Minted ${amount.toLocaleString()} MockUSDC`,
+            message: `Minted ${amount.toLocaleString()} USDT`,
             txHash,
             timestamp: Date.now(),
           };
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
         break;
       
       case 'create-portfolio':
-        // Create portfolio on RWAManager with MockUSDC deposit
+        // Create portfolio on RWAManager with USDT deposit
         const depositAmount = body.depositAmount || 150000000; // Default $150M
         const createResult = await manager.createPortfolioOnRWAManager(depositAmount);
         
