@@ -26,6 +26,8 @@ import {
   CANDIDE_SEPOLIA,
   PIMLICO_MAINNET,
   PIMLICO_ARBITRUM,
+  CANDIDE_PLASMA,
+  CANDIDE_POLYGON,
   CRONOS_ZKEVM_MAINNET,
   CRONOS_ZKEVM_TESTNET,
   CRONOS_EVM_FALLBACK,
@@ -104,6 +106,36 @@ describe('AA Paymaster Configuration', () => {
     it('should have Arbitrum config', () => {
       expect(PIMLICO_ARBITRUM.chainId).toBe(42161);
       expect(PIMLICO_ARBITRUM.isTestnet).toBe(false);
+    });
+
+    // WDK Official Verified Networks
+    describe('WDK Official Verified Networks', () => {
+      it('should have Plasma config (9745) - WDK Official', () => {
+        expect(CANDIDE_PLASMA.chainId).toBe(9745);
+        expect(CANDIDE_PLASMA.chainName).toBe('Plasma');
+        expect(CANDIDE_PLASMA.bundlerUrl).toBe('https://api.candide.dev/public/v3/9745');
+        expect(CANDIDE_PLASMA.paymasterUrl).toBe('https://api.candide.dev/public/v3/9745');
+        expect(CANDIDE_PLASMA.paymasterAddress).toBe('0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba');
+        expect(CANDIDE_PLASMA.paymasterToken.address).toBe('0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb');
+        expect(CANDIDE_PLASMA.isTestnet).toBe(false);
+      });
+
+      it('should have Polygon config (137) - WDK Official', () => {
+        expect(CANDIDE_POLYGON.chainId).toBe(137);
+        expect(CANDIDE_POLYGON.chainName).toBe('Polygon');
+        expect(CANDIDE_POLYGON.bundlerUrl).toBe('https://api.candide.dev/public/v3/polygon');
+        expect(CANDIDE_POLYGON.paymasterAddress).toBe('0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba');
+        expect(CANDIDE_POLYGON.paymasterToken.address).toBe('0xc2132D05D31c914a87C6611C10748AEb04B58e8F');
+        expect(CANDIDE_POLYGON.isTestnet).toBe(false);
+      });
+
+      it('should use common entry point v0.7 for all WDK networks', () => {
+        expect(PIMLICO_SEPOLIA.entryPointAddress).toBe(ENTRY_POINT_V07);
+        expect(CANDIDE_PLASMA.entryPointAddress).toBe(ENTRY_POINT_V07);
+        expect(CANDIDE_POLYGON.entryPointAddress).toBe(ENTRY_POINT_V07);
+        expect(PIMLICO_MAINNET.entryPointAddress).toBe(ENTRY_POINT_V07);
+        expect(PIMLICO_ARBITRUM.entryPointAddress).toBe(ENTRY_POINT_V07);
+      });
     });
 
     it('should have mainnet USDT addresses', () => {
