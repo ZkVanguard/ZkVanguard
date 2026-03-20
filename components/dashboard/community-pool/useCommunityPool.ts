@@ -16,10 +16,13 @@
 
 import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSignMessage, useReadContract, useSwitchChain, useSignTypedData } from 'wagmi';
+import { waitForTransactionReceipt } from '@wagmi/core';
 import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
+import { config } from '@/app/providers';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
 import { useSuiSafe } from '@/app/sui-providers';
+import { useWdkSafe } from '@/lib/wdk/wdk-context';
 import { 
   POOL_CHAIN_CONFIGS, 
   getCommunityPoolAddress, 
@@ -177,7 +180,7 @@ export function useCommunityPool(propAddress?: string) {
   const wagmiChainId = useChainId();
   const chainId = chain?.id ?? wagmiChainId;
   const { signMessageAsync } = useSignMessage();
-  const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
+  const { writeContract, writeContractAsync, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
   const { switchChainAsync } = useSwitchChain();
   
@@ -203,6 +206,12 @@ export function useCommunityPool(propAddress?: string) {
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiSetNetwork = suiContext?.setNetwork;
   
+  // WDK (Tether Wallet Development Kit) hooks
+  const wdkContext = useWdkSafe();
+  const wdkAddress = wdkContext?.wallet?.address ?? null;
+  const wdkIsConnected = wdkContext?.wallet?.isInitialized ?? false;
+  const wdkSignPermit = wdkContext?.signPermit;
+  
   // Derived values
   const { selectedChain } = poolState;
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
@@ -211,6 +220,21 @@ export function useCommunityPool(propAddress?: string) {
   const USDT_ADDRESS = getUsdtAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
+  
+  // Determine active wallet type: 'wagmi' | 'wdk' | 'sui' | null
+  const activeWalletType = useMemo(() => {
+    if (selectedChain === 'sui' && suiIsConnected) return 'sui';
+    if (wdkIsConnected && wdkAddress) return 'wdk';
+    if (isConnected && address) return 'wagmi';
+    return null;
+  }, [selectedChain, suiIsConnected, wdkIsConnected, wdkAddress, isConnected, address]);
+  
+  // Effective address based on active wallet
+  const effectiveAddress = useMemo(() => {
+    if (activeWalletType === 'sui') return suiAddress;
+    if (activeWalletType === 'wdk') return wdkAddress;
+    return address;
+  }, [activeWalletType, suiAddress, wdkAddress, address]);
   
   // ERC20 allowance check (for USDT reset-to-zero pattern)
   const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
@@ -887,8 +911,8 @@ export function useCommunityPool(propAddress?: string) {
         
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
         
-        // Call depositWithPermit - single transaction!
-        writeContract({
+        // Call depositWithPermit - single transaction using async/await!
+        const permitDepositTxHash = await writeContractAsync({
           chainId: targetChainId,
           address: COMMUNITY_POOL_ADDRESS,
           abi: [{
@@ -908,7 +932,21 @@ export function useCommunityPool(propAddress?: string) {
           args: [amountInUnits, deadline, v, r, s],
         });
         
-        return; // Wait for depositWithPermit to confirm
+        console.error('🟢🟢🟢 PERMIT - depositWithPermit tx submitted:', permitDepositTxHash);
+        await waitForTransactionReceipt(config, { hash: permitDepositTxHash });
+        console.error('🟢🟢🟢 PERMIT - Deposit confirmed!');
+        
+        // SUCCESS!
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: permitDepositTxHash });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful (gasless)! Tx: ${permitDepositTxHash.slice(0, 10)}...` });
+        dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
+        dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        
+        // Refresh pool data
+        fetchPoolData(true);
+        return; // Done with permit flow
         
       } catch (permitError: any) {
         console.error('🟠🟠🟠 PERMIT - Failed, falling back to approve+deposit', permitError?.message);
@@ -918,6 +956,7 @@ export function useCommunityPool(propAddress?: string) {
     
     // =========================================
     // FALLBACK: Regular Approve + Deposit (2 TXs)
+    // Using async/await for reliable sequencing
     // =========================================
     console.error('🔴🔴🔴 DEPOSIT - Using regular approve+deposit flow');
     
@@ -925,45 +964,80 @@ export function useCommunityPool(propAddress?: string) {
       // Refetch current allowance
       await refetchAllowance();
       const allowance = currentAllowance ? BigInt(currentAllowance.toString()) : BigInt(0);
-      console.error('🔴🔴🔴 DEPOSIT - Current allowance:', allowance.toString());
+      const amountInUnits = parseUnits(amount.toString(), 6);
+      console.error('🔴🔴🔴 DEPOSIT - Current allowance:', allowance.toString(), 'needed:', amountInUnits.toString());
       
-      // USDT requires reset-to-zero before changing allowance (non-standard ERC20)
-      // Check if we need to reset allowance first
+      // STEP 1: Reset allowance if needed (USDT non-standard requirement)
       if (allowance > BigInt(0)) {
         logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
-        console.error('🔴🔴🔴 DEPOSIT - Calling writeContract for reset approval');
+        console.error('🔴🔴🔴 DEPOSIT - Step 1: Resetting allowance to 0');
         
-        writeContract({
+        const resetTxHash = await writeContractAsync({
           chainId: targetChainId,
           address: USDT_ADDRESS,
           abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
           functionName: 'approve',
           args: [COMMUNITY_POOL_ADDRESS, BigInt(0)],
         });
-        return; // Wait for reset to confirm, then approve in effect
+        
+        console.error('🔴🔴🔴 DEPOSIT - Reset tx submitted:', resetTxHash);
+        await waitForTransactionReceipt(config, { hash: resetTxHash });
+        console.error('🔴🔴🔴 DEPOSIT - Reset confirmed!');
       }
       
-      // Allowance is 0, proceed with approval
+      // STEP 2: Approve the deposit amount
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
-      const amountInUnits = parseUnits(amount.toString(), 6);
-      console.error('🔴🔴🔴 DEPOSIT - Calling writeContract for approval', { amountInUnits: amountInUnits.toString() });
+      console.error('🔴🔴🔴 DEPOSIT - Step 2: Approving', amountInUnits.toString());
       
-      writeContract({
+      const approveTxHash = await writeContractAsync({
         chainId: targetChainId,
         address: USDT_ADDRESS,
         abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
         functionName: 'approve',
         args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
       });
+      
+      console.error('🔴🔴🔴 DEPOSIT - Approve tx submitted:', approveTxHash);
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
+      await waitForTransactionReceipt(config, { hash: approveTxHash });
+      console.error('🔴🔴🔴 DEPOSIT - Approve confirmed!');
+      
+      // STEP 3: Deposit to pool
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
+      console.error('🔴🔴🔴 DEPOSIT - Step 3: Depositing', amountInUnits.toString());
+      
+      const depositTxHash = await writeContractAsync({
+        chainId: targetChainId,
+        address: COMMUNITY_POOL_ADDRESS,
+        abi: [{ name: 'deposit', type: 'function', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'nonpayable' }],
+        functionName: 'deposit',
+        args: [amountInUnits],
+      });
+      
+      console.error('🔴🔴🔴 DEPOSIT - Deposit tx submitted:', depositTxHash);
+      await waitForTransactionReceipt(config, { hash: depositTxHash });
+      console.error('🔴🔴🔴 DEPOSIT - Deposit confirmed!');
+      
+      // SUCCESS!
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: depositTxHash });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful! Tx: ${depositTxHash.slice(0, 10)}...` });
+      dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
+      dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+      
+      // Refresh pool data
+      fetchPoolData(true);
+      
     } catch (err: any) {
       console.error('🔴🔴🔴 DEPOSIT - Error:', err);
       pendingDepositAmountRef.current = ''; // Clear on error
-      dispatchPool({ type: 'SET_ERROR', payload: err.message });
-      dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+      dispatchPool({ type: 'SET_ERROR', payload: err.shortMessage || err.message });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+    } finally {
+      dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit, permitSupported, permitNonce, tokenName, signTypedDataAsync, switchChainAsync]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContractAsync, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit, permitSupported, permitNonce, tokenName, signTypedDataAsync, switchChainAsync, fetchPoolData]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1390,8 +1464,22 @@ export function useCommunityPool(propAddress?: string) {
   // Memoize wallet-related values with chain-aware active address
   const walletValues = useMemo(() => {
     const isSui = selectedChain === 'sui';
-    const activeAddress = isSui ? suiAddress : address;
-    const isActiveWalletConnected = isSui ? suiIsConnected : isConnected;
+    
+    // Determine active address based on wallet type
+    // Priority: SUI (for sui chain) > WDK > Wagmi
+    let activeAddress: string | null = null;
+    let isActiveWalletConnected = false;
+    
+    if (isSui) {
+      activeAddress = suiAddress;
+      isActiveWalletConnected = suiIsConnected;
+    } else if (wdkIsConnected && wdkAddress) {
+      activeAddress = wdkAddress;
+      isActiveWalletConnected = true;
+    } else {
+      activeAddress = address ?? null;
+      isActiveWalletConnected = isConnected;
+    }
     
     return {
       address,
@@ -1402,11 +1490,15 @@ export function useCommunityPool(propAddress?: string) {
       suiBalance,
       suiNetwork,
       suiIsWrongNetwork,
+      // WDK wallet state
+      wdkAddress,
+      wdkIsConnected,
+      activeWalletType,
       // Chain-aware helpers
       activeAddress,
       isActiveWalletConnected,
     };
-  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain]);
+  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain, wdkAddress, wdkIsConnected, activeWalletType]);
   
   // Memoize derived configuration values
   const configValues = useMemo(() => {
