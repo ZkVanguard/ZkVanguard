@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle, ExternalLink, Coins } from 'lucide-react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useChainId } from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits, parseEther } from 'viem';
 import { getContractAddresses } from '../../lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '../../lib/contracts/abis';
@@ -174,7 +174,7 @@ export function DepositModal({
   const addresses = getContractAddresses(chainId);
   const rwaManagerAddress = addresses.rwaManager as `0x${string}`;
 
-  // Get native balance using wagmi hook
+  // Get native balance using WDK hook
   const { data: nativeBalanceData } = useBalance({
     address: address,
   });

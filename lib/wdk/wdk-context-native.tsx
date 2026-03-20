@@ -2,7 +2,7 @@
  * WDK Wallet Context (Browser-Safe)
  * 
  * Full WDK wallet implementation for self-custodial wallet management.
- * This replaces wagmi/RainbowKit with native Tether WDK.
+ * This is the native Tether WDK implementation.
  * 
  * Features:
  * - Create new wallets (BIP-39 seed phrase)

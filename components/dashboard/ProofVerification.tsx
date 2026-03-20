@@ -3,7 +3,7 @@ import { logger } from '../../lib/utils/logger';
 
 import { useState } from 'react';
 import { Shield, ExternalLink, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
-import { usePublicClient } from '@/lib/wdk/wdk-wagmi-compat';
+import { usePublicClient } from '@/lib/wdk/wdk-hooks';
 
 interface VerificationResult {
   onChain: boolean;
@@ -69,7 +69,7 @@ export function ProofVerification({ defaultTxHash }: ProofVerificationProps = {}
   /**
    * CLIENT-SIDE Comprehensive Cryptographic Verification
    * Everything happens in the browser - fully transparent!
-   * 1. Query Cronos blockchain directly via wagmi
+   * 1. Query Cronos blockchain directly via WDK
    * 2. Verify ZK-STARK proof through backend API (visible in browser console)
    * 3. Show real-time verification progress
    */

@@ -57,7 +57,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   const pool = useCommunityPool(propAddress);
 
   // ============================================================================
-  // TRANSACTION CONFIRMATION EFFECTS (tightly coupled to wagmi lifecycle)
+  // TRANSACTION CONFIRMATION EFFECTS (tightly coupled to WDK lifecycle)
   // ============================================================================
   
   // Guard against duplicate isConfirmed fires (React Strict Mode / rapid tx)

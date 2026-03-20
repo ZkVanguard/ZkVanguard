@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink, AlertTriangle } from 'lucide-react';
-import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
+import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
 import { CHAIN_IDS, getUsdcAddress, isTestnet as checkIsTestnet, getExplorerUrl } from '@/lib/utils/network';

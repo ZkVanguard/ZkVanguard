@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
 import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
-// WDK Provider - Native Tether wallet (replaces wagmi/RainbowKit)
+// WDK Provider - Native Tether self-custodial wallet
 import { WdkProvider } from '../lib/wdk/wdk-context';
 
 // Sui - use the complete provider that includes SuiContext

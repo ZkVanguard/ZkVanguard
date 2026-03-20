@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, createContext, useContext, ReactNode } from 'react';
-import { useAccount, useDisconnect } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount, useDisconnect } from '@/lib/wdk/wdk-hooks';
 import { useWdk } from '@/lib/wdk/wdk-context';
 import { Wallet, ChevronDown, Copy, Check, LogOut, Plus, Key, Loader2 } from 'lucide-react';
 

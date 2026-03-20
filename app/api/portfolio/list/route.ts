@@ -31,7 +31,7 @@ async function setAllListCaches(address: string, data: unknown): Promise<void> {
  * GET /api/portfolio/list?address=0x...
  * 
  * Server-side fallback for fetching user portfolios from the RWAManager contract.
- * Used when wagmi's useReadContract fails in the browser (chain mismatch, RPC timeout, etc.)
+ * Used when useReadContract fails in the browser (chain mismatch, RPC timeout, etc.)
  */
 export async function GET(request: NextRequest) {
   try {

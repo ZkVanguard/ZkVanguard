@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, Loader2, ExternalLink, Wallet, Plus, Trash2, Zap, Shield } from 'lucide-react';
-import { useAccount, useWalletClient } from '@/lib/wdk/wdk-wagmi-compat';
+import { useAccount, useWalletClient } from '@/lib/wdk/wdk-hooks';
 import { useProcessSettlement, useContractAddresses } from '../../lib/contracts/hooks';
 import { parseEther } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';

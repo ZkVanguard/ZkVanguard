@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from '@/lib/wdk/wdk-wagmi-compat';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from '@/lib/wdk/wdk-hooks';
 import { getContractAddresses } from './addresses';
 import { RWA_MANAGER_ABI, ZK_VERIFIER_ABI, PAYMENT_ROUTER_ABI } from './abis';
 import { getCronosProvider } from '@/lib/throttled-provider';
