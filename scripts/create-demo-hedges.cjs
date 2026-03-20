@@ -75,26 +75,26 @@ async function main() {
   console.log("  CRO Balance: " + ethers.formatEther(balance) + " CRO\n");
 
   const hedgeExecutor = await ethers.getContractAt("HedgeExecutor", deployment.HedgeExecutor);
-  const mockUsdc = await ethers.getContractAt("MockUSDC", deployment.MockUSDC);
+  const usdt = await ethers.getContractAt("MockUSDC", deployment.USDT);
 
-  // Check USDC balance and mint if needed
-  const usdcBal = await mockUsdc.balanceOf(deployer.address);
-  console.log("  USDC Balance: " + ethers.formatUnits(usdcBal, 6));
+  // Check USDT balance and mint if needed
+  const usdtBal = await usdt.balanceOf(deployer.address);
+  console.log("  USDT Balance: " + ethers.formatUnits(usdtBal, 6));
   
   const totalNeeded = HEDGE_CONFIGS.reduce((sum, h) => sum + Number(h.collateral), 0);
-  if (Number(ethers.formatUnits(usdcBal, 6)) < totalNeeded) {
-    console.log("  Minting " + (totalNeeded * 2) + " USDC...");
-    const mintTx = await mockUsdc.mint(deployer.address, ethers.parseUnits(String(totalNeeded * 2), 6));
+  if (Number(ethers.formatUnits(usdtBal, 6)) < totalNeeded) {
+    console.log("  Minting " + (totalNeeded * 2) + " USDT...");
+    const mintTx = await usdt.mint(deployer.address, ethers.parseUnits(String(totalNeeded * 2), 6));
     await mintTx.wait();
     console.log("  ✅ Minted");
   }
 
   // Approve HedgeExecutor
-  const allowance = await mockUsdc.allowance(deployer.address, deployment.HedgeExecutor);
+  const allowance = await usdt.allowance(deployer.address, deployment.HedgeExecutor);
   if (allowance < ethers.parseUnits(String(totalNeeded), 6)) {
-    const approveTx = await mockUsdc.approve(deployment.HedgeExecutor, ethers.MaxUint256);
+    const approveTx = await usdt.approve(deployment.HedgeExecutor, ethers.MaxUint256);
     await approveTx.wait();
-    console.log("  ✅ Approved HedgeExecutor for USDC");
+    console.log("  ✅ Approved HedgeExecutor for USDT");
   }
 
   // Create hedges

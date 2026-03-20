@@ -58,15 +58,15 @@ async function main() {
   // Check pool's NAV calculation
   console.log("\nPool NAV Breakdown:");
   const nav = await pool.calculateTotalNAV();
-  const usdcAddr = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
-  const usdcC = await ethers.getContractAt("MockUSDC", usdcAddr);
-  const usdcBal = await usdcC.balanceOf(poolAddress);
-  console.log("  USDC balance:", ethers.formatUnits(usdcBal, 6));
+  const usdtAddr = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
+  const usdtC = await ethers.getContractAt("MockUSDC", usdtAddr);
+  const usdtBal = await usdtC.balanceOf(poolAddress);
+  console.log("  USDT balance:", ethers.formatUnits(usdtBal, 6));
   console.log("  Total NAV:", ethers.formatUnits(nav, 6));
-  console.log("  Implied asset value:", ethers.formatUnits(nav - usdcBal, 6));
+  console.log("  Implied asset value:", ethers.formatUnits(nav - usdtBal, 6));
   
   // Get pool's view of swap quote
-  console.log("\nPool getSwapQuote (1000 USDC -> BTC):");
+  console.log("\nPool getSwapQuote (1000 USDT -> BTC):");
   try {
     const quote = await pool.getSwapQuote(0, 1000_000000n, true);
     console.log("  Expected BTC:", ethers.formatUnits(quote, 8));
