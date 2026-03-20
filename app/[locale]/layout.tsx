@@ -21,6 +21,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'hero' });
   
   return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://zkvanguard.com'),
     title: 'ZkVanguard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
     description: t('subtitle'),
     keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
