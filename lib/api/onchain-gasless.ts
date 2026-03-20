@@ -1,12 +1,16 @@
 /**
  * On-Chain x402-Powered Gasless Commitment Storage
  * TRUE GASLESS via x402 Facilitator - No gas costs for users!
+ * 
+ * Uses ethers.js for direct contract interactions (WDK migration)
  */
 
-import { config } from '../../app/providers';
-import { writeContract, waitForTransactionReceipt, readContract } from '@wagmi/core';
+import { ethers } from 'ethers';
 import { CONTRACT_ADDRESSES } from '../contracts/addresses';
 import { logger } from '../utils/logger';
+
+// RPC URL for Cronos Testnet
+const CRONOS_TESTNET_RPC = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
 
 // x402-powered gasless verifier (uses x402 Facilitator for zero gas costs)
 const GASLESS_VERIFIER_ADDRESS = CONTRACT_ADDRESSES.cronos_testnet.gaslessZKCommitmentVerifier;
@@ -85,6 +89,33 @@ const GASLESS_VERIFIER_ABI = [
   }
 ] as const;
 
+// Get ethers provider for read operations
+function getProvider() {
+  return new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+}
+
+// Get contract instance for read operations
+function getContract() {
+  const provider = getProvider();
+  return new ethers.Contract(GASLESS_VERIFIER_ADDRESS, GASLESS_VERIFIER_ABI, provider);
+}
+
+// Get signer for write operations (requires PRIVATE_KEY in env)
+function getSigner() {
+  const privateKey = process.env.PRIVATE_KEY || process.env.MOONLANDER_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error('No private key found in environment variables');
+  }
+  const provider = getProvider();
+  return new ethers.Wallet(privateKey, provider);
+}
+
+// Get contract with signer for write operations
+function getSignedContract() {
+  const signer = getSigner();
+  return new ethers.Contract(GASLESS_VERIFIER_ADDRESS, GASLESS_VERIFIER_ABI, signer);
+}
+
 export interface OnChainGaslessResult {
   txHash: string;
   gasless: true;
@@ -108,26 +139,22 @@ export async function storeCommitmentOnChainGasless(
     gasless: true,
   });
 
-  const hash = await writeContract(config, {
-    address: GASLESS_VERIFIER_ADDRESS,
-    abi: GASLESS_VERIFIER_ABI,
-    functionName: 'storeCommitmentGasless',
-    args: [proofHash as `0x${string}`, merkleRoot as `0x${string}`, securityLevel],
-  });
+  const contract = getSignedContract();
+  const tx = await contract.storeCommitmentGasless(proofHash, merkleRoot, securityLevel);
 
-  logger.info('Transaction submitted', { hash });
+  logger.info('Transaction submitted', { hash: tx.hash });
   logger.info('Waiting for gasless confirmation via x402');
 
-  const receipt = await waitForTransactionReceipt(config, { hash });
+  const receipt = await tx.wait();
 
-  if (receipt.status === 'success') {
+  if (receipt && receipt.status === 1) {
     logger.info('Commitment stored via x402 GASLESS', {
-      transaction: hash,
+      transaction: tx.hash,
       userCost: '$0.00',
     });
     
     return {
-      txHash: hash,
+      txHash: tx.hash,
       gasless: true,
       x402Powered: true,
       message: 'Commitment stored via x402 gasless - you paid $0.00!',
@@ -152,31 +179,27 @@ export async function storeCommitmentsBatchOnChainGasless(
     gasless: true,
   });
 
-  const proofHashes = commitments.map(c => c.proofHash as `0x${string}`);
-  const merkleRoots = commitments.map(c => c.merkleRoot as `0x${string}`);
+  const proofHashes = commitments.map(c => c.proofHash);
+  const merkleRoots = commitments.map(c => c.merkleRoot);
   const securityLevels = commitments.map(c => c.securityLevel);
 
-  const hash = await writeContract(config, {
-    address: GASLESS_VERIFIER_ADDRESS,
-    abi: GASLESS_VERIFIER_ABI,
-    functionName: 'storeCommitmentsBatchGasless',
-    args: [proofHashes, merkleRoots, securityLevels],
-  });
+  const contract = getSignedContract();
+  const tx = await contract.storeCommitmentsBatchGasless(proofHashes, merkleRoots, securityLevels);
 
-  logger.info('Batch transaction submitted', { hash });
+  logger.info('Batch transaction submitted', { hash: tx.hash });
   logger.info('Waiting for gasless confirmation via x402');
 
-  const receipt = await waitForTransactionReceipt(config, { hash });
+  const receipt = await tx.wait();
 
-  if (receipt.status === 'success') {
+  if (receipt && receipt.status === 1) {
     logger.info('Batch stored via x402 GASLESS', {
-      transaction: hash,
+      transaction: tx.hash,
       commitments: commitments.length,
       userCost: '$0.00',
     });
     
     return {
-      txHash: hash,
+      txHash: tx.hash,
       gasless: true,
       x402Powered: true,
       message: `${commitments.length} commitments stored via x402 gasless - you paid $0.00!`,
@@ -190,13 +213,8 @@ export async function storeCommitmentsBatchOnChainGasless(
  * Verify a commitment exists on-chain
  */
 export async function verifyCommitmentOnChain(proofHash: string) {
-  const commitment = await readContract(config, {
-    address: GASLESS_VERIFIER_ADDRESS,
-    abi: GASLESS_VERIFIER_ABI,
-    functionName: 'verifyCommitment',
-    args: [proofHash as `0x${string}`],
-  });
-
+  const contract = getContract();
+  const commitment = await contract.verifyCommitment(proofHash);
   return commitment;
 }
 
@@ -204,22 +222,12 @@ export async function verifyCommitmentOnChain(proofHash: string) {
  * Get on-chain gasless statistics
  */
 export async function getOnChainGaslessStats() {
+  const contract = getContract();
+  
   const [stats, balance, totalCommitments] = await Promise.all([
-    readContract(config, {
-      address: GASLESS_VERIFIER_ADDRESS,
-      abi: GASLESS_VERIFIER_ABI,
-      functionName: 'getStats',
-    }),
-    readContract(config, {
-      address: GASLESS_VERIFIER_ADDRESS,
-      abi: GASLESS_VERIFIER_ABI,
-      functionName: 'getBalance',
-    }),
-    readContract(config, {
-      address: GASLESS_VERIFIER_ADDRESS,
-      abi: GASLESS_VERIFIER_ABI,
-      functionName: 'totalCommitments',
-    })
+    contract.getStats(),
+    contract.getBalance(),
+    contract.totalCommitments()
   ]);
 
   return {

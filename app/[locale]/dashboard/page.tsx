@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import nextDynamic from 'next/dynamic';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance } from '@/lib/wdk/wdk-wagmi-compat';
 import { 
   Bot, Shield, Briefcase, TrendingUp, History, 
   BarChart3, Zap, MessageSquare, ChevronRight, 
