@@ -986,13 +986,13 @@ class AutoHedgingService {
         const allocation = await rwaManager.getAssetAllocation(portfolioId, assetAddress);
         const addr = assetAddress.toLowerCase();
         
-        // MockUSDC = institutional portfolio with virtual allocations
+        // USDT = institutional portfolio with virtual allocations
         if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') {
-          const mockUsdcValue = Number(allocation) / 1e6; // 6 decimals
+          const usdtValue = Number(allocation) / 1e6; // 6 decimals
           
           // Large portfolio? Create virtual BTC/ETH/CRO/SUI allocations
-          if (mockUsdcValue > 1000000) {
-            totalValue = mockUsdcValue;
+          if (usdtValue > 1000000) {
+            totalValue = usdtValue;
             const virtualAllocations = [
               { symbol: 'BTC', percentage: 35 },
               { symbol: 'ETH', percentage: 30 },
@@ -1006,7 +1006,7 @@ class AutoHedgingService {
                 const priceData = await marketDataService.getTokenPrice(alloc.symbol);
                 const price = priceData.price;
                 const change24h = priceData.change24h || 0;
-                const value = mockUsdcValue * (alloc.percentage / 100);
+                const value = usdtValue * (alloc.percentage / 100);
                 const balance = value / price;
                 
                 positions.push({

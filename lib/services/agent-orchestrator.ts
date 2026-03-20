@@ -159,8 +159,8 @@ export class AgentOrchestrator {
         const addresses = CRONOS_CONTRACT_ADDRESSES[network];
         
         const hedgeExecutorAddress = addresses.hedgeExecutor;
-        // MockUSDC on Cronos Testnet (same address as USDT for now)
-        const collateralTokenAddress = process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+        // USDT on Cronos Testnet
+        const collateralTokenAddress = process.env.NEXT_PUBLIC_USDT_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
         
         // Only enable on-chain if we have a real signer (not demo) and valid HedgeExecutor address
         const isValidHedgeExecutor = hedgeExecutorAddress && hedgeExecutorAddress !== '0x0000000000000000000000000000000000000000';

@@ -432,12 +432,12 @@ export class CentralizedHedgeManager {
         const allocation = await rwaManager.getAssetAllocation(portfolioId, assetAddress);
         const addr = assetAddress.toLowerCase();
 
-        // MockUSDC = institutional portfolio with virtual allocations
+        // USDT = institutional portfolio with virtual allocations
         if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') {
-          const mockUsdcValue = Number(allocation) / 1e6;
+          const usdtValue = Number(allocation) / 1e6;
           
-          if (mockUsdcValue > 1000000) {
-            totalValue = mockUsdcValue;
+          if (usdtValue > 1000000) {
+            totalValue = usdtValue;
             const virtualAllocations = [
               { symbol: 'BTC', percentage: 35 },
               { symbol: 'ETH', percentage: 30 },
@@ -449,7 +449,7 @@ export class CentralizedHedgeManager {
             for (const alloc of virtualAllocations) {
               const snapshotPrice = snapshot.prices.get(alloc.symbol);
               if (snapshotPrice) {
-                const value = mockUsdcValue * (alloc.percentage / 100);
+                const value = usdtValue * (alloc.percentage / 100);
                 positions.push({
                   symbol: alloc.symbol,
                   value,
