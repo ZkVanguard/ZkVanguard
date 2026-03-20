@@ -195,7 +195,7 @@ export function ConnectButton() {
                   <div className="p-2">
                     {/* WDK - Native Tether Wallet */}
                     <button
-                      onClick={() => setShowWdkModal('connect')}
+                      onClick={() => { setShowWdkModal('connect'); setShowSelector(false); }}
                       className="w-full p-2.5 rounded-lg hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] transition-colors text-left flex items-center gap-3"
                     >
                       <div className="w-8 h-8 rounded-full bg-[#26A17B] flex items-center justify-center">
