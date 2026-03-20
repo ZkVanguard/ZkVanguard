@@ -18,19 +18,19 @@ interface WdkWalletConnectProps {
 export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnectProps) {
   const wdk = useWdkSafe();
   const [showImport, setShowImport] = useState(false);
-  const [seedInput, setSeedInput] = useState('');
-  const [showSeedBackup, setShowSeedBackup] = useState(false);
-  const [newSeed, setNewSeed] = useState<string | null>(null);
-  const [copiedSeed, setCopiedSeed] = useState(false);
+  const [phraseInput, setPhraseInput] = useState('');
+  const [showBackup, setShowBackup] = useState(false);
+  const [newPhrase, setNewPhrase] = useState<string | null>(null);
+  const [phraseWasCopied, setPhraseWasCopied] = useState(false);
 
   // Handle wallet creation
   const handleCreate = useCallback(async () => {
     if (!wdk) return;
     
-    const seed = await wdk.createWallet();
-    if (seed) {
-      setNewSeed(seed);
-      setShowSeedBackup(true);
+    const phrase = await wdk.createWallet();
+    if (phrase) {
+      setNewPhrase(phrase);
+      setShowBackup(true);
       if (wdk.wallet.address && onConnect) {
         // Wait for state update
         setTimeout(() => {
@@ -44,29 +44,29 @@ export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnect
 
   // Handle wallet import
   const handleImport = useCallback(async () => {
-    if (!wdk || !seedInput.trim()) return;
+    if (!wdk || !phraseInput.trim()) return;
     
-    const success = await wdk.importWallet(seedInput.trim());
+    const success = await wdk.importWallet(phraseInput.trim());
     if (success && wdk.wallet.address && onConnect) {
       onConnect(wdk.wallet.address);
       setShowImport(false);
-      setSeedInput('');
+      setPhraseInput('');
     }
-  }, [wdk, seedInput, onConnect]);
+  }, [wdk, phraseInput, onConnect]);
 
-  // Copy seed to clipboard
-  const copySeed = useCallback(async () => {
-    if (newSeed) {
-      await navigator.clipboard.writeText(newSeed);
-      setCopiedSeed(true);
-      setTimeout(() => setCopiedSeed(false), 2000);
+  // Copy phrase to clipboard
+  const copyPhrase = useCallback(async () => {
+    if (newPhrase) {
+      await navigator.clipboard.writeText(newPhrase);
+      setPhraseWasCopied(true);
+      setTimeout(() => setPhraseWasCopied(false), 2000);
     }
-  }, [newSeed]);
+  }, [newPhrase]);
 
-  // Confirm seed backup
+  // Confirm backup complete
   const confirmBackup = useCallback(() => {
-    setShowSeedBackup(false);
-    setNewSeed(null);
+    setShowBackup(false);
+    setNewPhrase(null);
   }, []);
 
   if (!wdk) {
@@ -100,8 +100,8 @@ export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnect
     );
   }
 
-  // Seed backup modal
-  if (showSeedBackup && newSeed) {
+  // Backup modal
+  if (showBackup && newPhrase) {
     return (
       <div className={`p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg ${className}`}>
         <h4 className="text-yellow-400 font-semibold mb-2 flex items-center gap-2">
@@ -111,14 +111,14 @@ export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnect
           Write down these 12 words in order. You&apos;ll need them to recover your wallet.
         </p>
         <div className="p-3 bg-black/30 rounded-lg mb-3 font-mono text-sm text-white break-all">
-          {newSeed}
+          {newPhrase}
         </div>
         <div className="flex gap-2">
           <button
-            onClick={copySeed}
+            onClick={copyPhrase}
             className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
           >
-            {copiedSeed ? '✓ Copied' : 'Copy'}
+            {phraseWasCopied ? '✓ Copied' : 'Copy'}
           </button>
           <button
             onClick={confirmBackup}
@@ -137,8 +137,8 @@ export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnect
       <div className={`p-4 bg-gray-800/50 border border-gray-700 rounded-lg ${className}`}>
         <h4 className="text-white font-semibold mb-2">Import WDK Wallet</h4>
         <textarea
-          value={seedInput}
-          onChange={(e) => setSeedInput(e.target.value)}
+          value={phraseInput}
+          onChange={(e) => setPhraseInput(e.target.value)}
           placeholder="Enter your 12-word recovery phrase..."
           className="w-full h-20 p-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm font-mono resize-none focus:outline-none focus:border-cyan-500"
         />
@@ -154,7 +154,7 @@ export function WdkWalletConnect({ onConnect, className = '' }: WdkWalletConnect
           </button>
           <button
             onClick={handleImport}
-            disabled={!seedInput.trim() || wdk.wallet.isCreating}
+            disabled={!phraseInput.trim() || wdk.wallet.isCreating}
             className="flex-1 px-3 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
           >
             {wdk.wallet.isCreating ? 'Importing...' : 'Import'}
