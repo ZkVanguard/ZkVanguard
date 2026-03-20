@@ -158,7 +158,7 @@ npx tsx scripts/complete-system-test.ts  # 10/10 tests
 - **Blockchain:** Cronos (EVM/Solidity), SUI (Move)
 - **ZK:** ZK-STARK proofs, Post-quantum 521-bit curves
 - **AI:** Crypto.com AI SDK, Multi-agent orchestration
-- **Wallets:** RainbowKit (EVM), @mysten/dapp-kit (SUI)
+- **Wallets:** WDK (EVM), @mysten/dapp-kit (SUI)
 
 
 ---

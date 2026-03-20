@@ -278,7 +278,7 @@ function checkSharedConfig() {
   try {
     const wpContent = fs.readFileSync(path.join(ROOT, 'app/wallet-providers.tsx'), 'utf8');
     if (wpContent.includes('OasisSapphireTestnet') && wpContent.includes('OasisEmeraldTestnet')) {
-      addResult('wallet-providers.tsx', 'ready', 'Oasis chains in wagmi config');
+      addResult('wallet-providers.tsx', 'ready', 'Oasis chains in wallet config');
     } else {
       addResult('wallet-providers.tsx', 'warning', 'Oasis chains not in wallet config');
     }
