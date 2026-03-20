@@ -72,10 +72,11 @@ export class WdkTreasuryService {
       for (const chainKey of chainsToRegister) {
         const chainConfig = WDK_CHAINS[chainKey];
         if (chainConfig && chainConfig.usdtAddress) {
+          // Cast config to any - WDK types may not match exact runtime API
           this.wdk.registerWallet(chainKey, WalletManagerEvm, {
             chainId: chainConfig.chainId,
             rpcUrl: chainConfig.rpcUrl,
-          });
+          } as any);
           
           // Pre-derive account
           const account = await this.wdk.getAccount(chainKey, 0);

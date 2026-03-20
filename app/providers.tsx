@@ -11,7 +11,8 @@ import { RainbowKitProvider, darkTheme, getDefaultConfig } from '@rainbow-me/rai
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { PositionsProvider } from '../contexts/PositionsContext';
 import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
-import { WdkProvider } from '../lib/wdk/wdk-context';
+// Use stub provider (browser-safe) - actual WDK uses native Node.js deps
+import { WdkProvider } from '../lib/wdk/wdk-provider-stub';
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Sui - use the complete provider that includes SuiContext

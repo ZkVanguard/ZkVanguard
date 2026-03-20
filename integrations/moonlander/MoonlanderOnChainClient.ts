@@ -137,7 +137,8 @@ export class MoonlanderOnChainClient {
 
       // Initialize collateral contract (USDT on Cronos mainnet, USDC on zkEVM/testnet)
       const signerOrProvider = this.signer || this.provider;
-      const collateralAddress = this.contracts.COLLATERAL || this.contracts.USDC;
+      // All networks now have COLLATERAL defined in contracts.ts
+      const collateralAddress = (this.contracts as { COLLATERAL: string }).COLLATERAL;
       
       this.collateralContract = new Contract(
         collateralAddress,
@@ -230,7 +231,8 @@ export class MoonlanderOnChainClient {
       // - pythUpdateData (bytes[])
 
       const referrer = '0x0000000000000000000000000000000000000000';
-      const collateralToken = this.contracts.COLLATERAL || this.contracts.USDC;
+      // All networks now have COLLATERAL defined in contracts.ts
+      const collateralToken = (this.contracts as { COLLATERAL: string }).COLLATERAL;
       
       // Calculate leveraged position value (collateral * leverage)
       const leveragedAmount = collateralWei * BigInt(leverage);
