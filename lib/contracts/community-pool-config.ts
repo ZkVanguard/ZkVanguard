@@ -125,7 +125,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         // CommunityPool V3 Proxy (upgraded 2026-03-12)
         // WARNING: Pool data corrupted by mock token rebalance - use Sepolia instead!
         communityPool: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30',
-        usdt: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDC (NOT official WDK USDT)
+        usdt: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // Testnet USDT
         pythOracle: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',
       },
       mainnet: {

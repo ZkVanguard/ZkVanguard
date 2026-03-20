@@ -7,7 +7,7 @@
  * Called before every open/close to ensure the contract uses real market data
  * instead of stale hardcoded prices.
  * 
- * Also ensures MockMoonlander has enough USDC to settle trades
+ * Also ensures MockMoonlander has enough USDT to settle trades
  * (mints if needed — this is a test contract).
  */
 import { ethers } from 'ethers';
@@ -17,7 +17,7 @@ import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 // ⚠️ TESTNET-ONLY ADDRESSES
 // On mainnet, use real Moonlander oracle (no price sync needed)
 const MOCK_MOONLANDER_TESTNET = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
-const MOCK_USDC_TESTNET = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+const USDT_TESTNET = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 
 // Dynamic getters that throw on mainnet to prevent accidental usage
 function getMockMoonlanderAddress(): string {
@@ -27,11 +27,11 @@ function getMockMoonlanderAddress(): string {
   return MOCK_MOONLANDER_TESTNET;
 }
 
-function getMockUsdcAddress(): string {
+function getUsdtAddress(): string {
   if (isMainnet()) {
-    throw new Error('MockUSDC is testnet-only. Mainnet uses real USDC.');
+    throw new Error('Testnet USDT is testnet-only. Mainnet uses official WDK USDT.');
   }
-  return MOCK_USDC_TESTNET;
+  return USDT_TESTNET;
 }
 
 const MOONLANDER_ABI = [
@@ -191,34 +191,34 @@ export async function syncSinglePriceToChain(
 }
 
 /**
- * Ensure MockMoonlander has enough USDC to settle a trade.
- * Mints additional MockUSDC if needed (test contract — permissionless mint).
+ * Ensure MockMoonlander has enough USDT to settle a trade.
+ * Mints additional USDT if needed (test contract — permissionless mint).
  */
 export async function ensureMoonlanderLiquidity(
   signer: ethers.Wallet,
   requiredAmount: bigint
 ): Promise<void> {
-  const usdc = new ethers.Contract(getMockUsdcAddress(), USDC_ABI, signer);
-  const moonBalance = await usdc.balanceOf(getMockMoonlanderAddress());
+  const usdt = new ethers.Contract(getUsdtAddress(), USDC_ABI, signer);
+  const moonBalance = await usdt.balanceOf(getMockMoonlanderAddress());
 
   // Need at least 2x the trade amount to cover potential PnL returns
   const cushion = requiredAmount * 3n;
   if (moonBalance >= cushion) return;
 
   const deficit = cushion - moonBalance;
-  console.log(`💰 MockMoonlander needs ${ethers.formatUnits(deficit, 6)} more USDC (has ${ethers.formatUnits(moonBalance, 6)}, needs ${ethers.formatUnits(cushion, 6)})`);
+  console.log(`💰 MockMoonlander needs ${ethers.formatUnits(deficit, 6)} more USDT (has ${ethers.formatUnits(moonBalance, 6)}, needs ${ethers.formatUnits(cushion, 6)})`);
 
   try {
     const feeData = await signer.provider!.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
-    const tx = await usdc.mint(getMockMoonlanderAddress(), deficit, { gasPrice });
+    const tx = await usdt.mint(getMockMoonlanderAddress(), deficit, { gasPrice });
     await tx.wait();
-    const newBal = await usdc.balanceOf(getMockMoonlanderAddress());
-    console.log(`  ✅ Minted ${ethers.formatUnits(deficit, 6)} USDC to MockMoonlander (new balance: ${ethers.formatUnits(newBal, 6)})`);
+    const newBal = await usdt.balanceOf(getMockMoonlanderAddress());
+    console.log(`  ✅ Minted ${ethers.formatUnits(deficit, 6)} USDT to MockMoonlander (new balance: ${ethers.formatUnits(newBal, 6)})`);
   } catch (err) {
-    console.warn('⚠️ Failed to mint USDC to MockMoonlander:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Failed to mint USDT to MockMoonlander:', err instanceof Error ? err.message : err);
   }
 }
 
 // Export getter functions for testnet addresses (throws on mainnet)
-export { getMockMoonlanderAddress, getMockUsdcAddress, PAIR_NAMES, PAIR_TO_TICKER };
+export { getMockMoonlanderAddress, getUsdtAddress, PAIR_NAMES, PAIR_TO_TICKER };

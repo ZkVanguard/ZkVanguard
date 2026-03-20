@@ -84,6 +84,52 @@ export const CANDIDE_SEPOLIA: AAPaymasterConfig = {
 // ============================================================================
 
 /**
+ * Candide - Plasma Mainnet
+ * Official WDK verified network for USD₮
+ * Docs: https://docs.wdk.tether.io/sdk/wallet-modules/wallet-evm-erc-4337/configuration#plasma
+ */
+export const CANDIDE_PLASMA: AAPaymasterConfig = {
+  chainId: 9745,
+  chainName: 'Plasma',
+  provider: 'https://plasma.drpc.org',
+  bundlerUrl: 'https://api.candide.dev/public/v3/9745',
+  paymasterUrl: 'https://api.candide.dev/public/v3/9745',
+  paymasterAddress: '0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba',
+  entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  safeModulesVersion: '0.3.0',
+  paymasterToken: {
+    address: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USDT on Plasma
+    symbol: 'USDT',
+    decimals: 6,
+  },
+  transferMaxFee: 100000, // 0.1 USDT
+  isTestnet: false,
+};
+
+/**
+ * Candide - Polygon Mainnet
+ * Official WDK verified network
+ * Docs: https://docs.wdk.tether.io/sdk/wallet-modules/wallet-evm-erc-4337/configuration#polygon-mainnet
+ */
+export const CANDIDE_POLYGON: AAPaymasterConfig = {
+  chainId: 137,
+  chainName: 'Polygon',
+  provider: 'https://polygon-bor-rpc.publicnode.com',
+  bundlerUrl: 'https://api.candide.dev/public/v3/polygon',
+  paymasterUrl: 'https://api.candide.dev/public/v3/polygon',
+  paymasterAddress: '0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba',
+  entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  safeModulesVersion: '0.3.0',
+  paymasterToken: {
+    address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', // USDT on Polygon
+    symbol: 'USDT',
+    decimals: 6,
+  },
+  transferMaxFee: 100000, // 0.1 USDT
+  isTestnet: false,
+};
+
+/**
  * Pimlico - Ethereum Mainnet
  */
 export const PIMLICO_MAINNET: AAPaymasterConfig = {
@@ -251,6 +297,16 @@ export const AA_CONFIGS: Record<number, Record<PaymasterProvider, AAPaymasterCon
   1: {
     pimlico: PIMLICO_MAINNET,
     candide: PIMLICO_MAINNET, // Fallback to Pimlico
+  },
+  // Plasma - Official WDK recommended chain
+  9745: {
+    pimlico: CANDIDE_PLASMA, // Only Candide supports Plasma
+    candide: CANDIDE_PLASMA,
+  },
+  // Polygon
+  137: {
+    pimlico: CANDIDE_POLYGON, // Candide recommended for Polygon
+    candide: CANDIDE_POLYGON,
   },
   // Arbitrum
   42161: {
