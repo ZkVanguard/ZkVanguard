@@ -13,10 +13,8 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>('light'); // Default to light theme (Apple style)
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     // Check localStorage for saved preference
     const savedTheme = localStorage.getItem('theme') as Theme | null;
     if (savedTheme) {
@@ -40,11 +38,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
-  // Prevent flash of wrong theme
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
+  // Always render the provider — conditional provider causes hydration mismatch (#301)
+  // The inline script in layout.tsx handles FOUC prevention
   return (
     <ThemeContext.Provider value={value}>
       {children}
