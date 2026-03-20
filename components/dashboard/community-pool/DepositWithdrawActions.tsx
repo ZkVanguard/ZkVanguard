@@ -29,10 +29,8 @@ interface DepositWithdrawActionsProps {
   isConfirming: boolean;
   txStatus: TxStatus;
   address: string | undefined;
-  // WDK state
-  wdkAddress?: string | null;
-  wdkIsConnected?: boolean;
-  activeWalletType?: 'wagmi' | 'wdk' | 'sui' | null;
+  // Wallet type
+  activeWalletType?: 'wagmi' | 'sui' | null;
   // SUI state
   suiIsConnected: boolean;
   suiAddress: string | null;
@@ -75,8 +73,6 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   isConfirming,
   txStatus,
   address,
-  wdkAddress,
-  wdkIsConnected = false,
   activeWalletType,
   suiIsConnected,
   suiAddress,
@@ -99,8 +95,8 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   const isSui = selectedChain === 'sui';
   const minDeposit = isFirstDeposit ? 100 : 10;
   
-  // Effective address: use WDK if connected, otherwise wagmi
-  const effectiveAddress = wdkIsConnected && wdkAddress ? wdkAddress : address;
+  // User connects via wagmi (MetaMask, OKX, etc.)
+  const effectiveAddress = address;
   const evmConnected = !!effectiveAddress;
   
   // Get deposit token info based on chain and network (USDT for mainnet, USDC for testnet)
@@ -273,35 +269,21 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
   // EVM chains
   return (
     <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-      {/* EVM connection prompt with WDK option */}
+      {/* EVM connection prompt */}
       {!evmConnected ? (
         <div className="mb-4 space-y-3">
           <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
             <Wallet className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              Connect a wallet to deposit and withdraw from the pool.
+              Connect your wallet (MetaMask, OKX, etc.) to deposit and withdraw from the pool.
             </p>
           </div>
           
-          {/* WDK Wallet Option - Native Tether Experience */}
-          <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">₮</span>
-              <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                Tether WDK Wallet
-              </h4>
-              <span className="text-xs px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 rounded">
-                No Extension Needed
-              </span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-              Create a native USDT wallet powered by Tether WDK - no browser extension required!
-            </p>
-            <WdkWalletConnect className="w-full" />
-          </div>
+          {/* WDK Treasury Status - AI Agent Wallet */}
+          <WdkWalletConnect className="w-full" />
           
           <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-            — or connect MetaMask/RainbowKit above —
+            Use the Connect Wallet button in the header
           </div>
         </div>
       ) : (
@@ -309,11 +291,6 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
           <div className="flex items-center gap-2">
             <Wallet className="w-4 h-4 text-green-500" />
             <span>Connected: {effectiveAddress?.slice(0, 6)}...{effectiveAddress?.slice(-4)}</span>
-            {activeWalletType === 'wdk' && (
-              <span className="text-xs px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 rounded">
-                WDK
-              </span>
-            )}
           </div>
           {!isChainMismatch && userUsdtBalance >= 0 && (
             <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded">

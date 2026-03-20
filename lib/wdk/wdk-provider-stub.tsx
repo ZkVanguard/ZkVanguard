@@ -1,117 +1,43 @@
 /**
  * WDK Provider Stub (Browser-Safe)
  * 
+ * SECURITY: This provider does NOT handle any wallet credentials.
+ * 
  * The actual @tetherto/wdk-wallet-evm package uses sodium-native which
  * requires native Node.js bindings that can't be bundled for the browser.
  * 
- * This stub provides the same interface for client-side code, but actual
- * WDK operations happen server-side via the treasury service API:
- * - POST /api/community-pool/treasury/transfer
- * - POST /api/community-pool/treasury/sign-permit
+ * All WDK operations are handled server-side via:
+ * - GET /api/community-pool/treasury/status (treasury wallet status)
+ * - POST /api/community-pool/treasury/transfer (execute transfers)
  * 
- * For users who want an embedded wallet experience, they should use
- * wagmi/RainbowKit with their preferred wallet (MetaMask, OKX, etc.)
+ * Users deposit via their own wallets (MetaMask, OKX) using wagmi/RainbowKit.
+ * The AI agent's treasury wallet is managed securely on the server.
  */
 
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useCallback, ReactNode } from 'react';
 
-// ============================================
-// Types (same as wdk-context.tsx)
-// ============================================
-
-export interface WdkWalletState {
-  isInitialized: boolean;
-  isCreating: boolean;
-  address: string | null;
-  recoveryPhrase: string | null;
-  balance: string;
-  error: string | null;
-}
-
+// Minimal context - no wallet credentials ever in browser
 export interface WdkContextValue {
-  wallet: WdkWalletState;
-  createWallet: () => Promise<string | null>;
-  importWallet: (recoveryPhrase: string) => Promise<boolean>;
-  disconnectWallet: () => void;
-  getUsdtBalance: (chainId: number) => Promise<string>;
-  transfer: (to: string, amount: string, chainId: number) => Promise<string | null>;
-  signPermit: (spender: string, amount: string, deadline: number, chainId: number) => Promise<{ v: number; r: string; s: string } | null>;
   getSupportedChains: () => number[];
   isChainSupported: (chainId: number) => boolean;
 }
 
-const defaultWalletState: WdkWalletState = {
-  isInitialized: false,
-  isCreating: false,
-  address: null,
-  recoveryPhrase: null,
-  balance: '0',
-  error: null,
-};
-
 const WdkContext = createContext<WdkContextValue | null>(null);
-
-// ============================================
-// Stub Provider (Browser-Safe)
-// ============================================
 
 interface WdkProviderProps {
   children: ReactNode;
 }
 
 /**
- * Stub WDK Provider
+ * WDK Provider (Browser-Safe)
  * 
- * Provides the WDK interface without importing native Node.js dependencies.
- * All actual USDT operations should go through the treasury API endpoints.
+ * Provides chain support info only.
+ * All sensitive operations happen server-side.
  */
 export function WdkProvider({ children }: WdkProviderProps) {
-  const [wallet, setWallet] = useState<WdkWalletState>(defaultWalletState);
-
-  // Stub: WDK wallet creation not available in browser
-  // Users should use wagmi/RainbowKit with their existing wallet
-  const createWallet = useCallback(async (): Promise<string | null> => {
-    setWallet(prev => ({ 
-      ...prev, 
-      error: 'WDK embedded wallet not available. Please use MetaMask, OKX, or another wallet.' 
-    }));
-    return null;
-  }, []);
-
-  const importWallet = useCallback(async (_recoveryPhrase: string): Promise<boolean> => {
-    setWallet(prev => ({ 
-      ...prev, 
-      error: 'WDK embedded wallet not available. Please use MetaMask, OKX, or another wallet.' 
-    }));
-    return false;
-  }, []);
-
-  const disconnectWallet = useCallback(() => {
-    setWallet(defaultWalletState);
-  }, []);
-
-  const getUsdtBalance = useCallback(async (_chainId: number): Promise<string> => {
-    return '0';
-  }, []);
-
-  const transfer = useCallback(async (_to: string, _amount: string, _chainId: number): Promise<string | null> => {
-    console.warn('[WDK Stub] Transfer not available client-side. Use treasury API.');
-    return null;
-  }, []);
-
-  const signPermit = useCallback(async (
-    _spender: string, 
-    _amount: string, 
-    _deadline: number, 
-    _chainId: number
-  ): Promise<{ v: number; r: string; s: string } | null> => {
-    console.warn('[WDK Stub] Sign permit not available client-side. Use treasury API.');
-    return null;
-  }, []);
-
-  // Supported chains (same as real WDK config)
+  // WDK USDT supported chains
   const supportedChains = [11155111, 25, 42161]; // Sepolia, Cronos, Arbitrum
 
   const getSupportedChains = useCallback(() => supportedChains, []);
@@ -120,13 +46,6 @@ export function WdkProvider({ children }: WdkProviderProps) {
     supportedChains.includes(chainId), []);
 
   const value: WdkContextValue = {
-    wallet,
-    createWallet,
-    importWallet,
-    disconnectWallet,
-    getUsdtBalance,
-    transfer,
-    signPermit,
     getSupportedChains,
     isChainSupported,
   };
@@ -138,10 +57,6 @@ export function WdkProvider({ children }: WdkProviderProps) {
   );
 }
 
-// ============================================
-// Hook
-// ============================================
-
 export function useWdk(): WdkContextValue {
   const context = useContext(WdkContext);
   if (!context) {
@@ -150,9 +65,6 @@ export function useWdk(): WdkContextValue {
   return context;
 }
 
-/**
- * Safe hook that returns null if not in provider
- */
 export function useWdkSafe(): WdkContextValue | null {
   return useContext(WdkContext);
 }

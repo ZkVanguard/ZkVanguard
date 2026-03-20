@@ -206,11 +206,9 @@ export function useCommunityPool(propAddress?: string) {
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiSetNetwork = suiContext?.setNetwork;
   
-  // WDK (Tether Wallet Development Kit) hooks
+  // WDK chain support check (treasury wallet is server-side)
   const wdkContext = useWdkSafe();
-  const wdkAddress = wdkContext?.wallet?.address ?? null;
-  const wdkIsConnected = wdkContext?.wallet?.isInitialized ?? false;
-  const wdkSignPermit = wdkContext?.signPermit;
+  const isWdkChainSupported = wdkContext?.isChainSupported;
   
   // Derived values
   const { selectedChain } = poolState;
@@ -221,20 +219,19 @@ export function useCommunityPool(propAddress?: string) {
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
   
-  // Determine active wallet type: 'wagmi' | 'wdk' | 'sui' | null
-  const activeWalletType = useMemo((): 'wagmi' | 'wdk' | 'sui' | null => {
+  // Determine active wallet type: 'wagmi' | 'sui' | null
+  // Note: WDK treasury is server-side, users connect via wagmi
+  const activeWalletType = useMemo((): 'wagmi' | 'sui' | null => {
     if (selectedChain === 'sui' && suiIsConnected) return 'sui';
-    if (wdkIsConnected && wdkAddress) return 'wdk';
     if (isConnected && address) return 'wagmi';
     return null;
-  }, [selectedChain, suiIsConnected, wdkIsConnected, wdkAddress, isConnected, address]);
+  }, [selectedChain, suiIsConnected, isConnected, address]);
   
   // Effective address based on active wallet
   const effectiveAddress = useMemo(() => {
     if (activeWalletType === 'sui') return suiAddress;
-    if (activeWalletType === 'wdk') return wdkAddress;
     return address;
-  }, [activeWalletType, suiAddress, wdkAddress, address]);
+  }, [activeWalletType, suiAddress, address]);
   
   // ERC20 allowance check (for USDT reset-to-zero pattern)
   const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
@@ -1466,16 +1463,14 @@ export function useCommunityPool(propAddress?: string) {
     const isSui = selectedChain === 'sui';
     
     // Determine active address based on wallet type
-    // Priority: SUI (for sui chain) > WDK > Wagmi
+    // Priority: SUI (for sui chain) > Wagmi
+    // Note: WDK treasury is server-side, users connect via wagmi
     let activeAddress: string | null = null;
     let isActiveWalletConnected = false;
     
     if (isSui) {
       activeAddress = suiAddress;
       isActiveWalletConnected = suiIsConnected;
-    } else if (wdkIsConnected && wdkAddress) {
-      activeAddress = wdkAddress;
-      isActiveWalletConnected = true;
     } else {
       activeAddress = address ?? null;
       isActiveWalletConnected = isConnected;
@@ -1490,15 +1485,12 @@ export function useCommunityPool(propAddress?: string) {
       suiBalance,
       suiNetwork,
       suiIsWrongNetwork,
-      // WDK wallet state
-      wdkAddress,
-      wdkIsConnected,
       activeWalletType,
       // Chain-aware helpers
       activeAddress,
       isActiveWalletConnected,
     };
-  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain, wdkAddress, wdkIsConnected, activeWalletType]);
+  }, [address, isConnected, chainId, suiAddress, suiIsConnected, suiBalance, suiNetwork, suiIsWrongNetwork, selectedChain, activeWalletType]);
   
   // Memoize derived configuration values
   const configValues = useMemo(() => {
