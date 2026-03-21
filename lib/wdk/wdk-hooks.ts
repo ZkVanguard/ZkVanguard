@@ -134,8 +134,8 @@ export function useSwitchChain(): UseSwitchChainReturn {
 // ============================================
 
 export interface UseSignMessageReturn {
-  signMessage: (args: { message: string }) => void;
-  signMessageAsync: (args: { message: string }) => Promise<string>;
+  signMessage: (args: { message: string | Uint8Array }) => void;
+  signMessageAsync: (args: { message: string | Uint8Array }) => Promise<string>;
   data: string | undefined;
   isPending: boolean;
   isSuccess: boolean;
@@ -150,7 +150,7 @@ export function useSignMessage(): UseSignMessageReturn {
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   
-  const signMessageAsync = useCallback(async ({ message }: { message: string }) => {
+  const signMessageAsync = useCallback(async ({ message }: { message: string | Uint8Array }) => {
     setIsPending(true);
     setError(null);
     setIsSuccess(false);
@@ -171,7 +171,7 @@ export function useSignMessage(): UseSignMessageReturn {
     }
   }, [wdkSignMessage]);
   
-  const signMessage = useCallback(({ message }: { message: string }) => {
+  const signMessage = useCallback(({ message }: { message: string | Uint8Array }) => {
     signMessageAsync({ message }).catch(() => {});
   }, [signMessageAsync]);
   

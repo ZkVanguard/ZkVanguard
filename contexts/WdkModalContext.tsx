@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useWdk } from '@/lib/wdk/wdk-context';
 
-type ModalMode = 'none' | 'connect' | 'import' | 'backup';
+type ModalMode = 'none' | 'connect' | 'import' | 'backup' | 'unlock' | 'setup-passkey';
 
 interface WdkModalContextType {
   showWdkModal: ModalMode;
@@ -23,8 +23,17 @@ export function useWdkModal() {
 
 export function WdkModalProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ModalMode>('none');
+  const { state: wdkState } = useWdk();
 
-  const openWdkModal = useCallback(() => setMode('connect'), []);
+  const openWdkModal = useCallback(() => {
+    // If passkey exists and not unlocked, default to unlock screen
+    if (wdkState.hasPasskey && !wdkState.isUnlocked) {
+      setMode('unlock');
+    } else {
+      setMode('connect');
+    }
+  }, [wdkState.hasPasskey, wdkState.isUnlocked]);
+
   const closeWdkModal = useCallback(() => setMode('none'), []);
 
   return (
@@ -43,11 +52,11 @@ function WdkModalOverlay({
   onClose,
   onModeChange,
 }: {
-  mode: 'connect' | 'import' | 'backup';
+  mode: 'connect' | 'import' | 'backup' | 'unlock' | 'setup-passkey';
   onClose: () => void;
   onModeChange: (mode: ModalMode) => void;
 }) {
-  const { state: wdkState, createWallet, importWallet } = useWdk();
+  const { state: wdkState, createWallet, importWallet, loginWithPasskey, registerPasskey, lockWallet } = useWdk();
   const [seedPhrase, setSeedPhrase] = useState('');
   const [seedCopied, setSeedCopied] = useState(false);
   const [seedConfirmed, setSeedConfirmed] = useState(false);
@@ -77,9 +86,22 @@ function WdkModalOverlay({
     setError(null);
     const success = await importWallet(importPhrase.trim());
     if (success) {
-      onClose();
+      // Transition to setup-passkey
+      onModeChange('setup-passkey');
     } else {
       setError(wdkState.error || 'Failed to import wallet');
+    }
+    setLoading(false);
+  };
+
+  const handleUnlock = async () => {
+    setLoading(true);
+    setError(null);
+    const success = await loginWithPasskey();
+    if (success) {
+      onClose();
+    } else {
+      setError('Passkey verification failed');
     }
     setLoading(false);
   };
@@ -90,13 +112,34 @@ function WdkModalOverlay({
     setTimeout(() => setSeedCopied(false), 2000);
   };
 
-  const handleSeedConfirmed = () => {
+  const handleSeedConfirmed = async () => {
     if (!seedConfirmed) {
       setError('Please confirm you have saved your seed phrase');
       return;
     }
-    onClose();
+    // Offer passkey registration
+    onModeChange('setup-passkey');
   };
+
+  const handleEnablePasskey = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const success = await registerPasskey();
+      if (success) {
+        onClose();
+      } else {
+        // Fallback error if registration returned false (cancelled/failed)
+        setError('Passkey setup cancelled or failed');
+      }
+    } catch (e) {
+      setError('An unexpected error occurred');
+    }
+    setLoading(false);
+  };
+
+  // Reset local state when mode changes
+  // useEffect(() => { setError(null); setLoading(false); }, [mode]);
 
   return (
     <div
@@ -121,6 +164,15 @@ function WdkModalOverlay({
             )}
 
             <div className="space-y-3">
+              {wdkState.hasPasskey && !wdkState.isUnlocked && (
+                <button
+                  onClick={() => onModeChange('unlock')}
+                  className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
+                >
+                  <span className="text-lg">🔐</span> Unlock with Passkey
+                </button>
+              )}
+              
               <button
                 onClick={handleCreate}
                 disabled={loading}
@@ -143,6 +195,48 @@ function WdkModalOverlay({
             </div>
           </>
         )}
+
+        {mode === 'unlock' && (
+            <>
+              <h2 className="text-xl font-bold text-white mb-2">Welcome Back!</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                Unlock your WDK wallet using your secured passkey (FaceID / TouchID).
+              </p>
+  
+              {error && (
+                <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
+                  {error}
+                </div>
+              )}
+  
+              <div className="space-y-3">
+                <button
+                  onClick={handleUnlock}
+                  disabled={loading}
+                  className="w-full px-4 py-6 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex flex-col items-center justify-center gap-2"
+                >
+                  <span className="text-2xl">🔐</span>
+                  <span>{loading ? 'Verifying...' : 'Authenticate with Passkey'}</span>
+                </button>
+                
+                <div className="text-center">
+                    <button
+                    onClick={() => onModeChange('import')}
+                    className="text-gray-400 text-sm hover:text-white underline mt-2"
+                    >
+                    Reset / Import different wallet
+                    </button>
+                </div>
+
+                <button
+                  onClick={onClose}
+                  className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
 
         {mode === 'import' && (
           <>
@@ -235,7 +329,37 @@ function WdkModalOverlay({
             </button>
           </>
         )}
-      </div>
+        {mode === 'setup-passkey' && (
+          <>
+            <h2 className="text-xl font-bold text-white mb-2">Enable Passkey</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              Secure your wallet with biometric authentication (TouchID, FaceID, or YubiKey) for instant login next time.
+            </p>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleEnablePasskey}
+                disabled={loading}
+                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
+              >
+                {loading ? 'Activating Browser Prompt...' : 'Add Passkey'}
+              </button>
+              
+              <button
+                onClick={onClose}
+                className="w-full px-4 py-3 text-gray-400 hover:text-white rounded-lg font-medium"
+              >
+                Skip for now
+              </button>
+            </div>
+          </>
+        )}      </div>
     </div>
   );
 }
