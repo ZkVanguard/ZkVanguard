@@ -90,10 +90,11 @@ export const PasskeyService = {
         type: 'public-key' as const,
       }));
 
+      // If no credentials provided, try discoverable credentials (empty array) or undefined to let user choose
       const publicKey: PublicKeyCredentialRequestOptions = {
         challenge: challenge as unknown as BufferSource,
         rpId: window.location.hostname,
-        allowCredentials,
+        allowCredentials: allowCredentials?.length ? allowCredentials : undefined,
         userVerification: 'required',
         timeout: 60000,
       };
