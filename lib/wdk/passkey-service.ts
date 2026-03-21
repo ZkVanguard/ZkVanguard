@@ -100,23 +100,37 @@ export const PasskeyService = {
         }
       }).filter(c => c !== null) as PublicKeyCredentialDescriptor[];
 
-      // If credential IDs were provided but all failed to decode, fail early
-      if (credentialIds?.length && (!allowCredentials || allowCredentials.length === 0)) {
-        console.error('[PasskeyService] All provided credential IDs are invalid');
-        return false;
-      }
+      // If credential IDs were provided but all failed to decode, do NOT fail early.
+      // Instead, proceed with empty allowCredentials to trigger "Discoverable Credentials" flow.
+      const useDiscoverable = !allowCredentials || allowCredentials.length === 0;
 
-      // If no credentials provided, try discoverable credentials (empty array) or undefined to let user choose
       const publicKey: PublicKeyCredentialRequestOptions = {
         challenge: challenge as unknown as BufferSource,
         // rpId: window.location.hostname, // OMIT ID to match register (safer)
-        allowCredentials: allowCredentials?.length ? allowCredentials : undefined,
+        allowCredentials: useDiscoverable ? undefined : allowCredentials,
         userVerification: 'required',
         timeout: 60000,
       };
 
-      const assertion = await navigator.credentials.get({ publicKey });
-      return !!assertion;
+      try {
+        const assertion = await navigator.credentials.get({ publicKey });
+        return !!assertion;
+      } catch (innerErr: any) {
+        // If specific credential failed (e.g. NotFoundError because ID is from different domain/device/stale),
+        // try again with Discoverable Credentials (empty allowCredentials) if we haven't already.
+        if (!useDiscoverable && (innerErr.name === 'NotFoundError' || innerErr.name === 'NotAllowedError')) {
+          console.warn('[PasskeyService] Specific credential failed, retrying with Discoverable Credentials...');
+          
+          const fallbackKey: PublicKeyCredentialRequestOptions = {
+            ...publicKey,
+            allowCredentials: undefined,
+          };
+          
+          const fallbackAssertion = await navigator.credentials.get({ publicKey: fallbackKey });
+          return !!fallbackAssertion;
+        }
+        throw innerErr;
+      }
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
         // User cancelled or timed out -> safe to ignore
