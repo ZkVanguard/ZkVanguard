@@ -111,9 +111,9 @@ export function useUserPortfolios(userAddress?: string) {
 
   useEffect(() => {
     async function fetchUserPortfolios() {
-      if (!userAddress || !addresses.rwaManager) {
-        // No wallet connected — this is expected, not a warning
-        logger.debug(`[useUserPortfolios] Skipping: userAddress=${userAddress ?? 'none'}, rwaManager=${addresses.rwaManager}`, { component: 'hooks' });
+      if (!userAddress || !addresses.rwaManager || addresses.rwaManager === '0x0000000000000000000000000000000000000000') {
+        // No wallet connected or no RWA manager on this chain — expected, not an error
+        logger.debug(`[useUserPortfolios] Skipping: userAddress=${userAddress ?? 'none'}, rwaManager=${addresses.rwaManager}, chainId=${chainId}`, { component: 'hooks' });
         setUserPortfolios([]);
         setIsLoading(false);
         return;

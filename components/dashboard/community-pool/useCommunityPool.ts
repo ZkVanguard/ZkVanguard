@@ -196,16 +196,18 @@ export function useCommunityPool(propAddress?: string) {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
   const { switchChainAsync } = useSwitchChain();
   
-  // Debug: Track transaction state changes
+  // Debug: Track transaction state changes (only log when values actually matter)
   useEffect(() => {
-    console.error('🟡🟡🟡 TX STATE:', {
-      txHash: txHash ? `${txHash.slice(0, 10)}...` : null,
-      isPending,
-      isConfirming,
-      isConfirmed,
-      txStatus: txState.txStatus,
-      writeError: writeError?.message || null,
-    });
+    if (txHash || isPending || isConfirming || txState.txStatus !== 'idle') {
+      console.log('[TX STATE]', {
+        txHash: txHash ? `${txHash.slice(0, 10)}...` : null,
+        isPending,
+        isConfirming,
+        isConfirmed,
+        txStatus: txState.txStatus,
+        writeError: writeError?.message || null,
+      });
+    }
   }, [txHash, isPending, isConfirming, isConfirmed, txState.txStatus, writeError]);
   
   // SUI hooks
@@ -1519,21 +1521,18 @@ export function useCommunityPool(propAddress?: string) {
   // This effect runs when chainId changes and checks for pending actions
   // ============================================================================
   useEffect(() => {
-    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - chainId changed to:', chainId);
     const pending = pendingChainSwitchRef.current;
-    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - pending action:', pending);
     if (!pending) return;
     if (!chainId) return;
     
     const { action, targetChainId } = pending;
-    console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - comparing chainId:', chainId, 'with target:', targetChainId);
     
     // Execute only when we're on the target chain
     if (chainId === targetChainId) {
       // Clear pending action BEFORE executing to prevent re-triggering
       pendingChainSwitchRef.current = null;
       
-      console.error('🟢🟢🟢 AUTO-EXECUTE EFFECT - MATCH! Executing:', action);
+      logger.info(`[CommunityPool] Chain match! Auto-executing: ${action}, chainId: ${chainId}`);
       logger.info(`[CommunityPool] Chain switch completed! Auto-executing: ${action}, chainId: ${chainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: null });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Switched to chain! Processing ${action}...` });
