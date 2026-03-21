@@ -583,6 +583,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     lockWallet,
     unlockWallet,
     disconnect,
+    resetWallet,
     registerPasskey,
     loginWithPasskey,
     switchChain,
