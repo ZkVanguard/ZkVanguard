@@ -27,8 +27,8 @@ export const CRONOS_CONTRACT_ADDRESSES = {
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_GASLESS_COMMITMENT_VERIFIER || '0x52903d1FA10F90e9ec88DD7c3b1F0F73A0f811f9').trim()) as `0x${string}`,
     // TRUE gasless contract (x402 + USDC)
     x402GaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x44098d0dE36e157b4C1700B48d615285C76fdE47').trim()) as `0x${string}`,
-    // DevUSDCe token on Cronos Testnet (for x402 payments)
-    usdcToken: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`,
+    // USDT token on Cronos Testnet
+    usdtToken: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`,
     // HedgeExecutor on testnet
     hedgeExecutor: ((process.env.NEXT_PUBLIC_HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9').trim()) as `0x${string}`,
     // Moonlander Diamond (same address works on both testnet/mainnet)
@@ -45,8 +45,8 @@ export const CRONOS_CONTRACT_ADDRESSES = {
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     x402GaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_MAINNET_X402_GASLESS_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     hedgeExecutor: ((process.env.NEXT_PUBLIC_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    // Real USDC on Cronos Mainnet
-    usdcToken: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59' as `0x${string}`,
+    // USDT on Cronos Mainnet
+    usdtToken: '0xc21223249CA28397B4B6541dfFaEcC539BfF0c59' as `0x${string}`,
     // Real Moonlander Diamond on Cronos Mainnet (verified)
     moonlanderRouter: '0xE6F6351fb66f3a35313fEEFF9116698665FBEeC9' as `0x${string}`,
   },
@@ -105,7 +105,7 @@ export const OASIS_EMERALD_CONTRACT_ADDRESSES = {
     paymentRouter: ((process.env.NEXT_PUBLIC_EMERALD_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_EMERALD_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     hedgeExecutor: ((process.env.NEXT_PUBLIC_EMERALD_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
   mainnet: {
     zkVerifier: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
@@ -113,7 +113,7 @@ export const OASIS_EMERALD_CONTRACT_ADDRESSES = {
     paymentRouter: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_PAYMENT_ROUTER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     hedgeExecutor: ((process.env.NEXT_PUBLIC_EMERALD_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
 } as const;
 
@@ -133,8 +133,8 @@ export const OASIS_CONTRACT_ADDRESSES = {
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_OASIS_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     // Hedge executor
     hedgeExecutor: ((process.env.NEXT_PUBLIC_OASIS_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    // USDC/stablecoin token on Oasis Sapphire Testnet
-    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    // USDT/stablecoin token on Oasis Sapphire Testnet
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
   mainnet: {
     zkVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_ZKVERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
@@ -143,7 +143,7 @@ export const OASIS_CONTRACT_ADDRESSES = {
     confidentialZKVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_CONFIDENTIAL_ZK_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     gaslessZKCommitmentVerifier: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_GASLESS_COMMITMENT_VERIFIER || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
     hedgeExecutor: ((process.env.NEXT_PUBLIC_OASIS_MAINNET_HEDGE_EXECUTOR_ADDRESS || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    usdcToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
 } as const;
 
@@ -172,7 +172,7 @@ export const ARBITRUM_CONTRACT_ADDRESSES = {
   testnet: {
     // Arbitrum Sepolia (Chain ID: 421614)
     communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B' as `0x${string}`,
-    usdcToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // Test USDT
+    usdtToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // Test USDT
     pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
@@ -183,7 +183,7 @@ export const ARBITRUM_CONTRACT_ADDRESSES = {
   mainnet: {
     // Arbitrum One (Chain ID: 42161)
     communityPool: ((process.env.NEXT_PUBLIC_ARB_COMMUNITY_POOL || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    usdcToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as `0x${string}`, // Native USDC on Arbitrum
+    usdtToken: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9' as `0x${string}`, // USDT on Arbitrum One
     pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,

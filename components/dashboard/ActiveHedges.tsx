@@ -1746,14 +1746,14 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                         </div>
                       )}
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#86868b]">Collateral (USDC)</span>
+                        <span className="text-[11px] text-[#86868b]">Collateral (USDT)</span>
                         <a
-                          href={`${explorerUrl}/address/${contractAddresses.usdcToken}`}
+                          href={`${explorerUrl}/address/${contractAddresses.usdtToken}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
                         >
-                          <span className="font-mono">View USDC Contract</span>
+                          <span className="font-mono">View USDT Contract</span>
                           <ExternalLink className="w-2.5 h-2.5" />
                         </a>
                       </div>
