@@ -424,18 +424,22 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       if (stored.passkeyId) {
         console.log('[WDK]   🔐 Calling PasskeyService.authenticate()...');
         
-        // Check if WebAuthn is even supported before attempting
+        // Check if WebAuthn API exists (Chrome, Edge, Firefox, Safari all have it)
         const supported = await PasskeyService.isSupported();
-        console.log('[WDK]   WebAuthn supported:', supported);
+        console.log('[WDK]   WebAuthn API available:', supported);
         if (!supported) {
-          console.warn('[WDK]   ⚠️ WebAuthn not supported on this device/browser. Skipping passkey check.');
-          // Fall through to decrypt without passkey
+          console.warn('[WDK]   ⚠️ WebAuthn API not available (very old browser or non-browser environment). Skipping passkey check.');
+          // Fall through to decrypt without passkey — extremely rare case
         } else {
+          // Always attempt authentication — Chrome handles passkeys via:
+          // Windows Hello, phone-based passkey, security key, or built-in passkey manager
+          console.log('[WDK]   📡 Requesting passkey authentication (Chrome will show its own UI)...');
           const verified = await PasskeyService.authenticate(credentialId);
           console.log('[WDK]   PasskeyService.authenticate() returned:', verified);
           if (!verified) {
-            console.error('[WDK]   ❌ Passkey verification returned false — no biometric prompt appeared or user cancelled');
-            throw new Error('Passkey verification failed');
+            console.error('[WDK]   ❌ Passkey verification returned false — user cancelled or no matching passkey found');
+            console.error('[WDK]   💡 Tip: Make sure you registered a passkey first, and are on the same domain/browser');
+            throw new Error('Passkey verification failed. Please try again or re-register your passkey.');
           }
           console.log('[WDK]   ✅ Passkey authentication passed');
         }
