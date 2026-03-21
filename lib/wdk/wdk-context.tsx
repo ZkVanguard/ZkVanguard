@@ -398,8 +398,19 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // loginWithPasskey - Unlock using Passkey OR Local Key (if no passkey)
   // --------------------------------------------------
   const loginWithPasskey = useCallback(async (): Promise<boolean> => {
+    console.log('[WDK] 🔐 === loginWithPasskey START ===');
     const stored = loadWallet();
+    console.log('[WDK]   Stored wallet found:', !!stored);
+    console.log('[WDK]   Has keyJwk:', !!stored?.keyJwk);
+    console.log('[WDK]   Has passkeyId:', !!stored?.passkeyId);
+    console.log('[WDK]   passkeyId value:', stored?.passkeyId?.slice(0, 30) + (stored?.passkeyId && stored.passkeyId.length > 30 ? '...' : ''));
+    console.log('[WDK]   Has zkBindingHash:', !!stored?.zkBindingHash);
+    console.log('[WDK]   Has zkProofHash:', !!stored?.zkProofHash);
+    console.log('[WDK]   Stored addresses:', stored?.addresses);
+    console.log('[WDK]   Last chain:', stored?.lastChain);
+    
     if (!stored || !stored.keyJwk) {
+      console.error('[WDK] ❌ No wallet or keyJwk found. Aborting.');
       setState(prev => ({ ...prev, error: 'No wallet found' }));
       return false;
     }
@@ -407,10 +418,27 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     try {
       // 1. Authenticate with Passkey (WebAuthn biometric check)
       const credentialId = stored.passkeyId ? [stored.passkeyId] : undefined;
+      console.log('[WDK]   Step 1: Passkey authentication');
+      console.log('[WDK]   credentialId array:', credentialId);
       
       if (stored.passkeyId) {
-        const verified = await PasskeyService.authenticate(credentialId);
-        if (!verified) throw new Error('Passkey verification failed');
+        console.log('[WDK]   🔐 Calling PasskeyService.authenticate()...');
+        
+        // Check if WebAuthn is even supported before attempting
+        const supported = await PasskeyService.isSupported();
+        console.log('[WDK]   WebAuthn supported:', supported);
+        if (!supported) {
+          console.warn('[WDK]   ⚠️ WebAuthn not supported on this device/browser. Skipping passkey check.');
+          // Fall through to decrypt without passkey
+        } else {
+          const verified = await PasskeyService.authenticate(credentialId);
+          console.log('[WDK]   PasskeyService.authenticate() returned:', verified);
+          if (!verified) {
+            console.error('[WDK]   ❌ Passkey verification returned false — no biometric prompt appeared or user cancelled');
+            throw new Error('Passkey verification failed');
+          }
+          console.log('[WDK]   ✅ Passkey authentication passed');
+        }
         
         // 2. Verify ZK-STARK binding (passkey is cryptographically bound to this wallet)
         if (stored.zkBindingHash) {
@@ -430,17 +458,26 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       }
       
       // 3. Unlock wallet using the stored AES key
+      console.log('[WDK]   Step 3: Decrypting wallet...');
       const key = await importKey(stored.keyJwk);
+      console.log('[WDK]   AES key imported ✅');
       const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
+      console.log('[WDK]   Mnemonic decrypted:', !!mnemonic, 'length:', mnemonic?.split(' ').length, 'words');
       
       if (!mnemonic) {
+        console.error('[WDK]   ❌ Decryption returned empty mnemonic');
         throw new Error('Failed to decrypt wallet');
       }
 
-      return await initializeFromMnemonic(mnemonic, stored.lastChain);
+      console.log('[WDK]   Step 4: Initializing wallet from mnemonic...');
+      const result = await initializeFromMnemonic(mnemonic, stored.lastChain);
+      console.log('[WDK] 🔐 === loginWithPasskey END (success:', result, ') ===');
+      return result;
     } catch (err: any) {
-      console.error('[WDK] loginWithPasskey error:', err);
+      console.error('[WDK] ❌ loginWithPasskey error:', err?.name, err?.message);
+      console.error('[WDK]   Full error:', err);
       setState(prev => ({ ...prev, error: err.message || 'Unlock failed' }));
+      console.log('[WDK] 🔐 === loginWithPasskey END (failed) ===');
       return false;
     }
   }, [initializeFromMnemonic]);
