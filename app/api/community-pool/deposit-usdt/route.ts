@@ -344,6 +344,46 @@ export async function POST(request: NextRequest) {
           ],
           provider
         );
+
+        // Pack UserOp for v0.7 EntryPoint
+        const accountGasLimits = ethers.concat([
+          ethers.zeroPadValue(ethers.toBeHex(userOp.verificationGasLimit), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.callGasLimit), 16),
+        ]);
+        
+        const gasFees = ethers.concat([
+          ethers.zeroPadValue(ethers.toBeHex(userOp.maxPriorityFeePerGas), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.maxFeePerGas), 16),
+        ]);
+
+        let paymasterAndData = '0x';
+        if (userOp.paymaster) {
+             paymasterAndData = ethers.concat([
+                userOp.paymaster,
+                ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterVerificationGasLimit || 0n), 16),
+                ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterPostOpGasLimit || 0n), 16),
+                userOp.paymasterData || '0x'
+             ]);
+        }
+        
+        let initCode = '0x';
+        if (userOp.factory) {
+            initCode = ethers.concat([userOp.factory, userOp.factoryData || '0x']);
+        }
+        
+        const packedUserOp = {
+            sender: userOp.sender,
+            nonce: userOp.nonce,
+            initCode: initCode,
+            callData: userOp.callData,
+            accountGasLimits: accountGasLimits,
+            preVerificationGas: userOp.preVerificationGas,
+            gasFees: gasFees,
+            paymasterAndData: paymasterAndData,
+            signature: userOp.signature || '0x',
+        };
+
+        const userOpHash = await entryPoint.getUserOpHash(packedUserOp);
         
         // Serialize UserOp for client
         const serializedUserOp = {
@@ -366,6 +406,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           userOp: serializedUserOp,
+          userOpHash: userOpHash,
           gas: {
             preVerificationGas: estimatedGas.preVerificationGas.toString(),
             verificationGasLimit: estimatedGas.verificationGasLimit.toString(),
