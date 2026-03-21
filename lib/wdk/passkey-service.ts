@@ -39,13 +39,13 @@ export const PasskeyService = {
       const userId = crypto.getRandomValues(new Uint8Array(16));
 
       const publicKey: PublicKeyCredentialCreationOptions = {
-        challenge,
+        challenge: challenge as unknown as BufferSource,
         rp: {
           name: 'Chronos Vanguard WDK',
           id: window.location.hostname, // Must verify against current domain
         },
         user: {
-          id: userId,
+          id: userId as unknown as BufferSource,
           name: username,
           displayName: username,
         },
@@ -86,12 +86,12 @@ export const PasskeyService = {
       const challenge = getChallenge();
       
       const allowCredentials = credentialIds?.map(id => ({
-        id: Uint8Array.from(atob(id), c => c.charCodeAt(0)),
+        id: Uint8Array.from(atob(id), c => c.charCodeAt(0)) as unknown as BufferSource,
         type: 'public-key' as const,
       }));
 
       const publicKey: PublicKeyCredentialRequestOptions = {
-        challenge,
+        challenge: challenge as unknown as BufferSource,
         rpId: window.location.hostname,
         allowCredentials,
         userVerification: 'required',
