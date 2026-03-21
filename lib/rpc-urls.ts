@@ -7,9 +7,9 @@
  */
 
 const UPSTREAM_RPC_URLS: Record<string, string> = {
-  sepolia: 'https://sepolia.drpc.org',
+  sepolia: 'https://rpc.sepolia.org',
   ethereum: 'https://eth.drpc.org',
-  arbitrum: 'https://arbitrum.drpc.org',
+  arbitrum: 'https://arb1.arbitrum.io/rpc',
   plasma: 'https://plasma.drpc.org',
 };
 
