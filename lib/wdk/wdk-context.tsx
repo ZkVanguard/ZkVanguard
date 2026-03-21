@@ -302,15 +302,24 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     }
     
     try {
-      // 1. If Passkey exists, verify user biometrics
+      // 1. Authenticate with Passkey (using stored ID or discoverable)
+      // Even if stored.passkeyId is missing, we try to authenticate if the user requested "Sign in with Passkey"
+      // But for now, we only enforce it if we KNOW there is a passkey, OR if we want to treat "Unlock" as secure.
+      // To support "previous passkey" recovery, we always attempt authentication if passkeyId is present OR 
+      // if we are in a mode where we want to enforce security.
+      
+      const credentialId = stored.passkeyId ? [stored.passkeyId] : undefined;
+      
+      // If we have a passkey ID, we MUST verify it.
+      // If we don't, we can optionally verify it (e.g. system lock), but right now we treat no-passkey-id as "unprotected".
+      // However, to support the user's request: "it might have been in previous passkey", we can try to prompt.
+      
       if (stored.passkeyId) {
-        const verified = await PasskeyService.authenticate([stored.passkeyId]);
-        if (!verified) {
-          throw new Error('Passkey verification failed');
-        }
-      }
-
-      // 2. Unlock wallet using the stored AES key (either protected by passkey check or not)
+         const verified = await PasskeyService.authenticate(credentialId);
+         if (!verified) throw new Error('Passkey verification failed');
+      } 
+      
+      // 2. Unlock wallet using the stored AES key
       const key = await importKey(stored.keyJwk);
       const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
       
