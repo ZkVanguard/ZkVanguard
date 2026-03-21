@@ -275,10 +275,10 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
          throw new Error('Passkey registration cancelled');
       }
 
-      // Save passkey ID to local storage
+      // Save passkey ID to local storage (use rawId base64)
       const stored = loadWallet();
       if (stored) {
-        stored.passkeyId = credential.id;
+        stored.passkeyId = credential.rawId;
         saveWallet(stored);
         setState(prev => ({ ...prev, hasPasskey: true }));
         return true;
