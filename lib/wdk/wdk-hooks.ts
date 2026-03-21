@@ -368,8 +368,10 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
   const enabledFlag = args.enabled ?? legacyQuery.enabled ?? true;
   const refetchInterval = (args as any).refetchInterval ?? legacyQuery.refetchInterval;
   
-  // Stabilize args.args to prevent infinite re-render loops (arrays have new identity each render)
+  // Stabilize args.args AND args.abi to prevent infinite re-render loops
+  // (inline arrays/objects have new identity each render)
   const argsKey = JSON.stringify(args.args ?? []);
+  const abiKey = JSON.stringify(args.abi);
   
   const refetch = useCallback(async () => {
     if (!chainKey) {
@@ -394,9 +396,10 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     
     try {
       const parsedArgs = JSON.parse(argsKey);
+      const parsedAbi = JSON.parse(abiKey);
       const provider = getCachedProvider(chainKey);
       if (!provider) throw new Error(`No provider for chain: ${chainKey}`);
-      const contract = new ethers.Contract(args.address, args.abi, provider);
+      const contract = new ethers.Contract(args.address, parsedAbi, provider);
       const result = await contract[args.functionName](...parsedArgs);
       setData(result as T);
     } catch (err) {
@@ -404,7 +407,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     } finally {
       setIsLoading(false);
     }
-  }, [chainKey, args.address, args.abi, args.functionName, argsKey]);
+  }, [chainKey, args.address, abiKey, args.functionName, argsKey, enabledFlag]);
   
   // Initial fetch — useEffect to avoid setState during render (hydration #301)
   useEffect(() => {
