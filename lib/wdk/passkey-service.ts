@@ -42,7 +42,7 @@ export const PasskeyService = {
         challenge: challenge as unknown as BufferSource,
         rp: {
           name: 'Chronos Vanguard WDK',
-          id: window.location.hostname, // Must verify against current domain
+          // id: window.location.hostname, // OMIT ID to allow browser to infer (safer for localhost/etc)
         },
         user: {
           id: userId as unknown as BufferSource,
@@ -93,7 +93,7 @@ export const PasskeyService = {
       // If no credentials provided, try discoverable credentials (empty array) or undefined to let user choose
       const publicKey: PublicKeyCredentialRequestOptions = {
         challenge: challenge as unknown as BufferSource,
-        rpId: window.location.hostname,
+        // rpId: window.location.hostname, // OMIT ID to match register (safer)
         allowCredentials: allowCredentials?.length ? allowCredentials : undefined,
         userVerification: 'required',
         timeout: 60000,
