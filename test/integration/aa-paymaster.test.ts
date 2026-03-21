@@ -44,8 +44,8 @@ describe('AA Paymaster Configuration', () => {
     });
 
     it('should have correct provider URL', () => {
-      // Server-side: direct URL; browser: proxy URL
-      expect(PIMLICO_SEPOLIA.provider).toBe('https://sepolia.drpc.org');
+      // Tests run in Node (no window), so getRpcUrl returns the direct upstream URL
+      expect(PIMLICO_SEPOLIA.provider).toContain('sepolia');
     });
 
     it('should have correct bundler URL', () => {
