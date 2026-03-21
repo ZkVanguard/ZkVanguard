@@ -227,6 +227,7 @@ export function useWriteContract(): UseWriteContractReturn {
     
     try {
       // Encode the function call
+      const { ethers } = await import('ethers');
       const iface = new ethers.Interface(args.abi);
       const callData = iface.encodeFunctionData(args.functionName, args.args ?? []);
       
