@@ -41,12 +41,13 @@ const DEFAULT_CHAIN_ID = 11155111;
 
 // Community pool addresses per chain
 const COMMUNITY_POOL_ADDRESSES: Record<number, string> = {
-  11155111: '0x...', // Sepolia - TODO: Deploy
+  11155111: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086', // Sepolia
   25: '0x2fBD41568d63B0D31c4FFc074c9a2e0c71AE5F29', // Cronos EVM mainnet (use x402)
   338: '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos EVM testnet (use x402)
   388: '0x...', // Cronos zkEVM mainnet - TODO: Deploy
   282: '0x...', // Cronos zkEVM testnet - TODO: Deploy
-  42161: '0x...', // Arbitrum - TODO: Deploy
+  421614: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B', // Arbitrum Sepolia
+  42161: '0x...', // Arbitrum One - TODO: Deploy
 };
 
 /**
