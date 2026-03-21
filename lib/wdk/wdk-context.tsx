@@ -58,7 +58,7 @@ export interface WdkContextValue {
   disconnect: () => void;
   registerPasskey: () => Promise<boolean>;
   loginWithPasskey: () => Promise<boolean>;
-  
+  resetWallet: () => void;
   // Chain Operations
   switchChain: (chainKey: string) => Promise<boolean>;
   getBalance: (chainKey?: string) => Promise<string>;
@@ -402,7 +402,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, [initializeFromMnemonic, defaultChain]);
 
   // --------------------------------------------------
-  // lockWallet
+  // lockWallet (Disconnect from Session)
   // --------------------------------------------------
   const lockWallet = useCallback(() => {
     walletRef.current = null;
@@ -413,6 +413,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       isLoading: false,
       chainKey: stored?.lastChain ?? defaultChain,
       chainId: WDK_CHAINS[stored?.lastChain ?? defaultChain]?.chainId ?? null,
+      hasPasskey: !!stored?.passkeyId // Preserve passkey knowledge
     });
   }, [defaultChain]);
 
@@ -426,13 +427,25 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, []);
 
   // --------------------------------------------------
-  // disconnect — wipe storage
+  // disconnect — Alias for lockWallet (preserve storage)
   // --------------------------------------------------
   const disconnect = useCallback(() => {
+    lockWallet();
+  }, [lockWallet]);
+
+  // --------------------------------------------------
+  // resetWallet — Wipe storage (Factory Reset)
+  // --------------------------------------------------
+  const resetWallet = useCallback(() => {
     walletRef.current = null;
     mnemonicRef.current = null;
-    clearWallet();
-    setState({ ...initialState, isLoading: false, chainKey: defaultChain, chainId: WDK_CHAINS[defaultChain]?.chainId ?? null });
+    clearWallet(); // Writes nothing to local storage
+    setState({ 
+      ...initialState, 
+      isLoading: false, 
+      chainKey: defaultChain, 
+      chainId: WDK_CHAINS[defaultChain]?.chainId ?? null 
+    });
   }, [defaultChain]);
 
   // --------------------------------------------------
