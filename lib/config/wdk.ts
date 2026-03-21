@@ -21,6 +21,8 @@
  * 
  * For x402 payments: Use USD₮0 on Plasma/Stable chains
  */
+import { getRpcUrl } from '../rpc-urls';
+
 export const USDT_ADDRESSES = {
   // Sepolia Testnet - OFFICIAL WDK USDT (use this for hackathon!)
   sepolia: {
@@ -96,7 +98,7 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
     chainId: 11155111,
     name: 'Sepolia',
     network: 'testnet',
-    rpcUrl: 'https://sepolia.drpc.org',
+    rpcUrl: getRpcUrl('sepolia'),
     usdtAddress: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL WDK USDT
     explorerUrl: 'https://sepolia.etherscan.io',
     nativeCurrency: {

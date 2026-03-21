@@ -9,6 +9,8 @@
  * Paymasters sponsor the actual gas, taking USDT as payment.
  */
 
+import { getRpcUrl } from '../rpc-urls';
+
 export interface AAPaymasterConfig {
   chainId: number;
   chainName: string;
@@ -41,7 +43,7 @@ export type PaymasterProvider = 'pimlico' | 'candide';
 export const PIMLICO_SEPOLIA: AAPaymasterConfig = {
   chainId: 11155111,
   chainName: 'Sepolia',
-  provider: 'https://sepolia.drpc.org',
+  provider: getRpcUrl('sepolia'),
   bundlerUrl: 'https://public.pimlico.io/v2/11155111/rpc',
   paymasterUrl: 'https://public.pimlico.io/v2/11155111/rpc',
   paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
@@ -64,7 +66,7 @@ export const PIMLICO_SEPOLIA: AAPaymasterConfig = {
 export const CANDIDE_SEPOLIA: AAPaymasterConfig = {
   chainId: 11155111,
   chainName: 'Sepolia',
-  provider: 'https://sepolia.drpc.org',
+  provider: getRpcUrl('sepolia'),
   bundlerUrl: 'https://api.candide.dev/public/v3/11155111',
   paymasterUrl: 'https://api.candide.dev/public/v3/11155111',
   paymasterAddress: '0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba',
@@ -91,7 +93,7 @@ export const CANDIDE_SEPOLIA: AAPaymasterConfig = {
 export const CANDIDE_PLASMA: AAPaymasterConfig = {
   chainId: 9745,
   chainName: 'Plasma',
-  provider: 'https://plasma.drpc.org',
+  provider: getRpcUrl('plasma'),
   bundlerUrl: 'https://api.candide.dev/public/v3/9745',
   paymasterUrl: 'https://api.candide.dev/public/v3/9745',
   paymasterAddress: '0x8b1f6cb5d062aa2ce8d581942bbb960420d875ba',
@@ -135,7 +137,7 @@ export const CANDIDE_POLYGON: AAPaymasterConfig = {
 export const PIMLICO_MAINNET: AAPaymasterConfig = {
   chainId: 1,
   chainName: 'Ethereum',
-  provider: 'https://eth.drpc.org',
+  provider: getRpcUrl('ethereum'),
   bundlerUrl: 'https://public.pimlico.io/v2/1/rpc',
   paymasterUrl: 'https://public.pimlico.io/v2/1/rpc',
   paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
@@ -156,7 +158,7 @@ export const PIMLICO_MAINNET: AAPaymasterConfig = {
 export const PIMLICO_ARBITRUM: AAPaymasterConfig = {
   chainId: 42161,
   chainName: 'Arbitrum',
-  provider: 'https://arbitrum.drpc.org',
+  provider: getRpcUrl('arbitrum'),
   bundlerUrl: 'https://public.pimlico.io/v2/42161/rpc',
   paymasterUrl: 'https://public.pimlico.io/v2/42161/rpc',
   paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
