@@ -170,7 +170,7 @@ function WdkModalOverlay({
                   className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
                 >
                   <span className="text-lg">🔐</span> 
-                  {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage')) ? 'Sign In with Passkey' : 'Recover with Passkey'}
+                  {(wdkState.hasPasskey || (typeof window !== 'undefined' && localStorage.getItem('wdk-wallet-storage'))) ? 'Sign In with Passkey' : 'Recover with Passkey'}
                 </button>
               )}
               
