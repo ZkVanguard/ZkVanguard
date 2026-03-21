@@ -464,6 +464,26 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, [defaultChain]);
 
   // --------------------------------------------------
+  // verifyAction — Secure action with passkey if available
+  // --------------------------------------------------
+  const verifyAction = useCallback(async (): Promise<boolean> => {
+    const stored = loadWallet();
+    // Only prompt if a passkey is explicitly registered
+    if (stored?.passkeyId) {
+      try {
+        const verified = await PasskeyService.authenticate([stored.passkeyId]);
+        if (!verified) throw new Error('Action denied');
+        return true;
+      } catch (e: any) {
+        console.error('[WDK] Action verification failed:', e);
+        setState(prev => ({ ...prev, error: 'Authorization failed' }));
+        return false;
+      }
+    }
+    return true; // No passkey, allow action
+  }, []);
+
+  // --------------------------------------------------
   // switchChain
   // --------------------------------------------------
   const switchChain = useCallback(async (chainKey: string): Promise<boolean> => {
@@ -524,6 +544,11 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // --------------------------------------------------
   const sendTransaction = useCallback(async (tx: WdkTransactionRequest): Promise<string | null> => {
     if (!walletRef.current || !state.chainKey) return null;
+    
+    // Verify user presence if passkey enabled
+    const allowed = await verifyAction();
+    if (!allowed) return null;
+
     const provider = getProvider(state.chainKey);
     if (!provider) return null;
     const signer = walletRef.current.connect(provider);
@@ -533,13 +558,18 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       data: tx.data,
     });
     return resp.hash;
-  }, [state.chainKey]);
+  }, [state.chainKey, verifyAction]);
 
   // --------------------------------------------------
   // sendUsdt
   // --------------------------------------------------
   const sendUsdt = useCallback(async (to: string, amount: string): Promise<string | null> => {
     if (!walletRef.current || !state.chainKey) return null;
+    
+    // Verify user presence if passkey enabled
+    const allowed = await verifyAction();
+    if (!allowed) return null;
+
     const config = WDK_CHAINS[state.chainKey];
     if (!config?.usdtAddress) return null;
     try {
@@ -557,33 +587,43 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       setState(prev => ({ ...prev, error: err?.message ?? 'USDT transfer failed' }));
       return null;
     }
-  }, [state.chainKey]);
+  }, [state.chainKey, verifyAction]);
 
   // --------------------------------------------------
   // signMessage
   // --------------------------------------------------
   const signMessage = useCallback(async (message: string | Uint8Array): Promise<string | null> => {
     if (!walletRef.current) return null;
+
+    // Verify user presence if passkey enabled
+    const allowed = await verifyAction();
+    if (!allowed) return null;
+
     try {
       return await walletRef.current.signMessage(message);
     } catch (err: any) {
       console.error('[WDK] signMessage failed:', err);
       return null;
     }
-  }, []);
+  }, [verifyAction]);
 
   // --------------------------------------------------
   // signTypedData (EIP-712)
   // --------------------------------------------------
   const signTypedData = useCallback(async (domain: any, types: any, value: any): Promise<string | null> => {
     if (!walletRef.current) return null;
+
+    // Verify user presence if passkey enabled
+    const allowed = await verifyAction();
+    if (!allowed) return null;
+
     try {
       return await walletRef.current.signTypedData(domain, types, value);
     } catch (err: any) {
       console.error('[WDK] signTypedData failed:', err);
       return null;
     }
-  }, []);
+  }, [verifyAction]);
 
   // --------------------------------------------------
   // Utility
