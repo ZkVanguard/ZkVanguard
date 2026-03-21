@@ -32,7 +32,6 @@ import {
 import { mutationLimiter, readLimiter, createRateLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
-import { getRpcUrl } from '@/lib/rpc-urls';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,9 +45,9 @@ const fundGasLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60 * 60 * 1
 // Max ETH to send for gas funding (testnet only)
 const GAS_FUND_AMOUNT = ethers.parseEther('0.005');
 
-// RPC URLs per chain for gas funding
+// RPC URLs per chain for gas funding (direct URLs, not proxied)
 const CHAIN_RPC_URLS: Record<number, string> = {
-  11155111: getRpcUrl('sepolia'),
+  11155111: 'https://rpc.sepolia.org',
   421614: 'https://sepolia-rollup.arbitrum.io/rpc',
 };
 
