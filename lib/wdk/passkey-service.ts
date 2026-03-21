@@ -24,18 +24,31 @@ function getChallenge(): Uint8Array {
 export const PasskeyService = {
   /**
    * Check if WebAuthn is supported
+   * Returns true if the browser has the WebAuthn API (Chrome, Firefox, Safari, Edge all do).
+   * Does NOT require a platform authenticator — Chrome supports passkeys via
+   * Windows Hello, phone-based auth, security keys, and its built-in passkey manager.
    */
   isSupported: async (): Promise<boolean> => {
     console.log('[PasskeyService] 🔍 Checking WebAuthn support...');
     console.log('[PasskeyService]   window defined:', typeof window !== 'undefined');
+    console.log('[PasskeyService]   navigator.credentials:', typeof navigator !== 'undefined' && !!navigator.credentials);
     console.log('[PasskeyService]   PublicKeyCredential:', typeof window !== 'undefined' && !!window.PublicKeyCredential);
     if (typeof window === 'undefined' || !window.PublicKeyCredential) {
       console.warn('[PasskeyService] ❌ WebAuthn NOT supported (no PublicKeyCredential)');
       return false;
     }
-    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    console.log('[PasskeyService]   Platform authenticator available:', available);
-    return available;
+    // Check platform authenticator availability (informational only — not required)
+    try {
+      const platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      console.log('[PasskeyService]   Platform authenticator (biometric/Windows Hello):', platformAvailable);
+      // Even if platform authenticator is NOT available, Chrome/Edge still support
+      // passkeys via cross-platform authenticators (phone, security key, etc.)
+      // So we return true as long as the WebAuthn API exists.
+    } catch (e) {
+      console.log('[PasskeyService]   Platform check failed (non-fatal):', e);
+    }
+    console.log('[PasskeyService] ✅ WebAuthn API is available');
+    return true;
   },
 
   /**
