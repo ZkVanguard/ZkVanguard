@@ -285,7 +285,7 @@ export function useWaitForTransactionReceipt(args?: { hash?: `0x${string}` }): U
   const [error, setError] = useState<Error | null>(null);
   
   // Watch for transaction confirmation
-  useMemo(() => {
+  useEffect(() => {
     if (!args?.hash || !state.chainKey) return;
     
     const chainConfig = WDK_CHAINS[state.chainKey];
@@ -339,7 +339,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
 } {
   const { state } = useWdk();
   const [data, setData] = useState<T | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   
   const chainKey = args.chainId 
@@ -384,8 +384,8 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     }
   }, [chainKey, args.address, args.abi, args.functionName, args.args]);
   
-  // Initial fetch
-  useMemo(() => {
+  // Initial fetch — useEffect to avoid setState during render (hydration #301)
+  useEffect(() => {
     refetch();
   }, [refetch]);
 
@@ -528,7 +528,7 @@ export function useBalance(args?: { address?: `0x${string}`; chainId?: number })
 } {
   const { state } = useWdk();
   const [data, setData] = useState<{ value: bigint; formatted: string; symbol: string } | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   
   const address = args?.address ?? state.address as `0x${string}`;
@@ -566,8 +566,8 @@ export function useBalance(args?: { address?: `0x${string}`; chainId?: number })
     }
   }, [address, chainKey]);
   
-  // Initial fetch
-  useMemo(() => {
+  // Initial fetch — useEffect to avoid setState during render (hydration #301)
+  useEffect(() => {
     refetch();
   }, [refetch]);
   

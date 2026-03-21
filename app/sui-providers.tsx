@@ -119,14 +119,28 @@ function SuiContextProvider({
   const [balanceRaw, setBalanceRaw] = useState<bigint>(BigInt(0));
   const [walletNetwork, setWalletNetwork] = useState<string | null>(null);
   const [isWrongNetwork, setIsWrongNetwork] = useState(false);
+
+  // Mounted guard: @mysten/dapp-kit uses Zustand persist middleware that
+  // synchronously restores wallet state from localStorage during store init.
+  // Server has empty in-memory store → disconnected; client has persisted
+  // state → possibly connected.  Without this guard the initial client render
+  // differs from the server-rendered HTML → React #301.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   
-  const account = useCurrentAccount();
-  const { currentWallet: _currentWallet, connectionStatus } = useCurrentWallet();
+  // Always call hooks (rules of hooks), but gate their return values
+  const rawAccount = useCurrentAccount();
+  const rawWalletState = useCurrentWallet();
   const { mutate: connect, isPending: isConnecting } = useConnectWallet();
   const { mutate: disconnect } = useDisconnectWallet();
   const wallets = useWallets();
   const suiClient = useSuiClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+
+  // Until mounted, present the same "disconnected" state the server rendered
+  const account = mounted ? rawAccount : null;
+  const connectionStatus = mounted ? rawWalletState.connectionStatus : 'disconnected';
+  const _currentWallet = mounted ? rawWalletState.currentWallet : null;
 
   const address = account?.address ?? null;
   const isConnected = connectionStatus === 'connected' && !!address;
