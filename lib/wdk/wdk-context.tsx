@@ -220,7 +220,9 @@ function getProvider(chainKey: string) {
   if (!config) return null;
   // Lazy-import avoids top-level ethers reference during SSR
   const { ethers } = require('ethers');
-  return new ethers.JsonRpcProvider(config.rpcUrl, undefined, { batchMaxCount: 1 });
+  // Use staticNetwork to skip automatic network detection which retries forever on failure
+  const network = new ethers.Network(config.name, config.chainId);
+  return new ethers.JsonRpcProvider(config.rpcUrl, network, { staticNetwork: network, batchMaxCount: 1 });
 }
 
 // ============================================
@@ -706,14 +708,20 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // sendTransaction
   // --------------------------------------------------
   const sendTransaction = useCallback(async (tx: WdkTransactionRequest): Promise<string | null> => {
-    if (!walletRef.current || !state.chainKey) return null;
+    if (!walletRef.current || !state.chainKey) {
+      throw new Error('Wallet not connected');
+    }
     
     // Verify user presence if passkey enabled
     const allowed = await verifyAction();
-    if (!allowed) return null;
+    if (!allowed) {
+      throw new Error('Transaction cancelled by user');
+    }
 
     const provider = getProvider(state.chainKey);
-    if (!provider) return null;
+    if (!provider) {
+      throw new Error(`No RPC provider for chain: ${state.chainKey}`);
+    }
     const signer = walletRef.current.connect(provider);
     const resp = await signer.sendTransaction({
       to: tx.to,
@@ -774,18 +782,17 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // signTypedData (EIP-712)
   // --------------------------------------------------
   const signTypedData = useCallback(async (domain: any, types: any, value: any): Promise<string | null> => {
-    if (!walletRef.current) return null;
+    if (!walletRef.current) {
+      throw new Error('Wallet not connected');
+    }
 
     // Verify user presence if passkey enabled
     const allowed = await verifyAction();
-    if (!allowed) return null;
-
-    try {
-      return await walletRef.current.signTypedData(domain, types, value);
-    } catch (err: any) {
-      console.error('[WDK] signTypedData failed:', err);
-      return null;
+    if (!allowed) {
+      throw new Error('Signing cancelled by user');
     }
+
+    return await walletRef.current.signTypedData(domain, types, value);
   }, [verifyAction]);
 
   // --------------------------------------------------

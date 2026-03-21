@@ -912,6 +912,51 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     // =========================================
+    // CHECK & FUND GAS FOR WDK EOA WALLETS
+    // =========================================
+    // WDK wallets may have USDT but no ETH for gas. Request server-side gas funding if needed.
+    try {
+      const rpcUrl = chainConfig.rpcUrls[network];
+      const gasCheckProvider = new ethers.JsonRpcProvider(rpcUrl);
+      const ethBalance = await gasCheckProvider.getBalance(address as string);
+      const minGas = ethers.parseEther('0.001');
+      
+      if (ethBalance < minGas) {
+        console.log('🔵🔵🔵 GAS FUND - Wallet has insufficient ETH, requesting gas funding...');
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // reuse status for "preparing"
+        
+        const fundResp = await fetch('/api/community-pool/deposit-usdt?action=fund-gas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: address,
+            chainId: targetChainId,
+          }),
+        });
+        
+        const fundResult = await fundResp.json();
+        
+        if (!fundResp.ok) {
+          console.error('🔵🔵🔵 GAS FUND - Failed:', fundResult.error);
+          dispatchPool({ type: 'SET_ERROR', payload: fundResult.error || 'Failed to obtain gas funding. Please get Sepolia ETH from a faucet.' });
+          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+          return;
+        }
+        
+        if (fundResult.funded && fundResult.txHash) {
+          console.log('🔵🔵🔵 GAS FUND - Funded! TX:', fundResult.txHash);
+          // Brief wait for balance to propagate
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          console.log('🔵🔵🔵 GAS FUND - Already funded:', fundResult.message);
+        }
+      }
+    } catch (fundErr: any) {
+      console.warn('Gas funding check failed, proceeding anyway:', fundErr.message);
+    }
+    
+    // =========================================
     // TRY EIP-2612 PERMIT FLOW (Single TX!)
     // =========================================
     if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync) {

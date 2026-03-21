@@ -29,15 +29,28 @@ import {
   shouldUseX402,
   type PaymasterProvider,
 } from '@/lib/config/aa-paymaster';
-import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
+import { mutationLimiter, readLimiter, createRateLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
+import { getRpcUrl } from '@/lib/rpc-urls';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Default chain is Sepolia for testing
 const DEFAULT_CHAIN_ID = 11155111;
+
+// Rate limiter for gas funding: 3 requests per address per hour
+const fundGasLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60 * 60 * 1000 });
+
+// Max ETH to send for gas funding (testnet only)
+const GAS_FUND_AMOUNT = ethers.parseEther('0.005');
+
+// RPC URLs per chain for gas funding
+const CHAIN_RPC_URLS: Record<number, string> = {
+  11155111: getRpcUrl('sepolia'),
+  421614: 'https://sepolia-rollup.arbitrum.io/rpc',
+};
 
 // Community pool addresses per chain
 const COMMUNITY_POOL_ADDRESSES: Record<number, string> = {
@@ -277,6 +290,114 @@ export async function POST(request: NextRequest) {
           },
           hasEnoughForDeposit: amount ? balance >= parseUSDT(amount) : undefined,
         });
+      }
+
+      case 'fund-gas': {
+        /**
+         * Fund a WDK wallet with a small amount of ETH for gas.
+         * This enables EOA wallets (that hold USDT but no ETH) to execute
+         * deposit transactions. Testnet only.
+         */
+        const limited = fundGasLimiter.check(request);
+        if (limited) return limited;
+
+        const targetAddress = walletAddress || smartAccountAddress;
+        if (!targetAddress || !ethers.isAddress(targetAddress)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Valid walletAddress required',
+          }, { status: 400 });
+        }
+
+        // Only allow on testnets
+        const allowedTestnets = [11155111, 421614]; // Sepolia, Arbitrum Sepolia
+        if (!allowedTestnets.includes(chainId)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Gas funding is only available on testnets',
+          }, { status: 400 });
+        }
+
+        const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
+        if (!serverPrivateKey) {
+          return NextResponse.json({
+            success: false,
+            error: 'Server wallet not configured',
+          }, { status: 500 });
+        }
+
+        const rpcUrl = CHAIN_RPC_URLS[chainId];
+        if (!rpcUrl) {
+          return NextResponse.json({
+            success: false,
+            error: `No RPC configured for chain ${chainId}`,
+          }, { status: 400 });
+        }
+
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
+
+          // Check if the target already has enough ETH for gas
+          const targetBalance = await provider.getBalance(targetAddress);
+          const minGasNeeded = ethers.parseEther('0.001');
+          if (targetBalance >= minGasNeeded) {
+            return NextResponse.json({
+              success: true,
+              message: 'Wallet already has sufficient ETH for gas',
+              balance: ethers.formatEther(targetBalance),
+              funded: false,
+            });
+          }
+
+          // Check server wallet balance
+          const serverBalance = await serverWallet.provider!.getBalance(serverWallet.address);
+          if (serverBalance < GAS_FUND_AMOUNT + ethers.parseEther('0.001')) {
+            logger.error('[FundGas] Server wallet insufficient balance', {
+              serverAddress: serverWallet.address,
+              balance: ethers.formatEther(serverBalance),
+            });
+            return NextResponse.json({
+              success: false,
+              error: 'Gas funding temporarily unavailable',
+            }, { status: 503 });
+          }
+
+          // Send the funding transaction
+          logger.info('[FundGas] Sending gas funding', {
+            to: targetAddress,
+            amount: ethers.formatEther(GAS_FUND_AMOUNT),
+            chainId,
+          });
+
+          const tx = await serverWallet.sendTransaction({
+            to: targetAddress,
+            value: GAS_FUND_AMOUNT,
+          });
+
+          // Wait for confirmation
+          const receipt = await tx.wait(1);
+
+          logger.info('[FundGas] Gas funding confirmed', {
+            txHash: receipt?.hash,
+            to: targetAddress,
+          });
+
+          return NextResponse.json({
+            success: true,
+            funded: true,
+            txHash: receipt?.hash,
+            amount: ethers.formatEther(GAS_FUND_AMOUNT),
+            message: `Funded ${ethers.formatEther(GAS_FUND_AMOUNT)} ETH for gas`,
+          });
+
+        } catch (fundError: any) {
+          logger.error('[FundGas] Failed to fund gas', { error: fundError.message });
+          return NextResponse.json({
+            success: false,
+            error: 'Failed to send gas funding',
+          }, { status: 500 });
+        }
       }
       
       default: {

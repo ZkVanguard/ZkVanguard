@@ -13,6 +13,22 @@ import { useWdk, useWdkAccount, useWdkChain } from './wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { ethers } from 'ethers';
 
+// Cached providers per chain to avoid creating new instances on every call.
+// Uses staticNetwork to skip ethers.js automatic network detection which
+// retries every 1s forever when the RPC is unreachable — causing ERR_INSUFFICIENT_RESOURCES.
+const _providerCache = new Map<string, ethers.JsonRpcProvider>();
+
+function getCachedProvider(chainKey: string): ethers.JsonRpcProvider | null {
+  const existing = _providerCache.get(chainKey);
+  if (existing) return existing;
+  const config = WDK_CHAINS[chainKey];
+  if (!config) return null;
+  const network = new ethers.Network(config.name, config.chainId);
+  const provider = new ethers.JsonRpcProvider(config.rpcUrl, network, { staticNetwork: network });
+  _providerCache.set(chainKey, provider);
+  return provider;
+}
+
 // ============================================
 // CHAIN MAPPING
 // ============================================
@@ -352,6 +368,9 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
   const enabledFlag = args.enabled ?? legacyQuery.enabled ?? true;
   const refetchInterval = (args as any).refetchInterval ?? legacyQuery.refetchInterval;
   
+  // Stabilize args.args to prevent infinite re-render loops (arrays have new identity each render)
+  const argsKey = JSON.stringify(args.args ?? []);
+  
   const refetch = useCallback(async () => {
     if (!chainKey) {
       setIsLoading(false);
@@ -374,16 +393,18 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     setError(null);
     
     try {
-      const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+      const parsedArgs = JSON.parse(argsKey);
+      const provider = getCachedProvider(chainKey);
+      if (!provider) throw new Error(`No provider for chain: ${chainKey}`);
       const contract = new ethers.Contract(args.address, args.abi, provider);
-      const result = await contract[args.functionName](...(args.args ?? []));
+      const result = await contract[args.functionName](...parsedArgs);
       setData(result as T);
     } catch (err) {
       setError(err as Error);
     } finally {
       setIsLoading(false);
     }
-  }, [chainKey, args.address, args.abi, args.functionName, args.args]);
+  }, [chainKey, args.address, args.abi, args.functionName, argsKey]);
   
   // Initial fetch — useEffect to avoid setState during render (hydration #301)
   useEffect(() => {
@@ -449,7 +470,8 @@ export function usePublicClient(): any {
     const chainConfig = WDK_CHAINS[state.chainKey];
     if (!chainConfig) return null;
     
-    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+    const provider = getCachedProvider(state.chainKey!);
+    if (!provider) return null;
     
     // Wrap ethers provider with viem-compatible method signatures
     return {
@@ -555,7 +577,8 @@ export function useBalance(args?: { address?: `0x${string}`; chainId?: number })
     setError(null);
     
     try {
-      const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+      const provider = getCachedProvider(chainKey);
+      if (!provider) throw new Error(`No provider for chain: ${chainKey}`);
       const balance = await provider.getBalance(address);
       setData({
         value: balance,
