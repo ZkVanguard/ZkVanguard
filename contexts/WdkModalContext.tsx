@@ -169,7 +169,7 @@ function WdkModalOverlay({
                   onClick={() => onModeChange('unlock')}
                   className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
                 >
-                  <span className="text-lg">🔐</span> Unlock with Passkey
+                  <span className="text-lg">🔐</span> Sign In with Passkey
                 </button>
               )}
               
