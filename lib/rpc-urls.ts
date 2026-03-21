@@ -15,7 +15,7 @@ const UPSTREAM_RPC_URLS: Record<string, string> = {
 
 export function getRpcUrl(chain: string): string {
   if (typeof window !== 'undefined') {
-    return `/api/rpc/${chain}`;
+    return `${window.location.origin}/api/rpc/${chain}`;
   }
   return UPSTREAM_RPC_URLS[chain] || UPSTREAM_RPC_URLS.sepolia;
 }
