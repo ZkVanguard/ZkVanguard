@@ -1,4 +1,5 @@
 import { defineChain } from 'viem';
+import { getRpcUrl } from './rpc-urls';
 
 // ============================================
 // ETHEREUM MAINNET (Production with USDT)
@@ -14,7 +15,7 @@ export const EthereumMainnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://eth.drpc.org', 'https://cloudflare-eth.com'],
+      http: [getRpcUrl('ethereum'), 'https://cloudflare-eth.com'],
     },
   },
   blockExplorers: {
@@ -137,7 +138,7 @@ export const Sepolia = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+      http: [getRpcUrl('sepolia'), 'https://rpc.sepolia.org'],
     },
   },
   blockExplorers: {

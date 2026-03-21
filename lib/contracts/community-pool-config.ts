@@ -10,6 +10,7 @@
  */
 
 import { ChainType, NetworkType } from './addresses';
+import { getRpcUrl } from '../rpc-urls';
 
 // ============================================
 // TYPES
@@ -76,8 +77,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       decimals: 18,
     },
     rpcUrls: {
-      testnet: 'https://sepolia.drpc.org', // Sepolia for testnet
-      mainnet: 'https://eth.drpc.org',
+      testnet: getRpcUrl('sepolia'), // Sepolia for testnet
+      mainnet: getRpcUrl('ethereum'),
     },
     blockExplorer: {
       testnet: 'https://sepolia.etherscan.io',
@@ -194,8 +195,8 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       decimals: 18,
     },
     rpcUrls: {
-      testnet: 'https://sepolia.drpc.org',
-      mainnet: 'https://sepolia.drpc.org', // Sepolia is testnet-only
+      testnet: getRpcUrl('sepolia'),
+      mainnet: getRpcUrl('sepolia'), // Sepolia is testnet-only
     },
     blockExplorer: {
       testnet: 'https://sepolia.etherscan.io',
