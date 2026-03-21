@@ -38,6 +38,7 @@ export interface WdkWalletState {
   error: string | null;
   isUnlocked: boolean; // Tracks if wallet is locally unlocked (vs just connected)
   hasPasskey: boolean; // Tracks if a passkey is registered
+  hasWallet: boolean; // Tracks if a wallet exists in local storage
 }
 
 export interface WdkTransactionRequest {
@@ -85,6 +86,7 @@ const initialState: WdkWalletState = {
   error: null,
   isUnlocked: false,
   hasPasskey: false,
+  hasWallet: false,
 };
 
 // ============================================
@@ -193,6 +195,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
         isConnected: false, // locked until unlocked
         isUnlocked: false,
         hasPasskey: !!stored.passkeyId,
+        hasWallet: true,
         chainKey: stored.lastChain,
         chainId: WDK_CHAINS[stored.lastChain]?.chainId ?? null,
       }));
@@ -289,23 +292,25 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, [state.isUnlocked]);
 
   // --------------------------------------------------
-  // loginWithPasskey - Unlock using face/touch ID
+  // loginWithPasskey - Unlock using Passkey OR Local Key (if no passkey)
   // --------------------------------------------------
   const loginWithPasskey = useCallback(async (): Promise<boolean> => {
     const stored = loadWallet();
-    if (!stored || !stored.passkeyId || !stored.keyJwk) {
-      setState(prev => ({ ...prev, error: 'No passkey or keys found' }));
+    if (!stored || !stored.keyJwk) {
+      setState(prev => ({ ...prev, error: 'No wallet found' }));
       return false;
     }
     
     try {
-      // 1. Verify user biometrics via WebAuthn
-      const verified = await PasskeyService.authenticate([stored.passkeyId]);
-      if (!verified) {
-        throw new Error('Passkey verification failed');
+      // 1. If Passkey exists, verify user biometrics
+      if (stored.passkeyId) {
+        const verified = await PasskeyService.authenticate([stored.passkeyId]);
+        if (!verified) {
+          throw new Error('Passkey verification failed');
+        }
       }
 
-      // 2. If verified, unlock wallet using the stored AES key
+      // 2. Unlock wallet using the stored AES key (either protected by passkey check or not)
       const key = await importKey(stored.keyJwk);
       const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
       
@@ -316,7 +321,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       return await initializeFromMnemonic(mnemonic, stored.lastChain);
     } catch (err: any) {
       console.error('[WDK] loginWithPasskey error:', err);
-      setState(prev => ({ ...prev, error: err.message || 'Passkey login failed' }));
+      setState(prev => ({ ...prev, error: err.message || 'Unlock failed' }));
       return false;
     }
   }, [initializeFromMnemonic]);
@@ -413,7 +418,8 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       isLoading: false,
       chainKey: stored?.lastChain ?? defaultChain,
       chainId: WDK_CHAINS[stored?.lastChain ?? defaultChain]?.chainId ?? null,
-      hasPasskey: !!stored?.passkeyId // Preserve passkey knowledge
+      hasPasskey: !!stored?.passkeyId,
+      hasWallet: !!stored
     });
   }, [defaultChain]);
 
