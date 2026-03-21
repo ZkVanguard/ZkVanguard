@@ -78,7 +78,7 @@ export const WDK_USDT_CONFIGS: Record<number, WDKUSDTConfig> = {
     symbol: 'USD₮',
     decimals: 6,
     isTestnet: false,
-    explorer: 'https://plasma.drpc.org',
+    explorer: 'https://plasmascan.to',
   },
   
   // Sepolia Testnet (OFFICIAL WDK TEST TOKEN - FOR HACKATHON)
