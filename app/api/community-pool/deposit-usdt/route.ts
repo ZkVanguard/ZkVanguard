@@ -347,13 +347,13 @@ export async function POST(request: NextRequest) {
 
         // Pack UserOp for v0.7 EntryPoint
         const accountGasLimits = ethers.concat([
-          ethers.zeroPadValue(ethers.toBeHex(userOp.verificationGasLimit), 16),
-          ethers.zeroPadValue(ethers.toBeHex(userOp.callGasLimit), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.verificationGasLimit || 0n), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.callGasLimit || 0n), 16),
         ]);
         
         const gasFees = ethers.concat([
-          ethers.zeroPadValue(ethers.toBeHex(userOp.maxPriorityFeePerGas), 16),
-          ethers.zeroPadValue(ethers.toBeHex(userOp.maxFeePerGas), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.maxPriorityFeePerGas || 0n), 16),
+          ethers.zeroPadValue(ethers.toBeHex(userOp.maxFeePerGas || 0n), 16),
         ]);
 
         let paymasterAndData = '0x';
