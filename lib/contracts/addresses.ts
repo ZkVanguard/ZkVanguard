@@ -148,6 +148,23 @@ export const OASIS_CONTRACT_ADDRESSES = {
 } as const;
 
 // ============================================
+// SEPOLIA (ETH TESTNET) CONTRACT ADDRESSES
+// ============================================
+
+export const SEPOLIA_CONTRACT_ADDRESSES = {
+  testnet: {
+    // Sepolia (Chain ID: 11155111)
+    communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086' as `0x${string}`,
+    usdtToken: '0xd077a400968890eacc75cdc901f0356c943e4fdb' as `0x${string}`,
+    zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    hedgeExecutor: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  },
+} as const;
+
+// ============================================
 // ARBITRUM CONTRACT ADDRESSES
 // ============================================
 
@@ -255,6 +272,8 @@ export function getContractAddresses(chainId: number) {
       return CRONOS_CONTRACT_ADDRESSES.testnet;
     case 25: // Cronos Mainnet
       return CRONOS_CONTRACT_ADDRESSES.mainnet;
+    case 11155111: // Sepolia
+      return SEPOLIA_CONTRACT_ADDRESSES.testnet;
     case 421614: // Arbitrum Sepolia
       return ARBITRUM_CONTRACT_ADDRESSES.testnet;
     case 42161: // Arbitrum One
