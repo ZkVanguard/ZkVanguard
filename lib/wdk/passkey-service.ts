@@ -85,10 +85,26 @@ export const PasskeyService = {
     try {
       const challenge = getChallenge();
       
-      const allowCredentials = credentialIds?.map(id => ({
-        id: Uint8Array.from(atob(id), c => c.charCodeAt(0)) as unknown as BufferSource,
-        type: 'public-key' as const,
-      }));
+      const allowCredentials = credentialIds?.map(id => {
+        try {
+          // Normalize Base64URL to Base64 for atob
+          const base64 = id.replace(/-/g, '+').replace(/_/g, '/');
+          const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+          return {
+            id: Uint8Array.from(atob(padded), c => c.charCodeAt(0)) as unknown as BufferSource,
+            type: 'public-key' as const,
+          };
+        } catch (e) {
+          console.warn('[PasskeyService] Invalid credential ID format, skipping:', id);
+          return null;
+        }
+      }).filter(c => c !== null) as PublicKeyCredentialDescriptor[];
+
+      // If credential IDs were provided but all failed to decode, fail early
+      if (credentialIds?.length && (!allowCredentials || allowCredentials.length === 0)) {
+        console.error('[PasskeyService] All provided credential IDs are invalid');
+        return false;
+      }
 
       // If no credentials provided, try discoverable credentials (empty array) or undefined to let user choose
       const publicKey: PublicKeyCredentialRequestOptions = {
@@ -101,8 +117,13 @@ export const PasskeyService = {
 
       const assertion = await navigator.credentials.get({ publicKey });
       return !!assertion;
-    } catch (err) {
-      console.error('Passkey authentication failed:', err);
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        // User cancelled or timed out -> safe to ignore
+        console.log('[PasskeyService] Authentication cancelled by user');
+      } else {
+        console.error('[PasskeyService] Authentication failed:', err);
+      }
       return false;
     }
   }
