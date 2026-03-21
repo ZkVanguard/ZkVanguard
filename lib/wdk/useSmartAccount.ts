@@ -97,20 +97,3 @@ export function useSmartAccount() {
     error
   };
 }
-      return txHash;
-
-    } catch (err: any) {
-      console.error('Gasless Deposit Error:', err);
-      setError(err.message || 'Gasless deposit failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [address, chain, signTypedDataAsync]);
-
-  return {
-    depositWithGasless,
-    loading,
-    error,
-  };
-}
