@@ -15,6 +15,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { WDK_CHAINS } from '@/lib/config/wdk';
+import { PasskeyService } from './passkey-service';
+import { generateKey, exportKey, importKey, encryptData, decryptData } from './encryption';
 
 // ============================================
 // TYPES
@@ -34,6 +36,8 @@ export interface WdkWalletState {
   chainKey: string | null;
   accounts: WdkAccount[];
   error: string | null;
+  isUnlocked: boolean; // Tracks if wallet is locally unlocked (vs just connected)
+  hasPasskey: boolean; // Tracks if a passkey is registered
 }
 
 export interface WdkTransactionRequest {
@@ -52,6 +56,8 @@ export interface WdkContextValue {
   lockWallet: () => void;
   unlockWallet: (password: string) => Promise<boolean>;
   disconnect: () => void;
+  registerPasskey: () => Promise<boolean>;
+  loginWithPasskey: () => Promise<boolean>;
   
   // Chain Operations
   switchChain: (chainKey: string) => Promise<boolean>;
@@ -61,7 +67,7 @@ export interface WdkContextValue {
   // Transaction Operations
   sendTransaction: (tx: WdkTransactionRequest) => Promise<string | null>;
   sendUsdt: (to: string, amount: string) => Promise<string | null>;
-  signMessage: (message: string) => Promise<string | null>;
+  signMessage: (message: string | Uint8Array) => Promise<string | null>;
   signTypedData: (domain: any, types: any, value: any) => Promise<string | null>;
   
   // Utility
@@ -77,6 +83,8 @@ const initialState: WdkWalletState = {
   chainKey: null,
   accounts: [],
   error: null,
+  isUnlocked: false,
+  hasPasskey: false,
 };
 
 // ============================================
@@ -86,50 +94,39 @@ const initialState: WdkWalletState = {
 const STORAGE_KEY = 'wdk_wallet_v2';
 
 interface StoredWallet {
-  encryptedMnemonic: string;
+  encryptedData: string;
+  iv: string;
+  keyJwk: string;
   addresses: Record<string, string>;
   lastChain: string;
+  passkeyId?: string;
 }
 
-// Encrypt mnemonic with a password using XOR (demo-grade).
-// In production, use Web Crypto API (AES-GCM).
-function encryptMnemonic(mnemonic: string, password: string): string {
-  const encoder = new TextEncoder();
-  const mnemonicBytes = encoder.encode(mnemonic);
-  const keyBytes = encoder.encode(password.padEnd(mnemonicBytes.length, password));
-  const encrypted = new Uint8Array(mnemonicBytes.length);
-  for (let i = 0; i < mnemonicBytes.length; i++) {
-    encrypted[i] = mnemonicBytes[i] ^ keyBytes[i % keyBytes.length];
-  }
-  return btoa(String.fromCharCode(...encrypted));
-}
-
-function decryptMnemonic(encryptedData: string, password: string): string | null {
-  try {
-    const encrypted = new Uint8Array(
-      atob(encryptedData).split('').map(c => c.charCodeAt(0))
-    );
-    const keyBytes = new TextEncoder().encode(password.padEnd(encrypted.length, password));
-    const decrypted = new Uint8Array(encrypted.length);
-    for (let i = 0; i < encrypted.length; i++) {
-      decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
-    }
-    return new TextDecoder().decode(decrypted);
-  } catch {
-    return null;
-  }
-}
-
+// Helper to persist wallet structure
 function saveWallet(wallet: StoredWallet): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(wallet));
   }
 }
 
+// Helper to load wallet structure
 function loadWallet(): StoredWallet | null {
   if (typeof window === 'undefined') return null;
   const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : null;
+  if (!data) return null;
+  
+  try {
+    const parsed = JSON.parse(data);
+    // Basic validation to ensure migration from old format
+    if (!parsed.encryptedData || !parsed.iv || !parsed.keyJwk) {
+      console.warn('[WDK] Detected old wallet format, clearing storage.');
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed as StoredWallet;
+  } catch (e) {
+    return null;
+  }
 }
 
 function clearWallet(): void {
@@ -168,7 +165,6 @@ interface WdkProviderProps {
 }
 
 const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'arbitrum-mainnet'];
-const DEMO_PASSWORD = 'wdk-demo-password';
 
 /**
  * WDK Provider — browser-safe, ethers.js-backed wallet management.
@@ -190,10 +186,13 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   useEffect(() => {
     const stored = loadWallet();
     if (stored) {
+      console.log('[WDK] Found stored wallet, passkey:', !!stored.passkeyId);
       setState(prev => ({
         ...prev,
         isLoading: false,
         isConnected: false, // locked until unlocked
+        isUnlocked: false,
+        hasPasskey: !!stored.passkeyId,
         chainKey: stored.lastChain,
         chainId: WDK_CHAINS[stored.lastChain]?.chainId ?? null,
       }));
@@ -229,9 +228,13 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       mnemonicRef.current = mnemonic;
 
       const selected = accounts.find(a => a.chainKey === chainKey) ?? accounts[0];
+      const stored = loadWallet(); // Check storage for passkey status
+      
       setState(prev => ({
         ...prev,
         isConnected: true,
+        isUnlocked: true,
+        hasPasskey: !!stored?.passkeyId,
         isLoading: false,
         address: selected?.address ?? null,
         chainId: WDK_CHAINS[chainKey]?.chainId ?? null,
@@ -252,6 +255,73 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, [defaultChain]);
 
   // --------------------------------------------------
+  // registerPasskey - Add face/touch ID to existing wallet
+  // --------------------------------------------------
+  const registerPasskey = useCallback(async (): Promise<boolean> => {
+    if (!walletRef.current || !state.isUnlocked) {
+      setState(prev => ({ ...prev, error: 'Wallet must be unlocked to add passkey' }));
+      return false;
+    }
+
+    try {
+      // Use wallet address as user identifier for passkey
+      const username = walletRef.current.address.slice(0, 8);
+      const credential = await PasskeyService.register(username);
+      
+      if (!credential) {
+         throw new Error('Passkey registration cancelled');
+      }
+
+      // Save passkey ID to local storage
+      const stored = loadWallet();
+      if (stored) {
+        stored.passkeyId = credential.id;
+        saveWallet(stored);
+        setState(prev => ({ ...prev, hasPasskey: true }));
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.error('[WDK] registerPasskey error:', err);
+      setState(prev => ({ ...prev, error: err.message || 'Failed to register passkey' }));
+      return false;
+    }
+  }, [state.isUnlocked]);
+
+  // --------------------------------------------------
+  // loginWithPasskey - Unlock using face/touch ID
+  // --------------------------------------------------
+  const loginWithPasskey = useCallback(async (): Promise<boolean> => {
+    const stored = loadWallet();
+    if (!stored || !stored.passkeyId || !stored.keyJwk) {
+      setState(prev => ({ ...prev, error: 'No passkey or keys found' }));
+      return false;
+    }
+    
+    try {
+      // 1. Verify user biometrics via WebAuthn
+      const verified = await PasskeyService.authenticate([stored.passkeyId]);
+      if (!verified) {
+        throw new Error('Passkey verification failed');
+      }
+
+      // 2. If verified, unlock wallet using the stored AES key
+      const key = await importKey(stored.keyJwk);
+      const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
+      
+      if (!mnemonic) {
+        throw new Error('Failed to decrypt wallet');
+      }
+
+      return await initializeFromMnemonic(mnemonic, stored.lastChain);
+    } catch (err: any) {
+      console.error('[WDK] loginWithPasskey error:', err);
+      setState(prev => ({ ...prev, error: err.message || 'Passkey login failed' }));
+      return false;
+    }
+  }, [initializeFromMnemonic]);
+
+  // --------------------------------------------------
   // createWallet — BIP-39 via ethers.js
   // --------------------------------------------------
   const createWallet = useCallback(async (): Promise<string | null> => {
@@ -268,9 +338,15 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const ok = await initializeFromMnemonic(mnemonic);
       if (!ok) return null;
 
-      // Persist encrypted
+      // Persist encrypted with random key
+      const key = await generateKey();
+      const keyJwk = await exportKey(key);
+      const { data: encryptedData, iv } = await encryptData(mnemonic, key);
+
       const stored: StoredWallet = {
-        encryptedMnemonic: encryptMnemonic(mnemonic, DEMO_PASSWORD),
+        encryptedData,
+        iv,
+        keyJwk,
         addresses: {},
         lastChain: defaultChain,
       };
@@ -306,10 +382,16 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     const ok = await initializeFromMnemonic(mnemonic.trim());
     if (!ok) return false;
 
-    // Persist encrypted
+    // Persist encrypted with random key
     const address = walletRef.current?.address ?? '';
+    const key = await generateKey();
+    const keyJwk = await exportKey(key);
+    const { data: encryptedData, iv } = await encryptData(mnemonic.trim(), key);
+
     const stored: StoredWallet = {
-      encryptedMnemonic: encryptMnemonic(mnemonic.trim(), DEMO_PASSWORD),
+      encryptedData,
+      iv,
+      keyJwk,
       addresses: {},
       lastChain: defaultChain,
     };
@@ -338,18 +420,10 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // unlockWallet
   // --------------------------------------------------
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
-    const stored = loadWallet();
-    if (!stored) {
-      setState(prev => ({ ...prev, error: 'No wallet found' }));
-      return false;
-    }
-    const mnemonic = decryptMnemonic(stored.encryptedMnemonic, password);
-    if (!mnemonic) {
-      setState(prev => ({ ...prev, error: 'Invalid password' }));
-      return false;
-    }
-    return initializeFromMnemonic(mnemonic, stored.lastChain);
-  }, [initializeFromMnemonic]);
+    // Legacy password flow is deprecated in favor of Passkeys + Random Keys
+    console.warn('[WDK] Password unlock is deprecated. Use Passkey.');
+    return false;
+  }, []);
 
   // --------------------------------------------------
   // disconnect — wipe storage
@@ -460,7 +534,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // --------------------------------------------------
   // signMessage
   // --------------------------------------------------
-  const signMessage = useCallback(async (message: string): Promise<string | null> => {
+  const signMessage = useCallback(async (message: string | Uint8Array): Promise<string | null> => {
     if (!walletRef.current) return null;
     try {
       return await walletRef.current.signMessage(message);
@@ -496,6 +570,8 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     lockWallet,
     unlockWallet,
     disconnect,
+    registerPasskey,
+    loginWithPasskey,
     switchChain,
     getBalance,
     getUsdtBalance,
