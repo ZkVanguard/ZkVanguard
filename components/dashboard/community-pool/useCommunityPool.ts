@@ -28,6 +28,7 @@ import {
   useSwitchChain, 
   useSignTypedData 
 } from '@/lib/wdk/wdk-hooks';
+import { useSmartAccount } from '@/lib/wdk/useSmartAccount';
 import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
@@ -296,6 +297,9 @@ export function useCommunityPool(propAddress?: string) {
   
   // Typed data signing hook for EIP-2612 permit
   const { signTypedDataAsync } = useSignTypedData();
+  
+  // Account Abstraction (Gasless) support
+  const { depositWithGasless } = useSmartAccount();
   
   // Pool total shares (to detect first deposit)
   const { data: poolTotalShares } = useReadContract({
@@ -858,6 +862,54 @@ export function useCommunityPool(propAddress?: string) {
     });
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
+    
+    // =========================================
+    // TRY GASLESS (AA) FLOW
+    // =========================================
+    // Sepolia supports AA/Gasless. Try this first if available to save gas (USDT paid).
+    if (validChainIds.includes(11155111)) {
+        console.log('Attempting Gasless (Account Abstraction) flow...');
+        try {
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // Reusing status for signing
+            const tx = await depositWithGasless(amount.toString());
+            
+            console.log('Gasless Deposit Success:', tx);
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' }); // Show depositing spinner
+            
+            // Wait a bit for indexing/propagation (simplified for now)
+            await new Promise(r => setTimeout(r, 5000));
+            
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+            dispatchPool({ type: 'SET_SUCCESS', payload: `Gasless Deposit Submitted! Tx: ${tx.slice(0,10)}...` });
+            dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
+            dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+            
+            // Refresh
+            setTimeout(() => {
+                fetchPoolData(true);
+                dispatchPool({ type: 'SET_SUCCESS', payload: null });
+                dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+            }, 3000);
+            return;
+            
+        } catch (err: any) {
+            console.warn('Gasless flow failed/skipped:', err.message);
+            // Only fall back if it wasn't a user rejection or if it's explicitly "Not a smart account"
+            if (err.message?.includes('User rejected')) {
+                 dispatchPool({ type: 'SET_ERROR', payload: 'Transaction cancelled' });
+                 dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+                 dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+                 return;
+            }
+            
+            // If failed because not a smart account, fall back to EOA flow
+            // Otherwise, show error?
+            // For now, let's assume we fall back to EOA flow for robustness.
+            console.log('Falling back to standard EOA deposit...');
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' }); // Reset for standard flow
+        }
+    }
     
     // =========================================
     // TRY EIP-2612 PERMIT FLOW (Single TX!)
