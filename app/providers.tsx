@@ -10,6 +10,8 @@ import { PositionsProvider } from '../contexts/PositionsContext';
 import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
 // WDK Provider - Native Tether self-custodial wallet
 import { WdkProvider } from '../lib/wdk/wdk-context';
+// WDK Modal - rendered outside Navbar to avoid backdrop-filter stacking context
+import { WdkModalProvider } from '../contexts/WdkModalContext';
 
 // Sui - use the complete provider that includes SuiContext
 import { SuiWalletProviders } from './sui-providers';
@@ -46,7 +48,11 @@ export function Providers({ children }: { children: ReactNode }) {
           <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
             <PositionsProvider>
               <AIDecisionsProvider>
-                {children}
+                {/* WdkModalProvider renders the modal as a sibling of Navbar,
+                    outside the backdrop-filter stacking context */}
+                <WdkModalProvider>
+                  {children}
+                </WdkModalProvider>
               </AIDecisionsProvider>
             </PositionsProvider>
           </SuiWalletProviders>
