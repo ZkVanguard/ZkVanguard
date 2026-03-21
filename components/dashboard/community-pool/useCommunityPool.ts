@@ -962,7 +962,16 @@ export function useCommunityPool(propAddress?: string) {
         return; // Done with permit flow
         
       } catch (permitError: any) {
-        console.error('🟠🟠🟠 PERMIT - Failed, falling back to approve+deposit', permitError?.message);
+        // If it's an insufficient funds error, don't bother falling back — the wallet has no gas
+        const code = permitError?.code || permitError?.info?.error?.code;
+        const msg = permitError?.shortMessage || permitError?.message || '';
+        if (code === 'INSUFFICIENT_FUNDS' || msg.includes('insufficient funds')) {
+          dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet (e.g. Google Cloud faucet or Alchemy faucet).' });
+          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+          return;
+        }
+        console.error('🟠🟠🟠 PERMIT - Failed, falling back to approve+deposit', msg);
         // Fall through to regular approve+deposit flow
       }
     }
@@ -1054,7 +1063,14 @@ export function useCommunityPool(propAddress?: string) {
     } catch (err: any) {
       console.error('🔴🔴🔴 DEPOSIT - Error:', err);
       pendingDepositAmountRef.current = ''; // Clear on error
-      dispatchPool({ type: 'SET_ERROR', payload: err.shortMessage || err.message });
+      // Detect insufficient ETH for gas and show helpful message
+      const code = err?.code || err?.info?.error?.code;
+      const msg = err?.shortMessage || err?.message || '';
+      if (code === 'INSUFFICIENT_FUNDS' || msg.includes('insufficient funds')) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet (e.g. Google Cloud faucet or Alchemy faucet).' });
+      } else {
+        dispatchPool({ type: 'SET_ERROR', payload: msg });
+      }
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     } finally {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });

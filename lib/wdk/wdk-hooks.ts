@@ -230,7 +230,7 @@ export function useWriteContract(): UseWriteContractReturn {
       const iface = new ethers.Interface(args.abi);
       const callData = iface.encodeFunctionData(args.functionName, args.args ?? []);
       
-      // Send transaction via WDK
+      // Send transaction via WDK (throws on failure with real error)
       const hash = await sendTransaction({
         to: args.address,
         data: callData,
@@ -238,7 +238,7 @@ export function useWriteContract(): UseWriteContractReturn {
       });
       
       if (!hash) {
-        throw new Error('Transaction failed');
+        throw new Error('Wallet not connected or transaction cancelled');
       }
       
       setData(hash as `0x${string}`);
@@ -409,7 +409,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
 // ============================================
 
 export function useSignTypedData() {
-  const { signMessage } = useWdk();
+  const { signTypedData } = useWdk();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   
@@ -418,10 +418,12 @@ export function useSignTypedData() {
     setError(null);
     
     try {
-      // For now, use regular message signing
-      // Full EIP-712 would need wallet-level support
-      const message = JSON.stringify(data);
-      const signature = await signMessage(message);
+      // Use proper EIP-712 signing via ethers.js HDNodeWallet.signTypedData
+      const { domain, types, message } = data;
+      // ethers.js signTypedData does NOT want the EIP712Domain type in the types object
+      const { EIP712Domain, ...signingTypes } = types;
+      const signature = await signTypedData(domain, signingTypes, message);
+      if (!signature) throw new Error('Failed to sign typed data');
       return signature;
     } catch (err) {
       setError(err as Error);
@@ -429,7 +431,7 @@ export function useSignTypedData() {
     } finally {
       setIsPending(false);
     }
-  }, [signMessage]);
+  }, [signTypedData]);
   
   return { signTypedDataAsync, isPending, error };
 }

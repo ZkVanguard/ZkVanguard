@@ -62,6 +62,7 @@ export interface WdkContextValue {
   sendTransaction: (tx: WdkTransactionRequest) => Promise<string | null>;
   sendUsdt: (to: string, amount: string) => Promise<string | null>;
   signMessage: (message: string) => Promise<string | null>;
+  signTypedData: (domain: any, types: any, value: any) => Promise<string | null>;
   
   // Utility
   getSupportedChains: () => string[];
@@ -421,21 +422,15 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   // --------------------------------------------------
   const sendTransaction = useCallback(async (tx: WdkTransactionRequest): Promise<string | null> => {
     if (!walletRef.current || !state.chainKey) return null;
-    try {
-      const provider = getProvider(state.chainKey);
-      if (!provider) return null;
-      const signer = walletRef.current.connect(provider);
-      const resp = await signer.sendTransaction({
-        to: tx.to,
-        value: tx.value ?? 0n,
-        data: tx.data,
-      });
-      return resp.hash;
-    } catch (err: any) {
-      console.error('[WDK] sendTransaction failed:', err);
-      setState(prev => ({ ...prev, error: err?.message ?? 'Transaction failed' }));
-      return null;
-    }
+    const provider = getProvider(state.chainKey);
+    if (!provider) return null;
+    const signer = walletRef.current.connect(provider);
+    const resp = await signer.sendTransaction({
+      to: tx.to,
+      value: tx.value ?? 0n,
+      data: tx.data,
+    });
+    return resp.hash;
   }, [state.chainKey]);
 
   // --------------------------------------------------
@@ -476,6 +471,19 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, []);
 
   // --------------------------------------------------
+  // signTypedData (EIP-712)
+  // --------------------------------------------------
+  const signTypedData = useCallback(async (domain: any, types: any, value: any): Promise<string | null> => {
+    if (!walletRef.current) return null;
+    try {
+      return await walletRef.current.signTypedData(domain, types, value);
+    } catch (err: any) {
+      console.error('[WDK] signTypedData failed:', err);
+      return null;
+    }
+  }, []);
+
+  // --------------------------------------------------
   // Utility
   // --------------------------------------------------
   const getSupportedChains = useCallback(() => Object.keys(WDK_CHAINS), []);
@@ -494,6 +502,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     sendTransaction,
     sendUsdt,
     signMessage,
+    signTypedData,
     getSupportedChains,
     isChainSupported,
   };
