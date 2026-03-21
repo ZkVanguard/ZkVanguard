@@ -164,13 +164,13 @@ function WdkModalOverlay({
             )}
 
             <div className="space-y-3">
-              {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage')) && !wdkState.isUnlocked && (
+              {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage') || true) && !wdkState.isUnlocked && (
                 <button
                   onClick={() => onModeChange('unlock')}
                   className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
                 >
                   <span className="text-lg">🔐</span> 
-                  {wdkState.hasPasskey ? 'Sign In with Passkey' : 'Unlock Wallet (No Passkey)'}
+                  {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage')) ? 'Sign In with Passkey' : 'Recover with Passkey'}
                 </button>
               )}
               
