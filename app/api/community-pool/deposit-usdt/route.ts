@@ -400,6 +400,94 @@ export async function POST(request: NextRequest) {
           }, { status: 500 });
         }
       }
+
+      case 'update-prices': {
+        /**
+         * Update Pyth oracle prices before a deposit.
+         * Fetches latest price data from Pyth Hermes API and pushes on-chain.
+         * Uses the server wallet to pay the update fee.
+         */
+        const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
+        if (!serverPrivateKey) {
+          return NextResponse.json({
+            success: false,
+            error: 'Server wallet not configured',
+          }, { status: 500 });
+        }
+
+        const rpcUrl = CHAIN_RPC_URLS[chainId];
+        if (!rpcUrl) {
+          return NextResponse.json({
+            success: false,
+            error: `No RPC configured for chain ${chainId}`,
+          }, { status: 400 });
+        }
+
+        // Pyth oracle addresses per chain
+        const PYTH_ORACLE_ADDRESSES: Record<number, string> = {
+          11155111: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21', // Sepolia
+          421614: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C', // Arbitrum Sepolia
+        };
+
+        const pythAddress = PYTH_ORACLE_ADDRESSES[chainId];
+        if (!pythAddress) {
+          // No Pyth oracle on this chain — skip silently
+          return NextResponse.json({ success: true, skipped: true, reason: 'No Pyth oracle on this chain' });
+        }
+
+        // Price IDs for BTC, ETH, SUI, CRO (must match contract asset config)
+        const PYTH_PRICE_IDS = [
+          'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+          'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+          '23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe',
+          '23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744',
+        ];
+
+        try {
+          // Fetch latest VAA from Pyth Hermes
+          const hermesUrl = 'https://hermes.pyth.network/v2/updates/price/latest?ids[]=' + PYTH_PRICE_IDS.join('&ids[]=');
+          const hermesResp = await fetch(hermesUrl);
+          if (!hermesResp.ok) {
+            throw new Error(`Hermes API returned ${hermesResp.status}`);
+          }
+          const hermesData = await hermesResp.json();
+
+          if (!hermesData?.binary?.data?.length) {
+            throw new Error('No price update data from Hermes');
+          }
+
+          const updateData = hermesData.binary.data.map((d: string) => '0x' + d);
+
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
+
+          const pythAbi = [
+            'function updatePriceFeeds(bytes[] calldata updateData) external payable',
+            'function getUpdateFee(bytes[] calldata updateData) view returns (uint256)',
+          ];
+          const pyth = new ethers.Contract(pythAddress, pythAbi, serverWallet);
+
+          const fee = await pyth.getUpdateFee(updateData);
+          const tx = await pyth.updatePriceFeeds(updateData, { value: fee });
+          const receipt = await tx.wait(1);
+
+          logger.info('[UpdatePrices] Pyth prices updated', { txHash: receipt?.hash, chainId });
+
+          return NextResponse.json({
+            success: true,
+            txHash: receipt?.hash,
+            message: 'Oracle prices updated',
+          });
+        } catch (priceError: any) {
+          logger.error('[UpdatePrices] Failed to update prices', { error: priceError.message });
+          // Non-fatal: prices might still be fresh enough
+          return NextResponse.json({
+            success: false,
+            error: 'Price update failed, deposit may still succeed if prices are recent',
+            details: priceError.message,
+          }, { status: 200 }); // 200 so frontend doesn't block
+        }
+      }
       
       default: {
         /**

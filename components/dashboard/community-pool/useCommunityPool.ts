@@ -915,6 +915,27 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     // =========================================
+    // STEP 0.5: UPDATE PYTH ORACLE PRICES
+    // =========================================
+    // Ensure oracle prices are fresh before deposit to prevent OracleCallFailed reverts
+    try {
+      logger.info('[CommunityPool] Updating oracle prices...');
+      const priceResp = await fetch('/api/community-pool/deposit-usdt?action=update-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chainId: targetChainId }),
+      });
+      const priceResult = await priceResp.json();
+      if (priceResult.success) {
+        logger.info('[CommunityPool] Oracle prices updated', { txHash: priceResult.txHash });
+      } else {
+        logger.warn('[CommunityPool] Price update returned non-success, proceeding anyway', { error: priceResult.error });
+      }
+    } catch (priceErr: any) {
+      logger.warn('[CommunityPool] Price update failed, proceeding anyway', { error: priceErr.message });
+    }
+    
+    // =========================================
     // STEP 1: CHECK & FUND GAS FOR WDK WALLETS
     // =========================================
     // WDK wallets may have USDT but no ETH for gas. Request server-side gas funding.
