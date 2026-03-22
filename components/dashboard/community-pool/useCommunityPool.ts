@@ -478,16 +478,15 @@ export function useCommunityPool(propAddress?: string) {
     const chainParam = `&chain=${selectedChain}&network=${network}`;
     
     try {
-      const [poolRes, userRes, leaderRes] = await Promise.all([
+      // Fetch pool and user data first (critical for UI)
+      const [poolRes, userRes] = await Promise.all([
         fetch(`/api/community-pool?${chainParam.substring(1)}`),
         address ? fetch(`/api/community-pool?user=${address}${chainParam}`) : null,
-        fetch(`/api/community-pool?action=leaderboard&limit=5${chainParam}`),
       ]);
       
-      const [poolJson, userJson, leaderJson] = await Promise.all([
+      const [poolJson, userJson] = await Promise.all([
         poolRes.json(),
         userRes ? userRes.json() : null,
-        leaderRes.json(),
       ]);
       
       if (!mountedRef.current) return;
@@ -498,11 +497,21 @@ export function useCommunityPool(propAddress?: string) {
       if (userJson?.success) {
         dispatchPool({ type: 'SET_USER_POSITION', payload: userJson.user });
       }
-      if (leaderJson.success) {
-        dispatchPool({ type: 'SET_LEADERBOARD', payload: leaderJson.leaderboard });
-      }
       
+      // Stop loading spinner as soon as critical data is ready
       dispatchPool({ type: 'SET_LOADING', payload: false });
+      
+      // Fetch leaderboard separately (non-blocking)
+      // This heavy operation iterates all members on-chain
+      fetch(`/api/community-pool?action=leaderboard&limit=5${chainParam}`)
+        .then(res => res.json())
+        .then(leaderJson => {
+          if (mountedRef.current && leaderJson.success) {
+            dispatchPool({ type: 'SET_LEADERBOARD', payload: leaderJson.leaderboard });
+          }
+        })
+        .catch(err => logger.warn('[CommunityPool] Leaderboard fetch warning:', err));
+        
     } catch (err: any) {
       logger.error('[CommunityPool] Fetch error:', err);
       if (mountedRef.current) {

@@ -486,34 +486,10 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       }
     }
     
-    // Deduplicate member count (contract may have duplicate entries)
-    // OPTIMIZATION: Batch member lookups in parallel chunks of 5
-    let uniqueMemberCount = rawMemberCount;
-    try {
-      const uniqueAddresses = new Set<string>();
-      const cap = Math.min(rawMemberCount, 100);
-      const BATCH_SIZE = 5;
-
-      for (let batchStart = 0; batchStart < cap; batchStart += BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, cap);
-        const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
-
-        // Fetch addresses in parallel
-        const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
-        // Fetch member data in parallel
-        const memberDatas = await Promise.all(addrs.map(addr => pool.members(addr)));
-
-        for (let k = 0; k < addrs.length; k++) {
-          const shares = parseFloat(ethers.formatUnits(memberDatas[k].shares, 18));
-          if (shares > 0) {
-            uniqueAddresses.add(addrs[k].toLowerCase());
-          }
-        }
-      }
-      uniqueMemberCount = uniqueAddresses.size;
-    } catch (e) {
-      logger.warn(`[CommunityPool] Member dedup failed for ${config.chainKey}`, { error: e });
-    }
+    // Simplification: Trust the contract's member count to avoid 
+    // N+1 query performance issues. Deduplication should happen 
+    // off-chain or via graph indexing if precision is critical.
+    const uniqueMemberCount = rawMemberCount;
     
     // Parse allocations from contract (BPS to percentage)
     // rawAllocations array was set above from getPoolStats or defaults to [25, 25, 25, 25]
@@ -808,15 +784,8 @@ export async function GET(request: NextRequest) {
       let onChainUser = await getOnChainUserPosition(userAddress, chainConfig);
       const onChainPool = await getOnChainPoolData(chainConfig);
       
-      // If getMemberPosition returned 0 shares, try searching the member list
-      // This handles checksum mismatches between connected wallet and on-chain storage
-      if (onChainUser && onChainUser.shares === 0) {
-        const memberSearch = await findOnChainMember(userAddress, chainConfig);
-        if (memberSearch && memberSearch.shares > 0) {
-          logger.info(`[CommunityPool API] Found user ${userAddress} via member list search: ${memberSearch.shares} shares`);
-          onChainUser = memberSearch;
-        }
-      }
+      // Removed expensive member list iteration fallback.
+      // Trusted source is getMemberPosition directly.
       
       if (onChainUser && onChainUser.shares > 0 && onChainPool) {
         return NextResponse.json({
