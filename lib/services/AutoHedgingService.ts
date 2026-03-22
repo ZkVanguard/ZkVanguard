@@ -28,9 +28,9 @@ import { PredictionAggregatorService, type AggregatedPrediction } from './Predic
 
 // Configuration
 const CONFIG = {
-  // Update frequency
-  PNL_UPDATE_INTERVAL_MS: 10000, // 10 seconds
-  RISK_CHECK_INTERVAL_MS: 60000, // 1 minute
+  // Update frequency (increased to reduceDB quota usage)
+  PNL_UPDATE_INTERVAL_MS: 300000, // 5 minutes (was 10s)
+  RISK_CHECK_INTERVAL_MS: 600000, // 10 minutes (was 60s)
   
   // Risk thresholds
   MAX_PORTFOLIO_DRAWDOWN_PERCENT: 3, // Auto-hedge if portfolio down > 3%
@@ -113,10 +113,14 @@ class AutoHedgingService {
     }
 
     this.isRunning = true;
-    logger.info('[AutoHedging] Starting service...');
+    logger.info('[AutoHedging] Starting service (optimized mode)...');
 
-    // Initial PnL update
-    await this.updateAllHedgePnL();
+    // Initial PnL update - Wrap in try/catch and log error but don't crash
+    try {
+        await this.updateAllHedgePnL();
+    } catch (e: any) {
+        logger.error('[AutoHedging] Initial PnL update failed (quota limit?)', { error: e?.message });
+    }
 
     // Start PnL update loop — with overlap guard
     this.pnlUpdateInterval = setInterval(async () => {
@@ -127,8 +131,12 @@ class AutoHedgingService {
       this.pnlUpdateInProgress = true;
       try {
         await this.updateAllHedgePnL();
-      } catch (error) {
-        logger.error('[AutoHedging] PnL update error', { error: error instanceof Error ? error.message : error });
+      } catch (error: any) {
+        if (error?.message?.includes('usage limit') || error?.message?.includes('quota')) {
+            logger.warn('[AutoHedging] Database quota reached, pausing updates temporarily...');
+        } else {
+            logger.error('[AutoHedging] PnL update error', { error: error instanceof Error ? error.message : error });
+        }
       } finally {
         this.pnlUpdateInProgress = false;
       }
