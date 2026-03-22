@@ -69,6 +69,15 @@ export function useSmartAccount() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // Handle "Insufficient funds on Safe" specifically
+        if (errorData.error === 'Insufficient USDT balance on Safe' && errorData.safeAddress) {
+             const manualError = new Error(`Gasless account needs setup. Please transfer USDT to your Safe Address: ${errorData.safeAddress}`);
+             (manualError as any).safeAddress = errorData.safeAddress;
+             (manualError as any).details = errorData.hint;
+             throw manualError;
+        }
+
         throw new Error(errorData.error || 'Failed to create UserOp');
       }
 
