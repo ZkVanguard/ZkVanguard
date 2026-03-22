@@ -35,6 +35,7 @@ import { ethers } from 'ethers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120; // Allow up to 2 min for multi-TX deposit flows
 
 // Default chain is Sepolia for testing
 const DEFAULT_CHAIN_ID = 11155111;
@@ -553,6 +554,7 @@ export async function POST(request: NextRequest) {
           const amountInUnits = ethers.parseUnits(String(amount), 6);
 
           const usdtAbi = [
+            'function transfer(address to, uint256 amount) returns (bool)',
             'function transferFrom(address from, address to, uint256 amount) returns (bool)',
             'function approve(address spender, uint256 amount) returns (bool)',
             'function allowance(address owner, address spender) view returns (uint256)',
@@ -581,14 +583,15 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Step 2: Check BOTH allowances in parallel (user→server AND server→pool)
+          // Step 2: Check allowances + resolve proxy
           const { deriveTreasuryProxy } = await import('@/lib/crypto/ProxyPDA');
           const proxyAddress = deriveTreasuryProxy('pool-share');
           logger.info('[DepositProxy] Treasury proxy', { proxyAddress, depositor: walletAddress });
 
-          const [userAllowance, poolAllowance] = await Promise.all([
+          const [userAllowance, poolAllowance, serverUsdtBalance] = await Promise.all([
             usdt.allowance(walletAddress, serverWallet.address),
             usdt.allowance(serverWallet.address, communityPoolAddress),
+            usdt.balanceOf(serverWallet.address),
           ]);
           
           if (BigInt(userAllowance) < amountInUnits) {
@@ -601,64 +604,187 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
           }
 
-          // Step 3: Pipeline transactions with explicit nonces
-          // Submit all TXs to mempool immediately — they mine in nonce order
-          // This can fit 2-3 TXs into a single block instead of waiting per-block
-          let nonce = await serverWallet.getNonce();
-          const needsPoolApprove = BigInt(poolAllowance) < amountInUnits;
-
-          logger.info('[DepositProxy] Pipelining transactions', { 
-            startNonce: nonce, 
-            needsPoolApprove,
-            steps: needsPoolApprove ? 3 : 2,
-          });
-
-          // Submit transferFrom (nonce N)
-          logger.info('[DepositProxy] Submitting transferFrom', { nonce });
-          const transferTx = await usdt.transferFrom(
-            walletAddress, serverWallet.address, amountInUnits, { nonce }
-          );
-          nonce++;
-
-          // Submit approve if needed (nonce N+1)
-          let approveTx = null;
-          if (needsPoolApprove) {
-            logger.info('[DepositProxy] Submitting approve', { nonce });
-            approveTx = await usdt.approve(communityPoolAddress, amountInUnits, { nonce });
-            nonce++;
+          // Step 3: Pre-approve pool with maxUint256 if needed (one-time, persists forever)
+          // This eliminates the approve step from all future deposits
+          if (BigInt(poolAllowance) < amountInUnits) {
+            logger.info('[DepositProxy] Pre-approving pool with maxUint256');
+            const approveTx = await usdt.approve(communityPoolAddress, ethers.MaxUint256);
+            await approveTx.wait(1);
+            logger.info('[DepositProxy] Pool pre-approved');
           }
 
-          // Submit depositFor (nonce N+1 or N+2)
+          // Step 4: Transfer USDT from user → server (SEQUENTIAL - must confirm before deposit)
+          logger.info('[DepositProxy] Executing transferFrom', { from: walletAddress, amount });
+          const transferTx = await usdt.transferFrom(
+            walletAddress, serverWallet.address, amountInUnits
+          );
+          const transferReceipt = await transferTx.wait(1);
+          
+          if (!transferReceipt || transferReceipt.status !== 1) {
+            return NextResponse.json({
+              success: false,
+              error: 'Transfer from your wallet failed — no funds were moved.',
+            }, { status: 500 });
+          }
+          logger.info('[DepositProxy] Transfer confirmed', { txHash: transferReceipt.hash });
+
+          // Step 5: Deposit into pool — wrapped in try/catch with refund on failure
+          // If this fails, the USDT is in the server wallet and MUST be returned to user
           const poolAbi = [
             'function depositFor(address beneficiary, uint256 amount) returns (uint256)',
           ];
           const pool = new ethers.Contract(communityPoolAddress, poolAbi, serverWallet);
 
-          logger.info('[DepositProxy] Submitting depositFor', { proxyAddress, nonce });
-          const depositTx = await pool.depositFor(proxyAddress, amountInUnits, { nonce });
+          try {
+            logger.info('[DepositProxy] Executing depositFor', { proxyAddress, amount });
+            const depositTx = await pool.depositFor(proxyAddress, amountInUnits);
+            const receipt = await depositTx.wait(1);
 
-          // Wait only for the final TX receipt (all prior TXs must have mined first)
-          const receipt = await depositTx.wait(1);
+            if (!receipt || receipt.status !== 1) {
+              throw new Error('depositFor transaction reverted');
+            }
 
-          logger.info('[DepositProxy] Deposit complete!', { 
-            txHash: receipt?.hash, 
-            treasuryProxy: proxyAddress, 
-            depositor: walletAddress,
-          });
+            logger.info('[DepositProxy] Deposit complete!', { 
+              txHash: receipt.hash, 
+              treasuryProxy: proxyAddress, 
+              depositor: walletAddress,
+            });
 
-          return NextResponse.json({
-            success: true,
-            txHash: receipt?.hash,
-            proxyAddress,
-            depositor: walletAddress,
-            message: `Deposited ${amount} USDT to treasury proxy wallet`,
-          });
+            return NextResponse.json({
+              success: true,
+              txHash: receipt.hash,
+              proxyAddress,
+              depositor: walletAddress,
+              message: `Deposited ${amount} USDT to treasury proxy wallet`,
+            });
+
+          } catch (depositErr: any) {
+            // CRITICAL: depositFor failed but transferFrom succeeded.
+            // User's USDT is in the server wallet. Refund immediately.
+            logger.error('[DepositProxy] depositFor FAILED — refunding USDT to user', { 
+              error: depositErr.message,
+              walletAddress,
+              amount,
+            });
+
+            try {
+              const refundTx = await usdt.transfer(walletAddress, amountInUnits);
+              const refundReceipt = await refundTx.wait(1);
+              logger.info('[DepositProxy] Refund sent', { txHash: refundReceipt?.hash });
+
+              return NextResponse.json({
+                success: false,
+                error: 'Pool deposit failed but your USDT has been refunded to your wallet.',
+                refunded: true,
+                refundTxHash: refundReceipt?.hash,
+                originalError: depositErr.message,
+              }, { status: 500 });
+            } catch (refundErr: any) {
+              // Refund also failed — log critical error for manual recovery
+              logger.error('[DepositProxy] CRITICAL: Refund ALSO failed — manual recovery needed', {
+                walletAddress,
+                amount,
+                depositError: depositErr.message,
+                refundError: refundErr.message,
+              });
+
+              return NextResponse.json({
+                success: false,
+                error: `Pool deposit failed and auto-refund failed. Your ${amount} USDT is held safely and will be recovered. Contact support.`,
+                refunded: false,
+                recoverable: true,
+                walletAddress,
+                amount,
+              }, { status: 500 });
+            }
+          }
 
         } catch (proxyErr: any) {
           logger.error('[DepositProxy] Failed', { error: proxyErr.message });
           return NextResponse.json({
             success: false,
             error: proxyErr.message || 'Proxy deposit failed',
+          }, { status: 500 });
+        }
+      }
+
+      case 'recover-deposit': {
+        /**
+         * Recovery endpoint: checks if the server wallet holds orphaned USDT
+         * from a previously interrupted deposit and refunds it to the user.
+         * Client can call this on page load or after a failed deposit to recover funds.
+         */
+        if (!walletAddress || !ethers.isAddress(walletAddress)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Valid walletAddress required',
+          }, { status: 400 });
+        }
+
+        const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
+        if (!serverPrivateKey) {
+          return NextResponse.json({ success: true, orphanedAmount: '0', message: 'No orphaned funds' });
+        }
+
+        const rpcUrl = CHAIN_RPC_URLS[chainId];
+        if (!rpcUrl) {
+          return NextResponse.json({ success: true, orphanedAmount: '0', message: 'No RPC for this chain' });
+        }
+
+        const USDT_ADDRESSES: Record<number, string> = {
+          11155111: '0xd077a400968890eacc75cdc901f0356c943e4fdb',
+          421614: '0x...',
+        };
+
+        const usdtAddress = USDT_ADDRESSES[chainId];
+        if (!usdtAddress || usdtAddress === '0x...') {
+          return NextResponse.json({ success: true, orphanedAmount: '0' });
+        }
+
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
+          const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
+          const usdt = new ethers.Contract(usdtAddress, [
+            'function balanceOf(address) view returns (uint256)',
+            'function transfer(address to, uint256 amount) returns (bool)',
+          ], serverWallet);
+
+          const serverBalance = await usdt.balanceOf(serverWallet.address);
+          
+          // Server wallet should normally hold 0 USDT
+          // Any balance means an interrupted deposit left funds behind
+          if (BigInt(serverBalance) === 0n) {
+            return NextResponse.json({
+              success: true,
+              orphanedAmount: '0',
+              message: 'No orphaned funds detected',
+            });
+          }
+
+          // Refund all orphaned USDT to the requesting wallet
+          logger.info('[RecoverDeposit] Found orphaned USDT in server wallet', {
+            amount: ethers.formatUnits(serverBalance, 6),
+            refundTo: walletAddress,
+          });
+
+          const refundTx = await usdt.transfer(walletAddress, serverBalance);
+          const receipt = await refundTx.wait(1);
+
+          logger.info('[RecoverDeposit] Refund complete', { txHash: receipt?.hash });
+
+          return NextResponse.json({
+            success: true,
+            recovered: true,
+            orphanedAmount: ethers.formatUnits(serverBalance, 6),
+            refundTxHash: receipt?.hash,
+            message: `Recovered ${ethers.formatUnits(serverBalance, 6)} USDT to your wallet`,
+          });
+
+        } catch (recoverErr: any) {
+          logger.error('[RecoverDeposit] Recovery failed', { error: recoverErr.message });
+          return NextResponse.json({
+            success: false,
+            error: 'Recovery check failed',
           }, { status: 500 });
         }
       }
