@@ -76,6 +76,8 @@ async function ensureAutoHedgeTable() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
       
+      ALTER TABLE auto_hedge_configs ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(42);
+      
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_enabled ON auto_hedge_configs(enabled);
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_wallet ON auto_hedge_configs(wallet_address);
     `);
