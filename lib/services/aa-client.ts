@@ -386,9 +386,6 @@ export class AAClient {
     return iface.encodeFunctionData('depositUSDT', [amountUSD]);
   }
   
-  /**
-   * Create a UserOperation for USDT deposit to community pool
-   */
   async createDepositUserOp(params: {
     smartAccountAddress: string;
     communityPoolAddress: string;
@@ -396,18 +393,20 @@ export class AAClient {
     approveFirst?: boolean;
     factory?: string;
     factoryData?: string;
+    permit?: any; // Placeholder for future permit implementation
   }): Promise<{
     userOp: Partial<UserOperation>;
     estimatedGas: GasEstimation;
     paymasterQuote: PaymasterQuote;
   }> {
-    const { smartAccountAddress, communityPoolAddress, amountUSDT, approveFirst, factory, factoryData } = params;
+    const { smartAccountAddress, communityPoolAddress, amountUSDT, approveFirst, factory, factoryData, permit } = params;
     
+    // Safety check for unsignable permit requests
+    if (permit) {
+        throw new Error("Permit-based deposits require funding Safe account first.");
+    }
+
     // Build calldata
-    let callData: string;
-    
-    if (approveFirst) {
-      // Batch: approve + deposit (using multicall or Safe batch)
       // For Safe accounts, we'd use the MultiSend contract
       // For simplicity, just deposit here (assumes approval already done)
       callData = this.buildDepositCallData(communityPoolAddress, amountUSDT);
