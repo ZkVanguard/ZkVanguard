@@ -63,6 +63,65 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // Guard against duplicate isConfirmed fires (React Strict Mode / rapid tx)
   const txProcessedRef = useRef<string | null>(null);
 
+  // Shared helper for recording deposit/withdraw in backend after on-chain confirmation
+  const recordTransaction = useCallback(async (
+    action: 'deposit' | 'withdraw',
+    value: string,
+    successMsg: string,
+    resetField: () => void,
+    hidePanel: () => void,
+  ) => {
+    try {
+      pool.setError(`Please sign to confirm your ${action}...`);
+      const authData = await pool.signForApi(action, value);
+      if (!authData) {
+        pool.setError(`Signature required to confirm ${action}`);
+        pool.setTxStatus('idle');
+        pool.setActionLoading(false);
+        return;
+      }
+      pool.setError(null);
+
+      const body = action === 'deposit'
+        ? { walletAddress: pool.address, amount: parseFloat(value) }
+        : { walletAddress: pool.address, shares: parseFloat(value) };
+
+      const res = await fetch(`/api/community-pool?action=${action}&chain=${pool.selectedChain}&network=${pool.network}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': pool.address || '',
+          'x-wallet-signature': authData.signature,
+          'x-wallet-message': btoa(authData.message),
+        },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        pool.setSuccess(successMsg);
+        resetField();
+        hidePanel();
+        pool.setTxStatus('idle');
+        pool.resetWrite();
+
+        await fetch(`/api/community-pool?action=sync&user=${pool.address}`);
+        pool.fetchPoolData();
+
+        setTimeout(() => { pool.setSuccess(null); pool.setLastTxHash(null); }, 10000);
+      } else {
+        pool.setError(json.error);
+        pool.setTxStatus('idle');
+      }
+    } catch (err: any) {
+      pool.setError(err.message);
+      pool.setTxStatus('idle');
+    } finally {
+      pool.setActionLoading(false);
+    }
+  }, [pool]);
+
   // Handle transaction confirmation based on current status
   useEffect(() => {
     if (!pool.isConfirmed) return;
@@ -81,117 +140,27 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     
     // Deposit confirmed - record in backend
     if (pool.txStatus === 'depositing') {
-      const recordDeposit = async () => {
-        try {
-          const amount = parseFloat(pool.depositAmount);
-          
-          pool.setError('Please sign to confirm your deposit...');
-          const authData = await pool.signForApi('deposit', amount.toString());
-          if (!authData) {
-            pool.setError('Signature required to confirm deposit');
-            pool.setTxStatus('idle');
-            pool.setActionLoading(false);
-            return;
-          }
-          pool.setError(null);
-          
-          const res = await fetch(`/api/community-pool?action=deposit&chain=${pool.selectedChain}&network=${pool.network}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-wallet-address': pool.address || '',
-              'x-wallet-signature': authData.signature,
-              'x-wallet-message': btoa(authData.message),
-            },
-            body: JSON.stringify({
-              walletAddress: pool.address,
-              amount,
-            }),
-          });
-          
-          const json = await res.json();
-          
-          if (json.success) {
-            pool.setSuccess(`Deposited $${amount.toFixed(2)} successfully!`);
-            pool.setDepositAmount('');
-            pool.setShowDeposit(false);
-            pool.setTxStatus('idle');
-            pool.resetWrite();
-            
-            await fetch(`/api/community-pool?action=sync&user=${pool.address}`);
-            pool.fetchPoolData();
-            
-            setTimeout(() => { pool.setSuccess(null); pool.setLastTxHash(null); }, 10000);
-          } else {
-            pool.setError(json.error);
-            pool.setTxStatus('idle');
-          }
-        } catch (err: any) {
-          pool.setError(err.message);
-          pool.setTxStatus('idle');
-        } finally {
-          pool.setActionLoading(false);
-        }
-      };
-      recordDeposit();
+      const amount = parseFloat(pool.depositAmount);
+      recordTransaction(
+        'deposit',
+        pool.depositAmount,
+        `Deposited $${amount.toFixed(2)} successfully!`,
+        () => pool.setDepositAmount(''),
+        () => pool.setShowDeposit(false),
+      );
       return;
     }
     
     // Withdrawal confirmed - record in backend
     if (pool.txStatus === 'withdrawing') {
-      const recordWithdrawal = async () => {
-        try {
-          const shares = parseFloat(pool.withdrawShares);
-          
-          pool.setError('Please sign to confirm your withdrawal...');
-          const authData = await pool.signForApi('withdraw', shares.toString());
-          if (!authData) {
-            pool.setError('Signature required to confirm withdrawal');
-            pool.setTxStatus('idle');
-            pool.setActionLoading(false);
-            return;
-          }
-          pool.setError(null);
-          
-          const res = await fetch(`/api/community-pool?action=withdraw&chain=${pool.selectedChain}&network=${pool.network}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-wallet-address': pool.address || '',
-              'x-wallet-signature': authData.signature,
-              'x-wallet-message': btoa(authData.message),
-            },
-            body: JSON.stringify({
-              walletAddress: pool.address,
-              shares,
-            }),
-          });
-          
-          const json = await res.json();
-          
-          if (json.success) {
-            pool.setSuccess(`Withdrew ${shares.toFixed(2)} shares successfully!`);
-            pool.setWithdrawShares('');
-            pool.setShowWithdraw(false);
-            pool.setTxStatus('idle');
-            pool.resetWrite();
-            
-            await fetch(`/api/community-pool?action=sync&user=${pool.address}`);
-            pool.fetchPoolData();
-            
-            setTimeout(() => { pool.setSuccess(null); pool.setLastTxHash(null); }, 10000);
-          } else {
-            pool.setError(json.error);
-            pool.setTxStatus('idle');
-          }
-        } catch (err: any) {
-          pool.setError(err.message);
-          pool.setTxStatus('idle');
-        } finally {
-          pool.setActionLoading(false);
-        }
-      };
-      recordWithdrawal();
+      const shares = parseFloat(pool.withdrawShares);
+      recordTransaction(
+        'withdraw',
+        pool.withdrawShares,
+        `Withdrew ${shares.toFixed(2)} shares successfully!`,
+        () => pool.setWithdrawShares(''),
+        () => pool.setShowWithdraw(false),
+      );
     }
   }, [pool.isConfirmed]);
 

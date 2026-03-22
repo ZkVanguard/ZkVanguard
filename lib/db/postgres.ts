@@ -55,3 +55,68 @@ export async function closePool() {
     pool = null;
   }
 }
+
+// ── Centralized DB readiness ──
+
+let _dbReady = false;
+let _dbInitPromise: Promise<void> | null = null;
+
+/**
+ * Quick check: is the DB reachable? (3s timeout)
+ * Returns false if no DATABASE_URL is set or connection fails.
+ */
+export async function isDbAvailable(): Promise<boolean> {
+  if (!process.env.DATABASE_URL && !process.env.VERCEL) return false;
+  try {
+    await Promise.race([
+      query('SELECT 1'),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('DB ping timeout')), 3000)
+      ),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure ALL application tables exist (idempotent, runs once).
+ * Safely no-ops if the DB is unreachable.
+ */
+export async function ensureAllTables(): Promise<boolean> {
+  if (_dbReady) return true;
+
+  // Deduplicate concurrent callers
+  if (_dbInitPromise) {
+    await _dbInitPromise;
+    return _dbReady;
+  }
+
+  _dbInitPromise = (async () => {
+    const reachable = await isDbAvailable();
+    if (!reachable) {
+      logger.warn('[DB] Database unreachable — skipping table init');
+      return;
+    }
+
+    try {
+      // Lazy-import to avoid circular deps at module load
+      const { initCommunityPoolTables } = await import('./community-pool');
+      const { ensureHedgesTable } = await import('./hedges');
+
+      await Promise.all([
+        initCommunityPoolTables(),
+        ensureHedgesTable(),
+      ]);
+      _dbReady = true;
+      logger.info('[DB] All tables initialized');
+    } catch (e) {
+      logger.error('[DB] Table init failed (non-fatal)', { error: e });
+    }
+  })();
+
+  await _dbInitPromise;
+  _dbInitPromise = null;
+  return _dbReady;
+}

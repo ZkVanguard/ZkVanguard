@@ -929,7 +929,8 @@ export function useCommunityPool(propAddress?: string) {
       if (priceResult.success) {
         logger.info('[CommunityPool] Oracle prices updated', { txHash: priceResult.txHash });
       } else {
-        logger.warn('[CommunityPool] Price update returned non-success, proceeding anyway', { error: priceResult.error });
+        // Non-fatal: prices may already be fresh enough for deposit
+        logger.info('[CommunityPool] Price update skipped (prices may be recent)', { reason: priceResult.details || priceResult.error });
       }
     } catch (priceErr: any) {
       logger.warn('[CommunityPool] Price update failed, proceeding anyway', { error: priceErr.message });
