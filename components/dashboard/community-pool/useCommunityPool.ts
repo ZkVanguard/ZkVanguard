@@ -1099,7 +1099,7 @@ export function useCommunityPool(propAddress?: string) {
         // SUCCESS!
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
         dispatchTx({ type: 'SET_LAST_TX_HASH', payload: proxyResult.txHash });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful via proxy wallet! Your real address is protected. Tx: ${proxyResult.txHash.slice(0, 10)}...` });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful via treasury proxy! Your real address is protected. Tx: ${proxyResult.txHash.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
