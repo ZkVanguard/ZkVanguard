@@ -160,6 +160,7 @@ contract CommunityPool is
     bytes32 public constant REBALANCER_ROLE = keccak256("REBALANCER_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant FEE_MANAGER_ROLE = keccak256("FEE_MANAGER_ROLE");
+    bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
     // ═══════════════════════════════════════════════════════════════
     // CONSTANTS
@@ -598,6 +599,7 @@ contract CommunityPool is
     error ZeroAddress();
     error ZeroAmount();
     error TransferFailed();
+    error PermitFailed();
     error NotAMember();
     error EmergencyWithdrawDisabled();
     error InsufficientLiquidity(uint256 requested, uint256 available);
@@ -720,6 +722,7 @@ contract CommunityPool is
         _grantRole(REBALANCER_ROLE, _admin);
         _grantRole(UPGRADER_ROLE, _admin);
         _grantRole(FEE_MANAGER_ROLE, _admin);
+        _grantRole(RELAYER_ROLE, _admin);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -742,7 +745,30 @@ contract CommunityPool is
         whenNotPaused 
         returns (uint256 shares) 
     {
-        return _depositInternal(amount);
+        return _depositInternal(amount, msg.sender, msg.sender);
+    }
+
+    /**
+     * @notice Deposit USDT on behalf of a proxy wallet address (relayer only)
+     * @dev Server-side relayer deposits tokens from the depositor and credits
+     *      shares to the beneficiary (proxy address). Protects the original
+     *      wallet owner's privacy by keeping their address off-chain.
+     * @param beneficiary The proxy wallet address to credit shares to
+     * @param amount Amount of USDT to deposit (6 decimals)
+     * @return shares Number of pool shares minted to the beneficiary
+     */
+    function depositFor(
+        address beneficiary,
+        uint256 amount
+    ) 
+        external 
+        nonReentrant 
+        whenNotPaused 
+        onlyRole(RELAYER_ROLE)
+        returns (uint256 shares) 
+    {
+        if (beneficiary == address(0)) revert ZeroAddress();
+        return _depositInternal(amount, msg.sender, beneficiary);
     }
 
     /**
@@ -783,18 +809,21 @@ contract CommunityPool is
             // Check if allowance is sufficient, if not revert with helpful message
             uint256 currentAllowance = depositToken.allowance(msg.sender, address(this));
             if (currentAllowance < amount) {
-                revert("Permit failed and insufficient allowance. Use approve() + deposit() instead.");
+                revert PermitFailed();
             }
         }
         
         // Now execute deposit with the allowance set by permit
-        return _depositInternal(amount);
+        return _depositInternal(amount, msg.sender, msg.sender);
     }
 
     /**
-     * @dev Internal deposit implementation shared by deposit() and depositWithPermit()
+     * @dev Internal deposit implementation shared by deposit(), depositWithPermit(), and depositFor()
+     * @param amount Amount of USDT to deposit
+     * @param depositor Address to pull tokens from (msg.sender for direct, relayer for proxy)
+     * @param beneficiary Address to credit shares to (same as depositor for direct deposits)
      */
-    function _depositInternal(uint256 amount) internal returns (uint256 shares) {
+    function _depositInternal(uint256 amount, address depositor, address beneficiary) internal returns (uint256 shares) {
         // Circuit breaker check
         if (circuitBreakerTripped) revert CircuitBreakerActive();
         
@@ -827,17 +856,17 @@ contract CommunityPool is
         
         if (shares < MIN_SHARES_FOR_WITHDRAWAL) revert MinSharesRequired();
 
-        // Transfer USDT from user
-        depositToken.safeTransferFrom(msg.sender, address(this), amount);
+        // Transfer USDT from depositor (may differ from beneficiary in proxy deposits)
+        depositToken.safeTransferFrom(depositor, address(this), amount);
 
-        // Update member state
-        Member storage member = members[msg.sender];
-        if (!isMember[msg.sender]) {
-            isMember[msg.sender] = true;
-            memberList.push(msg.sender);
+        // Update member state (credit shares to beneficiary)
+        Member storage member = members[beneficiary];
+        if (!isMember[beneficiary]) {
+            isMember[beneficiary] = true;
+            memberList.push(beneficiary);
             member.joinedAt = block.timestamp;
             member.highWaterMark = _calculateNavPerShare();
-            emit MemberJoined(msg.sender, block.timestamp);
+            emit MemberJoined(beneficiary, block.timestamp);
         }
 
         member.shares += shares;
@@ -856,7 +885,7 @@ contract CommunityPool is
         }
 
         uint256 sharePrice = _calculateNavPerShare();
-        emit Deposited(msg.sender, amount, shares, sharePrice, block.timestamp);
+        emit Deposited(beneficiary, amount, shares, sharePrice, block.timestamp);
 
         return shares;
     }
@@ -1536,13 +1565,6 @@ contract CommunityPool is
     // healthCheck() removed - use getPoolStats() for basic health metrics
 
     /**
-     * @notice Get rebalance history count
-     */
-    function getRebalanceHistoryCount() external view returns (uint256) {
-        return rebalanceHistory.length;
-    }
-
-    /**
      * @notice Get member count
      */
     function getMemberCount() external view returns (uint256) {
@@ -1653,19 +1675,6 @@ contract CommunityPool is
         if (assetIndex >= NUM_ASSETS) revert InvalidAssetIndex();
         pythPriceIds[assetIndex] = priceId;
         emit PriceFeedSet(assetIndex, address(0)); // Event for tracking
-    }
-
-    /**
-     * @notice Set all Pyth price IDs at once
-     * @param priceIds Array of 4 Pyth price feed IDs
-     */
-    function setAllPriceIds(bytes32[NUM_ASSETS] calldata priceIds) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint8 i = 0; i < NUM_ASSETS; i++) {
-            if (priceIds[i] != bytes32(0)) {
-                pythPriceIds[i] = priceIds[i];
-                emit PriceFeedSet(i, address(0));
-            }
-        }
     }
 
     /**
