@@ -22,8 +22,10 @@ import {
   ENTRY_POINT_V07,
   parseUSDT,
   formatUSDT,
+  SAFE_4337_MODULE,
 } from '@/lib/config/aa-paymaster';
 import { logger } from '@/lib/utils/logger';
+import { SafeUtils } from '@/lib/services/safe-utils';
 
 // ============================================================================
 // ABI DEFINITIONS
@@ -405,15 +407,43 @@ export class AAClient {
     if (permit) {
         throw new Error("Permit-based deposits require funding Safe account first.");
     }
-
-    // Build calldata
-      // For Safe accounts, we'd use the MultiSend contract
-      // For simplicity, just deposit here (assumes approval already done)
-      callData = this.buildDepositCallData(communityPoolAddress, amountUSDT);
-    } else {
-      callData = this.buildDepositCallData(communityPoolAddress, amountUSDT);
-    }
     
+    let callData: string;
+    
+    // Standard Safe execution: batch Approve + Deposit using MultiSend
+    // Safe 4337 Module expects: executeUserOp(to, value, data, operation)
+    
+    // 1. Build transactions
+    const txs: Array<{to: string, value: bigint, data: string, operation?: number}> = [];
+    
+    // Approve tx
+    txs.push({
+        to: this.config.paymasterToken.address,
+        value: 0n,
+        data: this.buildApprovalCallData(communityPoolAddress, amountUSDT),
+        operation: 0 // Call
+    });
+    
+    // Deposit tx
+    txs.push({
+        to: communityPoolAddress,
+        value: 0n,
+        data: this.buildDepositCallData(communityPoolAddress, amountUSDT),
+        operation: 0 // Call
+    });
+    
+    // 2. Encode MultiSend
+    const multiSendData = SafeUtils.encodeMultiSend(txs);
+    
+    // 3. Wrap in executeUserOp targeting MultiSend via DelegateCall
+    // MultiSend address must be called with DelegateCall (Success if txs succeed)
+    callData = SafeUtils.encodeExecuteUserOp(
+        SAFE_4337_MODULE.multiSend, 
+        0n, 
+        multiSendData, 
+        1 // DelegateCall
+    );
+
     // Get nonce
     const nonce = await this.getNonce(smartAccountAddress);
     
