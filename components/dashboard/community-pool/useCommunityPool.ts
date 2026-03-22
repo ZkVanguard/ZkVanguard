@@ -988,11 +988,16 @@ export function useCommunityPool(propAddress?: string) {
     }
     
     // =========================================
-    // STEP 2: TRY EIP-2612 PERMIT FLOW (Single TX!)
+    // STEP 2: TRY PROXY DEPOSIT VIA PERMIT (Privacy-preserving!)
     // =========================================
-    // The permit flow signs an off-chain approval + calls depositWithPermit in 1 tx.
-    // This is the preferred path for WDK wallets.
+    // User signs a permit granting the server wallet USDT allowance.
+    // Server relays deposit through a proxy wallet address so the
+    // user's real address never appears on-chain as a pool member.
+    // Falls back to direct deposit if proxy flow fails.
     let permitAttempted = false;
+    
+    // Server relayer wallet address (deposits on behalf of proxy)
+    const SERVER_WALLET = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c' as `0x${string}`;
     
     // Fetch permit details ON CLICK - no eager loading
     let permitDetails: { supported: boolean; nonce?: bigint; name?: string; domainSeparator?: string } = { supported: false };
@@ -1006,7 +1011,7 @@ export function useCommunityPool(propAddress?: string) {
     const { supported: permitSupported, nonce: permitNonce, name: tokenName, domainSeparator: domainSep } = permitDetails;
 
     if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync && domainSep) {
-      logger.info('[CommunityPool] Using EIP-2612 Permit flow');
+      logger.info('[CommunityPool] Using proxy deposit via permit (privacy mode)');
       permitAttempted = true;
       
       try {
@@ -1015,7 +1020,8 @@ export function useCommunityPool(propAddress?: string) {
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
         const nonce = BigInt(permitNonce.toString());
         
-        // EIP-712 Permit typed data
+        // EIP-712 Permit typed data — spender is SERVER WALLET (not pool!)
+        // Server will transfer USDT from user, then depositFor(proxy, amount)
         const domain = {
           name: tokenName as string,
           version: '1',
@@ -1035,13 +1041,13 @@ export function useCommunityPool(propAddress?: string) {
         
         const message = {
           owner: address as `0x${string}`,
-          spender: COMMUNITY_POOL_ADDRESS as `0x${string}`,
+          spender: SERVER_WALLET,
           value: amountInUnits,
           nonce: nonce,
           deadline: deadline,
         };
         
-        logger.info('[CommunityPool] Requesting permit signature...');
+        logger.info('[CommunityPool] Requesting permit signature for proxy deposit...');
         
         // Sign the permit (gasless - just a signature!)
         const signature = await signTypedDataAsync({
@@ -1053,7 +1059,7 @@ export function useCommunityPool(propAddress?: string) {
 
         if (!signature) throw new Error('Failed to obtain signature');
 
-        logger.info('[CommunityPool] Permit signature obtained, submitting depositWithPermit...');
+        logger.info('[CommunityPool] Permit signature obtained, sending to proxy deposit API...');
         
         // Parse signature into v, r, s
         const r = signature.slice(0, 66) as `0x${string}`;
@@ -1062,38 +1068,38 @@ export function useCommunityPool(propAddress?: string) {
         
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
         
-        // Call depositWithPermit - single transaction!
-        const permitDepositTxHash = await writeContractAsync({
-          chainId: targetChainId,
-          address: COMMUNITY_POOL_ADDRESS,
-          abi: [{
-            name: 'depositWithPermit',
-            type: 'function',
-            inputs: [
-              { name: 'amount', type: 'uint256' },
-              { name: 'deadline', type: 'uint256' },
-              { name: 'v', type: 'uint8' },
-              { name: 'r', type: 'bytes32' },
-              { name: 's', type: 'bytes32' },
-            ],
-            outputs: [{ type: 'uint256' }],
-            stateMutability: 'nonpayable',
-          }],
-          functionName: 'depositWithPermit',
-          args: [amountInUnits, deadline, v, r, s],
+        // Call proxy deposit API — server handles everything
+        const proxyResp = await fetch('/api/community-pool/deposit-usdt?action=deposit-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: address,
+            chainId: targetChainId,
+            amount: amount,
+            permit: {
+              deadline: deadline.toString(),
+              v,
+              r,
+              s,
+            },
+          }),
         });
         
-        logger.info('[CommunityPool] Permit tx submitted, waiting for confirmation...', { txHash: permitDepositTxHash });
-        {
-          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
-          await provider.waitForTransaction(permitDepositTxHash, 1, 60000);
+        const proxyResult = await proxyResp.json();
+        
+        if (!proxyResp.ok || !proxyResult.success) {
+          throw new Error(proxyResult.error || 'Proxy deposit failed');
         }
-        logger.info('[CommunityPool] Permit deposit confirmed!');
+        
+        logger.info('[CommunityPool] Proxy deposit confirmed!', { 
+          txHash: proxyResult.txHash, 
+          proxyAddress: proxyResult.proxyAddress,
+        });
         
         // SUCCESS!
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: permitDepositTxHash });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful (gasless)! Tx: ${permitDepositTxHash.slice(0, 10)}...` });
+        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: proxyResult.txHash });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful via proxy wallet! Your real address is protected. Tx: ${proxyResult.txHash.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });

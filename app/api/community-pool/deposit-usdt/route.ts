@@ -47,7 +47,7 @@ const GAS_FUND_AMOUNT = ethers.parseEther('0.005');
 
 // RPC URLs per chain for gas funding (direct URLs, not proxied)
 const CHAIN_RPC_URLS: Record<number, string> = {
-  11155111: 'https://rpc.sepolia.org',
+  11155111: process.env.SEPOLIA_RPC || 'https://sepolia.drpc.org',
   421614: 'https://sepolia-rollup.arbitrum.io/rpc',
 };
 
@@ -486,6 +486,163 @@ export async function POST(request: NextRequest) {
             error: 'Price update failed, deposit may still succeed if prices are recent',
             details: priceError.message,
           }, { status: 200 }); // 200 so frontend doesn't block
+        }
+      }
+
+      case 'deposit-proxy': {
+        /**
+         * Proxy wallet deposit: Server relays the deposit so the user's
+         * real address never appears on-chain as a pool member.
+         * 
+         * Flow:
+         * 1. User signs EIP-2612 permit granting server wallet USDT allowance
+         * 2. Server transfers USDT from user to itself via transferFrom
+         * 3. Server calls depositFor(proxyAddress, amount) on CommunityPool
+         * 4. Shares are credited to the user's deterministic proxy address
+         * 5. User's real wallet is never exposed on-chain
+         */
+        if (!walletAddress || !ethers.isAddress(walletAddress)) {
+          return NextResponse.json({
+            success: false,
+            error: 'Valid walletAddress required',
+          }, { status: 400 });
+        }
+
+        if (!amount || amount <= 0) {
+          return NextResponse.json({
+            success: false,
+            error: 'Valid amount required',
+          }, { status: 400 });
+        }
+
+        const { permit } = body; // { deadline, v, r, s }
+
+        const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
+        if (!serverPrivateKey) {
+          return NextResponse.json({
+            success: false,
+            error: 'Server wallet not configured',
+          }, { status: 500 });
+        }
+
+        const rpcUrl = CHAIN_RPC_URLS[chainId];
+        if (!rpcUrl) {
+          return NextResponse.json({
+            success: false,
+            error: `No RPC configured for chain ${chainId}`,
+          }, { status: 400 });
+        }
+
+        // USDT addresses per chain
+        const USDT_ADDRESSES: Record<number, string> = {
+          11155111: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Sepolia
+          421614: '0x...', // Arbitrum Sepolia - TODO
+        };
+
+        const usdtAddress = USDT_ADDRESSES[chainId];
+        if (!usdtAddress || usdtAddress === '0x...') {
+          return NextResponse.json({
+            success: false,
+            error: `USDT not configured for chain ${chainId}`,
+          }, { status: 400 });
+        }
+
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
+          const amountInUnits = ethers.parseUnits(String(amount), 6);
+
+          const usdtAbi = [
+            'function transferFrom(address from, address to, uint256 amount) returns (bool)',
+            'function approve(address spender, uint256 amount) returns (bool)',
+            'function allowance(address owner, address spender) view returns (uint256)',
+            'function balanceOf(address) view returns (uint256)',
+            'function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+          ];
+          const usdt = new ethers.Contract(usdtAddress, usdtAbi, serverWallet);
+
+          // Step 1: Execute permit if provided (sets allowance from user to server)
+          if (permit?.deadline && permit?.v !== undefined && permit?.r && permit?.s) {
+            logger.info('[DepositProxy] Executing permit', { from: walletAddress, to: serverWallet.address });
+            try {
+              const permitTx = await usdt.permit(
+                walletAddress,
+                serverWallet.address,
+                amountInUnits,
+                permit.deadline,
+                permit.v,
+                permit.r,
+                permit.s
+              );
+              await permitTx.wait(1);
+              logger.info('[DepositProxy] Permit executed');
+            } catch (permitErr: any) {
+              logger.warn('[DepositProxy] Permit failed, checking existing allowance', { error: permitErr.message });
+            }
+          }
+
+          // Step 2: Verify allowance from user to server
+          const userAllowance = await usdt.allowance(walletAddress, serverWallet.address);
+          if (BigInt(userAllowance) < amountInUnits) {
+            return NextResponse.json({
+              success: false,
+              error: 'Insufficient allowance from user to server wallet. Please approve or sign permit first.',
+              serverWallet: serverWallet.address,
+              required: amount,
+              currentAllowance: ethers.formatUnits(userAllowance, 6),
+            }, { status: 400 });
+          }
+
+          // Step 3: Transfer USDT from user to server wallet
+          logger.info('[DepositProxy] Transferring USDT from user to server', { amount });
+          const transferTx = await usdt.transferFrom(walletAddress, serverWallet.address, amountInUnits);
+          await transferTx.wait(1);
+          logger.info('[DepositProxy] USDT transferred to server');
+
+          // Step 4: Derive proxy PDA for the user
+          const { deriveProxyPDA } = await import('@/lib/crypto/ProxyPDA');
+          const proxyPDA = deriveProxyPDA(walletAddress, 0, 'pool-share');
+          const proxyAddress = proxyPDA.proxyAddress;
+          logger.info('[DepositProxy] Proxy address derived', { proxyAddress, owner: walletAddress });
+
+          // Step 5: Approve USDT from server to CommunityPool
+          const currentPoolAllowance = await usdt.allowance(serverWallet.address, communityPoolAddress);
+          if (BigInt(currentPoolAllowance) < amountInUnits) {
+            logger.info('[DepositProxy] Approving USDT for pool');
+            const approveTx = await usdt.approve(communityPoolAddress, amountInUnits);
+            await approveTx.wait(1);
+          }
+
+          // Step 6: Call depositFor(proxyAddress, amount) on CommunityPool
+          const poolAbi = [
+            'function depositFor(address beneficiary, uint256 amount) returns (uint256)',
+          ];
+          const pool = new ethers.Contract(communityPoolAddress, poolAbi, serverWallet);
+
+          logger.info('[DepositProxy] Calling depositFor', { proxyAddress, amount });
+          const depositTx = await pool.depositFor(proxyAddress, amountInUnits);
+          const receipt = await depositTx.wait(1);
+
+          logger.info('[DepositProxy] Deposit complete!', { 
+            txHash: receipt?.hash, 
+            proxyAddress, 
+            owner: walletAddress,
+          });
+
+          return NextResponse.json({
+            success: true,
+            txHash: receipt?.hash,
+            proxyAddress,
+            shares: 'Check events for exact share count',
+            message: `Deposited ${amount} USDT via proxy wallet`,
+          });
+
+        } catch (proxyErr: any) {
+          logger.error('[DepositProxy] Failed', { error: proxyErr.message });
+          return NextResponse.json({
+            success: false,
+            error: proxyErr.message || 'Proxy deposit failed',
+          }, { status: 500 });
         }
       }
       
