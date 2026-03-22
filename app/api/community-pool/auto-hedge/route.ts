@@ -20,7 +20,7 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 
 // In-memory cache for auto-hedge status (expensive risk assessment)
 let autoHedgeCache: { data: unknown; expiresAt: number } | null = null;
-const AUTO_HEDGE_CACHE_TTL = 60_000; // 60s — risk assessment is expensive
+const AUTO_HEDGE_CACHE_TTL = 300_000; // 5 min — reduce DB load
 
 interface AutoHedgeStatus {
   enabled: boolean;
@@ -91,13 +91,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // Get auto-hedge config
-    const config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
+    // Get auto-hedge config (graceful fallback if DB is unavailable)
+    let config: Awaited<ReturnType<typeof getAutoHedgeConfig>> = null;
+    try {
+      config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
+    } catch (e: any) {
+      logger.warn('[AutoHedge API] Could not fetch config (DB may be unavailable)', { error: e.message });
+    }
     
-    // Get active hedges
-    logger.info('[AutoHedge API] Fetching hedges for portfolio_id:', { portfolioId: COMMUNITY_POOL_PORTFOLIO_ID });
-    const hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
-    logger.info('[AutoHedge API] Hedges found:', { count: hedges.length, hedgeIds: hedges.map(h => h.id) });
+    // Get active hedges (graceful fallback if DB is unavailable)
+    let hedges: Awaited<ReturnType<typeof getActiveHedges>> = [];
+    try {
+      logger.info('[AutoHedge API] Fetching hedges for portfolio_id:', { portfolioId: COMMUNITY_POOL_PORTFOLIO_ID });
+      hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
+      logger.info('[AutoHedge API] Hedges found:', { count: hedges.length, hedgeIds: hedges.map(h => h.id) });
+    } catch (e: any) {
+      logger.warn('[AutoHedge API] Could not fetch hedges (DB may be unavailable)', { error: e.message });
+    }
     
     // Get recent AI decisions from database
     let recentDecisions: AutoHedgeStatus['recentDecisions'] = [];
