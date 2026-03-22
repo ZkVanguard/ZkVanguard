@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useSignMessage } from './wdk-hooks';
 import { ethers } from 'ethers';
 import { SafeUtils } from '@/lib/services/safe-utils';
@@ -27,6 +27,25 @@ export function useSmartAccount() {
   const { signMessageAsync } = useSignMessage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
+  const [isDeployed, setIsDeployed] = useState(false);
+
+  // Calculate Safe address on mount/change
+  useEffect(() => {
+    async function fetchSafeAddress() {
+      if (!address || !chain?.id) return;
+      try {
+        const safeInfo = await SafeUtils.getSafeAddress(address, chain.id);
+        if (safeInfo) {
+          setSmartAccountAddress(safeInfo.address);
+          // Ideally we'd check if deployed here too, but that needs provider
+        }
+      } catch (e) {
+        console.warn('Failed to predict Safe address', e);
+      }
+    }
+    fetchSafeAddress();
+  }, [address, chain?.id]);
 
   const depositWithGasless = useCallback(async (amount: string) => {
     setLoading(true);
@@ -126,6 +145,7 @@ export function useSmartAccount() {
   return {
     depositWithGasless,
     loading,
-    error
+    error,
+    smartAccountAddress
   };
 }
