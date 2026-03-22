@@ -79,6 +79,16 @@ export function deriveProxyPDA(
 }
 
 /**
+ * Derive the single shared treasury proxy address.
+ * ALL deposits go to this one address — individual user tracking is via events.
+ */
+export function deriveTreasuryProxy(seed: string = 'pool-share'): string {
+  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:treasury:${seed}:0`;
+  const hash = crypto.createHash('sha256').update(derivationPath).digest('hex');
+  return '0x' + hash.slice(-40);
+}
+
+/**
  * Verify that a proxy address was derived from an owner
  * Used to prove ownership without revealing the owner on-chain
  */

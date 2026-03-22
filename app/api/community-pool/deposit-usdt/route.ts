@@ -491,14 +491,14 @@ export async function POST(request: NextRequest) {
 
       case 'deposit-proxy': {
         /**
-         * Proxy wallet deposit: Server relays the deposit so the user's
-         * real address never appears on-chain as a pool member.
+         * Treasury proxy deposit: Server relays ALL deposits to a single
+         * treasury proxy wallet so no user address appears on-chain.
          * 
          * Flow:
          * 1. User signs EIP-2612 permit granting server wallet USDT allowance
          * 2. Server transfers USDT from user to itself via transferFrom
-         * 3. Server calls depositFor(proxyAddress, amount) on CommunityPool
-         * 4. Shares are credited to the user's deterministic proxy address
+         * 3. Server calls depositFor(treasuryProxy, amount) on CommunityPool
+         * 4. Shares are credited to the single treasury proxy address
          * 5. User's real wallet is never exposed on-chain
          */
         if (!walletAddress || !ethers.isAddress(walletAddress)) {
@@ -599,11 +599,10 @@ export async function POST(request: NextRequest) {
           await transferTx.wait(1);
           logger.info('[DepositProxy] USDT transferred to server');
 
-          // Step 4: Derive proxy PDA for the user
-          const { deriveProxyPDA } = await import('@/lib/crypto/ProxyPDA');
-          const proxyPDA = deriveProxyPDA(walletAddress, 0, 'pool-share');
-          const proxyAddress = proxyPDA.proxyAddress;
-          logger.info('[DepositProxy] Proxy address derived', { proxyAddress, owner: walletAddress });
+          // Step 4: Use single treasury proxy for ALL deposits
+          const { deriveTreasuryProxy } = await import('@/lib/crypto/ProxyPDA');
+          const proxyAddress = deriveTreasuryProxy('pool-share');
+          logger.info('[DepositProxy] Treasury proxy', { proxyAddress, depositor: walletAddress });
 
           // Step 5: Approve USDT from server to CommunityPool
           const currentPoolAllowance = await usdt.allowance(serverWallet.address, communityPoolAddress);
@@ -625,16 +624,16 @@ export async function POST(request: NextRequest) {
 
           logger.info('[DepositProxy] Deposit complete!', { 
             txHash: receipt?.hash, 
-            proxyAddress, 
-            owner: walletAddress,
+            treasuryProxy: proxyAddress, 
+            depositor: walletAddress,
           });
 
           return NextResponse.json({
             success: true,
             txHash: receipt?.hash,
             proxyAddress,
-            shares: 'Check events for exact share count',
-            message: `Deposited ${amount} USDT via proxy wallet`,
+            depositor: walletAddress,
+            message: `Deposited ${amount} USDT to treasury proxy wallet`,
           });
 
         } catch (proxyErr: any) {
