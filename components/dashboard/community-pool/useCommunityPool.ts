@@ -975,7 +975,7 @@ export function useCommunityPool(propAddress?: string) {
     // TRY EIP-2612 PERMIT FLOW (Single TX!)
     // =========================================
     // Fetch permit details ON CLICK - no eager loading!
-    let permitDetails = { supported: false, nonce: BigInt(0), name: '', domainSeparator: '' };
+    let permitDetails: { supported: boolean; nonce?: bigint; name?: string; domainSeparator?: string } = { supported: false, nonce: BigInt(0), name: '', domainSeparator: '' };
     try {
       permitDetails = await getPermitDetails(USDT_ADDRESS, address, targetChainId);
     } catch (e) {
