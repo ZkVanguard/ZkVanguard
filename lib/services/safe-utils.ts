@@ -104,4 +104,43 @@ export class SafeUtils {
       ethers.ZeroAddress
     ]);
   }
+
+  /**
+   * Encode MultiSend transaction
+   * transactions format: operation(1)to(20)value(32)dataLength(32)data(bytes)
+   */
+  static encodeMultiSend(transactions: Array<{ to: string, value: bigint, data: string, operation?: number }>): string {
+    let packed = '0x';
+    
+    for (const tx of transactions) {
+      const operation = tx.operation || 0; // 0 = Call, 1 = DelegateCall
+      const to = tx.to.toLowerCase().replace('0x', '');
+      const value = tx.value.toString(16).padStart(64, '0');
+      const data = tx.data.replace('0x', '');
+      const dataLength = (data.length / 2).toString(16).padStart(64, '0');
+      
+      const txEncoded =
+        operation.toString(16).padStart(2, '0') +
+        to +
+        value +
+        dataLength +
+        data;
+        
+      packed += txEncoded;
+    }
+
+    const iface = new ethers.Interface(['function multiSend(bytes transactions)']);
+    return iface.encodeFunctionData('multiSend', [packed]);
+  }
+
+  /**
+   * Encode executeUserOp for Safe 4337 Module
+   * function executeUserOp(address to, uint256 value, bytes calldata data, uint8 operation)
+   */
+  static encodeExecuteUserOp(to: string, value: bigint, data: string, operation: number): string {
+    const iface = new ethers.Interface([
+      'function executeUserOp(address to, uint256 value, bytes calldata data, uint8 operation)'
+    ]);
+    return iface.encodeFunctionData('executeUserOp', [to, value, data, operation]);
+  }
 }
