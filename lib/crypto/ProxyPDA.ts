@@ -56,7 +56,7 @@ export function deriveProxyPDA(
   
   // Generate deterministic proxy address using keccak256 (same as EVM)
   // This mirrors how CREATE2 and Solana PDAs work
-  const hash = crypto.createHash('sha3-256')
+  const hash = crypto.createHash('sha256')
     .update(derivationPath)
     .digest('hex');
   
