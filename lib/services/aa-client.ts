@@ -394,12 +394,14 @@ export class AAClient {
     communityPoolAddress: string;
     amountUSDT: bigint;
     approveFirst?: boolean;
+    factory?: string;
+    factoryData?: string;
   }): Promise<{
     userOp: Partial<UserOperation>;
     estimatedGas: GasEstimation;
     paymasterQuote: PaymasterQuote;
   }> {
-    const { smartAccountAddress, communityPoolAddress, amountUSDT, approveFirst } = params;
+    const { smartAccountAddress, communityPoolAddress, amountUSDT, approveFirst, factory, factoryData } = params;
     
     // Build calldata
     let callData: string;
@@ -427,6 +429,8 @@ export class AAClient {
       maxFeePerGas: gasPrices.maxFeePerGas,
       maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
       signature: '0x', // Placeholder
+      factory,
+      factoryData,
     };
     
     // Estimate gas

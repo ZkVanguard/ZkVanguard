@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useSignMessage } from './wdk-hooks';
 import { ethers } from 'ethers';
+import { SafeUtils } from '@/lib/services/safe-utils';
 
 interface UserOperation {
   sender: string;
@@ -33,12 +34,34 @@ export function useSmartAccount() {
     try {
       if (!address || !chain) throw new Error('Wallet not connected');
 
+      let smartAccountAddress = address;
+      let factory: string | undefined;
+      let factoryData: string | undefined;
+
+      // Try to determine counterfactual Safe address
+      try {
+        if (chain?.id) {
+            const safeInfo = await SafeUtils.getSafeAddress(address, chain.id);
+            if (safeInfo) {
+                smartAccountAddress = safeInfo.address as `0x${string}`;
+                factory = safeInfo.factory;
+                factoryData = safeInfo.factoryData;
+                console.log('Using counterfactual Safe:', safeInfo);
+            }
+        }
+      } catch (e) {
+        console.warn('Could not determine Safe address, falling back to EOA:', e);
+      }
+
       // 1. Get UserOp from Server
       const response = await fetch('/api/community-pool/deposit-usdt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          smartAccountAddress: address,
+          smartAccountAddress,
+          factory,
+          factoryData,
+          walletAddress: address, // Pass the original signer (owner)
           amount,
           chainId: chain?.id,
         }),

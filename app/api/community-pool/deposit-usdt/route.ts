@@ -173,6 +173,8 @@ export async function POST(request: NextRequest) {
       walletAddress,
       smartAccountAddress,
       amount,
+      factory,
+      factoryData,
     } = body;
     
     // Validate chain support
@@ -423,11 +425,12 @@ export async function POST(request: NextRequest) {
         const provider = new ethers.JsonRpcProvider(config.provider);
         const isSmart = await isSmartAccount(provider, smartAccountAddress);
         
-        if (!isSmart) {
+        // If not deployed, we need factory params to deploy it
+        if (!isSmart && !factory) {
           return NextResponse.json({
             success: false,
             error: 'Address is not a deployed smart account',
-            hint: 'Deploy a Safe or other ERC-4337 compatible account first',
+            hint: 'Provide factory and factoryData to deploy a counteracttual account',
           }, { status: 400 });
         }
         
@@ -455,6 +458,8 @@ export async function POST(request: NextRequest) {
           smartAccountAddress,
           communityPoolAddress,
           amountUSDT: amountWei,
+          factory,
+          factoryData,
         });
         
         // Calculate UserOp hash for signing
