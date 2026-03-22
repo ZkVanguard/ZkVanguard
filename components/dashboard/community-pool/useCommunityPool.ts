@@ -248,12 +248,13 @@ export function useCommunityPool(propAddress?: string) {
   }, [activeWalletType, suiAddress, address]);
   
   // ERC20 allowance check (for USDT reset-to-zero pattern)
+  // OPTIMIZED: Only fetch when needed or polling slowly
   const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
     address: USDT_ADDRESS,
     abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'allowance',
     args: address && COMMUNITY_POOL_ADDRESS ? [address as `0x${string}`, COMMUNITY_POOL_ADDRESS] : undefined,
-    enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui',
+    enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' && (txState.showDeposit || txState.txStatus !== 'idle'),
   });
   
   // User's USDT balance (show how much they can deposit)
@@ -266,29 +267,31 @@ export function useCommunityPool(propAddress?: string) {
   });
   
   // EIP-2612 Permit Support Check - check if token has nonces() function
-  // If nonces exists, token likely supports EIP-2612 permit
+  // OPTIMIZED: Defer execution until deposit modal is open
   const { data: permitNonce, isError: permitNonceError } = useReadContract({
     address: USDT_ADDRESS,
     abi: [{ name: 'nonces', type: 'function', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
     functionName: 'nonces',
     args: address ? [address as `0x${string}`] : undefined,
-    enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui',
+    enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
   });
   
   // EIP-2612: Get token name for permit signing
+  // OPTIMIZED: Defer execution until deposit modal is open
   const { data: tokenName } = useReadContract({
     address: USDT_ADDRESS,
     abi: [{ name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' }],
     functionName: 'name',
-    enabled: !!USDT_ADDRESS && selectedChain !== 'sui',
+    enabled: !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
   });
   
   // EIP-2612: Get DOMAIN_SEPARATOR (cached on-chain)
+  // OPTIMIZED: Defer execution until deposit modal is open
   const { data: domainSeparator } = useReadContract({
     address: USDT_ADDRESS,
     abi: [{ name: 'DOMAIN_SEPARATOR', type: 'function', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' }],
     functionName: 'DOMAIN_SEPARATOR',
-    enabled: !!USDT_ADDRESS && selectedChain !== 'sui',
+    enabled: !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
   });
   
   // Check if permit is supported
