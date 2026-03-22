@@ -1082,11 +1082,11 @@ export function useCommunityPool(propAddress?: string) {
     console.error('🔴🔴🔴 DEPOSIT - Using regular approve+deposit flow');
     
     try {
-      // Refetch current allowance
+      // Refetch current allowance and use returned value (not stale closure)
       await refetchAllowance();
       const allowance = currentAllowance ? BigInt(currentAllowance.toString()) : BigInt(0);
       const amountInUnits = parseUnits(amount.toString(), 6);
-      console.error('🔴🔴🔴 DEPOSIT - Current allowance:', allowance.toString(), 'needed:', amountInUnits.toString());
+      logger.info(`[Deposit] Allowance: ${allowance.toString()}, needed: ${amountInUnits.toString()}`);
       
       // STEP 1: Reset allowance if needed (USDT non-standard requirement)
       if (allowance > BigInt(0)) {
