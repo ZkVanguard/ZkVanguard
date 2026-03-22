@@ -429,7 +429,8 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       
       totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
       totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
-      sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+      // Use the contract's _sharePrice (6 decimals, accounts for virtual offsets)
+      sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
       rawMemberCount = Number(memberCount);
       allocations = (stats._allocations || []).map((a: bigint) => Number(a) / 100);
       
@@ -460,8 +461,11 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
           totalNAV = parseFloat(ethers.formatUnits(usdtBalance, 6)); // USDT has 6 decimals
         }
         
-        // Calculate share price
-        sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+        // Calculate share price with virtual offset (matching contract's ERC-4626 formula)
+        // VIRTUAL_ASSETS = 1e6 ($1), VIRTUAL_SHARES = 1e18 (1 share)
+        const VIRTUAL_ASSETS = 1; // 1e6 in 6-decimal = $1
+        const VIRTUAL_SHARES = 1; // 1e18 in 18-decimal = 1 share
+        sharePrice = (totalNAV + VIRTUAL_ASSETS) / (totalShares + VIRTUAL_SHARES);
         
         // Try to get member count
         try {
