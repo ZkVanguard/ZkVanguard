@@ -874,7 +874,6 @@ export function useCommunityPool(propAddress?: string) {
       USDT_ADDRESS, 
       COMMUNITY_POOL_ADDRESS,
       poolDeployed,
-      permitSupported,
     });
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
