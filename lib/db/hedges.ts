@@ -1,6 +1,84 @@
 import { query, queryOne } from './postgres';
 import crypto from 'crypto';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '../constants';
+import { logger } from '@/lib/utils/logger';
+
+// ── Lazy table initialization ──
+let hedgesTableReady = false;
+
+/**
+ * Ensure hedges table + all migration columns exist (idempotent).
+ * Safe to call on every request — no-ops after first success.
+ */
+export async function ensureHedgesTable(): Promise<void> {
+  if (hedgesTableReady) return;
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hedges (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) UNIQUE NOT NULL,
+        portfolio_id INTEGER,
+        wallet_address VARCHAR(255),
+        asset VARCHAR(20) NOT NULL,
+        market VARCHAR(50) NOT NULL,
+        side VARCHAR(10) NOT NULL CHECK (side IN ('LONG', 'SHORT')),
+        size DECIMAL(18, 8) NOT NULL,
+        notional_value DECIMAL(18, 2) NOT NULL,
+        leverage INTEGER NOT NULL,
+        entry_price DECIMAL(18, 2),
+        liquidation_price DECIMAL(18, 2),
+        stop_loss DECIMAL(18, 2),
+        take_profit DECIMAL(18, 2),
+        status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed', 'liquidated', 'cancelled')),
+        simulation_mode BOOLEAN NOT NULL DEFAULT true,
+        reason TEXT,
+        prediction_market TEXT,
+        current_pnl DECIMAL(18, 2) DEFAULT 0,
+        realized_pnl DECIMAL(18, 2) DEFAULT 0,
+        funding_paid DECIMAL(18, 2) DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        closed_at TIMESTAMP WITH TIME ZONE,
+        tx_hash VARCHAR(66)
+      )
+    `);
+    // Migration columns (idempotent ADD COLUMN IF NOT EXISTS)
+    await query(`
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS zk_proof_hash VARCHAR(128);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS wallet_binding_hash VARCHAR(128);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS owner_commitment VARCHAR(128);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS hedge_id_onchain VARCHAR(66);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS chain VARCHAR(30) DEFAULT 'cronos-testnet';
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS chain_id INTEGER DEFAULT 338;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS contract_address VARCHAR(42);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS commitment_hash VARCHAR(66);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS nullifier VARCHAR(66);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS proxy_wallet VARCHAR(42);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS on_chain BOOLEAN DEFAULT false;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS explorer_link VARCHAR(256);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS block_number INTEGER;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS current_price DECIMAL(24, 10);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_source VARCHAR(50);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_updated_at TIMESTAMP WITH TIME ZONE;
+    `);
+    // Indexes
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_hedges_order_id ON hedges(order_id);
+      CREATE INDEX IF NOT EXISTS idx_hedges_portfolio ON hedges(portfolio_id);
+      CREATE INDEX IF NOT EXISTS idx_hedges_status ON hedges(status);
+      CREATE INDEX IF NOT EXISTS idx_hedges_asset ON hedges(asset);
+      CREATE INDEX IF NOT EXISTS idx_hedges_created ON hedges(created_at);
+    `);
+    hedgesTableReady = true;
+    logger.debug('[Hedges DB] Table ensured');
+  } catch (error) {
+    logger.error('[Hedges DB] Failed to ensure table', { error });
+    // Mark ready anyway to avoid retrying on every request if DB is up
+    // but the table-creation SQL failed for a transient reason
+    hedgesTableReady = true;
+  }
+}
 
 export interface Hedge {
   id: number;
@@ -104,6 +182,7 @@ export function verifyZKOwnership(walletAddress: string, hedgeId: string, stored
 }
 
 export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
+  await ensureHedgesTable();
   // Generate ZK binding hash using OWNER wallet (not proxy)
   // This ensures funds always return to owner even when using proxy
   const walletBindingHash = params.walletAddress 
@@ -208,6 +287,7 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
 }
 
 export async function getHedgeByOrderId(orderId: string): Promise<Hedge | null> {
+  await ensureHedgesTable();
   const sql = 'SELECT * FROM hedges WHERE order_id = $1';
   return queryOne<Hedge>(sql, [orderId]);
 }
@@ -224,12 +304,14 @@ export async function getHedgeByNumericId(id: number): Promise<Hedge | null> {
 }
 
 export async function getHedgeByZkProofHash(proofHash: string): Promise<Hedge | null> {
+  await ensureHedgesTable();
   // Check both zk_proof_hash and tx_hash (legacy column where proof was stored)
   const sql = 'SELECT * FROM hedges WHERE zk_proof_hash = $1 OR tx_hash = $1';
   return queryOne<Hedge>(sql, [proofHash]);
 }
 
 export async function getActiveHedges(portfolioId?: number): Promise<Hedge[]> {
+  await ensureHedgesTable();
   if (portfolioId !== undefined) {
     const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 AND status = $2 ORDER BY created_at DESC';
     return query<Hedge>(sql, [portfolioId, 'active']);

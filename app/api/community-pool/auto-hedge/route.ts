@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
 import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS } from '@/lib/constants';
 import { getAutoHedgeConfig, saveAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { getActiveHedges } from '@/lib/db/hedges';
-import { query } from '@/lib/db/postgres';
+import { query, ensureAllTables } from '@/lib/db/postgres';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
@@ -90,57 +90,64 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
+  // Ensure tables exist and DB is reachable (idempotent, runs once per cold start)
+  const dbAvailable = await ensureAllTables();
+
   try {
     // Get auto-hedge config (graceful fallback if DB is unavailable)
     let config: Awaited<ReturnType<typeof getAutoHedgeConfig>> = null;
-    try {
-      config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
-    } catch (e: any) {
-      logger.warn('[AutoHedge API] Could not fetch config (DB may be unavailable)', { error: e.message });
+    if (dbAvailable) {
+      try {
+        config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
+      } catch (e: any) {
+        logger.warn('[AutoHedge API] Could not fetch config', { error: e.message });
+      }
     }
     
     // Get active hedges (graceful fallback if DB is unavailable)
     let hedges: Awaited<ReturnType<typeof getActiveHedges>> = [];
-    try {
-      logger.info('[AutoHedge API] Fetching hedges for portfolio_id:', { portfolioId: COMMUNITY_POOL_PORTFOLIO_ID });
-      hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
-      logger.info('[AutoHedge API] Hedges found:', { count: hedges.length, hedgeIds: hedges.map(h => h.id) });
-    } catch (e: any) {
-      logger.warn('[AutoHedge API] Could not fetch hedges (DB may be unavailable)', { error: e.message });
+    if (dbAvailable) {
+      try {
+        hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
+      } catch (e: any) {
+        logger.warn('[AutoHedge API] Could not fetch hedges', { error: e.message });
+      }
     }
     
     // Get recent AI decisions from database
     let recentDecisions: AutoHedgeStatus['recentDecisions'] = [];
     let decisionsToday = 0;
     
-    try {
-      const decisions = await query(`
-        SELECT transaction_id as id, details, created_at 
-        FROM community_pool_transactions 
-        WHERE type = 'AI_DECISION'
-        ORDER BY created_at DESC 
-        LIMIT 10
-      `) as Array<{ id: string; details: Record<string, unknown>; created_at: Date }>;
-      
-      recentDecisions = decisions.map((d) => ({
-        id: String(d.id || ''),
-        action: String(d.details?.action || 'UNKNOWN'),
-        reasoning: String(d.details?.reasoning || ''),
-        riskScore: Number(d.details?.riskScore || 0),
-        executed: Boolean(d.details?.executed),
-        timestamp: d.created_at?.toISOString?.() || new Date().toISOString(),
-      }));
-      
-      // Count today's decisions
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayCount = await query(`
-        SELECT COUNT(*) as count FROM community_pool_transactions 
-        WHERE type = 'AI_DECISION' AND created_at >= $1
-      `, [todayStart]);
-      decisionsToday = Number(todayCount[0]?.count || 0);
-    } catch (e) {
-      logger.warn('[AutoHedge API] Could not fetch AI decisions', { error: e });
+    if (dbAvailable) {
+      try {
+        const decisions = await query(`
+          SELECT transaction_id as id, details, created_at 
+          FROM community_pool_transactions 
+          WHERE type = 'AI_DECISION'
+          ORDER BY created_at DESC 
+          LIMIT 10
+        `) as Array<{ id: string; details: Record<string, unknown>; created_at: Date }>;
+        
+        recentDecisions = decisions.map((d) => ({
+          id: String(d.id || ''),
+          action: String(d.details?.action || 'UNKNOWN'),
+          reasoning: String(d.details?.reasoning || ''),
+          riskScore: Number(d.details?.riskScore || 0),
+          executed: Boolean(d.details?.executed),
+          timestamp: d.created_at?.toISOString?.() || new Date().toISOString(),
+        }));
+        
+        // Count today's decisions
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayCount = await query(`
+          SELECT COUNT(*) as count FROM community_pool_transactions 
+          WHERE type = 'AI_DECISION' AND created_at >= $1
+        `, [todayStart]);
+        decisionsToday = Number(todayCount[0]?.count || 0);
+      } catch (e) {
+        logger.warn('[AutoHedge API] Could not fetch AI decisions', { error: e });
+      }
     }
     
     // Get latest risk assessment from service
@@ -218,10 +225,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     logger.error('[AutoHedge API] Error fetching status', { error });
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch auto-hedge status' },
-      { status: 500 }
-    );
+    // Return clean fallback instead of 500 — this is a status endpoint, not critical
+    const fallback = {
+      success: true,
+      enabled: false,
+      config: null,
+      activeHedges: [],
+      recentDecisions: [],
+      riskAssessment: null,
+      stats: { totalHedgeValue: 0, totalPnL: 0, hedgeCount: 0, decisionsToday: 0 },
+    };
+    autoHedgeCache = { data: fallback, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL };
+    return NextResponse.json(fallback, {
+      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+    });
   }
 }
 

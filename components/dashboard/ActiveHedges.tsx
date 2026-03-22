@@ -1,94 +1,21 @@
 'use client';
 
 import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Shield, TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, ExternalLink, AlertTriangle, Sparkles, Zap, Brain, RefreshCw, Wallet, Lock } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, TrendingUp, TrendingDown, CheckCircle, ExternalLink, RefreshCw, Wallet, Lock } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 import { useWalletClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getExplorerUrl, getNetworkName, CHAIN_IDS } from '@/lib/utils/network';
-
-interface HedgePosition {
-  id: string;
-  type: 'SHORT' | 'LONG';
-  asset: string;
-  size: number;
-  leverage: number;
-  entryPrice: number;
-  currentPrice: number;
-  targetPrice: number;
-  stopLoss: number;
-  capitalUsed: number;
-  pnl: number;
-  pnlPercent: number;
-  status: 'active' | 'closed' | 'triggered' | 'pending' | 'liquidated' | 'cancelled';
-  openedAt: Date;
-  closedAt?: Date;
-  reason: string;
-  txHash?: string;
-  walletAddress?: string;
-  walletVerified?: boolean;
-  // ZK verification fields
-  zkVerified?: boolean;
-  walletBindingHash?: string;
-  commitmentHash?: string;
-  // On-chain fields
-  onChain?: boolean;
-  chain?: string;
-  contractAddress?: string;
-  hedgeId?: string;
-  // Proxy wallet (ZK privacy)
-  proxyWallet?: string;
-  proxyVault?: string;
-}
-
-interface CloseReceipt {
-  success: boolean;
-  asset: string;
-  side: string;
-  collateral: number;
-  leverage: number;
-  realizedPnl: number;
-  fundsReturned: number;
-  balanceBefore: number;
-  balanceAfter: number;
-  txHash: string;
-  explorerLink: string;
-  trader: string;
-  gasless: boolean;
-  gasSavings?: { userGasCost: string; relayerGasCost: string; totalSaved: string };
-  elapsed?: string;
-  finalStatus: string;
-  error?: string;
-}
-
-interface PerformanceStats {
-  totalHedges: number;
-  activeHedges: number;
-  winRate: number;
-  totalPnL: number;
-  avgHoldTime: string;
-  bestTrade: number;
-  worstTrade: number;
-}
-
-interface AIRecommendation {
-  strategy: string;
-  confidence: number;
-  expectedReduction: number;
-  description: string;
-  actions: {
-    action: string;
-    asset: string;
-    size: number;
-    leverage: number;
-    protocol: string;
-    reason: string;
-  }[];
-  agentSource?: string;
-}
+import {
+  HedgeDetailModal,
+  CloseConfirmModal,
+  CloseReceiptModal,
+  AIRecommendationsSection,
+} from './active-hedges';
+import type { HedgePosition, CloseReceipt, PerformanceStats, AIRecommendation } from './active-hedges';
 
 interface ActiveHedgesProps {
   address?: string;
@@ -117,7 +44,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   
   // EIP-712 signature helper for closing hedges - uses WDK walletClient for correct wallet
   // NO fallback to window.ethereum - that causes conflicts with multiple wallets (OKX vs MetaMask)
-  const signCloseHedge = async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
+  const signCloseHedge = useCallback(async (hedgeId: string): Promise<{ signature: string; timestamp: number } | null> => {
     try {
       // IMPORTANT: Only use WDK walletClient - no window.ethereum fallback
       // Multiple wallet extensions conflict over window.ethereum
@@ -161,10 +88,10 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       logger.warn('Wallet signature declined or failed', { component: 'ActiveHedges', error: err });
       return null;
     }
-  };
+  }, [walletClient, getEIP712Domain]);
 
   // EIP-712 signature helper for OPENING hedges — proves user authorized this hedge
-  const signOpenHedge = async (asset: string, side: string, collateral: number, leverage: number): Promise<{ signature: string; timestamp: number } | null> => {
+  const signOpenHedge = useCallback(async (asset: string, side: string, collateral: number, leverage: number): Promise<{ signature: string; timestamp: number } | null> => {
     try {
       if (!walletClient) {
         alert('Wallet not connected. Please connect your wallet first.');
@@ -211,7 +138,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
       logger.warn('Wallet signature declined or failed for hedge execution', { component: 'ActiveHedges', error: err });
       return null;
     }
-  };
+  }, [walletClient, getEIP712Domain]);
 
   const [hedges, setHedges] = useState<HedgePosition[]>([]);
   const [stats, setStats] = useState<PerformanceStats>({
@@ -1423,135 +1350,13 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
           {/* AI Multi-Agent Recommendations Section */}
           {!compact && (
-            <div className="bg-gradient-to-br from-[#f8f9ff] to-[#f0f4ff] rounded-[16px] sm:rounded-[20px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-[#007AFF]/10 p-3 sm:p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[12px] flex items-center justify-center">
-                    <Brain className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-[-0.01em]">
-                      AI Multi-Agent Recommendations
-                    </h3>
-                    <span className="text-[11px] text-[#86868b]">
-                      LeadAgent • RiskAgent • HedgingAgent orchestration
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => refreshContextHedges(true)}
-                  disabled={loadingRecommendations}
-                  className="p-2 rounded-[10px] hover:bg-[#007AFF]/10 transition-colors disabled:opacity-50"
-                  title="Refresh recommendations"
-                >
-                  <RefreshCw className={`w-4 h-4 text-[#007AFF] ${loadingRecommendations ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-
-              {loadingRecommendations ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-[#007AFF]/30 border-t-[#007AFF] rounded-full animate-spin" />
-                    <span className="text-[13px] text-[#86868b]">Multi-agent analysis in progress...</span>
-                  </div>
-                </div>
-              ) : recommendations.length > 0 ? (
-                <div className="space-y-3">
-                  {recommendations.map((rec, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="p-4 bg-white rounded-[14px] border border-[#007AFF]/10 hover:border-[#007AFF]/30 transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[14px] font-semibold text-[#1d1d1f]">
-                              {rec.strategy}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              rec.confidence >= 0.7 
-                                ? 'bg-[#34C759]/10 text-[#34C759]' 
-                                : rec.confidence >= 0.5 
-                                  ? 'bg-[#FF9500]/10 text-[#FF9500]'
-                                  : 'bg-[#86868b]/10 text-[#86868b]'
-                            }`}>
-                              {(rec.confidence * 100).toFixed(0)}% Confidence
-                            </span>
-                          </div>
-                          <p className="text-[12px] text-[#86868b] leading-relaxed">
-                            {rec.description}
-                          </p>
-                          {rec.agentSource && (
-                            <div className="flex items-center gap-1 mt-2">
-                              <Sparkles className="w-3 h-3 text-[#5856D6]" />
-                              <span className="text-[10px] text-[#5856D6] font-medium">
-                                {rec.agentSource}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[11px] text-[#86868b] mb-1">Risk Reduction</div>
-                          <div className="text-[15px] font-bold text-[#34C759]">
-                            {((rec.expectedReduction || 0) * 100).toFixed(0)}%
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      {rec.actions && rec.actions.length > 0 && (
-                        <div className="flex items-center justify-between pt-3 border-t border-[#e8e8ed]">
-                          <div className="flex items-center gap-3 text-[11px] text-[#86868b]">
-                            <span className={`font-semibold ${
-                              rec.actions[0].action === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#34C759]'
-                            }`}>
-                              {rec.actions[0].action} {rec.actions[0].asset}
-                            </span>
-                            <span>Size: {rec.actions[0].size?.toFixed(4) || '0.25'}</span>
-                            <span>{rec.actions[0].leverage || 5}x leverage</span>
-                          </div>
-                          <button
-                            onClick={() => executeRecommendation(rec)}
-                            disabled={executingRecommendation === rec.strategy}
-                            className="px-4 py-2 bg-[#007AFF] text-white rounded-[10px] text-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-1.5"
-                          >
-                            {executingRecommendation === rec.strategy ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                Executing...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-3.5 h-3.5" />
-                                Execute
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-[#f5f5f7] rounded-[14px] flex items-center justify-center mx-auto mb-3">
-                    <Brain className="w-6 h-6 text-[#86868b]" />
-                  </div>
-                  <p className="text-[13px] text-[#86868b] mb-3">
-                    No recommendations yet. Click refresh to run multi-agent analysis.
-                  </p>
-                  <button
-                    onClick={() => refreshContextHedges(true)}
-                    className="px-4 py-2 bg-[#007AFF] text-white rounded-[10px] text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
-                  >
-                    Run AI Analysis
-                  </button>
-                </div>
-              )}
-            </div>
+            <AIRecommendationsSection
+              recommendations={recommendations}
+              loading={loadingRecommendations}
+              executingRecommendation={executingRecommendation}
+              onRefresh={refreshContextHedges}
+              onExecute={executeRecommendation}
+            />
           )}
         </div>
       )}
@@ -1581,552 +1386,27 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
         </div>
       )}
 
-      {/* Hedge Detail Modal — comprehensive info about a specific hedge */}
-      <AnimatePresence>
-        {detailHedge && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setDetailHedge(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-[#e8e8ed] overflow-hidden max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className={`p-5 ${detailHedge.type === 'LONG' ? 'bg-gradient-to-r from-[#34C759]/10 to-[#007AFF]/5' : 'bg-gradient-to-r from-[#FF3B30]/10 to-[#FF9500]/5'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      detailHedge.type === 'SHORT' ? 'bg-[#FF3B30]/20' : 'bg-[#34C759]/20'
-                    }`}>
-                      {detailHedge.type === 'SHORT' ? (
-                        <TrendingDown className="w-6 h-6 text-[#FF3B30]" strokeWidth={2.5} />
-                      ) : (
-                        <TrendingUp className="w-6 h-6 text-[#34C759]" strokeWidth={2.5} />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-[18px] font-bold text-[#1d1d1f]">{detailHedge.type} {detailHedge.asset}</h3>
-                        <span className="px-2 py-0.5 bg-[#007AFF]/10 text-[#007AFF] rounded-[6px] text-[11px] font-bold">
-                          {detailHedge.leverage}x
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="px-1.5 py-0.5 bg-[#34C759] text-white text-[9px] font-bold rounded uppercase">{detailHedge.status}</span>
-                        {detailHedge.zkVerified && (
-                          <span className="px-1.5 py-0.5 bg-[#5856D6] text-white text-[9px] font-bold rounded flex items-center gap-0.5">
-                            <Lock className="w-2.5 h-2.5" />ZK
-                          </span>
-                        )}
-                        {detailHedge.onChain && (
-                          <span className="px-1.5 py-0.5 bg-[#FF9500]/10 text-[#FF9500] text-[9px] font-bold rounded">⛓ ON-CHAIN</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => setDetailHedge(null)} className="p-2 hover:bg-black/5 rounded-lg transition-colors">
-                    <XCircle className="w-5 h-5 text-[#86868b]" />
-                  </button>
-                </div>
-              </div>
+      <HedgeDetailModal
+        hedge={detailHedge}
+        onClose={() => setDetailHedge(null)}
+        onClosePosition={handleClosePosition}
+        closingPosition={closingPosition}
+        explorerUrl={explorerUrl}
+        chainId={chainId || CHAIN_IDS.CRONOS_TESTNET}
+        contractAddresses={contractAddresses}
+      />
 
-              <div className="p-5 space-y-4">
-                {/* P&L */}
-                <div className="text-center p-4 bg-[#f5f5f7] rounded-xl">
-                  <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">Unrealized P/L</div>
-                  <div className={`text-[28px] font-bold ${detailHedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                    {detailHedge.pnl >= 0 ? '+' : ''}{detailHedge.pnl.toFixed(2)} USDC
-                  </div>
-                  <div className={`text-[14px] font-medium ${detailHedge.pnlPercent >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                    {detailHedge.pnlPercent >= 0 ? '+' : ''}{detailHedge.pnlPercent.toFixed(2)}%
-                  </div>
-                </div>
+      <CloseConfirmModal
+        isOpen={showCloseConfirm}
+        hedge={selectedHedge}
+        onClose={closeCloseConfirm}
+        onConfirm={confirmClosePosition}
+      />
 
-                {/* Position Details */}
-                <div className="space-y-2.5">
-                  <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Position Details</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
-                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Entry Price</div>
-                      <div className="text-[15px] font-bold text-[#1d1d1f]">${detailHedge.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</div>
-                    </div>
-                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
-                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Current Price</div>
-                      <div className="text-[15px] font-bold text-[#1d1d1f]">${detailHedge.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</div>
-                    </div>
-                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
-                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Collateral</div>
-                      <div className="text-[15px] font-bold text-[#1d1d1f]">{detailHedge.capitalUsed?.toLocaleString()} USDC</div>
-                    </div>
-                    <div className="p-3 bg-[#f5f5f7] rounded-xl">
-                      <div className="text-[10px] font-semibold text-[#86868b] uppercase">Notional Value</div>
-                      <div className="text-[15px] font-bold text-[#1d1d1f]">{((detailHedge.capitalUsed || 0) * detailHedge.leverage).toLocaleString()} USDC</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Amount Held */}
-                {detailHedge.onChain && (
-                  <div className="space-y-2.5">
-                    <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Funds Held in Contract</div>
-                    <div className="p-4 bg-gradient-to-r from-[#34C759]/5 to-[#007AFF]/5 rounded-xl border border-[#34C759]/20 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-[#86868b]">Collateral Locked</span>
-                        <span className="text-[15px] font-bold text-[#1d1d1f]">{detailHedge.capitalUsed?.toLocaleString()} USDC</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-[#86868b]">Unrealized P/L</span>
-                        <span className={`text-[15px] font-bold ${detailHedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                          {detailHedge.pnl >= 0 ? '+' : ''}{detailHedge.pnl.toFixed(2)} USDC
-                        </span>
-                      </div>
-                      <div className="h-px bg-[#e8e8ed]" />
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-[#1d1d1f]">Estimated Return</span>
-                        <span className={`text-[17px] font-bold ${((Number(detailHedge.capitalUsed) || 0) + (Number(detailHedge.pnl) || 0)) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                          {(isNaN(Number(detailHedge.capitalUsed)) || isNaN(Number(detailHedge.pnl))) ? '—' : Math.max(0, (Number(detailHedge.capitalUsed) || 0) + (Number(detailHedge.pnl) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-[#86868b]">
-                        <Lock className="w-3 h-3 text-[#5856D6]" />
-                        <span>Funds held in HedgeExecutor contract — returned to your wallet on close</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* On-Chain Info */}
-                {detailHedge.onChain && (
-                  <div className="space-y-2.5">
-                    <div className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">On-Chain Details</div>
-                    <div className="p-3 bg-[#f5f5f7] rounded-xl space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#86868b]">Chain</span>
-                        <span className="text-[12px] font-semibold text-[#1d1d1f]">{chainId === CHAIN_IDS.CRONOS_MAINNET ? 'Cronos Mainnet (25)' : 'Cronos Testnet (338)'}</span>
-                      </div>
-                      {detailHedge.hedgeId && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">Hedge ID</span>
-                          <span className="text-[11px] font-mono text-[#1d1d1f]">{detailHedge.hedgeId.slice(0, 10)}...{detailHedge.hedgeId.slice(-8)}</span>
-                        </div>
-                      )}
-                      {detailHedge.contractAddress && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">Contract</span>
-                          <a
-                            href={`${explorerUrl}/address/${detailHedge.contractAddress}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
-                          >
-                            <span className="font-mono">{detailHedge.contractAddress.slice(0, 8)}...{detailHedge.contractAddress.slice(-6)}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        </div>
-                      )}
-                      {detailHedge.txHash && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">Transaction</span>
-                          <a
-                            href={`${explorerUrl}/tx/${detailHedge.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
-                          >
-                            <span className="font-mono">{detailHedge.txHash.slice(0, 10)}...{detailHedge.txHash.slice(-8)}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#86868b]">Collateral (USDT)</span>
-                        <a
-                          href={`${explorerUrl}/address/${contractAddresses.usdtToken}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
-                        >
-                          <span className="font-mono">View USDT Contract</span>
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
-                      </div>
-                      {detailHedge.walletAddress && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">Trader Wallet</span>
-                          <a
-                            href={`${explorerUrl}/address/${detailHedge.walletAddress}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
-                          >
-                            <span className="font-mono">{detailHedge.walletAddress.slice(0, 8)}...{detailHedge.walletAddress.slice(-6)}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ZK Privacy */}
-                {detailHedge.zkVerified && (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-[#5856D6]" />
-                      <span className="text-[11px] font-bold text-[#5856D6] uppercase tracking-wider">ZK Privacy Shield</span>
-                    </div>
-                    <div className="p-3 bg-[#5856D6]/5 rounded-xl border border-[#5856D6]/10 space-y-2.5">
-                      {detailHedge.proxyWallet && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">ZK Privacy Address</span>
-                          <a
-                            href={`${explorerUrl}/address/${detailHedge.proxyWallet}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[#007AFF] hover:underline text-[11px]"
-                          >
-                            <span className="font-mono">{detailHedge.proxyWallet.slice(0, 8)}...{detailHedge.proxyWallet.slice(-6)}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        </div>
-                      )}
-                      {detailHedge.commitmentHash && detailHedge.commitmentHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#86868b]">Commitment Hash</span>
-                          <span className="font-mono text-[10px] text-[#1d1d1f]">{detailHedge.commitmentHash.slice(0, 14)}...{detailHedge.commitmentHash.slice(-8)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#86868b]">Verification</span>
-                        <div className="flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5 text-[#34C759]" />
-                          <span className="text-[12px] font-semibold text-[#34C759]">STARK proof verified</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Timing */}
-                <div className="flex items-center gap-2 text-[11px] text-[#86868b]">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Opened {new Date(detailHedge.openedAt).toLocaleString()}</span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3 pt-2">
-                  {detailHedge.onChain && (
-                    <a
-                      href={detailHedge.txHash
-                        ? `${explorerUrl}/tx/${detailHedge.txHash}`
-                        : `${explorerUrl}/address/${detailHedge.contractAddress}`
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 px-4 py-3 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-xl text-[13px] font-semibold transition-colors flex items-center justify-center gap-2"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      {detailHedge.txHash ? 'View Transaction' : 'View Contract'}
-                    </a>
-                  )}
-                  {detailHedge.status === 'active' && (
-                    <button
-                      onClick={() => { setDetailHedge(null); handleClosePosition(detailHedge); }}
-                      disabled={closingPosition === detailHedge.id}
-                      className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-50"
-                    >
-                      {detailHedge.onChain ? '⚡ Close & Withdraw' : 'Close Position'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Close Position Modal */}
-      <AnimatePresence>
-        {showCloseConfirm && selectedHedge && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeCloseConfirm}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#e8e8ed]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-[#FF3B30]/10 rounded-xl flex items-center justify-center">
-                  <XCircle className="w-6 h-6 text-[#FF3B30]" />
-                </div>
-                <div>
-                  <h3 className="text-[17px] font-semibold text-[#1d1d1f]">Close Position</h3>
-                  <p className="text-[13px] text-[#86868b]">Finalize hedge with current P/L</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="p-4 bg-[#f5f5f7] rounded-xl">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[13px] text-[#86868b]">Position</span>
-                    <span className="text-[15px] font-semibold text-[#1d1d1f]">{selectedHedge.type} {selectedHedge.asset}</span>
-                  </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[13px] text-[#86868b]">Current P/L</span>
-                    <span className={`text-[17px] font-bold ${selectedHedge.pnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                      {selectedHedge.pnl >= 0 ? '+' : ''}{selectedHedge.pnl.toFixed(2)} USDC
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] text-[#86868b]">Return</span>
-                    <span className={`text-[15px] font-semibold ${selectedHedge.pnlPercent >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                      {selectedHedge.pnlPercent >= 0 ? '+' : ''}{selectedHedge.pnlPercent.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-[#FF9500]/10 rounded-xl flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-[#FF9500] mt-0.5 flex-shrink-0" />
-                  <p className="text-[11px] text-[#1d1d1f]">
-                    Closing this position will lock in the current P/L. This action cannot be undone.
-                  </p>
-                </div>
-
-                {selectedHedge.onChain && (
-                  <div className="p-3 bg-[#AF52DE]/10 rounded-xl space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-[#AF52DE]" />
-                      <span className="text-[12px] font-semibold text-[#AF52DE]">⚡ x402 Gasless Close &amp; Withdraw</span>
-                    </div>
-                    <p className="text-[11px] text-[#1d1d1f]">
-                      This will execute <code className="text-[10px] bg-[#AF52DE]/10 px-1 py-0.5 rounded">closeHedge()</code> via x402 gasless relay. 
-                      Your collateral {selectedHedge.pnl >= 0 ? '+ profit' : '- loss'} will be transferred directly back to your wallet — <strong>zero gas fees</strong>.
-                    </p>
-                    <div className="flex items-center gap-1 text-[10px] text-[#86868b]">
-                      <span>Contract:</span>
-                      <span className="font-mono">0x090b...62B9</span>
-                      <span>→</span>
-                      <span className="font-semibold text-[#1d1d1f]">Your original wallet</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#86868b]">Estimated return</span>
-                      <span className="font-semibold text-[#1d1d1f]">
-                        {(isNaN(Number(selectedHedge.capitalUsed)) || isNaN(Number(selectedHedge.pnl))) ? '—' : Math.max(0, (Number(selectedHedge.capitalUsed) || 0) + (Number(selectedHedge.pnl) || 0)).toLocaleString()} USDC
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#86868b]">Gas cost to you</span>
-                      <span className="font-semibold text-[#34C759]">$0.00 ✅</span>
-                    </div>
-                    
-                    {/* Signature requirement notice */}
-                    <div className="mt-2 p-2 bg-[#007AFF]/10 rounded-lg border border-[#007AFF]/20">
-                      <p className="text-[10px] text-[#007AFF] font-medium">
-                        📝 MetaMask will ask you to <strong>sign a message</strong> to verify ownership. 
-                        Click <strong>&quot;Sign&quot;</strong> in the popup to proceed.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={closeCloseConfirm}
-                  className="flex-1 px-4 py-3 bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#1d1d1f] rounded-xl text-[15px] font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmClosePosition}
-                  className="flex-1 px-4 py-3 bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white rounded-xl text-[15px] font-semibold transition-colors"
-                >
-                  {selectedHedge.onChain ? '⚡ Close & Withdraw (Gasless)' : 'Close Position'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Close Receipt Modal — shows full transaction details after close */}
-      <AnimatePresence>
-        {closeReceipt && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-            onClick={() => setCloseReceipt(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className={`p-5 ${closeReceipt.success ? 'bg-gradient-to-r from-[#34C759]/10 to-[#007AFF]/10' : 'bg-[#FF3B30]/10'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${closeReceipt.success ? 'bg-[#34C759]/20' : 'bg-[#FF3B30]/20'}`}>
-                    {closeReceipt.success ? (
-                      <CheckCircle className="w-7 h-7 text-[#34C759]" />
-                    ) : (
-                      <XCircle className="w-7 h-7 text-[#FF3B30]" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-[18px] font-bold text-[#1d1d1f]">
-                      {closeReceipt.success ? 'Position Closed' : 'Close Failed'}
-                    </h3>
-                    <p className="text-[12px] text-[#86868b]">
-                      {closeReceipt.success
-                        ? `${closeReceipt.asset} ${closeReceipt.side} x${closeReceipt.leverage} — ${closeReceipt.finalStatus}`
-                        : closeReceipt.error}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {closeReceipt.success && (
-                <div className="p-5 space-y-4">
-                  {/* Fund Flow Visualization */}
-                  <div className="p-4 bg-[#f5f5f7] rounded-xl space-y-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#86868b]">Fund Flow</div>
-                    
-                    {/* Step 1: Contract releases */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[10px] font-bold text-[#007AFF]">1</div>
-                      <div className="flex-1">
-                        <div className="text-[11px] font-medium text-[#1d1d1f]">HedgeExecutor closes trade on DEX</div>
-                        <div className="text-[9px] text-[#86868b] font-mono">0x090b...62B9 → closeHedge()</div>
-                      </div>
-                    </div>
-                    
-                    {/* Step 2: DEX returns */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[10px] font-bold text-[#007AFF]">2</div>
-                      <div className="flex-1">
-                        <div className="text-[11px] font-medium text-[#1d1d1f]">DEX returns collateral {closeReceipt.realizedPnl >= 0 ? '+ profit' : '- loss'}</div>
-                        <div className="text-[9px] text-[#86868b]">Moonlander → HedgeExecutor</div>
-                      </div>
-                    </div>
-                    
-                    {/* Step 3: Funds sent to wallet */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#34C759]/10 flex items-center justify-center text-[10px] font-bold text-[#34C759]">3</div>
-                      <div className="flex-1">
-                        <div className="text-[11px] font-medium text-[#1d1d1f]">USDC sent to your wallet</div>
-                        <div className="text-[9px] text-[#86868b] font-mono">→ {closeReceipt.trader.slice(0, 8)}...{closeReceipt.trader.slice(-6)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Financial Summary */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-[#86868b]">Collateral</span>
-                      <span className="text-[13px] font-semibold text-[#1d1d1f]">{closeReceipt.collateral.toLocaleString()} USDC</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-[#86868b]">Realized P/L</span>
-                      <span className={`text-[13px] font-bold ${closeReceipt.realizedPnl >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                        {closeReceipt.realizedPnl >= 0 ? '+' : ''}{closeReceipt.realizedPnl.toLocaleString()} USDC
-                      </span>
-                    </div>
-                    <div className="h-px bg-[#e8e8ed]" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] font-semibold text-[#1d1d1f]">Returned to Wallet</span>
-                      <span className={`text-[15px] font-bold ${closeReceipt.fundsReturned > 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                        {closeReceipt.fundsReturned > 0 ? closeReceipt.fundsReturned.toLocaleString() : '0'} USDC
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#86868b]">Balance before</span>
-                      <span className="font-mono text-[#86868b]">{closeReceipt.balanceBefore.toLocaleString()} USDC</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#86868b]">Balance after</span>
-                      <span className="font-mono font-semibold text-[#1d1d1f]">{closeReceipt.balanceAfter.toLocaleString()} USDC</span>
-                    </div>
-                  </div>
-
-                  {/* Gas Savings */}
-                  {closeReceipt.gasless && closeReceipt.gasSavings && (
-                    <div className="p-3 bg-[#AF52DE]/5 rounded-xl border border-[#AF52DE]/10">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Zap className="w-3.5 h-3.5 text-[#AF52DE]" />
-                        <span className="text-[11px] font-semibold text-[#AF52DE]">x402 Gasless</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-[#86868b]">Your gas cost</span>
-                        <span className="font-semibold text-[#34C759]">{closeReceipt.gasSavings.userGasCost}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-[#86868b]">Gas sponsored by relayer</span>
-                        <span className="font-mono text-[#86868b]">{closeReceipt.gasSavings.relayerGasCost}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] mt-1">
-                        <span className="text-[#86868b]">You saved</span>
-                        <span className="font-bold text-[#34C759]">{closeReceipt.gasSavings.totalSaved}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Transaction Link */}
-                  {closeReceipt.txHash && (
-                    <a
-                      href={closeReceipt.explorerLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 p-3 bg-[#007AFF]/5 rounded-xl text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span className="text-[12px] font-semibold">View on Cronos Explorer</span>
-                      <span className="text-[10px] font-mono text-[#86868b]">{closeReceipt.txHash.slice(0, 10)}...{closeReceipt.txHash.slice(-8)}</span>
-                    </a>
-                  )}
-
-                  {closeReceipt.elapsed && (
-                    <div className="text-center text-[10px] text-[#86868b]">
-                      Transaction completed in {closeReceipt.elapsed}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Dismiss Button */}
-              <div className="p-5 pt-0">
-                <button
-                  onClick={() => setCloseReceipt(null)}
-                  className={`w-full px-4 py-3 rounded-xl text-[15px] font-semibold transition-colors ${
-                    closeReceipt.success
-                      ? 'bg-[#34C759] hover:bg-[#34C759]/90 text-white'
-                      : 'bg-[#FF3B30] hover:bg-[#FF3B30]/90 text-white'
-                  }`}
-                >
-                  {closeReceipt.success ? 'Done' : 'Dismiss'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <CloseReceiptModal
+        receipt={closeReceipt}
+        onDismiss={() => setCloseReceipt(null)}
+      />
     </div>
   );
 });
