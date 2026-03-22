@@ -558,7 +558,7 @@ export function useCommunityPool(propAddress?: string) {
         // Get target chain for approval
         const validChainIds = getValidChainIds(selectedChain);
         const targetChainId = validChainIds[0];
-        console.error('🔴🔴🔴 RESET CONFIRMED - Will approve in 1s', { targetChainId });
+        logger.info('[CommunityPool] Reset confirmed, scheduling approval', { targetChainId });
         
         setTimeout(() => {
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
@@ -599,14 +599,13 @@ export function useCommunityPool(propAddress?: string) {
         // Get target chain for deposit
         const validChainIds = getValidChainIds(selectedChain);
         const targetChainId = validChainIds[0];
-        console.error('🔴🔴🔴 APPROVAL CONFIRMED - Will deposit in 1s', { targetChainId });
+        logger.info('[CommunityPool] Approval confirmed, scheduling deposit', { targetChainId });
         
         setTimeout(() => {
           if (pendingDepositRef.current && COMMUNITY_POOL_ADDRESS) {
             dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
             const depositAmount = parseFloat(pendingDepositRef.current.amount);
             const amountInUnits = parseUnits(depositAmount.toString(), 6);
-            console.error('🔴🔴🔴 DEPOSITING NOW', { amount: depositAmount, amountInUnits: amountInUnits.toString() });
             
             writeContract({
               chainId: targetChainId,
@@ -704,7 +703,6 @@ export function useCommunityPool(propAddress?: string) {
     // Use preserved amount from ref if available (survives chain switch), else use UI state
     const depositAmountStr = pendingDepositAmountRef.current || txState.depositAmount;
     const amount = parseFloat(depositAmountStr);
-    console.error('🔴🔴🔴 DEPOSIT - Amount context:', { fromRef: pendingDepositAmountRef.current, fromState: txState.depositAmount, using: depositAmountStr });
     
     // Check minimum deposit amount (first deposit requires $100 for inflation attack protection)
     const minDeposit = isFirstDeposit ? 100 : 10;
@@ -717,15 +715,16 @@ export function useCommunityPool(propAddress?: string) {
     
     // Skip chain check if we just did a successful wallet switch (WDK lags behind native API)
     if (skipChainCheckRef.current) {
-      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Skipping chain check (just switched), proceeding with deposit');
+      logger.info('[CommunityPool] Chain check skipped (recent switch)', { chainId });
       skipChainCheckRef.current = false;
       // Fall through to actual deposit logic below
     } else if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
-      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Mismatch detected!', { chainId, targetChainId, selectedChain });
+      logger.info('[CommunityPool] Chain mismatch, initiating switch', { current: chainId, target: targetChainId });
+      
       // Preserve the deposit amount in ref before chain switch (UI state may be lost during switch)
       pendingDepositAmountRef.current = txState.depositAmount;
-      console.error('🔴🔴🔴 CHAIN SWITCH v3 - Saving deposit amount to ref:', txState.depositAmount);
+      
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
@@ -755,7 +754,7 @@ export function useCommunityPool(propAddress?: string) {
       };
       
       // Use WDK switchChainAsync - this properly syncs state
-      console.error('🔴🔴🔴 CHAIN SWITCH v4 - Using WDK switchChainAsync to', targetChainId);
+      logger.info('[CommunityPool] Switching chain (WDK)', { targetChainId });
       
       // Set timeout for user feedback
       const timeoutId = setTimeout(() => {
@@ -769,18 +768,19 @@ export function useCommunityPool(propAddress?: string) {
       // Try WDK switchChainAsync (syncs state properly)
       switchChainAsync({ chainId: targetChainId })
         .then(() => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - switchChainAsync SUCCESS!');
+          logger.info('[CommunityPool] Chain switch success (WDK)');
           clearTimeout(timeoutId);
           pendingChainSwitchRef.current = null;
           dispatchPool({ type: 'SET_ERROR', payload: null });
+          
           // State is now synced, proceed immediately
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - Proceeding with deposit (synced)');
+          logger.info('[CommunityPool] Proceeding with deposit (synced)');
           setTimeout(() => {
             handleDeposit();
           }, 100);
         })
         .catch(async (switchError: any) => {
-          console.error('🔴🔴🔴 CHAIN SWITCH v4 - WDK error:', switchError?.message);
+          logger.warn('[CommunityPool] WDK switch failed, trying native', { error: switchError?.message });
           // Fallback to native API if WDK fails (e.g., chain not in config)
           const ethereum = (window as any).ethereum;
           if (!ethereum) {
@@ -797,23 +797,25 @@ export function useCommunityPool(propAddress?: string) {
           }
           
           try {
-            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Falling back to native API');
+            logger.info('[CommunityPool] Falling back to native API');
             await ethereum.request({
               method: 'wallet_switchEthereumChain',
               params: [{ chainId: params.chainId }],
             });
-            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Native switch SUCCESS');
+            
+            logger.info('[CommunityPool] Native switch success');
             clearTimeout(timeoutId);
             skipChainCheckRef.current = true;
             pendingChainSwitchRef.current = null;
             dispatchPool({ type: 'SET_ERROR', payload: null });
+            
             // Wait a bit longer for WDK to sync via chainChanged event
             setTimeout(() => {
-              console.error('🔴🔴🔴 CHAIN SWITCH v4 - Retrying deposit after native switch');
+              logger.info('[CommunityPool] Retrying deposit after native switch');
               handleDeposit();
             }, 1000);
           } catch (nativeError: any) {
-            console.error('🔴🔴🔴 CHAIN SWITCH v4 - Native error:', nativeError?.code, nativeError?.message);
+            logger.error('[CommunityPool] Native switch failed', { code: nativeError?.code, message: nativeError?.message });
             if (nativeError?.code === 4902) {
               // Chain not added - try to add it
               try {
@@ -821,7 +823,7 @@ export function useCommunityPool(propAddress?: string) {
                   method: 'wallet_addEthereumChain',
                   params: [params],
                 });
-                console.error('🔴🔴🔴 CHAIN SWITCH v4 - Chain added');
+                logger.info('[CommunityPool] Chain added');
                 clearTimeout(timeoutId);
                 skipChainCheckRef.current = true;
                 pendingChainSwitchRef.current = null;
@@ -924,7 +926,7 @@ export function useCommunityPool(propAddress?: string) {
       const minGas = ethers.parseEther('0.001');
       
       if (ethBalance < minGas) {
-        console.log('🔵🔵🔵 GAS FUND - Wallet has insufficient ETH, requesting gas funding...');
+        logger.info('[CommunityPool] Insufficient ETH, requesting gas funding...');
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // reuse status for "preparing"
         
         const fundResp = await fetch('/api/community-pool/deposit-usdt?action=fund-gas', {
@@ -939,7 +941,7 @@ export function useCommunityPool(propAddress?: string) {
         const fundResult = await fundResp.json();
         
         if (!fundResp.ok) {
-          console.error('🔵🔵🔵 GAS FUND - Failed:', fundResult.error);
+          logger.error('[CommunityPool] Gas funding failed', { error: fundResult.error });
           dispatchPool({ type: 'SET_ERROR', payload: fundResult.error || 'Failed to obtain gas funding. Please get Sepolia ETH from a faucet.' });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
@@ -947,11 +949,11 @@ export function useCommunityPool(propAddress?: string) {
         }
         
         if (fundResult.funded && fundResult.txHash) {
-          console.log('🔵🔵🔵 GAS FUND - Funded! TX:', fundResult.txHash);
+          logger.info('[CommunityPool] Gas funded', { txHash: fundResult.txHash });
           // Brief wait for balance to propagate
           await new Promise(r => setTimeout(r, 2000));
         } else {
-          console.log('🔵🔵🔵 GAS FUND - Already funded:', fundResult.message);
+          logger.info('[CommunityPool] Gas already funded', { message: fundResult.message });
         }
       }
     } catch (fundErr: any) {
@@ -962,7 +964,7 @@ export function useCommunityPool(propAddress?: string) {
     // TRY EIP-2612 PERMIT FLOW (Single TX!)
     // =========================================
     if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync) {
-      console.error('🟢🟢🟢 PERMIT - Token supports EIP-2612, trying gasless approval');
+      logger.info('[CommunityPool] Using EIP-2612 Permit flow');
       
       try {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' });
@@ -997,7 +999,7 @@ export function useCommunityPool(propAddress?: string) {
           deadline: deadline,
         };
         
-        console.error('🟢🟢🟢 PERMIT - Signing permit message', { domain, message });
+        logger.debug('[CommunityPool] Signing permit', { domain, message });
         
         // Sign the permit (gasless - just a signature!)
         const signature = await signTypedDataAsync({
@@ -1009,14 +1011,14 @@ export function useCommunityPool(propAddress?: string) {
 
         if (!signature) throw new Error('Failed to obtain signature');
 
-        console.error('🟢🟢🟢 PERMIT - Signature obtained', { signature: signature.slice(0, 20) + '...' });
+        logger.debug('[CommunityPool] Signature obtained');
         
         // Parse signature into v, r, s
         const r = signature.slice(0, 66) as `0x${string}`;
         const s = ('0x' + signature.slice(66, 130)) as `0x${string}`;
         const v = parseInt(signature.slice(130, 132), 16);
         
-        console.error('🟢🟢🟢 PERMIT - Calling depositWithPermit (single TX!)', { amount: amountInUnits.toString(), deadline: deadline.toString(), v, r: r.slice(0, 10) + '...' });
+        logger.info('[CommunityPool] Executing depositWithPermit');
         
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
         
@@ -1041,12 +1043,12 @@ export function useCommunityPool(propAddress?: string) {
           args: [amountInUnits, deadline, v, r, s],
         });
         
-        console.error('🟢🟢🟢 PERMIT - depositWithPermit tx submitted:', permitDepositTxHash);
+        logger.info('[CommunityPool] Permit tx submitted', { txHash: permitDepositTxHash });
         {
           const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
           await provider.waitForTransaction(permitDepositTxHash, 1, 60000);
         }
-        console.error('🟢🟢🟢 PERMIT - Deposit confirmed!');
+        logger.info('[CommunityPool] Permit deposit confirmed');
         
         // SUCCESS!
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
@@ -1070,7 +1072,7 @@ export function useCommunityPool(propAddress?: string) {
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           return;
         }
-        console.error('🟠🟠🟠 PERMIT - Failed, falling back to approve+deposit', msg);
+        logger.warn('[CommunityPool] Permit flow failed, falling back', { error: msg });
         // Fall through to regular approve+deposit flow
       }
     }
@@ -1079,7 +1081,7 @@ export function useCommunityPool(propAddress?: string) {
     // FALLBACK: Regular Approve + Deposit (2 TXs)
     // Using async/await for reliable sequencing
     // =========================================
-    console.error('🔴🔴🔴 DEPOSIT - Using regular approve+deposit flow');
+    logger.info('[CommunityPool] Using standard Approve+Deposit flow');
     
     try {
       // Refetch current allowance and use returned value (not stale closure)
@@ -1092,7 +1094,7 @@ export function useCommunityPool(propAddress?: string) {
       if (allowance > BigInt(0)) {
         logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
-        console.error('🔴🔴🔴 DEPOSIT - Step 1: Resetting allowance to 0');
+        logger.info('[CommunityPool] Step 1: Resetting allowance');
         
         const resetTxHash = await writeContractAsync({
           chainId: targetChainId,
@@ -1102,17 +1104,17 @@ export function useCommunityPool(propAddress?: string) {
           args: [COMMUNITY_POOL_ADDRESS, BigInt(0)],
         });
         
-        console.error('🔴🔴🔴 DEPOSIT - Reset tx submitted:', resetTxHash);
+        logger.info('[CommunityPool] Reset tx submitted', { txHash: resetTxHash });
         {
           const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
           await provider.waitForTransaction(resetTxHash, 1, 60000);
         }
-        console.error('🔴🔴🔴 DEPOSIT - Reset confirmed!');
+        logger.info('[CommunityPool] Reset confirmed');
       }
       
       // STEP 2: Approve the deposit amount
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
-      console.error('🔴🔴🔴 DEPOSIT - Step 2: Approving', amountInUnits.toString());
+      logger.info('[CommunityPool] Step 2: Approving tokens', { amount: amountInUnits.toString() });
       
       const approveTxHash = await writeContractAsync({
         chainId: targetChainId,
@@ -1122,17 +1124,17 @@ export function useCommunityPool(propAddress?: string) {
         args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
       });
       
-      console.error('🔴🔴🔴 DEPOSIT - Approve tx submitted:', approveTxHash);
+      logger.info('[CommunityPool] Approve tx submitted', { txHash: approveTxHash });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
       {
         const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
         await provider.waitForTransaction(approveTxHash, 1, 60000);
       }
-      console.error('🔴🔴🔴 DEPOSIT - Approve confirmed!');
+      logger.info('[CommunityPool] Approve confirmed');
       
       // STEP 3: Deposit to pool
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
-      console.error('🔴🔴🔴 DEPOSIT - Step 3: Depositing', amountInUnits.toString());
+      logger.info('[CommunityPool] Step 3: Depositing tokens');
       
       const depositTxHash = await writeContractAsync({
         chainId: targetChainId,
@@ -1142,12 +1144,12 @@ export function useCommunityPool(propAddress?: string) {
         args: [amountInUnits],
       });
       
-      console.error('🔴🔴🔴 DEPOSIT - Deposit tx submitted:', depositTxHash);
+      logger.info('[CommunityPool] Deposit tx submitted', { txHash: depositTxHash });
       {
         const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
         await provider.waitForTransaction(depositTxHash, 1, 60000);
       }
-      console.error('🔴🔴🔴 DEPOSIT - Deposit confirmed!');
+      logger.info('[CommunityPool] Deposit confirmed');
       
       // SUCCESS!
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
