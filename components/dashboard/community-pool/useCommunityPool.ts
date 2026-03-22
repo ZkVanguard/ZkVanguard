@@ -275,10 +275,9 @@ export function useCommunityPool(propAddress?: string) {
   // Helper to lazily fetch permit details only when needed
   const getPermitDetails = useCallback(async (tokenAddress: string, walletAddress: string, chainId: number) => {
     try {
-      const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
       const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
       
       const erc20 = new ethers.Contract(tokenAddress, [
         'function nonces(address) view returns (uint256)',
@@ -307,10 +306,10 @@ export function useCommunityPool(propAddress?: string) {
   // Helper to lazily fetch allowance
   const getAllowance = useCallback(async (tokenAddress: string, owner: string, spender: string) => {
     try {
-      const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
       const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const targetChainId = getValidChainIds(selectedChain)[0];
+      const provider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
       const erc20 = new ethers.Contract(tokenAddress, ['function allowance(address,address) view returns (uint256)'], provider);
       const allowance = await erc20.allowance(owner, spender);
       return BigInt(allowance);
@@ -898,51 +897,50 @@ export function useCommunityPool(propAddress?: string) {
     const txProvider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
 
     // =========================================
-    // STEP 0: VERIFY USDT BALANCE (fail fast)
+    // PARALLEL STEP: Balance + Oracle + Gas + Permit details (all independent)
     // =========================================
-    try {
-      const usdt = new ethers.Contract(USDT_ADDRESS, ['function balanceOf(address) view returns (uint256)'], txProvider);
-      const usdtBalance = await usdt.balanceOf(address);
+    // Fire all checks simultaneously instead of sequentially
+    const usdt = new ethers.Contract(USDT_ADDRESS, ['function balanceOf(address) view returns (uint256)'], txProvider);
+    
+    const [balanceResult, gasResult, oracleResult, permitResult] = await Promise.allSettled([
+      // Balance check
+      usdt.balanceOf(address),
+      // Gas balance check
+      txProvider.getBalance(address as string),
+      // Oracle price update (fire early, non-blocking for deposit)
+      fetch('/api/community-pool/deposit-usdt?action=update-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chainId: targetChainId }),
+      }).then(r => r.json()).catch(() => ({ success: false })),
+      // Permit details
+      getPermitDetails(USDT_ADDRESS, address, targetChainId),
+    ]);
+    
+    // Check USDT balance (fail fast)
+    if (balanceResult.status === 'fulfilled') {
+      const usdtBalance = balanceResult.value;
       logger.info('[CommunityPool] USDT balance check', { balance: usdtBalance.toString(), needed: amountInUnits.toString() });
-      
       if (BigInt(usdtBalance) < BigInt(amountInUnits)) {
         const balFormatted = (Number(usdtBalance) / 1e6).toFixed(2);
         dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDT balance. You have ${balFormatted} USDT but need ${amount} USDT.` });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         return;
       }
-    } catch (balErr: any) {
-      logger.warn('[CommunityPool] Balance check failed, proceeding', { error: balErr.message });
+    }
+    
+    // Log oracle result (non-fatal)
+    if (oracleResult.status === 'fulfilled' && oracleResult.value?.success) {
+      logger.info('[CommunityPool] Oracle prices updated', { txHash: oracleResult.value.txHash });
+    } else {
+      logger.info('[CommunityPool] Oracle update skipped or failed (non-fatal)');
     }
     
     // =========================================
-    // STEP 0.5: UPDATE PYTH ORACLE PRICES
+    // GAS FUNDING (only if needed)
     // =========================================
-    // Ensure oracle prices are fresh before deposit to prevent OracleCallFailed reverts
     try {
-      logger.info('[CommunityPool] Updating oracle prices...');
-      const priceResp = await fetch('/api/community-pool/deposit-usdt?action=update-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chainId: targetChainId }),
-      });
-      const priceResult = await priceResp.json();
-      if (priceResult.success) {
-        logger.info('[CommunityPool] Oracle prices updated', { txHash: priceResult.txHash });
-      } else {
-        // Non-fatal: prices may already be fresh enough for deposit
-        logger.info('[CommunityPool] Price update skipped (prices may be recent)', { reason: priceResult.details || priceResult.error });
-      }
-    } catch (priceErr: any) {
-      logger.warn('[CommunityPool] Price update failed, proceeding anyway', { error: priceErr.message });
-    }
-    
-    // =========================================
-    // STEP 1: CHECK & FUND GAS FOR WDK WALLETS
-    // =========================================
-    // WDK wallets may have USDT but no ETH for gas. Request server-side gas funding.
-    try {
-      const ethBalance = await txProvider.getBalance(address as string);
+      const ethBalance = gasResult.status === 'fulfilled' ? gasResult.value : await txProvider.getBalance(address as string);
       const minGas = ethers.parseEther('0.001');
       
       if (ethBalance < minGas) {
@@ -970,9 +968,9 @@ export function useCommunityPool(propAddress?: string) {
         
         if (fundResult.funded && fundResult.txHash) {
           logger.info('[CommunityPool] Gas funded, waiting for confirmation...', { txHash: fundResult.txHash });
-          // Wait until the ETH actually appears in the wallet (poll up to 15s)
+          // Wait until the ETH actually appears in the wallet (poll up to 5s)
           for (let i = 0; i < 10; i++) {
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 500));
             const newBalance = await txProvider.getBalance(address as string);
             if (newBalance >= minGas) {
               logger.info('[CommunityPool] Gas funding confirmed in wallet', { balance: ethers.formatEther(newBalance) });
@@ -999,14 +997,9 @@ export function useCommunityPool(propAddress?: string) {
     // Server relayer wallet address (deposits on behalf of proxy)
     const SERVER_WALLET = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c' as `0x${string}`;
     
-    // Fetch permit details ON CLICK - no eager loading
-    let permitDetails: { supported: boolean; nonce?: bigint; name?: string; domainSeparator?: string } = { supported: false };
-    try {
-      permitDetails = await getPermitDetails(USDT_ADDRESS, address, targetChainId);
-      logger.info('[CommunityPool] Permit details', { supported: permitDetails.supported, hasNonce: !!permitDetails.nonce, hasName: !!permitDetails.name });
-    } catch (e: any) {
-      logger.warn('[CommunityPool] Failed to fetch permit details', { error: e.message });
-    }
+    // Use permit details from parallel fetch above
+    const permitDetails = permitResult.status === 'fulfilled' ? permitResult.value : { supported: false };
+    logger.info('[CommunityPool] Permit details', { supported: permitDetails.supported, hasNonce: !!permitDetails.nonce, hasName: !!permitDetails.name });
 
     const { supported: permitSupported, nonce: permitNonce, name: tokenName, domainSeparator: domainSep } = permitDetails;
 

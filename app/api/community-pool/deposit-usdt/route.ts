@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
           const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
 
           // Check if the target already has enough ETH for gas
@@ -458,7 +458,7 @@ export async function POST(request: NextRequest) {
 
           const updateData = hermesData.binary.data.map((d: string) => '0x' + d);
 
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
           const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
 
           const pythAbi = [
@@ -548,7 +548,7 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
           const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
           const amountInUnits = ethers.parseUnits(String(amount), 6);
 
@@ -581,8 +581,16 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Step 2: Verify allowance from user to server
-          const userAllowance = await usdt.allowance(walletAddress, serverWallet.address);
+          // Step 2: Check BOTH allowances in parallel (user→server AND server→pool)
+          const { deriveTreasuryProxy } = await import('@/lib/crypto/ProxyPDA');
+          const proxyAddress = deriveTreasuryProxy('pool-share');
+          logger.info('[DepositProxy] Treasury proxy', { proxyAddress, depositor: walletAddress });
+
+          const [userAllowance, poolAllowance] = await Promise.all([
+            usdt.allowance(walletAddress, serverWallet.address),
+            usdt.allowance(serverWallet.address, communityPoolAddress),
+          ]);
+          
           if (BigInt(userAllowance) < amountInUnits) {
             return NextResponse.json({
               success: false,
@@ -593,33 +601,43 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
           }
 
-          // Step 3: Transfer USDT from user to server wallet
-          logger.info('[DepositProxy] Transferring USDT from user to server', { amount });
-          const transferTx = await usdt.transferFrom(walletAddress, serverWallet.address, amountInUnits);
-          await transferTx.wait(1);
-          logger.info('[DepositProxy] USDT transferred to server');
+          // Step 3: Pipeline transactions with explicit nonces
+          // Submit all TXs to mempool immediately — they mine in nonce order
+          // This can fit 2-3 TXs into a single block instead of waiting per-block
+          let nonce = await serverWallet.getNonce();
+          const needsPoolApprove = BigInt(poolAllowance) < amountInUnits;
 
-          // Step 4: Use single treasury proxy for ALL deposits
-          const { deriveTreasuryProxy } = await import('@/lib/crypto/ProxyPDA');
-          const proxyAddress = deriveTreasuryProxy('pool-share');
-          logger.info('[DepositProxy] Treasury proxy', { proxyAddress, depositor: walletAddress });
+          logger.info('[DepositProxy] Pipelining transactions', { 
+            startNonce: nonce, 
+            needsPoolApprove,
+            steps: needsPoolApprove ? 3 : 2,
+          });
 
-          // Step 5: Approve USDT from server to CommunityPool
-          const currentPoolAllowance = await usdt.allowance(serverWallet.address, communityPoolAddress);
-          if (BigInt(currentPoolAllowance) < amountInUnits) {
-            logger.info('[DepositProxy] Approving USDT for pool');
-            const approveTx = await usdt.approve(communityPoolAddress, amountInUnits);
-            await approveTx.wait(1);
+          // Submit transferFrom (nonce N)
+          logger.info('[DepositProxy] Submitting transferFrom', { nonce });
+          const transferTx = await usdt.transferFrom(
+            walletAddress, serverWallet.address, amountInUnits, { nonce }
+          );
+          nonce++;
+
+          // Submit approve if needed (nonce N+1)
+          let approveTx = null;
+          if (needsPoolApprove) {
+            logger.info('[DepositProxy] Submitting approve', { nonce });
+            approveTx = await usdt.approve(communityPoolAddress, amountInUnits, { nonce });
+            nonce++;
           }
 
-          // Step 6: Call depositFor(proxyAddress, amount) on CommunityPool
+          // Submit depositFor (nonce N+1 or N+2)
           const poolAbi = [
             'function depositFor(address beneficiary, uint256 amount) returns (uint256)',
           ];
           const pool = new ethers.Contract(communityPoolAddress, poolAbi, serverWallet);
 
-          logger.info('[DepositProxy] Calling depositFor', { proxyAddress, amount });
-          const depositTx = await pool.depositFor(proxyAddress, amountInUnits);
+          logger.info('[DepositProxy] Submitting depositFor', { proxyAddress, nonce });
+          const depositTx = await pool.depositFor(proxyAddress, amountInUnits, { nonce });
+
+          // Wait only for the final TX receipt (all prior TXs must have mined first)
           const receipt = await depositTx.wait(1);
 
           logger.info('[DepositProxy] Deposit complete!', { 
