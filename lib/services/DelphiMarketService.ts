@@ -458,32 +458,15 @@ export class DelphiMarketService {
     const cryptoPredictions = await this.generateCryptoPredictions(assets);
     logger.info(`Generated ${cryptoPredictions.length} crypto predictions from Crypto.com data`, { component: 'DelphiMarket' });
     
-    // Try Delphi API first
+    // Fetch from Polymarket API
     try {
-      const response = await fetch(`${this.API_URL}/v1/markets?category=crypto&limit=20`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) throw new Error('Delphi API unavailable');
-      
-      const data = await response.json();
-      logger.info('Using Delphi API data', { component: 'DelphiMarket' });
-      realPredictions = this.parseMarkets(data, assets);
-      usedSource = 'delphi';
-    } catch (delphiError) {
-      logger.warn('Delphi API unavailable, trying Polymarket API...', { component: 'DelphiMarket' });
-      
-      // Try Polymarket API as backup
-      try {
-        const polymarketData = await this.fetchPolymarketData(assets);
-        logger.info(`Using live Polymarket data: ${polymarketData.length} predictions`, { component: 'DelphiMarket' });
-        
-        // Filter to relevant assets
-        realPredictions = this.filterByAssets(polymarketData, assets);
-        usedSource = 'polymarket';
-      } catch (polymarketError) {
-        console.error('❌ Polymarket API also unavailable:', polymarketError);
-        usedSource = 'error';
-      }
+      const polymarketData = await this.fetchPolymarketData(assets);
+      logger.info(`Using live Polymarket data: ${polymarketData.length} predictions`, { component: 'DelphiMarket' });
+      realPredictions = this.filterByAssets(polymarketData, assets);
+      usedSource = 'polymarket';
+    } catch (polymarketError) {
+      logger.warn('Polymarket API unavailable, continuing with crypto predictions only', { component: 'DelphiMarket' });
+      usedSource = 'error';
     }
     
     // Merge crypto predictions with Polymarket/Delphi predictions

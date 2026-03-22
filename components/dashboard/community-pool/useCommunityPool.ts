@@ -893,14 +893,15 @@ export function useCommunityPool(propAddress?: string) {
     
     const amountInUnits = parseUnits(amount.toString(), 6);
     
+    // Single shared provider — staticNetwork skips eth_chainId auto-detection on every call
+    const rpcUrl = chainConfig.rpcUrls[network] || 'https://sepolia.drpc.org';
+    const txProvider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
+
     // =========================================
     // STEP 0: VERIFY USDT BALANCE (fail fast)
     // =========================================
     try {
-      const { ethers: eth } = await import('ethers');
-      const rpcUrl = chainConfig.rpcUrls[network] || 'https://sepolia.drpc.org';
-      const balanceProvider = new eth.JsonRpcProvider(rpcUrl);
-      const usdt = new eth.Contract(USDT_ADDRESS, ['function balanceOf(address) view returns (uint256)'], balanceProvider);
+      const usdt = new ethers.Contract(USDT_ADDRESS, ['function balanceOf(address) view returns (uint256)'], txProvider);
       const usdtBalance = await usdt.balanceOf(address);
       logger.info('[CommunityPool] USDT balance check', { balance: usdtBalance.toString(), needed: amountInUnits.toString() });
       
@@ -941,9 +942,7 @@ export function useCommunityPool(propAddress?: string) {
     // =========================================
     // WDK wallets may have USDT but no ETH for gas. Request server-side gas funding.
     try {
-      const rpcUrl = chainConfig.rpcUrls[network];
-      const gasCheckProvider = new ethers.JsonRpcProvider(rpcUrl);
-      const ethBalance = await gasCheckProvider.getBalance(address as string);
+      const ethBalance = await txProvider.getBalance(address as string);
       const minGas = ethers.parseEther('0.001');
       
       if (ethBalance < minGas) {
@@ -974,7 +973,7 @@ export function useCommunityPool(propAddress?: string) {
           // Wait until the ETH actually appears in the wallet (poll up to 15s)
           for (let i = 0; i < 10; i++) {
             await new Promise(r => setTimeout(r, 1500));
-            const newBalance = await gasCheckProvider.getBalance(address as string);
+            const newBalance = await txProvider.getBalance(address as string);
             if (newBalance >= minGas) {
               logger.info('[CommunityPool] Gas funding confirmed in wallet', { balance: ethers.formatEther(newBalance) });
               break;
@@ -1167,8 +1166,7 @@ export function useCommunityPool(propAddress?: string) {
         });
         
         logger.info('[CommunityPool] Reset tx submitted', { txHash: resetTxHash });
-        const resetProvider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
-        await resetProvider.waitForTransaction(resetTxHash, 1, 60000);
+        await txProvider.waitForTransaction(resetTxHash, 1, 90000);
         logger.info('[CommunityPool] Reset confirmed');
       }
       
@@ -1187,8 +1185,7 @@ export function useCommunityPool(propAddress?: string) {
         
         logger.info('[CommunityPool] Approve tx submitted', { txHash: approveTxHash });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
-        const approveProvider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
-        await approveProvider.waitForTransaction(approveTxHash, 1, 60000);
+        await txProvider.waitForTransaction(approveTxHash, 1, 90000);
         logger.info('[CommunityPool] Approve confirmed');
         
         // Verify allowance was actually set (belt and suspenders)
@@ -1214,8 +1211,7 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       logger.info('[CommunityPool] Deposit tx submitted', { txHash: depositTxHash });
-      const depositProvider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
-      await depositProvider.waitForTransaction(depositTxHash, 1, 60000);
+      await txProvider.waitForTransaction(depositTxHash, 1, 90000);
       logger.info('[CommunityPool] Deposit confirmed!');
       
       // SUCCESS!
