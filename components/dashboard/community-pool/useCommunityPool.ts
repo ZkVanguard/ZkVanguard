@@ -1729,6 +1729,7 @@ export function useCommunityPool(propAddress?: string) {
     
     // Transaction state (memoized)
     ...txValues,
+    txHash,
     isPending,
     isConfirming,
     isConfirmed,
@@ -1766,6 +1767,7 @@ export function useCommunityPool(propAddress?: string) {
   }), [
     poolValues,
     txValues,
+    txHash,
     isPending,
     isConfirming,
     isConfirmed,

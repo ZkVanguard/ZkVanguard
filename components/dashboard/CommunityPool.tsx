@@ -83,8 +83,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       pool.setError(null);
 
       const body = action === 'deposit'
-        ? { walletAddress: pool.address, amount: parseFloat(value) }
-        : { walletAddress: pool.address, shares: parseFloat(value) };
+        ? { walletAddress: pool.address, amount: parseFloat(value), txHash: pool.txHash }
+        : { walletAddress: pool.address, shares: parseFloat(value), txHash: pool.txHash };
 
       const res = await fetch(`/api/community-pool?action=${action}&chain=${pool.selectedChain}&network=${pool.network}`, {
         method: 'POST',
