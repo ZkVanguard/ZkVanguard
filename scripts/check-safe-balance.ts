@@ -3,7 +3,8 @@ import { ethers } from 'ethers';
 
 const RPC_URL = 'https://sepolia.drpc.org';
 const USDT_ADDRESS = '0xd077a400968890eacc75cdc901f0356c943e4fdb'; // Sepolia USDT
-const SAFE_ADDRESS = '0xFD898B4D00214faaA59D4eeDA068533e05280F65';
+
+const SAFE_ADDRESS = process.argv[2] ? process.argv[2] : '0xA9461A037cC45Ab6c265BF30325f5C13239CF2Ad';
 
 const ERC20_ABI = [
   'function balanceOf(address account) external view returns (uint256)',
