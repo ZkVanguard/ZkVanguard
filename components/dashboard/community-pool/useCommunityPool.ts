@@ -897,6 +897,27 @@ export function useCommunityPool(propAddress?: string) {
     const txProvider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
 
     // =========================================
+    // RECOVERY CHECK: Recover any orphaned USDT from interrupted deposits
+    // =========================================
+    try {
+      const recoverResp = await fetch('/api/community-pool/deposit-usdt?action=recover-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address, chainId: targetChainId }),
+      });
+      const recoverResult = await recoverResp.json();
+      if (recoverResult.recovered) {
+        logger.info('[CommunityPool] Recovered orphaned USDT from previous failed deposit', {
+          amount: recoverResult.orphanedAmount,
+          txHash: recoverResult.refundTxHash,
+        });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Recovered ${recoverResult.orphanedAmount} USDT from a previous interrupted deposit. You can now retry.` });
+      }
+    } catch {
+      // Non-fatal — recovery is best-effort
+    }
+
+    // =========================================
     // PARALLEL STEP: Balance + Oracle + Gas + Permit details (all independent)
     // =========================================
     // Fire all checks simultaneously instead of sequentially
