@@ -438,12 +438,30 @@ export async function POST(request: NextRequest) {
         const balance = await client.getUSDTBalance(smartAccountAddress);
         const amountWei = parseUSDT(amount);
         
+        // If deploying a new account, we might be funding it in this text (not implemented)
+        // Or users are expected to fund the counterfactual address first.
+        // We throw if balance is insufficient
         if (balance < amountWei) {
+          // If it's a new deployment, check if walletAddress (EOA) has funds and warn user
+          if (factory && walletAddress) {
+             const eoaBalance = await client.getUSDTBalance(walletAddress);
+             if (eoaBalance >= amountWei) {
+                 return NextResponse.json({
+                    success: false,
+                    error: 'Insufficient USDT balance on Safe',
+                    hint: `You must transfer USDT to your Safe address (${smartAccountAddress}) first. Your EOA has ${formatUSDT(eoaBalance)} USDT but cannot use it directly for AA gasless deposit.`,
+                    safeAddress: smartAccountAddress,
+                    eoaBalance: formatUSDT(eoaBalance)
+                 }, { status: 400 });
+             }
+          }
+
           return NextResponse.json({
             success: false,
             error: 'Insufficient USDT balance',
             balance: formatUSDT(balance),
             required: amount.toString(),
+            safeAddress: smartAccountAddress 
           }, { status: 400 });
         }
         
