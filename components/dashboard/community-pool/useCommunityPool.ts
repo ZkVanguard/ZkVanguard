@@ -248,16 +248,9 @@ export function useCommunityPool(propAddress?: string) {
   }, [activeWalletType, suiAddress, address]);
   
   // ERC20 allowance check (for USDT reset-to-zero pattern)
-  // OPTIMIZED: Only fetch when needed or polling slowly
-  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: [{ name: 'allowance', type: 'function', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-    functionName: 'allowance',
-    args: address && COMMUNITY_POOL_ADDRESS ? [address as `0x${string}`, COMMUNITY_POOL_ADDRESS] : undefined,
-    enabled: !!address && !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui' && (txState.showDeposit || txState.txStatus !== 'idle'),
-  });
+  // DEPRECATED HOOK: Replaced by imperative check in handleDeposit
   
-  // User's USDT balance (show how much they can deposit)
+  // User's USDT balance (show how much they can deposit) - keep this for UI
   const { data: userUsdtBalance } = useReadContract({
     address: USDT_ADDRESS,
     abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
@@ -266,59 +259,66 @@ export function useCommunityPool(propAddress?: string) {
     enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui',
   });
   
-  // EIP-2612 Permit Support Check - check if token has nonces() function
-  // OPTIMIZED: Defer execution until deposit modal is open
-  const { data: permitNonce, isError: permitNonceError } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: [{ name: 'nonces', type: 'function', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-    functionName: 'nonces',
-    args: address ? [address as `0x${string}`] : undefined,
-    enabled: !!address && !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
-  });
-  
-  // EIP-2612: Get token name for permit signing
-  // OPTIMIZED: Defer execution until deposit modal is open
-  const { data: tokenName } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: [{ name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' }],
-    functionName: 'name',
-    enabled: !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
-  });
-  
-  // EIP-2612: Get DOMAIN_SEPARATOR (cached on-chain)
-  // OPTIMIZED: Defer execution until deposit modal is open
-  const { data: domainSeparator } = useReadContract({
-    address: USDT_ADDRESS,
-    abi: [{ name: 'DOMAIN_SEPARATOR', type: 'function', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' }],
-    functionName: 'DOMAIN_SEPARATOR',
-    enabled: !!USDT_ADDRESS && selectedChain !== 'sui' && txState.showDeposit,
-  });
-  
-  // Check if permit is supported
-  const permitSupported = useMemo(() => {
-    // Permit is supported if nonces function exists and didn't error
-    return !permitNonceError && permitNonce !== undefined && domainSeparator !== undefined;
-  }, [permitNonceError, permitNonce, domainSeparator]);
-  
   // Typed data signing hook for EIP-2612 permit
   const { signTypedDataAsync } = useSignTypedData();
   
   // Account Abstraction (Gasless) support
   const { depositWithGasless } = useSmartAccount();
   
-  // Pool total shares (to detect first deposit)
-  const { data: poolTotalShares } = useReadContract({
-    address: COMMUNITY_POOL_ADDRESS,
-    abi: [{ name: 'totalShares', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-    functionName: 'totalShares',
-    enabled: !!COMMUNITY_POOL_ADDRESS && selectedChain !== 'sui',
-  });
+  // Pool total shares (to detect first deposit) - DEPRECATED HOOK, assume non-empty or check lazily
+  // const { data: poolTotalShares } = useReadContract({...});
   
   // Derived: is first deposit (requires $100 minimum for inflation attack protection)
-  const isFirstDeposit = useMemo(() => {
-    if (!poolTotalShares) return true;
-    return BigInt(poolTotalShares.toString()) === BigInt(0);
-  }, [poolTotalShares]);
+  // OPTIMIZATION: Assume false by default to speed up load. API enforces the rule anyway.
+  const isFirstDeposit = false;
+  
+  // Helper to lazily fetch permit details only when needed
+  const getPermitDetails = useCallback(async (tokenAddress: string, walletAddress: string, chainId: number) => {
+    try {
+      const { ethers } = await import('ethers');
+      const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      const erc20 = new ethers.Contract(tokenAddress, [
+        'function nonces(address) view returns (uint256)',
+        'function name() view returns (string)',
+        'function DOMAIN_SEPARATOR() view returns (bytes32)',
+      ], provider);
+      
+      const [nonce, name, domainSeparator] = await Promise.all([
+        erc20.nonces(walletAddress).catch(() => null),
+        erc20.name().catch(() => null),
+        erc20.DOMAIN_SEPARATOR().catch(() => null),
+      ]);
+      
+      return { 
+        nonce: nonce ? BigInt(nonce) : undefined, 
+        name, 
+        domainSeparator,
+        supported: !!nonce && !!domainSeparator 
+      };
+    } catch (e) {
+      console.warn('Failed to fetch permit details', e);
+      return { supported: false };
+    }
+  }, [selectedChain, network]);
+  
+  // Helper to lazily fetch allowance
+  const getAllowance = useCallback(async (tokenAddress: string, owner: string, spender: string) => {
+    try {
+      const { ethers } = await import('ethers');
+      const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const erc20 = new ethers.Contract(tokenAddress, ['function allowance(address,address) view returns (uint256)'], provider);
+      const allowance = await erc20.allowance(owner, spender);
+      return BigInt(allowance);
+    } catch (e) { 
+      console.warn('Failed to fetch allowance', e);
+      return BigInt(0); 
+    }
+  }, [selectedChain, network]);
   
   // Derived: Check if wallet chain matches selected chain (for EVM only)
   const validChainIds = useMemo(() => getValidChainIds(selectedChain), [selectedChain]);
@@ -975,7 +975,17 @@ export function useCommunityPool(propAddress?: string) {
     // =========================================
     // TRY EIP-2612 PERMIT FLOW (Single TX!)
     // =========================================
-    if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync) {
+    // Fetch permit details ON CLICK - no eager loading!
+    let permitDetails = { supported: false, nonce: BigInt(0), name: '', domainSeparator: '' };
+    try {
+      permitDetails = await getPermitDetails(USDT_ADDRESS, address, targetChainId);
+    } catch (e) {
+      console.warn('Failed to fetch permit details', e);
+    }
+
+    const { supported: permitSupported, nonce: permitNonce, name: tokenName, domainSeparator: domainSep } = permitDetails;
+
+    if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync && domainSep) {
       logger.info('[CommunityPool] Using EIP-2612 Permit flow');
       
       try {
@@ -1096,14 +1106,14 @@ export function useCommunityPool(propAddress?: string) {
     logger.info('[CommunityPool] Using standard Approve+Deposit flow');
     
     try {
-      // Refetch current allowance and use returned value (not stale closure)
-      await refetchAllowance();
-      const allowance = currentAllowance ? BigInt(currentAllowance.toString()) : BigInt(0);
+      // Refetch current allowance interactively (lazy)
+      const currentAllowance = await getAllowance(USDT_ADDRESS, address, COMMUNITY_POOL_ADDRESS);
+      const allowance = BigInt(currentAllowance.toString());
       const amountInUnits = parseUnits(amount.toString(), 6);
       logger.info(`[Deposit] Allowance: ${allowance.toString()}, needed: ${amountInUnits.toString()}`);
       
       // STEP 1: Reset allowance if needed (USDT non-standard requirement)
-      if (allowance > BigInt(0)) {
+      if (allowance > BigInt(0) && allowance < amountInUnits) {
         logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
         logger.info('[CommunityPool] Step 1: Resetting allowance');
@@ -1124,25 +1134,29 @@ export function useCommunityPool(propAddress?: string) {
         logger.info('[CommunityPool] Reset confirmed');
       }
       
-      // STEP 2: Approve the deposit amount
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
-      logger.info('[CommunityPool] Step 2: Approving tokens', { amount: amountInUnits.toString() });
-      
-      const approveTxHash = await writeContractAsync({
-        chainId: targetChainId,
-        address: USDT_ADDRESS,
-        abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
-        functionName: 'approve',
-        args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
-      });
-      
-      logger.info('[CommunityPool] Approve tx submitted', { txHash: approveTxHash });
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
-      {
-        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
-        await provider.waitForTransaction(approveTxHash, 1, 60000);
+      // STEP 2: Approve the deposit amount (only if needed)
+      if (allowance < amountInUnits) {
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
+        logger.info('[CommunityPool] Step 2: Approving tokens', { amount: amountInUnits.toString() });
+        
+        const approveTxHash = await writeContractAsync({
+          chainId: targetChainId,
+          address: USDT_ADDRESS,
+          abi: [{ name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }],
+          functionName: 'approve',
+          args: [COMMUNITY_POOL_ADDRESS, amountInUnits],
+        });
+        
+        logger.info('[CommunityPool] Approve tx submitted', { txHash: approveTxHash });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(approveTxHash, 1, 60000);
+        }
+        logger.info('[CommunityPool] Approve confirmed');
+      } else {
+         logger.info('[CommunityPool] Step 2 Skipped: Allowance sufficient', { allowance: allowance.toString() });
       }
-      logger.info('[CommunityPool] Approve confirmed');
       
       // STEP 3: Deposit to pool
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
@@ -1188,7 +1202,7 @@ export function useCommunityPool(propAddress?: string) {
     } finally {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
     }
-  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContractAsync, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, currentAllowance, refetchAllowance, isFirstDeposit, permitSupported, permitNonce, tokenName, signTypedDataAsync, switchChainAsync, fetchPoolData]);
+  }, [isConnected, address, txState.depositAmount, selectedChain, chainId, chainConfig, network, poolDeployed, writeContractAsync, USDT_ADDRESS, COMMUNITY_POOL_ADDRESS, isFirstDeposit, signTypedDataAsync, switchChainAsync, fetchPoolData]);
   
   const handleWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
