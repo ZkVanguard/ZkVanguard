@@ -277,7 +277,7 @@ export function useCommunityPool(propAddress?: string) {
     try {
       const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
       const provider = new ethers.JsonRpcProvider(rpcUrl);
       
       const erc20 = new ethers.Contract(tokenAddress, [
@@ -309,7 +309,7 @@ export function useCommunityPool(propAddress?: string) {
     try {
       const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
       const provider = new ethers.JsonRpcProvider(rpcUrl);
       const erc20 = new ethers.Contract(tokenAddress, ['function allowance(address,address) view returns (uint256)'], provider);
       const allowance = await erc20.allowance(owner, spender);
@@ -480,11 +480,24 @@ export function useCommunityPool(propAddress?: string) {
     // EVM chains
     const chainParam = `&chain=${selectedChain}&network=${network}`;
     
+    const fetchWithTimeout = async (url: string, ms = 8000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), ms);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        return response;
+      } catch (error) {
+        clearTimeout(id);
+        throw error;
+      }
+    };
+
     try {
       // Fetch pool and user data first (critical for UI)
       const [poolRes, userRes] = await Promise.all([
-        fetch(`/api/community-pool?${chainParam.substring(1)}`),
-        address ? fetch(`/api/community-pool?user=${address}${chainParam}`) : null,
+        fetchWithTimeout(`/api/community-pool?${chainParam.substring(1)}`),
+        address ? fetchWithTimeout(`/api/community-pool?user=${address}${chainParam}`) : null,
       ]);
       
       const [poolJson, userJson] = await Promise.all([
