@@ -44,6 +44,8 @@ export async function ensureHedgesTable(): Promise<void> {
     `);
     // Migration columns (idempotent ADD COLUMN IF NOT EXISTS)
     await query(`
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS portfolio_id INTEGER;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS zk_proof_hash VARCHAR(128);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS wallet_binding_hash VARCHAR(128);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS owner_commitment VARCHAR(128);
