@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Shield, TrendingUp, TrendingDown, CheckCircle, ExternalLink, RefreshCw, Wallet, Lock } from 'lucide-react';
+import { Shield, TrendingUp, TrendingDown, CheckCircle, ExternalLink, RefreshCw, Wallet, Lock, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
 import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
