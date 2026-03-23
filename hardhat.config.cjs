@@ -104,6 +104,20 @@ const config = {
       gasPrice: 'auto',
       timeout: 120000,
     },
+    'hedera-testnet': {
+      chainId: parseInt(process.env.HEDERA_TESTNET_CHAIN_ID || '296'),
+      url: process.env.HEDERA_TESTNET_RPC_URL || 'https://hedera-testnet-rpc.example',
+      accounts: process.env.HEDERA_PRIVATE_KEY ? [process.env.HEDERA_PRIVATE_KEY] : [],
+      gasPrice: process.env.HEDERA_GAS_PRICE ? Number(process.env.HEDERA_GAS_PRICE) : 20000000000000,
+      timeout: 120000,
+    },
+    'hedera-mainnet': {
+      chainId: parseInt(process.env.HEDERA_MAINNET_CHAIN_ID || '295'),
+      url: process.env.HEDERA_MAINNET_RPC_URL || 'https://hedera-mainnet-rpc.example',
+      accounts: process.env.HEDERA_PRIVATE_KEY ? [process.env.HEDERA_PRIVATE_KEY] : [],
+      gasPrice: 'auto',
+      timeout: 120000,
+    },
   },
   etherscan: {
     apiKey: {

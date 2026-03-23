@@ -21,6 +21,7 @@ const MAINNET_USDT = {
   1: '0xdAC17F958D2ee523a2206206994597C13D831ec7',     // Ethereum Mainnet
   25: '0x66e428c3f67a68878562e79A0234c1F83c208770',    // Cronos Mainnet
   42161: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Arbitrum One
+  296: process.env.HEDERA_USDT_ADDRESS || '0x0000000000000000000000000000000000068cc2', // Hedera Testnet (USDT)
 };
 
 // Pyth Oracle addresses
@@ -28,12 +29,14 @@ const PYTH_ORACLES = {
   1: '0x4305FB66699C3B2702D4d05CF36551390A4c69C6',     // Ethereum Mainnet
   25: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',    // Cronos Mainnet
   42161: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C', // Arbitrum One
+  296: process.env.HEDERA_PYTH_ORACLE || '0x000000000000000000000000000000000004ae4cf', // Hedera Testnet (Pyth)
 };
 
 const NETWORK_NAMES = {
   1: 'Ethereum Mainnet',
   25: 'Cronos Mainnet',
   42161: 'Arbitrum One',
+  296: 'Hedera Testnet',
 };
 
 async function main() {
@@ -47,16 +50,20 @@ async function main() {
   console.log(`\n📍 Network: ${NETWORK_NAMES[chainId] || `Unknown (${chainId})`}`);
   console.log(`👛 Deployer: ${deployer.address}`);
   
-  // Check if this is a mainnet
-  if (![1, 25, 42161].includes(chainId)) {
-    console.error(`\n❌ Error: Chain ${chainId} is not a supported mainnet.`);
-    console.log('   Supported: ethereum (1), cronos (25), arbitrum (42161)');
+  // Check if this is a supported network
+  if (![1, 25, 42161, 296].includes(chainId)) {
+    console.error(`\n❌ Error: Chain ${chainId} is not a supported network.`);
+    console.log('   Supported: ethereum (1), cronos (25), arbitrum (42161), hedera-testnet (296)');
     process.exit(1);
   }
   
   const balance = await hre.ethers.provider.getBalance(deployer.address);
-  console.log(`💰 Balance: ${hre.ethers.formatEther(balance)} ${chainId === 25 ? 'CRO' : 'ETH'}`);
-  
+  console.log(`💰 Balance: ${hre.ethers.formatEther(balance)} ${chainId === 25 ? 'CRO' : chainId === 296 ? 'HBAR' : 'ETH'}`);
+  if (chainId === 296 && balance.eq(0)) {
+    console.error('\n❌ Error: Hedera testnet account balance is 0. Fund this account with testnet HBAR gas before deploying.');
+    process.exit(1);
+  }
+
   const usdtAddress = MAINNET_USDT[chainId];
   const pythAddress = PYTH_ORACLES[chainId];
   
@@ -66,10 +73,15 @@ async function main() {
   
   // Safety prompt
   console.log('\n' + '⚠️'.repeat(35));
-  console.log('   WARNING: YOU ARE DEPLOYING TO MAINNET');
-  console.log('   This will use REAL funds and create a REAL contract.');
+  if (chainId !== 296) {
+    console.log('   WARNING: YOU ARE DEPLOYING TO MAINNET');
+    console.log('   This will use REAL funds and create a REAL contract.');
+  } else {
+    console.log('   WARNING: YOU ARE DEPLOYING TO HEDERA TESTNET');
+    console.log('   Confirm the account exists and has enough testnet gas tokens.');
+  }
   console.log('⚠️'.repeat(35));
-  
+
   // Verify USDT is correct
   const usdt = await hre.ethers.getContractAt(
     ['function symbol() view returns (string)', 'function decimals() view returns (uint8)'],
@@ -77,13 +89,17 @@ async function main() {
   );
   
   try {
-    const symbol = await usdt.symbol();
-    const decimals = await usdt.decimals();
-    console.log(`\n✅ Verified USDT: ${symbol} (${decimals} decimals)`);
-    
-    if (symbol !== 'USDT' && symbol !== 'USD₮') {
-      console.error(`\n❌ Error: Token at ${usdtAddress} is ${symbol}, not USDT!`);
-      process.exit(1);
+    if (chainId !== 296) {
+      const symbol = await usdt.symbol();
+      const decimals = await usdt.decimals();
+      console.log(`\n✅ Verified USDT: ${symbol} (${decimals} decimals)`);
+      
+      if (symbol !== 'USDT' && symbol !== 'USD₮') {
+        console.error(`\n❌ Error: Token at ${usdtAddress} is ${symbol}, not USDT!`);
+        process.exit(1);
+      }
+    } else {
+      console.log('\n⚠️ Hedera testnet: skipping USDT symbol verification, using provided address');
     }
   } catch (e) {
     console.error(`\n❌ Error: Could not verify USDT at ${usdtAddress}`);
@@ -123,7 +139,18 @@ async function main() {
   console.log(`\n✅ Pool verified, deposit token: ${depositToken}`);
   
   // Save deployment info
-  const networkKey = chainId === 1 ? 'ethereum' : chainId === 25 ? 'cronos' : 'arbitrum';
+  const networkKey = chainId === 1 ? 'ethereum' : chainId === 25 ? 'cronos' : chainId === 42161 ? 'arbitrum' : chainId === 296 ? 'hedera-testnet' : 'unknown';
+  const explorerUrl =
+    chainId === 1
+      ? `https://etherscan.io/address/${proxyAddress}`
+      : chainId === 25
+      ? `https://explorer.cronos.org/address/${proxyAddress}`
+      : chainId === 42161
+      ? `https://arbiscan.io/address/${proxyAddress}`
+      : chainId === 296
+      ? `https://hashscan.io/testnet/account/${deployer.address}`
+      : 'unknown';
+
   const deploymentInfo = {
     network: NETWORK_NAMES[chainId],
     chainId,
@@ -142,11 +169,7 @@ async function main() {
       },
     },
     deployer: deployer.address,
-    explorer: chainId === 1 
-      ? `https://etherscan.io/address/${proxyAddress}`
-      : chainId === 25
-      ? `https://explorer.cronos.org/address/${proxyAddress}`
-      : `https://arbiscan.io/address/${proxyAddress}`,
+    explorer: explorerUrl,
   };
   
   const deploymentPath = path.join(__dirname, '..', 'deployments', `community-pool-${networkKey}-mainnet.json`);
