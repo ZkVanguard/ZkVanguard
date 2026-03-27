@@ -664,7 +664,7 @@ export async function POST(request: NextRequest) {
       // Determine if deposit was already executed on-chain (real txDigest from wallet signing)
       const isOnChainDeposit = txDigest && !txDigest.startsWith('usdc-deposit-');
 
-      let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: number; amountOut?: number; error?: string }> };
+      let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: string; amountOut?: string; error?: string }> };
       const hedgeResults: Array<{ asset: string; success: boolean; hedgeId?: string; method: string; error?: string }> = [];
 
       // Only attempt server-side swaps for legacy API-only deposits (no on-chain tx)
