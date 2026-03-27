@@ -47,7 +47,7 @@ function isValidChainAddress(address: string, chain: string): boolean {
 /**
  * Validate positive number within reasonable bounds
  */
-function isValidAmount(amount: number, maxValue = 1e15): boolean {
+function isValidAmount(amount: number, maxValue = 1e10): boolean {
   return typeof amount === 'number' && 
          Number.isFinite(amount) && 
          amount >= 0 && 

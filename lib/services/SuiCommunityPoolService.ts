@@ -324,6 +324,15 @@ export class SuiCommunityPoolService {
         // Calculate share price
         const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
 
+        // MAINNET SANITY CHECK: Reject obviously wrong SUI amounts  
+        // Max 10B SUI (total supply is ~10B)
+        if (totalNAV > 10_000_000_000 || sharePrice > 1_000_000) {
+          logger.error('[SuiCommunityPool] SANITY CHECK FAILED', {
+            rawBalance: balanceValue, totalNAV, totalShares, sharePrice,
+          });
+          return defaultStats;
+        }
+
         // Get SUI price for USD conversion
         let suiPrice = 0;
         try {
@@ -858,6 +867,18 @@ export class SuiUsdcPoolService {
         const totalNAVUsdc = Number(balanceValue) / Math.pow(10, USDC_DECIMALS);
         const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
         const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;
+
+        // MAINNET SANITY CHECK: Reject obviously wrong values
+        const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
+        if (totalNAVUsdc > MAX_REASONABLE_NAV || sharePriceUsdc > 1_000_000) {
+          logger.error('[SuiUsdcPool] SANITY CHECK FAILED — values exceed reasonable bounds', {
+            rawBalance: balanceValue,
+            totalNAVUsdc,
+            totalShares,
+            sharePriceUsdc,
+          });
+          return this.getStatsFromFallback();
+        }
 
         // Parse 4-asset allocation from on-chain
         const alloc = fields.current_allocation?.fields || {};

@@ -300,6 +300,39 @@ export async function getPoolStats(): Promise<PoolStats> {
     // NAV and sharePrice from dedicated functions (more accurate)
     const totalNAV = parseFloat(ethers.formatUnits(nav, 6));
     const sharePrice = parseFloat(ethers.formatUnits(navPerShare, 6));
+
+    // MAINNET SANITY CHECK: Reject obviously wrong values
+    // Max pool size $10B — anything above indicates a decimal conversion bug
+    const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
+    const MAX_REASONABLE_SHARE_PRICE = 1_000_000; // $1M per share
+    if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE) {
+      logger.error('[PoolStats] SANITY CHECK FAILED — values exceed reasonable bounds', {
+        rawNav: nav.toString(),
+        rawNavPerShare: navPerShare.toString(),
+        parsedTotalNAV: totalNAV,
+        parsedSharePrice: sharePrice,
+        maxReasonableNAV: MAX_REASONABLE_NAV,
+        maxReasonableSharePrice: MAX_REASONABLE_SHARE_PRICE,
+      });
+      // Return safe zero-state instead of crashing — frontend will show "loading" or "no data"
+      return {
+        totalShares: 0,
+        totalNAV: 0,
+        sharePrice: 1.0,
+        memberCount: 0,
+        allocations: {
+          BTC: { percentage: 0, targetBps: 0 },
+          ETH: { percentage: 0, targetBps: 0 },
+          SUI: { percentage: 0, targetBps: 0 },
+          CRO: { percentage: 0, targetBps: 0 },
+        },
+        assetBalances: { BTC: 0, ETH: 0, SUI: 0, CRO: 0 },
+        lastUpdated: Date.now(),
+        source: 'on-chain',
+        chainId: config.chainId,
+        error: 'Sanity check failed — on-chain values exceed reasonable bounds',
+      } as PoolStats;
+    }
     
     // Allocations (BPS to percentage)
     const btcBps = Number(allocBps[0]);
