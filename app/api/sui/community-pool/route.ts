@@ -100,6 +100,8 @@ export async function GET(request: NextRequest) {
           priceImpact: quote.priceImpact,
           route: quote.route,
           canSwapOnChain: quote.canSwapOnChain,
+          isSimulated: quote.isSimulated,
+          hedgeVia: quote.hedgeVia,
         },
         chain: 'sui',
         network,
@@ -182,6 +184,10 @@ export async function GET(request: NextRequest) {
       // Also include the deployed SUI-native pool contract info
       const { getSuiCommunityPoolService } = await import('@/lib/services/SuiCommunityPoolService');
       const nativeInfo = getSuiCommunityPoolService(network).getContractInfo();
+      
+      // Check BlueFin hedging status
+      const bluefinConfigured = !!process.env.BLUEFIN_PRIVATE_KEY;
+      
       return NextResponse.json({
         success: true,
         data: {
@@ -190,7 +196,8 @@ export async function GET(request: NextRequest) {
           deployedPackageId: info.packageId || nativeInfo.packageId,
           nativePoolPackageId: nativeInfo.packageId,
           nativePoolStateId: nativeInfo.poolStateId,
-          hedgeExecutorStateId: nativeInfo.poolStateId ? undefined : undefined,
+          hedgeExecutorStateId: bluefinConfigured ? 'bluefin-perps' : undefined,
+          bluefinConfigured,
         },
         chain: 'sui',
         network,
@@ -684,6 +691,7 @@ export async function POST(request: NextRequest) {
       // Check admin wallet — if not configured, still record deposit to DB (swaps deferred)
       const wallet = await aggregator.checkAdminWallet();
       let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: number; amountOut?: number; error?: string }> };
+      const hedgeResults: Array<{ asset: string; success: boolean; hedgeId?: string; method: string; error?: string }> = [];
 
       if (wallet.configured && wallet.hasGas) {
         // Execute swaps: USDC → 4 assets
@@ -693,6 +701,50 @@ export async function POST(request: NextRequest) {
         );
 
         swapResult = await aggregator.executeRebalance(plan, 0.01);
+
+        // Attempt BlueFin hedges for non-swappable assets
+        const bluefinKey = process.env.BLUEFIN_PRIVATE_KEY;
+        if (bluefinKey) {
+          try {
+            const { BluefinService } = await import('@/lib/services/BluefinService');
+            const bluefin = BluefinService.getInstance();
+            if (!bluefin.isInitialized()) {
+              await bluefin.initialize(bluefinKey, network as 'mainnet' | 'testnet');
+            }
+
+            // Hedge assets that couldn't swap on-chain
+            const hedgeableAssets = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
+            for (const swap of hedgeableAssets) {
+              const pair = BluefinService.assetToPair(swap.asset);
+              if (!pair) continue;
+              const usdcAllocated = Number(swap.amountIn) / 1e6;
+              try {
+                const result = await bluefin.openHedge({
+                  symbol: pair,
+                  side: 'LONG',
+                  size: usdcAllocated,
+                  leverage: 1,
+                });
+                hedgeResults.push({
+                  asset: swap.asset,
+                  success: result.success,
+                  hedgeId: result.hedgeId,
+                  method: 'bluefin',
+                  error: result.error,
+                });
+              } catch (hedgeErr) {
+                hedgeResults.push({
+                  asset: swap.asset,
+                  success: false,
+                  method: 'bluefin',
+                  error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
+                });
+              }
+            }
+          } catch (bfErr) {
+            logger.warn('[SUI-API] BlueFin hedging failed', { error: bfErr });
+          }
+        }
       } else {
         logger.warn('[SUI-API] Admin wallet not configured or insufficient gas — recording deposit to DB only, swaps deferred');
       }
@@ -735,6 +787,7 @@ export async function POST(request: NextRequest) {
         amountUsdc,
         sharesTotal: newTotalShares,
         swapsExecuted: swapResult.totalExecuted,
+        hedgesAttempted: hedgeResults.length,
       });
 
       return NextResponse.json({
@@ -749,6 +802,7 @@ export async function POST(request: NextRequest) {
             failed: swapResult.totalFailed,
             results: swapResult.results,
           },
+          hedges: hedgeResults.length > 0 ? hedgeResults : undefined,
         },
         chain: 'sui',
         network,

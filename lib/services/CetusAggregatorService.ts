@@ -201,7 +201,9 @@ export class CetusAggregatorService {
     if (!toCoinType || asset === 'CRO') {
       // Estimate output from market price for tracking purposes
       const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
-      const hedgeMethod = asset === 'CRO' ? 'bluefin' as const : 'virtual' as const;
+      // Check if BlueFin is configured — if so, this is a real hedge, not a simulation
+      const bluefinConfigured = !!process.env.BLUEFIN_PRIVATE_KEY;
+      const hedgeMethod = (bluefinConfigured || asset === 'CRO') ? 'bluefin' as const : 'virtual' as const;
       return {
         asset,
         fromCoinType,
@@ -212,7 +214,7 @@ export class CetusAggregatorService {
         route: `USDC → ${asset} (hedged via BlueFin perps)`,
         routerData: null,
         canSwapOnChain: false,
-        isSimulated: true,
+        isSimulated: !bluefinConfigured,
         hedgeVia: hedgeMethod,
       };
     }
@@ -277,7 +279,8 @@ export class CetusAggregatorService {
       if (expectedOut === '0' || expectedOut === '') {
         const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
         if (estimate) {
-          logger.info(`[CetusAggregator] Cetus returned 0 for ${asset}, using price estimate`, { price: estimate.price });
+          const bluefinConfigured = !!process.env.BLUEFIN_PRIVATE_KEY;
+          logger.info(`[CetusAggregator] Cetus returned 0 for ${asset}, using price estimate`, { price: estimate.price, bluefinConfigured });
           return {
             asset,
             fromCoinType,
@@ -285,11 +288,13 @@ export class CetusAggregatorService {
             amountIn: amountInRaw.toString(),
             expectedAmountOut: estimate.estimatedOut,
             priceImpact: 0,
-            route: `USDC → ${asset} via price-estimate ($${estimate.price.toFixed(2)})`,
+            route: bluefinConfigured
+              ? `USDC → ${asset} (hedged via BlueFin perps)`
+              : `USDC → ${asset} via price-estimate ($${estimate.price.toFixed(2)})`,
             routerData: null,
             canSwapOnChain: false,
-            isSimulated: true,
-            hedgeVia: 'virtual',
+            isSimulated: !bluefinConfigured,
+            hedgeVia: bluefinConfigured ? 'bluefin' : 'virtual',
           };
         }
       }
