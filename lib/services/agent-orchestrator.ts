@@ -12,6 +12,7 @@ import { PriceMonitorAgent } from '@/agents/specialized/PriceMonitorAgent';
 import { LeadAgent } from '@/agents/core/LeadAgent';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { saveAgentState, loadAgentState } from '@/lib/db/agent-state';
 import type { MarketSnapshot } from './CentralizedHedgeManager';
 import type { HedgeExecutorConfig } from '@/integrations/hedge-executor/HedgeExecutorClient';
 
@@ -267,6 +268,34 @@ export class AgentOrchestrator {
       } catch (err) {
         logger.warn('AutoHedgingService start failed (non-critical)', { error: err });
       }
+      
+      // Persist agent state to DB for cold start recovery
+      const activeAgents = [
+        this.riskAgent && 'RiskAgent',
+        this.hedgingAgent && 'HedgingAgent',
+        this.settlementAgent && 'SettlementAgent',
+        this.reportingAgent && 'ReportingAgent',
+        this.leadAgent && 'LeadAgent',
+        this.priceMonitorAgent && 'PriceMonitorAgent',
+      ].filter(Boolean) as string[];
+      
+      saveAgentState({
+        initialized_at: new Date().toISOString(),
+        agents_active: activeAgents,
+      }).catch(err => logger.debug('[Orchestrator] Non-critical: state save failed', { err }));
+      
+      // Load last known state from DB (for warm restart context)
+      try {
+        const lastState = await loadAgentState();
+        if (lastState?.last_risk_assessment) {
+          logger.info('[Orchestrator] Restored last risk assessment from DB', {
+            riskScore: lastState.last_risk_assessment.riskScore,
+            timestamp: lastState.last_risk_assessment.timestamp,
+          });
+        }
+      } catch {
+        // Non-critical — agents will fetch fresh data
+      }
     } catch (error) {
       logger.error('Failed to initialize AgentOrchestrator', { 
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -362,6 +391,20 @@ export class AgentOrchestrator {
         priority: 4,
         createdAt: new Date(),
       });
+
+      // Persist last risk assessment for cold start recovery
+      if (result.success && result.data) {
+        const data = result.data as Record<string, unknown>;
+        saveAgentState({
+          last_risk_assessment: {
+            riskScore: Number(data.riskScore || 0),
+            drawdownPercent: Number(data.drawdownPercent || 0),
+            volatility: Number(data.volatility || 0),
+            recommendations: Number(data.recommendations || 0),
+            timestamp: new Date().toISOString(),
+          },
+        }).catch(() => {/* non-critical */});
+      }
 
       return {
         success: result.success,
