@@ -355,7 +355,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         <div ref={autoHedgeRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {autoHedgeVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
-              <AutoHedgePanel />
+              <AutoHedgePanel chain={pool.selectedChain} />
             </Suspense>
           ) : (
             <PanelSkeleton />

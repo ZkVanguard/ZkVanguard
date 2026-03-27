@@ -38,7 +38,6 @@ import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSh
 import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { COMMUNITY_POOL_ADDRESS } from '@/lib/constants';
 import { POOL_CHAIN_CONFIGS, getCommunityPoolAddress } from '@/lib/contracts/community-pool-config';
 
 export const runtime = 'nodejs';
@@ -58,20 +57,20 @@ interface ChainConfig {
 
 /**
  * Get RPC URL and pool address for a given chain/network
- * Falls back to Cronos testnet if invalid
+ * Falls back to Sepolia testnet (primary live chain) if invalid
  */
 function getChainConfig(chain?: string | null, network?: string | null): ChainConfig {
-  const chainKey = (chain as ChainKey) || 'cronos';
+  const chainKey = (chain as ChainKey) || 'sepolia';
   const networkType: NetworkType = network === 'mainnet' ? 'mainnet' : 'testnet';
   
   const config = POOL_CHAIN_CONFIGS[chainKey];
   if (!config) {
-    // Fallback to Cronos testnet
-    const fallbackConfig = POOL_CHAIN_CONFIGS['cronos'];
+    // Fallback to Sepolia testnet (primary live chain)
+    const fallbackConfig = POOL_CHAIN_CONFIGS['sepolia'];
     return {
-      rpcUrl: 'https://evm-t3.cronos.org',
-      poolAddress: COMMUNITY_POOL_ADDRESS,
-      chainKey: 'cronos',
+      rpcUrl: fallbackConfig?.rpcUrls?.testnet || 'https://sepolia.drpc.org',
+      poolAddress: getCommunityPoolAddress('sepolia', 'testnet'),
+      chainKey: 'sepolia',
       network: 'testnet',
       assets: fallbackConfig?.assets || ['BTC', 'ETH', 'SUI', 'CRO'],
     };
