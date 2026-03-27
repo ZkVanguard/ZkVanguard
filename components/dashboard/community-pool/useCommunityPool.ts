@@ -1580,6 +1580,7 @@ export function useCommunityPool(propAddress?: string) {
       const recordJson = await recordRes.json();
       
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
       const sharesMsg = recordJson.success && recordJson.data
         ? `${recordJson.data.sharesMinted} shares minted`
         : 'shares minted on-chain';
@@ -1715,6 +1716,7 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
       dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USDC! TX: ${result.digest.slice(0, 12)}...` });
       dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
       dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
