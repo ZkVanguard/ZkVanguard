@@ -640,7 +640,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Record USDC deposit: verify transfer, execute swaps, mint shares
+    // Record USDC deposit: record on-chain deposit to DB, optionally execute server-side swaps
     if (action === 'record-deposit') {
       const { walletAddress, amountUsdc, allocations, txDigest } = body;
       
@@ -657,96 +657,44 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      if (!allocations || typeof allocations !== 'object') {
-        return NextResponse.json(
-          { success: false, error: 'allocations required (e.g. { BTC: 30, ETH: 30, SUI: 25, CRO: 15 })' },
-          { status: 400 }
-        );
-      }
-
-      // Use AI agent for dynamic allocation if frontend sent the default static values
-      let finalAllocations = allocations as Record<PoolAsset, number>;
-      const isStaticDefault = allocations.BTC === 30 && allocations.ETH === 30 && allocations.SUI === 25 && allocations.CRO === 15;
-      if (isStaticDefault) {
-        try {
-          const { getSuiPoolAgent } = await import('@/agents/specialized/SuiPoolAgent');
-          const agent = getSuiPoolAgent(network);
-          const indicators = await agent.analyzeMarket();
-          const decision = agent.generateAllocation(indicators);
-          finalAllocations = decision.allocations;
-          logger.info('[SUI-API] Using AI allocation for deposit', {
-            allocations: finalAllocations,
-            confidence: decision.confidence,
-          });
-        } catch {
-          // Keep static allocation on failure
-        }
-      }
 
       // Dynamically import DB functions to avoid edge runtime issues
       const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
 
-      const aggregator = getCetusAggregatorService(network);
+      // Determine if deposit was already executed on-chain (real txDigest from wallet signing)
+      const isOnChainDeposit = txDigest && !txDigest.startsWith('usdc-deposit-');
 
-      // Check admin wallet — if not configured, still record deposit to DB (swaps deferred)
-      const wallet = await aggregator.checkAdminWallet();
       let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: number; amountOut?: number; error?: string }> };
       const hedgeResults: Array<{ asset: string; success: boolean; hedgeId?: string; method: string; error?: string }> = [];
 
-      if (wallet.configured && wallet.hasGas) {
-        // Execute swaps: USDC → 4 assets
-        const plan = await aggregator.planRebalanceSwaps(
-          amountUsdc,
-          finalAllocations,
-        );
+      // Only attempt server-side swaps for legacy API-only deposits (no on-chain tx)
+      if (!isOnChainDeposit && allocations && typeof allocations === 'object') {
+        const aggregator = getCetusAggregatorService(network);
+        const wallet = await aggregator.checkAdminWallet();
 
-        swapResult = await aggregator.executeRebalance(plan, 0.01);
-
-        // Attempt BlueFin hedges for non-swappable assets
-        const bluefinKey = process.env.BLUEFIN_PRIVATE_KEY;
-        if (bluefinKey) {
-          try {
-            const { BluefinService } = await import('@/lib/services/BluefinService');
-            const bluefin = BluefinService.getInstance();
-            if (!bluefin.isInitialized()) {
-              await bluefin.initialize(bluefinKey, network as 'mainnet' | 'testnet');
+        if (wallet.configured && wallet.hasGas) {
+          // Use AI agent for dynamic allocation if frontend sent the default static values
+          let finalAllocations = allocations as Record<PoolAsset, number>;
+          const isStaticDefault = allocations.BTC === 30 && allocations.ETH === 30 && allocations.SUI === 25 && allocations.CRO === 15;
+          if (isStaticDefault) {
+            try {
+              const { getSuiPoolAgent } = await import('@/agents/specialized/SuiPoolAgent');
+              const agent = getSuiPoolAgent(network);
+              const indicators = await agent.analyzeMarket();
+              const decision = agent.generateAllocation(indicators);
+              finalAllocations = decision.allocations;
+            } catch {
+              // Keep static allocation on failure
             }
-
-            // Hedge assets that couldn't swap on-chain
-            const hedgeableAssets = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
-            for (const swap of hedgeableAssets) {
-              const pair = BluefinService.assetToPair(swap.asset);
-              if (!pair) continue;
-              const usdcAllocated = Number(swap.amountIn) / 1e6;
-              try {
-                const result = await bluefin.openHedge({
-                  symbol: pair,
-                  side: 'LONG',
-                  size: usdcAllocated,
-                  leverage: 1,
-                });
-                hedgeResults.push({
-                  asset: swap.asset,
-                  success: result.success,
-                  hedgeId: result.hedgeId,
-                  method: 'bluefin',
-                  error: result.error,
-                });
-              } catch (hedgeErr) {
-                hedgeResults.push({
-                  asset: swap.asset,
-                  success: false,
-                  method: 'bluefin',
-                  error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
-                });
-              }
-            }
-          } catch (bfErr) {
-            logger.warn('[SUI-API] BlueFin hedging failed', { error: bfErr });
           }
+
+          const plan = await aggregator.planRebalanceSwaps(amountUsdc, finalAllocations);
+          swapResult = await aggregator.executeRebalance(plan, 0.01);
+        } else {
+          logger.info('[SUI-API] Admin wallet not configured — deposit recorded to DB only (on-chain deposit handled by user wallet)');
         }
-      } else {
-        logger.warn('[SUI-API] Admin wallet not configured or insufficient gas — recording deposit to DB only, swaps deferred');
+      } else if (isOnChainDeposit) {
+        logger.info('[SUI-API] On-chain deposit detected, skipping server-side swaps', { txDigest });
       }
 
       // Calculate shares to mint (1 share = 1 USDC for simplicity)
@@ -809,9 +757,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Record withdrawal: execute reverse swaps, burn shares, update DB
+    // Record withdrawal: update DB shares (on-chain withdrawal already handled by user wallet)
     if (action === 'record-withdraw') {
-      const { walletAddress, sharesToBurn, allocations } = body;
+      const { walletAddress, sharesToBurn, txDigest } = body;
 
       // Validate inputs
       if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(walletAddress)) {
@@ -823,12 +771,6 @@ export async function POST(request: NextRequest) {
       if (!sharesToBurn || typeof sharesToBurn !== 'number' || sharesToBurn <= 0) {
         return NextResponse.json(
           { success: false, error: 'sharesToBurn required (positive number)' },
-          { status: 400 }
-        );
-      }
-      if (!allocations || typeof allocations !== 'object') {
-        return NextResponse.json(
-          { success: false, error: 'allocations required (current pool allocations)' },
           { status: 400 }
         );
       }
@@ -845,57 +787,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const aggregator = getCetusAggregatorService(network);
-
-      // Verify admin wallet
-      const wallet = await aggregator.checkAdminWallet();
-      if (!wallet.configured || !wallet.hasGas) {
-        return NextResponse.json(
-          { success: false, error: 'Admin wallet not configured or insufficient gas' },
-          { status: 503 }
-        );
-      }
-
       // Calculate USDC equivalent (1 share = 1 USDC)
       const withdrawUsdc = sharesToBurn;
-
-      // Execute reverse swaps: 4 assets → USDC
-      const assets: PoolAsset[] = ['BTC', 'ETH', 'SUI', 'CRO'];
-      const results: Array<import('@/lib/services/CetusAggregatorService').SwapExecutionResult> = [];
-
-      for (const asset of assets) {
-        const pct = (allocations[asset] || 0) / 100;
-        if (pct <= 0) continue;
-
-        const assetUsdValue = withdrawUsdc * pct;
-
-        try {
-          // Get forward quote to estimate asset amount
-          const forwardQuote = await aggregator.getSwapQuote(asset, assetUsdValue);
-          if (!forwardQuote.canSwapOnChain) {
-            results.push({
-              asset,
-              success: true,
-              error: `${asset} hedged via perps (no on-chain swap)`,
-            } as import('@/lib/services/CetusAggregatorService').SwapExecutionResult);
-            continue;
-          }
-
-          // Get reverse quote and execute
-          const reverseQuote = await aggregator.getReverseSwapQuote(asset, Number(forwardQuote.expectedAmountOut));
-          if (reverseQuote.canSwapOnChain && reverseQuote.routerData) {
-            const execResult = await aggregator.executeSwap(reverseQuote, 0.015);
-            results.push(execResult);
-          }
-        } catch (err) {
-          logger.error(`[SUI-API] Error with ${asset} reverse swap:`, err);
-          results.push({
-            asset,
-            success: false,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          } as import('@/lib/services/CetusAggregatorService').SwapExecutionResult);
-        }
-      }
 
       // Update user shares in DB
       const remainingShares = userShares.shares - sharesToBurn;
@@ -921,34 +814,25 @@ export async function POST(request: NextRequest) {
         sharePrice: 1.0,
         details: {
           network,
-          swapResults: results,
-          allocations,
+          onChain: true,
         },
-        txHash: undefined,
+        txHash: txDigest || undefined,
       });
-
-      const successfulSwaps = results.filter(r => r.success).length;
-      const failedSwaps = results.filter(r => !r.success).length;
 
       logger.info('[SUI-API] Withdrawal recorded', {
         wallet: walletAddress.slice(0, 10) + '...',
         sharesBurned: sharesToBurn,
         remainingShares,
-        swapsExecuted: successfulSwaps,
+        txDigest,
       });
 
       return NextResponse.json({
-        success: failedSwaps === 0,
+        success: true,
         data: {
           walletAddress,
           sharesBurned: sharesToBurn,
           usdcReturned: withdrawUsdc,
           remainingShares,
-          swaps: {
-            executed: successfulSwaps,
-            failed: failedSwaps,
-            results,
-          },
         },
         chain: 'sui',
         network,
