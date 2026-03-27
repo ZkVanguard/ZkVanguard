@@ -22,7 +22,8 @@ import crypto from 'crypto';
  */
 function isValidWalletAddress(address: string): boolean {
   if (!address || typeof address !== 'string') return false;
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
+  // Accept both EVM (40 hex) and SUI (64 hex) addresses
+  return /^0x[a-fA-F0-9]{40}$/.test(address) || /^0x[a-fA-F0-9]{64}$/.test(address);
 }
 
 /**
@@ -220,9 +221,15 @@ export async function savePoolStateToDb(state: {
  */
 export async function getAllUserSharesFromDb(): Promise<DbUserShares[]> {
   try {
-    return await query<DbUserShares>(
+    const rows = await query<DbUserShares>(
       `SELECT * FROM community_pool_shares ORDER BY shares DESC`
     );
+    // PostgreSQL returns NUMERIC/DECIMAL as strings; parse to numbers
+    return rows.map(row => ({
+      ...row,
+      shares: Number(row.shares),
+      cost_basis_usd: Number(row.cost_basis_usd),
+    }));
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get all user shares', error);
     return [];
@@ -241,10 +248,17 @@ export async function getUserSharesFromDb(walletAddress: string, chain: string =
   }
 
   try {
-    return await queryOne<DbUserShares>(
+    const row = await queryOne<DbUserShares>(
       `SELECT * FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
       [walletAddress, chain]
     );
+    if (!row) return null;
+    // PostgreSQL returns NUMERIC/DECIMAL as strings; parse to numbers
+    return {
+      ...row,
+      shares: Number(row.shares),
+      cost_basis_usd: Number(row.cost_basis_usd),
+    };
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get user shares', error);
     return null;
