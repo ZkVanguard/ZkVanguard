@@ -211,10 +211,10 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Min deposit: $10 USDC • Your USDC is split into BTC (30%), ETH (30%), SUI (25%), CRO (15%)
+                  Min deposit: $10 USDC • Your wallet will prompt you to sign the transaction.
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  1 share = 1 USDC. AI agents manage rebalancing across the 4-asset portfolio.
+                  USDC is deposited on-chain to the pool contract. 1 share = 1 USDC.
                 </p>
               </motion.div>
             )}
