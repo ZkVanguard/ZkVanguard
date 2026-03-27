@@ -57,9 +57,9 @@ function getChainTypeFromEvmId(chainId: number): ChainType | null {
     case 25:      // Cronos mainnet
     case 338:     // Cronos testnet
       return 'evm';
-    case 42161:   // Arbitrum One
-    case 421614:  // Arbitrum Sepolia
-      return 'arbitrum';
+    case 295:    // Hedera mainnet
+    case 296:     // Hedera testnet
+      return 'hedera';
     case 42262:   // Oasis Emerald mainnet
     case 42261:   // Oasis Emerald testnet
       return 'oasis-emerald';
@@ -133,16 +133,16 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
       return sui.getExplorerUrl(type, value);
     }
 
-    // Arbitrum explorer
-    if (activeChain === 'arbitrum') {
+    // Hedera explorer
+    if (activeChain === 'hedera') {
       const baseUrl = network === 'mainnet'
-        ? 'https://arbiscan.io'
-        : 'https://sepolia.arbiscan.io';
+        ? 'https://hashscan.io/mainnet'
+        : 'https://hashscan.io/testnet';
       switch (type) {
         case 'tx':
-          return `${baseUrl}/tx/${value}`;
+          return `${baseUrl}/transaction/${value}`;
         case 'address':
-          return `${baseUrl}/address/${value}`;
+          return `${baseUrl}/account/${value}`;
         default:
           return baseUrl;
       }
@@ -300,14 +300,14 @@ export function ChainSelector({ className = '' }: ChainSelectorProps) {
           Cronos
         </button>
         <button
-          onClick={() => setActiveChain('arbitrum')}
+          onClick={() => setActiveChain('hedera')}
           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'arbitrum'
-              ? 'bg-cyan-500 text-white'
+            activeChain === 'hedera'
+              ? 'bg-purple-500 text-white'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
           }`}
         >
-          Arbitrum
+          Hedera
         </button>
         <button
           onClick={() => setActiveChain('oasis-emerald')}

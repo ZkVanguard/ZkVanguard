@@ -3,7 +3,7 @@
  * 
  * Provides professional hedge fund-style risk analytics
  * 
- * GET /api/community-pool/risk-metrics?chain=cronos|sui|arbitrum
+ * GET /api/community-pool/risk-metrics?chain=cronos|sui|hedera
  *   Returns comprehensive risk metrics including:
  *   - Real-time volatility (from market data)
  *   - Sharpe/Sortino ratios (from NAV history)

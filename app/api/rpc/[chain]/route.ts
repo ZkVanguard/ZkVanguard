@@ -18,10 +18,9 @@ const UPSTREAM_RPC_URLS: Record<string, string[]> = {
     'https://ethereum-rpc.publicnode.com',
     'https://rpc.ankr.com/eth',
   ],
-  arbitrum: [
-    'https://arb1.arbitrum.io/rpc',
-    'https://arbitrum.drpc.org',
-    'https://arbitrum-one-rpc.publicnode.com',
+  hedera: [
+    'https://testnet.hashio.io/api',
+    'https://mainnet.hashio.io/api',
   ],
   plasma: [
     'https://plasma.drpc.org',

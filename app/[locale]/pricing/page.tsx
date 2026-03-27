@@ -97,7 +97,7 @@ export default async function PricingPage() {
                 What chains are supported?
               </h3>
               <p className="text-[15px] text-[#86868b] leading-[1.6]">
-                We support Cronos EVM, Arbitrum, and SUI with unified AI management. 
+                We support Cronos EVM, Hedera, and SUI with unified AI management. 
                 Same portfolio strategy across all chains using Pyth Network oracles.
               </p>
             </div>
