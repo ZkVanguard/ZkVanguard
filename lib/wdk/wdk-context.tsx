@@ -236,7 +236,7 @@ interface WdkProviderProps {
   defaultChain?: string;
 }
 
-const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'arbitrum-mainnet'];
+const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'hedera-mainnet'];
 
 /**
  * WDK Provider — browser-safe, ethers.js-backed wallet management.

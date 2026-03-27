@@ -78,50 +78,50 @@ export const CronosTestnet = defineChain({
 });
 
 // ============================================
-// ARBITRUM CHAINS
+// HEDERA CHAINS
 // ============================================
 
-// Arbitrum One (Mainnet)
-export const ArbitrumOne = defineChain({
-  id: 42161,
-  name: 'Arbitrum One',
+// Hedera Mainnet
+export const HederaMainnet = defineChain({
+  id: 295,
+  name: 'Hedera',
   nativeCurrency: {
     decimals: 18,
-    name: 'Ethereum',
-    symbol: 'ETH',
+    name: 'HBAR',
+    symbol: 'HBAR',
   },
   rpcUrls: {
     default: {
-      http: ['https://arb1.arbitrum.io/rpc'],
+      http: ['https://mainnet.hashio.io/api'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'Arbiscan',
-      url: 'https://arbiscan.io',
+      name: 'HashScan',
+      url: 'https://hashscan.io/mainnet',
     },
   },
   testnet: false,
 });
 
-// Arbitrum Sepolia (Testnet)
-export const ArbitrumSepolia = defineChain({
-  id: 421614,
-  name: 'Arbitrum Sepolia',
+// Hedera Testnet
+export const HederaTestnet = defineChain({
+  id: 296,
+  name: 'Hedera Testnet',
   nativeCurrency: {
     decimals: 18,
-    name: 'Sepolia Ethereum',
-    symbol: 'ETH',
+    name: 'HBAR',
+    symbol: 'HBAR',
   },
   rpcUrls: {
     default: {
-      http: ['https://sepolia-rollup.arbitrum.io/rpc'],
+      http: ['https://testnet.hashio.io/api'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'Arbiscan Sepolia',
-      url: 'https://sepolia.arbiscan.io',
+      name: 'HashScan Testnet',
+      url: 'https://hashscan.io/testnet',
     },
   },
   testnet: true,
@@ -427,7 +427,7 @@ export const SuiDevnet = {
 // MULTI-CHAIN UTILITIES
 // ============================================
 
-export type ChainType = 'evm' | 'sui' | 'arbitrum' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
+export type ChainType = 'evm' | 'sui' | 'hedera' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
 
 // Convenience type for any Oasis ParaTime
 export type OasisParaTime = 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
@@ -437,8 +437,8 @@ export interface MultiChainConfig {
   name: string;
   logo: string;
   chains: {
-    mainnet: typeof CronosMainnet | typeof ArbitrumOne | typeof SuiMainnet | typeof OasisSapphireMainnet | typeof OasisEmeraldMainnet | typeof OasisConsensusMainnet | typeof OasisCipherMainnet;
-    testnet: typeof CronosTestnet | typeof ArbitrumSepolia | typeof SuiTestnet | typeof OasisSapphireTestnet | typeof OasisEmeraldTestnet | typeof OasisConsensusTestnet | typeof OasisCipherTestnet;
+    mainnet: typeof CronosMainnet | typeof HederaMainnet | typeof SuiMainnet | typeof OasisSapphireMainnet | typeof OasisEmeraldMainnet | typeof OasisConsensusMainnet | typeof OasisCipherMainnet;
+    testnet: typeof CronosTestnet | typeof HederaTestnet | typeof SuiTestnet | typeof OasisSapphireTestnet | typeof OasisEmeraldTestnet | typeof OasisConsensusTestnet | typeof OasisCipherTestnet;
   };
 }
 
@@ -454,12 +454,12 @@ export const SUPPORTED_CHAINS: MultiChainConfig[] = [
     },
   },
   {
-    type: 'arbitrum',
-    name: 'Arbitrum',
-    logo: '/chains/arbitrum.svg',
+    type: 'hedera',
+    name: 'Hedera',
+    logo: '/chains/hedera.svg',
     chains: {
-      mainnet: ArbitrumOne,
-      testnet: ArbitrumSepolia,
+      mainnet: HederaMainnet,
+      testnet: HederaTestnet,
     },
   },
   {
@@ -520,11 +520,11 @@ export function isOasisChain(chainId: number | string): boolean {
   return false;
 }
 
-// Helper to check if a chain is EVM-compatible (includes Cronos, Arbitrum, Emerald, Sapphire)
+// Helper to check if a chain is EVM-compatible (includes Cronos, Hedera, Emerald, Sapphire)
 export function isEVMChain(chainId: number | string): boolean {
   if (typeof chainId === 'number') {
-    // Cronos (25, 338), Arbitrum (42161, 421614), Oasis Emerald (42262, 42261), Oasis Sapphire (23294, 23295)
-    return chainId === 25 || chainId === 338 || chainId === 42161 || chainId === 421614 || chainId === 23294 || chainId === 23295 || chainId === 42262 || chainId === 42261;
+    // Cronos (25, 338), Hedera (295, 296), Oasis Emerald (42262, 42261), Oasis Sapphire (23294, 23295)
+    return chainId === 25 || chainId === 338 || chainId === 295 || chainId === 296 || chainId === 23294 || chainId === 23295 || chainId === 42262 || chainId === 42261;
   }
   return !chainId.startsWith('sui:') && !chainId.startsWith('oasis:');
 }
@@ -545,7 +545,7 @@ export function getChainType(chainId: number | string): ChainType {
     if (chainId.startsWith('oasis:cipher')) return 'oasis-cipher';
   }
   if (typeof chainId === 'number') {
-    if (chainId === 42161 || chainId === 421614) return 'arbitrum';
+    if (chainId === 295 || chainId === 296) return 'hedera';
     if (chainId === 42262 || chainId === 42261) return 'oasis-emerald';
     if (chainId === 23294 || chainId === 23295) return 'oasis-sapphire';
   }

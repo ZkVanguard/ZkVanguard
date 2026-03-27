@@ -5,7 +5,7 @@
  * - Ethereum Mainnet - Production with USDT (via Tether WDK)
  * - Sepolia Testnet - Hackathon testing with WDK USDT
  * - Cronos - Live on testnet, mainnet ready
- * - Arbitrum - Live on Sepolia testnet
+ * - Hedera - Live on testnet
  * - SUI - Testing
  */
 
@@ -141,36 +141,36 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     status: 'deprecated',
   },
   
-  arbitrum: {
-    chainId: 421614,
-    chainType: 'arbitrum',
-    name: 'Arbitrum',
-    shortName: 'ARB',
-    icon: '🔵',
-    color: 'bg-cyan-500',
+  hedera: {
+    chainId: 296,
+    chainType: 'evm',
+    name: 'Hedera',
+    shortName: 'HBAR',
+    icon: 'ℏ',
+    color: 'bg-purple-500',
     nativeCurrency: {
-      name: 'Ethereum',
-      symbol: 'ETH',
+      name: 'HBAR',
+      symbol: 'HBAR',
       decimals: 18,
     },
     rpcUrls: {
-      testnet: 'https://sepolia-rollup.arbitrum.io/rpc',
-      mainnet: 'https://arb1.arbitrum.io/rpc',
+      testnet: 'https://testnet.hashio.io/api',
+      mainnet: 'https://mainnet.hashio.io/api',
     },
     blockExplorer: {
-      testnet: 'https://sepolia.arbiscan.io',
-      mainnet: 'https://arbiscan.io',
+      testnet: 'https://hashscan.io/testnet',
+      mainnet: 'https://hashscan.io/mainnet',
     },
     contracts: {
       testnet: {
-        communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-        usdt: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // USDT via WDK (Mock on Arbitrum Sepolia, 6 decimals)
-        pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF',
+        communityPool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6',
+        usdt: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO: Deploy
+        pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729', // Pyth on Hedera testnet
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000', // Not deployed yet
-        usdt: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Official Tether USDT on Arbitrum
-        pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C',
+        usdt: '0x0000000000000000000000000000000000000000', // USDT on Hedera mainnet
+        pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729', // Pyth on Hedera mainnet
       },
     },
     // Pool accepts USDT deposits only (via Tether WDK)

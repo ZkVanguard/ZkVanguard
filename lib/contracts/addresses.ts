@@ -165,15 +165,15 @@ export const SEPOLIA_CONTRACT_ADDRESSES = {
 } as const;
 
 // ============================================
-// ARBITRUM CONTRACT ADDRESSES
+// HEDERA CONTRACT ADDRESSES
 // ============================================
 
-export const ARBITRUM_CONTRACT_ADDRESSES = {
+export const HEDERA_CONTRACT_ADDRESSES = {
   testnet: {
-    // Arbitrum Sepolia (Chain ID: 421614)
-    communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B' as `0x${string}`,
-    usdtToken: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1' as `0x${string}`, // Test USDT
-    pythOracle: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF' as `0x${string}`,
+    // Hedera Testnet (Chain ID: 296)
+    communityPool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6' as `0x${string}`,
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`, // USDT on Hedera testnet - TODO
+    pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
@@ -181,10 +181,10 @@ export const ARBITRUM_CONTRACT_ADDRESSES = {
     gaslessZKCommitmentVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   },
   mainnet: {
-    // Arbitrum One (Chain ID: 42161)
-    communityPool: ((process.env.NEXT_PUBLIC_ARB_COMMUNITY_POOL || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
-    usdtToken: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9' as `0x${string}`, // USDT on Arbitrum One
-    pythOracle: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C' as `0x${string}`,
+    // Hedera Mainnet (Chain ID: 295)
+    communityPool: ((process.env.NEXT_PUBLIC_HEDERA_COMMUNITY_POOL || '0x0000000000000000000000000000000000000000').trim()) as `0x${string}`,
+    usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`, // USDT on Hedera mainnet
+    pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     rwaManager: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     paymentRouter: '0x0000000000000000000000000000000000000000' as `0x${string}`,
@@ -205,8 +205,8 @@ export const CONTRACT_ADDRESSES = {
   sui_devnet: SUI_CONTRACT_ADDRESSES.devnet,
   oasis_emerald_testnet: OASIS_EMERALD_CONTRACT_ADDRESSES.testnet,
   oasis_emerald_mainnet: OASIS_EMERALD_CONTRACT_ADDRESSES.mainnet,
-  arbitrum_testnet: ARBITRUM_CONTRACT_ADDRESSES.testnet,
-  arbitrum_mainnet: ARBITRUM_CONTRACT_ADDRESSES.mainnet,
+  hedera_testnet: HEDERA_CONTRACT_ADDRESSES.testnet,
+  hedera_mainnet: HEDERA_CONTRACT_ADDRESSES.mainnet,
   oasis_sapphire_testnet: OASIS_CONTRACT_ADDRESSES.testnet,
   oasis_sapphire_mainnet: OASIS_CONTRACT_ADDRESSES.mainnet,
 } as const;
@@ -215,7 +215,7 @@ export const CONTRACT_ADDRESSES = {
 // CHAIN TYPE DETECTION
 // ============================================
 
-export type ChainType = 'evm' | 'sui' | 'arbitrum' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
+export type ChainType = 'evm' | 'sui' | 'hedera' | 'oasis-emerald' | 'oasis-sapphire' | 'oasis-consensus' | 'oasis-cipher';
 export type NetworkType = 'mainnet' | 'testnet' | 'devnet';
 
 export interface ChainInfo {
@@ -246,10 +246,10 @@ export function getChainInfo(chainId: number | string): ChainInfo {
       return { type: 'evm', network: 'testnet', chainId };
     case 25:
       return { type: 'evm', network: 'mainnet', chainId };
-    case 421614:
-      return { type: 'arbitrum', network: 'testnet', chainId };
-    case 42161:
-      return { type: 'arbitrum', network: 'mainnet', chainId };
+    case 296:
+      return { type: 'hedera', network: 'testnet', chainId };
+    case 295:
+      return { type: 'hedera', network: 'mainnet', chainId };
     case 42261:
       return { type: 'oasis-emerald', network: 'testnet', chainId };
     case 42262:
@@ -274,10 +274,10 @@ export function getContractAddresses(chainId: number) {
       return CRONOS_CONTRACT_ADDRESSES.mainnet;
     case 11155111: // Sepolia
       return SEPOLIA_CONTRACT_ADDRESSES.testnet;
-    case 421614: // Arbitrum Sepolia
-      return ARBITRUM_CONTRACT_ADDRESSES.testnet;
-    case 42161: // Arbitrum One
-      return ARBITRUM_CONTRACT_ADDRESSES.mainnet;
+    case 296: // Hedera Testnet
+      return HEDERA_CONTRACT_ADDRESSES.testnet;
+    case 295: // Hedera Mainnet
+      return HEDERA_CONTRACT_ADDRESSES.mainnet;
     case 42261: // Oasis Emerald Testnet
       return OASIS_EMERALD_CONTRACT_ADDRESSES.testnet;
     case 42262: // Oasis Emerald Mainnet
@@ -305,8 +305,8 @@ export function getMultiChainAddresses(chainType: ChainType, network: NetworkTyp
   if (chainType === 'sui') {
     return SUI_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet'];
   }
-  if (chainType === 'arbitrum') {
-    return ARBITRUM_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
+  if (chainType === 'hedera') {
+    return HEDERA_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];
   }
   if (chainType === 'oasis-sapphire') {
     return OASIS_CONTRACT_ADDRESSES[network === 'mainnet' ? 'mainnet' : 'testnet'];

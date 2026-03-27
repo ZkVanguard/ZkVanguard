@@ -76,16 +76,16 @@ const config = {
       gasPrice: 'auto',
       timeout: 60000,
     },
-    'arbitrum-sepolia': {
-      chainId: 421614,
-      url: process.env.ARBITRUM_SEPOLIA_RPC || 'https://sepolia-rollup.arbitrum.io/rpc',
+    'hedera-testnet': {
+      chainId: 296,
+      url: process.env.HEDERA_TESTNET_RPC || 'https://testnet.hashio.io/api',
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       gasPrice: 'auto',
       timeout: 120000,
     },
-    'arbitrum-one': {
-      chainId: 42161,
-      url: process.env.ARBITRUM_ONE_RPC || 'https://arb1.arbitrum.io/rpc',
+    'hedera-mainnet': {
+      chainId: 295,
+      url: process.env.HEDERA_MAINNET_RPC || 'https://mainnet.hashio.io/api',
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       gasPrice: 'auto',
       timeout: 120000,
@@ -127,8 +127,8 @@ const config = {
       'oasis-emerald-mainnet': 'no-api-key-needed',
       'oasis-sapphire-testnet': 'no-api-key-needed',
       'oasis-sapphire-mainnet': 'no-api-key-needed',
-      'arbitrum-sepolia': process.env.ARBISCAN_API_KEY || '',
-      'arbitrum-one': process.env.ARBISCAN_API_KEY || '',
+      'hedera-testnet': process.env.HASHSCAN_API_KEY || '',
+      'hedera-mainnet': process.env.HASHSCAN_API_KEY || '',
       'sepolia': process.env.ETHERSCAN_API_KEY || '',
       'ethereum': process.env.ETHERSCAN_API_KEY || '',
     },
@@ -182,19 +182,19 @@ const config = {
         },
       },
       {
-        network: 'arbitrum-sepolia',
-        chainId: 421614,
+        network: 'hedera-testnet',
+        chainId: 296,
         urls: {
-          apiURL: 'https://api-sepolia.arbiscan.io/api',
-          browserURL: 'https://sepolia.arbiscan.io/',
+          apiURL: 'https://server-verify.hashscan.io/api',
+          browserURL: 'https://hashscan.io/testnet/',
         },
       },
       {
-        network: 'arbitrum-one',
-        chainId: 42161,
+        network: 'hedera-mainnet',
+        chainId: 295,
         urls: {
-          apiURL: 'https://api.arbiscan.io/api',
-          browserURL: 'https://arbiscan.io/',
+          apiURL: 'https://server-verify.hashscan.io/api',
+          browserURL: 'https://hashscan.io/mainnet/',
         },
       },
       {

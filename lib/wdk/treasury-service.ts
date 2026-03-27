@@ -29,7 +29,7 @@ const ERC20_ABI = [
 // Types
 export interface TreasuryConfig {
   privateKey: string;
-  defaultChain: 'sepolia' | 'cronos-mainnet' | 'arbitrum-mainnet';
+  defaultChain: 'sepolia' | 'cronos-mainnet' | 'hedera-mainnet';
 }
 
 export interface TransferParams {
@@ -78,7 +78,7 @@ export class TreasuryService {
       const chainsToRegister = [
         'sepolia',          // USDT testnet
         'cronos-mainnet',   // Hedge execution
-        'arbitrum-mainnet', // Alternative USDT
+        'hedera-mainnet', // Alternative USDT
       ];
       
       for (const chainKey of chainsToRegister) {
