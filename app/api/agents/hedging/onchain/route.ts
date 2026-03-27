@@ -513,6 +513,27 @@ export async function GET(request: NextRequest) {
     // ═══════════════════════════════════════════════════════════
     // FALLBACK: RPC mode (DB empty or forceRpc=true)
     // ═══════════════════════════════════════════════════════════
+
+    // SUI addresses (0x + 64 hex) are incompatible with EVM RPC calls — return empty
+    if (address && /^0x[a-fA-F0-9]{64}$/.test(address)) {
+      return NextResponse.json({
+        success: true,
+        source: 'database',
+        summary: {
+          totalHedges: 0,
+          activeCount: 0,
+          closedCount: 0,
+          totalUnrealizedPnL: 0,
+          profitable: 0,
+          unprofitable: 0,
+          details: [],
+        },
+        allHedges: [],
+        protocolStats: null,
+        message: 'Hedging not available for SUI wallets — connect an EVM wallet for on-chain hedges',
+      });
+    }
+
     console.log('⚠️ DB empty or forceRpc=true — falling back to RPC (slow)');
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;

@@ -618,22 +618,21 @@ export async function POST(request: NextRequest) {
 
       const aggregator = getCetusAggregatorService(network);
 
-      // Verify admin wallet has gas
+      // Check admin wallet — if not configured, still record deposit to DB (swaps deferred)
       const wallet = await aggregator.checkAdminWallet();
-      if (!wallet.configured || !wallet.hasGas) {
-        return NextResponse.json(
-          { success: false, error: 'Admin wallet not configured or insufficient gas' },
-          { status: 503 }
+      let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: number; amountOut?: number; error?: string }> };
+
+      if (wallet.configured && wallet.hasGas) {
+        // Execute swaps: USDC → 4 assets
+        const plan = await aggregator.planRebalanceSwaps(
+          amountUsdc,
+          allocations as Record<PoolAsset, number>,
         );
+
+        swapResult = await aggregator.executeRebalance(plan, 0.01);
+      } else {
+        logger.warn('[SUI-API] Admin wallet not configured or insufficient gas — recording deposit to DB only, swaps deferred');
       }
-
-      // Execute swaps: USDC → 4 assets
-      const plan = await aggregator.planRebalanceSwaps(
-        amountUsdc,
-        allocations as Record<PoolAsset, number>,
-      );
-
-      const swapResult = await aggregator.executeRebalance(plan, 0.01);
 
       // Calculate shares to mint (1 share = 1 USDC for simplicity)
       const sharesToMint = amountUsdc;
