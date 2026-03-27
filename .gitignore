@@ -115,12 +115,31 @@ bun-debug.log*
 check-old-contracts.js
 check-db.js
 check-ownership.js
+check-auto-hedge.js
 scripts/check-nav.js
 scripts/complete-migration.js
 scripts/debug-*.js
 scripts/sync-shares-*.js
 scripts/upgrade-*.js
 scripts/test-deposit.js
+scripts/test-cetus-fix.ts
+
+# -------------------------------------------
+# Temporary Output / Debug Files
+# -------------------------------------------
+git-status.txt
+deploy-out.txt
+deploy-v2-output.txt
+test-deposit-output.txt
+test-mainnet-output.txt
+tsc-output.txt
+body.json
+cetus-coins.txt
+cetus-count.txt
+cetus-pools.txt
+cetus-pools2.txt
+tmp-verify-hedera.js
+set-cron-secret.js
 
 # -------------------------------------------
 # Testing

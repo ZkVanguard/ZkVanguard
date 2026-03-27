@@ -433,6 +433,19 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       rawMemberCount = Number(memberCount);
       allocations = (stats._allocations || [0, 0, 0, 0]).map((a: bigint) => Number(a) / 100);
       
+      // MAINNET SANITY CHECK: Reject obviously wrong values
+      const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
+      const MAX_REASONABLE_SHARE_PRICE = 1_000_000; // $1M per share
+      if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE) {
+        logger.error(`[CommunityPool] SANITY CHECK FAILED for ${config.chainKey}`, {
+          rawNAV: stats._totalNAV.toString(),
+          rawSharePrice: stats._sharePrice.toString(),
+          parsedTotalNAV: totalNAV,
+          parsedSharePrice: sharePrice,
+        });
+        return null; // Don't serve obviously wrong data
+      }
+      
       logger.info(`[CommunityPool] getPoolStats succeeded for ${config.chainKey}`, {
         totalShares, totalNAV, rawMemberCount
       });
