@@ -752,7 +752,7 @@ export async function GET(request: NextRequest) {
     // Get user's position
     if (userAddress) {
       // SUI addresses (0x + 64 hex) passed to EVM chains → return empty early
-      if (/^0x[a-fA-F0-9]{64}$/.test(userAddress) && chainConfig.chainKey !== 'sui') {
+      if (/^0x[a-fA-F0-9]{64}$/.test(userAddress) && (chainConfig.chainKey as string) !== 'sui') {
         return NextResponse.json({
           success: true,
           user: {
