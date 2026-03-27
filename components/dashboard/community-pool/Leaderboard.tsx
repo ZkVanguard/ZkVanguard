@@ -1,7 +1,7 @@
 'use client';
 
-import React, { memo, useState, useMemo } from 'react';
-import { Award, Shield, Wallet, ExternalLink, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import React, { memo, useState } from 'react';
+import { Award, Shield, Wallet, ExternalLink, ChevronDown, ChevronUp, CheckCircle2, Database } from 'lucide-react';
 import type { LeaderboardEntry } from './types';
 import { formatPercent } from './utils';
 
@@ -10,6 +10,14 @@ interface LeaderboardProps {
   proxyWallet?: string;
   poolTVL?: number;
   chainId?: number;
+  selectedChain?: string;
+  chainConfig?: {
+    chainType?: string;
+    name?: string;
+    contracts?: { testnet?: { communityPool?: string; usdt?: string } };
+    blockExplorer?: { testnet?: string };
+    assets?: string[];
+  };
 }
 
 const RANK_STYLES = [
@@ -18,25 +26,17 @@ const RANK_STYLES = [
   'bg-orange-600 text-white',
 ];
 
-// ZK Proxy Vault address for Community Pool Treasury
+// Treasury addresses for EVM chains
 const POOL_PROXY_WALLETS: Record<string, { address: string; name: string }> = {
   sepolia: {
     address: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
-    name: 'Pool Treasury (ZK Proxy)',
+    name: 'Pool Contract (WDK USDT)',
   },
   cronos: {
     address: '0x7F75Ca65D32752607fF481F453E4fbD45E61FdFd',
-    name: 'Pool Treasury (ZK Proxy)',
+    name: 'Pool Contract',
   },
 };
-
-// On-chain proof: Verified asset tokens held by pool
-const SEPOLIA_ASSET_TOKENS = [
-  { symbol: 'mBTC', address: '0xaEbA1a0817F6A072F6272d9B46098E2e8A20A9D6', allocation: '30%' },
-  { symbol: 'mETH', address: '0xEbFA21Ca64791821D4138d3F0643a821313e53A5', allocation: '30%' },
-  { symbol: 'mCRO', address: '0x257d8583094D524554472d30A58F5cd9337D81c0', allocation: '20%' },
-  { symbol: 'mSUI', address: '0x5DA2C404bA47d289d8E125Ef12f0Dd4707d68E5D', allocation: '20%' },
-];
 
 const EXPLORER_URLS: Record<number, string> = {
   11155111: 'https://sepolia.etherscan.io',
@@ -44,7 +44,7 @@ const EXPLORER_URLS: Record<number, string> = {
   296: 'https://hashscan.io/testnet',
 };
 
-// Deterministic treasury proxy address — ALL deposits go here
+// Deterministic treasury proxy address for EVM chains
 const ZKVANGUARD_PDA_DOMAIN = 'ZKVANGUARD_PROXY_PDA_V1';
 
 async function deriveTreasuryProxyClient(): Promise<string> {
@@ -57,39 +57,53 @@ async function deriveTreasuryProxyClient(): Promise<string> {
   return '0x' + hashHex.slice(-40);
 }
 
-export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poolTVL, chainId = 11155111 }: LeaderboardProps) {
+export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poolTVL, chainId = 11155111, selectedChain, chainConfig }: LeaderboardProps) {
   const [showProof, setShowProof] = useState(false);
   const [treasuryProxy, setTreasuryProxy] = useState<string>('');
+  const isSui = selectedChain === 'sui' || chainConfig?.chainType === 'sui';
   
-  // Derive single treasury proxy address
+  // Derive treasury proxy address (EVM chains only)
   React.useEffect(() => {
-    deriveTreasuryProxyClient().then(setTreasuryProxy);
-  }, []);
+    if (!isSui) {
+      deriveTreasuryProxyClient().then(setTreasuryProxy);
+    }
+  }, [isSui]);
 
-  // Show the ZK Proxy wallet as the pool treasury
-  const treasury = treasuryProxy ? {
+  // Get explorer URL based on chain
+  const explorerUrl = isSui
+    ? (chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet')
+    : (EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111]);
+
+  // Treasury info varies by chain
+  const treasury = isSui ? {
+    address: chainConfig?.contracts?.testnet?.communityPool || '',
+    name: 'Pool Contract (USDC)',
+  } : treasuryProxy ? {
     address: treasuryProxy,
-    name: 'Pool Treasury (ZK Proxy)',
+    name: POOL_PROXY_WALLETS[selectedChain || 'sepolia']?.name || 'Pool Treasury',
   } : proxyWallet ? {
     address: proxyWallet,
-    name: 'Pool Treasury (ZK Proxy)',
-  } : POOL_PROXY_WALLETS.sepolia;
+    name: 'Pool Treasury',
+  } : POOL_PROXY_WALLETS[selectedChain || 'sepolia'] || POOL_PROXY_WALLETS.sepolia;
 
-  const explorerUrl = EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111];
+  // Build explorer link based on chain type
+  const contractUrl = isSui
+    ? `${explorerUrl}/object/${treasury.address}`
+    : `${explorerUrl}/address/${treasury.address}`;
 
   return (
     <div className="p-4">
-      {/* Pool Treasury - ZK Proxy Wallet */}
+      {/* Pool Contract Info */}
       <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
         <div className="flex items-center gap-2 mb-2">
-          <Shield className="w-4 h-4 text-purple-500" />
+          {isSui ? <Database className="w-4 h-4 text-blue-500" /> : <Shield className="w-4 h-4 text-purple-500" />}
           <span className="font-semibold text-sm text-purple-600 dark:text-purple-400">
             {treasury.name}
           </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-            {treasury.address.slice(0, 8)}...{treasury.address.slice(-6)}
+            {treasury.address ? `${treasury.address.slice(0, 8)}...${treasury.address.slice(-6)}` : 'N/A'}
           </span>
           {poolTVL !== undefined && (
             <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
@@ -98,89 +112,55 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
           )}
         </div>
         <div className="flex items-center gap-3 mt-2">
-          <a
-            href={`${explorerUrl}/address/${treasury.address}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
-          >
-            <ExternalLink className="w-3 h-3" />
-            View Contract
-          </a>
-          <a
-            href={`${explorerUrl}/address/${treasury.address}#tokentxns`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
-          >
-            <ExternalLink className="w-3 h-3" />
-            Token Transfers
-          </a>
+          {treasury.address && (
+            <a
+              href={contractUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              {isSui ? 'View on SuiScan' : 'View Contract'}
+            </a>
+          )}
+          {isSui && chainConfig?.contracts?.testnet?.usdt && (
+            <a
+              href={`${explorerUrl}/object/${chainConfig.contracts.testnet.usdt}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              USDC Token
+            </a>
+          )}
+          {!isSui && treasury.address && (
+            <a
+              href={`${explorerUrl}/address/${treasury.address}#tokentxns`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Token Transfers
+            </a>
+          )}
         </div>
       </div>
 
-      {/* On-Chain Proof of Holdings - Sepolia */}
-      {chainId === 11155111 && (
-        <div className="mb-4">
-          <button
-            onClick={() => setShowProof(!showProof)}
-            className="w-full flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="font-semibold text-sm text-green-600 dark:text-green-400">
-                On-Chain Proof of Holdings
-              </span>
-            </div>
-            {showProof ? (
-              <ChevronUp className="w-4 h-4 text-green-500" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-green-500" />
-            )}
-          </button>
-          
-          {showProof && (
-            <div className="mt-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Verify pool holdings on-chain. All assets are held in the ZK Proxy vault contract.
-                Depositor addresses are private - only the pool address is public.
-              </p>
-              
-              <div className="space-y-2">
-                {SEPOLIA_ASSET_TOKENS.map((token) => (
-                  <div
-                    key={token.symbol}
-                    className="flex items-center justify-between p-2 rounded bg-white dark:bg-gray-900/50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {token.symbol}
-                      </span>
-                      <span className="text-xs text-green-600 dark:text-green-400">
-                        {token.allocation}
-                      </span>
-                    </div>
-                    <a
-                      href={`${explorerUrl}/token/${token.address}?a=${treasury.address}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
-                    >
-                      <span className="font-mono">{token.address.slice(0, 6)}...{token.address.slice(-4)}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  <strong>Privacy:</strong> Depositor addresses are never disclosed.
-                  Pool earnings are distributed proportionally via smart contract.
-                </p>
-              </div>
-            </div>
-          )}
+      {/* SUI Pool Info */}
+      {isSui && (
+        <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="w-4 h-4 text-blue-500" />
+            <span className="font-semibold text-sm text-blue-600 dark:text-blue-400">
+              Database-Backed USDC Pool
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Deposits are recorded in the pool database. AI manages a 4-asset allocation
+            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI, CRO'}. 1 share = 1 USDC.
+          </p>
         </div>
       )}
 

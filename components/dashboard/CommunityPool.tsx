@@ -368,6 +368,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
           entries={pool.leaderboard} 
           poolTVL={pool.poolData?.totalValueUSD}
           chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
+          selectedChain={pool.selectedChain}
+          chainConfig={pool.chainConfig}
         />
       )}
 
