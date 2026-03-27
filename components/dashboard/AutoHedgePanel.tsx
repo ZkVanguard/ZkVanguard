@@ -299,7 +299,7 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-white">
-                        {data.riskAssessment.volatility.toFixed(2)}
+                        {data.riskAssessment.volatility.toFixed(1)}%
                       </div>
                       <div className="text-xs text-slate-500">Volatility</div>
                     </div>
@@ -335,7 +335,7 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
                             </span>
                           </div>
                           <div className="text-lg font-bold text-white">
-                            {data.riskAssessment.aggregatedPrediction.confidence}%
+                            {data.riskAssessment.aggregatedPrediction.confidence.toFixed(1)}%
                             <span className="text-xs text-slate-500 ml-1">confidence</span>
                           </div>
                         </div>
@@ -347,7 +347,7 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
                             </span>
                           </div>
                           <div className="text-lg font-bold text-white">
-                            {data.riskAssessment.aggregatedPrediction.consensus}%
+                            {data.riskAssessment.aggregatedPrediction.consensus.toFixed(1)}%
                             <span className="text-xs text-slate-500 ml-1">agreement</span>
                           </div>
                         </div>

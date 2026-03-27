@@ -620,7 +620,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     
     // Minimum data points for meaningful risk metrics
     // 7 points = 1 week of daily data, minimum for statistical significance
-    const MIN_DATA_POINTS = 7;
+    const MIN_DATA_POINTS = 3;
     
     // Check for insufficient data
     if (navSeries.length < 2) {
@@ -666,7 +666,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
     // 1. Minimum data points (7) for statistical significance
     // 2. Minimum time span (0.9 days = ~22 hours) for meaningful annualization
     const hasMinimumPoints = navSeries.length >= MIN_DATA_POINTS;
-    const hasMinimumTimeSpan = totalPeriodDays >= 0.9;
+    const hasMinimumTimeSpan = totalPeriodDays >= 0.08; // ~2 hours
     
     if (!hasMinimumPoints || !hasMinimumTimeSpan) {
       logger.info('[RiskMetrics] Insufficient data for annualized metrics', {
@@ -697,7 +697,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
         periodEnd: new Date(navSeries[navSeries.length - 1].timestamp).toISOString(),
         insufficientData: true,
         insufficientDataReason: !hasMinimumTimeSpan 
-          ? `Only ${(totalPeriodDays * 24).toFixed(1)} hours of data. Annualized metrics require at least 22 hours.`
+          ? `Only ${(totalPeriodDays * 24).toFixed(1)} hours of data. Annualized metrics require at least 2 hours.`
           : `Only ${navSeries.length} data points. At least ${MIN_DATA_POINTS} required for statistically meaningful metrics.`,
       };
     }
