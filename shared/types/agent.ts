@@ -11,7 +11,8 @@ export type AgentType =
   | 'hedging'
   | 'settlement'
   | 'reporting'
-  | 'monitoring';
+  | 'monitoring'
+  | 'sui-pool';
 
 /**
  * Agent capabilities enum
