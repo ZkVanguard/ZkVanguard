@@ -274,7 +274,7 @@ const WHITEPAPER_SECTIONS = {
   'roadmap.q2_2026': 'Q2 2026 - SUI Integration',
   'roadmap.q2_2026_desc': 'Multi-chain expansion, SUI mainnet deployment, cross-chain portfolio',
   'roadmap.q3_2026': 'Q3 2026 - Ethereum L2s',
-  'roadmap.q3_2026_desc': 'Arbitrum, Optimism, Base integration, unified multi-chain dashboard',
+  'roadmap.q3_2026_desc': 'Hedera, Optimism, Base integration, unified multi-chain dashboard',
   'roadmap.q4_2026': 'Q4 2026 - Advanced Derivatives',
   'roadmap.q4_2026_desc': 'Full Moonlander integration, options strategies, advanced hedging',
   'roadmap.2027_2030': '2027-2030 - Global Scale',

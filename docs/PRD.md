@@ -94,7 +94,7 @@ Institutional investors managing RWA portfolios face:
   - Target: 10+ beta users on SUI by June 2026
 
 **V2 Features (Q3-Q4 2026):**
-- Additional multi-chain support (Ethereum mainnet, Polygon, Arbitrum) - AFTER Cronos + SUI validated
+- Additional multi-chain support (Ethereum mainnet, Polygon, Hedera) - AFTER Cronos + SUI validated
 - Options trading integration (Deribit, Opyn)
 - White-label API for platforms
 - Advanced portfolio analytics (Greeks, correlation matrices)
@@ -322,7 +322,7 @@ Institutional investors managing $1.2T in DeFi assets face critical operational 
 **Rationale:** 
 - Cronos = Primary launch (production-ready, x402 integration)
 - SUI = Fast follow-up (validate cross-chain logic, capture new ecosystem)
-- Ethereum/Polygon/Arbitrum = After product-market fit proven on 2 chains  
+- Ethereum/Polygon/Hedera = After product-market fit proven on 2 chains  
 **Timeline:** V2 (Q3 2026+)
 
 ### Feature 2: Mobile Native Apps
@@ -660,7 +660,7 @@ Institutional investors managing $1.2T in DeFi assets face critical operational 
 | Finance | What's customer acquisition cost (CAC) target? | $500 for Pro users, $2,000 for Institutional. LTV:CAC ratio target is 15:1. |
 | Engineering | What if x402 gasless fails? | Graceful fallback to traditional gas payment. User notification: "Gasless unavailable, paying 0.02 CRO gas." |
 | Product | **Why Cronos first, then SUI? Why not Ethereum?** | **Cronos has production-ready x402 gasless integration + lower dev costs. SUI validates multi-chain architecture with sub-second finality + native gas sponsorship. Ethereum expansion requires more capital ($100K+ for mainnet gas) after PMF proven on 2 chains.** |
-| Engineering | **Why SUI over Polygon/Arbitrum for second chain?** | **SUI offers: (1) Sub-second finality (faster hedges), (2) Native gas sponsorship (no external dependency), (3) Move language security advantages, (4) Less competition in SUI DeFi ecosystem = easier to win market share.** |
+| Engineering | **Why SUI over Polygon/Hedera for second chain?** | **SUI offers: (1) Sub-second finality (faster hedges), (2) Native gas sponsorship (no external dependency), (3) Move language security advantages, (4) Less competition in SUI DeFi ecosystem = easier to win market share.** |
 | Security | What happens if ZK proof is invalid? | Transaction reverts on-chain. Agent retries proof generation with adjusted parameters. User notified if 3 consecutive failures. |
 | Business | How do we compete with centralized platforms like Binance? | We're non-custodial (users control keys) + privacy-preserving (Binance sees all trades) + autonomous AI (Binance requires manual trading). Different market segments. |
 | Product | **Will users need two wallets (Cronos + SUI)?** | **V1.5: Yes, users connect separate wallets (MetaMask for Cronos, Sui Wallet for SUI). V2: We'll add wallet abstraction to enable single-wallet experience across chains.** |

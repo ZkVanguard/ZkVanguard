@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - Mainnet deployment on Cronos zkEVM
 - Additional AI models for portfolio optimization
-- Multi-chain support (Ethereum, Arbitrum)
+- Multi-chain support (Ethereum, Hedera)
 - Advanced hedging strategies (options, perpetuals)
 - Historical performance analytics
 - Mobile app (React Native)

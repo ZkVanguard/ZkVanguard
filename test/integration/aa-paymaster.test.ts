@@ -25,7 +25,7 @@ import {
   PIMLICO_SEPOLIA,
   CANDIDE_SEPOLIA,
   PIMLICO_MAINNET,
-  PIMLICO_ARBITRUM,
+  PIMLICO_HEDERA,
   CANDIDE_PLASMA,
   CANDIDE_POLYGON,
   CRONOS_ZKEVM_MAINNET,
@@ -104,9 +104,9 @@ describe('AA Paymaster Configuration', () => {
       expect(PIMLICO_MAINNET.isTestnet).toBe(false);
     });
 
-    it('should have Arbitrum config', () => {
-      expect(PIMLICO_ARBITRUM.chainId).toBe(42161);
-      expect(PIMLICO_ARBITRUM.isTestnet).toBe(false);
+    it('should have Hedera config', () => {
+      expect(PIMLICO_HEDERA.chainId).toBe(295);
+      expect(PIMLICO_HEDERA.isTestnet).toBe(false);
     });
 
     // WDK Official Verified Networks
@@ -135,15 +135,15 @@ describe('AA Paymaster Configuration', () => {
         expect(CANDIDE_PLASMA.entryPointAddress).toBe(ENTRY_POINT_V07);
         expect(CANDIDE_POLYGON.entryPointAddress).toBe(ENTRY_POINT_V07);
         expect(PIMLICO_MAINNET.entryPointAddress).toBe(ENTRY_POINT_V07);
-        expect(PIMLICO_ARBITRUM.entryPointAddress).toBe(ENTRY_POINT_V07);
+        expect(PIMLICO_HEDERA.entryPointAddress).toBe(ENTRY_POINT_V07);
       });
     });
 
     it('should have mainnet USDT addresses', () => {
       // Ethereum USDT
       expect(PIMLICO_MAINNET.paymasterToken.address).toBe('0xdAC17F958D2ee523a2206206994597C13D831ec7');
-      // Arbitrum USDT
-      expect(PIMLICO_ARBITRUM.paymasterToken.address).toBe('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9');
+      // Hedera USDT
+      expect(PIMLICO_HEDERA.paymasterToken.address).toBe('0x0000000000000000000000000000000000000000');
     });
   });
 
@@ -213,8 +213,8 @@ describe('AA Paymaster Configuration', () => {
       expect(shouldUseX402(11155111)).toBe(false);
     });
 
-    it('should NOT identify Arbitrum as x402 preferred', () => {
-      expect(shouldUseX402(42161)).toBe(false);
+    it('should NOT identify Hedera as x402 preferred', () => {
+      expect(shouldUseX402(295)).toBe(false);
     });
 
     it('should have X402_PREFERRED_CHAINS constant', () => {
@@ -264,8 +264,8 @@ describe('AA Config Lookup Functions', () => {
       expect(isAASupported(1)).toBe(true);
     });
 
-    it('should return true for Arbitrum', () => {
-      expect(isAASupported(42161)).toBe(true);
+    it('should return true for Hedera', () => {
+      expect(isAASupported(295)).toBe(true);
     });
 
     it('should return true for Cronos zkEVM mainnet', () => {
@@ -293,7 +293,7 @@ describe('AA Config Lookup Functions', () => {
       expect(Array.isArray(chains)).toBe(true);
       expect(chains).toContain(11155111); // Sepolia
       expect(chains).toContain(1); // Mainnet
-      expect(chains).toContain(42161); // Arbitrum
+      expect(chains).toContain(295); // Hedera
     });
 
     it('should include Cronos chains', () => {

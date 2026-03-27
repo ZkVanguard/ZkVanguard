@@ -773,7 +773,7 @@ Return to landing page or show a summary slide
 
 > "Multi-chain expansion is on our roadmap:
 > - V1.5 (Q2 2026): SUI testnet integration
-> - V2 (Q3 2026): Ethereum, Arbitrum, Optimism
+> - V2 (Q3 2026): Ethereum, Hedera, Optimism
 >
 > But Cronos itself has 99.9% uptime. And our agents can pause operations if network issues are detected."
 

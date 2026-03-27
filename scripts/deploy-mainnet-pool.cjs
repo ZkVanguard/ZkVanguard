@@ -20,7 +20,7 @@ const path = require('path');
 const MAINNET_USDT = {
   1: '0xdAC17F958D2ee523a2206206994597C13D831ec7',     // Ethereum Mainnet
   25: '0x66e428c3f67a68878562e79A0234c1F83c208770',    // Cronos Mainnet
-  42161: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Arbitrum One
+  295: '0x0000000000000000000000000000000000000000',    // Hedera Mainnet (TBD)
   296: process.env.HEDERA_USDT_ADDRESS || '0x0000000000000000000000000000000000068cc2', // Hedera Testnet (USDT)
 };
 
@@ -28,14 +28,14 @@ const MAINNET_USDT = {
 const PYTH_ORACLES = {
   1: '0x4305FB66699C3B2702D4d05CF36551390A4c69C6',     // Ethereum Mainnet
   25: '0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B',    // Cronos Mainnet
-  42161: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C', // Arbitrum One
+  295: '0x0000000000000000000000000000000000000000',    // Hedera Mainnet (TBD)
   296: process.env.HEDERA_PYTH_ORACLE || '0x000000000000000000000000000000000004ae4cf', // Hedera Testnet (Pyth)
 };
 
 const NETWORK_NAMES = {
   1: 'Ethereum Mainnet',
   25: 'Cronos Mainnet',
-  42161: 'Arbitrum One',
+  295: 'Hedera Mainnet',
   296: 'Hedera Testnet',
 };
 
@@ -51,9 +51,9 @@ async function main() {
   console.log(`👛 Deployer: ${deployer.address}`);
   
   // Check if this is a supported network
-  if (![1, 25, 42161, 296].includes(chainId)) {
+  if (![1, 25, 295, 296].includes(chainId)) {
     console.error(`\n❌ Error: Chain ${chainId} is not a supported network.`);
-    console.log('   Supported: ethereum (1), cronos (25), arbitrum (42161), hedera-testnet (296)');
+    console.log('   Supported: ethereum (1), cronos (25), hedera (295), hedera-testnet (296)');
     process.exit(1);
   }
   
@@ -139,14 +139,14 @@ async function main() {
   console.log(`\n✅ Pool verified, deposit token: ${depositToken}`);
   
   // Save deployment info
-  const networkKey = chainId === 1 ? 'ethereum' : chainId === 25 ? 'cronos' : chainId === 42161 ? 'arbitrum' : chainId === 296 ? 'hedera-testnet' : 'unknown';
+  const networkKey = chainId === 1 ? 'ethereum' : chainId === 25 ? 'cronos' : chainId === 295 ? 'hedera' : chainId === 296 ? 'hedera-testnet' : 'unknown';
   const explorerUrl =
     chainId === 1
       ? `https://etherscan.io/address/${proxyAddress}`
       : chainId === 25
       ? `https://explorer.cronos.org/address/${proxyAddress}`
-      : chainId === 42161
-      ? `https://arbiscan.io/address/${proxyAddress}`
+      : chainId === 295
+      ? `https://hashscan.io/mainnet/account/${deployer.address}`
       : chainId === 296
       ? `https://hashscan.io/testnet/account/${deployer.address}`
       : 'unknown';
