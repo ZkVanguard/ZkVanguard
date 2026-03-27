@@ -554,6 +554,11 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
  */
 async function getOnChainUserPosition(userAddress: string, chainConfig?: ChainConfig): Promise<UserPositionCache | null> {
   try {
+    // Non-EVM addresses (e.g. SUI 64-hex) cannot be queried against EVM contracts
+    if (!/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+      return null;
+    }
+
     // For cronos (default), use the unified service for better caching
     if (!chainConfig || chainConfig.chainKey === 'cronos') {
       const pos = await getUnifiedMemberPosition(userAddress);
