@@ -26,6 +26,24 @@ function isValidWalletAddress(address: string): boolean {
 }
 
 /**
+ * Validate SUI wallet address format
+ * Must be 66 characters starting with 0x, containing only hex characters
+ */
+function isValidSuiAddress(address: string): boolean {
+  if (!address || typeof address !== 'string') return false;
+  return /^0x[a-fA-F0-9]{64}$/.test(address);
+}
+
+/**
+ * Validate wallet address for any chain
+ */
+function isValidChainAddress(address: string, chain: string): boolean {
+  if (!address || typeof address !== 'string') return false;
+  if (chain === 'sui') return isValidSuiAddress(address);
+  return isValidWalletAddress(address);
+}
+
+/**
  * Validate positive number within reasonable bounds
  */
 function isValidAmount(amount: number, maxValue = 1e15): boolean {
@@ -213,12 +231,12 @@ export async function getAllUserSharesFromDb(): Promise<DbUserShares[]> {
 
 /**
  * Get user shares by wallet address and chain
- * Security: Validates wallet address format
+ * Security: Validates wallet address format based on chain
  */
 export async function getUserSharesFromDb(walletAddress: string, chain: string = 'cronos'): Promise<DbUserShares | null> {
-  // Security: Validate wallet address format
-  if (!isValidWalletAddress(walletAddress)) {
-    logger.warn('[CommunityPool DB] Invalid wallet address format', { wallet: walletAddress?.slice(0, 10) });
+  // Security: Validate wallet address format based on chain
+  if (!isValidChainAddress(walletAddress, chain)) {
+    logger.warn('[CommunityPool DB] Invalid wallet address format', { wallet: walletAddress?.slice(0, 10), chain });
     return null;
   }
 
@@ -245,9 +263,9 @@ export async function saveUserSharesToDb(userShares: {
 }): Promise<void> {
   const chain = userShares.chain || 'cronos';
   
-  // Security: Validate wallet address
-  if (!isValidWalletAddress(userShares.walletAddress)) {
-    throw new Error('Invalid wallet address format');
+  // Security: Validate wallet address based on chain
+  if (!isValidChainAddress(userShares.walletAddress, chain)) {
+    throw new Error(`Invalid wallet address format for ${chain}`);
   }
   // Security: Validate numeric inputs
   if (!isValidAmount(userShares.shares)) {
@@ -293,12 +311,12 @@ export async function saveUserSharesToDb(userShares: {
 
 /**
  * Delete user shares for a specific chain (when fully withdrawn)
- * Security: Validates wallet address format
+ * Security: Validates wallet address format based on chain
  */
 export async function deleteUserSharesFromDb(walletAddress: string, chain: string = 'cronos'): Promise<void> {
-  // Security: Validate wallet address
-  if (!isValidWalletAddress(walletAddress)) {
-    throw new Error('Invalid wallet address format');
+  // Security: Validate wallet address based on chain
+  if (!isValidChainAddress(walletAddress, chain)) {
+    throw new Error(`Invalid wallet address format for ${chain}`);
   }
 
   try {
