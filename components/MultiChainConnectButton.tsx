@@ -192,7 +192,7 @@ function WdkConnectModal({ isOpen, onClose, chainType }: WdkConnectModalProps) {
   const getChainInfo = () => {
     switch (chainType) {
       case 'evm':
-        return { name: 'Cronos & Arbitrum', color: 'from-[#002D74] to-[#0052CC]' };
+        return { name: 'Cronos & Hedera', color: 'from-[#002D74] to-[#8259EF]' };
       case 'oasis-emerald':
         return { name: 'Oasis Emerald', color: 'from-[#00C853] to-[#009624]' };
       case 'oasis-sapphire':
@@ -374,7 +374,7 @@ export function UnifiedConnectButton({ className = '' }: UnifiedConnectButtonPro
                       <span className="text-white font-bold text-xs">EVM</span>
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-[#1D1D1F]">Cronos & Arbitrum</div>
+                      <div className="font-semibold text-[#1D1D1F]">Cronos & Hedera</div>
                       <div className="text-xs text-[#86868B]">WDK Self-Custodial Wallet</div>
                     </div>
                   </div>

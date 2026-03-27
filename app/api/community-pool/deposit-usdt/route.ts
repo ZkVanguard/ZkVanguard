@@ -49,7 +49,7 @@ const GAS_FUND_AMOUNT = ethers.parseEther('0.005');
 // RPC URLs per chain for gas funding (direct URLs, not proxied)
 const CHAIN_RPC_URLS: Record<number, string> = {
   11155111: process.env.SEPOLIA_RPC || 'https://sepolia.drpc.org',
-  421614: 'https://sepolia-rollup.arbitrum.io/rpc',
+  296: 'https://testnet.hashio.io/api',
 };
 
 // Community pool addresses per chain
@@ -59,8 +59,8 @@ const COMMUNITY_POOL_ADDRESSES: Record<number, string> = {
   338: '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos EVM testnet (use x402)
   388: '0x...', // Cronos zkEVM mainnet - TODO: Deploy
   282: '0x...', // Cronos zkEVM testnet - TODO: Deploy
-  421614: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B', // Arbitrum Sepolia
-  42161: '0x...', // Arbitrum One - TODO: Deploy
+  296: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6', // Hedera Testnet
+  295: '0x0000000000000000000000000000000000000000', // Hedera Mainnet - TODO: Deploy
 };
 
 /**
@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Only allow on testnets
-        const allowedTestnets = [11155111, 421614]; // Sepolia, Arbitrum Sepolia
+        const allowedTestnets = [11155111, 296]; // Sepolia, Hedera Testnet
         if (!allowedTestnets.includes(chainId)) {
           return NextResponse.json({
             success: false,
@@ -427,7 +427,7 @@ export async function POST(request: NextRequest) {
         // Pyth oracle addresses per chain
         const PYTH_ORACLE_ADDRESSES: Record<number, string> = {
           11155111: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21', // Sepolia
-          421614: '0xff1a0f4744e8582DF1aE09D5611b887B6a12925C', // Arbitrum Sepolia
+          296: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729', // Hedera Testnet
         };
 
         const pythAddress = PYTH_ORACLE_ADDRESSES[chainId];
@@ -537,11 +537,11 @@ export async function POST(request: NextRequest) {
         // USDT addresses per chain
         const USDT_ADDRESSES: Record<number, string> = {
           11155111: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // Sepolia
-          421614: '0x...', // Arbitrum Sepolia - TODO
+          296: '0x0000000000000000000000000000000000000000', // Hedera Testnet - TODO
         };
 
         const usdtAddress = USDT_ADDRESSES[chainId];
-        if (!usdtAddress || usdtAddress === '0x...') {
+        if (!usdtAddress || usdtAddress === '0x...' || usdtAddress === '0x0000000000000000000000000000000000000000') {
           return NextResponse.json({
             success: false,
             error: `USDT not configured for chain ${chainId}`,
@@ -733,7 +733,7 @@ export async function POST(request: NextRequest) {
 
         const USDT_ADDRESSES: Record<number, string> = {
           11155111: '0xd077a400968890eacc75cdc901f0356c943e4fdb',
-          421614: '0x...',
+          296: '0x0000000000000000000000000000000000000000', // Hedera Testnet - TODO
         };
 
         const usdtAddress = USDT_ADDRESSES[chainId];

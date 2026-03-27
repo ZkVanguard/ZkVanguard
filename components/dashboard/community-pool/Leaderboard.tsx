@@ -41,7 +41,7 @@ const SEPOLIA_ASSET_TOKENS = [
 const EXPLORER_URLS: Record<number, string> = {
   11155111: 'https://sepolia.etherscan.io',
   338: 'https://explorer.cronos.org/testnet',
-  421614: 'https://sepolia.arbiscan.io',
+  296: 'https://hashscan.io/testnet',
 };
 
 // Deterministic treasury proxy address — ALL deposits go here

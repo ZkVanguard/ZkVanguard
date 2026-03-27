@@ -46,7 +46,7 @@ export const dynamic = 'force-dynamic';
 
 // Multi-chain configuration
 type NetworkType = 'testnet' | 'mainnet';
-type ChainKey = 'ethereum' | 'cronos' | 'arbitrum' | 'sepolia' | 'sui';
+type ChainKey = 'ethereum' | 'cronos' | 'hedera' | 'sepolia' | 'sui';
 
 interface ChainConfig {
   rpcUrl: string;
@@ -820,7 +820,7 @@ export async function GET(request: NextRequest) {
       }
       
       // Fallback to local storage (only if on-chain fails AND we're on the default chain)
-      // Non-default chains (Sepolia, Arbitrum, etc.) should only use on-chain data
+      // Non-default chains (Sepolia, Hedera, etc.) should only use on-chain data
       if (chainKey === 'cronos') {
         try {
           const userShares = await getUserShares(userAddress);

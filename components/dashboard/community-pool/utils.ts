@@ -53,9 +53,9 @@ export function getChainKeyFromId(chainId: number): string | null {
     case 338:
     case 25:
       return 'cronos';
-    case 421614:
-    case 42161:
-      return 'arbitrum';
+    case 296:
+    case 295:
+      return 'hedera';
     case 11155111:
       return 'sepolia';
     default:
@@ -72,8 +72,8 @@ export function getValidChainIds(chainKey: string): number[] {
       return [1];
     case 'cronos':
       return [338, 25];
-    case 'arbitrum':
-      return [421614, 42161];
+    case 'hedera':
+      return [296, 295];
     case 'sepolia':
       return [11155111];
     default:
@@ -88,7 +88,7 @@ export function getNetworkFromChainId(chainId: number): 'testnet' | 'mainnet' {
   switch (chainId) {
     case 1: // Ethereum Mainnet
     case 25: // Cronos Mainnet
-    case 42161: // Arbitrum One
+    case 295: // Hedera Mainnet
       return 'mainnet';
     case 11155111: // Sepolia is always testnet
     default:

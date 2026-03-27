@@ -768,12 +768,12 @@ export function useCommunityPool(propAddress?: string) {
           blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
           nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
         },
-        421614: { // Arbitrum Sepolia
-          chainId: '0x66eee',
-          chainName: 'Arbitrum Sepolia',
-          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
-          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
-          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        296: { // Hedera Testnet
+          chainId: '0x128',
+          chainName: 'Hedera Testnet',
+          rpcUrls: ['https://testnet.hashio.io/api'],
+          blockExplorerUrls: ['https://hashscan.io/testnet'],
+          nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
         },
       };
       
@@ -1297,12 +1297,12 @@ export function useCommunityPool(propAddress?: string) {
           blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
           nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
         },
-        421614: { // Arbitrum Sepolia
-          chainId: '0x66eee',
-          chainName: 'Arbitrum Sepolia',
-          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
-          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
-          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        296: { // Hedera Testnet
+          chainId: '0x128',
+          chainName: 'Hedera Testnet',
+          rpcUrls: ['https://testnet.hashio.io/api'],
+          blockExplorerUrls: ['https://hashscan.io/testnet'],
+          nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
         },
       };
       

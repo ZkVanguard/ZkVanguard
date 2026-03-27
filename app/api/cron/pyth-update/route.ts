@@ -17,17 +17,15 @@ import { verifyCronRequest } from '@/lib/qstash';
 // Pyth contract addresses by chain
 const PYTH_CONTRACTS: Record<number, string> = {
   11155111: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21', // Sepolia
-  421614: '0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF',   // Arbitrum Sepolia
+  296: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729',      // Hedera Testnet
   338: '0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320',      // Cronos Testnet
-  296: '0x000000000000000000000000000000000004ae4cf',      // Hedera Testnet
 };
 
 // RPC URLs
 const RPC_URLS: Record<number, string> = {
   11155111: 'https://sepolia.drpc.org',
-  421614: 'https://sepolia-rollup.arbitrum.io/rpc',
+  296: 'https://testnet.hashio.io/api',
   338: 'https://evm-t3.cronos.org/',
-  296: 'https://testnet.hashio.io/api', // Hedera Testnet
 };
 
 // Price IDs to update (BTC, ETH, SUI, CRO)
@@ -87,7 +85,7 @@ async function fetchPriceUpdates(): Promise<string[] | null> {
  */
 async function updateChain(chainId: number, updateData: string[]): Promise<PythUpdateResult> {
   const chainName = chainId === 11155111 ? 'Sepolia' 
-    : chainId === 421614 ? 'Arbitrum Sepolia' 
+    : chainId === 296 ? 'Hedera Testnet' 
     : chainId === 338 ? 'Cronos Testnet' 
     : `Chain ${chainId}`;
   
