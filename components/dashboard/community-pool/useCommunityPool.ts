@@ -1438,11 +1438,13 @@ export function useCommunityPool(propAddress?: string) {
     // USDC has 6 decimals
     const amountMicroUsdc = Math.floor(usdAmount * 1_000_000);
     
-    // Contract config from env (NEXT_PUBLIC_ vars are available client-side)
-    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
+    // Contract config — use env vars with hardcoded testnet fallbacks
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
+      || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
     const poolStateId = poolState.suiPoolStateId
       || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
+      || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
     const usdcCoinType = suiNetwork === 'mainnet'
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
@@ -1583,10 +1585,12 @@ export function useCommunityPool(propAddress?: string) {
     const sharesOnChain = Math.floor(shares * 1_000_000);
     const estimatedUsd = shares;
     
-    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
+      || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
     const poolStateId = poolState.suiPoolStateId
       || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
+      || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
     const usdcCoinType = suiNetwork === 'mainnet'
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
