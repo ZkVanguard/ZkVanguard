@@ -1130,19 +1130,25 @@ class AutoHedgingService {
     const totalValue = positions.reduce((sum, p) => sum + (p.value || 0), 0);
     
     if (hasRealVolatility && totalValue > 0) {
-      // Weighted portfolio volatility (annualized %)
+      // Weighted portfolio volatility — volatility values are already annualized decimals
+      // e.g. 0.30 = 30%, 1.12 = 112%. Convert to percentage by multiplying by 100.
       const weightedVol = positions.reduce((acc, pos) => {
         const weight = (pos.value || 0) / totalValue;
-        const vol = pos.volatility || 0.30; // Default 30% if missing
+        // volatility is already annualized (e.g. 0.30 = 30% annual)
+        const vol = pos.volatility || 0.30;
         return acc + vol * weight;
       }, 0);
-      return weightedVol * 100; // Return as percentage
+      // weightedVol is in decimal form (e.g. 0.21 = 21%),  return as percentage
+      return weightedVol * 100;
     }
     
     // Fallback: estimate from 24h changes (RMSE approach)
-    return Math.sqrt(
+    // change24h comes as percentage (e.g. -3.5 means -3.5%)
+    const dailyVol = Math.sqrt(
       positions.reduce((acc, pos) => acc + Math.pow(pos.change24h / 100, 2), 0) / positions.length
-    ) * 100;
+    );
+    // Annualize and return as percentage
+    return dailyVol * Math.sqrt(365) * 100;
   }
 
   /**

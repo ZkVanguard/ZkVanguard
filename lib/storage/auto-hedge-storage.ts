@@ -59,14 +59,30 @@ async function ensureStorageDir() {
 }
 
 /**
- * Ensure auto_hedge_configs table exists (idempotent)
+ * Ensure auto_hedge_configs table exists with correct schema (idempotent)
+ * Handles legacy schema migration: if table exists with old columns (id, config JSONB),
+ * drops and recreates with the correct normalized schema.
  */
+let _tableVerified = false;
 async function ensureAutoHedgeTable() {
+  if (_tableVerified) return;
   try {
+    // Check if table exists with wrong schema (legacy: 'id' column instead of 'portfolio_id')
+    const colCheck = await query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'auto_hedge_configs' AND column_name = 'portfolio_id'
+    `);
+    
+    if (colCheck.length === 0) {
+      // Table either doesn't exist or has legacy schema — drop and recreate
+      logger.info('[AutoHedgeStorage] Migrating auto_hedge_configs to correct schema');
+      await query(`DROP TABLE IF EXISTS auto_hedge_configs`);
+    }
+    
     await query(`
       CREATE TABLE IF NOT EXISTS auto_hedge_configs (
         portfolio_id INTEGER PRIMARY KEY,
-        wallet_address VARCHAR(42) NOT NULL,
+        wallet_address VARCHAR(42) NOT NULL DEFAULT '',
         enabled BOOLEAN NOT NULL DEFAULT true,
         risk_threshold INTEGER NOT NULL DEFAULT 5,
         max_leverage INTEGER NOT NULL DEFAULT 3,
@@ -76,11 +92,10 @@ async function ensureAutoHedgeTable() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
       
-      ALTER TABLE auto_hedge_configs ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(42);
-      
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_enabled ON auto_hedge_configs(enabled);
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_wallet ON auto_hedge_configs(wallet_address);
     `);
+    _tableVerified = true;
     logger.debug('[AutoHedgeStorage] Table ensured');
   } catch (error) {
     logger.error('[AutoHedgeStorage] Error ensuring table', { error });
@@ -88,9 +103,25 @@ async function ensureAutoHedgeTable() {
   }
 }
 
+// Common row-to-config mapper
+function mapRowToConfig(row: any): AutoHedgeConfig {
+  return {
+    portfolioId: row.portfolio_id as number,
+    walletAddress: row.wallet_address as string,
+    enabled: row.enabled as boolean,
+    riskThreshold: row.risk_threshold as number,
+    maxLeverage: row.max_leverage as number,
+    allowedAssets: Array.isArray(row.allowed_assets) ? row.allowed_assets : [],
+    riskTolerance: row.risk_tolerance as number,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  };
+}
+
 /**
  * Get all enabled auto-hedge configurations
  * Loads from database or file depending on environment
+ * On first DB access, seeds DB from file if DB is empty
  */
 export async function getAutoHedgeConfigs(): Promise<AutoHedgeConfig[]> {
   if (shouldUseDatabase()) {
@@ -101,17 +132,23 @@ export async function getAutoHedgeConfigs(): Promise<AutoHedgeConfig[]> {
         SELECT * FROM auto_hedge_configs WHERE enabled = true
       `);
       
-      const configs = result.map((row: any) => ({
-        portfolioId: row.portfolio_id as number,
-        walletAddress: row.wallet_address as string,
-        enabled: row.enabled as boolean,
-        riskThreshold: row.risk_threshold as number,
-        maxLeverage: row.max_leverage as number,
-        allowedAssets: Array.isArray(row.allowed_assets) ? row.allowed_assets : [],
-        riskTolerance: row.risk_tolerance as number,
-        createdAt: new Date(row.created_at).getTime(),
-        updatedAt: new Date(row.updated_at).getTime(),
-      }));
+      // If DB is empty, seed from file configs (one-time migration)
+      if (result.length === 0) {
+        const fileConfigs = await getConfigsFromFile();
+        if (fileConfigs.length > 0) {
+          logger.info('[AutoHedgeStorage] DB empty, seeding from file', { count: fileConfigs.length });
+          for (const cfg of fileConfigs) {
+            try {
+              await saveAutoHedgeConfig(cfg);
+            } catch { /* skip duplicates */ }
+          }
+          // Re-query after seeding
+          const seeded = await query(`SELECT * FROM auto_hedge_configs WHERE enabled = true`);
+          return seeded.map(mapRowToConfig);
+        }
+      }
+      
+      const configs = result.map(mapRowToConfig);
       
       logger.info('[AutoHedgeStorage] Loaded configs from database', { 
         count: configs.length,
@@ -143,17 +180,7 @@ export async function getAutoHedgeConfig(portfolioId: number): Promise<AutoHedge
       
       if (!row) return null;
       
-      return {
-        portfolioId: row.portfolio_id as number,
-        walletAddress: row.wallet_address as string,
-        enabled: row.enabled as boolean,
-        riskThreshold: row.risk_threshold as number,
-        maxLeverage: row.max_leverage as number,
-        allowedAssets: Array.isArray(row.allowed_assets) ? row.allowed_assets : [],
-        riskTolerance: row.risk_tolerance as number,
-        createdAt: new Date(row.created_at).getTime(),
-        updatedAt: new Date(row.updated_at).getTime(),
-      };
+      return mapRowToConfig(row);
     } catch (error) {
       logger.error('[AutoHedgeStorage] Error fetching config', { portfolioId, error });
       return null;
