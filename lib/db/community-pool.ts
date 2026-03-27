@@ -520,9 +520,9 @@ export async function getNavHistory(daysBack = 365): Promise<DbNavSnapshot[]> {
   try {
     return await query<DbNavSnapshot>(
       `SELECT * FROM community_pool_nav_history 
-       WHERE timestamp >= NOW() - INTERVAL '${safeDays} days'
+       WHERE timestamp >= NOW() - make_interval(days => $1)
        ORDER BY timestamp ASC`,
-      []
+      [safeDays]
     );
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get NAV history', error);
@@ -549,10 +549,11 @@ export async function getLatestNavSnapshot(): Promise<DbNavSnapshot | null> {
  * Delete old NAV snapshots (cleanup, keep last N days)
  */
 export async function cleanupOldNavSnapshots(keepDays = 365): Promise<number> {
+  const safeDays = Math.min(Math.max(1, keepDays), 730);
   try {
     const result = await query(
-      `DELETE FROM community_pool_nav_history WHERE timestamp < NOW() - INTERVAL '${keepDays} days' RETURNING id`,
-      []
+      `DELETE FROM community_pool_nav_history WHERE timestamp < NOW() - make_interval(days => $1) RETURNING id`,
+      [safeDays]
     );
     logger.info('[CommunityPool DB] Cleaned up old NAV snapshots', { deleted: result.length });
     return result.length;
@@ -571,7 +572,8 @@ export async function insertInceptionSnapshot(
   sharePrice: number,
   totalNav: number,
   totalShares: number,
-  memberCount: number
+  memberCount: number,
+  allocations?: Record<string, number>
 ): Promise<boolean> {
   try {
     // Check if an inception record already exists before this timestamp
@@ -588,8 +590,8 @@ export async function insertInceptionSnapshot(
     await query(
       `INSERT INTO community_pool_nav_history 
        (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
-       VALUES ($1, $2, $3, $4, $5, '{"BTC": 35, "ETH": 30, "SUI": 20, "CRO": 15}'::jsonb, 'inception')`,
-      [timestamp, sharePrice, totalNav, totalShares, memberCount]
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'inception')`,
+      [timestamp, sharePrice, totalNav, totalShares, memberCount, JSON.stringify(allocations || {})]
     );
     logger.info('[CommunityPool DB] Inserted inception snapshot', { 
       timestamp, 
@@ -608,7 +610,7 @@ export async function insertInceptionSnapshot(
  * Reset NAV history completely and insert a fresh starting point
  * Used when bad data has accumulated
  */
-export async function resetNavHistory(currentNav: number, sharePrice: number, totalShares: number, memberCount: number): Promise<{ deleted: number; inserted: boolean }> {
+export async function resetNavHistory(currentNav: number, sharePrice: number, totalShares: number, memberCount: number, allocations?: Record<string, number>): Promise<{ deleted: number; inserted: boolean }> {
   try {
     // Delete all NAV history
     const deleted = await query(
@@ -621,8 +623,8 @@ export async function resetNavHistory(currentNav: number, sharePrice: number, to
     await query(
       `INSERT INTO community_pool_nav_history 
        (total_nav, share_price, total_shares, member_count, allocations, source)
-       VALUES ($1, $2, $3, $4, '{"BTC": 35, "ETH": 30, "SUI": 20, "CRO": 15}'::jsonb, 'manual-reset')`,
-      [currentNav, sharePrice, totalShares, memberCount]
+       VALUES ($1, $2, $3, $4, $5::jsonb, 'manual-reset')`,
+      [currentNav, sharePrice, totalShares, memberCount, JSON.stringify(allocations || {})]
     );
     logger.info('[CommunityPool DB] Inserted fresh NAV snapshot', { nav: currentNav, sharePrice, totalShares });
     
@@ -770,10 +772,10 @@ export async function initCommunityPoolTables(): Promise<void> {
       VALUES (1, 0, 0, 1.0, $1)
       ON CONFLICT (id) DO NOTHING
     `, [JSON.stringify({
-      BTC: { percentage: 35, valueUSD: 0, amount: 0, price: 0 },
-      ETH: { percentage: 30, valueUSD: 0, amount: 0, price: 0 },
-      SUI: { percentage: 20, valueUSD: 0, amount: 0, price: 0 },
-      CRO: { percentage: 15, valueUSD: 0, amount: 0, price: 0 },
+      BTC: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      ETH: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      SUI: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      CRO: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
     })]);
 
     logger.info('[CommunityPool DB] Tables initialized successfully');
