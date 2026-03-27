@@ -11,7 +11,7 @@
  * - Plasma (eip155:9745) - Purpose-built for USD₮ transfers
  * - Stable (eip155:988) - Near-instant finality and near-zero fees
  * 
- * Note: We also support Cronos and Arbitrum for broader compatibility.
+ * Note: We also support Cronos and Hedera for broader compatibility.
  */
 
 // ============================================
@@ -62,24 +62,24 @@ export const X402_NETWORKS = {
     usdt0Address: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDT
     nativeCurrency: { name: 'tCRO', symbol: 'tCRO', decimals: 18 },
   },
-  // Arbitrum - For multi-chain support
-  arbitrum: {
-    name: 'Arbitrum One',
-    caip2: 'eip155:42161',
-    chainId: 42161,
-    rpcUrl: 'https://arb1.arbitrum.io/rpc',
-    explorerUrl: 'https://arbiscan.io',
-    usdt0Address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // Official USDT on Arbitrum
-    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  // Hedera - For multi-chain support
+  hedera: {
+    name: 'Hedera',
+    caip2: 'eip155:295',
+    chainId: 295,
+    rpcUrl: 'https://mainnet.hashio.io/api',
+    explorerUrl: 'https://hashscan.io/mainnet',
+    usdt0Address: '0x0000000000000000000000000000000000000000', // USDT on Hedera - TODO
+    nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
   },
-  'arbitrum-sepolia': {
-    name: 'Arbitrum Sepolia',
-    caip2: 'eip155:421614',
-    chainId: 421614,
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    explorerUrl: 'https://sepolia.arbiscan.io',
-    usdt0Address: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // MockUSDT
-    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  'hedera-testnet': {
+    name: 'Hedera Testnet',
+    caip2: 'eip155:296',
+    chainId: 296,
+    rpcUrl: 'https://testnet.hashio.io/api',
+    explorerUrl: 'https://hashscan.io/testnet',
+    usdt0Address: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO
+    nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
   },
 } as const;
 
@@ -120,7 +120,7 @@ export const X402_FACILITATORS = {
   // Self-hosted facilitator (local development)
   local: {
     url: process.env.X402_FACILITATOR_URL || 'http://localhost:4022',
-    supportedNetworks: ['cronos-testnet', 'arbitrum-sepolia', 'plasma', 'stable'] as X402NetworkKey[],
+    supportedNetworks: ['cronos-testnet', 'hedera-testnet', 'plasma', 'stable'] as X402NetworkKey[],
     description: 'Self-hosted in-process facilitator',
   },
 } as const;

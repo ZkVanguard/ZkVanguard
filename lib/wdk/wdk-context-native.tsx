@@ -8,7 +8,7 @@
  * - Create new wallets (BIP-39 seed phrase)
  * - Import existing wallets
  * - Encrypted local storage
- * - Multi-chain support (Cronos, Arbitrum, Sepolia)
+ * - Multi-chain support (Cronos, Hedera, Sepolia)
  * - ERC-20 token transfers (USDT)
  * 
  * @see https://docs.wdk.tether.io/
@@ -234,7 +234,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const wdk = new WDK(mnemonic);
       
       // Register EVM wallet for each supported chain
-      const supportedChains = ['sepolia', 'cronos-mainnet', 'arbitrum-mainnet'];
+      const supportedChains = ['sepolia', 'cronos-mainnet', 'hedera-mainnet'];
       const accounts: WdkAccount[] = [];
       
       for (const chain of supportedChains) {

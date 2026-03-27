@@ -38,16 +38,16 @@ const CHAIN_ID_TO_KEY: Record<number, string> = {
   11155111: 'sepolia',
   25: 'cronos-mainnet',
   338: 'cronos-testnet',
-  42161: 'arbitrum-mainnet',
-  421614: 'arbitrum-sepolia',
+  295: 'hedera-mainnet',
+  296: 'hedera-testnet',
 };
 
 const CHAIN_KEY_TO_ID: Record<string, number> = {
   'sepolia': 11155111,
   'cronos-mainnet': 25,
   'cronos-testnet': 338,
-  'arbitrum-mainnet': 42161,
-  'arbitrum-sepolia': 421614,
+  'hedera-mainnet': 295,
+  'hedera-testnet': 296,
 };
 
 // ============================================

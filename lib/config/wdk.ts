@@ -2,7 +2,7 @@
  * Tether WDK (Wallet Development Kit) Configuration
  * 
  * This module configures the Tether WDK for USDT integration across
- * supported EVM chains: Cronos and Arbitrum.
+ * supported EVM chains: Cronos and Hedera.
  * 
  * @see https://docs.wdk.tether.io/
  */
@@ -34,10 +34,10 @@ export const USDT_ADDRESSES = {
     mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
     testnet: null, // Cronos testnet uses separate testnet USDT
   },
-  // Arbitrum - Official USDT  
-  arbitrum: {
-    mainnet: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-    testnet: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1', // MockUSDT on Arbitrum Sepolia
+  // Hedera - USDT  
+  hedera: {
+    mainnet: '0x0000000000000000000000000000000000000000', // USDT on Hedera mainnet - TODO
+    testnet: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO
   },
   // Ethereum Mainnet (for reference)
   ethereum: {
@@ -135,31 +135,31 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
       decimals: 18,
     },
   },
-  // Arbitrum One (Mainnet)
-  'arbitrum-mainnet': {
-    chainId: 42161,
-    name: 'Arbitrum One',
+  // Hedera Mainnet
+  'hedera-mainnet': {
+    chainId: 295,
+    name: 'Hedera',
     network: 'mainnet',
-    rpcUrl: 'https://arb1.arbitrum.io/rpc',
-    usdtAddress: USDT_ADDRESSES.arbitrum.mainnet,
-    explorerUrl: 'https://arbiscan.io',
+    rpcUrl: 'https://mainnet.hashio.io/api',
+    usdtAddress: USDT_ADDRESSES.hedera.mainnet,
+    explorerUrl: 'https://hashscan.io/mainnet',
     nativeCurrency: {
-      name: 'Ethereum',
-      symbol: 'ETH',
+      name: 'HBAR',
+      symbol: 'HBAR',
       decimals: 18,
     },
   },
-  // Arbitrum Sepolia (Testnet)
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    name: 'Arbitrum Sepolia',
+  // Hedera Testnet
+  'hedera-testnet': {
+    chainId: 296,
+    name: 'Hedera Testnet',
     network: 'testnet',
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    usdtAddress: USDT_ADDRESSES.arbitrum.testnet,
-    explorerUrl: 'https://sepolia.arbiscan.io',
+    rpcUrl: 'https://testnet.hashio.io/api',
+    usdtAddress: USDT_ADDRESSES.hedera.testnet,
+    explorerUrl: 'https://hashscan.io/testnet',
     nativeCurrency: {
-      name: 'Sepolia ETH',
-      symbol: 'ETH',
+      name: 'HBAR',
+      symbol: 'HBAR',
       decimals: 18,
     },
   },
@@ -273,8 +273,8 @@ export function getWDKEvmConfig(chainId: number) {
 export const WDK_SUPPORTED_CHAINS = [
   11155111, // Sepolia - OFFICIAL WDK USDT (primary for hackathon)
   25,       // Cronos Mainnet
-  42161,    // Arbitrum One
-  421614,   // Arbitrum Sepolia
+  295,      // Hedera Mainnet
+  296,      // Hedera Testnet
   9745,     // Plasma (x402 primary)
   988,      // Stable (x402 secondary)
 ] as const;

@@ -38,7 +38,7 @@ interface WdkProviderProps {
  */
 export function WdkProvider({ children }: WdkProviderProps) {
   // WDK USDT supported chains
-  const supportedChains = [11155111, 25, 42161]; // Sepolia, Cronos, Arbitrum
+  const supportedChains = [11155111, 25, 295]; // Sepolia, Cronos, Hedera
 
   const getSupportedChains = useCallback(() => supportedChains, []);
   

@@ -164,19 +164,19 @@ export const PIMLICO_MAINNET: AAPaymasterConfig = {
 };
 
 /**
- * Pimlico - Arbitrum
+ * Pimlico - Hedera Mainnet
  */
-export const PIMLICO_ARBITRUM: AAPaymasterConfig = {
-  chainId: 42161,
-  chainName: 'Arbitrum',
-  provider: getRpcUrl('arbitrum'),
-  bundlerUrl: 'https://public.pimlico.io/v2/42161/rpc',
-  paymasterUrl: 'https://public.pimlico.io/v2/42161/rpc',
+export const PIMLICO_HEDERA: AAPaymasterConfig = {
+  chainId: 295,
+  chainName: 'Hedera',
+  provider: getRpcUrl('hedera'),
+  bundlerUrl: 'https://public.pimlico.io/v2/295/rpc',
+  paymasterUrl: 'https://public.pimlico.io/v2/295/rpc',
   paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
   entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
   safeModulesVersion: '0.3.0',
   paymasterToken: {
-    address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // USDT Arbitrum
+    address: '0x0000000000000000000000000000000000000000', // USDT Hedera (TBD)
     symbol: 'USDT',
     decimals: 6,
   },
@@ -185,19 +185,19 @@ export const PIMLICO_ARBITRUM: AAPaymasterConfig = {
 };
 
 /**
- * Pimlico - Arbitrum Sepolia
+ * Pimlico - Hedera Testnet
  */
-export const PIMLICO_ARBITRUM_SEPOLIA: AAPaymasterConfig = {
-  chainId: 421614,
-  chainName: 'Arbitrum Sepolia',
-  provider: 'https://sepolia-rollup.arbitrum.io/rpc',
-  bundlerUrl: 'https://public.pimlico.io/v2/421614/rpc',
-  paymasterUrl: 'https://public.pimlico.io/v2/421614/rpc',
+export const PIMLICO_HEDERA_TESTNET: AAPaymasterConfig = {
+  chainId: 296,
+  chainName: 'Hedera Testnet',
+  provider: 'https://testnet.hashio.io/api',
+  bundlerUrl: 'https://public.pimlico.io/v2/296/rpc',
+  paymasterUrl: 'https://public.pimlico.io/v2/296/rpc',
   paymasterAddress: '0x777777777777AeC03fd955926DbF81597e66834C',
   entryPointAddress: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
   safeModulesVersion: '0.3.0',
   paymasterToken: {
-    address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // USDC Arb Sepolia (use as USDT proxy)
+    address: '0x0000000000000000000000000000000000000000', // USDT Hedera Testnet (TBD)
     symbol: 'USDT',
     decimals: 6,
   },
@@ -321,15 +321,15 @@ export const AA_CONFIGS: Record<number, Record<PaymasterProvider, AAPaymasterCon
     pimlico: CANDIDE_POLYGON, // Candide recommended for Polygon
     candide: CANDIDE_POLYGON,
   },
-  // Arbitrum
-  42161: {
-    pimlico: PIMLICO_ARBITRUM,
-    candide: PIMLICO_ARBITRUM,
+  // Hedera Mainnet
+  295: {
+    pimlico: PIMLICO_HEDERA,
+    candide: PIMLICO_HEDERA,
   },
-  // Arbitrum Sepolia
-  421614: {
-    pimlico: PIMLICO_ARBITRUM_SEPOLIA,
-    candide: PIMLICO_ARBITRUM_SEPOLIA,
+  // Hedera Testnet
+  296: {
+    pimlico: PIMLICO_HEDERA_TESTNET,
+    candide: PIMLICO_HEDERA_TESTNET,
   },
   // Cronos zkEVM Mainnet (full AA support)
   388: {

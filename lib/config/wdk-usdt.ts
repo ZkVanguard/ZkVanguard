@@ -59,15 +59,15 @@ export const WDK_USDT_CONFIGS: Record<number, WDKUSDTConfig> = {
     explorer: 'https://polygonscan.com/token/0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
   },
   
-  // Arbitrum One
-  42161: {
-    chainId: 42161,
-    network: 'Arbitrum One',
-    address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+  // Hedera Mainnet
+  295: {
+    chainId: 295,
+    network: 'Hedera Mainnet',
+    address: '0x0000000000000000000000000000000000000000',
     symbol: 'USD₮',
     decimals: 6,
     isTestnet: false,
-    explorer: 'https://arbiscan.io/token/0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    explorer: 'https://hashscan.io/mainnet',
   },
   
   // Plasma
