@@ -150,21 +150,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
     
-    // Get latest risk assessment from service
+    // Get latest risk assessment from service (LIVE — no mock data)
     let riskAssessment: AutoHedgeStatus['riskAssessment'] = null;
     try {
-      // MOCK: Prevent 500 errors if risk service is unavailable
-      const assessment = {
-         riskScore: 65,
-         drawdownPercent: 2.5,
-         volatility: 12.3,
-         recommendations: [],
-         aggregatedPrediction: null
-      };
-      // const assessment = await autoHedgingService.triggerRiskAssessment(
-      //   COMMUNITY_POOL_PORTFOLIO_ID, 
-      //   COMMUNITY_POOL_ADDRESS
-      // );
+      const assessment = await autoHedgingService.triggerRiskAssessment(
+        COMMUNITY_POOL_PORTFOLIO_ID, 
+        COMMUNITY_POOL_ADDRESS
+      );
       riskAssessment = {
         riskScore: assessment.riskScore,
         drawdownPercent: assessment.drawdownPercent,
@@ -174,7 +166,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         aggregatedPrediction: assessment.aggregatedPrediction || null,
       };
     } catch (e) {
-      logger.warn('[AutoHedge API] Could not get risk assessment', { error: e });
+      logger.warn('[AutoHedge API] Could not get risk assessment — returning null (no mock data)', { error: e });
+      // riskAssessment stays null — frontend must handle null gracefully
     }
     
     // Calculate stats
@@ -225,19 +218,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     logger.error('[AutoHedge API] Error fetching status', { error });
-    // Return clean fallback instead of 500 — this is a status endpoint, not critical
-    const fallback = {
-      success: true,
+    // Return error with 503 — do NOT cache or return fake "success" data
+    logger.error('[AutoHedge API] Returning 503 — no mock/fallback data allowed', { error });
+    return NextResponse.json({
+      success: false,
+      error: 'Auto-hedge service temporarily unavailable',
       enabled: false,
       config: null,
       activeHedges: [],
       recentDecisions: [],
       riskAssessment: null,
-      stats: { totalHedgeValue: 0, totalPnL: 0, hedgeCount: 0, decisionsToday: 0 },
-    };
-    autoHedgeCache = { data: fallback, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL };
-    return NextResponse.json(fallback, {
-      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+      stats: null,
+    }, {
+      status: 503,
+      headers: { 'Cache-Control': 'no-store' },
     });
   }
 }

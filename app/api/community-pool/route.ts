@@ -418,7 +418,7 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     let totalNAV = 0;
     let sharePrice = 1.0;
     let rawMemberCount = 0;
-    let allocations: number[] = [25, 25, 25, 25]; // Default 25% each
+    let allocations: number[] = []; // Populated from on-chain getPoolStats
     
     // Try getPoolStats first
     try {
@@ -432,7 +432,7 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
       // Use the contract's _sharePrice (6 decimals, accounts for virtual offsets)
       sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
       rawMemberCount = Number(memberCount);
-      allocations = (stats._allocations || []).map((a: bigint) => Number(a) / 100);
+      allocations = (stats._allocations || [0, 0, 0, 0]).map((a: bigint) => Number(a) / 100);
       
       logger.info(`[CommunityPool] getPoolStats succeeded for ${config.chainKey}`, {
         totalShares, totalNAV, rawMemberCount
@@ -492,11 +492,11 @@ async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCa
     const uniqueMemberCount = rawMemberCount;
     
     // Parse allocations from contract (BPS to percentage)
-    // rawAllocations array was set above from getPoolStats or defaults to [25, 25, 25, 25]
-    const btcAlloc = allocations[0] || 25;
-    const ethAlloc = allocations[1] || 25;
-    const suiAlloc = allocations[2] || 25;
-    const croAlloc = allocations[3] || 25;
+    // allocations array populated from on-chain getPoolStats, empty if unavailable
+    const btcAlloc = allocations[0] || 0;
+    const ethAlloc = allocations[1] || 0;
+    const suiAlloc = allocations[2] || 0;
+    const croAlloc = allocations[3] || 0;
     
     // Check if pool has diversified allocations or is holding just USDT
     const hasAllocations = btcAlloc > 0 || ethAlloc > 0 || suiAlloc > 0 || croAlloc > 0;
@@ -1060,11 +1060,16 @@ export async function GET(request: NextRequest) {
       const memberCount = onChainData?.totalMembers || 1;
       
       // Reset with market-adjusted values
+      const allocPct: Record<string, number> = {};
+      for (const [asset, data] of Object.entries(marketNAV.allocations)) {
+        allocPct[asset] = data.percentage;
+      }
       const result = await resetNavHistory(
         nav,
         sharePrice,
         totalShares,
-        memberCount
+        memberCount,
+        allocPct
       );
       
       return NextResponse.json({
@@ -1494,11 +1499,18 @@ export async function POST(request: NextRequest) {
         }
         
         // Reset NAV history with correct values
+        const syncAllocPct: Record<string, number> = {};
+        if (onChainData.allocations) {
+          for (const [asset, data] of Object.entries(onChainData.allocations)) {
+            syncAllocPct[asset] = (data as { percentage: number }).percentage;
+          }
+        }
         const resetResult = await resetNavHistory(
           onChainData.totalValueUSD,
           onChainData.sharePrice,
           onChainData.totalShares,
-          onChainData.totalMembers
+          onChainData.totalMembers,
+          syncAllocPct
         );
         
         return NextResponse.json({
@@ -1620,11 +1632,16 @@ export async function POST(request: NextRequest) {
         });
         
         // Step 7: Reset NAV history completely with fresh on-chain data
+        const resetAllocPct: Record<string, number> = {};
+        for (const [asset, data] of Object.entries(allocations)) {
+          resetAllocPct[asset] = data.percentage;
+        }
         const navReset = await resetNavHistory(
           onChainData.totalValueUSD,
           onChainData.sharePrice,
           onChainData.totalShares,
-          activeMembers.length
+          activeMembers.length,
+          resetAllocPct
         );
         
         // Step 8: Clear all in-memory caches
