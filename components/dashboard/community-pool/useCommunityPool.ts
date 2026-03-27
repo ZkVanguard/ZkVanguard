@@ -1429,7 +1429,13 @@ export function useCommunityPool(propAddress?: string) {
       const priceData = await priceRes.json();
       // API returns { success, data: [{ symbol, price, ... }] }
       const suiPriceEntry = priceData?.data?.find((p: { symbol: string }) => p.symbol === 'SUI');
-      const suiPrice = suiPriceEntry?.price || 3.50; // fallback price
+      const suiPrice = suiPriceEntry?.price;
+      if (!suiPrice || suiPrice <= 0) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Unable to fetch live SUI price. Please try again.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
       const suiAmount = usdAmount / suiPrice;
       
       logger.info(`[SUI Deposit] Fresh price: $${suiPrice}, converting $${usdAmount} → ${suiAmount.toFixed(6)} SUI`);

@@ -111,12 +111,12 @@ function getInitialPoolState(): PoolState {
   return {
     totalValueUSD: 0,
     totalShares: 0,
-    sharePrice: 1.0, // Start at $1 per share
+    sharePrice: 1.0, // ERC-4626 starting price ($1 per share)
     allocations: {
-      BTC: { percentage: 35, valueUSD: 0, amount: 0, price: 0 },
-      ETH: { percentage: 30, valueUSD: 0, amount: 0, price: 0 },
-      SUI: { percentage: 20, valueUSD: 0, amount: 0, price: 0 },
-      CRO: { percentage: 15, valueUSD: 0, amount: 0, price: 0 },
+      BTC: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      ETH: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      SUI: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
+      CRO: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
     },
     lastRebalance: now,
     lastAIDecision: null,
