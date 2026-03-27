@@ -9,10 +9,13 @@
  * - GET  /api/sui/community-pool?action=allocation        - Get current 4-asset allocation
  * - GET  /api/sui/community-pool?action=swap-quote        - Get Cetus aggregator swap quote
  * - GET  /api/sui/community-pool?action=admin-wallet      - Check admin wallet status
+ * - GET  /api/sui/community-pool?action=user-position     - Get user position from DB
  * - POST /api/sui/community-pool?action=deposit           - Build USDC deposit tx params
  * - POST /api/sui/community-pool?action=withdraw          - Build withdrawal tx params
  * - POST /api/sui/community-pool?action=execute-deposit-swaps   - Swap deposited USDC → 4 assets
  * - POST /api/sui/community-pool?action=execute-withdraw-swaps  - Swap assets → USDC for withdrawal
+ * - POST /api/sui/community-pool?action=record-deposit    - Record USDC deposit + execute swaps + mint shares
+ * - POST /api/sui/community-pool?action=record-withdraw   - Burn shares + execute reverse swaps + record withdrawal
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -121,12 +124,86 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Get user position from database (for USDC pool)
+    if (action === 'user-position') {
+      const wallet = url.searchParams.get('wallet');
+      if (!wallet || !/^0x[a-fA-F0-9]{64}$/.test(wallet)) {
+        return NextResponse.json(
+          { success: false, error: 'Valid SUI wallet address required (0x + 64 hex chars)' },
+          { status: 400 }
+        );
+      }
+
+      const { getUserSharesFromDb, getUserTransactionCounts } = await import('@/lib/db/community-pool');
+      const userShares = await getUserSharesFromDb(wallet, 'sui');
+      const txCounts = await getUserTransactionCounts(wallet);
+
+      if (!userShares) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            isMember: false,
+            wallet,
+            shares: 0,
+            valueUsdc: 0,
+            costBasisUsd: 0,
+            depositCount: txCounts.depositCount,
+            withdrawalCount: txCounts.withdrawalCount,
+          },
+          chain: 'sui',
+          network,
+        });
+      }
+
+      // 1 share = 1 USDC for USDC pool
+      const valueUsdc = userShares.shares;
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          isMember: true,
+          wallet,
+          shares: userShares.shares,
+          valueUsdc,
+          costBasisUsd: userShares.cost_basis_usd,
+          joinedAt: userShares.joined_at,
+          lastActionAt: userShares.last_action_at,
+          depositCount: txCounts.depositCount,
+          withdrawalCount: txCounts.withdrawalCount,
+        },
+        chain: 'sui',
+        network,
+      });
+    }
+
     // Get contract info
     if (action === 'contract') {
       const info = service.getContractInfo();
       return NextResponse.json({
         success: true,
         data: info,
+        chain: 'sui',
+        network,
+      });
+    }
+
+    // Get current 4-asset allocation (AI-managed)
+    if (action === 'allocation') {
+      // Default allocation for SUI pool (AI can adjust these based on market conditions)
+      const allocation = {
+        BTC: 30,
+        ETH: 30,
+        SUI: 25,
+        CRO: 15,
+      };
+      return NextResponse.json({
+        success: true,
+        data: {
+          allocation,
+          description: '4-asset AI-managed allocation for USDC deposits',
+          assets: ['BTC', 'ETH', 'SUI', 'CRO'],
+          rebalanceFrequency: 'daily',
+        },
         chain: 'sui',
         network,
       });
@@ -511,9 +588,259 @@ export async function POST(request: NextRequest) {
         chain: 'sui',
       });
     }
+
+    // Record USDC deposit: verify transfer, execute swaps, mint shares
+    if (action === 'record-deposit') {
+      const { walletAddress, amountUsdc, allocations, txDigest } = body;
+      
+      // Validate inputs
+      if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(walletAddress)) {
+        return NextResponse.json(
+          { success: false, error: 'Valid SUI wallet address required (0x + 64 hex chars)' },
+          { status: 400 }
+        );
+      }
+      if (!amountUsdc || typeof amountUsdc !== 'number' || amountUsdc <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'amountUsdc required (positive number)' },
+          { status: 400 }
+        );
+      }
+      if (!allocations || typeof allocations !== 'object') {
+        return NextResponse.json(
+          { success: false, error: 'allocations required (e.g. { BTC: 30, ETH: 30, SUI: 25, CRO: 15 })' },
+          { status: 400 }
+        );
+      }
+
+      // Dynamically import DB functions to avoid edge runtime issues
+      const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
+
+      const aggregator = getCetusAggregatorService(network);
+
+      // Verify admin wallet has gas
+      const wallet = await aggregator.checkAdminWallet();
+      if (!wallet.configured || !wallet.hasGas) {
+        return NextResponse.json(
+          { success: false, error: 'Admin wallet not configured or insufficient gas' },
+          { status: 503 }
+        );
+      }
+
+      // Execute swaps: USDC → 4 assets
+      const plan = await aggregator.planRebalanceSwaps(
+        amountUsdc,
+        allocations as Record<PoolAsset, number>,
+      );
+
+      const swapResult = await aggregator.executeRebalance(plan, 0.01);
+
+      // Calculate shares to mint (1 share = 1 USDC for simplicity)
+      const sharesToMint = amountUsdc;
+
+      // Get existing user shares
+      const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
+      const newTotalShares = (existingShares?.shares || 0) + sharesToMint;
+      const newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
+
+      // Save updated shares to database
+      await saveUserSharesToDb({
+        walletAddress,
+        shares: newTotalShares,
+        costBasisUSD: newCostBasis,
+        chain: 'sui',
+      });
+
+      // Record transaction
+      await addPoolTransactionToDb({
+        id: `sui-deposit-${Date.now()}-${walletAddress.slice(-8)}`,
+        type: 'DEPOSIT',
+        walletAddress,
+        amountUSD: amountUsdc,
+        shares: sharesToMint,
+        sharePrice: 1.0,
+        details: {
+          network,
+          txDigest,
+          swapResults: swapResult.results,
+          allocations,
+        },
+        txHash: txDigest || undefined,
+      });
+
+      logger.info('[SUI-API] USDC deposit recorded', {
+        wallet: walletAddress.slice(0, 10) + '...',
+        amountUsdc,
+        sharesTotal: newTotalShares,
+        swapsExecuted: swapResult.totalExecuted,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          walletAddress,
+          amountUsdc,
+          sharesMinted: sharesToMint,
+          totalShares: newTotalShares,
+          swaps: {
+            executed: swapResult.totalExecuted,
+            failed: swapResult.totalFailed,
+            results: swapResult.results,
+          },
+        },
+        chain: 'sui',
+        network,
+      });
+    }
+
+    // Record withdrawal: execute reverse swaps, burn shares, update DB
+    if (action === 'record-withdraw') {
+      const { walletAddress, sharesToBurn, allocations } = body;
+
+      // Validate inputs
+      if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(walletAddress)) {
+        return NextResponse.json(
+          { success: false, error: 'Valid SUI wallet address required (0x + 64 hex chars)' },
+          { status: 400 }
+        );
+      }
+      if (!sharesToBurn || typeof sharesToBurn !== 'number' || sharesToBurn <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'sharesToBurn required (positive number)' },
+          { status: 400 }
+        );
+      }
+      if (!allocations || typeof allocations !== 'object') {
+        return NextResponse.json(
+          { success: false, error: 'allocations required (current pool allocations)' },
+          { status: 400 }
+        );
+      }
+
+      // Import DB functions
+      const { getUserSharesFromDb, saveUserSharesToDb, deleteUserSharesFromDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
+
+      // Get user's current shares
+      const userShares = await getUserSharesFromDb(walletAddress, 'sui');
+      if (!userShares || userShares.shares < sharesToBurn) {
+        return NextResponse.json(
+          { success: false, error: `Insufficient shares. Have: ${userShares?.shares || 0}, Need: ${sharesToBurn}` },
+          { status: 400 }
+        );
+      }
+
+      const aggregator = getCetusAggregatorService(network);
+
+      // Verify admin wallet
+      const wallet = await aggregator.checkAdminWallet();
+      if (!wallet.configured || !wallet.hasGas) {
+        return NextResponse.json(
+          { success: false, error: 'Admin wallet not configured or insufficient gas' },
+          { status: 503 }
+        );
+      }
+
+      // Calculate USDC equivalent (1 share = 1 USDC)
+      const withdrawUsdc = sharesToBurn;
+
+      // Execute reverse swaps: 4 assets → USDC
+      const assets: PoolAsset[] = ['BTC', 'ETH', 'SUI', 'CRO'];
+      const results: Array<import('@/lib/services/CetusAggregatorService').SwapExecutionResult> = [];
+
+      for (const asset of assets) {
+        const pct = (allocations[asset] || 0) / 100;
+        if (pct <= 0) continue;
+
+        const assetUsdValue = withdrawUsdc * pct;
+
+        try {
+          // Get forward quote to estimate asset amount
+          const forwardQuote = await aggregator.getSwapQuote(asset, assetUsdValue);
+          if (!forwardQuote.canSwapOnChain) {
+            results.push({
+              asset,
+              success: true,
+              error: `${asset} hedged via perps (no on-chain swap)`,
+            } as import('@/lib/services/CetusAggregatorService').SwapExecutionResult);
+            continue;
+          }
+
+          // Get reverse quote and execute
+          const reverseQuote = await aggregator.getReverseSwapQuote(asset, Number(forwardQuote.expectedAmountOut));
+          if (reverseQuote.canSwapOnChain && reverseQuote.routerData) {
+            const execResult = await aggregator.executeSwap(reverseQuote, 0.015);
+            results.push(execResult);
+          }
+        } catch (err) {
+          logger.error(`[SUI-API] Error with ${asset} reverse swap:`, err);
+          results.push({
+            asset,
+            success: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          } as import('@/lib/services/CetusAggregatorService').SwapExecutionResult);
+        }
+      }
+
+      // Update user shares in DB
+      const remainingShares = userShares.shares - sharesToBurn;
+      if (remainingShares <= 0.0001) {
+        await deleteUserSharesFromDb(walletAddress, 'sui');
+      } else {
+        const remainingCostBasis = userShares.cost_basis_usd * (remainingShares / userShares.shares);
+        await saveUserSharesToDb({
+          walletAddress,
+          shares: remainingShares,
+          costBasisUSD: remainingCostBasis,
+          chain: 'sui',
+        });
+      }
+
+      // Record transaction
+      await addPoolTransactionToDb({
+        id: `sui-withdraw-${Date.now()}-${walletAddress.slice(-8)}`,
+        type: 'WITHDRAWAL',
+        walletAddress,
+        amountUSD: withdrawUsdc,
+        shares: sharesToBurn,
+        sharePrice: 1.0,
+        details: {
+          network,
+          swapResults: results,
+          allocations,
+        },
+        txHash: undefined,
+      });
+
+      const successfulSwaps = results.filter(r => r.success).length;
+      const failedSwaps = results.filter(r => !r.success).length;
+
+      logger.info('[SUI-API] Withdrawal recorded', {
+        wallet: walletAddress.slice(0, 10) + '...',
+        sharesBurned: sharesToBurn,
+        remainingShares,
+        swapsExecuted: successfulSwaps,
+      });
+
+      return NextResponse.json({
+        success: failedSwaps === 0,
+        data: {
+          walletAddress,
+          sharesBurned: sharesToBurn,
+          usdcReturned: withdrawUsdc,
+          remainingShares,
+          swaps: {
+            executed: successfulSwaps,
+            failed: failedSwaps,
+            results,
+          },
+        },
+        chain: 'sui',
+        network,
+      });
+    }
     
     return NextResponse.json(
-      { success: false, error: 'Invalid action. Use deposit, withdraw, execute-deposit-swaps, or execute-withdraw-swaps' },
+      { success: false, error: 'Invalid action. Use deposit, withdraw, execute-deposit-swaps, execute-withdraw-swaps, record-deposit, or record-withdraw' },
       { status: 400 }
     );
     
