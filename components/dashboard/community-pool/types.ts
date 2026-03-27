@@ -13,9 +13,9 @@ export interface PoolAllocation {
 export interface PoolSummary {
   totalValueUSD: number;
   totalShares: number;
-  sharePrice: number;  // For EVM: USD, For SUI: native SUI price
-  sharePriceUSD?: number; // For SUI: converted to USD
-  totalNAV?: number;  // Native asset NAV (SUI tokens for SUI chain)
+  sharePrice: number;  // USD per share (1.0 for SUI USDC pool)
+  sharePriceUSD?: number; // Legacy: converted to USD
+  totalNAV?: number;  // Legacy: native asset NAV
   memberCount: number;
   allocations: PoolAllocation;
   aiLastUpdate: string | null;
@@ -26,7 +26,7 @@ export interface UserPosition {
   walletAddress: string;
   shares: number;
   valueUSD: number;
-  valueSUI?: number;  // SUI chain: value in native SUI tokens
+  valueSUI?: number;  // Legacy: kept for compatibility
   percentage: number;
   isMember: boolean;
   joinedAt?: string;
