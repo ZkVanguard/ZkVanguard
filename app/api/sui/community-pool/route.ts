@@ -179,9 +179,19 @@ export async function GET(request: NextRequest) {
     // Get contract info
     if (action === 'contract') {
       const info = service.getContractInfo();
+      // Also include the deployed SUI-native pool contract info
+      const { getSuiCommunityPoolService } = await import('@/lib/services/SuiCommunityPoolService');
+      const nativeInfo = getSuiCommunityPoolService(network).getContractInfo();
       return NextResponse.json({
         success: true,
-        data: info,
+        data: {
+          ...info,
+          // If USDC pool not deployed, show native pool contract as deployed reference
+          deployedPackageId: info.packageId || nativeInfo.packageId,
+          nativePoolPackageId: nativeInfo.packageId,
+          nativePoolStateId: nativeInfo.poolStateId,
+          hedgeExecutorStateId: nativeInfo.poolStateId ? undefined : undefined,
+        },
         chain: 'sui',
         network,
       });
@@ -189,24 +199,58 @@ export async function GET(request: NextRequest) {
 
     // Get current 4-asset allocation (AI-managed)
     if (action === 'allocation') {
-      // Default allocation for SUI pool (AI can adjust these based on market conditions)
-      const allocation = {
-        BTC: 30,
-        ETH: 30,
-        SUI: 25,
-        CRO: 15,
-      };
-      return NextResponse.json({
-        success: true,
-        data: {
-          allocation,
-          description: '4-asset AI-managed allocation for USDC deposits',
-          assets: ['BTC', 'ETH', 'SUI', 'CRO'],
-          rebalanceFrequency: 'daily',
-        },
-        chain: 'sui',
-        network,
-      });
+      // Use SuiPoolAgent for dynamic AI allocation when possible
+      try {
+        const { getSuiPoolAgent } = await import('@/agents/specialized/SuiPoolAgent');
+        const agent = getSuiPoolAgent(network);
+        const indicators = await agent.analyzeMarket();
+        const decision = agent.generateAllocation(indicators);
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            allocation: decision.allocations,
+            description: '4-asset AI-managed allocation for USDC deposits',
+            assets: ['BTC', 'ETH', 'SUI', 'CRO'],
+            rebalanceFrequency: 'daily',
+            confidence: decision.confidence,
+            reasoning: decision.reasoning,
+            shouldRebalance: decision.shouldRebalance,
+            swappableAssets: decision.swappableAssets,
+            hedgedAssets: decision.hedgedAssets,
+            riskScore: decision.riskScore,
+            source: 'ai-agent',
+          },
+          chain: 'sui',
+          network,
+          duration: Date.now() - startTime,
+        });
+      } catch (err) {
+        // Fallback to static allocation if agent fails
+        logger.warn('[SUI-API] SuiPoolAgent failed, using static allocation', {
+          error: err instanceof Error ? err.message : err,
+          stack: err instanceof Error ? err.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+        });
+        const allocation = {
+          BTC: 30,
+          ETH: 30,
+          SUI: 25,
+          CRO: 15,
+        };
+        return NextResponse.json({
+          success: true,
+          data: {
+            allocation,
+            description: '4-asset AI-managed allocation for USDC deposits',
+            assets: ['BTC', 'ETH', 'SUI', 'CRO'],
+            rebalanceFrequency: 'daily',
+            source: 'static-fallback',
+          },
+          chain: 'sui',
+          network,
+          duration: Date.now() - startTime,
+        });
+      }
     }
     
     // Get all members (cached 2m)
@@ -613,6 +657,25 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Use AI agent for dynamic allocation if frontend sent the default static values
+      let finalAllocations = allocations as Record<PoolAsset, number>;
+      const isStaticDefault = allocations.BTC === 30 && allocations.ETH === 30 && allocations.SUI === 25 && allocations.CRO === 15;
+      if (isStaticDefault) {
+        try {
+          const { getSuiPoolAgent } = await import('@/agents/specialized/SuiPoolAgent');
+          const agent = getSuiPoolAgent(network);
+          const indicators = await agent.analyzeMarket();
+          const decision = agent.generateAllocation(indicators);
+          finalAllocations = decision.allocations;
+          logger.info('[SUI-API] Using AI allocation for deposit', {
+            allocations: finalAllocations,
+            confidence: decision.confidence,
+          });
+        } catch {
+          // Keep static allocation on failure
+        }
+      }
+
       // Dynamically import DB functions to avoid edge runtime issues
       const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
 
@@ -626,7 +689,7 @@ export async function POST(request: NextRequest) {
         // Execute swaps: USDC → 4 assets
         const plan = await aggregator.planRebalanceSwaps(
           amountUsdc,
-          allocations as Record<PoolAsset, number>,
+          finalAllocations,
         );
 
         swapResult = await aggregator.executeRebalance(plan, 0.01);
