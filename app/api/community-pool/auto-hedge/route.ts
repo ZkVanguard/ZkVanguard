@@ -99,6 +99,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (dbAvailable) {
       try {
         config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
+        
+        // MAINNET: Auto-seed default config if none exists
+        // This ensures auto-hedge is always configured for the community pool
+        if (!config) {
+          const defaultConfig = {
+            portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+            walletAddress: COMMUNITY_POOL_ADDRESS,
+            enabled: true,
+            riskThreshold: 4,
+            maxLeverage: 3,
+            allowedAssets: ['BTC', 'ETH', 'CRO', 'SUI'],
+            riskTolerance: 30,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          try {
+            await saveAutoHedgeConfig(defaultConfig);
+            config = defaultConfig;
+            logger.info('[AutoHedge API] Auto-seeded default config for community pool');
+          } catch (seedErr) {
+            logger.warn('[AutoHedge API] Could not seed default config', { error: seedErr });
+          }
+        }
       } catch (e: any) {
         logger.warn('[AutoHedge API] Could not fetch config', { error: e.message });
       }
@@ -158,12 +181,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         COMMUNITY_POOL_ADDRESS
       );
       riskAssessment = {
-        riskScore: assessment.riskScore,
-        drawdownPercent: assessment.drawdownPercent,
-        volatility: assessment.volatility,
+        riskScore: Math.round(assessment.riskScore * 100) / 100,
+        drawdownPercent: Math.round(assessment.drawdownPercent * 100) / 100,
+        volatility: Math.round(assessment.volatility * 100) / 100,
         recommendations: assessment.recommendations.length,
         lastUpdated: new Date().toISOString(),
-        aggregatedPrediction: assessment.aggregatedPrediction || null,
+        aggregatedPrediction: assessment.aggregatedPrediction ? {
+          ...assessment.aggregatedPrediction,
+          confidence: Math.round(assessment.aggregatedPrediction.confidence * 100) / 100,
+          consensus: Math.round(assessment.aggregatedPrediction.consensus * 100) / 100,
+          sizeMultiplier: Math.round(assessment.aggregatedPrediction.sizeMultiplier * 100) / 100,
+        } : null,
       };
     } catch (e) {
       logger.warn('[AutoHedge API] Could not get risk assessment — returning null (no mock data)', { error: e });
@@ -198,8 +226,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       recentDecisions,
       riskAssessment,
       stats: {
-        totalHedgeValue,
-        totalPnL,
+        totalHedgeValue: Math.round(totalHedgeValue * 100) / 100,
+        totalPnL: Math.round(totalPnL * 100) / 100,
         hedgeCount: hedges.length,
         decisionsToday,
       },
