@@ -98,7 +98,11 @@ const getRiskLevel = (score: number): keyof typeof RISK_COLORS => {
   return 'critical';
 };
 
-export function AutoHedgePanel() {
+interface AutoHedgePanelProps {
+  chain?: string;
+}
+
+export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
   const [data, setData] = useState<AutoHedgeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +111,8 @@ export function AutoHedgePanel() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/community-pool/auto-hedge');
+      const params = chain ? `?chain=${chain}` : '';
+      const res = await fetch(`/api/community-pool/auto-hedge${params}`);
       const json = await res.json();
       if (json.success) {
         setData(json);
@@ -120,7 +125,7 @@ export function AutoHedgePanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [chain]);
 
   useEffect(() => {
     fetchData();

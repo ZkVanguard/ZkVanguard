@@ -25,7 +25,8 @@ export function isCommunityPoolPortfolio(portfolioId: number | null | undefined)
 }
 
 /**
- * Community Pool contract address on Cronos Testnet.
- * Updated to CommunityPool V3 proxy with auto-hedge support.
+ * Community Pool contract address on Cronos Testnet (legacy/deprecated).
+ * For chain-specific addresses, use getCommunityPoolAddress(chain, network)
+ * from lib/contracts/community-pool-config.ts instead.
  */
 export const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
