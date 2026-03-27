@@ -32,7 +32,9 @@ const CETUS_CONFIG = {
     poolsPackageId: '0x0c7ae833c220aa73a3643a0d508afa4ac5c27ee97a4c4a6f15a3f48e32e8e48b',
     routerPackageId: '0x0c7ae833c220aa73a3643a0d508afa4ac5c27ee97a4c4a6f15a3f48e32e8e48b',
     integratePackageId: '0x0c7ae833c220aa73a3643a0d508afa4ac5c27ee97a4c4a6f15a3f48e32e8e48b',
-    apiUrl: 'https://api-sui.devcetus.com',
+    // Testnet API (devcetus.com) is dead — use mainnet API for price discovery.
+    // Actual testnet execution goes through BlueFin perps hedging.
+    apiUrl: 'https://api-sui.cetus.zone',
   },
 } as const;
 
@@ -259,11 +261,20 @@ export class CetusSwapService {
         amountIn: params.amountIn.toString(),
       });
 
+      // On testnet: use mainnet token types for API queries since the Cetus
+      // aggregator API only indexes mainnet pools
+      const queryTokenIn = this.network === 'testnet'
+        ? (SUI_TOKENS_MAINNET[tokenInInfo.symbol.toUpperCase()]?.type || tokenInInfo.type)
+        : tokenInInfo.type;
+      const queryTokenOut = this.network === 'testnet'
+        ? (SUI_TOKENS_MAINNET[tokenOutInfo.symbol.toUpperCase()]?.type || tokenOutInfo.type)
+        : tokenOutInfo.type;
+
       // Call Cetus aggregator API for best route
       const amountInStr = params.amountIn.toString();
       const url = `${this.config.apiUrl}/v2/sui/swap/router?` +
-        `from=${encodeURIComponent(tokenInInfo.type)}` +
-        `&target=${encodeURIComponent(tokenOutInfo.type)}` +
+        `from=${encodeURIComponent(queryTokenIn)}` +
+        `&target=${encodeURIComponent(queryTokenOut)}` +
         `&amount=${amountInStr}` +
         `&by_amount_in=true`;
 
@@ -488,8 +499,11 @@ export class CetusSwapService {
    */
   private resolvePoolToken(coinData: Record<string, string>): TokenInfo {
     const type = coinData?.address || '';
-    // Try to match with known tokens
-    for (const token of Object.values(this.tokens)) {
+    // Try to match with known tokens (check mainnet tokens too for testnet price queries)
+    const allTokens = this.network === 'testnet'
+      ? { ...SUI_TOKENS_MAINNET, ...this.tokens }
+      : this.tokens;
+    for (const token of Object.values(allTokens)) {
       if (token.type === type) return token;
     }
     return {
@@ -582,12 +596,16 @@ export class CetusSwapService {
   async getTokenPrice(tokenSymbol: string): Promise<number> {
     try {
       const tokenInfo = this.getTokenInfo(tokenSymbol);
+      // Use mainnet token type for price queries (Cetus API only indexes mainnet)
+      const queryType = this.network === 'testnet'
+        ? (SUI_TOKENS_MAINNET[tokenInfo.symbol.toUpperCase()]?.type || tokenInfo.type)
+        : tokenInfo.type;
       const response = await fetch(
-        `${this.config.apiUrl}/v2/sui/coin/price?coins=${encodeURIComponent(tokenInfo.type)}`
+        `${this.config.apiUrl}/v2/sui/coin/price?coins=${encodeURIComponent(queryType)}`
       );
       if (!response.ok) throw new Error(`Price API error: ${response.status}`);
       const data = await response.json();
-      return data.data?.[tokenInfo.type] || 0;
+      return data.data?.[queryType] || 0;
     } catch (error) {
       logger.warn('[CetusSwap] Cetus price API failed, falling back to Crypto.com', { tokenSymbol, error });
       // Fall back to live Crypto.com price
