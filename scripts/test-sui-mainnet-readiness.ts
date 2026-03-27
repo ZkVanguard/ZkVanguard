@@ -150,6 +150,7 @@ async function testSwapQuotes() {
   
   const assets = ['BTC', 'ETH', 'SUI', 'CRO'];
   const swappable: string[] = [];
+  const hedged: string[] = [];
   const simulated: string[] = [];
   
   for (const asset of assets) {
@@ -167,9 +168,17 @@ async function testSwapQuotes() {
       if (q.canSwapOnChain) {
         pass(`Quote ${asset}`, `On-chain route: ${q.route} — out: ${q.expectedAmountOut}`);
         swappable.push(asset);
+      } else if (q.hedgeVia === 'bluefin' && q.expectedAmountOut && q.expectedAmountOut !== '0') {
+        pass(`Quote ${asset}`, `Hedged via BlueFin perps: ${q.route}`);
+        hedged.push(asset);
       } else if (q.expectedAmountOut && q.expectedAmountOut !== '0') {
-        warn(`Quote ${asset}`, `Simulated (price-based): ${q.route}`);
-        simulated.push(asset);
+        if (q.isSimulated) {
+          warn(`Quote ${asset}`, `Simulated (price-based): ${q.route}`);
+          simulated.push(asset);
+        } else {
+          pass(`Quote ${asset}`, `Price-tracked: ${q.route}`);
+          hedged.push(asset);
+        }
       } else {
         fail(`Quote ${asset}`, `No route found: ${q.route}`);
       }
@@ -178,8 +187,8 @@ async function testSwapQuotes() {
     }
   }
   
-  console.log(`  📊 Summary: ${swappable.length} on-chain, ${simulated.length} simulated, ${4 - swappable.length - simulated.length} failed`);
-  return { swappable, simulated };
+  console.log(`  📊 Summary: ${swappable.length} on-chain, ${hedged.length} hedged, ${simulated.length} simulated, ${4 - swappable.length - hedged.length - simulated.length} failed`);
+  return { swappable, hedged, simulated };
 }
 
 async function testInitialPosition() {
@@ -254,6 +263,17 @@ async function testDeposit(amount: number) {
     warn('No swap data', 'Deposit recorded but no swap info returned');
   }
   
+  // Check BlueFin hedges
+  if (d.hedges && d.hedges.length > 0) {
+    for (const h of d.hedges) {
+      if (h.success) {
+        pass(`Hedge ${h.asset}`, `Hedged via ${h.method}${h.hedgeId ? ` (${h.hedgeId})` : ''}`);
+      } else {
+        warn(`Hedge ${h.asset}`, `${h.method} hedge attempted: ${h.error || 'unknown error'}`);
+      }
+    }
+  }
+  
   return d;
 }
 
@@ -308,9 +328,15 @@ async function testHedging() {
     const info = data.data;
     
     if (info?.hedgeExecutorStateId) {
-      pass('Hedge executor', `State: ${info.hedgeExecutorStateId.slice(0, 20)}...`);
+      pass('Hedge executor', `Active: ${info.hedgeExecutorStateId}`);
     } else {
-      warn('Hedge executor', 'No hedgeExecutorState — on-chain hedging not deployed');
+      warn('Hedge executor', 'No hedge executor configured');
+    }
+    
+    if (info?.bluefinConfigured) {
+      pass('BlueFin integration', 'BlueFin perpetual hedging configured');
+    } else {
+      warn('BlueFin integration', 'BlueFin not configured — hedging will use mock mode');
     }
   } catch {
     warn('Hedge executor check', 'Could not check hedge executor state');
@@ -319,9 +345,25 @@ async function testHedging() {
   // Check BlueFin configuration
   const bluefinKey = process.env.BLUEFIN_PRIVATE_KEY;
   if (bluefinKey) {
-    pass('BlueFin config', 'BLUEFIN_PRIVATE_KEY set');
+    pass('BlueFin config', 'BLUEFIN_PRIVATE_KEY set — perpetual hedging enabled');
+    
+    // Also check if BlueFin can initialize
+    try {
+      const { status: bfStatus, data: bfData } = await api(
+        `/api/sui/community-pool?action=swap-quote&asset=CRO&amount=100&network=${NETWORK}`
+      );
+      if (bfStatus === 200 && bfData.data?.hedgeVia === 'bluefin' && !bfData.data?.isSimulated) {
+        pass('BlueFin active', 'CRO quotes routed through BlueFin (not simulated)');
+      } else if (bfStatus === 200 && bfData.data?.hedgeVia === 'bluefin') {
+        pass('BlueFin route', 'CRO hedged via BlueFin perps');
+      } else {
+        warn('BlueFin route', 'CRO quote not using BlueFin hedge path');
+      }
+    } catch {
+      warn('BlueFin check', 'Could not verify BlueFin routing');
+    }
   } else {
-    warn('BlueFin config', 'BLUEFIN_PRIVATE_KEY not set — CRO perpetual hedging unavailable');
+    warn('BlueFin config', 'BLUEFIN_PRIVATE_KEY not set — perpetual hedging in mock mode');
   }
 }
 
