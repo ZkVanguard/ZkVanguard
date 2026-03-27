@@ -27,21 +27,73 @@ export const SUI_POOL_CONFIG = {
     adminCapId: '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
     feeManagerCapId: '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6',
     moduleName: 'community_pool',
-    rpcUrl: 'https://fullnode.testnet.sui.io:443',
+    rpcUrl: process.env.SUI_TESTNET_RPC || 'https://fullnode.testnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/testnet',
     // Pool state ID (created via create_pool)
     poolStateId: '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56' as string | null,
   },
   mainnet: {
-    packageId: '',
-    adminCapId: '',
-    feeManagerCapId: '',
+    packageId: (process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '').trim(),
+    adminCapId: (process.env.NEXT_PUBLIC_SUI_MAINNET_ADMIN_CAP || process.env.NEXT_PUBLIC_SUI_ADMIN_CAP || '').trim(),
+    feeManagerCapId: (process.env.NEXT_PUBLIC_SUI_MAINNET_FEE_MANAGER_CAP || process.env.NEXT_PUBLIC_SUI_FEE_MANAGER_CAP || '').trim(),
     moduleName: 'community_pool',
-    rpcUrl: 'https://fullnode.mainnet.sui.io:443',
+    rpcUrl: process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/mainnet',
-    poolStateId: null as string | null,
+    poolStateId: (process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE || process.env.NEXT_PUBLIC_SUI_COMMUNITY_POOL_STATE || '').trim() || null as string | null,
   },
 } as const;
+
+// ============================================
+// USDC POOL CONFIG (4-asset AI-managed pool)
+// ============================================
+
+/** USDC coin type on SUI networks */
+export const SUI_USDC_COIN_TYPE = {
+  // Circle native USDC on SUI mainnet
+  mainnet: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
+  // Testnet USDC (use SUI testnet faucet USDC or mock)
+  testnet: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
+} as const;
+
+export const SUI_USDC_POOL_CONFIG = {
+  testnet: {
+    packageId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '').trim(),
+    moduleName: 'community_pool_usdc',
+    rpcUrl: process.env.SUI_TESTNET_RPC || 'https://fullnode.testnet.sui.io:443',
+    explorerUrl: 'https://suiscan.xyz/testnet',
+    poolStateId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || '').trim() || null as string | null,
+    usdcCoinType: SUI_USDC_COIN_TYPE.testnet,
+    usdcDecimals: 6,
+  },
+  mainnet: {
+    packageId: (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '').trim(),
+    moduleName: 'community_pool_usdc',
+    rpcUrl: process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443',
+    explorerUrl: 'https://suiscan.xyz/mainnet',
+    poolStateId: (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '').trim() || null as string | null,
+    usdcCoinType: SUI_USDC_COIN_TYPE.mainnet,
+    usdcDecimals: 6,
+  },
+} as const;
+
+/** 4-asset allocation for the USDC pool */
+export interface SuiPoolAllocation {
+  BTC: number;  // percentage
+  ETH: number;
+  SUI: number;
+  CRO: number;
+}
+
+export interface SuiUsdcPoolStats extends SuiPoolStats {
+  /** Pool value in USDC (6 decimals on-chain) */
+  totalNAVUsdc: number;
+  /** Share price in USDC */
+  sharePriceUsdc: number;
+  /** Current 4-asset allocation */
+  allocation: SuiPoolAllocation;
+  /** Whether the USDC pool is deployed */
+  isUsdcPool: boolean;
+}
 
 type SuiNetworkType = 'testnet' | 'mainnet';
 
@@ -599,6 +651,317 @@ export class SuiCommunityPoolService {
 }
 
 // ============================================
+// USDC POOL SERVICE (4-asset AI-managed)
+// ============================================
+
+const USDC_DECIMALS = 6;
+
+export class SuiUsdcPoolService {
+  private network: SuiNetworkType;
+  private config: (typeof SUI_USDC_POOL_CONFIG)[SuiNetworkType];
+  private fallbackService: SuiCommunityPoolService;
+  private cachedUsdcPoolStateId: string | null = null;
+
+  constructor(network: SuiNetworkType = 'testnet') {
+    this.network = network;
+    this.config = SUI_USDC_POOL_CONFIG[network];
+    // Fallback to SUI-native pool until USDC pool is deployed
+    this.fallbackService = new SuiCommunityPoolService(network);
+    logger.info('[SuiUsdcPool] Initialized', { network, packageId: this.config.packageId || '(pending deploy)' });
+  }
+
+  /** Check if USDC pool contract is deployed */
+  isDeployed(): boolean {
+    return !!this.config.packageId;
+  }
+
+  /** Clear all caches */
+  clearCaches(): void {
+    suiStatsCache.clear();
+    suiPendingRequests.clear();
+    this.fallbackService.clearCaches();
+  }
+
+  /** Get or discover USDC pool state ID */
+  async getPoolStateId(): Promise<string | null> {
+    if (this.cachedUsdcPoolStateId) return this.cachedUsdcPoolStateId;
+    if (this.config.poolStateId) {
+      this.cachedUsdcPoolStateId = this.config.poolStateId;
+      return this.cachedUsdcPoolStateId;
+    }
+
+    // If USDC pool not deployed, no pool state
+    if (!this.config.packageId) return null;
+
+    // Search for UsdcPoolCreated event
+    try {
+      const response = await fetch(this.config.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'suix_queryEvents',
+          params: [{
+            MoveEventType: `${this.config.packageId}::${this.config.moduleName}::UsdcPoolCreated`,
+          }, null, 1, true],
+        }),
+      });
+      const data = await response.json();
+      const events = data.result?.data || [];
+      if (events.length > 0) {
+        this.cachedUsdcPoolStateId = events[0].parsedJson?.pool_id;
+        return this.cachedUsdcPoolStateId;
+      }
+    } catch (err) {
+      logger.error('[SuiUsdcPool] Failed to query pool events:', err);
+    }
+
+    return null;
+  }
+
+  /**
+   * Get USDC pool stats with 4-asset allocation.
+   * Falls back to SUI-native pool if USDC pool not deployed.
+   */
+  async getPoolStats(): Promise<SuiUsdcPoolStats> {
+    // If USDC pool not yet deployed, use SUI-native pool with USD overlay
+    if (!this.isDeployed()) {
+      return this.getStatsFromFallback();
+    }
+
+    const poolStateId = await this.getPoolStateId();
+    if (!poolStateId) {
+      return this.getStatsFromFallback();
+    }
+
+    const cacheKey = `sui-usdc-pool-stats-${this.network}`;
+    return suiCachedFetch(cacheKey, async () => {
+      try {
+        const fields = await this.fetchObjectFields(poolStateId);
+        if (!fields) return this.getStatsFromFallback();
+
+        const balanceValue = typeof fields.balance === 'string'
+          ? fields.balance
+          : (fields.balance?.fields?.value || fields.balance?.value || '0');
+        const totalNAVUsdc = Number(balanceValue) / Math.pow(10, USDC_DECIMALS);
+        const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
+        const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;
+
+        // Parse 4-asset allocation from on-chain
+        const alloc = fields.current_allocation?.fields || {};
+        const allocation: SuiPoolAllocation = {
+          BTC: Number(alloc.btc_bps || 3000) / 100,
+          ETH: Number(alloc.eth_bps || 3000) / 100,
+          SUI: Number(alloc.sui_bps || 2000) / 100,
+          CRO: Number(alloc.cro_bps || 2000) / 100,
+        };
+
+        return {
+          totalNAV: totalNAVUsdc,
+          totalNAVUsd: totalNAVUsdc, // USDC ≈ USD
+          totalNAVUsdc,
+          totalShares,
+          sharePrice: sharePriceUsdc,
+          sharePriceUsd: sharePriceUsdc,
+          sharePriceUsdc,
+          memberCount: Number(fields.member_count || 0),
+          managementFeeBps: Number(fields.management_fee_bps || 50),
+          performanceFeeBps: Number(fields.performance_fee_bps || 1000),
+          paused: fields.paused || false,
+          allTimeHighNav: Number(fields.all_time_high_nav_per_share || 1e6) / 1e6,
+          createdAt: Number(fields.created_at || 0),
+          poolStateId,
+          allocation,
+          isUsdcPool: true,
+        };
+      } catch (err) {
+        logger.error('[SuiUsdcPool] Failed to fetch pool stats:', err);
+        return this.getStatsFromFallback();
+      }
+    }, SUI_STATS_TTL);
+  }
+
+  /** Get stats from SUI-native pool with USDC overlay */
+  private async getStatsFromFallback(): Promise<SuiUsdcPoolStats> {
+    const base = await this.fallbackService.getPoolStats();
+    return {
+      ...base,
+      totalNAVUsdc: base.totalNAVUsd,
+      sharePriceUsdc: base.sharePriceUsd,
+      allocation: { BTC: 30, ETH: 30, SUI: 20, CRO: 20 },
+      isUsdcPool: false,
+    };
+  }
+
+  /** Get member position (USDC-denominated) */
+  async getMemberPosition(address: string): Promise<SuiMemberPosition> {
+    if (!this.isDeployed()) {
+      return this.fallbackService.getMemberPosition(address);
+    }
+
+    const poolStateId = await this.getPoolStateId();
+    if (!poolStateId) {
+      return this.fallbackService.getMemberPosition(address);
+    }
+
+    const defaultPosition: SuiMemberPosition = {
+      address,
+      shares: 0,
+      depositedSui: 0,
+      withdrawnSui: 0,
+      joinedAt: 0,
+      lastDepositAt: 0,
+      highWaterMark: 0,
+      valueSui: 0,
+      valueUsd: 0,
+      percentage: 0,
+      isMember: false,
+    };
+
+    const cacheKey = `sui-usdc-member-${this.network}-${address.toLowerCase()}`;
+    return suiCachedFetch(cacheKey, async () => {
+      try {
+        const stats = await this.getPoolStats();
+        const fields = await this.fetchObjectFields(poolStateId!);
+        if (!fields) return defaultPosition;
+
+        const membersTableId = fields.members?.fields?.id?.id;
+        if (!membersTableId) return defaultPosition;
+
+        const response = await fetch(this.config.rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'suix_getDynamicFieldObject',
+            params: [membersTableId, { type: 'address', value: address }],
+          }),
+        });
+        const data = await response.json();
+        const memberFields = data.result?.data?.content?.fields?.value?.fields ||
+                            data.result?.data?.content?.fields;
+
+        if (!memberFields?.shares) return defaultPosition;
+
+        const shares = Number(memberFields.shares || 0) / Math.pow(10, USDC_DECIMALS);
+        const valueUsdc = shares * stats.sharePriceUsdc;
+
+        return {
+          address,
+          shares,
+          depositedSui: Number(memberFields.deposited_usdc || 0) / Math.pow(10, USDC_DECIMALS),
+          withdrawnSui: Number(memberFields.withdrawn_usdc || 0) / Math.pow(10, USDC_DECIMALS),
+          joinedAt: Number(memberFields.joined_at || 0),
+          lastDepositAt: Number(memberFields.last_deposit_at || 0),
+          highWaterMark: Number(memberFields.high_water_mark || 0) / 1e6,
+          valueSui: valueUsdc, // In USDC context, valueSui = valueUsdc
+          valueUsd: valueUsdc,
+          percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
+          isMember: shares > 0,
+        };
+      } catch (err) {
+        logger.error('[SuiUsdcPool] Failed to fetch member:', err);
+        return defaultPosition;
+      }
+    }, SUI_MEMBER_TTL);
+  }
+
+  /** Get all members */
+  async getAllMembers(): Promise<SuiMemberPosition[]> {
+    // Delegate to fallback for now — member structure is compatible
+    return this.fallbackService.getAllMembers();
+  }
+
+  /**
+   * Build USDC deposit transaction params.
+   * The frontend must find a USDC coin object to split.
+   */
+  buildDepositParams(amountUsdc: number): {
+    target: string;
+    poolStateId: string | null;
+    amountRaw: bigint;
+    clockId: string;
+    usdcCoinType: string;
+    typeArg: string;
+  } {
+    const amountRaw = BigInt(Math.floor(amountUsdc * Math.pow(10, USDC_DECIMALS)));
+    const pkg = this.config.packageId || this.fallbackService.getDeploymentConfig().packageId;
+    const mod = this.config.moduleName;
+    
+    return {
+      target: `${pkg}::${mod}::deposit`,
+      poolStateId: this.cachedUsdcPoolStateId || this.config.poolStateId,
+      amountRaw,
+      clockId: CLOCK_OBJECT_ID,
+      usdcCoinType: this.config.usdcCoinType,
+      typeArg: this.config.usdcCoinType,
+    };
+  }
+
+  /** Build USDC withdraw transaction params */
+  buildWithdrawParams(sharesToBurn: number): {
+    target: string;
+    poolStateId: string | null;
+    sharesScaled: bigint;
+    clockId: string;
+    typeArg: string;
+  } {
+    const sharesScaled = BigInt(Math.floor(sharesToBurn * Math.pow(10, USDC_DECIMALS)));
+    const pkg = this.config.packageId || this.fallbackService.getDeploymentConfig().packageId;
+    const mod = this.config.moduleName;
+
+    return {
+      target: `${pkg}::${mod}::withdraw`,
+      poolStateId: this.cachedUsdcPoolStateId || this.config.poolStateId,
+      sharesScaled,
+      clockId: CLOCK_OBJECT_ID,
+      typeArg: this.config.usdcCoinType,
+    };
+  }
+
+  /** Fetch object fields from SUI RPC */
+  private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
+    try {
+      const response = await fetch(this.config.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'sui_getObject',
+          params: [objectId, { showContent: true }],
+        }),
+      });
+      const data = await response.json();
+      return data.result?.data?.content?.fields || null;
+    } catch (error) {
+      logger.error('[SuiUsdcPool] Failed to fetch object:', { objectId, error });
+      return null;
+    }
+  }
+
+  /** Get contract info for frontend */
+  getContractInfo() {
+    return {
+      packageId: this.config.packageId,
+      moduleName: this.config.moduleName,
+      poolStateId: this.cachedUsdcPoolStateId,
+      usdcCoinType: this.config.usdcCoinType,
+      network: this.network,
+      rpcUrl: this.config.rpcUrl,
+      explorerUrl: this.config.explorerUrl,
+      isUsdcPool: true,
+    };
+  }
+
+  getExplorerUrl(txDigest: string): string {
+    return `${this.config.explorerUrl}/tx/${txDigest}`;
+  }
+}
+
+// ============================================
 // SINGLETON
 // ============================================
 
@@ -606,9 +969,10 @@ let testnetServiceInstance: SuiCommunityPoolService | null = null;
 let mainnetServiceInstance: SuiCommunityPoolService | null = null;
 
 export function getSuiCommunityPoolService(
-  network: SuiNetworkType = 'testnet'
+  network?: SuiNetworkType
 ): SuiCommunityPoolService {
-  if (network === 'mainnet') {
+  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'testnet';
+  if (net === 'mainnet') {
     if (!mainnetServiceInstance) {
       mainnetServiceInstance = new SuiCommunityPoolService('mainnet');
     }
@@ -619,4 +983,25 @@ export function getSuiCommunityPoolService(
     testnetServiceInstance = new SuiCommunityPoolService('testnet');
   }
   return testnetServiceInstance;
+}
+
+// USDC Pool singletons
+let testnetUsdcInstance: SuiUsdcPoolService | null = null;
+let mainnetUsdcInstance: SuiUsdcPoolService | null = null;
+
+export function getSuiUsdcPoolService(
+  network?: SuiNetworkType
+): SuiUsdcPoolService {
+  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'testnet';
+  if (net === 'mainnet') {
+    if (!mainnetUsdcInstance) {
+      mainnetUsdcInstance = new SuiUsdcPoolService('mainnet');
+    }
+    return mainnetUsdcInstance;
+  }
+
+  if (!testnetUsdcInstance) {
+    testnetUsdcInstance = new SuiUsdcPoolService('testnet');
+  }
+  return testnetUsdcInstance;
 }
