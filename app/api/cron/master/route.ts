@@ -3,11 +3,12 @@
  * 
  * Chains ALL cron tasks in a single invocation:
  * 
- * 1. Community Pool snapshot & AI management
- * 2. Pool NAV monitoring & drawdown alerts
- * 3. Auto-rebalance & loss protection
- * 4. Hedge position monitoring (stop-loss, take-profit, trailing stops)
- * 5. Liquidation guard for leveraged positions
+ * 1. Community Pool snapshot & AI management (EVM)
+ * 2. SUI Community Pool AI management (USDC, 4-asset)
+ * 3. Pool NAV monitoring & drawdown alerts
+ * 4. Auto-rebalance & loss protection
+ * 5. Hedge position monitoring (stop-loss, take-profit, trailing stops)
+ * 6. Liquidation guard for leveraged positions
  * 
  * Schedule: Every 5 minutes via Upstash QStash
  * 
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
   const cronJobs = [
     { name: 'Pyth Price Update',      path: '/api/cron/pyth-update' },        // Update oracle prices first
     { name: 'Community Pool Snapshot', path: '/api/cron/community-pool' },
+    { name: 'SUI Community Pool',      path: '/api/cron/sui-community-pool' },
     { name: 'Pool NAV Monitor',       path: '/api/cron/pool-nav-monitor' },
     { name: 'Auto Rebalance',         path: '/api/cron/auto-rebalance' },
     { name: 'Hedge Monitor',          path: '/api/cron/hedge-monitor' },

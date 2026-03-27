@@ -77,6 +77,12 @@ const INDIVIDUAL_SCHEDULES = [
     retries: 3,
   },
   {
+    name: 'SUI Community Pool',
+    destination: `${BASE_URL}/api/cron/sui-community-pool`,
+    cron: '*/30 * * * *', // Every 30 minutes — USDC pool AI management
+    retries: 3,
+  },
+  {
     name: 'Pool NAV Monitor',
     destination: `${BASE_URL}/api/cron/pool-nav-monitor`,
     cron: '*/15 * * * *', // Every 15 minutes
