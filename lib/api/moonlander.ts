@@ -35,7 +35,7 @@ export async function getMoonlanderPositions(address: string): Promise<Position[
       if (!res.ok) {
         logger.warn('Moonlander API returned non-OK', { status: res.status });
       } else {
-        const data: Record<string, unknown> = await res.json();
+        const data = (await res.json()) as Record<string, unknown>;
         // Expect data.positions to be an array of Position-like objects
         if (Array.isArray(data?.positions)) {
           return (data.positions as Array<Record<string, unknown>>).map((p) => ({
