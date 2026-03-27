@@ -216,6 +216,7 @@ export function useCommunityPool(propAddress?: string) {
   const suiIsConnected = suiContext?.isConnected ?? false;
   const suiBalance = suiContext?.balance ?? '0';
   const suiExecuteTransaction = suiContext?.executeTransaction;
+  const suiRequestFaucet = suiContext?.requestFaucetTokens;
   const suiNetwork = suiContext?.network ?? 'testnet';
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiSetNetwork = suiContext?.setNetwork;
@@ -1460,17 +1461,53 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // 1. Fetch user's USDC coins from SUI RPC
+      // 0. Check SUI gas balance — wallet needs SUI to pay for transaction gas
       const rpcUrl = suiNetwork === 'mainnet'
         ? 'https://fullnode.mainnet.sui.io:443'
         : 'https://fullnode.testnet.sui.io:443';
       
+      const gasBalRes = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'suix_getBalance',
+          params: [suiAddress, '0x2::sui::SUI'],
+        }),
+      });
+      const gasBalJson = await gasBalRes.json();
+      const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
+      
+      // Need at least 0.01 SUI (10M MIST) for gas
+      if (suiGasBalance < BigInt(10_000_000)) {
+        if (suiNetwork !== 'mainnet' && suiRequestFaucet) {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
+          const faucetRes = await suiRequestFaucet();
+          if (!faucetRes.success) {
+            dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
+            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+            return;
+          }
+          // Wait for faucet SUI to arrive
+          dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
+          await new Promise(r => setTimeout(r, 3000));
+          dispatchPool({ type: 'SET_ERROR', payload: null });
+        } else {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
+          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+          return;
+        }
+      }
+      
+      // 1. Fetch user's USDC coins from SUI RPC
       const coinsRes = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 1,
+          id: 2,
           method: 'suix_getCoins',
           params: [suiAddress, usdcCoinType, null, 50],
         }),
@@ -1606,6 +1643,44 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
+      // Check SUI gas balance before withdraw
+      const rpcUrl = suiNetwork === 'mainnet'
+        ? 'https://fullnode.mainnet.sui.io:443'
+        : 'https://fullnode.testnet.sui.io:443';
+      
+      const gasBalRes = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'suix_getBalance',
+          params: [suiAddress, '0x2::sui::SUI'],
+        }),
+      });
+      const gasBalJson = await gasBalRes.json();
+      const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
+      
+      if (suiGasBalance < BigInt(10_000_000)) {
+        if (suiNetwork !== 'mainnet' && suiRequestFaucet) {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
+          const faucetRes = await suiRequestFaucet();
+          if (!faucetRes.success) {
+            dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
+            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+            return;
+          }
+          dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
+          await new Promise(r => setTimeout(r, 3000));
+          dispatchPool({ type: 'SET_ERROR', payload: null });
+        } else {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
+          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+          return;
+        }
+      }
+      
       const { Transaction } = await import('@mysten/sui/transactions');
       const tx = new Transaction();
       
