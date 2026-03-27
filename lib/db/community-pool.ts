@@ -509,6 +509,7 @@ export async function recordNavSnapshot(snapshot: {
   memberCount: number;
   allocations?: Record<string, number>;
   source?: string;
+  timestamp?: Date;
 }): Promise<void> {
   // Validate inputs
   if (!isValidAmount(snapshot.sharePrice, 1e9)) {
@@ -522,7 +523,7 @@ export async function recordNavSnapshot(snapshot: {
     await query(
       `INSERT INTO community_pool_nav_history 
        (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
-       VALUES (NOW(), $1, $2, $3, $4, $5, $6)`,
+       VALUES ($7, $1, $2, $3, $4, $5, $6)`,
       [
         snapshot.sharePrice,
         snapshot.totalNav,
@@ -530,6 +531,7 @@ export async function recordNavSnapshot(snapshot: {
         snapshot.memberCount,
         snapshot.allocations ? JSON.stringify(snapshot.allocations) : null,
         snapshot.source || 'on-chain',
+        snapshot.timestamp || new Date(),
       ]
     );
     logger.debug('[CommunityPool DB] NAV snapshot recorded', { 
