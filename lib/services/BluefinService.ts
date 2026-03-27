@@ -49,6 +49,8 @@ export const BLUEFIN_NETWORKS = {
     // WebSocket streams (50 RPM for connection)
     wsUrl: 'wss://stream.api.sui-prod.bluefin.io',
     chainId: 'mainnet',
+    // IDS (Independent Data Store) object address from exchange/info contractsConfig
+    idsId: '0xa9f033047d2fc453da063b03500a48950d2497bb0a2faec57da2833d42a12806',
     // Audience must be 'api' per SDK source code
     audience: 'api',
   },
@@ -61,6 +63,8 @@ export const BLUEFIN_NETWORKS = {
     tradeApiUrl: 'https://trade.api.sui-staging.bluefin.io',
     wsUrl: 'wss://stream.api.sui-staging.bluefin.io',
     chainId: 'testnet',
+    // IDS (Independent Data Store) object address from exchange/info contractsConfig
+    idsId: '0xf19acdacbd086641c7a316d23617fa18bba5d95dab8a02c1281538104f3d4040',
     // Audience must be 'api' per SDK source code
     audience: 'api',
   },
@@ -353,7 +357,7 @@ export class BluefinService {
    * then signed with signPersonalMessage
    */
   private async signOrderFields(signedFields: {
-    idsId: number;
+    idsId: string;
     accountAddress: string;
     symbol: string;
     priceE9: string;
@@ -362,14 +366,14 @@ export class BluefinService {
     side: string;
     isIsolated: boolean;
     expiresAtMillis: number;
-    salt: number;
+    salt: string;
     signedAtMillis: number;
   }): Promise<string> {
     if (!this.keypair) throw new Error('Keypair not initialized');
     
     // Transform to UI format per SDK's toUICreateOrderRequest
     const uiOrderRequest = {
-      type: 'OrderRequest',
+      type: 'Bluefin Pro Order',
       ids: signedFields.idsId,
       account: signedFields.accountAddress,
       market: signedFields.symbol,
@@ -377,7 +381,7 @@ export class BluefinService {
       quantity: signedFields.quantityE9,
       leverage: signedFields.leverageE9,
       side: signedFields.side.toString(),
-      positionType: signedFields.isIsolated ? 'Isolated' : 'Cross',
+      positionType: signedFields.isIsolated ? 'ISOLATED' : 'CROSS',
       expiration: signedFields.expiresAtMillis.toString(),
       salt: signedFields.salt,
       signedAt: signedFields.signedAtMillis.toString(),
@@ -433,10 +437,11 @@ export class BluefinService {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
+      const requestBody = method !== 'GET' && body ? JSON.stringify(body) : undefined;
       const response = await fetch(url, {
         method,
         headers,
-        body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
+        body: requestBody,
         signal: controller.signal,
       });
 
@@ -646,6 +651,19 @@ export class BluefinService {
         leverage: params.leverage,
       });
 
+      // Check if account is onboarded on BlueFin
+      try {
+        const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
+        if (!acctResp) {
+          throw new Error(`BlueFin account ${this.walletAddress} not found. Please onboard at https://pro.bluefin.io first.`);
+        }
+      } catch (acctError) {
+        const msg = acctError instanceof Error ? acctError.message : String(acctError);
+        if (msg.includes('404') || msg.includes('not found')) {
+          throw new Error(`BlueFin account ${this.walletAddress} not onboarded. Visit https://pro.bluefin.io to register.`);
+        }
+      }
+
       // Validate pair
       const pair = Object.values(BLUEFIN_PAIRS).find(p => p.symbol === params.symbol);
       if (!pair) {
@@ -669,15 +687,18 @@ export class BluefinService {
       const leverageE9 = Math.floor(params.leverage * 1e9).toString();
       // For market orders, use a price with slippage buffer
       const slippageMultiplier = params.side === 'LONG' ? 1.01 : 0.99; // 1% slippage
-      const priceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
+      const limitPriceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
+      // MARKET orders require price=0 in signedFields; LIMIT orders use the limit price
+      const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
       const signedAtMillis = Date.now();
-      const salt = Math.floor(Math.random() * 2147483647); // Random salt
+      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
 
       // Create signedFields object per BlueFin Pro SDK format
       // Uses SDK-compatible field names (camelCase)
+      const networkConfig = BLUEFIN_NETWORKS[this.network];
       const signedFields = {
-        idsId: 0, // Default IDS ID
+        idsId: networkConfig.idsId,
         accountAddress: this.walletAddress!,
         symbol: params.symbol,
         priceE9: priceE9,
@@ -703,24 +724,11 @@ export class BluefinService {
         filledQty?: string;
         fee?: string;
       }>('POST', '/api/v1/trade/orders', {
-        signedFields: {
-          symbol: params.symbol,
-          side: params.side,
-          price_e9: priceE9,
-          quantity_e9: quantityE9,
-          leverage_e9: leverageE9,
-          isIsolated: false,
-          expires_at_millis: expiresAt,
-          salt,
-          signed_at_millis: signedAtMillis,
-        },
+        signedFields,
         signature,
         clientOrderId: hedgeId,
-        type: 'MARKET', // MARKET for immediate, LIMIT for price orders
+        type: 'MARKET',
         reduceOnly: false,
-        postOnly: false,
-        timeInForce: 'IOC', // GTT, IOC, or FOK
-        selfTradePreventionType: 'MAKER',
       });
 
       logger.info('✅ BlueFin hedge opened', {
@@ -786,14 +794,17 @@ export class BluefinService {
       // BlueFin uses e9 scaling
       const quantityE9 = Math.floor(closeSize * 1e9).toString();
       const slippageMultiplier = closeSide === 'LONG' ? 1.01 : 0.99;
-      const priceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
+      const limitPriceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
+      // MARKET orders require price=0
+      const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000;
       const signedAtMillis = Date.now();
-      const salt = Math.floor(Math.random() * 2147483647);
+      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
 
       // Create signedFields for close order per SDK format
+      const networkConfig = BLUEFIN_NETWORKS[this.network];
       const signedFields = {
-        idsId: 0,
+        idsId: networkConfig.idsId,
         accountAddress: this.walletAddress!,
         symbol: params.symbol,
         priceE9: priceE9,
@@ -817,22 +828,11 @@ export class BluefinService {
         fee?: string;
         realizedPnl?: string;
       }>('POST', '/api/v1/trade/orders', {
-        signedFields: {
-          symbol: params.symbol,
-          side: closeSide,
-          price_e9: priceE9,
-          quantity_e9: quantityE9,
-          leverage_e9: '1000000000',
-          isIsolated: false,
-          expires_at_millis: expiresAt,
-          salt,
-          signed_at_millis: signedAtMillis,
-        },
+        signedFields,
         signature,
         clientOrderId: hedgeId,
         type: 'MARKET',
-        reduceOnly: true, // Important: close-only order
-        timeInForce: 'IOC',
+        reduceOnly: true,
       });
 
       logger.info('✅ BlueFin position closed', {
