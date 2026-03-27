@@ -11,6 +11,8 @@ node_modules/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
+build-output-local.txt
+build-result.txt
 
 # -------------------------------------------
 # Package Manager Lock Files (using bun.lock)
