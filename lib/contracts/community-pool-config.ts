@@ -226,9 +226,9 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
   sui: {
     chainId: 'sui:testnet',
     chainType: 'sui',
-    name: 'SUI',
+    name: 'SUI (USDC)',
     shortName: 'SUI',
-    icon: '💧',
+    icon: '💵',
     color: 'bg-blue-400',
     nativeCurrency: {
       name: 'SUI',
@@ -247,15 +247,15 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
       testnet: {
         // Package ID - use create_pool to create CommunityPoolState shared object
         communityPool: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
-        usdt: '0x0000000000000000000000000000000000000000', // Native SUI used
+        usdt: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29', // USDC on SUI testnet
       },
       mainnet: {
         communityPool: '0x0000000000000000000000000000000000000000',
         usdt: '0x0000000000000000000000000000000000000000',
       },
     },
-    // SUI Move chain - native SUI pool with BTC/ETH tracking
-    assets: ['BTC', 'ETH', 'SUI'],
+    // SUI USDC pool - deposits in USDC, AI-managed 4-asset allocation
+    assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'testing',
   },
 };

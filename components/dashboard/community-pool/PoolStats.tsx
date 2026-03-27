@@ -13,35 +13,29 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
   const isSui = selectedChain === 'sui';
 
   const totalValueDisplay = useMemo(() => {
-    if (isSui && poolData.totalNAV) {
-      const nav = Number(poolData.totalNAV) || 0;
-      return `${nav.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`;
+    if (isSui) {
+      // USDC pool: display in USD
+      const totalUsdc = Number(poolData.totalValueUSD) || Number(poolData.totalShares) || 0;
+      return formatUSD(totalUsdc);
     }
     return formatUSD(poolData.totalValueUSD);
-  }, [isSui, poolData.totalNAV, poolData.totalValueUSD]);
+  }, [isSui, poolData.totalValueUSD, poolData.totalShares]);
 
   const totalValueSubtext = useMemo(() => {
-    if (isSui && poolData.totalValueUSD > 0) {
-      return `Total Value (~${formatUSD(poolData.totalValueUSD)})`;
-    }
+    if (isSui) return 'Total Pool Value (USDC)';
     return 'Total Value';
-  }, [isSui, poolData.totalValueUSD]);
+  }, [isSui]);
 
   const sharePriceDisplay = useMemo(() => {
+    if (isSui) return '$1.00'; // 1 share = 1 USDC
     const price = Number(poolData.sharePrice) || 0;
-    if (isSui) {
-      return `${price.toFixed(4)} SUI`;
-    }
     return `$${price.toFixed(4)}`;
   }, [isSui, poolData.sharePrice]);
 
   const sharePriceSubtext = useMemo(() => {
-    if (isSui && poolData.sharePriceUSD) {
-      const priceUSD = Number(poolData.sharePriceUSD) || 0;
-      return `Share Price (~$${priceUSD.toFixed(2)})`;
-    }
+    if (isSui) return 'Share Price (1 share = 1 USDC)';
     return 'Share Price';
-  }, [isSui, poolData.sharePriceUSD]);
+  }, [isSui]);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b border-gray-100 dark:border-gray-700">

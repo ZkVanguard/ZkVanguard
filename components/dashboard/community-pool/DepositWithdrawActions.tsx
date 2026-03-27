@@ -114,9 +114,9 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
           <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">💧</span>
-                <h4 className="font-semibold text-gray-900 dark:text-white">SUI Community Pool</h4>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">{tokenInfo.symbol} Deposits</span>
+                <span className="text-2xl">💵</span>
+                <h4 className="font-semibold text-gray-900 dark:text-white">SUI USDC Pool</h4>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC → 4-Asset AI</span>
               </div>
               <a
                 href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${suiPoolStateId || communityPoolAddress}`}
@@ -134,11 +134,11 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 <Wallet className="w-4 h-4 text-green-500" />
                 <span>Connected: {suiAddress?.slice(0, 8)}...{suiAddress?.slice(-6)}</span>
                 <span className="text-gray-400">|</span>
-                <span>{suiBalance} SUI (for gas)</span>
+                <span>1 share = 1 USDC</span>
               </div>
             ) : (
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                Connect a SUI wallet (Sui Wallet, Suiet, or Ethos) to deposit and withdraw.
+                Connect a SUI wallet to deposit USDC and earn from AI-managed 4-asset allocation.
               </p>
             )}
           </div>
@@ -172,7 +172,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Deposit {tokenInfo.symbol}
+              Deposit USDC
             </button>
             <button
               onClick={() => { onShowWithdraw(!showWithdraw); }}
@@ -180,7 +180,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Minus className="w-4 h-4" />
-              Withdraw
+              Withdraw USDC
             </button>
           </div>
 
@@ -197,7 +197,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                     type="number"
                     value={suiDepositAmount}
                     onChange={(e) => onSuiDepositAmountChange(e.target.value)}
-                    placeholder="Amount in USD (min $10)"
+                    placeholder="USDC amount (min $10)"
                     disabled={actionLoading}
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
@@ -211,10 +211,10 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Min deposit: $10 {tokenInfo.symbol} • Pool internally converts to portfolio assets
+                  Min deposit: $10 USDC • Your USDC is split into BTC (30%), ETH (30%), SUI (25%), CRO (15%)
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Deposits are denominated in {tokenInfo.symbol}. Your share value reflects the portfolio NAV.
+                  1 share = 1 USDC. AI agents manage rebalancing across the 4-asset portfolio.
                 </p>
               </motion.div>
             )}
@@ -255,7 +255,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 </div>
                 {poolData && suiWithdrawShares && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Estimated value: ~${(parseFloat(suiWithdrawShares) * (Number(poolData.sharePriceUSD || poolData.sharePrice) || 1)).toFixed(2)} USD
+                    Estimated value: ~${parseFloat(suiWithdrawShares).toFixed(2)} USDC (1 share = 1 USDC)
                   </p>
                 )}
               </motion.div>

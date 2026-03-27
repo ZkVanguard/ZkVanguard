@@ -20,18 +20,17 @@ export const UserPositionCard = memo(function UserPositionCard({
 
   const valueDisplay = useMemo(() => {
     if (isSui) {
-      const suiVal = userPosition.valueSUI ?? userPosition.shares;
-      return `${suiVal.toLocaleString(undefined, { maximumFractionDigits: 4 })} SUI`;
+      // USDC pool: 1 share = 1 USDC, show value in USD
+      const usdcVal = Number(userPosition.valueUSD) || Number(userPosition.shares) || 0;
+      return formatUSD(usdcVal);
     }
     return formatUSD(userPosition.valueUSD);
-  }, [isSui, userPosition.valueSUI, userPosition.shares, userPosition.valueUSD]);
+  }, [isSui, userPosition.valueUSD, userPosition.shares]);
 
   const valueSubtext = useMemo(() => {
-    if (isSui && userPosition.valueUSD > 0) {
-      return `Current Value (~${formatUSD(userPosition.valueUSD)})`;
-    }
+    if (isSui) return 'Current Value (USDC)';
     return 'Current Value';
-  }, [isSui, userPosition.valueUSD]);
+  }, [isSui]);
 
   const txCount = (userPosition.depositCount || 0) + (userPosition.withdrawalCount || 0);
 

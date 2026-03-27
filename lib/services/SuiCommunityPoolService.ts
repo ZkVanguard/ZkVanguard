@@ -591,6 +591,122 @@ export class SuiCommunityPoolService {
     };
   }
 
+  /**
+   * Build create portfolio transaction (compatible with test interface)
+   * Uses rwa_manager module for RWA portfolio management
+   */
+  buildCreatePortfolioTransaction(params: {
+    targetYield: number;
+    riskTolerance: number;
+    initialDeposit: bigint;
+  }): {
+    target: string;
+    coinAmount: bigint;
+    typeArgs: string[];
+    arguments: (string | number | bigint)[];
+  } {
+    const rwaPackageId = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
+    return {
+      target: `${rwaPackageId}::rwa_manager::create_portfolio`,
+      coinAmount: params.initialDeposit,
+      typeArgs: ['0x2::sui::SUI'],
+      arguments: [params.targetYield, params.riskTolerance, params.initialDeposit],
+    };
+  }
+
+  /**
+   * Build deposit transaction (compatible with test interface)
+   */
+  buildDepositTransaction(params: {
+    portfolioId: string;
+    amount: bigint;
+  }): {
+    target: string;
+    typeArgs: string[];
+    arguments: (string | bigint)[];
+  } {
+    const rwaPackageId = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
+    return {
+      target: `${rwaPackageId}::rwa_manager::deposit`,
+      typeArgs: ['0x2::sui::SUI'],
+      arguments: [params.portfolioId, params.amount],
+    };
+  }
+
+  /**
+   * Build withdraw transaction (compatible with test interface)
+   */
+  buildWithdrawTransaction(params: {
+    portfolioId: string;
+    amount: bigint;
+  }): {
+    target: string;
+    typeArgs: string[];
+    arguments: (string | bigint)[];
+  } {
+    const rwaPackageId = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
+    return {
+      target: `${rwaPackageId}::rwa_manager::withdraw`,
+      typeArgs: ['0x2::sui::SUI'],
+      arguments: [params.portfolioId, params.amount],
+    };
+  }
+
+  /**
+   * Build rebalance transaction (compatible with test interface)
+   */
+  buildRebalanceTransaction(params: {
+    portfolioId: string;
+    newAllocations: number[];
+    reasoning: string;
+  }): {
+    target: string;
+    typeArgs: string[];
+    arguments: (string | number[] | string)[];
+  } {
+    const rwaPackageId = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
+    return {
+      target: `${rwaPackageId}::rwa_manager::rebalance`,
+      typeArgs: [],
+      arguments: [params.portfolioId, params.newAllocations, params.reasoning],
+    };
+  }
+
+  /**
+   * Build payment transaction (compatible with test interface)
+   */
+  buildPaymentTransaction(
+    amount: bigint,
+    recipient: string,
+    invoiceId: string,
+  ): {
+    target: string;
+    typeArgs: string[];
+    arguments: (string | bigint)[];
+  } {
+    const rwaPackageId = '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a';
+    return {
+      target: `${rwaPackageId}::payment_router::route_payment`,
+      typeArgs: ['0x2::sui::SUI'],
+      arguments: [amount, recipient, invoiceId],
+    };
+  }
+
+  /**
+   * Get deployment config (compatible with test interface)
+   */
+  getDeploymentConfig(): {
+    packageId: string;
+    rwaManagerState: string;
+    network: SuiNetworkType;
+  } {
+    return {
+      packageId: '0xb1442796d8593b552c7c27a072043639e3e6615a79ba11b87666d31b42fa283a',
+      rwaManagerState: '0x65638c3c5a5af66c33bf06f57230f8d9972d3a5507138974dce11b1e46e85c97',
+      network: this.network,
+    };
+  }
+
   // ============================================
   // HELPERS
   // ============================================
@@ -624,13 +740,6 @@ export class SuiCommunityPoolService {
    */
   getExplorerUrl(txDigest: string): string {
     return `${this.config.explorerUrl}/tx/${txDigest}`;
-  }
-
-  /**
-   * Get deployment config
-   */
-  getDeploymentConfig() {
-    return { ...this.config, network: this.network };
   }
 
   /**

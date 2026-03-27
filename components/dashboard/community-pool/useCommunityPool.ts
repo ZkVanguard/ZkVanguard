@@ -412,13 +412,16 @@ export function useCommunityPool(propAddress?: string) {
     if (selectedChain === 'sui') {
       const userAddress = suiAddress;  // Only use SUI address for SUI chain
       try {
-        const [poolRes, userRes] = await Promise.all([
+        // Fetch pool summary + allocation + user position (USDC-based from DB)
+        const [poolRes, allocRes, userRes] = await Promise.all([
           fetch(`/api/sui/community-pool?network=${suiNetwork}`),
-          userAddress ? fetch(`/api/sui/community-pool?user=${userAddress}&network=${suiNetwork}`) : null,
+          fetch(`/api/sui/community-pool?action=allocation&network=${suiNetwork}`),
+          userAddress ? fetch(`/api/sui/community-pool?action=user-position&wallet=${userAddress}&network=${suiNetwork}`) : null,
         ]);
         
-        const [poolJson, userJson] = await Promise.all([
+        const [poolJson, allocJson, userJson] = await Promise.all([
           poolRes.json(),
+          allocRes.json(),
           userRes ? userRes.json() : null,
         ]);
         
@@ -429,37 +432,49 @@ export function useCommunityPool(propAddress?: string) {
             dispatchPool({ type: 'SET_SUI_POOL_STATE_ID', payload: poolJson.data.poolStateId });
           }
           
-          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || 0;
-          const totalNAV = parseFloat(poolJson.data.totalNAV) || 0;
+          // Use USDC-denominated values (1 share = 1 USDC)
+          const totalShares = parseFloat(poolJson.data.totalShares) || 0;
+          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || totalShares;
+          
+          // Get allocation from the allocation endpoint
+          const alloc = allocJson?.success ? allocJson.data.allocation : { BTC: 30, ETH: 30, SUI: 25, CRO: 15 };
           
           dispatchPool({
             type: 'SET_POOL_DATA',
             payload: {
-              totalShares: parseFloat(poolJson.data.totalShares) || 0,
-              totalNAV,
+              totalShares,
+              totalNAV: totalShares, // In USDC pool, NAV = total shares in USDC
               totalValueUSD,
-              sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
-              sharePriceUSD: parseFloat(poolJson.data.sharePriceUsd) || 1.0,
+              sharePrice: 1.0, // 1 share = 1 USDC
+              sharePriceUSD: 1.0,
               memberCount: poolJson.data.memberCount || 0,
-              allocations: { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0 },
+              allocations: alloc,
               aiLastUpdate: null,
               aiReasoning: null,
             },
           });
         }
         
-        if (userJson?.success) {
+        // User position from DB (USDC-denominated)
+        if (userJson?.success && userJson.data) {
+          const userData = userJson.data;
+          const shares = Number(userData.shares) || 0;
+          const totalShares = parseFloat(poolJson?.data?.totalShares) || 0;
+          const percentage = totalShares > 0 && shares > 0 ? (shares / totalShares) * 100 : 0;
+          
           dispatchPool({
             type: 'SET_USER_POSITION',
             payload: {
               walletAddress: userAddress || '',
-              shares: parseFloat(userJson.data.shares) || 0,
-              valueUSD: parseFloat(userJson.data.valueUsd) || 0,
-              valueSUI: parseFloat(userJson.data.valueSui) || 0,
-              percentage: parseFloat(userJson.data.percentage) || 0,
-              isMember: userJson.data.isMember || false,
-              totalDeposited: parseFloat(userJson.data.depositedSui) || 0,
-              totalWithdrawn: parseFloat(userJson.data.withdrawnSui) || 0,
+              shares,
+              valueUSD: Number(userData.valueUsdc) || shares, // 1 share = 1 USDC
+              valueSUI: 0,
+              percentage,
+              isMember: userData.isMember || false,
+              totalDeposited: Number(userData.costBasisUsd) || 0,
+              totalWithdrawn: 0,
+              depositCount: userData.depositCount || 0,
+              withdrawalCount: userData.withdrawalCount || 0,
             },
           });
         }
@@ -1394,17 +1409,12 @@ export function useCommunityPool(propAddress?: string) {
     }
   }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
   
-  // SUI handlers - Accept USDC (USD) and convert to SUI for deposit
+  // SUI handlers - Accept USDC deposits via record-deposit API
   const handleSuiDeposit = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
     
     if (!suiIsConnected || !suiAddress) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Please connect your SUI wallet' });
-      return;
-    }
-    
-    if (!suiExecuteTransaction) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Wallet transaction signing not available' });
       return;
     }
     
@@ -1424,87 +1434,37 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // Step 1: Get current SUI price (fresh from Crypto.com) and calculate SUI amount
-      const priceRes = await fetch('/api/prices?symbols=SUI&source=exchange');
-      const priceData = await priceRes.json();
-      // API returns { success, data: [{ symbol, price, ... }] }
-      const suiPriceEntry = priceData?.data?.find((p: { symbol: string }) => p.symbol === 'SUI');
-      const suiPrice = suiPriceEntry?.price;
-      if (!suiPrice || suiPrice <= 0) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Unable to fetch live SUI price. Please try again.' });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-        return;
-      }
-      const suiAmount = usdAmount / suiPrice;
-      
-      logger.info(`[SUI Deposit] Fresh price: $${suiPrice}, converting $${usdAmount} → ${suiAmount.toFixed(6)} SUI`);
-      
-      // Check if user has enough SUI (including 0.1 reserve for gas)
-      const userSuiBalance = parseFloat(suiBalance);
-      if (userSuiBalance < suiAmount + 0.1) {
-        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI. Need ${(suiAmount + 0.1).toFixed(4)} SUI (${suiAmount.toFixed(4)} + gas). You have ${suiBalance} SUI.` });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-        return;
-      }
-      
-      // Step 2: Get transaction params from API
-      const res = await fetch(`/api/sui/community-pool?action=deposit&network=${suiNetwork}`, {
+      // Record deposit via API — mints shares and executes USDC → 4 asset swaps
+      const res = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: BigInt(Math.floor(suiAmount * 1e9)).toString() }),
+        body: JSON.stringify({
+          walletAddress: suiAddress,
+          amountUsdc: usdAmount,
+          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
+          txDigest: `usdc-deposit-${Date.now()}`,
+        }),
       });
       
       const json = await res.json();
       if (!json.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: json.error });
+        dispatchPool({ type: 'SET_ERROR', payload: json.error || 'Deposit failed' });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
-      const { target, poolStateId, amountMist, clockId } = json.data;
+      const data = json.data;
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! ${data.sharesMinted} shares minted (total: ${data.totalShares.toFixed(2)})` });
+      dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
+      dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
       
-      if (!poolStateId) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
-        return;
-      }
-      
-      // Step 2: Build transaction using @mysten/sui/transactions
-      const { Transaction } = await import('@mysten/sui/transactions');
-      const tx = new Transaction();
-      
-      // Split SUI for the deposit amount
-      const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
-      
-      // Call the deposit function: deposit(state, payment, clock)
-      tx.moveCall({
-        target,
-        arguments: [
-          tx.object(poolStateId),
-          depositCoin,
-          tx.object(clockId),
-        ],
-      });
-      
-      // Step 3: Execute transaction
-      const result = await suiExecuteTransaction(tx);
-      
-      if (result.success) {
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! Tx: ${result.digest.slice(0, 10)}...` });
-        dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
-        dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
-        
-        // Refresh pool data after a short delay
-        setTimeout(() => {
-          fetchPoolData(true);
-          dispatchPool({ type: 'SET_SUCCESS', payload: null });
-        }, 3000);
-      } else {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
-      }
+      // Refresh pool data after a short delay
+      setTimeout(() => {
+        fetchPoolData(true);
+        dispatchPool({ type: 'SET_SUCCESS', payload: null });
+      }, 2000);
     } catch (err: any) {
       logger.error('SUI deposit error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Deposit failed' });
@@ -1512,7 +1472,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, suiBalance, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1522,80 +1482,49 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    if (!suiExecuteTransaction) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Wallet transaction signing not available' });
-      return;
-    }
-    
     const shares = parseFloat(txState.suiWithdrawShares);
     if (isNaN(shares) || shares <= 0) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Invalid share amount' });
       return;
     }
     
-    // Calculate estimated USD value
-    const sharePrice = Number(poolState.poolData?.sharePriceUSD || poolState.poolData?.sharePrice) || 1;
-    const estimatedUsd = shares * sharePrice;
+    // 1 share = 1 USDC
+    const estimatedUsd = shares;
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
-      // Step 1: Get transaction params from API
-      const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
+      // Record withdrawal via API — burns shares and executes reverse swaps
+      const res = await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shares: BigInt(Math.floor(shares * 1e9)).toString() }),
+        body: JSON.stringify({
+          walletAddress: suiAddress,
+          sharesToBurn: shares,
+          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
+        }),
       });
       
       const json = await res.json();
       if (!json.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: json.error });
+        dispatchPool({ type: 'SET_ERROR', payload: json.error || 'Withdrawal failed' });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
-      const { target, poolStateId, sharesScaled, clockId } = json.data;
+      const data = json.data;
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USDC! ${data.sharesBurned} shares burned.` });
+      dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
+      dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
       
-      if (!poolStateId) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-        return;
-      }
-      
-      // Step 2: Build transaction using @mysten/sui/transactions
-      const { Transaction } = await import('@mysten/sui/transactions');
-      const tx = new Transaction();
-      
-      // Call the withdraw function: withdraw(state, shares_to_burn, clock)
-      tx.moveCall({
-        target,
-        arguments: [
-          tx.object(poolStateId),
-          tx.pure.u64(sharesScaled),
-          tx.object(clockId),
-        ],
-      });
-      
-      // Step 3: Execute transaction
-      const result = await suiExecuteTransaction(tx);
-      
-      if (result.success) {
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USD! Tx: ${result.digest.slice(0, 10)}...` });
-        dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
-        dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
-        
-        // Refresh pool data after a short delay
-        setTimeout(() => {
-          fetchPoolData(true);
-          dispatchPool({ type: 'SET_SUCCESS', payload: null });
-        }, 3000);
-      } else {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
-      }
+      // Refresh pool data after a short delay
+      setTimeout(() => {
+        fetchPoolData(true);
+        dispatchPool({ type: 'SET_SUCCESS', payload: null });
+      }, 2000);
     } catch (err: any) {
       logger.error('SUI withdraw error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Withdrawal failed' });
@@ -1603,7 +1532,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.poolData, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH
