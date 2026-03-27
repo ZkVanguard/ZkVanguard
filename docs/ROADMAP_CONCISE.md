@@ -33,7 +33,7 @@
 
 | Chain | Highlight |
 |-------|-----------|
-| Arbitrum One | GMX perps · LayerZero bridge from Cronos |
+| Hedera | DeFi integration · Cross-chain bridge from Cronos |
 | Base | Aerodrome LP hedging · Coinbase Smart Wallet |
 | SUI Mainnet | Move contracts · ZK verifier · native sponsored txs |
 | All | Unified dashboard · cross-chain VaR |

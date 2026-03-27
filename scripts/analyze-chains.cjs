@@ -27,14 +27,14 @@ const CHAINS = {
     status: 'live',
     explorer: 'https://explorer.cronos.org/testnet'
   },
-  arbitrum: {
-    name: 'Arbitrum Sepolia',
-    chainId: 421614,
-    rpc: 'https://sepolia-rollup.arbitrum.io/rpc',
-    pool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-    usdc: '0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1',
+  hedera: {
+    name: 'Hedera Testnet',
+    chainId: 296,
+    rpc: 'https://testnet.hashio.io/api',
+    pool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6',
+    usdc: '0x0000000000000000000000000000000000000000',
     status: 'testing',
-    explorer: 'https://sepolia.arbiscan.io'
+    explorer: 'https://hashscan.io/testnet'
   },
   sui: {
     name: 'SUI Testnet',
@@ -97,22 +97,22 @@ async function analyzeChains() {
     console.log(`  ❌ Error: ${e.message}`);
   }
 
-  // 2. Check Arbitrum Sepolia
+  // 2. Check Hedera Testnet
   console.log('\n═══════════════════════════════════════════════════════════════════');
-  console.log('  2. ARBITRUM SEPOLIA (Chain ID: 421614) - TESTING');
+  console.log('  2. HEDERA TESTNET (Chain ID: 296) - TESTING');
   console.log('═══════════════════════════════════════════════════════════════════');
   
-  const arbProvider = new ethers.JsonRpcProvider(CHAINS.arbitrum.rpc);
+  const hederaProvider = new ethers.JsonRpcProvider(CHAINS.hedera.rpc);
   
   try {
-    const code = await arbProvider.getCode(CHAINS.arbitrum.pool);
-    console.log(`  Contract: ${CHAINS.arbitrum.pool}`);
+    const code = await hederaProvider.getCode(CHAINS.hedera.pool);
+    console.log(`  Contract: ${CHAINS.hedera.pool}`);
     console.log(`  Status: ${code !== '0x' ? '✅ DEPLOYED' : '❌ NOT DEPLOYED'}`);
     
     if (code !== '0x') {
       try {
-        const arbPool = new ethers.Contract(CHAINS.arbitrum.pool, POOL_ABI, arbProvider);
-        const shares = await arbPool.totalShares();
+        const hederaPool = new ethers.Contract(CHAINS.hedera.pool, POOL_ABI, hederaProvider);
+        const shares = await hederaPool.totalShares();
         console.log(`  Total Shares: ${ethers.formatUnits(shares, 18)}`);
       } catch (e) {
         console.log(`  ⚠️  Contract has different ABI (may be older version)`);
@@ -171,7 +171,7 @@ async function analyzeChains() {
   console.log(`    - Member count shows 30 raw instead of 4 unique in some places`);
   console.log(`  `);
   console.log(`  🟡 WARNINGS:`);
-  console.log(`    - Arbitrum pool has 200 shares but API doesn't read from it`);
+  console.log(`    - Hedera pool needs USDT and Pyth oracle configured`);
   console.log(`    - SUI pool verification not integrated`);
   console.log(`    - NAV history member_count may be inaccurate (raw vs deduplicated)`);
   console.log(`  `);

@@ -178,8 +178,8 @@ After validating our platform on Cronos, SUI is our **second blockchain** before
 With proven cross-chain architecture from Cronos→SUI expansion, we now expand to Ethereum Layer 2 networks. This phase targets EVM-compatible chains to leverage existing smart contracts.
 
 ### Ethereum L2 Integrations
-- [ ] **Arbitrum** (First L2)
-  - Deploy smart contracts on Arbitrum One
+- [ ] **Hedera** (Hashgraph L1)
+  - Deploy smart contracts on Hedera
   - VVS Finance V3 integration for concentrated liquidity
   - VVS Finance V2 integration for swaps
   - GMX perpetuals integration
@@ -191,7 +191,7 @@ With proven cross-chain architecture from Cronos→SUI expansion, we now expand 
   - Coinbase L2 support
   - Aerodrome DEX integration
 - [ ] Unified multi-chain dashboard
-  - Portfolio aggregation across all 5 chains (Cronos, SUI, Arbitrum, Optimism, Base)
+  - Portfolio aggregation across all 5 chains (Cronos, SUI, Hedera, Optimism, Base)
   - Unified risk metrics across all chains
   - Gas optimization per network
   - Cross-chain rebalancing strategies
@@ -423,7 +423,7 @@ Interested in shaping the future of ZkVanguard? Here's how you can help:
 Vote on what we should build next:
 - [ ] Mobile app
 - [ ] Additional chains beyond roadmap (Polygon, Avalanche, Solana)
-  - Note: Primary expansion path is Cronos → SUI → Arbitrum → Optimism → Base
+  - Note: Primary expansion path is Cronos → SUI → Hedera → Optimism → Base
 - [ ] Social trading features
 - [ ] Advanced charting tools
 - [ ] Voice/chat support with AI agents

@@ -23,7 +23,7 @@ interface StoredWallet {
   passkeyId?: string;
 }
 
-const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'arbitrum-mainnet'];
+const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'hedera-mainnet'];
 
 describe("WDK Wallet Security Recipe", () => {
     

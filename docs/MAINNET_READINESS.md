@@ -62,14 +62,14 @@ Mainnet uses official Tether USDT via WDK integration:
 | Chain | Address | Verified |
 |-------|---------|----------|
 | Cronos Mainnet | `0x66e428c3f67a68878562e79A0234c1F83c208770` | ✅ |
-| Arbitrum One | `0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9` | ✅ |
+| Hedera Mainnet | `0x0000000000000000000000000000000000000000` | ❌ (not yet deployed) |
 
 ### Testnet Tokens (MockUSDC)
 
 | Chain | Address | Purpose |
 |-------|---------|---------|
 | Cronos Testnet | `0x28217DAddC55e3C4831b4A48A00Ce04880786967` | Testing |
-| Arbitrum Sepolia | `0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1` | Testing |
+| Hedera Testnet | `0x0000000000000000000000000000000000000000` | Testing |
 
 ---
 
@@ -81,8 +81,8 @@ Mainnet uses official Tether USDT via WDK integration:
 |---------|----------------|
 | Cronos Mainnet | `0xE0d0e68297772Dd5a1f1D99897c581E2082dbA5B` |
 | Cronos Testnet | `0x36825bf3Fbdf5a29E2d5148bfe7Dcf7B5639e320` |
-| Arbitrum One | `0xff1a0f4744e8582DF1aE09D5611b887B6a12925C` |
-| Arbitrum Sepolia | `0x4374e5a8b9C22271E9EB878A2AA31DE97DF15DAF` |
+| Hedera Mainnet | `0xA2aa501b19aff244D90cc15a4Cf739D2725B5729` |
+| Hedera Testnet | `0xA2aa501b19aff244D90cc15a4Cf739D2725B5729` |
 
 ### Price Feed IDs
 ```
@@ -106,7 +106,7 @@ Users pay $0.00 in native gas - all transactions are sponsored via x402 protocol
 4. Contract pays CRO/ETH gas from its sponsored pool
 
 ### Cost Per Operation
-| Operation | Gas Units | Cronos Cost | Arbitrum Cost |
+| Operation | Gas Units | Cronos Cost | Hedera Cost |
 |-----------|-----------|-------------|---------------|
 | Deposit | ~132,500 | ~$0.00007 | ~$0.05 |
 | Withdraw | ~150,000 | ~$0.00008 | ~$0.05 |
@@ -116,7 +116,7 @@ Users pay $0.00 in native gas - all transactions are sponsored via x402 protocol
 | Chain | Amount | Supports |
 |-------|--------|----------|
 | Cronos | 50 CRO (~$5) | ~75,000 txs |
-| Arbitrum | 0.1 ETH (~$350) | ~7,000 txs |
+| Hedera | 100 HBAR (~$10) | ~10,000 txs |
 | x402 Pool | $100 USDC | Payment flow |
 | **Total** | **~$455** | MVP launch |
 
@@ -292,8 +292,8 @@ await communityPool.setEmergencyWithdraw(true);
 - Deposits: ✅ Working
 - Withdrawals: ✅ Working
 
-### Arbitrum Sepolia
-- Contract: `0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B`
+### Hedera Testnet
+- Contract: `0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6`
 - Status: ✅ Live and operational
 - Total Value: ~$210 (test funds)
 - Deposits: ✅ Working

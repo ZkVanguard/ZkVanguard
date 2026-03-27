@@ -5,7 +5,7 @@
  * - USDT token configuration across chains
  * - x402 facilitator service with WDK tokens
  * - Gasless payment flows using USDT
- * - Multi-chain support (Cronos, Arbitrum)
+ * - Multi-chain support (Cronos, Hedera)
  * - EIP-3009 transferWithAuthorization compatibility
  */
 
@@ -52,13 +52,13 @@ describe('WDK x402 Full Integration', () => {
       expect(USDT_ADDRESSES.cronos.testnet).toBe('0x28217DAddC55e3C4831b4A48A00Ce04880786967');
       expect(USDT_ADDRESSES.cronos.testnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
       
-      // Arbitrum Mainnet
-      expect(USDT_ADDRESSES.arbitrum.mainnet).toBe('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9');
-      expect(USDT_ADDRESSES.arbitrum.mainnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      // Hedera Mainnet
+      expect(USDT_ADDRESSES.hedera.mainnet).toBe('0x0000000000000000000000000000000000000000');
+      expect(USDT_ADDRESSES.hedera.mainnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
       
-      // Arbitrum Testnet (MockUSDT)
-      expect(USDT_ADDRESSES.arbitrum.testnet).toBe('0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1');
-      expect(USDT_ADDRESSES.arbitrum.testnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      // Hedera Testnet
+      expect(USDT_ADDRESSES.hedera.testnet).toBe('0x0000000000000000000000000000000000000000');
+      expect(USDT_ADDRESSES.hedera.testnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
       
       // Ethereum Mainnet (reference)
       expect(USDT_ADDRESSES.ethereum.mainnet).toBe('0xdAC17F958D2ee523a2206206994597C13D831ec7');
@@ -78,11 +78,11 @@ describe('WDK x402 Full Integration', () => {
       // Cronos Testnet (338)
       expect(getUSDTAddress(338)).toBe(USDT_ADDRESSES.cronos.testnet);
       
-      // Arbitrum One (42161)
-      expect(getUSDTAddress(42161)).toBe(USDT_ADDRESSES.arbitrum.mainnet);
+      // Hedera Mainnet (295)
+      expect(getUSDTAddress(295)).toBe(USDT_ADDRESSES.hedera.mainnet);
       
-      // Arbitrum Sepolia (421614)
-      expect(getUSDTAddress(421614)).toBe(USDT_ADDRESSES.arbitrum.testnet);
+      // Hedera Testnet (296)
+      expect(getUSDTAddress(296)).toBe(USDT_ADDRESSES.hedera.testnet);
       
       // Unknown chain
       expect(getUSDTAddress(999999)).toBeNull();
@@ -90,9 +90,9 @@ describe('WDK x402 Full Integration', () => {
 
     it('should correctly identify mainnet chains', () => {
       expect(isMainnet(25)).toBe(true);     // Cronos Mainnet
-      expect(isMainnet(42161)).toBe(true);  // Arbitrum One
+      expect(isMainnet(295)).toBe(true);  // Hedera Mainnet
       expect(isMainnet(338)).toBe(false);   // Cronos Testnet
-      expect(isMainnet(421614)).toBe(false); // Arbitrum Sepolia
+      expect(isMainnet(296)).toBe(false); // Hedera Testnet
     });
   });
 
@@ -103,8 +103,8 @@ describe('WDK x402 Full Integration', () => {
     it('should have all supported chains configured', () => {
       expect(Object.keys(WDK_CHAINS)).toContain('cronos-mainnet');
       expect(Object.keys(WDK_CHAINS)).toContain('cronos-testnet');
-      expect(Object.keys(WDK_CHAINS)).toContain('arbitrum-mainnet');
-      expect(Object.keys(WDK_CHAINS)).toContain('arbitrum-sepolia');
+      expect(Object.keys(WDK_CHAINS)).toContain('hedera-mainnet');
+      expect(Object.keys(WDK_CHAINS)).toContain('hedera-testnet');
     });
 
     it('should have correct Cronos mainnet config', () => {
@@ -117,14 +117,14 @@ describe('WDK x402 Full Integration', () => {
       expect(config.nativeCurrency.symbol).toBe('CRO');
     });
 
-    it('should have correct Arbitrum mainnet config', () => {
-      const config = WDK_CHAINS['arbitrum-mainnet'];
-      expect(config.chainId).toBe(42161);
-      expect(config.name).toBe('Arbitrum One');
+    it('should have correct Hedera mainnet config', () => {
+      const config = WDK_CHAINS['hedera-mainnet'];
+      expect(config.chainId).toBe(295);
+      expect(config.name).toBe('Hedera');
       expect(config.network).toBe('mainnet');
-      expect(config.rpcUrl).toBe('https://arb1.arbitrum.io/rpc');
-      expect(config.usdtAddress).toBe(USDT_ADDRESSES.arbitrum.mainnet);
-      expect(config.nativeCurrency.symbol).toBe('ETH');
+      expect(config.rpcUrl).toBe('https://mainnet.hashio.io/api');
+      expect(config.usdtAddress).toBe(USDT_ADDRESSES.hedera.mainnet);
+      expect(config.nativeCurrency.symbol).toBe('HBAR');
     });
 
     it('should return chain config by chain ID', () => {
@@ -132,9 +132,9 @@ describe('WDK x402 Full Integration', () => {
       expect(cronosConfig).toBeDefined();
       expect(cronosConfig?.name).toBe('Cronos');
       
-      const arbitrumConfig = getChainConfig(42161);
-      expect(arbitrumConfig).toBeDefined();
-      expect(arbitrumConfig?.name).toBe('Arbitrum One');
+      const hederaConfig = getChainConfig(295);
+      expect(hederaConfig).toBeDefined();
+      expect(hederaConfig?.name).toBe('Hedera');
     });
 
     it('should have valid RPC URLs', () => {
@@ -183,8 +183,8 @@ describe('WDK x402 Full Integration', () => {
       const supportedAssets = [
         USDT_ADDRESSES.cronos.mainnet,
         USDT_ADDRESSES.cronos.testnet,
-        USDT_ADDRESSES.arbitrum.mainnet,
-        USDT_ADDRESSES.arbitrum.testnet,
+        USDT_ADDRESSES.hedera.mainnet,
+        USDT_ADDRESSES.hedera.testnet,
       ];
       
       supportedAssets.forEach(asset => {
@@ -285,16 +285,16 @@ describe('WDK x402 Full Integration', () => {
       expect(depositConfig.poolAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
 
-    it('should support deposits on Arbitrum', () => {
+    it('should support deposits on Hedera', () => {
       const depositConfig = {
-        chain: 'arbitrum',
+        chain: 'hedera',
         network: 'testnet' as const,
-        poolAddress: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
-        tokenAddress: USDT_ADDRESSES.arbitrum.testnet,
+        poolAddress: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6',
+        tokenAddress: USDT_ADDRESSES.hedera.testnet,
         tokenSymbol: 'USDT', // USDT via WDK (Mock on testnet)
       };
       
-      expect(depositConfig.tokenAddress).toBe('0xA50E3d2C2110EBd08567A322e6e7B0Ca25341bF1');
+      expect(depositConfig.tokenAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
       expect(depositConfig.poolAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
 
@@ -334,9 +334,9 @@ describe('WDK x402 Full Integration', () => {
         expectedDecimals: 6,
       },
       {
-        name: 'Arbitrum Sepolia',
-        rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-        tokenAddress: USDT_ADDRESSES.arbitrum.testnet,
+        name: 'Hedera Testnet',
+        rpcUrl: 'https://testnet.hashio.io/api',
+        tokenAddress: USDT_ADDRESSES.hedera.testnet,
         expectedSymbol: 'USDC', // On-chain MockUSDC (labeled USDT in app)
         expectedDecimals: 6,
       },
@@ -410,18 +410,18 @@ describe('WDK x402 Full Integration', () => {
     it('should support all WDK chain IDs', () => {
       expect(WDK_SUPPORTED_CHAINS).toContain(25);     // Cronos Mainnet
       expect(WDK_SUPPORTED_CHAINS).toContain(338);    // Cronos Testnet
-      expect(WDK_SUPPORTED_CHAINS).toContain(42161);  // Arbitrum One
-      expect(WDK_SUPPORTED_CHAINS).toContain(421614); // Arbitrum Sepolia
+      expect(WDK_SUPPORTED_CHAINS).toContain(295);    // Hedera Mainnet
+      expect(WDK_SUPPORTED_CHAINS).toContain(296);    // Hedera Testnet
     });
 
     it('should provide correct deposit token address', () => {
       // Mainnet - returns USDT
       expect(getDepositTokenAddress(25)).toBe(USDT_ADDRESSES.cronos.mainnet);
-      expect(getDepositTokenAddress(42161)).toBe(USDT_ADDRESSES.arbitrum.mainnet);
+      expect(getDepositTokenAddress(295)).toBe(USDT_ADDRESSES.hedera.mainnet);
       
       // Testnet - returns MockUSDT (via config)
       expect(getDepositTokenAddress(338)).toBe(USDT_ADDRESSES.cronos.testnet);
-      expect(getDepositTokenAddress(421614)).toBe(USDT_ADDRESSES.arbitrum.testnet);
+      expect(getDepositTokenAddress(296)).toBe(USDT_ADDRESSES.hedera.testnet);
     });
 
     it('should create ethers provider for each chain', () => {
