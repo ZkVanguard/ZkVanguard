@@ -1439,10 +1439,12 @@ export function useCommunityPool(propAddress?: string) {
     const amountMicroUsdc = Math.floor(usdAmount * 1_000_000);
     
     // Contract config — use env vars with hardcoded testnet fallbacks
+    // NOTE: Do NOT use poolState.suiPoolStateId here — API may return the native
+    // SUI pool state (PoolState) rather than the USDC pool state (UsdcPoolState<T>),
+    // which causes a TypeMismatch error in the Move contract call.
     const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
       || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
-    const poolStateId = poolState.suiPoolStateId
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
+    const poolStateId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
       || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
       || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
     const usdcCoinType = suiNetwork === 'mainnet'
@@ -1560,7 +1562,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, poolState.suiPoolStateId, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1585,10 +1587,10 @@ export function useCommunityPool(propAddress?: string) {
     const sharesOnChain = Math.floor(shares * 1_000_000);
     const estimatedUsd = shares;
     
+    // NOTE: Do NOT use poolState.suiPoolStateId here — see deposit handler comment.
     const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
       || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
-    const poolStateId = poolState.suiPoolStateId
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
+    const poolStateId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
       || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
       || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
     const usdcCoinType = suiNetwork === 'mainnet'
@@ -1653,7 +1655,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.suiPoolStateId, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH

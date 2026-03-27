@@ -57,11 +57,13 @@ export const SUI_USDC_COIN_TYPE = {
 
 export const SUI_USDC_POOL_CONFIG = {
   testnet: {
-    packageId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '').trim(),
+    packageId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '').trim()
+      || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9',
     moduleName: 'community_pool_usdc',
     rpcUrl: process.env.SUI_TESTNET_RPC || 'https://fullnode.testnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/testnet',
-    poolStateId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || '').trim() || null as string | null,
+    poolStateId: (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || '').trim()
+      || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971' as string | null,
     usdcCoinType: SUI_USDC_COIN_TYPE.testnet,
     usdcDecimals: 6,
   },
