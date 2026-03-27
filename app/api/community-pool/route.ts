@@ -751,6 +751,25 @@ export async function GET(request: NextRequest) {
   try {
     // Get user's position
     if (userAddress) {
+      // SUI addresses (0x + 64 hex) passed to EVM chains → return empty early
+      if (/^0x[a-fA-F0-9]{64}$/.test(userAddress) && chainConfig.chainKey !== 'sui') {
+        return NextResponse.json({
+          success: true,
+          user: {
+            walletAddress: userAddress,
+            shares: 0,
+            valueUSD: 0,
+            percentage: 0,
+            isMember: false,
+            depositCount: 0,
+            withdrawalCount: 0,
+          },
+          pool: null,
+          source: 'none',
+          message: 'SUI wallet detected — use /api/sui/community-pool for SUI deposits',
+        });
+      }
+
       // Get transaction counts for user (used in multiple responses)
       const txCounts = await getUserTransactionCounts(userAddress);
       const chainKey = chainConfig.chainKey;
