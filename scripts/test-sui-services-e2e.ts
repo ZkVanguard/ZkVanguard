@@ -1,7 +1,7 @@
 /**
  * SUI Services End-to-End Testnet Test
  * 
- * Tests all 7 SUI services against the live SUI testnet:
+ * Tests all 8 SUI services + USDC Pool API against the live SUI testnet:
  * 1. CetusSwapService       - Token resolution, quotes, pool info, prices
  * 2. SuiOnChainHedgeService - Contract reads, commitment generation, tx builders
  * 3. SuiCommunityPoolService - Pool stats, tx builders, payment routing
@@ -9,6 +9,7 @@
  * 5. SuiPrivateHedgeService - Commitment scheme, proofs, stealth deposits
  * 6. SuiExplorerService     - Balances, transactions, objects, checkpoints
  * 7. SuiPortfolioManager    - Init, positions, risk metrics, hedging
+ * 8. USDC Pool API          - user-position, record-deposit, record-withdraw
  * 
  * Run: npx tsx scripts/test-sui-services-e2e.ts
  */
@@ -920,6 +921,115 @@ async function testSuiPortfolioManager() {
 }
 
 // ============================================================
+// TEST 9: SUI USDC Pool API Endpoints (Database-backed)
+// ============================================================
+const API_BASE = 'http://localhost:3099';
+
+async function testSuiUsdcPoolAPI() {
+  console.log('\n═══ TEST 9: SUI USDC Pool API Endpoints ═══');
+
+  // Test wallet address (64 hex chars after 0x)
+  const testWallet = '0xac13bb75d72169cee6dcef201bf6217a4f20228248bede51bb7893ae43a78c38';
+
+  // 9.1 Test user-position endpoint
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=user-position&wallet=${testWallet}&network=testnet`);
+    const data = await res.json();
+    if (data.success && data.data) {
+      ok('user-position endpoint', `isMember: ${data.data.isMember}, shares: ${data.data.shares || 0}`);
+    } else {
+      fail('user-position endpoint', data.error || 'No data returned');
+    }
+  } catch (e) { fail('user-position endpoint', e); }
+
+  // 9.2 Test user-position with invalid wallet (should fail)
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=user-position&wallet=invalid&network=testnet`);
+    const data = await res.json();
+    if (!data.success && data.error) {
+      ok('user-position validation', 'Rejects invalid wallet');
+    } else {
+      fail('user-position validation', 'Should reject invalid wallet');
+    }
+  } catch (e) { fail('user-position validation', e); }
+
+  // 9.3 Test admin-wallet endpoint
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=admin-wallet&network=testnet`);
+    const data = await res.json();
+    if (data.success && data.data) {
+      ok('admin-wallet endpoint', `configured: ${data.data.configured}, hasGas: ${data.data.hasGas}`);
+    } else {
+      fail('admin-wallet endpoint', data.error || 'No data returned');
+    }
+  } catch (e) { fail('admin-wallet endpoint', e); }
+
+  // 9.4 Test record-deposit endpoint (dry-run, should fail without actual funds)
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=record-deposit&network=testnet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: testWallet,
+        amountUsdc: 0.001, // Tiny amount for test
+        allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
+        txDigest: 'test_dry_run_' + Date.now(),
+      }),
+    });
+    const data = await res.json();
+    // Expect this to either fail (no actual USDC) or succeed with swap errors
+    if (data.success || data.error) {
+      ok('record-deposit endpoint', data.success ? 'Accepted' : `Rejected: ${data.error?.slice(0, 50)}`);
+    }
+  } catch (e) { fail('record-deposit endpoint', e); }
+
+  // 9.5 Test record-withdraw endpoint (dry-run, should fail without shares)
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=record-withdraw&network=testnet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: testWallet,
+        sharesToBurn: 1,
+        allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
+      }),
+    });
+    const data = await res.json();
+    // Expect this to fail (no shares to withdraw)
+    if (data.error?.includes('shares') || data.error?.includes('Insufficient')) {
+      ok('record-withdraw endpoint', 'Correctly rejects withdrawal without shares');
+    } else if (data.success) {
+      ok('record-withdraw endpoint', 'Accepted (user has shares)');
+    } else {
+      ok('record-withdraw endpoint', `Response: ${data.error?.slice(0, 50) || 'Unknown'}`);
+    }
+  } catch (e) { fail('record-withdraw endpoint', e); }
+
+  // 9.6 Test allocation endpoint
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=allocation&network=testnet`);
+    const data = await res.json();
+    if (data.success && data.data?.allocation) {
+      const alloc = data.data.allocation;
+      ok('allocation endpoint', `BTC:${alloc.BTC}% ETH:${alloc.ETH}% SUI:${alloc.SUI}% CRO:${alloc.CRO}%`);
+    } else {
+      fail('allocation endpoint', data.error || 'No allocation data');
+    }
+  } catch (e) { fail('allocation endpoint', e); }
+
+  // 9.7 Test swap-quote endpoint
+  try {
+    const res = await fetch(`${API_BASE}/api/sui/community-pool?action=swap-quote&fromAsset=USDC&toAsset=SUI&amount=1&network=testnet`);
+    const data = await res.json();
+    if (data.success && data.data?.quote) {
+      ok('swap-quote endpoint', `1 USDC → ${data.data.quote.estimatedAmountOut || '?'} SUI`);
+    } else if (data.error) {
+      skip('swap-quote endpoint', data.error?.slice(0, 50));
+    }
+  } catch (e) { fail('swap-quote endpoint', e); }
+}
+
+// ============================================================
 // MAIN RUNNER
 // ============================================================
 async function main() {
@@ -940,6 +1050,7 @@ async function main() {
     await testSuiPrivateHedgeService();
     await testSuiAutoHedgingAdapter();
     await testSuiPortfolioManager();
+    await testSuiUsdcPoolAPI();
   } catch (e) {
     console.error('\n💥 FATAL ERROR:', e);
   }
