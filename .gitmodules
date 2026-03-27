@@ -1,0 +1,3 @@
+[submodule "external/wdk-wallet-evm"]
+	path = external/wdk-wallet-evm
+	url = https://github.com/tetherto/wdk-wallet-evm.git
