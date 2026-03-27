@@ -293,6 +293,50 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // SUI addresses (0x + 64 hex) are incompatible with EVM hedging — return empty early
+    // This avoids unnecessary DB queries for wallets that can never have EVM hedges
+    if (/^0x[a-fA-F0-9]{64}$/.test(address)) {
+      return NextResponse.json({
+        success: true,
+        source: 'database',
+        chain: 'cronos-testnet',
+        chainId: 338,
+        contract: HEDGE_EXECUTOR,
+        summary: {
+          totalHedges: 0,
+          activeCount: 0,
+          closedCount: 0,
+          totalUnrealizedPnL: 0,
+          profitable: 0,
+          unprofitable: 0,
+          details: [],
+        },
+        allHedges: [],
+        protocolStats: null,
+        message: 'Hedging not available for SUI wallets — connect an EVM wallet for on-chain hedges',
+      });
+    }
+
+    // SUI addresses (0x + 64 hex) are incompatible with EVM hedging — return empty early
+    if (/^0x[a-fA-F0-9]{64}$/.test(address)) {
+      return NextResponse.json({
+        success: true,
+        source: 'database',
+        summary: {
+          totalHedges: 0,
+          activeCount: 0,
+          closedCount: 0,
+          totalUnrealizedPnL: 0,
+          profitable: 0,
+          unprofitable: 0,
+          details: [],
+        },
+        allHedges: [],
+        protocolStats: null,
+        message: 'Hedging not available for SUI wallets — connect an EVM wallet for on-chain hedges',
+      });
+    }
+
     // ═══════════════════════════════════════════════════════════
     // RESYNC: If forced or stale (>5 min), sync DB from on-chain RPC
     // ═══════════════════════════════════════════════════════════
