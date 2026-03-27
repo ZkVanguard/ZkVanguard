@@ -1409,12 +1409,17 @@ export function useCommunityPool(propAddress?: string) {
     }
   }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
   
-  // SUI handlers - Accept USDC deposits via record-deposit API
+  // SUI handlers - On-chain USDC deposit via wallet signing
   const handleSuiDeposit = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
     
     if (!suiIsConnected || !suiAddress) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Please connect your SUI wallet' });
+      return;
+    }
+    
+    if (!suiExecuteTransaction) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Wallet transaction signing not available' });
       return;
     }
     
@@ -1430,33 +1435,114 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
+    // USDC has 6 decimals
+    const amountMicroUsdc = Math.floor(usdAmount * 1_000_000);
+    
+    // Contract config from env (NEXT_PUBLIC_ vars are available client-side)
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
+    const poolStateId = poolState.suiPoolStateId
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
+    const usdcCoinType = suiNetwork === 'mainnet'
+      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
+    
+    if (!packageId || !poolStateId) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
+      return;
+    }
+    
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // Record deposit via API — mints shares and executes USDC → 4 asset swaps
-      const res = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
+      // 1. Fetch user's USDC coins from SUI RPC
+      const rpcUrl = suiNetwork === 'mainnet'
+        ? 'https://fullnode.mainnet.sui.io:443'
+        : 'https://fullnode.testnet.sui.io:443';
+      
+      const coinsRes = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'suix_getCoins',
+          params: [suiAddress, usdcCoinType, null, 50],
+        }),
+      });
+      const coinsJson = await coinsRes.json();
+      const coins: Array<{ coinObjectId: string; balance: string }> = coinsJson.result?.data || [];
+      
+      if (coins.length === 0) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'No USDC found in your wallet. Get testnet USDC first.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      // Check total USDC balance
+      const totalBalance = coins.reduce((sum, c) => sum + BigInt(c.balance), BigInt(0));
+      if (totalBalance < BigInt(amountMicroUsdc)) {
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDC. You have ${(Number(totalBalance) / 1e6).toFixed(2)} USDC.` });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      // 2. Build SUI Transaction
+      const { Transaction } = await import('@mysten/sui/transactions');
+      const tx = new Transaction();
+      
+      const primaryCoinRef = tx.object(coins[0].coinObjectId);
+      
+      // Merge all USDC coins into the primary one (if multiple)
+      if (coins.length > 1) {
+        tx.mergeCoins(primaryCoinRef, coins.slice(1).map(c => tx.object(c.coinObjectId)));
+      }
+      
+      // Split the exact deposit amount
+      const [depositCoin] = tx.splitCoins(primaryCoinRef, [amountMicroUsdc]);
+      
+      // Call the on-chain deposit function
+      tx.moveCall({
+        target: `${packageId}::community_pool_usdc::deposit`,
+        typeArguments: [usdcCoinType],
+        arguments: [
+          tx.object(poolStateId),   // &mut UsdcPoolState<T>
+          depositCoin,              // Coin<T> payment
+          tx.object('0x6'),         // &Clock
+        ],
+      });
+      
+      // 3. Sign & execute via wallet (triggers Slush/Sui Wallet popup)
+      const result = await suiExecuteTransaction(tx);
+      
+      if (!result.success) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      // 4. Record deposit in backend DB (for tracking, AI allocation, etc.)
+      const recordRes = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress: suiAddress,
           amountUsdc: usdAmount,
           allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-          txDigest: `usdc-deposit-${Date.now()}`,
+          txDigest: result.digest,
         }),
       });
+      const recordJson = await recordRes.json();
       
-      const json = await res.json();
-      if (!json.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: json.error || 'Deposit failed' });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-        return;
-      }
-      
-      const data = json.data;
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! ${data.sharesMinted} shares minted (total: ${data.totalShares.toFixed(2)})` });
+      const sharesMsg = recordJson.success && recordJson.data
+        ? `${recordJson.data.sharesMinted} shares minted`
+        : 'shares minted on-chain';
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! ${sharesMsg}. TX: ${result.digest.slice(0, 12)}...` });
       dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
       dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
       
@@ -1464,7 +1550,7 @@ export function useCommunityPool(propAddress?: string) {
       setTimeout(() => {
         fetchPoolData(true);
         dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       logger.error('SUI deposit error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Deposit failed' });
@@ -1472,7 +1558,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, poolState.suiPoolStateId, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1482,49 +1568,80 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
+    if (!suiExecuteTransaction) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Wallet transaction signing not available' });
+      return;
+    }
+    
     const shares = parseFloat(txState.suiWithdrawShares);
     if (isNaN(shares) || shares <= 0) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Invalid share amount' });
       return;
     }
     
-    // 1 share = 1 USDC
+    // Shares use 6 decimals on-chain (same as USDC)
+    const sharesOnChain = Math.floor(shares * 1_000_000);
     const estimatedUsd = shares;
+    
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
+    const poolStateId = poolState.suiPoolStateId
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
+    const usdcCoinType = suiNetwork === 'mainnet'
+      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
+    
+    if (!packageId || !poolStateId) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
+      return;
+    }
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
-      // Record withdrawal via API — burns shares and executes reverse swaps
-      const res = await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: suiAddress,
-          sharesToBurn: shares,
-          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-        }),
+      const { Transaction } = await import('@mysten/sui/transactions');
+      const tx = new Transaction();
+      
+      tx.moveCall({
+        target: `${packageId}::community_pool_usdc::withdraw`,
+        typeArguments: [usdcCoinType],
+        arguments: [
+          tx.object(poolStateId),        // &mut UsdcPoolState<T>
+          tx.pure.u64(sharesOnChain),    // shares_to_burn: u64
+          tx.object('0x6'),              // &Clock
+        ],
       });
       
-      const json = await res.json();
-      if (!json.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: json.error || 'Withdrawal failed' });
+      const result = await suiExecuteTransaction(tx);
+      
+      if (!result.success) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
-      const data = json.data;
+      // Record withdrawal in backend DB
+      await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: suiAddress,
+          sharesToBurn: shares,
+          txDigest: result.digest,
+        }),
+      });
+      
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-      dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USDC! ${data.sharesBurned} shares burned.` });
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USDC! TX: ${result.digest.slice(0, 12)}...` });
       dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
       dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
       
-      // Refresh pool data after a short delay
       setTimeout(() => {
         fetchPoolData(true);
         dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 2000);
+      }, 3000);
     } catch (err: any) {
       logger.error('SUI withdraw error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Withdrawal failed' });
@@ -1532,7 +1649,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.suiPoolStateId, fetchPoolData]);
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH
