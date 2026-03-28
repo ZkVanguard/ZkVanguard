@@ -169,38 +169,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       
       if (hasAllocations) {
         try {
-          // Get live prices and their 24h changes
+          // Get live prices for real portfolio valuation
           const [btcPrice, ethPrice] = await Promise.all([
             getMultiSourceValidatedPrice('BTC'),
             getMultiSourceValidatedPrice('ETH'),
           ]);
           
-          // Simulate portfolio performance based on 24h price changes
-          // Typical daily volatility: BTC ~2%, ETH ~3%, SUI ~4%, CRO ~3%
-          // Apply weighted returns to simulate real hedging performance
-          const btcChange = (btcPrice.price - (btcPrice.price / 1.001)) / btcPrice.price; // ~0.1% variation
-          const ethChange = (ethPrice.price - (ethPrice.price / 1.002)) / ethPrice.price; // ~0.2% variation
-          
-          // Random-ish variation based on time (deterministic per minute)
-          const minuteOfDay = new Date().getHours() * 60 + new Date().getMinutes();
-          const timeFactor = Math.sin(minuteOfDay / 100) * 0.001; // ±0.1% variation
-          
-          // Calculate weighted portfolio return (guard against undefined allocations)
+          // Use on-chain NAV as the authoritative value
+          // Apply allocation weights to on-chain data (no synthetic mock variations)
           const btcWeight = (poolStats.allocations?.BTC ?? 0) / 100;
           const ethWeight = (poolStats.allocations?.ETH ?? 0) / 100;
           const suiWeight = (poolStats.allocations?.SUI ?? 0) / 100;
           const croWeight = (poolStats.allocations?.CRO ?? 0) / 100;
           
-          // Synthetic return (small daily fluctuation based on market)
-          const portfolioReturn = (btcChange * btcWeight) + (ethChange * ethWeight) + 
-                                  (timeFactor * suiWeight) + (timeFactor * 0.5 * croWeight);
+          // Share price is authoritative from on-chain contract
+          syntheticSharePrice = baseSharePrice;
           
-          syntheticSharePrice = baseSharePrice * (1 + portfolioReturn);
-          
-          logger.info('[CommunityPool Cron] Calculated synthetic share price', {
+          logger.info('[CommunityPool Cron] NAV snapshot with live prices', {
             basePrice: baseSharePrice.toFixed(6),
             syntheticPrice: syntheticSharePrice.toFixed(6),
-            portfolioReturn: `${(portfolioReturn * 100).toFixed(4)}%`,
+            btcPrice: btcPrice.price.toFixed(2),
+            ethPrice: ethPrice.price.toFixed(2),
             allocations: { btcWeight, ethWeight, suiWeight, croWeight },
           });
         } catch (priceError) {
@@ -238,21 +227,26 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         
         // First pass: Get all on-chain members and sync to DB
         for (let i = 0; i < memberCount; i++) {
-          const addr = await poolContract.memberList(i);
-          const addrLower = addr.toLowerCase();
-          onChainAddresses.add(addrLower);
+          try {
+            const addr = await poolContract.memberList(i);
+            const addrLower = addr.toLowerCase();
+            onChainAddresses.add(addrLower);
           
-          const memberData = await poolContract.members(addr);
-          const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
+            const memberData = await poolContract.members(addr);
+            const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
           
-          await saveUserSharesToDb({
-            walletAddress: addrLower,
-            shares: shares,
-            costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
-            chain: 'cronos',
-          });
-          syncedMembers++;
-          if (shares > 0) activeMembers++;
+            await saveUserSharesToDb({
+              walletAddress: addrLower,
+              shares: shares,
+              costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+              chain: 'cronos',
+            });
+            syncedMembers++;
+            if (shares > 0) activeMembers++;
+          } catch (memberErr) {
+            logger.error(`[CommunityPool Cron] Failed to sync member ${i}`, { error: memberErr });
+            // Continue to next member — don't let one failure stop the whole sync
+          }
         }
         
         // Second pass: DELETE any DB entries not found on-chain (ghost cleanup)
@@ -260,7 +254,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         let deletedGhosts = 0;
         for (const entry of dbEntries) {
           const dbAddr = entry.wallet_address.toLowerCase();
-          if (!onChainAddresses.has(dbAddr) && Number(entry.shares) > 0) {
+          // Only delete cronos entries that aren't on-chain anymore
+          if (entry.chain === 'cronos' && !onChainAddresses.has(dbAddr)) {
             await deleteUserSharesFromDb(entry.wallet_address);
             logger.warn('[CommunityPool Cron] Deleted ghost DB entry', { address: dbAddr, hadShares: entry.shares });
             deletedGhosts++;
@@ -485,6 +480,33 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
                     BigInt(Math.round((aiData.recommendation.allocations?.SUI || poolStats.allocations.SUI) * 100)),
                     BigInt(Math.round((aiData.recommendation.allocations?.CRO || poolStats.allocations.CRO) * 100)),
                   ];
+                  
+                  // Validate allocation BPS sum matches expected total
+                  const totalBps = allocationsBps.reduce((sum, bps) => sum + bps, 0n);
+                  if (totalBps > 10000n) {
+                    throw new Error(`Allocation BPS sum ${totalBps} exceeds 10000 (100%)`);
+                  }
+                  
+                  // Validate individual allocations are non-negative
+                  for (let i = 0; i < allocationsBps.length; i++) {
+                    if (allocationsBps[i] < 0n) {
+                      throw new Error(`Negative allocation at index ${i}: ${allocationsBps[i]}`);
+                    }
+                  }
+                  
+                  // Check MIN_RESERVE_RATIO_BPS constraint
+                  try {
+                    const minReserveBps = await poolContract.MIN_RESERVE_RATIO_BPS();
+                    const maxAllocationBps = 10000n - BigInt(Number(minReserveBps));
+                    if (totalBps > maxAllocationBps) {
+                      throw new Error(`Allocation ${totalBps}bps exceeds max ${maxAllocationBps}bps (reserve ratio ${minReserveBps}bps)`);
+                    }
+                  } catch (reserveCheckErr) {
+                    if (reserveCheckErr instanceof Error && reserveCheckErr.message.includes('Allocation')) {
+                      throw reserveCheckErr; // Re-throw our validation error
+                    }
+                    logger.warn('[CommunityPool Cron] Could not read MIN_RESERVE_RATIO_BPS, proceeding with sum check only', { error: reserveCheckErr });
+                  }
                   
                   // Sign and execute via SecureAgentSigner with rate limiting
                   // signAndSend(contract, method, params, valueUSD, options?)

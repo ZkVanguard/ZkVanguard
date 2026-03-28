@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
 
       const { getUserSharesFromDb, getUserTransactionCounts } = await import('@/lib/db/community-pool');
       const userShares = await getUserSharesFromDb(wallet, 'sui');
-      const txCounts = await getUserTransactionCounts(wallet);
+      const txCounts = await getUserTransactionCounts(wallet, 'sui');
 
       if (!userShares) {
         return NextResponse.json({
