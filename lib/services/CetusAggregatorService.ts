@@ -485,7 +485,7 @@ export class CetusAggregatorService {
       if (pct <= 0) return null;
 
       const usdcForAsset = totalUsdcAvailable * (pct / 100);
-      if (usdcForAsset < 0.01) return null; // Skip if less than 1 cent
+      if (usdcForAsset < 0.50) return null; // Skip if less than $0.50 (gas costs would exceed value)
 
       return this.getSwapQuote(asset, usdcForAsset);
     });
@@ -778,15 +778,15 @@ export class CetusAggregatorService {
       }
     }
 
-    // Also include non-swappable (CRO) in results
+    // Also include non-swappable (hedged via perps) in results
     for (const s of plan.swaps) {
       if (!s.canSwapOnChain) {
         results.push({
           asset: s.asset,
-          success: true, // CRO is hedged via perps, not a failure
+          success: true, // Hedged via perps, not a failure
           amountIn: s.amountIn,
-          amountOut: '0',
-          error: 'Hedged via BlueFin perps (no on-chain swap)',
+          amountOut: s.expectedAmountOut || '0',
+          error: `Hedged via ${s.hedgeVia || 'BlueFin perps'} (no on-chain swap)`,
         });
       }
     }
@@ -864,8 +864,7 @@ export class CetusAggregatorService {
         }
       }
 
-      // Fallback: estimate from market price
-      const estimate = await this.estimateOutputFromPrice('SUI' as PoolAsset, 0); // dummy to check service
+      // Fallback: estimate from market price using the actual asset
       try {
         const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
         const mds = getMarketDataService();
@@ -902,8 +901,30 @@ export class CetusAggregatorService {
       };
     }
 
-    // Mainnet: real on-chain reverse swaps
+    // Mainnet: CRO and assets without coin types use BlueFin perps hedging
     if (!fromCoinType || asset === 'CRO') {
+      // Get market price for accurate expectedAmountOut
+      try {
+        const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+        const mds = getMarketDataService();
+        const data = await mds.getTokenPrice(asset);
+        if (data.price > 0) {
+          const usdcOut = assetAmount * data.price;
+          return {
+            asset,
+            fromCoinType: fromCoinType || '',
+            toCoinType,
+            amountIn: amountInStr,
+            expectedAmountOut: Math.floor(usdcOut * 1e6).toString(),
+            priceImpact: 0,
+            route: `${asset} → USDC (close BlueFin perps position)`,
+            routerData: null,
+            canSwapOnChain: false,
+            hedgeVia: 'bluefin',
+          };
+        }
+      } catch { /* fall through */ }
+
       return {
         asset,
         fromCoinType: fromCoinType || '',
@@ -914,6 +935,7 @@ export class CetusAggregatorService {
         route: `${asset} → USDC (close BlueFin perps position)`,
         routerData: null,
         canSwapOnChain: false,
+        hedgeVia: 'bluefin',
       };
     }
 
