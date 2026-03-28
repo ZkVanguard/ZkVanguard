@@ -151,12 +151,9 @@ async function getCurrentPrices(assets: string[]): Promise<Record<string, number
 }
 
 function getDefaultPrices(): Record<string, number> {
-  return {
-    BTC: 95000,
-    ETH: 3200,
-    CRO: 0.15,
-    SUI: 4.50,
-  };
+  // Return empty map — no hardcoded prices. Callers must handle missing prices.
+  logger.warn('[HedgeMonitor] No live prices available — returning empty price map');
+  return {};
 }
 
 /**
@@ -260,47 +257,7 @@ function checkTrailingStop(hedge: ActiveHedge, currentPrice: number, pnlPercent:
     : peak * (1 + TRAILING_STOP_DISTANCE / 100);
 }
 
-/**
- * Mock data for testing
- */
-function getMockActiveHedges(): ActiveHedge[] {
-  return [
-    {
-      id: 'hedge-btc-001',
-      asset: 'BTC',
-      side: 'SHORT',
-      entryPrice: 96000,
-      currentPrice: 95000,
-      size: 0.5,
-      leverage: 3,
-      notionalValue: 142500,
-      unrealizedPnl: 1500,
-      unrealizedPnlPercent: 3.12,
-      stopLoss: 100000,
-      takeProfit: 90000,
-      createdAt: Date.now() - 86400000,
-      walletAddress: '0x1234567890123456789012345678901234567890',
-      portfolioId: 1,
-    },
-    {
-      id: 'hedge-eth-001',
-      asset: 'ETH',
-      side: 'SHORT',
-      entryPrice: 3300,
-      currentPrice: 3200,
-      size: 10,
-      leverage: 2,
-      notionalValue: 64000,
-      unrealizedPnl: 2000,
-      unrealizedPnlPercent: 6.06,
-      stopLoss: 3500,
-      takeProfit: 3000,
-      createdAt: Date.now() - 43200000,
-      walletAddress: '0x1234567890123456789012345678901234567890',
-      portfolioId: 1,
-    },
-  ];
-}
+// NOTE: getMockActiveHedges removed — production code must never use mock data.
 
 /**
  * Main monitor function
@@ -322,7 +279,11 @@ async function monitorHedges(): Promise<HedgeMonitorResult['actionsExecuted'] & 
   let healthyCount = 0;
   
   for (const hedge of hedges) {
-    const currentPrice = prices[hedge.asset] || hedge.currentPrice;
+    const currentPrice = prices[hedge.asset];
+    if (!currentPrice || currentPrice <= 0) {
+      logger.warn(`[HedgeMonitor] No live price for ${hedge.asset} — skipping hedge ${hedge.id}`);
+      continue;
+    }
     const { pnl, pnlPercent } = calculatePnl(hedge, currentPrice);
     
     totalPnl += pnl;

@@ -105,10 +105,11 @@ async function generateHedgeProof(hedge: HedgeStrategy): Promise<{ proofHash: st
       verified: true,
     };
   } catch (error) {
-    logger.warn('ZK proof generation failed, using fallback', { error: String(error) });
+    logger.warn('ZK proof generation failed, using deterministic fallback', { error: String(error) });
+    const fallbackData = `hedge-fallback:${Date.now()}`;
     return {
-      proofHash: `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-      verified: true,
+      proofHash: `0x${Buffer.from(fallbackData).toString('hex').slice(0, 64).padEnd(64, '0')}`,
+      verified: false,
     };
   }
 }

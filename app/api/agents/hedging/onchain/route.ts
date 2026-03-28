@@ -155,7 +155,7 @@ async function backgroundResyncHedges(hedgeIdOnchains: string[]): Promise<void> 
           side: isLong ? 'LONG' : 'SHORT',
           collateral,
           leverage,
-          entryPrice: entryPrice || FALLBACK_PRICES[pairIndex] || 1000,
+          entryPrice: entryPrice || FALLBACK_PRICES[pairIndex] || 0,
           status: statusName,
           commitmentHash: h.commitmentHash !== ethers.ZeroHash ? h.commitmentHash : undefined,
           nullifier: h.nullifier !== ethers.ZeroHash ? h.nullifier : undefined,
@@ -400,7 +400,7 @@ export async function GET(request: NextRequest) {
             // Fallback chain: live (possibly fallback) → DB cache → hardcoded fallback
             const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx)] : undefined;
             const dbCached = cachedPrices[symbol];
-            priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 1000;
+            priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 0;
             if (dbCached?.price) actualPriceSource = 'db-cache';
           }
         }
@@ -422,7 +422,7 @@ export async function GET(request: NextRequest) {
 
         // Build response from DB data
         const hedgeDetails = filteredHedges.map(h => {
-          const currentPrice = Number(priceMap[h.asset] || h.current_price || h.entry_price) || 1000;
+          const currentPrice = Number(priceMap[h.asset] || h.current_price || h.entry_price) || 0;
           const entryPrice = Number(h.entry_price) || currentPrice;
           
           // Calculate unrealized PnL (with safety checks for NaN)
@@ -691,7 +691,7 @@ export async function GET(request: NextRequest) {
         const status = Number(h.status);
 
         // Use actual entry price from MockMoonlander, fallback to live price
-        const entryPrice = entryPriceMap[hedgeId] || livePrices[pairIndex] || FALLBACK_PRICES[pairIndex] || 1000;
+        const entryPrice = entryPriceMap[hedgeId] || livePrices[pairIndex] || FALLBACK_PRICES[pairIndex] || 0;
         const currentPrice = status === 1 ? (livePrices[pairIndex] || entryPrice) : entryPrice;
 
         // Calculate unrealized PnL using real price delta (with NaN protection)
