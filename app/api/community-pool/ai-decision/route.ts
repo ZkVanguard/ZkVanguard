@@ -226,6 +226,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const forceRefresh = searchParams.get('refresh') === 'true';
+    const chain = searchParams.get('chain') || undefined;
     
     // OPTIMIZATION: Return cached response if fresh (2 minute TTL)
     if (!forceRefresh && aiRecommendationCache && (Date.now() - aiRecommendationCache.timestamp) < AI_CACHE_TTL_MS) {
@@ -237,7 +238,7 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    const poolSummary = await getPoolSummary();
+    const poolSummary = await getPoolSummary(chain);
     const { allocations, reasoning, confidence, indicators, shouldRebalance } = await generateAIAllocation();
     
     // Calculate what would change
@@ -290,7 +291,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const { apply = false, marketConditions } = body;
+    const { apply = false, marketConditions, chain } = body;
     
     // If applying changes, require admin auth (internal API only)
     if (apply) {
@@ -302,7 +303,7 @@ export async function POST(request: NextRequest) {
     
     if (!apply) {
       // Just return the recommendation
-      const poolSummary = await getPoolSummary();
+      const poolSummary = await getPoolSummary(chain);
       const changes = SUPPORTED_ASSETS.map(asset => ({
         asset,
         currentPercent: poolSummary.allocations[asset].percentage,
@@ -326,7 +327,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Apply the AI decision
-    const result = await applyAIDecision(allocations, reasoning);
+    const result = await applyAIDecision(allocations, reasoning, chain);
     
     if (!result.success) {
       return NextResponse.json(

@@ -26,14 +26,15 @@ import { getPoolStateFromDb, savePoolStateToDb } from '../db/community-pool';
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 
-// Contract addresses (single source of truth)
-const POOL_CONFIG = {
-  mainnet: {
+// Contract addresses — per-chain configuration
+// When chain config is passed, these are overridden
+const POOL_CONFIG: Record<string, { rpcUrl: string; poolAddress: string; chainId: number }> = {
+  'cronos:mainnet': {
     rpcUrl: process.env.CRONOS_MAINNET_RPC || 'https://evm.cronos.org/',
     poolAddress: '', // Set when deployed
     chainId: 25,
   },
-  testnet: {
+  'cronos:testnet': {
     rpcUrl: process.env.CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org',
     poolAddress: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
     chainId: 338,
@@ -166,18 +167,32 @@ async function cachedFetch<T>(
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Get network configuration
+ * Chain configuration override for multi-chain support
  */
-function getConfig() {
+export interface ChainStatsConfig {
+  rpcUrl: string;
+  poolAddress: string;
+  chainId: number;
+  chainKey: string;
+}
+
+/**
+ * Get network configuration for a specific chain, or default to Cronos
+ */
+function getConfig(chainConfig?: ChainStatsConfig) {
+  if (chainConfig) {
+    return { rpcUrl: chainConfig.rpcUrl, poolAddress: chainConfig.poolAddress, chainId: chainConfig.chainId };
+  }
   const mainnetMode = isMainnet();
-  return mainnetMode ? POOL_CONFIG.mainnet : POOL_CONFIG.testnet;
+  const key = mainnetMode ? 'cronos:mainnet' : 'cronos:testnet';
+  return POOL_CONFIG[key] || POOL_CONFIG['cronos:testnet'];
 }
 
 /**
  * Get pool contract instance
  */
-function getPoolContract(provider: JsonRpcProvider | BrowserProvider) {
-  const config = getConfig();
+function getPoolContract(provider: JsonRpcProvider | BrowserProvider, chainConfig?: ChainStatsConfig) {
+  const config = getConfig(chainConfig);
   if (!config.poolAddress) {
     throw new Error('CommunityPool not deployed on this network');
   }
@@ -195,9 +210,10 @@ function getPoolContract(provider: JsonRpcProvider | BrowserProvider) {
  * This is the SINGLE SOURCE OF TRUTH for pool stats.
  * All other services should call this instead of implementing their own.
  */
-export async function getPoolStats(): Promise<PoolStats> {
-  const config = getConfig();
-  const cacheKey = `pool-stats-${config.chainId}`;
+export async function getPoolStats(chainConfig?: ChainStatsConfig): Promise<PoolStats> {
+  const config = getConfig(chainConfig);
+  const chainKey = chainConfig?.chainKey || 'cronos';
+  const cacheKey = `pool-stats-${chainKey}-${config.chainId}`;
   
   // Layer 1: Check in-memory cache first
   const cachedEntry = statsCache.get(cacheKey);
@@ -215,7 +231,7 @@ export async function getPoolStats(): Promise<PoolStats> {
   const request = (async (): Promise<PoolStats> => {
     // Layer 2: Check DB cache (shared across serverless instances)
     try {
-      const dbState = await getPoolStateFromDb();
+      const dbState = await getPoolStateFromDb(chainKey);
       if (dbState && dbState.updated_at) {
         const dbAge = Date.now() - new Date(dbState.updated_at).getTime();
         if (dbAge < DB_FRESHNESS_TTL) {
@@ -256,7 +272,7 @@ export async function getPoolStats(): Promise<PoolStats> {
     
     // Layer 3: Fetch from on-chain RPC
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-    const pool = getPoolContract(provider);
+    const pool = getPoolContract(provider, chainConfig);
     
     // Fetch all data in parallel
     const [stats, nav, navPerShare, ...allocBps] = await Promise.all([
@@ -396,6 +412,7 @@ export async function getPoolStats(): Promise<PoolStats> {
       },
       lastRebalance: Date.now(),
       lastAIDecision: null,
+      chain: chainKey,
     }).catch(err => {
       logger.warn('[PoolStats] Failed to update DB cache', { err });
     });
@@ -420,14 +437,15 @@ export async function getPoolStats(): Promise<PoolStats> {
 /**
  * Get member position - ALWAYS from on-chain
  */
-export async function getMemberPosition(walletAddress: string): Promise<MemberPosition> {
-  const config = getConfig();
+export async function getMemberPosition(walletAddress: string, chainConfig?: ChainStatsConfig): Promise<MemberPosition> {
+  const config = getConfig(chainConfig);
+  const chainKey = chainConfig?.chainKey || 'cronos';
   const normalizedAddr = walletAddress.toLowerCase();
-  const cacheKey = `member-${normalizedAddr}-${config.chainId}`;
+  const cacheKey = `member-${normalizedAddr}-${chainKey}-${config.chainId}`;
   
   return cachedFetch(cacheKey, memberCache, async () => {
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-    const pool = getPoolContract(provider);
+    const pool = getPoolContract(provider, chainConfig);
     
     const [position, memberData, isMember] = await Promise.all([
       pool.getMemberPosition(walletAddress),
@@ -452,22 +470,24 @@ export async function getMemberPosition(walletAddress: string): Promise<MemberPo
 /**
  * Force refresh stats (bypasses cache)
  */
-export async function refreshPoolStats(): Promise<PoolStats> {
-  const config = getConfig();
-  const cacheKey = `pool-stats-${config.chainId}`;
+export async function refreshPoolStats(chainConfig?: ChainStatsConfig): Promise<PoolStats> {
+  const chainKey = chainConfig?.chainKey || 'cronos';
+  const config = getConfig(chainConfig);
+  const cacheKey = `pool-stats-${chainKey}-${config.chainId}`;
   statsCache.delete(cacheKey);
-  return getPoolStats();
+  return getPoolStats(chainConfig);
 }
 
 /**
  * Force refresh member position (bypasses cache)
  */
-export async function refreshMemberPosition(walletAddress: string): Promise<MemberPosition> {
-  const config = getConfig();
+export async function refreshMemberPosition(walletAddress: string, chainConfig?: ChainStatsConfig): Promise<MemberPosition> {
+  const chainKey = chainConfig?.chainKey || 'cronos';
+  const config = getConfig(chainConfig);
   const normalizedAddr = walletAddress.toLowerCase();
-  const cacheKey = `member-${normalizedAddr}-${config.chainId}`;
+  const cacheKey = `member-${normalizedAddr}-${chainKey}-${config.chainId}`;
   memberCache.delete(cacheKey);
-  return getMemberPosition(walletAddress);
+  return getMemberPosition(walletAddress, chainConfig);
 }
 
 /**
@@ -487,8 +507,8 @@ export function clearCaches(): void {
 /**
  * Get pool summary (alias for getPoolStats with formatted output)
  */
-export async function getPoolSummary() {
-  const stats = await getPoolStats();
+export async function getPoolSummary(chainConfig?: ChainStatsConfig) {
+  const stats = await getPoolStats(chainConfig);
   return {
     totalValueUSD: stats.totalNAV,
     totalShares: stats.totalShares,
@@ -508,8 +528,8 @@ export async function getPoolSummary() {
 /**
  * Get user shares (alias for getMemberPosition)
  */
-export async function getUserShares(walletAddress: string) {
-  const pos = await getMemberPosition(walletAddress);
+export async function getUserShares(walletAddress: string, chainConfig?: ChainStatsConfig) {
+  const pos = await getMemberPosition(walletAddress, chainConfig);
   return {
     walletAddress: pos.walletAddress,
     shares: pos.shares,
