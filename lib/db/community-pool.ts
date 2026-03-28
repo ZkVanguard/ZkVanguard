@@ -290,36 +290,48 @@ export async function saveUserSharesToDb(userShares: {
   }
 
   try {
-    // Use explicit check-then-update/insert pattern for case-insensitive deduplication
-    // First check if user exists (case-insensitive) for this chain
-    const existing = await queryOne<{ id: number }>(
-      `SELECT id FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
-      [userShares.walletAddress, chain]
+    // Atomic UPSERT — prevents race condition on concurrent deposits to same wallet
+    await query(
+      `INSERT INTO community_pool_shares (wallet_address, chain, shares, cost_basis_usd, joined_at, last_action_at)
+       VALUES (LOWER($1), $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (LOWER(wallet_address), chain) DO UPDATE SET
+         shares = $3,
+         cost_basis_usd = $4,
+         last_action_at = NOW()`,
+      [userShares.walletAddress, chain, userShares.shares, userShares.costBasisUSD]
     );
-    
-    if (existing) {
-      // Update existing record
-      await query(
-        `UPDATE community_pool_shares SET
-           wallet_address = $1,
-           shares = $2,
-           cost_basis_usd = $3,
-           last_action_at = NOW()
-         WHERE LOWER(wallet_address) = LOWER($1) AND chain = $4`,
-        [userShares.walletAddress.toLowerCase(), userShares.shares, userShares.costBasisUSD, chain]
-      );
-    } else {
-      // Insert new record
-      await query(
-        `INSERT INTO community_pool_shares (wallet_address, chain, shares, cost_basis_usd, joined_at, last_action_at)
-         VALUES ($1, $2, $3, $4, NOW(), NOW())`,
-        [userShares.walletAddress.toLowerCase(), chain, userShares.shares, userShares.costBasisUSD]
-      );
-    }
     logger.info('[CommunityPool DB] User shares saved', { wallet: userShares.walletAddress, chain, shares: userShares.shares });
   } catch (error) {
-    logger.error('[CommunityPool DB] Failed to save user shares', error);
-    throw error;
+    // Fallback: The ON CONFLICT may fail on some PG versions if unique index is on expression
+    // In that case, use the explicit check-then-update pattern
+    const pgErr = error as { code?: string };
+    if (pgErr.code === '42P10' || pgErr.code === '42712') {
+      logger.debug('[CommunityPool DB] Atomic UPSERT not supported on index expression, falling back');
+      const existing = await queryOne<{ id: number }>(
+        `SELECT id FROM community_pool_shares WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
+        [userShares.walletAddress, chain]
+      );
+      if (existing) {
+        await query(
+          `UPDATE community_pool_shares SET
+             shares = $2,
+             cost_basis_usd = $3,
+             last_action_at = NOW()
+           WHERE LOWER(wallet_address) = LOWER($1) AND chain = $4`,
+          [userShares.walletAddress, userShares.shares, userShares.costBasisUSD, chain]
+        );
+      } else {
+        await query(
+          `INSERT INTO community_pool_shares (wallet_address, chain, shares, cost_basis_usd, joined_at, last_action_at)
+           VALUES (LOWER($1), $2, $3, $4, NOW(), NOW())`,
+          [userShares.walletAddress, chain, userShares.shares, userShares.costBasisUSD]
+        );
+      }
+      logger.info('[CommunityPool DB] User shares saved (fallback path)', { wallet: userShares.walletAddress, chain });
+    } else {
+      logger.error('[CommunityPool DB] Failed to save user shares', error);
+      throw error;
+    }
   }
 }
 
@@ -352,7 +364,7 @@ export async function deleteUserSharesFromDb(walletAddress: string, chain: strin
  * Security: Validates wallet address format
  */
 export async function getUserTransactionCounts(walletAddress: string): Promise<{ depositCount: number; withdrawalCount: number }> {
-  // Security: Validate wallet address
+  // Security: Validate wallet address (accept both EVM and SUI)
   if (!isValidWalletAddress(walletAddress)) {
     return { depositCount: 0, withdrawalCount: 0 };
   }
@@ -458,6 +470,18 @@ export async function addPoolTransactionToDb(transaction: {
   });
 
   try {
+    // Idempotency: skip if this txHash already recorded (prevents double-minting on retries)
+    if (transaction.txHash) {
+      const exists = await txHashExists(transaction.txHash);
+      if (exists) {
+        logger.info('[CommunityPool DB] Transaction already recorded, skipping (idempotent)', {
+          txHash: transaction.txHash,
+          type: transaction.type,
+        });
+        return;
+      }
+    }
+
     await query(
       `INSERT INTO community_pool_transactions 
        (transaction_id, type, wallet_address, amount_usd, shares, share_price, details, tx_hash, created_at)

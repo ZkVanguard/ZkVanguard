@@ -567,33 +567,32 @@ export async function POST(request: NextRequest) {
       const results: Array<import('@/lib/services/CetusAggregatorService').SwapExecutionResult> = [];
       const hedgedPositions: Array<{ asset: string; usdcValue: number; assetAmount: string; method: string; route: string }> = [];
 
-      for (const asset of assets) {
-        const pct = (allocations[asset] || 0) / 100;
-        if (pct <= 0) continue;
+      // Phase 1: Get ALL forward + reverse quotes in parallel (price discovery)
+      const assetQuotes = await Promise.allSettled(
+        assets.filter(asset => (allocations[asset] || 0) > 0).map(async (asset) => {
+          const pct = (allocations[asset] || 0) / 100;
+          const assetUsdValue = withdrawUsdc * pct;
+          const forwardQuote = await aggregator.getSwapQuote(asset, assetUsdValue);
+          if (!forwardQuote.expectedAmountOut || forwardQuote.expectedAmountOut === '0') {
+            return { asset, assetUsdValue, forwardQuote, reverseQuote: null, error: `No price data for ${asset}` };
+          }
+          const assetAmountRaw = Number(forwardQuote.expectedAmountOut);
+          const decimals = asset === 'SUI' ? 9 : 8;
+          const assetAmount = assetAmountRaw / Math.pow(10, decimals);
+          const reverseQuote = await aggregator.getReverseSwapQuote(asset, assetAmount);
+          return { asset, assetUsdValue, forwardQuote, reverseQuote, error: null };
+        })
+      );
 
-        // USD value this asset needs to contribute
-        const assetUsdValue = withdrawUsdc * pct;
-        
-        // Use a forward quote to determine how much of the asset to sell back
-        // This is used for price discovery — canSwapOnChain may be false on testnet
-        const forwardQuote = await aggregator.getSwapQuote(asset, assetUsdValue);
-        
-        if (!forwardQuote.expectedAmountOut || forwardQuote.expectedAmountOut === '0') {
-          results.push({
-            asset,
-            success: false,
-            amountIn: '0',
-            error: `No price data for ${asset} — cannot estimate reverse swap amount`,
-          });
+      // Phase 2: Execute swaps sequentially (on-chain txs need sequential nonces)
+      for (const settled of assetQuotes) {
+        if (settled.status !== 'fulfilled' || !settled.value) continue;
+        const { asset, assetUsdValue, forwardQuote, reverseQuote, error } = settled.value;
+
+        if (error || !reverseQuote) {
+          results.push({ asset, success: false, amountIn: '0', error: error || `No reverse quote for ${asset}` });
           continue;
         }
-
-        // Convert raw amount to human-readable for reverse quote
-        const assetAmountRaw = Number(forwardQuote.expectedAmountOut);
-        const decimals = asset === 'SUI' ? 9 : 8;
-        const assetAmount = assetAmountRaw / Math.pow(10, decimals);
-
-        const reverseQuote = await aggregator.getReverseSwapQuote(asset, assetAmount);
 
         // On-chain reverse swap (mainnet with liquidity)
         if (reverseQuote.canSwapOnChain && reverseQuote.routerData) {
@@ -677,7 +676,27 @@ export async function POST(request: NextRequest) {
       }
 
       // Dynamically import DB functions to avoid edge runtime issues
-      const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
+      const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb, txHashExists } = await import('@/lib/db/community-pool');
+
+      // Idempotency check: prevent double-minting on retried requests
+      if (txDigest) {
+        const alreadyRecorded = await txHashExists(txDigest);
+        if (alreadyRecorded) {
+          const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
+          return NextResponse.json({
+            success: true,
+            data: {
+              walletAddress,
+              amountUsdc,
+              sharesMinted: 0,
+              totalShares: existingShares?.shares || 0,
+              message: 'Transaction already recorded (idempotent)',
+            },
+            chain: 'sui',
+            network,
+          });
+        }
+      }
 
       // Determine if deposit was already executed on-chain (real txDigest from wallet signing)
       const isOnChainDeposit = txDigest && !txDigest.startsWith('usdc-deposit-');
