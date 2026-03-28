@@ -220,6 +220,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           CRO: poolStats.allocations.CRO,
         },
         source: 'synthetic-portfolio',
+        chain: 'cronos',
       });
       logger.info('[CommunityPool Cron] Synthetic NAV snapshot recorded', {
         syntheticNAV: `$${onChainNAV.toFixed(2)}`,
@@ -248,6 +249,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             walletAddress: addrLower,
             shares: shares,
             costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
+            chain: 'cronos',
           });
           syncedMembers++;
           if (shares > 0) activeMembers++;
@@ -284,6 +286,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           allocations: poolAllocRecord,
           lastRebalance: Date.now(),
           lastAIDecision: null,
+          chain: 'cronos',
         });
         
         logger.info('[CommunityPool Cron] DB cache synced from on-chain', { syncedMembers });
@@ -532,6 +535,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       await addPoolTransactionToDb({
         id: decisionId,
         type: 'AI_DECISION',
+        chain: 'cronos',
         details: {
           action: aiDecision.action,
           reasoning: aiDecision.reasoning,
@@ -562,6 +566,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             reasoning: aiDecision.reasoning,
             allocations: poolStats.allocations,
           },
+          chain: 'cronos',
         });
       }
       

@@ -97,6 +97,7 @@ function generateAuditHash(data: Record<string, unknown>): string {
 
 export interface DbPoolState {
   id: number;
+  chain: string;
   total_value_usd: number;
   total_shares: number;
   share_price: number;
@@ -141,16 +142,18 @@ export interface DbPoolTransaction {
 // ============ Pool State Operations ============
 
 /**
- * Get current pool state (there's only one row)
+ * Get current pool state for a specific chain
+ * Each chain has its own independent pool state row
  */
-export async function getPoolStateFromDb(): Promise<DbPoolState | null> {
+export async function getPoolStateFromDb(chain: string = 'cronos'): Promise<DbPoolState | null> {
   try {
     const row = await queryOne<DbPoolState>(
-      `SELECT * FROM community_pool_state ORDER BY id DESC LIMIT 1`
+      `SELECT * FROM community_pool_state WHERE chain = $1 LIMIT 1`,
+      [chain]
     );
     return row;
   } catch (error) {
-    logger.error('[CommunityPool DB] Failed to get pool state', error);
+    logger.error('[CommunityPool DB] Failed to get pool state', { error, chain });
     return null;
   }
 }
@@ -166,7 +169,10 @@ export async function savePoolStateToDb(state: {
   allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }>;
   lastRebalance: number;
   lastAIDecision: { timestamp: number; reasoning: string; allocations: Record<string, number> } | null;
+  chain?: string;
 }): Promise<void> {
+  const chain = state.chain || 'cronos';
+
   // Security: Validate all numeric inputs
   if (!isValidAmount(state.totalValueUSD)) {
     throw new Error('Invalid totalValueUSD: must be a positive number');
@@ -186,11 +192,11 @@ export async function savePoolStateToDb(state: {
   }
 
   try {
-    // Upsert - update if exists, insert if not
+    // Upsert per chain — each chain has its own independent pool state row
     await query(
-      `INSERT INTO community_pool_state (id, total_value_usd, total_shares, share_price, allocations, last_rebalance, last_ai_decision, updated_at)
-       VALUES (1, $1, $2, $3, $4, to_timestamp($5 / 1000.0), $6, NOW())
-       ON CONFLICT (id) DO UPDATE SET
+      `INSERT INTO community_pool_state (chain, total_value_usd, total_shares, share_price, allocations, last_rebalance, last_ai_decision, updated_at)
+       VALUES ($7, $1, $2, $3, $4, to_timestamp($5 / 1000.0), $6, NOW())
+       ON CONFLICT (chain) DO UPDATE SET
          total_value_usd = $1,
          total_shares = $2,
          share_price = $3,
@@ -205,11 +211,12 @@ export async function savePoolStateToDb(state: {
         JSON.stringify(state.allocations),
         state.lastRebalance,
         state.lastAIDecision ? JSON.stringify(state.lastAIDecision) : null,
+        chain,
       ]
     );
-    logger.info('[CommunityPool DB] Pool state saved');
+    logger.info('[CommunityPool DB] Pool state saved', { chain });
   } catch (error) {
-    logger.error('[CommunityPool DB] Failed to save pool state', error);
+    logger.error('[CommunityPool DB] Failed to save pool state', { error, chain });
     throw error;
   }
 }
@@ -393,11 +400,17 @@ export async function getUserTransactionCounts(walletAddress: string): Promise<{
  * Get pool transaction history
  * Security: Limits query size to prevent resource exhaustion
  */
-export async function getPoolHistoryFromDb(limit = 100): Promise<DbPoolTransaction[]> {
+export async function getPoolHistoryFromDb(limit = 100, chain?: string): Promise<DbPoolTransaction[]> {
   // Security: Cap limit to prevent resource exhaustion attacks
   const safeLimit = Math.min(Math.max(1, limit), 500);
   
   try {
+    if (chain) {
+      return await query<DbPoolTransaction>(
+        `SELECT * FROM community_pool_transactions WHERE chain = $2 ORDER BY created_at DESC LIMIT $1`,
+        [safeLimit, chain]
+      );
+    }
     return await query<DbPoolTransaction>(
       `SELECT * FROM community_pool_transactions ORDER BY created_at DESC LIMIT $1`,
       [safeLimit]
@@ -439,6 +452,7 @@ export async function addPoolTransactionToDb(transaction: {
   sharePrice?: number;
   details?: Record<string, unknown>;
   txHash?: string;
+  chain?: string;
 }): Promise<void> {
   // Security: Validate transaction type
   if (!isValidTransactionType(transaction.type)) {
@@ -461,6 +475,8 @@ export async function addPoolTransactionToDb(transaction: {
     throw new Error('Invalid share price: must be a positive number');
   }
   
+  const chain = transaction.chain || 'cronos';
+
   // Security: Generate audit hash for integrity
   const auditHash = generateAuditHash({
     id: transaction.id,
@@ -484,8 +500,8 @@ export async function addPoolTransactionToDb(transaction: {
 
     await query(
       `INSERT INTO community_pool_transactions 
-       (transaction_id, type, wallet_address, amount_usd, shares, share_price, details, tx_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+       (transaction_id, type, wallet_address, amount_usd, shares, share_price, details, tx_hash, chain, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
       [
         transaction.id,
         transaction.type,
@@ -495,6 +511,7 @@ export async function addPoolTransactionToDb(transaction: {
         transaction.sharePrice || null,
         transaction.details ? JSON.stringify({ ...transaction.details, _audit: auditHash }) : JSON.stringify({ _audit: auditHash }),
         transaction.txHash || null,
+        chain,
       ]
     );
     logger.info('[CommunityPool DB] Transaction added', { 
@@ -534,6 +551,7 @@ export async function recordNavSnapshot(snapshot: {
   allocations?: Record<string, number>;
   source?: string;
   timestamp?: Date;
+  chain?: string;
 }): Promise<void> {
   // Validate inputs
   if (!isValidAmount(snapshot.sharePrice, 1e9)) {
@@ -543,11 +561,13 @@ export async function recordNavSnapshot(snapshot: {
     throw new Error('Invalid total NAV');
   }
 
+  const chain = snapshot.chain || 'cronos';
+
   try {
     await query(
       `INSERT INTO community_pool_nav_history 
-       (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
-       VALUES ($7, $1, $2, $3, $4, $5, $6)`,
+       (timestamp, share_price, total_nav, total_shares, member_count, allocations, source, chain)
+       VALUES ($7, $1, $2, $3, $4, $5, $6, $8)`,
       [
         snapshot.sharePrice,
         snapshot.totalNav,
@@ -556,11 +576,13 @@ export async function recordNavSnapshot(snapshot: {
         snapshot.allocations ? JSON.stringify(snapshot.allocations) : null,
         snapshot.source || 'on-chain',
         snapshot.timestamp || new Date(),
+        chain,
       ]
     );
     logger.debug('[CommunityPool DB] NAV snapshot recorded', { 
       sharePrice: snapshot.sharePrice,
       totalNav: snapshot.totalNav,
+      chain,
     });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to record NAV snapshot', error);
@@ -572,10 +594,19 @@ export async function recordNavSnapshot(snapshot: {
  * Get NAV history for risk metrics calculation
  * Returns snapshots ordered by timestamp ascending (oldest first)
  */
-export async function getNavHistory(daysBack = 365): Promise<DbNavSnapshot[]> {
+export async function getNavHistory(daysBack = 365, chain?: string): Promise<DbNavSnapshot[]> {
   const safeDays = Math.min(Math.max(1, daysBack), 730); // Max 2 years
   
   try {
+    if (chain) {
+      return await query<DbNavSnapshot>(
+        `SELECT * FROM community_pool_nav_history 
+         WHERE timestamp >= NOW() - make_interval(days => $1)
+           AND chain = $2
+         ORDER BY timestamp ASC`,
+        [safeDays, chain]
+      );
+    }
     return await query<DbNavSnapshot>(
       `SELECT * FROM community_pool_nav_history 
        WHERE timestamp >= NOW() - make_interval(days => $1)
@@ -591,8 +622,14 @@ export async function getNavHistory(daysBack = 365): Promise<DbNavSnapshot[]> {
 /**
  * Get latest NAV snapshot
  */
-export async function getLatestNavSnapshot(): Promise<DbNavSnapshot | null> {
+export async function getLatestNavSnapshot(chain?: string): Promise<DbNavSnapshot | null> {
   try {
+    if (chain) {
+      return await queryOne<DbNavSnapshot>(
+        `SELECT * FROM community_pool_nav_history WHERE chain = $1 ORDER BY timestamp DESC LIMIT 1`,
+        [chain]
+      );
+    }
     return await queryOne<DbNavSnapshot>(
       `SELECT * FROM community_pool_nav_history ORDER BY timestamp DESC LIMIT 1`,
       []
@@ -700,10 +737,11 @@ export async function resetNavHistory(currentNav: number, sharePrice: number, to
  */
 export async function initCommunityPoolTables(): Promise<void> {
   try {
-    // Pool state table (single row)
+    // Pool state table — one row PER CHAIN (independent pool states)
     await query(`
       CREATE TABLE IF NOT EXISTS community_pool_state (
-        id INTEGER PRIMARY KEY DEFAULT 1,
+        id SERIAL PRIMARY KEY,
+        chain VARCHAR(50) NOT NULL DEFAULT 'cronos' UNIQUE,
         total_value_usd DECIMAL(20, 2) NOT NULL DEFAULT 0,
         total_shares DECIMAL(20, 8) NOT NULL DEFAULT 0,
         share_price DECIMAL(20, 8) NOT NULL DEFAULT 1.0,
@@ -711,10 +749,17 @@ export async function initCommunityPoolTables(): Promise<void> {
         last_rebalance TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         last_ai_decision JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT single_row CHECK (id = 1)
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+
+    // Migration: Add chain column if table already exists without it, drop legacy single_row CHECK
+    await query(`ALTER TABLE community_pool_state DROP CONSTRAINT IF EXISTS single_row`).catch(() => {});
+    await query(`ALTER TABLE community_pool_state ADD COLUMN IF NOT EXISTS chain VARCHAR(50) NOT NULL DEFAULT 'cronos'`).catch(() => {});
+    // Set chain='cronos' for existing rows that have NULL chain (safety)
+    await query(`UPDATE community_pool_state SET chain = 'cronos' WHERE chain IS NULL OR chain = ''`).catch(() => {});
+    // Add unique constraint on chain (idempotent)
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_state_chain ON community_pool_state(chain)`).catch(() => {});
 
     // User shares table (with chain support for multi-chain)
     await query(`
@@ -736,7 +781,7 @@ export async function initCommunityPoolTables(): Promise<void> {
       ADD COLUMN IF NOT EXISTS chain VARCHAR(50) NOT NULL DEFAULT 'cronos'
     `).catch(() => {}); // Ignore if column exists
 
-    // Transaction history table
+    // Transaction history table (with chain for per-chain isolation)
     await query(`
       CREATE TABLE IF NOT EXISTS community_pool_transactions (
         id SERIAL PRIMARY KEY,
@@ -748,11 +793,17 @@ export async function initCommunityPoolTables(): Promise<void> {
         share_price DECIMAL(20, 8),
         details JSONB,
         tx_hash VARCHAR(255),
+        chain VARCHAR(50) NOT NULL DEFAULT 'cronos',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
 
-    // NAV history table for risk metrics (hourly snapshots from on-chain)
+    // Migration: Add chain column to transactions if missing
+    await query(`ALTER TABLE community_pool_transactions ADD COLUMN IF NOT EXISTS chain VARCHAR(50) NOT NULL DEFAULT 'cronos'`).catch(() => {});
+    // Migrate existing SUI transactions based on details JSON
+    await query(`UPDATE community_pool_transactions SET chain = 'sui' WHERE chain = 'cronos' AND details->>'chain' = 'sui'`).catch(() => {});
+
+    // NAV history table for risk metrics (hourly snapshots from on-chain, per chain)
     await query(`
       CREATE TABLE IF NOT EXISTS community_pool_nav_history (
         id SERIAL PRIMARY KEY,
@@ -763,18 +814,26 @@ export async function initCommunityPoolTables(): Promise<void> {
         member_count INTEGER NOT NULL DEFAULT 0,
         allocations JSONB,
         source VARCHAR(50) DEFAULT 'on-chain',
+        chain VARCHAR(50) NOT NULL DEFAULT 'cronos',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
 
-    // Create indexes (including txHash uniqueness for idempotency)
+    // Migration: Add chain column to NAV history if missing
+    await query(`ALTER TABLE community_pool_nav_history ADD COLUMN IF NOT EXISTS chain VARCHAR(50) NOT NULL DEFAULT 'cronos'`).catch(() => {});
+    // Migrate existing SUI NAV snapshots based on source field
+    await query(`UPDATE community_pool_nav_history SET chain = 'sui' WHERE chain = 'cronos' AND source LIKE 'sui%'`).catch(() => {});
+
+    // Create indexes (including txHash uniqueness for idempotency and chain filtering)
     await query(`
       CREATE INDEX IF NOT EXISTS idx_pool_shares_wallet ON community_pool_shares(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_type ON community_pool_transactions(type);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_wallet ON community_pool_transactions(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_created ON community_pool_transactions(created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_tx_hash ON community_pool_transactions(tx_hash) WHERE tx_hash IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_pool_tx_chain ON community_pool_transactions(chain);
       CREATE INDEX IF NOT EXISTS idx_pool_nav_timestamp ON community_pool_nav_history(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_pool_nav_chain ON community_pool_nav_history(chain);
     `);
     
     // Add case-insensitive unique index for wallet addresses (prevents duplicates due to case differences)
@@ -824,17 +883,24 @@ export async function initCommunityPoolTables(): Promise<void> {
       logger.warn('[CommunityPool DB] Deduplication/index creation note', { error: String(dedupeError) });
     }
 
-    // Insert initial state if not exists
-    await query(`
-      INSERT INTO community_pool_state (id, total_value_usd, total_shares, share_price, allocations)
-      VALUES (1, 0, 0, 1.0, $1)
-      ON CONFLICT (id) DO NOTHING
-    `, [JSON.stringify({
-      BTC: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
-      ETH: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
-      SUI: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
-      CRO: { percentage: 0, valueUSD: 0, amount: 0, price: 0 },
-    })]);
+    // Seed initial pool state for each active chain (if not exists)
+    const activeChains = ['cronos', 'sepolia', 'hedera', 'sui'];
+    for (const chainKey of activeChains) {
+      // Per-chain asset configuration
+      const chainAssets = chainKey === 'sui' || chainKey === 'cronos'
+        ? ['BTC', 'ETH', 'SUI', 'CRO']
+        : ['BTC', 'ETH', 'USDT'];
+      const allocs: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {};
+      for (const a of chainAssets) {
+        allocs[a] = { percentage: 0, valueUSD: 0, amount: 0, price: 0 };
+      }
+      await query(
+        `INSERT INTO community_pool_state (chain, total_value_usd, total_shares, share_price, allocations)
+         VALUES ($1, 0, 0, 1.0, $2)
+         ON CONFLICT (chain) DO NOTHING`,
+        [chainKey, JSON.stringify(allocs)]
+      ).catch(() => {}); // Ignore if unique constraint prevents duplicate
+    }
 
     logger.info('[CommunityPool DB] Tables initialized successfully');
   } catch (error) {

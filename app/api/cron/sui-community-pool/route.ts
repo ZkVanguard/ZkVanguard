@@ -302,6 +302,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         memberCount: poolStats.memberCount,
         allocations: aiResult.allocations,
         source: 'sui-usdc-pool',
+        chain: 'sui',
       });
       logger.info('[SUI Cron] NAV snapshot recorded');
     } catch (navErr) {
@@ -352,6 +353,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           reasoning: aiResult.reasoning,
           allocations: aiResult.allocations,
         },
+        chain: 'sui',
       });
       logger.info('[SUI Cron] Pool state saved to DB');
     } catch (dbErr) {
@@ -449,6 +451,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       await addPoolTransactionToDb({
         id: decisionId,
         type: 'AI_DECISION',
+        chain: 'sui',
         details: {
           chain: 'sui',
           agent: 'SuiPoolAgent',

@@ -144,11 +144,11 @@ function dbToPoolState(db: DbPoolState): PoolState {
 /**
  * Get pool state from Neon PostgreSQL
  */
-export async function getPoolState(): Promise<PoolState> {
+export async function getPoolState(chain?: string): Promise<PoolState> {
   await ensureTablesInitialized();
   
   try {
-    const dbState = await getPoolStateFromDb();
+    const dbState = await getPoolStateFromDb(chain || 'cronos');
     if (dbState) {
       return dbToPoolState(dbState);
     }
@@ -162,7 +162,7 @@ export async function getPoolState(): Promise<PoolState> {
 /**
  * Save pool state to Neon PostgreSQL
  */
-export async function savePoolState(state: PoolState): Promise<void> {
+export async function savePoolState(state: PoolState, chain?: string): Promise<void> {
   await ensureTablesInitialized();
   state.updatedAt = Date.now();
   
@@ -174,6 +174,7 @@ export async function savePoolState(state: PoolState): Promise<void> {
       allocations: state.allocations,
       lastRebalance: state.lastRebalance,
       lastAIDecision: state.lastAIDecision,
+      chain: chain || 'cronos',
     });
   } catch (error) {
     logger.error('[CommunityPool] Failed to save pool state to DB', error);
@@ -184,12 +185,12 @@ export async function savePoolState(state: PoolState): Promise<void> {
 /**
  * Get all user shares from Neon PostgreSQL
  */
-export async function getAllUserShares(): Promise<UserShares[]> {
+export async function getAllUserShares(chain?: string): Promise<UserShares[]> {
   await ensureTablesInitialized();
   
   try {
     const dbShares = await getAllUserSharesFromDb();
-    const poolState = await getPoolState();
+    const poolState = await getPoolState(chain);
     
     return dbShares.map(db => ({
       walletAddress: db.wallet_address,
@@ -210,14 +211,14 @@ export async function getAllUserShares(): Promise<UserShares[]> {
 /**
  * Get user shares by wallet address
  */
-export async function getUserShares(walletAddress: string): Promise<UserShares | null> {
+export async function getUserShares(walletAddress: string, chain?: string): Promise<UserShares | null> {
   await ensureTablesInitialized();
   
   try {
     const dbShares = await getUserSharesFromDb(walletAddress);
     if (!dbShares) return null;
     
-    const poolState = await getPoolState();
+    const poolState = await getPoolState(chain);
     return {
       walletAddress: dbShares.wallet_address,
       shares: Number(dbShares.shares),
@@ -264,11 +265,11 @@ export async function saveUserShares(userShares: UserShares): Promise<void> {
 /**
  * Get pool transaction history from Neon PostgreSQL
  */
-export async function getPoolHistory(limit: number = 50): Promise<PoolTransaction[]> {
+export async function getPoolHistory(limit: number = 50, chain?: string): Promise<PoolTransaction[]> {
   await ensureTablesInitialized();
   
   try {
-    const dbHistory = await getPoolHistoryFromDb(limit);
+    const dbHistory = await getPoolHistoryFromDb(limit, chain);
     return dbHistory.map(db => ({
       id: db.transaction_id,
       type: db.type,
@@ -289,7 +290,7 @@ export async function getPoolHistory(limit: number = 50): Promise<PoolTransactio
 /**
  * Add transaction to pool history in Neon PostgreSQL
  */
-export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>): Promise<PoolTransaction> {
+export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>, chain?: string): Promise<PoolTransaction> {
   await ensureTablesInitialized();
   
   const transaction: PoolTransaction = {
@@ -307,6 +308,7 @@ export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>): Promi
       sharePrice: transaction.sharePrice,
       details: transaction.details,
       txHash: transaction.txHash,
+      chain: chain,
     });
     return transaction;
   } catch (error) {
@@ -326,9 +328,9 @@ export function calculateOwnership(userShares: number, totalShares: number): num
 /**
  * Get top shareholders
  */
-export async function getTopShareholders(limit: number = 10): Promise<{ walletAddress: string; shares: number; percentage: number }[]> {
-  const allShares = await getAllUserShares();
-  const poolState = await getPoolState();
+export async function getTopShareholders(limit: number = 10, chain?: string): Promise<{ walletAddress: string; shares: number; percentage: number }[]> {
+  const allShares = await getAllUserShares(chain);
+  const poolState = await getPoolState(chain);
   
   return allShares
     .filter(u => u.shares > 0)

@@ -761,6 +761,8 @@ export async function GET(request: NextRequest) {
     }, { status: 400 });
   }
   
+  const chainKey = chainConfig.chainKey;
+
   try {
     // Get user's position
     if (userAddress) {
@@ -785,7 +787,6 @@ export async function GET(request: NextRequest) {
 
       // Get transaction counts for user (used in multiple responses)
       const txCounts = await getUserTransactionCounts(userAddress);
-      const chainKey = chainConfig.chainKey;
       
       // Try DB first (faster for UI) unless forceOnChain
       // DB storage is now chain-aware and works for all chains
@@ -794,7 +795,7 @@ export async function GET(request: NextRequest) {
           const userShares = await getUserSharesFromDb(userAddress, chainKey);
           if (userShares && userShares.shares > 0) {
             const onChainPool = await getOnChainPoolData(chainConfig);
-            const poolData = onChainPool || await getPoolSummary();
+            const poolData = onChainPool || await getPoolSummary(chainKey);
             
             return NextResponse.json({
               success: true,
@@ -859,8 +860,8 @@ export async function GET(request: NextRequest) {
       // Non-default chains (Sepolia, Hedera, etc.) should only use on-chain data
       if (chainKey === 'cronos') {
         try {
-          const userShares = await getUserShares(userAddress);
-          const poolSummary = await getPoolSummary();
+          const userShares = await getUserShares(userAddress, chainKey);
+          const poolSummary = await getPoolSummary(chainKey);
           
           if (!userShares) {
             return NextResponse.json({
@@ -937,7 +938,7 @@ export async function GET(request: NextRequest) {
       const { saveUserShares, savePoolState, getPoolState, getUserShares } = await import('@/lib/storage/community-pool-storage');
       
       // Sync user position
-      let localUser = await getUserShares(userAddress);
+      let localUser = await getUserShares(userAddress, chainKey);
       if (!localUser && onChainUser.shares > 0) {
         // User exists on-chain but not locally - create record
         localUser = {
@@ -963,11 +964,11 @@ export async function GET(request: NextRequest) {
       }
       
       // Sync pool state
-      const localPool = await getPoolState();
+      const localPool = await getPoolState(chainKey);
       localPool.totalShares = onChainPool.totalShares;
       localPool.totalValueUSD = onChainPool.totalValueUSD;
       localPool.sharePrice = onChainPool.sharePrice;
-      await savePoolState(localPool);
+      await savePoolState(localPool, chainKey);
       
       return NextResponse.json({
         success: true,
@@ -981,7 +982,7 @@ export async function GET(request: NextRequest) {
     // Get transaction history
     if (action === 'history') {
       const limit = parseInt(searchParams.get('limit') || '50');
-      const history = await getPoolHistory(limit);
+      const history = await getPoolHistory(limit, chainKey);
       
       return NextResponse.json({
         success: true,
@@ -1087,7 +1088,7 @@ export async function GET(request: NextRequest) {
       // Use market-adjusted NAV (virtual holdings × current prices)
       // This ensures reset starts with accurate market values
       const onChainData = await getOnChainPoolData(chainConfig);
-      const marketNAV = await calculatePoolNAV();
+      const marketNAV = await calculatePoolNAV(chainConfig.chainKey);
       
       // Use market-adjusted values but on-chain member count
       const nav = marketNAV.totalValueUSD;
@@ -1177,7 +1178,7 @@ export async function GET(request: NextRequest) {
     
     // Final fallback: Local calculated NAV (for when on-chain has no value)
     try {
-      const summary = await getPoolSummary();
+      const summary = await getPoolSummary(chainConfig.chainKey);
       
       // Get native USDT token address for this chain from full config
       const fullChainConfig = POOL_CHAIN_CONFIGS[chainConfig.chainKey];
@@ -1300,7 +1301,7 @@ export async function POST(request: NextRequest) {
           // Use the on-chain amount as source of truth
         }
         
-        const result = await deposit(walletAddress, verifiedAmount, txHash);
+        const result = await deposit(walletAddress, verifiedAmount, txHash, chainConfig.chainKey);
         
         if (!result.success) {
           return NextResponse.json(
@@ -1339,6 +1340,7 @@ export async function POST(request: NextRequest) {
               allocations,
               lastRebalance: Date.now(),
               lastAIDecision: null,
+              chain: chainConfig.chainKey,
             });
             
             logger.info(`[CommunityPool] Post-deposit on-chain sync: ${walletAddress} has ${onChainUser.shares} shares`);
@@ -1395,7 +1397,7 @@ export async function POST(request: NextRequest) {
           // Use the on-chain shares as source of truth
         }
         
-        const result = await withdraw(walletAddress, verifiedShares, txHash);
+        const result = await withdraw(walletAddress, verifiedShares, txHash, undefined, chainConfig.chainKey);
         
         if (!result.success) {
           return NextResponse.json(
@@ -1426,6 +1428,7 @@ export async function POST(request: NextRequest) {
               allocations,
               lastRebalance: Date.now(),
               lastAIDecision: null,
+              chain: chainConfig.chainKey,
             });
           }
           
@@ -1513,6 +1516,7 @@ export async function POST(request: NextRequest) {
           allocations,
           lastRebalance: Date.now(),
           lastAIDecision: null,
+          chain: chainConfig.chainKey,
         });
         
         // CRITICAL: Sync ALL on-chain members to database
@@ -1665,6 +1669,7 @@ export async function POST(request: NextRequest) {
           allocations,
           lastRebalance: Date.now(),
           lastAIDecision: null,
+          chain: chainConfig.chainKey,
         });
         
         // Step 7: Reset NAV history completely with fresh on-chain data
