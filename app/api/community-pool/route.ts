@@ -127,7 +127,9 @@ export async function GET(request: NextRequest) {
             });
           }
         } catch (dbError) {
-          logger.warn('[CommunityPool API] DB user lookup failed, falling back to on-chain');
+          logger.warn('[CommunityPool API] DB user lookup failed, falling back to on-chain', {
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+          });
         }
       }
       
@@ -231,8 +233,8 @@ export async function GET(request: NextRequest) {
           },
           pool: null,
           source: 'none',
-          warning: 'User not found on-chain or in database',
-        });
+          warning: 'Pool data unavailable — on-chain and database both unreachable',
+        }, { status: 503 });
     }
     
     // Sync local storage with on-chain data for a specific user
@@ -360,11 +362,36 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
       
-      // Pool inception was when first member joined (you can adjust this timestamp)
-      // Using Feb 24, 2026 as approximate inception based on monitoring gap
-      const inceptionTimestamp = new Date('2026-02-24T16:00:00Z');
-      const inceptionSharePrice = 1.00;
-      const inceptionNav = 450.00; // First deposit amount
+      // Query the actual first deposit from the database
+      const { queryOne } = await import('@/lib/db/postgres');
+      const firstTx = await queryOne<{ created_at: Date; amount_usd: string; share_price: string }>(
+        `SELECT created_at, amount_usd, share_price FROM community_pool_transactions 
+         WHERE type = 'DEPOSIT' ORDER BY created_at ASC LIMIT 1`
+      );
+      
+      let inceptionTimestamp: Date;
+      let inceptionSharePrice: number;
+      let inceptionNav: number;
+      
+      if (firstTx) {
+        inceptionTimestamp = new Date(firstTx.created_at);
+        inceptionSharePrice = parseFloat(firstTx.share_price) || 1.00;
+        inceptionNav = parseFloat(firstTx.amount_usd) || 0;
+      } else {
+        // No transactions recorded yet — use on-chain contract state
+        const onChainData = await getOnChainPoolData(chainConfig);
+        if (onChainData && onChainData.totalValueUSD > 0) {
+          inceptionTimestamp = new Date();
+          inceptionSharePrice = onChainData.sharePrice || 1.00;
+          inceptionNav = onChainData.totalValueUSD;
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: 'No deposit history found — cannot determine inception',
+          }, { status: 404 });
+        }
+      }
+      
       const inceptionShares = inceptionNav / inceptionSharePrice;
       const inceptionMembers = 1;
       
@@ -380,13 +407,14 @@ export async function GET(request: NextRequest) {
         success: true,
         inserted,
         message: inserted 
-          ? 'Inception snapshot added at $1.00 share price' 
+          ? 'Inception snapshot added at $' + inceptionSharePrice.toFixed(2) + ' share price' 
           : 'Inception snapshot already exists',
         inceptionData: {
           timestamp: inceptionTimestamp.toISOString(),
           sharePrice: inceptionSharePrice,
           nav: inceptionNav,
           shares: inceptionShares,
+          source: firstTx ? 'first-transaction' : 'on-chain',
         },
       });
     }

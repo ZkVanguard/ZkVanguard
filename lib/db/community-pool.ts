@@ -120,6 +120,7 @@ export interface DbPoolState {
 export interface DbUserShares {
   id: number;
   wallet_address: string;
+  chain: string;
   shares: number;
   cost_basis_usd: number;
   joined_at: Date;
@@ -232,11 +233,15 @@ export async function getAllUserSharesFromDb(): Promise<DbUserShares[]> {
       `SELECT * FROM community_pool_shares ORDER BY shares DESC`
     );
     // PostgreSQL returns NUMERIC/DECIMAL as strings; parse to numbers
-    return rows.map(row => ({
-      ...row,
-      shares: Number(row.shares),
-      cost_basis_usd: Number(row.cost_basis_usd),
-    }));
+    return rows.map(row => {
+      const shares = Number(row.shares);
+      const costBasis = Number(row.cost_basis_usd);
+      return {
+        ...row,
+        shares: Number.isFinite(shares) && shares >= 0 ? shares : 0,
+        cost_basis_usd: Number.isFinite(costBasis) && costBasis >= 0 ? costBasis : 0,
+      };
+    });
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get all user shares', error);
     return [];
@@ -261,10 +266,12 @@ export async function getUserSharesFromDb(walletAddress: string, chain: string =
     );
     if (!row) return null;
     // PostgreSQL returns NUMERIC/DECIMAL as strings; parse to numbers
+    const shares = Number(row.shares);
+    const costBasis = Number(row.cost_basis_usd);
     return {
       ...row,
-      shares: Number(row.shares),
-      cost_basis_usd: Number(row.cost_basis_usd),
+      shares: Number.isFinite(shares) && shares >= 0 ? shares : 0,
+      cost_basis_usd: Number.isFinite(costBasis) && costBasis >= 0 ? costBasis : 0,
     };
   } catch (error) {
     logger.error('[CommunityPool DB] Failed to get user shares', error);
@@ -370,21 +377,30 @@ export async function deleteUserSharesFromDb(walletAddress: string, chain: strin
  * Get user transaction counts (deposits and withdrawals)
  * Security: Validates wallet address format
  */
-export async function getUserTransactionCounts(walletAddress: string): Promise<{ depositCount: number; withdrawalCount: number }> {
+export async function getUserTransactionCounts(walletAddress: string, chain?: string): Promise<{ depositCount: number; withdrawalCount: number }> {
   // Security: Validate wallet address (accept both EVM and SUI)
   if (!isValidWalletAddress(walletAddress)) {
     return { depositCount: 0, withdrawalCount: 0 };
   }
 
   try {
-    const result = await queryOne<{ deposit_count: string; withdrawal_count: string }>(
-      `SELECT 
-         COUNT(*) FILTER (WHERE type = 'DEPOSIT') as deposit_count,
-         COUNT(*) FILTER (WHERE type = 'WITHDRAWAL') as withdrawal_count
-       FROM community_pool_transactions 
-       WHERE LOWER(wallet_address) = LOWER($1)`,
-      [walletAddress]
-    );
+    const result = chain
+      ? await queryOne<{ deposit_count: string; withdrawal_count: string }>(
+          `SELECT 
+             COUNT(*) FILTER (WHERE type = 'DEPOSIT') as deposit_count,
+             COUNT(*) FILTER (WHERE type = 'WITHDRAWAL') as withdrawal_count
+           FROM community_pool_transactions 
+           WHERE LOWER(wallet_address) = LOWER($1) AND chain = $2`,
+          [walletAddress, chain]
+        )
+      : await queryOne<{ deposit_count: string; withdrawal_count: string }>(
+          `SELECT 
+             COUNT(*) FILTER (WHERE type = 'DEPOSIT') as deposit_count,
+             COUNT(*) FILTER (WHERE type = 'WITHDRAWAL') as withdrawal_count
+           FROM community_pool_transactions 
+           WHERE LOWER(wallet_address) = LOWER($1)`,
+          [walletAddress]
+        );
     
     return {
       depositCount: parseInt(result?.deposit_count || '0', 10),

@@ -324,6 +324,12 @@ export async function deposit(
     const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
     const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
     
+    // Guard: totalSharesWithOffset should never be zero (VIRTUAL_SHARES >= 1)
+    // but protect against misconfiguration
+    if (totalAssetsWithOffset <= 0 || totalSharesWithOffset <= 0) {
+      throw new Error('Pool state corrupt: virtual offset resulted in zero denominator');
+    }
+    
     // shares = (amount * totalSharesWithOffset) / totalAssetsWithOffset
     // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
     const sharesReceived = Math.floor((amountUSD * totalSharesWithOffset) / totalAssetsWithOffset);
@@ -518,6 +524,11 @@ export async function withdraw(
     const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
     const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
     
+    // Guard: totalSharesWithOffset should never be zero (VIRTUAL_SHARES >= 1)
+    if (totalAssetsWithOffset <= 0 || totalSharesWithOffset <= 0) {
+      throw new Error('Pool state corrupt: virtual offset resulted in zero denominator');
+    }
+    
     // amountUSD = sharesToBurn * totalAssetsWithOffset / totalSharesWithOffset
     // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
     const amountUSD = Math.floor((sharesToBurn * totalAssetsWithOffset) / totalSharesWithOffset);
@@ -613,12 +624,27 @@ export async function applyAIDecision(
   error?: string;
 }> {
   try {
+    // Validate individual allocations are within valid range
+    for (const [asset, pct] of Object.entries(newAllocations)) {
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
+        return {
+          success: false,
+          previousAllocations: emptyAlloc,
+          newAllocations,
+          trades: [],
+          error: `Invalid allocation for ${asset}: ${pct}% (must be 0-100)`,
+        };
+      }
+    }
+    
     // Validate allocations sum to 100%
     const totalPct = Object.values(newAllocations).reduce((sum, pct) => sum + pct, 0);
     if (Math.abs(totalPct - 100) > 0.1) {
+      const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
       return {
         success: false,
-        previousAllocations: {} as any,
+        previousAllocations: emptyAlloc,
         newAllocations,
         trades: [],
         error: `Allocations must sum to 100%, got ${totalPct}%`,
@@ -629,7 +655,7 @@ export async function applyAIDecision(
     const { totalValueUSD } = await calculatePoolNAV(chain);
     const prices = await fetchLivePrices();
     
-    const previousAllocations: Record<SupportedAsset, number> = {} as any;
+    const previousAllocations = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
     const trades: { asset: SupportedAsset; action: 'BUY' | 'SELL'; amountUSD: number }[] = [];
     
     for (const asset of SUPPORTED_ASSETS) {
@@ -689,7 +715,7 @@ export async function applyAIDecision(
     logger.error('[CommunityPool] AI decision failed:', error);
     return {
       success: false,
-      previousAllocations: {} as any,
+      previousAllocations: Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>,
       newAllocations,
       trades: [],
       error: error.message,

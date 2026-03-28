@@ -321,7 +321,7 @@ export async function getPoolStats(chainConfig?: ChainStatsConfig): Promise<Pool
     // Max pool size $10B — anything above indicates a decimal conversion bug
     const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
     const MAX_REASONABLE_SHARE_PRICE = 1_000_000; // $1M per share
-    if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE) {
+    if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE || totalNAV < 0 || sharePrice < 0) {
       logger.error('[PoolStats] SANITY CHECK FAILED — values exceed reasonable bounds', {
         rawNav: nav.toString(),
         rawNavPerShare: navPerShare.toString(),
@@ -329,6 +329,7 @@ export async function getPoolStats(chainConfig?: ChainStatsConfig): Promise<Pool
         parsedSharePrice: sharePrice,
         maxReasonableNAV: MAX_REASONABLE_NAV,
         maxReasonableSharePrice: MAX_REASONABLE_SHARE_PRICE,
+        alert: 'DATA_CORRUPTION',
       });
       // Return safe zero-state instead of crashing — frontend will show "loading" or "no data"
       return {
