@@ -13,7 +13,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import {
   deposit,
@@ -22,717 +21,32 @@ import {
   fetchLivePrices,
   calculatePoolNAV,
 } from '@/lib/services/CommunityPoolService';
-import {
-  getPoolStats as getUnifiedPoolStats,
-  getMemberPosition as getUnifiedMemberPosition,
-  clearCaches as clearStatsCaches,
-} from '@/lib/services/CommunityPoolStatsService';
+import { clearCaches as clearStatsCaches } from '@/lib/services/CommunityPoolStatsService';
 import {
   getUserShares,
   getPoolHistory,
-  getTopShareholders,
-  SUPPORTED_ASSETS,
   getUserTransactionCounts,
 } from '@/lib/storage/community-pool-storage';
 import { resetNavHistory, insertInceptionSnapshot, savePoolStateToDb, saveUserSharesToDb, deleteUserSharesFromDb, getUserSharesFromDb } from '@/lib/db/community-pool';
-import { verifyWalletAuth, requireAuth } from '@/lib/security/auth-middleware';
+import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { POOL_CHAIN_CONFIGS, getCommunityPoolAddress } from '@/lib/contracts/community-pool-config';
+import { POOL_CHAIN_CONFIGS } from '@/lib/contracts/community-pool-config';
+
+// Extracted modules
+import { getChainConfig } from '@/lib/community-pool/chain-config';
+import { clearRpcCaches } from '@/lib/community-pool/cache';
+import { verifyOnChainDeposit, verifyOnChainWithdraw } from '@/lib/community-pool/on-chain-verifier';
+import {
+  getOnChainPoolData,
+  getOnChainUserPosition,
+  getAllOnChainMembers,
+  cachedJsonResponse,
+  buildAllocationsForDb,
+} from '@/lib/community-pool/on-chain-reader';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-// Multi-chain configuration
-type NetworkType = 'testnet' | 'mainnet';
-type ChainKey = 'ethereum' | 'cronos' | 'hedera' | 'sepolia' | 'sui';
-
-interface ChainConfig {
-  rpcUrl: string;
-  poolAddress: string;
-  chainKey: ChainKey;
-  network: NetworkType;
-  assets: string[]; // Chain-specific assets (e.g., ['BTC', 'ETH', 'USDT'] for Sepolia)
-}
-
-/**
- * Get RPC URL and pool address for a given chain/network
- * Falls back to Sepolia testnet (primary live chain) if invalid
- */
-function getChainConfig(chain?: string | null, network?: string | null): ChainConfig {
-  const chainKey = (chain as ChainKey) || 'sepolia';
-  const networkType: NetworkType = network === 'mainnet' ? 'mainnet' : 'testnet';
-  
-  const config = POOL_CHAIN_CONFIGS[chainKey];
-  if (!config) {
-    // Fallback to Sepolia testnet (primary live chain)
-    const fallbackConfig = POOL_CHAIN_CONFIGS['sepolia'];
-    return {
-      rpcUrl: fallbackConfig?.rpcUrls?.testnet || 'https://sepolia.drpc.org',
-      poolAddress: getCommunityPoolAddress('sepolia', 'testnet'),
-      chainKey: 'sepolia',
-      network: 'testnet',
-      assets: fallbackConfig?.assets || ['BTC', 'ETH', 'SUI', 'CRO'],
-    };
-  }
-  
-  const rpcUrl = networkType === 'mainnet' ? config.rpcUrls.mainnet : config.rpcUrls.testnet;
-  const poolAddress = networkType === 'mainnet' 
-    ? config.contracts.mainnet.communityPool 
-    : config.contracts.testnet.communityPool;
-  
-  return { rpcUrl, poolAddress, chainKey, network: networkType, assets: config.assets };
-}
-
-// Legacy constant for default chain (Cronos testnet)
-const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
-
-// Minimal ABI for reading pool stats
-const POOL_ABI = [
-  'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
-  'function getMemberPosition(address member) view returns (uint256 shares, uint256 valueUSD, uint256 percentage)',
-  'function calculateTotalNAV() view returns (uint256)',
-  'function totalShares() view returns (uint256)',
-  'function getMemberCount() view returns (uint256)',
-  'function memberList(uint256) view returns (address)',
-  'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
-];
-
-// ============================================================================
-// HIGH-CONCURRENCY OPTIMIZATIONS
-// ============================================================================
-
-// 1. In-memory cache with INCREASED TTLs for community pool data
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
-}
-const rpcCache = new Map<string, CacheEntry<unknown>>();
-
-// 2. Request deduplication - prevent thundering herd
-// When 100 users request the same data simultaneously, only 1 fetch runs
-const pendingRequests = new Map<string, Promise<unknown>>();
-
-async function dedupedFetch<T>(
-  key: string,
-  fetcher: () => Promise<T>,
-  ttlMs: number
-): Promise<T> {
-  // Check cache first
-  const cached = getCachedRpc<T>(key);
-  if (cached !== null) {
-    return cached;
-  }
-  
-  // Check if a request is already in flight
-  const pending = pendingRequests.get(key) as Promise<T> | undefined;
-  if (pending) {
-    logger.debug('[CommunityPool] Deduped request', { key });
-    return pending;
-  }
-  
-  // Create new request with cleanup
-  const request = fetcher()
-    .then(result => {
-      setCachedRpc(key, result, ttlMs);
-      return result;
-    })
-    .finally(() => {
-      pendingRequests.delete(key);
-    });
-  
-  pendingRequests.set(key, request);
-  return request;
-}
-
-function getCachedRpc<T>(key: string): T | null {
-  const entry = rpcCache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    rpcCache.delete(key);
-    return null;
-  }
-  return entry.data as T;
-}
-
-function setCachedRpc<T>(key: string, data: T, ttlMs: number = 30000): void {
-  rpcCache.set(key, { data, expiresAt: Date.now() + ttlMs });
-}
-
-// Explicit types for RPC cache to avoid circular ReturnType references
-interface PoolDataCache {
-  totalValueUSD: number;
-  totalShares: number;
-  sharePrice: number;
-  totalMembers: number;
-  allocations: Record<string, { percentage: number }>;
-  onChain: boolean;
-}
-
-interface UserPositionCache {
-  walletAddress: string;
-  shares: number;
-  valueUSD: number;
-  percentage: number;
-  isMember: boolean;
-  onChain: boolean;
-}
-
-// CACHE TTLs - Increased for high concurrency (pool data changes slowly)
-const POOL_DATA_TTL = 60_000;       // 60 seconds for pool summary
-const USER_POSITION_TTL = 30_000;   // 30 seconds for user positions
-const LEADERBOARD_TTL = 120_000;    // 2 minutes for leaderboard
-
-// ============================================================================
-// ON-CHAIN TRANSACTION VERIFICATION
-// ============================================================================
-
-// CommunityPool event signatures for deposit/withdraw
-// Event: Deposited(address indexed member, uint256 amountUSD, uint256 sharesReceived, uint256 sharePrice, uint256 timestamp)
-const DEPOSIT_EVENT_TOPIC = ethers.id('Deposited(address,uint256,uint256,uint256,uint256)');
-// Event: Withdrawn(address indexed member, uint256 sharesBurned, uint256 amountUSD, uint256 sharePrice, uint256 timestamp)
-const WITHDRAW_EVENT_TOPIC = ethers.id('Withdrawn(address,uint256,uint256,uint256,uint256)');
-
-/**
- * Verify that a transaction hash corresponds to a real on-chain deposit
- * to the CommunityPool contract from the claimed wallet.
- * 
- * SECURITY: This prevents fake deposits where someone could call the API
- * with a fabricated txHash and get shares credited without actually depositing.
- * 
- * @param txHash - The transaction hash to verify
- * @param expectedWallet - The wallet address that should have made the deposit
- * @param chainConfig - Chain configuration for RPC and contract address
- * @returns Verified deposit amount in USD (from on-chain), or null if invalid
- */
-async function verifyOnChainDeposit(
-  txHash: string,
-  expectedWallet: string,
-  chainConfig: ChainConfig = getChainConfig()
-): Promise<{ verified: boolean; amountUSD: number; sharesReceived: number; error?: string }> {
-  try {
-    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
-    const poolAddress = chainConfig.poolAddress;
-    
-    // Fetch transaction receipt
-    const receipt = await provider.getTransactionReceipt(txHash);
-    if (!receipt) {
-      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction not found on-chain' };
-    }
-    
-    // Verify transaction was successful
-    if (receipt.status !== 1) {
-      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction failed on-chain' };
-    }
-    
-    // Verify transaction was to the CommunityPool contract
-    if (receipt.to?.toLowerCase() !== poolAddress.toLowerCase()) {
-      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'Transaction not to CommunityPool contract' };
-    }
-    
-    // Find the Deposited event in the logs
-    const depositLog = receipt.logs.find(log => 
-      log.topics[0] === DEPOSIT_EVENT_TOPIC &&
-      log.address.toLowerCase() === poolAddress.toLowerCase()
-    );
-    
-    if (!depositLog) {
-      return { verified: false, amountUSD: 0, sharesReceived: 0, error: 'No Deposited event found in transaction' };
-    }
-    
-    // Decode the event: Deposited(address depositor, uint256 amount, uint256 shares)
-    // depositor is indexed (in topics[1])
-    const depositorAddress = ethers.getAddress('0x' + depositLog.topics[1].slice(26));
-    
-    // Verify the depositor matches the expected wallet
-    if (depositorAddress.toLowerCase() !== expectedWallet.toLowerCase()) {
-      return { 
-        verified: false, 
-        amountUSD: 0, 
-        sharesReceived: 0, 
-        error: `Depositor ${depositorAddress} does not match expected ${expectedWallet}` 
-      };
-    }
-    
-    // Decode the non-indexed parameters: amountUSD, sharesReceived, sharePrice, timestamp
-    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-      ['uint256', 'uint256', 'uint256', 'uint256'],
-      depositLog.data
-    );
-    const amountUSD = parseFloat(ethers.formatUnits(decoded[0], 6)); // USDC has 6 decimals
-    const sharesReceived = parseFloat(ethers.formatUnits(decoded[1], 18)); // Shares have 18 decimals
-    
-    logger.info(`[CommunityPool] Verified on-chain deposit: ${expectedWallet} deposited $${amountUSD}, received ${sharesReceived} shares`);
-    
-    return { verified: true, amountUSD, sharesReceived };
-    
-  } catch (error: any) {
-    logger.error('[CommunityPool] On-chain deposit verification failed:', error);
-    return { verified: false, amountUSD: 0, sharesReceived: 0, error: error.message };
-  }
-}
-
-/**
- * Verify that a transaction hash corresponds to a real on-chain withdrawal
- * from the CommunityPool contract by the claimed wallet.
- */
-async function verifyOnChainWithdraw(
-  txHash: string,
-  expectedWallet: string,
-  chainConfig: ChainConfig = getChainConfig()
-): Promise<{ verified: boolean; amountUSD: number; sharesBurned: number; error?: string }> {
-  try {
-    const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
-    const poolAddress = chainConfig.poolAddress;
-    
-    const receipt = await provider.getTransactionReceipt(txHash);
-    if (!receipt) {
-      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction not found on-chain' };
-    }
-    
-    if (receipt.status !== 1) {
-      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction failed on-chain' };
-    }
-    
-    if (receipt.to?.toLowerCase() !== poolAddress.toLowerCase()) {
-      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'Transaction not to CommunityPool contract' };
-    }
-    
-    // Find the Withdrawn event: Withdrawn(address member, uint256 shares, uint256 amountOut, uint256 fee)
-    const withdrawLog = receipt.logs.find(log => 
-      log.topics[0] === WITHDRAW_EVENT_TOPIC &&
-      log.address.toLowerCase() === poolAddress.toLowerCase()
-    );
-    
-    if (!withdrawLog) {
-      return { verified: false, amountUSD: 0, sharesBurned: 0, error: 'No Withdrawn event found in transaction' };
-    }
-    
-    const memberAddress = ethers.getAddress('0x' + withdrawLog.topics[1].slice(26));
-    
-    if (memberAddress.toLowerCase() !== expectedWallet.toLowerCase()) {
-      return { 
-        verified: false, 
-        amountUSD: 0, 
-        sharesBurned: 0, 
-        error: `Withdrawer ${memberAddress} does not match expected ${expectedWallet}` 
-      };
-    }
-    
-    // Decode: sharesBurned, amountUSD, sharePrice, timestamp (4 non-indexed params)
-    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-      ['uint256', 'uint256', 'uint256', 'uint256'],
-      withdrawLog.data
-    );
-    const sharesBurned = parseFloat(ethers.formatUnits(decoded[0], 18));
-    // amountUSD is in 6 decimals (USDC)
-    const amountUSD = parseFloat(ethers.formatUnits(decoded[1], 6));
-    
-    logger.info(`[CommunityPool] Verified on-chain withdrawal: ${expectedWallet} withdrew $${amountUSD}, burned ${sharesBurned} shares`);
-    
-    return { verified: true, amountUSD, sharesBurned };
-    
-  } catch (error: any) {
-    logger.error('[CommunityPool] On-chain withdrawal verification failed:', error);
-    return { verified: false, amountUSD: 0, sharesBurned: 0, error: error.message };
-  }
-}
-
-/**
- * Create a JSON response with CDN cache headers for Vercel Edge Cache
- * s-maxage: CDN caches for specified seconds
- * stale-while-revalidate: serves stale while fetching fresh in background
- */
-function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
-  return NextResponse.json(data, {
-    headers: {
-      'Cache-Control': `s-maxage=${cdnTtlSeconds}, stale-while-revalidate=${cdnTtlSeconds * 2}`,
-    },
-  });
-}
-
-/**
- * Fetch on-chain pool data (SINGLE SOURCE OF TRUTH)
- * 
- * Multi-chain support:
- * - For Cronos: uses CommunityPoolStatsService (with caching)
- * - For other chains: fetches directly from that chain's RPC
- * 
- * @param chainConfig - Optional chain configuration. If not provided, uses Cronos testnet.
- */
-async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCache | null> {
-  const config = chainConfig || getChainConfig();
-  const cacheKey = `onchain-pool-${config.chainKey}-${config.network}`;
-  
-  // Check in-memory cache first
-  const cached = getCachedRpc<PoolDataCache>(cacheKey);
-  if (cached) return cached;
-  
-  try {
-    // For Cronos testnet, use the unified stats service (has extra caching)
-    if (config.chainKey === 'cronos' && config.network === 'testnet') {
-      const stats = await getUnifiedPoolStats();
-      
-      // Use actual on-chain allocations for BTC/ETH/SUI/CRO hedging
-      // The pool accepts USDT deposits but allocates to multiple assets
-      const allocations: Record<string, { percentage: number }> = {
-        BTC: { percentage: stats.allocations.BTC.percentage },
-        ETH: { percentage: stats.allocations.ETH.percentage },
-        SUI: { percentage: stats.allocations.SUI.percentage },
-        CRO: { percentage: stats.allocations.CRO.percentage },
-      };
-      
-      // Check if hedging is active (has non-zero allocations)
-      const hasHedging = stats.allocations.BTC.percentage > 0 || stats.allocations.ETH.percentage > 0;
-      const actualHoldings = hasHedging 
-        ? allocations  // Show target allocations when hedging
-        : { USDT: { percentage: 100 } };  // Show USDT when not hedged
-      
-      const result = {
-        totalValueUSD: stats.totalNAV,
-        totalShares: stats.totalShares,
-        sharePrice: stats.sharePrice,
-        totalMembers: stats.memberCount,
-        allocations,
-        actualHoldings,
-        depositAsset: 'USDT',
-        onChain: true,
-      };
-      setCachedRpc(cacheKey, result, POOL_DATA_TTL);
-      return result;
-    }
-    
-    // For other chains, fetch directly from on-chain
-    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
-    const pool = new ethers.Contract(config.poolAddress, POOL_ABI, provider);
-    
-    // Extended ABI for fallback methods
-    const FALLBACK_ABI = [
-      'function totalShares() view returns (uint256)',
-      'function depositToken() view returns (address)',
-    ];
-    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
-    
-    let totalShares = 0;
-    let totalNAV = 0;
-    let sharePrice = 1.0;
-    let rawMemberCount = 0;
-    let allocations: number[] = []; // Populated from on-chain getPoolStats
-    
-    // Try getPoolStats first
-    try {
-      const [stats, memberCount] = await Promise.all([
-        pool.getPoolStats(),
-        pool.getMemberCount(),
-      ]);
-      
-      totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-      totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
-      // Use the contract's _sharePrice (6 decimals, accounts for virtual offsets)
-      sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
-      rawMemberCount = Number(memberCount);
-      allocations = (stats._allocations || [0, 0, 0, 0]).map((a: bigint) => Number(a) / 100);
-      
-      // MAINNET SANITY CHECK: Reject obviously wrong values
-      const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
-      const MAX_REASONABLE_SHARE_PRICE = 1_000_000; // $1M per share
-      if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE) {
-        logger.error(`[CommunityPool] SANITY CHECK FAILED for ${config.chainKey}`, {
-          rawNAV: stats._totalNAV.toString(),
-          rawSharePrice: stats._sharePrice.toString(),
-          parsedTotalNAV: totalNAV,
-          parsedSharePrice: sharePrice,
-        });
-        return null; // Don't serve obviously wrong data
-      }
-      
-      logger.info(`[CommunityPool] getPoolStats succeeded for ${config.chainKey}`, {
-        totalShares, totalNAV, rawMemberCount
-      });
-    } catch (statsError) {
-      // Fallback: Read totalShares and USDT balance directly
-      logger.warn(`[CommunityPool] getPoolStats failed for ${config.chainKey}, using fallback`, { 
-        error: statsError instanceof Error ? statsError.message.substring(0, 100) : String(statsError)
-      });
-      
-      try {
-        const poolFallback = new ethers.Contract(config.poolAddress, FALLBACK_ABI, provider);
-        
-        // Get total shares
-        const rawShares = await poolFallback.totalShares();
-        totalShares = parseFloat(ethers.formatUnits(rawShares, 18));
-        
-        // Get deposit token (USDT) address and its balance as TVL
-        const fullChainConfig = POOL_CHAIN_CONFIGS[config.chainKey];
-        const networkKey = config.network as 'testnet' | 'mainnet';
-        const usdtAddress = fullChainConfig?.contracts?.[networkKey]?.usdt;
-        
-        if (usdtAddress) {
-          const usdt = new ethers.Contract(usdtAddress, ERC20_ABI, provider);
-          const usdtBalance = await usdt.balanceOf(config.poolAddress);
-          totalNAV = parseFloat(ethers.formatUnits(usdtBalance, 6)); // USDT has 6 decimals
-        }
-        
-        // Calculate share price with virtual offset (matching contract's ERC-4626 formula)
-        // VIRTUAL_ASSETS = 1e6 ($1), VIRTUAL_SHARES = 1e18 (1 share)
-        const VIRTUAL_ASSETS = 1; // 1e6 in 6-decimal = $1
-        const VIRTUAL_SHARES = 1; // 1e18 in 18-decimal = 1 share
-        sharePrice = (totalNAV + VIRTUAL_ASSETS) / (totalShares + VIRTUAL_SHARES);
-        
-        // Try to get member count
-        try {
-          const mc = await pool.getMemberCount();
-          rawMemberCount = Number(mc);
-        } catch {
-          rawMemberCount = 1; // Minimum 1 member if we can't read
-        }
-        
-        logger.info(`[CommunityPool] Fallback succeeded for ${config.chainKey}`, {
-          totalShares, totalNAV, sharePrice, rawMemberCount
-        });
-      } catch (fallbackError) {
-        logger.error(`[CommunityPool] Fallback also failed for ${config.chainKey}`, { 
-          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-        });
-        return null;
-      }
-    }
-    
-    // Simplification: Trust the contract's member count to avoid 
-    // N+1 query performance issues. Deduplication should happen 
-    // off-chain or via graph indexing if precision is critical.
-    const uniqueMemberCount = rawMemberCount;
-    
-    // Parse allocations from contract (BPS to percentage)
-    // allocations array populated from on-chain getPoolStats, empty if unavailable
-    const btcAlloc = allocations[0] || 0;
-    const ethAlloc = allocations[1] || 0;
-    const suiAlloc = allocations[2] || 0;
-    const croAlloc = allocations[3] || 0;
-    
-    // Check if pool has diversified allocations or is holding just USDT
-    const hasAllocations = btcAlloc > 0 || ethAlloc > 0 || suiAlloc > 0 || croAlloc > 0;
-    
-    let allocationResult: Record<string, { percentage: number }>;
-    
-    if (hasAllocations) {
-      // Multi-asset pool: use on-chain target allocations
-      allocationResult = {
-        BTC: { percentage: btcAlloc },
-        ETH: { percentage: ethAlloc },
-        SUI: { percentage: suiAlloc },
-        CRO: { percentage: croAlloc },
-      };
-    } else {
-      // No allocations set - pool is holding USDT only
-      allocationResult = {};
-      for (const asset of config.assets) {
-        if (asset === 'USDT') {
-          allocationResult[asset] = { percentage: 100 };
-        } else {
-          allocationResult[asset] = { percentage: 0 };
-        }
-      }
-    }
-    
-    const result = {
-      totalValueUSD: totalNAV,
-      totalShares,
-      sharePrice,
-      totalMembers: uniqueMemberCount,
-      allocations: allocationResult,
-      onChain: true,
-    };
-    
-    logger.info(`[CommunityPool] Fetched on-chain data for ${config.chainKey}:${config.network}`, {
-      totalValueUSD: result.totalValueUSD,
-      totalShares: result.totalShares,
-      memberCount: result.totalMembers,
-    });
-    
-    setCachedRpc(cacheKey, result, POOL_DATA_TTL);
-    return result;
-  } catch (err) {
-    logger.error(`[CommunityPool API] On-chain stats error for ${config.chainKey}:`, err);
-    return null;
-  }
-}
-
-/**
- * Fetch on-chain user position (SINGLE SOURCE OF TRUTH)
- * 
- * Now accepts chainConfig to query the correct chain's contract.
- * For default chain (cronos), uses CommunityPoolStatsService.
- * For other chains, queries the contract directly.
- */
-async function getOnChainUserPosition(userAddress: string, chainConfig?: ChainConfig): Promise<UserPositionCache | null> {
-  try {
-    // Non-EVM addresses (e.g. SUI 64-hex) cannot be queried against EVM contracts
-    if (!/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
-      return null;
-    }
-
-    // For cronos (default), use the unified service for better caching
-    if (!chainConfig || chainConfig.chainKey === 'cronos') {
-      const pos = await getUnifiedMemberPosition(userAddress);
-      return {
-        walletAddress: pos.walletAddress,
-        shares: pos.shares,
-        valueUSD: pos.valueUSD,
-        percentage: pos.percentage,
-        isMember: pos.isMember,
-        onChain: true,
-      };
-    }
-    
-    // For other chains, query the contract directly
-    const cacheKey = `user-pos-${chainConfig.chainKey}-${chainConfig.network}-${userAddress.toLowerCase()}`;
-    
-    return dedupedFetch<UserPositionCache | null>(
-      cacheKey,
-      async () => {
-        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
-        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
-        
-        // Get pool stats for share price calculation
-        const poolData = await getOnChainPoolData(chainConfig);
-        if (!poolData) return null;
-        
-        // Get user's member data
-        const memberData = await pool.members(userAddress);
-        const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
-        
-        if (shares === 0) {
-          return {
-            walletAddress: userAddress,
-            shares: 0,
-            valueUSD: 0,
-            percentage: 0,
-            isMember: false,
-            onChain: true,
-          };
-        }
-        
-        const valueUSD = shares * poolData.sharePrice;
-        const percentage = poolData.totalShares > 0 ? (shares / poolData.totalShares) * 100 : 0;
-        
-        return {
-          walletAddress: userAddress,
-          shares,
-          valueUSD,
-          percentage,
-          isMember: true,
-          onChain: true,
-        };
-      },
-      USER_POSITION_TTL
-    );
-  } catch (err) {
-    logger.error('[CommunityPool API] On-chain user position error:', err);
-    return null;
-  }
-}
-
-/**
- * Fetch ALL on-chain members and their positions with request deduplication
- * TTL: 120 seconds (expensive query)
- * NOTE: Contract memberList may have duplicate entries - we deduplicate by address
- */
-async function getAllOnChainMembers(chainConfig: ChainConfig = getChainConfig()) {
-  // Include chain in cache key to avoid mixing data between chains
-  const cacheKey = `all-members-${chainConfig.chainKey}-${chainConfig.network}`;
-  
-  return dedupedFetch<Array<{
-    walletAddress: string;
-    shares: number;
-    depositedUSD: number;
-    joinTime: number;
-  }> | null>(
-    cacheKey,
-    async () => {
-      try {
-        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
-        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
-        
-        const memberCount = await pool.getMemberCount();
-        const count = Number(memberCount);
-        logger.info(`[CommunityPool API] On-chain member count (raw) for ${chainConfig.chainKey}: ${count}`);
-        
-        // Use a Map to deduplicate by address (contract memberList has duplicates)
-        // OPTIMIZATION: Batch all member lookups in parallel chunks of 5
-        const memberMap = new Map<string, {
-          walletAddress: string;
-          shares: number;
-          depositedUSD: number;
-          joinTime: number;
-        }>();
-
-        const BATCH_SIZE = 5;
-        for (let batchStart = 0; batchStart < count; batchStart += BATCH_SIZE) {
-          const batchEnd = Math.min(batchStart + BATCH_SIZE, count);
-          const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
-
-          // Step 1: Fetch addresses in parallel
-          const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
-
-          // Step 2: Filter already-seen, fetch member data in parallel
-          const newAddrs = addrs.filter(addr => !memberMap.has(addr.toLowerCase()));
-          if (newAddrs.length === 0) continue;
-
-          const memberDatas = await Promise.all(newAddrs.map(addr => pool.members(addr)));
-
-          for (let k = 0; k < newAddrs.length; k++) {
-            const normalizedAddr = newAddrs[k].toLowerCase();
-            memberMap.set(normalizedAddr, {
-              walletAddress: normalizedAddr,
-              shares: parseFloat(ethers.formatUnits(memberDatas[k].shares, 18)),
-              depositedUSD: parseFloat(ethers.formatUnits(memberDatas[k].depositedUSD, 6)),
-              joinTime: Number(memberDatas[k].joinTime),
-            });
-          }
-        }
-        
-        const members = Array.from(memberMap.values());
-        logger.info(`[CommunityPool API] Unique members after deduplication: ${members.length}`);
-        
-        return members;
-      } catch (err) {
-        logger.error('[CommunityPool API] Failed to fetch all on-chain members:', err);
-        return null;
-      }
-    },
-    LEADERBOARD_TTL
-  );
-}
-
-/**
- * Find user in on-chain members by searching the member list
- * This handles cases where the user's wallet address checksum differs from on-chain storage
- */
-async function findOnChainMember(userAddress: string, chainConfig: ChainConfig = getChainConfig()) {
-  const normalizedUser = userAddress.toLowerCase();
-  const members = await getAllOnChainMembers(chainConfig);
-  
-  if (!members) return null;
-  
-  const found = members.find(m => m.walletAddress.toLowerCase() === normalizedUser);
-  if (found) {
-    const onChainPool = await getOnChainPoolData(chainConfig);
-    const totalShares = onChainPool?.totalShares || members.reduce((sum, m) => sum + m.shares, 0);
-    
-    return {
-      walletAddress: found.walletAddress,
-      shares: found.shares,
-      valueUSD: found.depositedUSD, // Use deposited value
-      percentage: totalShares > 0 ? (found.shares / totalShares) * 100 : 0,
-      isMember: found.shares > 0,
-      onChain: true,
-    };
-  }
-  
-  return null;
-}
-
 
 /**
  * GET - Fetch pool info
@@ -1317,7 +631,6 @@ export async function POST(request: NextRequest) {
           const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainUser && onChainPool) {
-            // Save on-chain user state directly to DB with chain info
             await saveUserSharesToDb({
               walletAddress: walletAddress.toLowerCase(),
               shares: onChainUser.shares,
@@ -1325,19 +638,11 @@ export async function POST(request: NextRequest) {
               chain: chainConfig.chainKey,
             });
             
-            // Update pool state in DB
-            const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
-              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: 0, amount: 0, price: 0 },
-              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: 0, amount: 0, price: 0 },
-              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: 0, amount: 0, price: 0 },
-              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: 0, amount: 0, price: 0 },
-            };
-            
             await savePoolStateToDb({
               totalValueUSD: onChainPool.totalValueUSD,
               totalShares: onChainPool.totalShares,
               sharePrice: onChainPool.sharePrice,
-              allocations,
+              allocations: buildAllocationsForDb(onChainPool),
               lastRebalance: Date.now(),
               lastAIDecision: null,
               chain: chainConfig.chainKey,
@@ -1413,19 +718,11 @@ export async function POST(request: NextRequest) {
           const onChainPool = await getOnChainPoolData(chainConfig);
           
           if (onChainPool) {
-            // Update pool state in DB
-            const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
-              BTC: { percentage: onChainPool.allocations.BTC.percentage, valueUSD: 0, amount: 0, price: 0 },
-              ETH: { percentage: onChainPool.allocations.ETH.percentage, valueUSD: 0, amount: 0, price: 0 },
-              CRO: { percentage: onChainPool.allocations.CRO.percentage, valueUSD: 0, amount: 0, price: 0 },
-              SUI: { percentage: onChainPool.allocations.SUI.percentage, valueUSD: 0, amount: 0, price: 0 },
-            };
-            
             await savePoolStateToDb({
               totalValueUSD: onChainPool.totalValueUSD,
               totalShares: onChainPool.totalShares,
               sharePrice: onChainPool.sharePrice,
-              allocations,
+              allocations: buildAllocationsForDb(onChainPool),
               lastRebalance: Date.now(),
               lastAIDecision: null,
               chain: chainConfig.chainKey,
@@ -1480,33 +777,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Build allocations with required fields
-        const totalNAV = onChainData.totalValueUSD;
-        const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
-          BTC: { 
-            percentage: onChainData.allocations.BTC.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.BTC.percentage / 100,
-            amount: 0, // Unknown from on-chain
-            price: 0, // Unknown from on-chain
-          },
-          ETH: { 
-            percentage: onChainData.allocations.ETH.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.ETH.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-          CRO: { 
-            percentage: onChainData.allocations.CRO.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.CRO.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-          SUI: { 
-            percentage: onChainData.allocations.SUI.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.SUI.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-        };
+        const allocations = buildAllocationsForDb(onChainData);
         
         // Update pool state in DB
         await savePoolStateToDb({
@@ -1633,33 +904,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Step 5: Build proper allocations object
-        const totalNAV = onChainData.totalValueUSD;
-        const allocations: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {
-          BTC: { 
-            percentage: onChainData.allocations.BTC.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.BTC.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-          ETH: { 
-            percentage: onChainData.allocations.ETH.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.ETH.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-          CRO: { 
-            percentage: onChainData.allocations.CRO.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.CRO.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-          SUI: { 
-            percentage: onChainData.allocations.SUI.percentage, 
-            valueUSD: totalNAV * onChainData.allocations.SUI.percentage / 100,
-            amount: 0,
-            price: 0,
-          },
-        };
+        const allocations = buildAllocationsForDb(onChainData);
         
         // Step 6: Update pool state
         await savePoolStateToDb({
@@ -1687,8 +932,7 @@ export async function POST(request: NextRequest) {
         
         // Step 8: Clear all in-memory caches
         clearStatsCaches();
-        rpcCache.clear();
-        pendingRequests.clear();
+        clearRpcCaches();
         
         logger.info('[CommunityPool API] Full reset completed successfully');
         
