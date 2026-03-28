@@ -154,13 +154,26 @@ export async function GET(request: NextRequest) {
       const shares = onChainPosition?.isMember ? onChainPosition.shares : 0;
       const valueUsdc = onChainPosition?.isMember ? onChainPosition.valueUsd : 0;
       const percentage = onChainPosition?.isMember ? onChainPosition.percentage : 0;
+      // costBasis tracks actual USDC deposited on-chain (depositedSui field = depositedUsdc for USDC pool)
+      const costBasisUsd = onChainPosition?.isMember ? onChainPosition.depositedSui : 0;
+
+      // Sanity check: percentage can never exceed 100, shares can never be negative
+      if (shares < 0 || percentage > 100.001 || valueUsdc < 0) {
+        logger.error('[SUI-API] SANITY CHECK FAILED on user position', {
+          shares, percentage, valueUsdc, wallet: wallet.slice(0, 10) + '...',
+        });
+        return NextResponse.json(
+          { success: false, error: 'On-chain data failed sanity check — please retry' },
+          { status: 500 }
+        );
+      }
 
       // Sync DB to match on-chain (background, non-blocking for response)
       if (shares > 0) {
         saveUserSharesToDb({
           walletAddress: wallet,
           shares,
-          costBasisUSD: shares, // 1 share ≈ 1 USDC cost basis
+          costBasisUSD: costBasisUsd || shares,
           chain: 'sui',
         }).catch(err => logger.warn('[SUI-API] DB sync failed (non-critical)', { 
           error: err instanceof Error ? err.message : err,
@@ -192,7 +205,7 @@ export async function GET(request: NextRequest) {
           wallet,
           shares,
           valueUsdc,
-          costBasisUsd: shares, // 1 share = 1 USDC
+          costBasisUsd,
           joinedAt: onChainPosition.joinedAt || null,
           lastActionAt: onChainPosition.lastDepositAt || null,
           depositCount: txCounts.depositCount,
@@ -698,6 +711,21 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      // Security: Cap single deposit to prevent DB inflation attacks
+      const MAX_SINGLE_DEPOSIT_USDC = 10_000_000; // $10M max per deposit
+      if (amountUsdc > MAX_SINGLE_DEPOSIT_USDC) {
+        return NextResponse.json(
+          { success: false, error: `Deposit exceeds maximum ($${MAX_SINGLE_DEPOSIT_USDC.toLocaleString()} USDC)` },
+          { status: 400 }
+        );
+      }
+      // Security: Validate txDigest format if provided (SUI base58/base64, 32-44 chars)
+      if (txDigest && typeof txDigest === 'string' && !/^[A-Za-z0-9+/=]{32,64}$/.test(txDigest) && !txDigest.startsWith('usdc-deposit-')) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid transaction digest format' },
+          { status: 400 }
+        );
+      }
 
       // Dynamically import DB functions to avoid edge runtime issues
       const { getUserSharesFromDb, saveUserSharesToDb, addPoolTransactionToDb, txHashExists } = await import('@/lib/db/community-pool');
@@ -762,29 +790,53 @@ export async function POST(request: NextRequest) {
       const sharesToMint = amountUsdc;
 
       // On-chain is the source of truth — read actual member shares from contract
+      // If on-chain read fails, we still record to DB as fallback (tx may not be finalized)
+      // but we log a warning and mark the record as unverified
       let newTotalShares = sharesToMint;
       let newCostBasis = amountUsdc;
+      let onChainVerified = false;
       try {
         // Clear cache so we get fresh on-chain data after the deposit tx
         service.clearCaches();
+        // Wait briefly for SUI finality (~2-3 seconds on SUI)
+        if (isOnChainDeposit) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
         const onChainPos = await service.getMemberPosition(walletAddress);
         if (onChainPos.isMember && onChainPos.shares > 0) {
           newTotalShares = onChainPos.shares;
-          newCostBasis = onChainPos.shares; // 1 share = 1 USDC
+          newCostBasis = onChainPos.shares; // 1 share ≈ 1 USDC
+          onChainVerified = true;
         } else {
-          // Fallback: accumulate from DB if on-chain member not found yet
-          // (may happen if deposit tx hasn't finalized)
+          // On-chain member not found yet — tx may not be finalized
+          // Use conservative estimate: existing + new deposit
           const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
           newTotalShares = (existingShares?.shares || 0) + sharesToMint;
           newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
+          logger.warn('[SUI-API] On-chain member not found yet, using DB + deposit estimate', {
+            wallet: walletAddress.slice(0, 10) + '...',
+            estimate: newTotalShares,
+          });
         }
       } catch (err) {
-        logger.warn('[SUI-API] Could not read on-chain shares, using calculated value', { 
+        logger.error('[SUI-API] On-chain read failed during deposit recording', { 
           error: err instanceof Error ? err.message : err,
         });
+        // Fallback: accumulate from DB — will be corrected on next user-position read
         const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
         newTotalShares = (existingShares?.shares || 0) + sharesToMint;
         newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
+      }
+
+      // Sanity check: shares should never be negative or astronomically large
+      if (newTotalShares < 0 || newTotalShares > MAX_SINGLE_DEPOSIT_USDC * 100) {
+        logger.error('[SUI-API] SANITY CHECK FAILED on deposit shares', {
+          newTotalShares, walletAddress: walletAddress.slice(0, 10) + '...',
+        });
+        return NextResponse.json(
+          { success: false, error: 'Calculated shares failed sanity check — please retry' },
+          { status: 500 }
+        );
       }
 
       // Save updated shares to database (DB is a cache of on-chain state)
@@ -795,7 +847,7 @@ export async function POST(request: NextRequest) {
         chain: 'sui',
       });
 
-      // Record transaction
+      // Record transaction with verification status
       await addPoolTransactionToDb({
         id: `sui-deposit-${Date.now()}-${walletAddress.slice(-8)}`,
         type: 'DEPOSIT',
@@ -806,6 +858,7 @@ export async function POST(request: NextRequest) {
         details: {
           network,
           txDigest,
+          onChainVerified,
           swapResults: swapResult.results,
           allocations,
         },
@@ -839,7 +892,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Record withdrawal: update DB shares (on-chain withdrawal already handled by user wallet)
+    // Record withdrawal: sync DB with on-chain state after user's on-chain withdrawal
     if (action === 'record-withdraw') {
       const { walletAddress, sharesToBurn, txDigest } = body;
 
@@ -856,37 +909,72 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-
-      // Import DB functions
-      const { getUserSharesFromDb, saveUserSharesToDb, deleteUserSharesFromDb, addPoolTransactionToDb } = await import('@/lib/db/community-pool');
-
-      // Get user's current shares
-      const userShares = await getUserSharesFromDb(walletAddress, 'sui');
-      if (!userShares || userShares.shares < sharesToBurn) {
+      // Security: Validate txDigest format
+      if (txDigest && typeof txDigest === 'string' && !/^[A-Za-z0-9+/=]{32,64}$/.test(txDigest)) {
         return NextResponse.json(
-          { success: false, error: `Insufficient shares. Have: ${userShares?.shares || 0}, Need: ${sharesToBurn}` },
+          { success: false, error: 'Invalid transaction digest format' },
           { status: 400 }
         );
       }
 
-      // Calculate USDC equivalent (1 share = 1 USDC)
+      // Import DB functions
+      const { saveUserSharesToDb, deleteUserSharesFromDb, addPoolTransactionToDb, txHashExists } = await import('@/lib/db/community-pool');
+
+      // Idempotency check: prevent double-recording withdrawal
+      if (txDigest) {
+        const alreadyRecorded = await txHashExists(txDigest);
+        if (alreadyRecorded) {
+          return NextResponse.json({
+            success: true,
+            data: {
+              walletAddress,
+              sharesBurned: 0,
+              usdcReturned: 0,
+              message: 'Withdrawal already recorded (idempotent)',
+            },
+            chain: 'sui',
+            network,
+          });
+        }
+      }
+
+      // On-chain is the source of truth — read actual position after withdrawal
+      let remainingShares = 0;
+      let onChainVerified = false;
+      try {
+        service.clearCaches();
+        // Wait for SUI finality
+        await new Promise(r => setTimeout(r, 2000));
+        const onChainPos = await service.getMemberPosition(walletAddress);
+        remainingShares = onChainPos.isMember ? onChainPos.shares : 0;
+        onChainVerified = true;
+      } catch (err) {
+        logger.error('[SUI-API] On-chain read failed during withdrawal recording', {
+          error: err instanceof Error ? err.message : err,
+        });
+        // Fallback: calculate from DB
+        const { getUserSharesFromDb } = await import('@/lib/db/community-pool');
+        const dbShares = await getUserSharesFromDb(walletAddress, 'sui');
+        remainingShares = Math.max(0, (dbShares?.shares || 0) - sharesToBurn);
+      }
+
+      // Calculate USDC equivalent
       const withdrawUsdc = sharesToBurn;
 
-      // Update user shares in DB
-      const remainingShares = userShares.shares - sharesToBurn;
+      // Sync DB to match on-chain state
       if (remainingShares <= 0.0001) {
         await deleteUserSharesFromDb(walletAddress, 'sui');
+        remainingShares = 0;
       } else {
-        const remainingCostBasis = userShares.cost_basis_usd * (remainingShares / userShares.shares);
         await saveUserSharesToDb({
           walletAddress,
           shares: remainingShares,
-          costBasisUSD: remainingCostBasis,
+          costBasisUSD: remainingShares, // 1 share ≈ 1 USDC cost basis
           chain: 'sui',
         });
       }
 
-      // Record transaction
+      // Record transaction with verification status
       await addPoolTransactionToDb({
         id: `sui-withdraw-${Date.now()}-${walletAddress.slice(-8)}`,
         type: 'WITHDRAWAL',
@@ -897,6 +985,8 @@ export async function POST(request: NextRequest) {
         details: {
           network,
           onChain: true,
+          onChainVerified,
+          remainingSharesOnChain: remainingShares,
         },
         txHash: txDigest || undefined,
       });
@@ -905,6 +995,7 @@ export async function POST(request: NextRequest) {
         wallet: walletAddress.slice(0, 10) + '...',
         sharesBurned: sharesToBurn,
         remainingShares,
+        onChainVerified,
         txDigest,
       });
 
@@ -915,6 +1006,7 @@ export async function POST(request: NextRequest) {
           sharesBurned: sharesToBurn,
           usdcReturned: withdrawUsdc,
           remainingShares,
+          onChainVerified,
         },
         chain: 'sui',
         network,

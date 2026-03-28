@@ -428,12 +428,21 @@ export function useCommunityPool(propAddress?: string) {
         
         if (!mountedRef.current) return;
         
+        // Parse share price from pool data (available to both pool and user position blocks)
+        const poolSharePrice = (poolJson.success && poolJson.data)
+          ? (parseFloat(poolJson.data.sharePriceUsd) || (
+              (parseFloat(poolJson.data.totalShares) || 0) > 0
+                ? (parseFloat(poolJson.data.totalNAVUsd) || 0) / parseFloat(poolJson.data.totalShares)
+                : 1.0
+            ))
+          : 1.0;
+        
         if (poolJson.success) {
           if (poolJson.data.poolStateId) {
             dispatchPool({ type: 'SET_SUI_POOL_STATE_ID', payload: poolJson.data.poolStateId });
           }
           
-          // Use USDC-denominated values (1 share = 1 USDC)
+          // Use USDC-denominated values (server provides share price)
           const totalShares = parseFloat(poolJson.data.totalShares) || 0;
           const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || totalShares;
           
@@ -446,8 +455,8 @@ export function useCommunityPool(propAddress?: string) {
               totalShares,
               totalNAV: totalShares, // In USDC pool, NAV = total shares in USDC
               totalValueUSD,
-              sharePrice: 1.0, // 1 share = 1 USDC
-              sharePriceUSD: 1.0,
+              sharePrice: poolSharePrice,
+              sharePriceUSD: poolSharePrice,
               memberCount: poolJson.data.memberCount || 0,
               allocations: alloc,
               aiLastUpdate: null,
@@ -471,7 +480,7 @@ export function useCommunityPool(propAddress?: string) {
             payload: {
               walletAddress: userAddress || '',
               shares,
-              valueUSD: Number(userData.valueUsdc) || shares, // 1 share = 1 USDC
+              valueUSD: Number(userData.valueUsdc) || (shares * poolSharePrice), // server value or compute from share price
               valueSUI: 0,
               percentage,
               isMember: userData.isMember || false,
@@ -1439,8 +1448,9 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    // USDC has 6 decimals
-    const amountMicroUsdc = Math.floor(usdAmount * 1_000_000);
+    // USDC has 6 decimals — use Math.round to avoid floating-point precision loss
+    // e.g. 10.55 * 1_000_000 = 10549999.999... → Math.round gives correct 10550000
+    const amountMicroUsdc = Math.round(usdAmount * 1_000_000);
     
     // Contract config — use env vars with hardcoded testnet fallbacks
     // NOTE: Do NOT use poolState.suiPoolStateId here — API may return the native
@@ -1624,8 +1634,15 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    // Shares use 6 decimals on-chain (same as USDC)
-    const sharesOnChain = Math.floor(shares * 1_000_000);
+    // Security: Validate shares don't exceed user's available balance
+    const userAvailableShares = poolState.userPosition?.shares || 0;
+    if (shares > userAvailableShares) {
+      dispatchPool({ type: 'SET_ERROR', payload: `Insufficient shares. You have ${userAvailableShares.toFixed(2)} shares.` });
+      return;
+    }
+    
+    // Shares use 6 decimals on-chain (same as USDC) — use Math.round for precision
+    const sharesOnChain = Math.round(shares * 1_000_000);
     const estimatedUsd = shares;
     
     // NOTE: Do NOT use poolState.suiPoolStateId here — see deposit handler comment.
@@ -1707,16 +1724,24 @@ export function useCommunityPool(propAddress?: string) {
         return;
       }
       
-      // Record withdrawal in backend DB
-      await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: suiAddress,
-          sharesToBurn: shares,
-          txDigest: result.digest,
-        }),
-      });
+      // Record withdrawal in backend DB (with error handling)
+      try {
+        const recordRes = await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: suiAddress,
+            sharesToBurn: shares,
+            txDigest: result.digest,
+          }),
+        });
+        if (!recordRes.ok) {
+          logger.warn('Failed to record withdrawal in DB', { status: recordRes.status });
+        }
+      } catch (recordErr) {
+        // Non-critical: on-chain tx already succeeded, DB will be synced on next position read
+        logger.warn('Withdrawal DB record failed (on-chain tx succeeded)', { error: recordErr });
+      }
       
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
       dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });

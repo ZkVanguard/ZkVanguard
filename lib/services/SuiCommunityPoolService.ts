@@ -977,6 +977,19 @@ export class SuiUsdcPoolService {
 
   /** Get member position (USDC-denominated) */
   async getMemberPosition(address: string): Promise<SuiMemberPosition> {
+    // Security: Validate SUI address format before wasting an RPC call
+    if (!address || !/^0x[a-fA-F0-9]{64}$/.test(address)) {
+      logger.warn('[SuiUsdcPool] Invalid address passed to getMemberPosition', { 
+        address: address?.slice(0, 10),
+      });
+      return {
+        address: address || '',
+        shares: 0, depositedSui: 0, withdrawnSui: 0,
+        joinedAt: 0, lastDepositAt: 0, highWaterMark: 0,
+        valueSui: 0, valueUsd: 0, percentage: 0, isMember: false,
+      };
+    }
+
     if (!this.isDeployed()) {
       return this.fallbackService.getMemberPosition(address);
     }
