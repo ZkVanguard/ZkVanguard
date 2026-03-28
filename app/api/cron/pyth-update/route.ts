@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
   // Step 2: Get target chains from query param or default to Sepolia
   const chainsParam = request.nextUrl.searchParams.get('chains');
   const targetChains = chainsParam 
-    ? chainsParam.split(',').map(c => parseInt(c.trim()))
+    ? chainsParam.split(',').map(c => parseInt(c.trim(), 10))
     : [11155111]; // Default to Sepolia only
   
   // Step 3: Update each chain

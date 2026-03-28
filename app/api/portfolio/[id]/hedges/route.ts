@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const portfolioId = parseInt(params.id);
+    const portfolioId = parseInt(params.id, 10);
 
     if (isNaN(portfolioId)) {
       return NextResponse.json(

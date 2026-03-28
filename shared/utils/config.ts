@@ -244,7 +244,7 @@ export const config = {
   // Database
   databaseUrl: process.env.DATABASE_URL || '',
   dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: parseInt(process.env.DB_PORT || '5432'),
+  dbPort: parseInt(process.env.DB_PORT || '5432', 10),
   dbName: process.env.DB_NAME || 'zk_vanguard',
   dbUser: process.env.DB_USER || 'zkvanguard_user',
   dbPassword: process.env.DB_PASSWORD || '',
@@ -252,12 +252,12 @@ export const config = {
   // Redis
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   redisHost: process.env.REDIS_HOST || 'localhost',
-  redisPort: parseInt(process.env.REDIS_PORT || '6379'),
+  redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
 
   // Agent Configuration
   agentLogLevel: process.env.AGENT_LOG_LEVEL || 'info',
-  agentMaxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3'),
-  agentTimeout: parseInt(process.env.AGENT_TIMEOUT || '30000'),
+  agentMaxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3', 10),
+  agentTimeout: parseInt(process.env.AGENT_TIMEOUT || '30000', 10),
 
   // ZK Configuration
   zkTrustedSetupPath: process.env.ZK_TRUSTED_SETUP_PATH || './zk/trusted-setup',
@@ -266,10 +266,10 @@ export const config = {
   // Frontend
   apiUrl: process.env.VITE_API_URL || 'http://localhost:3000',
   wsUrl: process.env.VITE_WS_URL || 'ws://localhost:3000',
-  chainId: parseInt(process.env.VITE_CHAIN_ID || '338'),
+  chainId: parseInt(process.env.VITE_CHAIN_ID || '338', 10),
 
   // Simulator
-  simulatorPort: parseInt(process.env.SIMULATOR_PORT || '3001'),
+  simulatorPort: parseInt(process.env.SIMULATOR_PORT || '3001', 10),
   simulatorDbPath: process.env.SIMULATOR_DB_PATH || './simulator/data',
 
   // Logging
@@ -278,7 +278,7 @@ export const config = {
 
   // Gas Configuration
   gasPriceMultiplier: parseFloat(process.env.GAS_PRICE_MULTIPLIER || '1.1'),
-  maxGasLimit: parseInt(process.env.MAX_GAS_LIMIT || '8000000'),
+  maxGasLimit: parseInt(process.env.MAX_GAS_LIMIT || '8000000', 10),
 
   // Security
   jwtSecret: process.env.JWT_SECRET || 'your-jwt-secret',
@@ -287,7 +287,7 @@ export const config = {
   // Monitoring
   sentryDsn: process.env.SENTRY_DSN || '',
   grafanaUrl: process.env.GRAFANA_URL || '',
-  prometheusPort: parseInt(process.env.PROMETHEUS_PORT || '9090'),
+  prometheusPort: parseInt(process.env.PROMETHEUS_PORT || '9090', 10),
 };
 
 /**

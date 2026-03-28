@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Portfolio summary
     if (summary) {
       const summaryData = await hedgePnLTracker.getPortfolioPnLSummary(
-        portfolioId ? parseInt(portfolioId) : undefined,
+        portfolioId ? parseInt(portfolioId, 10) : undefined,
         walletAddress || undefined
       );
 
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     if (walletAddress) {
       hedges = await getActiveHedgesByWallet(walletAddress);
     } else {
-      hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId) : undefined);
+      hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId, 10) : undefined);
     }
     
     // Cap at 50 hedges to prevent excessive API calls

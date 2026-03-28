@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message.includes('RebalanceCooldown')) {
       return NextResponse.json({
         error: 'Rebalance cooldown active. Try again later.',
-        details: error.message,
+        details: 'Rate limited - please try again later',
       }, { status: 429 });
     }
     

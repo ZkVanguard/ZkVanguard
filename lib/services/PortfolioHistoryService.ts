@@ -351,61 +351,6 @@ class PortfolioHistoryService {
     }));
   }
 
-  /**
-   * Generate mock history for demo/new users
-   */
-  generateMockHistory(
-    walletAddress: string,
-    currentValue: number,
-    days: number = 30
-  ): void {
-    if (this.getHistory(walletAddress).length > 0) {
-      return; // Don't overwrite existing history
-    }
-
-    const now = Date.now();
-    const intervalMs = INTERVALS.HOUR * 4; // 4-hour intervals
-    const dataPoints = Math.floor((days * INTERVALS.DAY) / intervalMs);
-    
-    // Start from a value 80-120% of current (random variance)
-    const startMultiplier = 0.85 + Math.random() * 0.2;
-    let value = currentValue * startMultiplier;
-    const history: PortfolioSnapshot[] = [];
-
-    // Generate realistic price movement using random walk
-    for (let i = 0; i < dataPoints; i++) {
-      const timestamp = now - ((dataPoints - i) * intervalMs);
-      
-      // Random daily return between -2% and +2.5% (slight upward bias)
-      const dailyReturn = (Math.random() * 0.045 - 0.02);
-      const intervalReturn = dailyReturn / 6; // 6 intervals per day
-      value = value * (1 + intervalReturn);
-      
-      // Add some noise
-      value = value * (1 + (Math.random() - 0.5) * 0.005);
-
-      history.push({
-        timestamp,
-        totalValue: value,
-        positions: [], // Empty for mock data
-      });
-    }
-
-    // Ensure final value matches current
-    if (history.length > 0) {
-      history[history.length - 1].totalValue = currentValue;
-    }
-
-    this.snapshots.set(walletAddress, history);
-    this.initialValues.set(walletAddress, history[0]?.totalValue || currentValue);
-    this.saveToStorage();
-
-    logger.info('[PortfolioHistoryService] Mock history generated', {
-      wallet: walletAddress.slice(0, 10),
-      dataPoints: history.length,
-    });
-  }
-
   // Private helper methods
 
   private findClosestSnapshot(

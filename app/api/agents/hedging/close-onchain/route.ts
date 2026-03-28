@@ -535,7 +535,7 @@ export async function POST(request: NextRequest) {
     }
     if (errMsg.includes('Signature') || errMsg.includes('signature')) {
       return NextResponse.json(
-        { success: false, error: errMsg },
+        { success: false, error: 'Authentication failed' },
         { status: 401 }
       );
     }
@@ -543,7 +543,7 @@ export async function POST(request: NextRequest) {
     // Database-related errors
     if (errMsg.includes('not found') || errMsg.includes('no on-chain ID')) {
       return NextResponse.json(
-        { success: false, error: errMsg },
+        { success: false, error: 'Hedge position not found' },
         { status: 404 }
       );
     }

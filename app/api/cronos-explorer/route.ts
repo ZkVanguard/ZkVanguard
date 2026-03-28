@@ -22,7 +22,7 @@ interface BlockscoutTransaction {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
-  const limit = searchParams.get('limit') || '50';
+  const limit = String(Math.min(parseInt(searchParams.get('limit') || '50', 10), 200));
   const network = searchParams.get('network') || 'testnet';
   const contracts = searchParams.get('contracts'); // Comma-separated list of contract addresses
 

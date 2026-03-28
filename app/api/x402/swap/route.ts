@@ -105,7 +105,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
       ProductionGuard.validateFinancialAmount(amountNum, 'amountIn');
     } catch (error: any) {
       return NextResponse.json(
-        { success: false, error: error.message || 'Amount exceeds maximum allowed value' },
+        { success: false, error: 'Swap validation failed' },
         { status: 400 }
       );
     }

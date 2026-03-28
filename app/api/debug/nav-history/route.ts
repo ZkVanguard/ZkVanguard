@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     logger.error('[Debug NAV History] Failed to query', error);
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Failed to retrieve NAV history',
     }, { status: 500 });
   }
 }

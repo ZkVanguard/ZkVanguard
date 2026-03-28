@@ -486,7 +486,7 @@ EFFECTIVENESS: [0-100]`;
           if (stratMatch) strategy = stratMatch[1].trim();
           if (assetMatch) asset = assetMatch[1].trim();
           if (reasonMatch) reason = reasonMatch[1].trim();
-          if (effMatch) effectiveness = parseInt(effMatch[1]);
+          if (effMatch) effectiveness = parseInt(effMatch[1], 10);
         }
         
         // Add AI recommendation to base recommendations

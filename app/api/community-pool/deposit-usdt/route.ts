@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
   
   const searchParams = request.nextUrl.searchParams;
-  const chainId = parseInt(searchParams.get('chainId') || String(DEFAULT_CHAIN_ID));
+  const chainId = parseInt(searchParams.get('chainId') || String(DEFAULT_CHAIN_ID), 10);
   const amount = parseFloat(searchParams.get('amount') || '100');
   const provider = (searchParams.get('provider') || 'pimlico') as PaymasterProvider;
   

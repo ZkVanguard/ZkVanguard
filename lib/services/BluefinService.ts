@@ -297,7 +297,7 @@ export class BluefinService {
 
       // Handle rate limiting
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
         this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
         logger.warn('BlueFin auth rate limited', { retryAfter });
         return false;
@@ -449,7 +449,7 @@ export class BluefinService {
 
       // Handle rate limiting (429)
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
         this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
         logger.warn('BlueFin API rate limited', { retryAfter, path });
         throw new Error(`Rate limited. Retry after ${retryAfter} seconds`);

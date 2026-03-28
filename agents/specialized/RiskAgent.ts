@@ -172,7 +172,7 @@ export class RiskAgent extends BaseAgent {
       };
     };
     
-    const portfolioId = params.portfolioId ?? parseInt(params.address?.split('-')[1] || '0');
+    const portfolioId = params.portfolioId ?? parseInt(params.address?.split('-')[1] || '0', 10);
     const portfolioData = params.portfolioData;
 
     logger.info('Analyzing portfolio risk with AI', {
@@ -238,7 +238,7 @@ REC3: [third recommendation]`;
       // Try to extract adjusted risk score
       const scoreMatch = aiResponse.content.match(/RISK_SCORE:?\s*(\d+)/i);
       if (scoreMatch) {
-        const aiRiskScore = parseInt(scoreMatch[1]);
+        const aiRiskScore = parseInt(scoreMatch[1], 10);
         if (aiRiskScore >= 0 && aiRiskScore <= 100) {
           totalRisk = Math.round((baseRiskScore + aiRiskScore) / 2);
           logger.info('🤖 AI adjusted risk score', { base: baseRiskScore, ai: aiRiskScore, final: totalRisk });

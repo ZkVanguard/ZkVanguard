@@ -31,7 +31,7 @@ const EXPLORER_APIS: Record<string, string> = {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
-  const limit = parseInt(searchParams.get('limit') || '50', 10);
+  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
   const network = searchParams.get('network') || 'sapphire-testnet';
   const contracts = searchParams.get('contracts');
 

@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const portfolioId = searchParams.get('portfolioId');
     const walletAddress = searchParams.get('walletAddress');
     const status = searchParams.get('status') || 'all';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
 
     logger.info('📊 Fetching hedges from database', { portfolioId, walletAddress, status, limit });
 
@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
         hedges = await getAllHedgesByWallet(walletAddress, limit);
       }
     } else if (status === 'active') {
-      hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId) : undefined);
+      hedges = await getActiveHedges(portfolioId ? parseInt(portfolioId, 10) : undefined);
     } else {
       hedges = await getAllHedges(
-        portfolioId ? parseInt(portfolioId) : undefined,
+        portfolioId ? parseInt(portfolioId, 10) : undefined,
         limit
       );
     }
