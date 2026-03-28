@@ -6,8 +6,6 @@ import './api-interceptor';
 import { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
-import { PositionsProvider } from '../contexts/PositionsContext';
-import { AIDecisionsProvider } from '../contexts/AIDecisionsContext';
 // WDK Provider - Native Tether self-custodial wallet
 import { WdkProvider } from '../lib/wdk/wdk-context';
 // WDK Modal - rendered outside Navbar to avoid backdrop-filter stacking context
@@ -46,15 +44,11 @@ export function Providers({ children }: { children: ReactNode }) {
         <WdkProvider defaultChain="sepolia">
           {/* Sui Provider with full context support */}
           <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
-            <PositionsProvider>
-              <AIDecisionsProvider>
-                {/* WdkModalProvider renders the modal as a sibling of Navbar,
-                    outside the backdrop-filter stacking context */}
-                <WdkModalProvider>
-                  {children}
-                </WdkModalProvider>
-              </AIDecisionsProvider>
-            </PositionsProvider>
+            {/* WdkModalProvider renders the modal as a sibling of Navbar,
+                outside the backdrop-filter stacking context */}
+            <WdkModalProvider>
+              {children}
+            </WdkModalProvider>
           </SuiWalletProviders>
         </WdkProvider>
       </QueryClientProvider>
