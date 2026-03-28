@@ -136,47 +136,38 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const { getUserSharesFromDb, getUserTransactionCounts, saveUserSharesToDb } = await import('@/lib/db/community-pool');
-      let userShares = await getUserSharesFromDb(wallet, 'sui');
+      const { getUserTransactionCounts, saveUserSharesToDb } = await import('@/lib/db/community-pool');
       const txCounts = await getUserTransactionCounts(wallet, 'sui');
 
-      // Cross-reference with on-chain pool state to prevent DB drift
-      let poolStats;
+      // On-chain is the source of truth — read member position from contract
+      let onChainPosition;
       try {
-        poolStats = await service.getPoolStats();
-      } catch {
-        poolStats = null;
-      }
-
-      // If DB shares exceed on-chain totalShares, the DB is out of sync.
-      // Read actual on-chain member position and correct DB.
-      if (userShares && poolStats && userShares.shares > poolStats.totalShares) {
-        logger.warn('[SUI-API] DB shares exceed on-chain total — syncing from contract', {
-          wallet: wallet.slice(0, 10) + '...',
-          dbShares: userShares.shares,
-          onChainTotal: poolStats.totalShares,
+        onChainPosition = await service.getMemberPosition(wallet);
+      } catch (err) {
+        logger.error('[SUI-API] Failed to read on-chain member position', { 
+          wallet: wallet.slice(0, 10) + '...', 
+          error: err instanceof Error ? err.message : err,
         });
-        try {
-          const onChainPosition = await service.getMemberPosition(wallet);
-          const correctedShares = onChainPosition.isMember ? onChainPosition.shares : 0;
-          if (correctedShares !== userShares.shares) {
-            await saveUserSharesToDb({
-              walletAddress: wallet,
-              shares: correctedShares,
-              costBasisUSD: correctedShares > 0 ? correctedShares : 0, // 1 share = 1 USDC cost basis
-              chain: 'sui',
-            });
-            userShares = { ...userShares, shares: correctedShares, cost_basis_usd: correctedShares };
-            logger.info('[SUI-API] DB shares corrected from on-chain', { correctedShares });
-          }
-        } catch (syncErr) {
-          logger.error('[SUI-API] Failed to sync from on-chain, capping at totalShares', { error: syncErr instanceof Error ? syncErr.message : syncErr });
-          // Fallback: cap at on-chain totalShares
-          userShares = { ...userShares, shares: poolStats.totalShares, cost_basis_usd: poolStats.totalShares };
-        }
+        onChainPosition = null;
       }
 
-      if (!userShares || userShares.shares <= 0) {
+      const shares = onChainPosition?.isMember ? onChainPosition.shares : 0;
+      const valueUsdc = onChainPosition?.isMember ? onChainPosition.valueUsd : 0;
+      const percentage = onChainPosition?.isMember ? onChainPosition.percentage : 0;
+
+      // Sync DB to match on-chain (background, non-blocking for response)
+      if (shares > 0) {
+        saveUserSharesToDb({
+          walletAddress: wallet,
+          shares,
+          costBasisUSD: shares, // 1 share ≈ 1 USDC cost basis
+          chain: 'sui',
+        }).catch(err => logger.warn('[SUI-API] DB sync failed (non-critical)', { 
+          error: err instanceof Error ? err.message : err,
+        }));
+      }
+
+      if (!onChainPosition?.isMember) {
         return NextResponse.json({
           success: true,
           data: {
@@ -187,29 +178,23 @@ export async function GET(request: NextRequest) {
             costBasisUsd: 0,
             depositCount: txCounts.depositCount,
             withdrawalCount: txCounts.withdrawalCount,
+            percentage: 0,
           },
           chain: 'sui',
           network,
         });
       }
 
-      // 1 share = 1 USDC for USDC pool
-      const valueUsdc = userShares.shares;
-
-      // Calculate percentage using on-chain totalShares as denominator
-      const totalShares = poolStats?.totalShares || 0;
-      const percentage = totalShares > 0 ? (userShares.shares / totalShares) * 100 : 0;
-
       return NextResponse.json({
         success: true,
         data: {
           isMember: true,
           wallet,
-          shares: userShares.shares,
+          shares,
           valueUsdc,
-          costBasisUsd: userShares.cost_basis_usd,
-          joinedAt: userShares.joined_at,
-          lastActionAt: userShares.last_action_at,
+          costBasisUsd: shares, // 1 share = 1 USDC
+          joinedAt: onChainPosition.joinedAt || null,
+          lastActionAt: onChainPosition.lastDepositAt || null,
           depositCount: txCounts.depositCount,
           withdrawalCount: txCounts.withdrawalCount,
           percentage,
@@ -776,35 +761,33 @@ export async function POST(request: NextRequest) {
       // Calculate shares to mint (1 share = 1 USDC for simplicity)
       const sharesToMint = amountUsdc;
 
-      // Get existing user shares
-      const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
-      let newTotalShares = (existingShares?.shares || 0) + sharesToMint;
-      let newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
-
-      // Verify against on-chain pool state — prevent DB shares from exceeding contract total
+      // On-chain is the source of truth — read actual member shares from contract
+      let newTotalShares = sharesToMint;
+      let newCostBasis = amountUsdc;
       try {
-        const poolStats = await service.getPoolStats();
-        if (newTotalShares > poolStats.totalShares && poolStats.totalShares > 0) {
-          logger.warn('[SUI-API] record-deposit: calculated shares exceed on-chain total, capping', {
-            calculated: newTotalShares,
-            onChainTotal: poolStats.totalShares,
-            walletAddress: walletAddress.slice(0, 10) + '...',
-          });
-          // Read actual on-chain member shares if available
-          const onChainPos = await service.getMemberPosition(walletAddress);
-          if (onChainPos.isMember && onChainPos.shares > 0) {
-            newTotalShares = onChainPos.shares;
-            newCostBasis = onChainPos.shares; // 1 share = 1 USDC
-          } else {
-            newTotalShares = poolStats.totalShares;
-            newCostBasis = poolStats.totalShares;
-          }
+        // Clear cache so we get fresh on-chain data after the deposit tx
+        service.clearCaches();
+        const onChainPos = await service.getMemberPosition(walletAddress);
+        if (onChainPos.isMember && onChainPos.shares > 0) {
+          newTotalShares = onChainPos.shares;
+          newCostBasis = onChainPos.shares; // 1 share = 1 USDC
+        } else {
+          // Fallback: accumulate from DB if on-chain member not found yet
+          // (may happen if deposit tx hasn't finalized)
+          const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
+          newTotalShares = (existingShares?.shares || 0) + sharesToMint;
+          newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
         }
-      } catch (verifyErr) {
-        logger.warn('[SUI-API] Could not verify on-chain shares, using calculated value', { error: verifyErr instanceof Error ? verifyErr.message : verifyErr });
+      } catch (err) {
+        logger.warn('[SUI-API] Could not read on-chain shares, using calculated value', { 
+          error: err instanceof Error ? err.message : err,
+        });
+        const existingShares = await getUserSharesFromDb(walletAddress, 'sui');
+        newTotalShares = (existingShares?.shares || 0) + sharesToMint;
+        newCostBasis = (existingShares?.cost_basis_usd || 0) + amountUsdc;
       }
 
-      // Save updated shares to database
+      // Save updated shares to database (DB is a cache of on-chain state)
       await saveUserSharesToDb({
         walletAddress,
         shares: newTotalShares,
