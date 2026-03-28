@@ -456,12 +456,15 @@ export function useCommunityPool(propAddress?: string) {
           });
         }
         
-        // User position from DB (USDC-denominated)
+        // User position from DB (USDC-denominated, synced with on-chain)
         if (userJson?.success && userJson.data) {
           const userData = userJson.data;
           const shares = Number(userData.shares) || 0;
           const totalShares = parseFloat(poolJson?.data?.totalShares) || 0;
-          const percentage = totalShares > 0 && shares > 0 ? (shares / totalShares) * 100 : 0;
+          // Prefer server-computed percentage (validated against on-chain), fallback to local calc
+          const percentage = userData.percentage != null
+            ? Number(userData.percentage)
+            : (totalShares > 0 && shares > 0 ? (shares / totalShares) * 100 : 0);
           
           dispatchPool({
             type: 'SET_USER_POSITION',
