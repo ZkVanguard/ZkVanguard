@@ -1,9 +1,10 @@
 'use client';
 
+import { memo } from 'react';
 import { ShieldCheckIcon, BoltIcon, ChartBarIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { useTranslations } from 'next-intl';
 
-export function Features() {
+export const Features = memo(function Features() {
   const t = useTranslations('features');
   
   const features = [
@@ -97,4 +98,4 @@ export function Features() {
       </div>
     </div>
   );
-}
+});

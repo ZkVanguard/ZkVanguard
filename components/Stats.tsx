@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
-export function Stats() {
+export const Stats = memo(function Stats() {
   const t = useTranslations('stats');
   const [isVisible, setIsVisible] = useState(false);
 
@@ -76,4 +76,4 @@ export function Stats() {
       </div>
     </div>
   );
-}
+});

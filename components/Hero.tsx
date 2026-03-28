@@ -1,10 +1,11 @@
 "use client";
 
+import { memo } from 'react';
 import Link from 'next/link';
 import { ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useTranslations } from 'next-intl';
 
-export function Hero() {
+export const Hero = memo(function Hero() {
   const t = useTranslations('hero');
   
   return (
@@ -183,4 +184,4 @@ export function Hero() {
       </div>
     </section>
   );
-}
+});

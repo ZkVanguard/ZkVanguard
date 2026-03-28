@@ -1,11 +1,13 @@
 "use client";
 
+import { memo } from 'react';
 import { Link } from '../i18n/routing';
 import { useTranslations } from 'next-intl';
 
-export function Footer() {
+const currentYear = new Date().getFullYear();
+
+export const Footer = memo(function Footer() {
   const t = useTranslations('footer');
-  const currentYear = new Date().getFullYear();
 
   return (
     <footer className="bg-[#f5f5f7]">
@@ -72,4 +74,4 @@ export function Footer() {
       </div>
     </footer>
   );
-}
+});
