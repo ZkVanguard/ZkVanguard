@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from '../i18n/routing';
 import { ConnectButton } from './ConnectButton';
 import { LanguageSelector } from './LanguageSelector';
@@ -8,7 +8,7 @@ import { Menu, X } from 'lucide-react';
 import Logo from './Logo';
 import { useTranslations } from 'next-intl';
 
-export function Navbar() {
+export const Navbar = memo(function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const t = useTranslations('nav');
@@ -108,4 +108,4 @@ export function Navbar() {
       </div>
     </nav>
   );
-}
+});
