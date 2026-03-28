@@ -1,0 +1,447 @@
+/**
+ * On-chain data readers for community pool.
+ * 
+ * Fetches pool statistics, user positions, and member lists directly
+ * from on-chain contracts. Includes caching and deduplication.
+ */
+
+import { ethers } from 'ethers';
+import { NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
+import {
+  getPoolStats as getUnifiedPoolStats,
+  getMemberPosition as getUnifiedMemberPosition,
+} from '@/lib/services/CommunityPoolStatsService';
+import { POOL_CHAIN_CONFIGS } from '@/lib/contracts/community-pool-config';
+import type { ChainConfig, PoolDataCache, UserPositionCache } from './types';
+import { getChainConfig, POOL_ABI } from './chain-config';
+import { dedupedFetch, getCachedRpc, setCachedRpc, POOL_DATA_TTL, USER_POSITION_TTL, LEADERBOARD_TTL } from './cache';
+
+/**
+ * Create a JSON response with CDN cache headers for Vercel Edge Cache
+ * s-maxage: CDN caches for specified seconds
+ * stale-while-revalidate: serves stale while fetching fresh in background
+ */
+export function cachedJsonResponse(data: unknown, cdnTtlSeconds: number = 30) {
+  return NextResponse.json(data, {
+    headers: {
+      'Cache-Control': `s-maxage=${cdnTtlSeconds}, stale-while-revalidate=${cdnTtlSeconds * 2}`,
+    },
+  });
+}
+
+/**
+ * Build the extended allocations object used for DB persistence.
+ * DRYs up the repeated pattern in deposit/withdraw/sync/reset handlers.
+ */
+export function buildAllocationsForDb(poolData: PoolDataCache) {
+  const totalNAV = poolData.totalValueUSD;
+  return {
+    BTC: { 
+      percentage: poolData.allocations.BTC?.percentage || 0, 
+      valueUSD: totalNAV * (poolData.allocations.BTC?.percentage || 0) / 100,
+      amount: 0,
+      price: 0,
+    },
+    ETH: { 
+      percentage: poolData.allocations.ETH?.percentage || 0, 
+      valueUSD: totalNAV * (poolData.allocations.ETH?.percentage || 0) / 100,
+      amount: 0,
+      price: 0,
+    },
+    CRO: { 
+      percentage: poolData.allocations.CRO?.percentage || 0, 
+      valueUSD: totalNAV * (poolData.allocations.CRO?.percentage || 0) / 100,
+      amount: 0,
+      price: 0,
+    },
+    SUI: { 
+      percentage: poolData.allocations.SUI?.percentage || 0, 
+      valueUSD: totalNAV * (poolData.allocations.SUI?.percentage || 0) / 100,
+      amount: 0,
+      price: 0,
+    },
+  };
+}
+
+/**
+ * Fetch on-chain pool data (SINGLE SOURCE OF TRUTH)
+ * 
+ * Multi-chain support:
+ * - For Cronos: uses CommunityPoolStatsService (with caching)
+ * - For other chains: fetches directly from that chain's RPC
+ * 
+ * @param chainConfig - Optional chain configuration. If not provided, uses Cronos testnet.
+ */
+export async function getOnChainPoolData(chainConfig?: ChainConfig): Promise<PoolDataCache | null> {
+  const config = chainConfig || getChainConfig();
+  const cacheKey = `onchain-pool-${config.chainKey}-${config.network}`;
+  
+  // Check in-memory cache first
+  const cached = getCachedRpc<PoolDataCache>(cacheKey);
+  if (cached) return cached;
+  
+  try {
+    // For Cronos testnet, use the unified stats service (has extra caching)
+    if (config.chainKey === 'cronos' && config.network === 'testnet') {
+      const stats = await getUnifiedPoolStats();
+      
+      // Use actual on-chain allocations for BTC/ETH/SUI/CRO hedging
+      // The pool accepts USDT deposits but allocates to multiple assets
+      const allocations: Record<string, { percentage: number }> = {
+        BTC: { percentage: stats.allocations.BTC.percentage },
+        ETH: { percentage: stats.allocations.ETH.percentage },
+        SUI: { percentage: stats.allocations.SUI.percentage },
+        CRO: { percentage: stats.allocations.CRO.percentage },
+      };
+      
+      // Check if hedging is active (has non-zero allocations)
+      const hasHedging = stats.allocations.BTC.percentage > 0 || stats.allocations.ETH.percentage > 0;
+      const actualHoldings = hasHedging 
+        ? allocations  // Show target allocations when hedging
+        : { USDT: { percentage: 100 } };  // Show USDT when not hedged
+      
+      const result: PoolDataCache = {
+        totalValueUSD: stats.totalNAV,
+        totalShares: stats.totalShares,
+        sharePrice: stats.sharePrice,
+        totalMembers: stats.memberCount,
+        allocations,
+        actualHoldings,
+        depositAsset: 'USDT',
+        onChain: true,
+      };
+      setCachedRpc(cacheKey, result, POOL_DATA_TTL);
+      return result;
+    }
+    
+    // For other chains, fetch directly from on-chain
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const pool = new ethers.Contract(config.poolAddress, POOL_ABI, provider);
+    
+    // Extended ABI for fallback methods
+    const FALLBACK_ABI = [
+      'function totalShares() view returns (uint256)',
+      'function depositToken() view returns (address)',
+    ];
+    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+    
+    let totalShares = 0;
+    let totalNAV = 0;
+    let sharePrice = 1.0;
+    let rawMemberCount = 0;
+    let allocations: number[] = []; // Populated from on-chain getPoolStats
+    
+    // Try getPoolStats first
+    try {
+      const [stats, memberCount] = await Promise.all([
+        pool.getPoolStats(),
+        pool.getMemberCount(),
+      ]);
+      
+      totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+      totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6)); // USDC decimals
+      // Use the contract's _sharePrice (6 decimals, accounts for virtual offsets)
+      sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
+      rawMemberCount = Number(memberCount);
+      allocations = (stats._allocations || [0, 0, 0, 0]).map((a: bigint) => Number(a) / 100);
+      
+      // MAINNET SANITY CHECK: Reject obviously wrong values
+      const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
+      const MAX_REASONABLE_SHARE_PRICE = 1_000_000; // $1M per share
+      if (totalNAV > MAX_REASONABLE_NAV || sharePrice > MAX_REASONABLE_SHARE_PRICE) {
+        logger.error(`[CommunityPool] SANITY CHECK FAILED for ${config.chainKey}`, {
+          rawNAV: stats._totalNAV.toString(),
+          rawSharePrice: stats._sharePrice.toString(),
+          parsedTotalNAV: totalNAV,
+          parsedSharePrice: sharePrice,
+        });
+        return null; // Don't serve obviously wrong data
+      }
+      
+      logger.info(`[CommunityPool] getPoolStats succeeded for ${config.chainKey}`, {
+        totalShares, totalNAV, rawMemberCount
+      });
+    } catch (statsError) {
+      // Fallback: Read totalShares and USDT balance directly
+      logger.warn(`[CommunityPool] getPoolStats failed for ${config.chainKey}, using fallback`, { 
+        error: statsError instanceof Error ? statsError.message.substring(0, 100) : String(statsError)
+      });
+      
+      try {
+        const poolFallback = new ethers.Contract(config.poolAddress, FALLBACK_ABI, provider);
+        
+        // Get total shares
+        const rawShares = await poolFallback.totalShares();
+        totalShares = parseFloat(ethers.formatUnits(rawShares, 18));
+        
+        // Get deposit token (USDT) address and its balance as TVL
+        const fullChainConfig = POOL_CHAIN_CONFIGS[config.chainKey];
+        const networkKey = config.network as 'testnet' | 'mainnet';
+        const usdtAddress = fullChainConfig?.contracts?.[networkKey]?.usdt;
+        
+        if (usdtAddress) {
+          const usdt = new ethers.Contract(usdtAddress, ERC20_ABI, provider);
+          const usdtBalance = await usdt.balanceOf(config.poolAddress);
+          totalNAV = parseFloat(ethers.formatUnits(usdtBalance, 6)); // USDT has 6 decimals
+        }
+        
+        // Calculate share price with virtual offset (matching contract's ERC-4626 formula)
+        // VIRTUAL_ASSETS = 1e6 ($1), VIRTUAL_SHARES = 1e18 (1 share)
+        const VIRTUAL_ASSETS = 1; // 1e6 in 6-decimal = $1
+        const VIRTUAL_SHARES = 1; // 1e18 in 18-decimal = 1 share
+        sharePrice = (totalNAV + VIRTUAL_ASSETS) / (totalShares + VIRTUAL_SHARES);
+        
+        // Try to get member count
+        try {
+          const mc = await pool.getMemberCount();
+          rawMemberCount = Number(mc);
+        } catch {
+          rawMemberCount = 1; // Minimum 1 member if we can't read
+        }
+        
+        logger.info(`[CommunityPool] Fallback succeeded for ${config.chainKey}`, {
+          totalShares, totalNAV, sharePrice, rawMemberCount
+        });
+      } catch (fallbackError) {
+        logger.error(`[CommunityPool] Fallback also failed for ${config.chainKey}`, { 
+          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        });
+        return null;
+      }
+    }
+    
+    // Simplification: Trust the contract's member count to avoid 
+    // N+1 query performance issues. Deduplication should happen 
+    // off-chain or via graph indexing if precision is critical.
+    const uniqueMemberCount = rawMemberCount;
+    
+    // Parse allocations from contract (BPS to percentage)
+    // allocations array populated from on-chain getPoolStats, empty if unavailable
+    const btcAlloc = allocations[0] || 0;
+    const ethAlloc = allocations[1] || 0;
+    const suiAlloc = allocations[2] || 0;
+    const croAlloc = allocations[3] || 0;
+    
+    // Check if pool has diversified allocations or is holding just USDT
+    const hasAllocations = btcAlloc > 0 || ethAlloc > 0 || suiAlloc > 0 || croAlloc > 0;
+    
+    let allocationResult: Record<string, { percentage: number }>;
+    
+    if (hasAllocations) {
+      // Multi-asset pool: use on-chain target allocations
+      allocationResult = {
+        BTC: { percentage: btcAlloc },
+        ETH: { percentage: ethAlloc },
+        SUI: { percentage: suiAlloc },
+        CRO: { percentage: croAlloc },
+      };
+    } else {
+      // No allocations set - pool is holding USDT only
+      allocationResult = {};
+      for (const asset of config.assets) {
+        if (asset === 'USDT') {
+          allocationResult[asset] = { percentage: 100 };
+        } else {
+          allocationResult[asset] = { percentage: 0 };
+        }
+      }
+    }
+    
+    const result: PoolDataCache = {
+      totalValueUSD: totalNAV,
+      totalShares,
+      sharePrice,
+      totalMembers: uniqueMemberCount,
+      allocations: allocationResult,
+      onChain: true,
+    };
+    
+    logger.info(`[CommunityPool] Fetched on-chain data for ${config.chainKey}:${config.network}`, {
+      totalValueUSD: result.totalValueUSD,
+      totalShares: result.totalShares,
+      memberCount: result.totalMembers,
+    });
+    
+    setCachedRpc(cacheKey, result, POOL_DATA_TTL);
+    return result;
+  } catch (err) {
+    logger.error(`[CommunityPool API] On-chain stats error for ${config.chainKey}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Fetch on-chain user position (SINGLE SOURCE OF TRUTH)
+ * 
+ * Now accepts chainConfig to query the correct chain's contract.
+ * For default chain (cronos), uses CommunityPoolStatsService.
+ * For other chains, queries the contract directly.
+ */
+export async function getOnChainUserPosition(userAddress: string, chainConfig?: ChainConfig): Promise<UserPositionCache | null> {
+  try {
+    // Non-EVM addresses (e.g. SUI 64-hex) cannot be queried against EVM contracts
+    if (!/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+      return null;
+    }
+
+    // For cronos (default), use the unified service for better caching
+    if (!chainConfig || chainConfig.chainKey === 'cronos') {
+      const pos = await getUnifiedMemberPosition(userAddress);
+      return {
+        walletAddress: pos.walletAddress,
+        shares: pos.shares,
+        valueUSD: pos.valueUSD,
+        percentage: pos.percentage,
+        isMember: pos.isMember,
+        onChain: true,
+      };
+    }
+    
+    // For other chains, query the contract directly
+    const cacheKey = `user-pos-${chainConfig.chainKey}-${chainConfig.network}-${userAddress.toLowerCase()}`;
+    
+    return dedupedFetch<UserPositionCache | null>(
+      cacheKey,
+      async () => {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
+        
+        // Get pool stats for share price calculation
+        const poolData = await getOnChainPoolData(chainConfig);
+        if (!poolData) return null;
+        
+        // Get user's member data
+        const memberData = await pool.members(userAddress);
+        const shares = parseFloat(ethers.formatUnits(memberData.shares, 18));
+        
+        if (shares === 0) {
+          return {
+            walletAddress: userAddress,
+            shares: 0,
+            valueUSD: 0,
+            percentage: 0,
+            isMember: false,
+            onChain: true,
+          };
+        }
+        
+        const valueUSD = shares * poolData.sharePrice;
+        const percentage = poolData.totalShares > 0 ? (shares / poolData.totalShares) * 100 : 0;
+        
+        return {
+          walletAddress: userAddress,
+          shares,
+          valueUSD,
+          percentage,
+          isMember: true,
+          onChain: true,
+        };
+      },
+      USER_POSITION_TTL
+    );
+  } catch (err) {
+    logger.error('[CommunityPool API] On-chain user position error:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch ALL on-chain members and their positions with request deduplication
+ * TTL: 120 seconds (expensive query)
+ * NOTE: Contract memberList may have duplicate entries - we deduplicate by address
+ */
+export async function getAllOnChainMembers(chainConfig: ChainConfig = getChainConfig()) {
+  // Include chain in cache key to avoid mixing data between chains
+  const cacheKey = `all-members-${chainConfig.chainKey}-${chainConfig.network}`;
+  
+  return dedupedFetch<Array<{
+    walletAddress: string;
+    shares: number;
+    depositedUSD: number;
+    joinTime: number;
+  }> | null>(
+    cacheKey,
+    async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+        const pool = new ethers.Contract(chainConfig.poolAddress, POOL_ABI, provider);
+        
+        const memberCount = await pool.getMemberCount();
+        const count = Number(memberCount);
+        logger.info(`[CommunityPool API] On-chain member count (raw) for ${chainConfig.chainKey}: ${count}`);
+        
+        // Use a Map to deduplicate by address (contract memberList has duplicates)
+        // OPTIMIZATION: Batch all member lookups in parallel chunks of 5
+        const memberMap = new Map<string, {
+          walletAddress: string;
+          shares: number;
+          depositedUSD: number;
+          joinTime: number;
+        }>();
+
+        const BATCH_SIZE = 5;
+        for (let batchStart = 0; batchStart < count; batchStart += BATCH_SIZE) {
+          const batchEnd = Math.min(batchStart + BATCH_SIZE, count);
+          const indices = Array.from({ length: batchEnd - batchStart }, (_, k) => batchStart + k);
+
+          // Step 1: Fetch addresses in parallel
+          const addrs = await Promise.all(indices.map(i => pool.memberList(i)));
+
+          // Step 2: Filter already-seen, fetch member data in parallel
+          const newAddrs = addrs.filter(addr => !memberMap.has(addr.toLowerCase()));
+          if (newAddrs.length === 0) continue;
+
+          const memberDatas = await Promise.all(newAddrs.map(addr => pool.members(addr)));
+
+          for (let k = 0; k < newAddrs.length; k++) {
+            const normalizedAddr = newAddrs[k].toLowerCase();
+            memberMap.set(normalizedAddr, {
+              walletAddress: normalizedAddr,
+              shares: parseFloat(ethers.formatUnits(memberDatas[k].shares, 18)),
+              depositedUSD: parseFloat(ethers.formatUnits(memberDatas[k].depositedUSD, 6)),
+              joinTime: Number(memberDatas[k].joinTime),
+            });
+          }
+        }
+        
+        const members = Array.from(memberMap.values());
+        logger.info(`[CommunityPool API] Unique members after deduplication: ${members.length}`);
+        
+        return members;
+      } catch (err) {
+        logger.error('[CommunityPool API] Failed to fetch all on-chain members:', err);
+        return null;
+      }
+    },
+    LEADERBOARD_TTL
+  );
+}
+
+/**
+ * Find user in on-chain members by searching the member list
+ * This handles cases where the user's wallet address checksum differs from on-chain storage
+ */
+export async function findOnChainMember(userAddress: string, chainConfig: ChainConfig = getChainConfig()) {
+  const normalizedUser = userAddress.toLowerCase();
+  const members = await getAllOnChainMembers(chainConfig);
+  
+  if (!members) return null;
+  
+  const found = members.find(m => m.walletAddress.toLowerCase() === normalizedUser);
+  if (found) {
+    const onChainPool = await getOnChainPoolData(chainConfig);
+    const totalShares = onChainPool?.totalShares || members.reduce((sum, m) => sum + m.shares, 0);
+    
+    return {
+      walletAddress: found.walletAddress,
+      shares: found.shares,
+      valueUSD: found.depositedUSD, // Use deposited value
+      percentage: totalShares > 0 ? (found.shares / totalShares) * 100 : 0,
+      isMember: found.shares > 0,
+      onChain: true,
+    };
+  }
+  
+  return null;
+}
