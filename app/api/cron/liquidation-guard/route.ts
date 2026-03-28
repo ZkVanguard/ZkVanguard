@@ -78,18 +78,23 @@ async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
     
     const response = await fetch(`${baseUrl}/api/positions?type=leveraged&status=active`, {
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000),
     });
     
     if (!response.ok) {
-      logger.warn('[LiquidationGuard] Failed to fetch positions, using calculated data');
-      return getMockPositions();
+      logger.error('[LiquidationGuard] Failed to fetch positions — returning empty (no mock data)', { status: response.status });
+      return [];
     }
     
     const data = await response.json();
-    return data.positions || getMockPositions();
+    if (!data.positions || !Array.isArray(data.positions)) {
+      logger.warn('[LiquidationGuard] No positions array in response');
+      return [];
+    }
+    return data.positions;
   } catch (error: any) {
-    logger.warn('[LiquidationGuard] Error fetching positions:', { error: error?.message || String(error) });
-    return getMockPositions();
+    logger.error('[LiquidationGuard] Error fetching positions — returning empty (no mock data)', { error: error?.message || String(error) });
+    return [];
   }
 }
 
@@ -118,12 +123,9 @@ async function getCurrentPrices(assets: string[]): Promise<Record<string, number
 }
 
 function getDefaultPrices(): Record<string, number> {
-  return {
-    BTC: 95000,
-    ETH: 3200,
-    CRO: 0.15,
-    SUI: 4.50,
-  };
+  // Return empty map — no hardcoded prices. Callers must handle missing prices.
+  logger.warn('[LiquidationGuard] No live prices available — returning empty price map');
+  return {};
 }
 
 /**
@@ -276,45 +278,8 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
   }
 }
 
-/**
- * Mock data for testing
- */
-function getMockPositions(): LeveragedPosition[] {
-  return [
-    {
-      id: 'pos-btc-001',
-      asset: 'BTC',
-      side: 'LONG',
-      entryPrice: 94000,
-      currentPrice: 95000,
-      size: 1.5,
-      leverage: 5,
-      collateral: 28500,
-      notionalValue: 142500,
-      marginLevel: 180,
-      liquidationPrice: 75200,
-      healthScore: 40,
-      walletAddress: '0x1234567890123456789012345678901234567890',
-      portfolioId: 1,
-    },
-    {
-      id: 'pos-eth-001',
-      asset: 'ETH',
-      side: 'SHORT',
-      entryPrice: 3100,
-      currentPrice: 3200,
-      size: 20,
-      leverage: 3,
-      collateral: 21333,
-      notionalValue: 64000,
-      marginLevel: 145,
-      liquidationPrice: 4130,
-      healthScore: 22,
-      walletAddress: '0x1234567890123456789012345678901234567890',
-      portfolioId: 1,
-    },
-  ];
-}
+// NOTE: getMockPositions removed — production code must never use mock data.
+// For testing, use the E2E test scripts in scripts/test-* instead.
 
 /**
  * Main guard function
@@ -332,7 +297,11 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
   let totalMarginLevel = 0;
   
   for (const position of positions) {
-    const currentPrice = prices[position.asset] || position.currentPrice;
+    const currentPrice = prices[position.asset];
+    if (!currentPrice || currentPrice <= 0) {
+      logger.warn(`[LiquidationGuard] No live price for ${position.asset} — skipping position ${position.id}`);
+      continue;
+    }
     const { marginLevel, liquidationPrice, healthScore } = calculateMarginLevel(position, currentPrice);
     const distanceToLiq = getDistanceToLiquidation(position, currentPrice);
     

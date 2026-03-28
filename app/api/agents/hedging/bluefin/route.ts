@@ -22,8 +22,8 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Use mock service in development/testnet
-const USE_MOCK = process.env.BLUEFIN_USE_MOCK !== 'false';
+// Mock mode only if explicitly enabled — production must use real service
+const USE_MOCK = process.env.BLUEFIN_USE_MOCK === 'true';
 const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY;
 // Network from env - defaults to testnet, set BLUEFIN_NETWORK=mainnet for production
 const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'testnet') as 'mainnet' | 'testnet';

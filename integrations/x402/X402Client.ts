@@ -162,7 +162,7 @@ export class X402Client {
       });
 
       return {
-        txHash: settlement.txHash || `0x${Math.random().toString(16).substr(2, 64)}`,
+        txHash: settlement.txHash,
         status: 'confirmed',
         gasless: true,
         timestamp: Date.now(),

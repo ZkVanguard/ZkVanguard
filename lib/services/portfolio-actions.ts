@@ -106,22 +106,24 @@ async function generateActionProof(action: PortfolioAction, result: Record<strin
     };
     
     return {
-      proofHash: `0x${Buffer.from(JSON.stringify(proofData)).toString('hex').slice(0, 64)}`,
-      merkleRoot: `0x${Buffer.from(JSON.stringify(proofData)).toString('hex').slice(0, 64)}`,
-      timestamp: Date.now(),
-      verified: true,
-      actionType: action.type,
-      generationTime: Math.floor(Math.random() * 100) + 50,
-    };
-  } catch (error) {
-    logger.warn('ZK proof generation failed, using fallback', { error: String(error) });
-    return {
-      proofHash: `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-      merkleRoot: `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+      proofHash: `0x${Buffer.from(JSON.stringify(proofData)).toString('hex').slice(0, 64).padEnd(64, '0')}`,
+      merkleRoot: `0x${Buffer.from(JSON.stringify(proofData)).toString('hex').slice(0, 64).padEnd(64, '0')}`,
       timestamp: Date.now(),
       verified: true,
       actionType: action.type,
       generationTime: 100,
+    };
+  } catch (error) {
+    logger.warn('ZK proof generation failed, using deterministic fallback', { error: String(error) });
+    const fallbackData = `fallback:${action.type}:${Date.now()}`;
+    const deterministicHash = `0x${Buffer.from(fallbackData).toString('hex').slice(0, 64).padEnd(64, '0')}`;
+    return {
+      proofHash: deterministicHash,
+      merkleRoot: deterministicHash,
+      timestamp: Date.now(),
+      verified: false,
+      actionType: action.type,
+      generationTime: 0,
     };
   }
 }

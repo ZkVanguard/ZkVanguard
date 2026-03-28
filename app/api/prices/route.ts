@@ -187,36 +187,21 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     logger.error('[Market Data API] Error', error);
     
-    // Return fallback prices for known symbols to prevent UI breakage
+    // Return error — do NOT return stale hardcoded prices as if they are valid
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol');
-    const fallbackPrices: Record<string, number> = {
-      'BTC': 85000,
-      'ETH': 3200,
-      'SUI': 3.50,
-      'CRO': 0.12,
-    };
     
-    if (symbol && fallbackPrices[symbol.toUpperCase()]) {
-      logger.warn(`[Market Data API] Using fallback price for ${symbol}`);
-      return NextResponse.json({
-        success: true,
-        data: {
-          symbol: symbol.toUpperCase(),
-          price: fallbackPrices[symbol.toUpperCase()],
-          change24h: 0,
-          volume24h: 0,
-          source: 'fallback',
-        },
-        source: 'fallback',
-        warning: 'Using cached fallback price',
-        timestamp: new Date().toISOString(),
-      }, {
-        headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10' },
-      });
-    }
+    logger.error(`[Market Data API] All price sources failed for ${symbol || 'unknown'}`, { error });
     
-    return safeErrorResponse(error, 'Price data fetch');
+    return NextResponse.json({
+      success: false,
+      error: 'All price sources unavailable',
+      symbol: symbol?.toUpperCase(),
+      timestamp: new Date().toISOString(),
+    }, { 
+      status: 503,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }
       

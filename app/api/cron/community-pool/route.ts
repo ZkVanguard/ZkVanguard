@@ -185,11 +185,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           const minuteOfDay = new Date().getHours() * 60 + new Date().getMinutes();
           const timeFactor = Math.sin(minuteOfDay / 100) * 0.001; // ±0.1% variation
           
-          // Calculate weighted portfolio return
-          const btcWeight = poolStats.allocations.BTC / 100;
-          const ethWeight = poolStats.allocations.ETH / 100;
-          const suiWeight = poolStats.allocations.SUI / 100;
-          const croWeight = poolStats.allocations.CRO / 100;
+          // Calculate weighted portfolio return (guard against undefined allocations)
+          const btcWeight = (poolStats.allocations?.BTC ?? 0) / 100;
+          const ethWeight = (poolStats.allocations?.ETH ?? 0) / 100;
+          const suiWeight = (poolStats.allocations?.SUI ?? 0) / 100;
+          const croWeight = (poolStats.allocations?.CRO ?? 0) / 100;
           
           // Synthetic return (small daily fluctuation based on market)
           const portfolioReturn = (btcChange * btcWeight) + (ethChange * ethWeight) + 
@@ -453,10 +453,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             
             // Execute rebalancing if auto-approval is enabled
             const autoApprovalEnabled = process.env.COMMUNITY_POOL_AUTO_REBALANCE === 'true';
-            const navThreshold = parseFloat(process.env.COMMUNITY_POOL_NAV_THRESHOLD || '100000');
-            const currentNAV = parseFloat(poolStats.totalNAV);
+            const navThresholdRaw = parseFloat(process.env.COMMUNITY_POOL_NAV_THRESHOLD || '0');
+            const navThreshold = Number.isFinite(navThresholdRaw) && navThresholdRaw > 0 ? navThresholdRaw : 100000;
+            const currentNAV = Number(poolStats.totalNAV) || 0;
             
-            if (autoApprovalEnabled && currentNAV <= navThreshold && secureSigner) {
+            if (!Number.isFinite(currentNAV) || currentNAV < 0) {
+              logger.error('[CommunityPool Cron] Invalid NAV value — aborting rebalance', { nav: poolStats.totalNAV });
+            } else if (autoApprovalEnabled && currentNAV <= navThreshold && secureSigner) {
               logger.info('[CommunityPool Cron] Auto-executing rebalance', {
                 newAllocations: aiData.recommendation.allocations,
               });
@@ -552,12 +555,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       
       // Update pool state with last AI decision
       if (aiDecision.action !== 'HOLD' || riskAssessment.riskScore >= 3) {
+        const navUSD = Number(poolStats.totalNAV) || 0;
+        const sharePriceNum = Number(poolStats.sharePrice) || 0;
+        const totalSharesNum = Number(ethers.formatUnits(stats._totalShares, 18)) || 0;
         await savePoolStateToDb({
-          totalValueUSD: parseFloat(poolStats.totalNAV),
-          totalShares: parseFloat(ethers.formatUnits(stats._totalShares, 18)),
-          sharePrice: parseFloat(poolStats.sharePrice),
+          totalValueUSD: navUSD,
+          totalShares: totalSharesNum,
+          sharePrice: sharePriceNum,
           allocations: Object.entries(poolStats.allocations).reduce((acc, [key, pct]) => {
-            acc[key] = { percentage: pct, valueUSD: parseFloat(poolStats.totalNAV) * (pct / 100), amount: 0, price: 0 };
+            acc[key] = { percentage: pct, valueUSD: navUSD * (pct / 100), amount: 0, price: 0 };
             return acc;
           }, {} as Record<string, { percentage: number; valueUSD: number; amount: number; price: number }>),
           lastRebalance: Date.now(),
