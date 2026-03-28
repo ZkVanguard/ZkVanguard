@@ -272,6 +272,16 @@ interface ChainSelectorProps {
   className?: string;
 }
 
+const CHAIN_OPTIONS: { chain: ChainType; label: string; activeColor: string }[] = [
+  { chain: 'sui', label: 'SUI', activeColor: 'bg-blue-500' },
+  { chain: 'evm', label: 'Cronos', activeColor: 'bg-blue-500' },
+  { chain: 'hedera', label: 'Hedera', activeColor: 'bg-purple-500' },
+  { chain: 'oasis-emerald', label: 'Emerald', activeColor: 'bg-green-500' },
+  { chain: 'oasis-sapphire', label: 'Sapphire', activeColor: 'bg-indigo-500' },
+  { chain: 'oasis-cipher', label: 'Cipher', activeColor: 'bg-purple-500' },
+  { chain: 'oasis-consensus', label: 'Consensus', activeColor: 'bg-rose-500' },
+];
+
 export function ChainSelector({ className = '' }: ChainSelectorProps) {
   const { activeChain, setActiveChain, network, setNetwork } = useMultiChain();
 
@@ -279,76 +289,19 @@ export function ChainSelector({ className = '' }: ChainSelectorProps) {
     <div className={`flex items-center gap-2 ${className}`}>
       {/* Chain Toggle */}
       <div className="flex flex-wrap bg-gray-100 dark:bg-gray-800 rounded-lg p-1 gap-0.5">
-        <button
-          onClick={() => setActiveChain('sui')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'sui'
-              ? 'bg-blue-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          SUI
-        </button>
-        <button
-          onClick={() => setActiveChain('evm')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'evm'
-              ? 'bg-blue-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Cronos
-        </button>
-        <button
-          onClick={() => setActiveChain('hedera')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'hedera'
-              ? 'bg-purple-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Hedera
-        </button>
-        <button
-          onClick={() => setActiveChain('oasis-emerald')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'oasis-emerald'
-              ? 'bg-green-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Emerald
-        </button>
-        <button
-          onClick={() => setActiveChain('oasis-sapphire')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'oasis-sapphire'
-              ? 'bg-indigo-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Sapphire
-        </button>
-        <button
-          onClick={() => setActiveChain('oasis-cipher')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'oasis-cipher'
-              ? 'bg-purple-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Cipher
-        </button>
-        <button
-          onClick={() => setActiveChain('oasis-consensus')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-            activeChain === 'oasis-consensus'
-              ? 'bg-rose-500 text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Consensus
-        </button>
+        {CHAIN_OPTIONS.map(({ chain, label, activeColor }) => (
+          <button
+            key={chain}
+            onClick={() => setActiveChain(chain)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              activeChain === chain
+                ? `${activeColor} text-white`
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Network Selector */}
