@@ -123,7 +123,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<MonitorCo
         // Get history if requested for single symbol
         let history: PriceData[] | undefined;
         if (body.symbol) {
-          history = priceMonitorAgent.getPriceHistory(body.symbol, body.limit || 100);
+          history = priceMonitorAgent.getPriceHistory(body.symbol, Math.min(body.limit || 100, 500));
         }
         
         return NextResponse.json({

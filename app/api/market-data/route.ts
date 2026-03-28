@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
         });
       }
       case 'ohlcv': {
-        const { timeframe = '1h', limit = 100 } = body;
+        const { timeframe = '1h', limit: rawLimit = 100 } = body;
+        const limit = Math.min(Number(rawLimit) || 100, 500);
         const ohlcvData = await Promise.all(
           symbols.map(symbol => mcpClient.getOHLCV(symbol, timeframe, limit))
         );

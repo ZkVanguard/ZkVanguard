@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         }
 
         const rebalanceConfig: AutoRebalanceConfig = {
-          portfolioId: parseInt(portfolioId),
+          portfolioId: parseInt(portfolioId, 10),
           walletAddress,
           enabled: true,
           threshold: config?.threshold || 2, // Default: 2% drift (lowered for active rebalancing)
@@ -116,10 +116,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Remove from persistent storage
-        await deleteAutoRebalanceConfig(parseInt(portfolioId));
+        await deleteAutoRebalanceConfig(parseInt(portfolioId, 10));
 
         // Also disable in in-memory service
-        autoRebalanceService.disableForPortfolio(parseInt(portfolioId));
+        autoRebalanceService.disableForPortfolio(parseInt(portfolioId, 10));
 
         return NextResponse.json({
           success: true,
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         }
 
         const assessment = await autoRebalanceService.triggerAssessment(
-          parseInt(portfolioId),
+          parseInt(portfolioId, 10),
           walletAddress
         );
 
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        const assessment = autoRebalanceService.getLastAssessment(parseInt(portfolioId));
+        const assessment = autoRebalanceService.getLastAssessment(parseInt(portfolioId, 10));
 
         if (!assessment) {
           return NextResponse.json({
@@ -232,12 +232,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Get existing config or create new one
-    let existingConfig = await getAutoRebalanceConfig(parseInt(portfolioId));
+    let existingConfig = await getAutoRebalanceConfig(parseInt(portfolioId, 10));
     
     if (!existingConfig && walletAddress) {
       // Create new config with defaults
       existingConfig = {
-        portfolioId: parseInt(portfolioId),
+        portfolioId: parseInt(portfolioId, 10),
         walletAddress,
         enabled: true,
         threshold: 2,

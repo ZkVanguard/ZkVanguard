@@ -90,7 +90,7 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
       // Find pair index for this symbol
       const idx = Object.entries(PAIR_SYMBOLS).find(([, s]) => s === symbol)?.[0];
       if (idx !== undefined && priceData.price > 0) {
-        prices[parseInt(idx)] = priceData.price;
+        prices[parseInt(idx, 10)] = priceData.price;
       }
     }
 
@@ -391,14 +391,14 @@ export async function GET(request: NextRequest) {
         const priceMap: Record<string, number> = {};
         let actualPriceSource: 'crypto.com' | 'db-cache' | 'fallback' = 'fallback';
         for (const symbol of ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL']) {
-          const pairIdx = Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === symbol);
+          const pairIdx = Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k, 10)] === symbol);
           if (pricesAreLive && pairIdx !== undefined) {
             // Live price from Crypto.com — always preferred
-            priceMap[symbol] = livePrices[parseInt(pairIdx)];
+            priceMap[symbol] = livePrices[parseInt(pairIdx, 10)];
             actualPriceSource = 'crypto.com';
           } else {
             // Fallback chain: live (possibly fallback) → DB cache → hardcoded fallback
-            const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx)] : undefined;
+            const livePrice = pairIdx !== undefined ? livePrices[parseInt(pairIdx, 10)] : undefined;
             const dbCached = cachedPrices[symbol];
             priceMap[symbol] = livePrice ?? dbCached?.price ?? FALLBACK_PRICES[pairIdx as unknown as number] ?? 0;
             if (dbCached?.price) actualPriceSource = 'db-cache';
@@ -408,14 +408,14 @@ export async function GET(request: NextRequest) {
         // ONLY persist to DB when prices are truly live (prevents stale data loop)
         if (pricesAreLive) {
           const priceUpdates = Object.entries(livePrices).map(([idx, price]) => ({
-            symbol: PAIR_SYMBOLS[parseInt(idx)],
+            symbol: PAIR_SYMBOLS[parseInt(idx, 10)],
             price,
             source: 'cryptocom-exchange',
           }));
           upsertPrices(priceUpdates).catch(() => {});
           const priceMapForDb: Record<string, { price: number; source: string }> = {};
           for (const [idx, price] of Object.entries(livePrices)) {
-            priceMapForDb[PAIR_SYMBOLS[parseInt(idx)]] = { price, source: 'cryptocom-exchange' };
+            priceMapForDb[PAIR_SYMBOLS[parseInt(idx, 10)]] = { price, source: 'cryptocom-exchange' };
           }
           batchUpdateHedgePrices(priceMapForDb).catch(() => {});
         }
@@ -450,7 +450,7 @@ export async function GET(request: NextRequest) {
             orderId: h.order_id.slice(0, 18),
             trader: trueOwner,
             asset: h.asset,
-            pairIndex: Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k)] === h.asset) || 0,
+            pairIndex: Object.keys(PAIR_NAMES).find(k => PAIR_NAMES[parseInt(k, 10)] === h.asset) || 0,
             side: h.side,
             type: h.side,
             collateral: capitalUsed,
@@ -489,8 +489,8 @@ export async function GET(request: NextRequest) {
         let protocolStats = null;
         if (includeStats && dbStats) {
           protocolStats = {
-            totalOpened: parseInt(dbStats.total_count || '0'),
-            totalClosed: parseInt(dbStats.closed_count || '0'),
+            totalOpened: parseInt(dbStats.total_count || '0', 10),
+            totalClosed: parseInt(dbStats.closed_count || '0', 10),
             collateralLocked: parseFloat(dbStats.collateral_locked || '0'),
             totalPnl: parseFloat(dbStats.total_pnl || '0'),
             feesCollected: parseFloat(dbStats.fees_collected || '0'),

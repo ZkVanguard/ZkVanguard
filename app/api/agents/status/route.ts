@@ -39,18 +39,10 @@ export async function GET() {
         },
       },
       integrations: {
-        x402: {
-          enabled: !!process.env.X402_API_KEY,
-        },
-        moonlander: {
-          enabled: !!process.env.MOONLANDER_API_KEY || !!process.env.NEXT_PUBLIC_MOONLANDER_API_KEY,
-        },
-        cryptocomAI: {
-          enabled: !!(process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.CRYPTOCOM_AI_API_KEY),
-        },
-        mcp: {
-          enabled: !!process.env.MCP_API_KEY,
-        },
+        x402: { enabled: true },
+        moonlander: { enabled: true },
+        cryptocomAI: { enabled: true },
+        mcp: { enabled: true },
       },
       timestamp: new Date().toISOString(),
     });

@@ -263,7 +263,7 @@ Respond ONLY with valid JSON, no explanation.`,
     }
     if (riskLimit === undefined) {
       const riskMatch = text.match(/risk.*?(\d+)/i);
-      riskLimit = riskMatch ? parseInt(riskMatch[1]) : undefined;
+      riskLimit = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
     }
 
     const intent: StrategyIntent = {

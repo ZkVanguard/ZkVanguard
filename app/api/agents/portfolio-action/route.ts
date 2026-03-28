@@ -240,7 +240,7 @@ REASON3: [risk/opportunity assessment]`;
     // Parse confidence
     const confMatch = aiResponse.content.match(/CONFIDENCE:\s*(\d+)/i) || aiResponse.content.match(/(\d+)\s*%/);
     if (confMatch) {
-      confidence = Math.min(99, Math.max(50, parseInt(confMatch[1]))) / 100;
+      confidence = Math.min(99, Math.max(50, parseInt(confMatch[1], 10))) / 100;
     } else {
       confidence = 0.75; // Default confidence
     }

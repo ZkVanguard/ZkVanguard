@@ -792,7 +792,7 @@ Consider: x402 is 100% gasless, so optimize for speed and reliability, not gas.`
       const batchMatch = aiResponse.content.match(/BATCH_SIZE:\s*(\d+)/i);
       const recMatch = aiResponse.content.match(/RECOMMENDATION:\s*(.+)/i);
       
-      const optimalBatchSize = batchMatch ? Math.min(parseInt(batchMatch[1]), 50) : defaultResult.optimalBatchSize;
+      const optimalBatchSize = batchMatch ? Math.min(parseInt(batchMatch[1], 10), 50) : defaultResult.optimalBatchSize;
       const recommendation = recMatch ? `🤖 ${recMatch[1].trim()}` : defaultResult.recommendation;
       
       logger.info('🤖 AI settlement optimization generated', { 

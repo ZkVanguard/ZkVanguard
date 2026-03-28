@@ -396,7 +396,7 @@ export class ReportingAgent extends BaseAgent {
         try {
           const { proofGenerator } = await import('../../zk/prover/ProofGenerator');
           const proof = await proofGenerator.generateRiskProof({
-            portfolioId: parseInt(portfolioId) || 0,
+            portfolioId: parseInt(portfolioId, 10) || 0,
             timestamp: new Date(),
             totalRisk,
             volatility: avgVolatility,
@@ -899,7 +899,7 @@ export class ReportingAgent extends BaseAgent {
     const reportList = Array.from(this.completedReports.keys()).map(reportId => ({
       reportId,
       type: reportId.split('-')[0],
-      createdAt: parseInt(reportId.split('-').slice(-1)[0]),
+      createdAt: parseInt(reportId.split('-').slice(-1)[0], 10),
     }));
 
     return {

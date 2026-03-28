@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // If portfolio specified, get its last risk assessment
     let riskAssessment = null;
     if (portfolioId) {
-      riskAssessment = autoHedgingService.getLastRiskAssessment(parseInt(portfolioId));
+      riskAssessment = autoHedgingService.getLastRiskAssessment(parseInt(portfolioId, 10));
     }
     
     return NextResponse.json({
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       case 'enable':
         // Enable auto-hedging for a specific portfolio
         // Community Pool (portfolioId=COMMUNITY_POOL_PORTFOLIO_ID) doesn't require walletAddress
-        const parsedPortfolioId = parseInt(portfolioId);
+        const parsedPortfolioId = parseInt(portfolioId, 10);
         const isCommunityPool = isCommunityPoolPortfolio(parsedPortfolioId);
         
         if (portfolioId === undefined || portfolioId === null) {
@@ -154,10 +154,10 @@ export async function POST(request: NextRequest) {
         }
         
         // Disable in storage (soft delete - sets enabled=false)
-        await disableAutoHedge(parseInt(portfolioId));
+        await disableAutoHedge(parseInt(portfolioId, 10));
         
         // Disable in runtime service
-        autoHedgingService.disableForPortfolio(parseInt(portfolioId));
+        autoHedgingService.disableForPortfolio(parseInt(portfolioId, 10));
         
         logger.info('[AutoHedge API] Portfolio disabled and persisted', {
           portfolioId
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
       
       case 'trigger_assessment':
         // Manually trigger risk assessment for a portfolio
-        const assessPortfolioId = parseInt(portfolioId);
+        const assessPortfolioId = parseInt(portfolioId, 10);
         const isCommunityPoolAssess = isCommunityPoolPortfolio(assessPortfolioId);
         
         if (portfolioId === undefined || portfolioId === null) {
@@ -232,10 +232,10 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Delete from storage (hard delete)
-    await deleteAutoHedgeConfig(parseInt(portfolioId));
+    await deleteAutoHedgeConfig(parseInt(portfolioId, 10));
     
     // Disable in runtime service
-    autoHedgingService.disableForPortfolio(parseInt(portfolioId));
+    autoHedgingService.disableForPortfolio(parseInt(portfolioId, 10));
     
     logger.info('[AutoHedge API] Portfolio config deleted', {
       portfolioId

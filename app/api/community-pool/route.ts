@@ -295,7 +295,7 @@ export async function GET(request: NextRequest) {
     
     // Get transaction history
     if (action === 'history') {
-      const limit = parseInt(searchParams.get('limit') || '50');
+      const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
       const history = await getPoolHistory(limit, chainKey);
       
       return NextResponse.json({
@@ -308,7 +308,7 @@ export async function GET(request: NextRequest) {
     // Get leaderboard - ALWAYS use on-chain as authoritative source
     // DB is a cache that can have stale data or ghost entries
     if (action === 'leaderboard') {
-      const limit = parseInt(searchParams.get('limit') || '10');
+      const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 100);
       
       // On-chain is authoritative - always use it
       const onChainMembers = await getAllOnChainMembers(chainConfig);

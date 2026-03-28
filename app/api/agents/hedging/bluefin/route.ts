@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
         symbol,
         side: side.toUpperCase() as 'LONG' | 'SHORT',
         size: parseFloat(size),
-        leverage: parseInt(leverage),
+        leverage: parseInt(leverage, 10),
       });
     } else {
       await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
         symbol,
         side: side.toUpperCase() as 'LONG' | 'SHORT',
         size: parseFloat(size),
-        leverage: parseInt(leverage),
+        leverage: parseInt(leverage, 10),
         portfolioId,
         reason,
       });
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
         market: symbol,
         side: side.toUpperCase() as 'LONG' | 'SHORT',
         size: parseFloat(size),
-        leverage: parseInt(leverage),
+        leverage: parseInt(leverage, 10),
         notionalValue,
         entryPrice: result.executionPrice,
         simulationMode: USE_MOCK,
