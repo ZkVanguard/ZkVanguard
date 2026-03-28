@@ -172,40 +172,48 @@ export class SuiPoolAgent extends BaseAgent {
     const aggregator = getCetusAggregatorService(this.network);
     const indicators: MarketIndicator[] = [];
 
-    for (const asset of POOL_ASSETS) {
+    // Determine swappability deterministically (avoids 4x unnecessary $10 test quotes)
+    // On testnet: nothing is on-chain swappable (all hedged via BlueFin)
+    // On mainnet: BTC/ETH/SUI are swappable, CRO is hedged
+    const swappabilityMap: Record<PoolAsset, boolean> = this.network === 'mainnet'
+      ? { BTC: true, ETH: true, SUI: true, CRO: false }
+      : { BTC: false, ETH: false, SUI: false, CRO: false };
+
+    // Fetch all market data in parallel
+    const marketDataPromises = POOL_ASSETS.map(async (asset) => {
       try {
         const data = await mds.getTokenPrice(asset);
-        const price = data.price;
-        const change24h = data.change24h ?? 0;
-        const volume24h = data.volume24h ?? 0;
-
-        const rangePercent = price > 0 ? Math.abs(change24h) * 1.2 : 0;
-        const volatility: 'low' | 'medium' | 'high' =
-          rangePercent < 3 ? 'low' : rangePercent < 7 ? 'medium' : 'high';
-        const trend: 'bullish' | 'bearish' | 'neutral' =
-          change24h > 2 ? 'bullish' : change24h < -2 ? 'bearish' : 'neutral';
-
-        let score = 50 + change24h * 2;
-        if (volatility === 'low') score += 10;
-        else if (volatility === 'high') score -= 5;
-        if (trend === 'bullish') score += 10;
-        else if (trend === 'bearish') score -= 10;
-        if (volume24h * price > 100_000_000) score += 5;
-        score = Math.max(0, Math.min(100, score));
-
-        // Check if asset can actually be swapped on-chain
-        const testQuote = await aggregator.getSwapQuote(asset, 10); // $10 test
-        const isSwappable = testQuote.canSwapOnChain && !testQuote.isSimulated;
-
-        indicators.push({
-          asset, price, change24h, volume24h, volatility, trend, score, isSwappable,
-        });
+        return { asset, price: data.price, change24h: data.change24h ?? 0, volume24h: data.volume24h ?? 0, ok: true };
       } catch {
-        indicators.push({
-          asset, price: 0, change24h: 0, volume24h: 0,
-          volatility: 'medium', trend: 'neutral', score: 50, isSwappable: false,
-        });
+        return { asset, price: 0, change24h: 0, volume24h: 0, ok: false };
       }
+    });
+
+    const marketResults = await Promise.allSettled(marketDataPromises);
+
+    for (const settled of marketResults) {
+      if (settled.status !== 'fulfilled') continue;
+      const { asset, price, change24h, volume24h } = settled.value;
+
+      const rangePercent = price > 0 ? Math.abs(change24h) * 1.2 : 0;
+      const volatility: 'low' | 'medium' | 'high' =
+        rangePercent < 3 ? 'low' : rangePercent < 7 ? 'medium' : 'high';
+      const trend: 'bullish' | 'bearish' | 'neutral' =
+        change24h > 2 ? 'bullish' : change24h < -2 ? 'bearish' : 'neutral';
+
+      let score = 50 + change24h * 2;
+      if (volatility === 'low') score += 10;
+      else if (volatility === 'high') score -= 5;
+      if (trend === 'bullish') score += 10;
+      else if (trend === 'bearish') score -= 10;
+      if (volume24h * price > 100_000_000) score += 5;
+      score = Math.max(0, Math.min(100, score));
+
+      const isSwappable = swappabilityMap[asset] && aggregator.canSwapOnChain(asset);
+
+      indicators.push({
+        asset, price, change24h, volume24h, volatility, trend, score, isSwappable,
+      });
     }
 
     logger.info('[SuiPoolAgent] Market analysis complete', {

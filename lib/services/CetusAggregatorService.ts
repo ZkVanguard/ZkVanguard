@@ -147,6 +147,57 @@ const GAS_BUDGET: Record<NetworkType, number> = {
 const MIN_GAS_RESERVE_MIST = 100_000_000; // 0.1 SUI always kept in wallet
 
 // ============================================
+// QUOTE CACHE (prevents duplicate API calls)
+// ============================================
+
+/** Short-lived cache for swap quotes — avoids hammering Cetus API */
+interface QuoteCacheEntry {
+  quote: SwapQuoteResult;
+  expiresAt: number;
+}
+
+const QUOTE_CACHE_TTL_MS = 15_000; // 15s — quotes refresh quickly
+const quoteCache = new Map<string, QuoteCacheEntry>();
+
+/** Cleanup stale cache entries periodically */
+let quoteCacheCleanupTimer: ReturnType<typeof setInterval> | null = null;
+function ensureQuoteCacheCleanup() {
+  if (quoteCacheCleanupTimer) return;
+  quoteCacheCleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of quoteCache) {
+      if (entry.expiresAt < now) quoteCache.delete(key);
+    }
+  }, 60_000);
+  if (typeof quoteCacheCleanupTimer === 'object' && 'unref' in quoteCacheCleanupTimer) {
+    quoteCacheCleanupTimer.unref();
+  }
+}
+
+function getQuoteCacheKey(network: string, asset: string, amount: number, direction: 'forward' | 'reverse'): string {
+  // Round amount to 2 decimals to improve cache hit rate
+  return `${network}:${asset}:${Math.round(amount * 100)}:${direction}`;
+}
+
+// ============================================
+// RPC TIMEOUT UTILITY
+// ============================================
+
+/** Default timeout for external RPC/API calls */
+const RPC_TIMEOUT_MS = 10_000; // 10 seconds
+
+/** Fetch with AbortController timeout */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = RPC_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ============================================
 // CETUS AGGREGATOR SERVICE
 // ============================================
 
@@ -173,6 +224,7 @@ export class CetusAggregatorService {
 
     this.coinTypes = SUI_COIN_TYPES[network] || SUI_COIN_TYPES.mainnet;
 
+    ensureQuoteCacheCleanup();
     logger.info('[CetusAggregator] Initialized', { network, hasPriceClient: this.priceClient !== this.client });
   }
 
@@ -268,6 +320,24 @@ export class CetusAggregatorService {
    *   This is NOT simulated — prices come from real mainnet DEX pools.
    */
   async getSwapQuote(
+    asset: PoolAsset,
+    usdcAmount: number,
+  ): Promise<SwapQuoteResult> {
+    // Check quote cache first
+    const cacheKey = getQuoteCacheKey(this.network, asset, usdcAmount, 'forward');
+    const cached = quoteCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.quote;
+    }
+
+    const result = await this._getSwapQuoteUncached(asset, usdcAmount);
+
+    // Cache the result
+    quoteCache.set(cacheKey, { quote: result, expiresAt: Date.now() + QUOTE_CACHE_TTL_MS });
+    return result;
+  }
+
+  private async _getSwapQuoteUncached(
     asset: PoolAsset,
     usdcAmount: number,
   ): Promise<SwapQuoteResult> {
@@ -814,6 +884,22 @@ export class CetusAggregatorService {
    * On testnet: uses mainnet Cetus for price discovery.
    */
   async getReverseSwapQuote(
+    asset: PoolAsset,
+    assetAmount: number,
+  ): Promise<SwapQuoteResult> {
+    // Check quote cache first
+    const cacheKey = getQuoteCacheKey(this.network, asset, assetAmount, 'reverse');
+    const cached = quoteCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.quote;
+    }
+
+    const result = await this._getReverseSwapQuoteUncached(asset, assetAmount);
+    quoteCache.set(cacheKey, { quote: result, expiresAt: Date.now() + QUOTE_CACHE_TTL_MS });
+    return result;
+  }
+
+  private async _getReverseSwapQuoteUncached(
     asset: PoolAsset,
     assetAmount: number,
   ): Promise<SwapQuoteResult> {

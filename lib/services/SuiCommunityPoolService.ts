@@ -177,6 +177,20 @@ const SUI_STATS_TTL = 60_000;    // 60s pool stats
 const SUI_MEMBER_TTL = 30_000;   // 30s member positions
 const SUI_MEMBERS_TTL = 120_000; // 2m all members (leaderboard)
 
+/** Default timeout for SUI RPC calls */
+const SUI_RPC_TIMEOUT_MS = 10_000; // 10 seconds
+
+/** Fetch with AbortController timeout — prevents hanging on slow RPC nodes */
+async function suiFetchWithTimeout(url: string, init: RequestInit, timeoutMs = SUI_RPC_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Deduplicated fetch with in-memory caching.
  * Prevents thundering herd: 100 concurrent users = 1 RPC call.
@@ -248,7 +262,7 @@ export class SuiCommunityPoolService {
 
     // Search for PoolCreated event
     try {
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -402,7 +416,7 @@ export class SuiCommunityPoolService {
       }
 
       // Query dynamic field for this address
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -474,7 +488,7 @@ export class SuiCommunityPoolService {
       if (!membersTableId) return [];
 
       // Get all dynamic fields (members)
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -498,36 +512,39 @@ export class SuiCommunityPoolService {
         // Use 0
       }
 
-      // Parallelize member fetches in batches of 5 (avoid rate limiting)
-      const BATCH_SIZE = 5;
+      // Parallelize member fetches using batched multiGetObjects (reduces N+1 RPC calls)
+      const BATCH_SIZE = 10;
       const memberAddresses = fields.map((f: any) => f.name?.value).filter(Boolean) as string[];
+      const objectIds = fields.map((f: any) => f.objectId).filter(Boolean) as string[];
       const members: SuiMemberPosition[] = [];
 
-      for (let i = 0; i < memberAddresses.length; i += BATCH_SIZE) {
-        const batch = memberAddresses.slice(i, i + BATCH_SIZE);
-        const results = await Promise.allSettled(
-          batch.map(async (memberAddress) => {
-            const memberRes = await fetch(this.config.rpcUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'suix_getDynamicFieldObject',
-                params: [membersTableId, { type: 'address', value: memberAddress }],
-              }),
-            });
+      for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
+        const batchIds = objectIds.slice(i, i + BATCH_SIZE);
+        const batchAddrs = memberAddresses.slice(i, i + BATCH_SIZE);
+        try {
+          const batchRes = await suiFetchWithTimeout(this.config.rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'sui_multiGetObjects',
+              params: [batchIds, { showContent: true }],
+            }),
+          });
+          const batchData = await batchRes.json();
+          const objects = batchData.result || [];
 
-            const memberData = await memberRes.json();
-            const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
-                                memberData.result?.data?.content?.fields;
-
+          for (let j = 0; j < objects.length; j++) {
+            const memberFields = objects[j]?.data?.content?.fields?.value?.fields ||
+                                objects[j]?.data?.content?.fields;
+            const memberAddress = batchAddrs[j];
             if (memberFields && memberFields.shares) {
               const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
               const valueSui = shares * stats.sharePrice;
 
               if (shares > 0) {
-                return {
+                members.push({
                   address: memberAddress,
                   shares,
                   depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
@@ -539,16 +556,48 @@ export class SuiCommunityPoolService {
                   valueUsd: valueSui * suiPrice,
                   percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
                   isMember: true,
-                } as SuiMemberPosition;
+                });
               }
             }
-            return null;
-          })
-        );
-
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value) {
-            members.push(result.value);
+          }
+        } catch (batchErr) {
+          logger.warn('[SuiCommunityPool] Batch member fetch failed, falling back to individual', { error: batchErr });
+          // Fallback: fetch individually for this batch
+          for (const memberAddress of batchAddrs) {
+            try {
+              const memberRes = await suiFetchWithTimeout(this.config.rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'suix_getDynamicFieldObject',
+                  params: [membersTableId, { type: 'address', value: memberAddress }],
+                }),
+              });
+              const memberData = await memberRes.json();
+              const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
+                                  memberData.result?.data?.content?.fields;
+              if (memberFields && memberFields.shares) {
+                const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+                const valueSui = shares * stats.sharePrice;
+                if (shares > 0) {
+                  members.push({
+                    address: memberAddress,
+                    shares,
+                    depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                    withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                    joinedAt: Number(memberFields.joined_at || 0),
+                    lastDepositAt: Number(memberFields.last_deposit_at || 0),
+                    highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+                    valueSui,
+                    valueUsd: valueSui * suiPrice,
+                    percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
+                    isMember: true,
+                  });
+                }
+              }
+            } catch { /* skip individual member on failure */ }
           }
         }
       }
@@ -727,7 +776,7 @@ export class SuiCommunityPoolService {
    */
   private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
     try {
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -815,7 +864,7 @@ export class SuiUsdcPoolService {
 
     // Search for UsdcPoolCreated event
     try {
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -961,7 +1010,7 @@ export class SuiUsdcPoolService {
         const membersTableId = fields.members?.fields?.id?.id;
         if (!membersTableId) return defaultPosition;
 
-        const response = await fetch(this.config.rpcUrl, {
+        const response = await suiFetchWithTimeout(this.config.rpcUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1056,7 +1105,7 @@ export class SuiUsdcPoolService {
   /** Fetch object fields from SUI RPC */
   private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
     try {
-      const response = await fetch(this.config.rpcUrl, {
+      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
