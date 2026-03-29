@@ -7,9 +7,18 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
+  // Standalone output — smaller deployment, faster cold starts
+  output: 'standalone',
+  
   // Performance optimizations
   experimental: {
-    optimizePackageImports: ['viem', 'lucide-react', '@heroicons/react', 'framer-motion', 'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui'],
+    optimizePackageImports: [
+      'viem', 'lucide-react', '@heroicons/react', 'framer-motion',
+      'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui',
+      'date-fns', 'ethers', 'zod', 'eventemitter3', 'uuid',
+    ],
+    // Reduce page data sent to browser
+    optimizeCss: true,
   },
   
   // Compiler optimizations
@@ -57,6 +66,38 @@ const nextConfig = {
       use: 'node-loader',
     });
 
+    // Optimize chunk splitting for multi-user concurrency
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          ...config.optimization?.splitChunks,
+          cacheGroups: {
+            ...((typeof config.optimization?.splitChunks === 'object' && config.optimization?.splitChunks?.cacheGroups) || {}),
+            // Separate large vendor chunks for better caching
+            web3: {
+              test: /[\\/]node_modules[\\/](viem|ethers|@mysten|@bluefin)[\\/]/,
+              name: 'vendor-web3',
+              chunks: 'all',
+              priority: 20,
+            },
+            ui: {
+              test: /[\\/]node_modules[\\/](framer-motion|chart\.js|react-chartjs|lucide-react|@heroicons)[\\/]/,
+              name: 'vendor-ui',
+              chunks: 'all',
+              priority: 15,
+            },
+          },
+        },
+      };
+    }
+
+    // Enable module concatenation for smaller bundles
+    config.optimization = {
+      ...config.optimization,
+      concatenateModules: true,
+    };
+
     return config;
   },
 
@@ -88,6 +129,18 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
     formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 86400, // 24h image caching
+    deviceSizes: [640, 750, 828, 1080, 1200], // Fewer sizes = fewer variants to cache
+  },
+  
+  // Reduce serverless function size
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@swc/core-linux-x64-gnu',
+      'node_modules/@swc/core-linux-x64-musl',
+      'node_modules/@esbuild',
+      'node_modules/sharp',
+    ],
   },
 
   // Security headers
