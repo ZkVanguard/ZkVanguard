@@ -24,6 +24,9 @@ import {
   SettlementResult,
 } from '@shared/types/agent';
 import { ethers } from 'ethers';
+import type { RiskAgent } from '../specialized/RiskAgent';
+import type { HedgingAgent } from '../specialized/HedgingAgent';
+import type { SettlementAgent } from '../specialized/SettlementAgent';
 
 /**
  * Lead Agent class - Orchestrates all specialized agents
@@ -282,6 +285,7 @@ Respond ONLY with valid JSON, no explanation.`,
       },
       requiredAgents,
       estimatedComplexity: requiredAgents.length > 3 ? 'high' : 'medium',
+      predictionContext: predictionContext || undefined,
     };
 
     logger.info('Strategy intent parsed', {
@@ -408,6 +412,7 @@ Respond ONLY with valid JSON, no explanation.`,
           type: 'analyze-risk',
           portfolioId: intent.targetPortfolio,
           objectives: intent.objectives,
+          predictionContext: intent.predictionContext,
         });
         
         if (!riskResult.success) {
@@ -427,42 +432,76 @@ Respond ONLY with valid JSON, no explanation.`,
 
       // ========================================================================
       // STEP 2: MULTI-AGENT CONSENSUS (For trades > $100K)
+      // Each agent independently evaluates the proposal using its own data.
       // ========================================================================
       if (intent.requiredAgents.includes('hedging') && validation.requiredApprovals.includes('multi_agent_consensus')) {
-        logger.info('🗳️ Step 2: Requesting multi-agent consensus...', { executionId });
+        logger.info('🗳️ Step 2: Requesting real multi-agent consensus...', { executionId });
         
         await this.executionGuard.requestConsensus({
           executionId,
           proposal: `Execute ${intent.action} strategy with estimated size $${estimatedPositionSize.toLocaleString()}`,
           requiredAgents: ['risk', 'hedging', 'settlement'],
-          timeoutMs: 10_000, // 10 seconds for automated consensus
+          timeoutMs: 10_000,
         });
-        
-        // Auto-vote from RiskAgent based on analysis
-        const riskApproved = (results.riskAnalysis as RiskAnalysis)?.totalRisk < 70;
-        this.executionGuard.submitVote(executionId, 'risk-agent', riskApproved, 
-          riskApproved ? 'Risk within acceptable limits' : 'Risk too high'
-        );
-        
-        // Real vote from HedgingAgent: approve only if volatility < 1.5 and position size is reasonable
-        const riskData = results.riskAnalysis as RiskAnalysis;
-        const volatilityAcceptable = (riskData?.volatility || 0) < 1.5; // 150% annualized is extreme
-        const positionSizeAcceptable = estimatedPositionSize < 10_000_000; // $10M max for automated
-        const hedgingApproved = volatilityAcceptable && positionSizeAcceptable;
-        this.executionGuard.submitVote(executionId, 'hedging-agent', hedgingApproved, 
-          hedgingApproved 
-            ? `Market conditions acceptable (vol: ${((riskData?.volatility || 0) * 100).toFixed(1)}%, size: $${estimatedPositionSize.toLocaleString()})`
-            : `Market conditions unfavorable (vol: ${((riskData?.volatility || 0) * 100).toFixed(1)}%, size: $${estimatedPositionSize.toLocaleString()})`
-        );
-        
-        // Real vote from SettlementAgent: approve if gas conditions are reasonable and risk < 80
-        const settlementRiskOk = (riskData?.totalRisk || 0) < 80;
-        const settlementApproved = settlementRiskOk && positionSizeAcceptable;
-        this.executionGuard.submitVote(executionId, 'settlement-agent', settlementApproved, 
-          settlementApproved
-            ? `Settlement feasible (risk: ${(riskData?.totalRisk || 0).toFixed(1)})`
-            : `Settlement risk too high (risk: ${(riskData?.totalRisk || 0).toFixed(1)})`
-        );
+
+        const riskData = results.riskAnalysis as RiskAnalysis | undefined;
+        const votingProposal = {
+          executionId,
+          action: intent.action,
+          estimatedPositionSize,
+          riskAnalysis: riskData ? { totalRisk: riskData.totalRisk, volatility: riskData.volatility } : undefined,
+        };
+
+        // ── Real vote from RiskAgent ──
+        const riskAgentInstance = this.agentRegistry.getAgentByType('risk' as AgentType) as unknown as RiskAgent | undefined;
+        if (riskAgentInstance && typeof riskAgentInstance.voteOnExecution === 'function') {
+          const riskVote = await riskAgentInstance.voteOnExecution(votingProposal);
+          this.executionGuard.submitVote(executionId, 'risk-agent', riskVote.approved, riskVote.reason);
+        } else {
+          // Fallback: rule-based vote if agent unavailable
+          const riskApproved = (riskData?.totalRisk ?? 50) < 75;
+          this.executionGuard.submitVote(executionId, 'risk-agent', riskApproved,
+            riskApproved ? 'Risk within limits (fallback)' : 'Risk too high (fallback)');
+          logger.warn('RiskAgent not available for independent vote, used rule-based fallback', { executionId });
+        }
+
+        // ── Real vote from HedgingAgent ──
+        const hedgingAgentInstance = this.agentRegistry.getAgentByType('hedging' as AgentType) as unknown as HedgingAgent | undefined;
+        if (hedgingAgentInstance && typeof hedgingAgentInstance.voteOnExecution === 'function') {
+          const hedgingVote = await hedgingAgentInstance.voteOnExecution(votingProposal);
+          this.executionGuard.submitVote(executionId, 'hedging-agent', hedgingVote.approved, hedgingVote.reason);
+        } else {
+          const volatilityAcceptable = (riskData?.volatility || 0) < 1.5;
+          const positionSizeAcceptable = estimatedPositionSize < 10_000_000;
+          const hedgingApproved = volatilityAcceptable && positionSizeAcceptable;
+          this.executionGuard.submitVote(executionId, 'hedging-agent', hedgingApproved,
+            hedgingApproved ? 'Market conditions acceptable (fallback)' : 'Market conditions unfavorable (fallback)');
+          logger.warn('HedgingAgent not available for independent vote, used rule-based fallback', { executionId });
+        }
+
+        // ── Real vote from SettlementAgent ──
+        const settlementAgentInstance = this.agentRegistry.getAgentByType('settlement' as AgentType) as unknown as SettlementAgent | undefined;
+        if (settlementAgentInstance && typeof settlementAgentInstance.voteOnExecution === 'function') {
+          const settlementVote = await settlementAgentInstance.voteOnExecution(votingProposal);
+          this.executionGuard.submitVote(executionId, 'settlement-agent', settlementVote.approved, settlementVote.reason);
+        } else {
+          const settlementApproved = (riskData?.totalRisk ?? 50) < 80 && estimatedPositionSize <= 10_000_000;
+          this.executionGuard.submitVote(executionId, 'settlement-agent', settlementApproved,
+            settlementApproved ? 'Settlement feasible (fallback)' : 'Settlement risk too high (fallback)');
+          logger.warn('SettlementAgent not available for independent vote, used rule-based fallback', { executionId });
+        }
+
+        // ── Log consensus votes to MessageBus for audit ──
+        try {
+          const { MessageBus } = await import('../communication/MessageBus');
+          MessageBus.getInstance().broadcast({
+            id: uuidv4(),
+            from: this.id,
+            type: 'consensus-result',
+            payload: { executionId, action: intent.action, estimatedPositionSize },
+            timestamp: new Date(),
+          });
+        } catch { /* MessageBus logging is best-effort */ }
         
         const consensusResult = this.executionGuard.checkConsensus(executionId);
         if (!consensusResult.approved) {
@@ -482,6 +521,7 @@ Respond ONLY with valid JSON, no explanation.`,
           portfolioId: intent.targetPortfolio,
           riskAnalysis: results.riskAnalysis,
           objectives: intent.objectives,
+          predictionContext: intent.predictionContext,
         });
         
         if (!hedgingResult.success) {

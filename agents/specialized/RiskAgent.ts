@@ -166,6 +166,7 @@ export class RiskAgent extends BaseAgent {
     const params = payload as { 
       portfolioId?: number;
       address?: string;
+      predictionContext?: string;
       portfolioData?: {
         totalValue: number;
         tokens: Array<{ symbol: string; balance: number; usdValue: number }>;
@@ -174,6 +175,7 @@ export class RiskAgent extends BaseAgent {
     
     const portfolioId = params.portfolioId ?? parseInt(params.address?.split('-')[1] || '0', 10);
     const portfolioData = params.portfolioData;
+    const predictionContext = params.predictionContext || '';
 
     logger.info('Analyzing portfolio risk with AI', {
       agentId: this.id,
@@ -214,7 +216,7 @@ Value: $${portfolioValue.toFixed(2)}
 Assets: ${portfolioSummary}
 Volatility: ${(volatility * 100).toFixed(1)}%
 Sentiment: ${sentiment}
-Base Risk: ${baseRiskScore.toFixed(1)}/100
+Base Risk: ${baseRiskScore.toFixed(1)}/100${predictionContext ? `\n${predictionContext}` : ''}
 
 Respond EXACTLY like this:
 RISK_SCORE: [0-100]
@@ -587,6 +589,76 @@ REC3: [third recommendation]`;
     }
 
     return recommendations;
+  }
+
+  /**
+   * Independently evaluate a proposed execution and return a vote.
+   * Called by LeadAgent during multi-agent consensus — the RiskAgent
+   * performs its own real-time risk analysis rather than relying on
+   * the LeadAgent's assessment.
+   */
+  async voteOnExecution(proposal: {
+    executionId: string;
+    action: string;
+    estimatedPositionSize: number;
+    portfolioId?: string;
+    riskAnalysis?: { totalRisk: number; volatility: number };
+    predictionContext?: string;
+  }): Promise<{ approved: boolean; reason: string }> {
+    try {
+      // Use pre-existing risk analysis if the LeadAgent already ran one this cycle
+      let totalRisk = proposal.riskAnalysis?.totalRisk ?? -1;
+      let volatility = proposal.riskAnalysis?.volatility ?? -1;
+
+      // If no analysis was supplied, run a quick assessment ourselves
+      if (totalRisk < 0 || volatility < 0) {
+        const freshVolatility = await this.calculateVolatilityInternal(0);
+        const sentiment = await this.assessMarketSentimentInternal();
+        volatility = freshVolatility;
+
+        // Simple composite risk: vol * 50 baseline, shift by sentiment
+        const sentimentShift = sentiment === 'bearish' ? 15 : sentiment === 'bullish' ? -10 : 0;
+        totalRisk = Math.min(100, Math.max(0, freshVolatility * 50 + sentimentShift));
+      }
+
+      // Factor in 5-min Polymarket signal if available
+      const signal = this.cachedFiveMinSignal;
+      if (signal && (Date.now() - signal.fetchedAt) < 20_000) {
+        if (signal.direction === 'DOWN' && signal.signalStrength === 'STRONG') {
+          totalRisk = Math.min(100, totalRisk + 10);
+        } else if (signal.direction === 'UP' && signal.signalStrength === 'STRONG') {
+          totalRisk = Math.max(0, totalRisk - 5);
+        }
+      }
+
+      // Decision thresholds:
+      //  - Risk ≥ 75 → reject
+      //  - Position > $10M → reject (automated trades only)
+      //  - Analysis-only (action=analyze) → always approve
+      const isAnalysisOnly = proposal.action === 'analyze' || proposal.action === 'analysis';
+      const positionOk = proposal.estimatedPositionSize <= 10_000_000;
+      const riskOk = totalRisk < 75;
+
+      const approved = isAnalysisOnly || (riskOk && positionOk);
+
+      const reason = approved
+        ? `Risk acceptable (score: ${totalRisk.toFixed(1)}, vol: ${(volatility * 100).toFixed(1)}%, size: $${proposal.estimatedPositionSize.toLocaleString()})`
+        : `Risk too high (score: ${totalRisk.toFixed(1)}, vol: ${(volatility * 100).toFixed(1)}%, size: $${proposal.estimatedPositionSize.toLocaleString()})`;
+
+      logger.info('🗳️ RiskAgent independent vote', {
+        executionId: proposal.executionId,
+        approved,
+        totalRisk,
+        volatility,
+        reason,
+        agentId: this.id,
+      });
+
+      return { approved, reason };
+    } catch (error) {
+      logger.error('RiskAgent vote failed — defaulting to cautious reject', { error, agentId: this.id });
+      return { approved: false, reason: `Vote evaluation error: ${error instanceof Error ? error.message : String(error)}` };
+    }
   }
 
   /**

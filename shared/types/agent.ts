@@ -36,7 +36,8 @@ export type MessageType =
   | 'error'
   | 'request'
   | 'response'
-  | 'broadcast';
+  | 'broadcast'
+  | 'consensus-result';
 
 /**
  * Agent configuration
@@ -150,6 +151,8 @@ export interface StrategyIntent {
   };
   requiredAgents: AgentType[];
   estimatedComplexity: 'low' | 'medium' | 'high';
+  /** Polymarket prediction context string passed to agents for enriched decision-making */
+  predictionContext?: string;
 }
 
 /**
