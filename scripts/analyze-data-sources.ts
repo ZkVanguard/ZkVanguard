@@ -23,9 +23,10 @@ async function analyzeDataSources() {
   console.log('1️⃣  ENVIRONMENT CONFIGURATION\n');
   console.log('   Production Mode Flags:');
   console.log(`   • NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   • BLUEFIN_USE_MOCK: ${process.env.BLUEFIN_USE_MOCK || 'not set'}`);
+  console.log(`   • BLUEFIN_PRIVATE_KEY: ${process.env.BLUEFIN_PRIVATE_KEY ? '✅ Configured (real BlueFin trades)' : '❌ NOT SET'}`);
   console.log(`   • ZK_FALLBACK_TO_MOCK: ${process.env.ZK_FALLBACK_TO_MOCK || 'not set'}`);
-  console.log(`   • PRIVATE_KEY: ${process.env.PRIVATE_KEY ? '✅ Configured (real transactions)' : '❌ NOT SET (simulation mode)'}`);
+  console.log(`   • PRIVATE_KEY: ${process.env.PRIVATE_KEY ? '✅ Configured (real transactions)' : '❌ NOT SET'}`);
+
 
   // Check 2: On-Chain Contract Verification
   console.log('\n2️⃣  ON-CHAIN CONTRACT DATA (Source of Truth)\n');
@@ -112,17 +113,17 @@ async function checkDataSources() {
 await checkDataSources();
 
 // Check 6: Simulation Modes
-console.log('\n6️⃣  SIMULATION & MOCK MODES\n');
+console.log('\n6️⃣  EXECUTION MODES\n');
 
-function checkSimulationModes() {
+function checkExecutionModes() {
   const hasPrivateKey = process.env.PRIVATE_KEY;
+  const hasBluefinKey = process.env.BLUEFIN_PRIVATE_KEY;
   const zkMockFallback = process.env.ZK_FALLBACK_TO_MOCK === 'true';
-  const bluefinMock = process.env.BLUEFIN_USE_MOCK === 'true';
   
   console.log('   Execution Modes:');
-  console.log(`   • Hedge Execution: ${hasPrivateKey ? '✅ Real On-Chain Transactions' : '⚠️  Simulation (no PRIVATE_KEY)'}`);
+  console.log(`   • Hedge Execution: ${hasPrivateKey ? '✅ Real On-Chain Transactions' : '❌ PRIVATE_KEY not set — hedges will fail'}`);
   console.log(`   • ZK Proof Generation: ${zkMockFallback ? '⚠️  Mock fallback enabled' : '✅ Real STARK proofs'}`);
-  console.log(`   • BlueFin DEX: ${bluefinMock ? '⚠️  Mock mode enabled' : '✅ Real trades'}`);
+  console.log(`   • BlueFin DEX: ${hasBluefinKey ? '✅ Real trades' : '❌ BLUEFIN_PRIVATE_KEY not set — BlueFin hedges will fail'}`);
   
   console.log('\n   Contract Types (Testnet):');
   console.log('   • MockUSDC: ⚠️  Testnet token (simulates USDC)');
@@ -130,7 +131,7 @@ function checkSimulationModes() {
   console.log('   • Purpose: Safe testing before mainnet deployment');
 }
 
-checkSimulationModes();
+checkExecutionModes();
 
 // Summary
 console.log('\n═══════════════════════════════════════════════════════════════');

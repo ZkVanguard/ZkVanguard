@@ -12,6 +12,9 @@ import { BluefinProSdk, makeSigner, OrderType, OrderSide } from '@bluefin-exchan
 import { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 const PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY || '';
 const ENVIRONMENT: 'mainnet' | 'testnet' = 'testnet';
@@ -142,7 +145,7 @@ async function main() {
     
     console.log('\n📝 Possible issues:');
     console.log('   1. Testnet environment may be down for maintenance');
-    console.log('   2. Account needs to be registered at https://pro.bluefin.io');
+    console.log('   2. Account needs to be registered at https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet)');
     console.log('   3. Try mainnet instead if testnet is unavailable');
     
     process.exit(1);

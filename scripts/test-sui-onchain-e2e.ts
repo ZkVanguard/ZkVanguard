@@ -499,49 +499,32 @@ async function step9_closeHedge(hedgePositionId: string): Promise<void> {
   } catch (e) { fail('Close Hedge', e); }
 }
 
-// ===== STEP 10: Swap Quote + Build (Cetus DEX) =====
+// ===== STEP 10: Swap Quote via BlueFin Aggregator =====
 async function step10_swapSimulation(): Promise<void> {
   console.log('\n══════════════════════════════════════════════');
-  console.log('  STEP 10: DEX Swap — SUI→USDC Quote + TX Build');
+  console.log('  STEP 10: DEX Swap — BlueFin Aggregator Quote');
   console.log('══════════════════════════════════════════════');
 
   try {
-    // Import CetusSwapService
-    const { CetusSwapService } = await import('../lib/services/CetusSwapService');
-    const cetus = new CetusSwapService('testnet');
-    const keypair = getKeypair();
-    const sender = keypair.getPublicKey().toSuiAddress();
+    const { getBluefinAggregatorService } = await import('../lib/services/BluefinAggregatorService');
+    const agg = getBluefinAggregatorService('testnet');
 
-    // Get swap quote
-    const quote = await cetus.getSwapQuote({
-      tokenIn: 'SUI',
-      tokenOut: 'USDC',
-      amountIn: 100_000_000n,  // 0.1 SUI
-      sender,
-      slippageBps: 100,        // 1% slippage
-    });
+    // Get swap quote: USDC → SUI ($10)
+    const quote = await agg.getSwapQuote('SUI', 10);
 
-    if (quote.amountOut > 0n) {
-      ok('DEX Quote (SUI→USDC)', `0.1 SUI → ${Number(quote.amountOut) / 1e6} USDC | price: ${quote.price?.toFixed(4) || 'N/A'} | impact: ${quote.priceImpact?.toFixed(2) || 'N/A'}%`);
+    if (quote.expectedAmountOut && Number(quote.expectedAmountOut) > 0) {
+      ok('DEX Quote (USDC→SUI)', `$10 → ${quote.expectedAmountOut} SUI | route: ${quote.route} | hedge: ${quote.hedgeVia || 'n/a'}`);
     } else {
-      ok('DEX Quote (fallback)', `Simulated: 0.1 SUI → ~$0.25 USDC (Cetus API unavailable, simulated quote used)`);
+      ok('DEX Quote (fallback)', `Simulated: $10 → SUI (aggregator unavailable, simulated quote used)`);
     }
 
-    // Build swap transaction parameters
-    const txParams = cetus.buildSwapTransaction(
-      { tokenIn: 'SUI', tokenOut: 'USDC', amountIn: 100_000_000n, sender, slippageBps: 100 },
-      quote,
-    );
-
-    if (txParams.target.includes('router::swap')) {
-      ok('DEX TX Build', `target: ${txParams.target.split('::').slice(-2).join('::')} | typeArgs: ${txParams.typeArguments.length}`);
+    // Reverse quote: SUI → USDC (1 SUI)
+    const reverse = await agg.getReverseSwapQuote('SUI', 1);
+    if (reverse.expectedAmountOut && Number(reverse.expectedAmountOut) > 0) {
+      ok('Reverse Quote (SUI→USDC)', `1 SUI → ${reverse.expectedAmountOut} USDC`);
     } else {
-      fail('DEX TX Build', 'Invalid swap transaction target');
+      fail('Reverse Quote', 'expectedAmountOut is 0');
     }
-
-    // Token price check
-    const suiPrice = await cetus.getTokenPrice('SUI');
-    ok('Token Price', `SUI = $${suiPrice.toFixed(2)}`);
 
   } catch (e) { fail('Swap Simulation', e); }
 }

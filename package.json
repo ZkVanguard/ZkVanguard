@@ -67,8 +67,8 @@
   },
   "dependencies": {
     "@bluefin-exchange/bluefin-v2-client": "^6.5.1",
+    "@bluefin-exchange/bluefin7k-aggregator-sdk": "^5.5.1",
     "@bluefin-exchange/pro-sdk": "^1.13.0",
-    "@cetusprotocol/aggregator-sdk": "^1.4.6",
     "@crypto.com/ai-agent-client": "^1.0.2",
     "@crypto.com/developer-platform-client": "^1.1.2",
     "@crypto.com/facilitator-client": "^1.0.4",
@@ -81,6 +81,7 @@
     "@oasisprotocol/sapphire-paratime": "^2.3.0",
     "@openzeppelin/contracts": "^5.4.0",
     "@openzeppelin/contracts-upgradeable": "^5.4.0",
+    "@pythnetwork/pyth-sui-js": "^3.0.0",
     "@shazow/whatsabi": "^0.25.0",
     "@tanstack/react-query": "^5.90.12",
     "@tetherto/wdk": "^1.0.0-beta.6",
