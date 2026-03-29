@@ -14,7 +14,7 @@ import { WdkModalProvider } from '../contexts/WdkModalContext';
 // Sui - use the complete provider that includes SuiContext
 import { SuiWalletProviders } from './sui-providers';
 
-// Singleton QueryClient instance
+// Singleton QueryClient instance — optimized for multi-user scale
 let queryClientInstance: QueryClient | null = null;
 function getQueryClient() {
   if (!queryClientInstance) {
@@ -22,11 +22,16 @@ function getQueryClient() {
       defaultOptions: {
         queries: {
           refetchOnWindowFocus: false,
-          retry: 2,
-          staleTime: 120_000,
-          gcTime: 600_000,
+          retry: 1,                      // Reduced from 2: fail fast for faster UX
+          staleTime: 120_000,            // 2 minutes
+          gcTime: 600_000,               // 10 minutes
           refetchOnMount: false,
           refetchOnReconnect: false,
+          networkMode: 'offlineFirst',   // Use cache while offline, reduces refetches
+        },
+        mutations: {
+          retry: 1,
+          networkMode: 'offlineFirst',
         },
       },
     });

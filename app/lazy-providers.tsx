@@ -29,12 +29,18 @@ export function LazyProviders({ children }: { children: ReactNode }) {
   const [shouldLoadWallet, setShouldLoadWallet] = useState(false);
   
   useEffect(() => {
-    // Defer wallet loading until after initial render
-    const timer = setTimeout(() => {
-      setShouldLoadWallet(true);
-    }, 100); // Load after 100ms to allow critical content to render first
-    
-    return () => clearTimeout(timer);
+    // Use requestIdleCallback to load wallet providers during browser idle time
+    // Falls back to 150ms timeout if requestIdleCallback is not available
+    if ('requestIdleCallback' in window) {
+      const id = (window as typeof window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(
+        () => setShouldLoadWallet(true),
+        { timeout: 2000 } // Max 2s delay
+      );
+      return () => (window as typeof window & { cancelIdleCallback: (id: number) => void }).cancelIdleCallback(id);
+    } else {
+      const timer = setTimeout(() => setShouldLoadWallet(true), 150);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   if (!shouldLoadWallet) {
