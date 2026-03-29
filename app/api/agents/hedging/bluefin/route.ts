@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { bluefinService, mockBluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/BluefinService';
+import { bluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/BluefinService';
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
@@ -22,8 +22,6 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Mock mode only if explicitly enabled — production must use real service
-const USE_MOCK = process.env.BLUEFIN_USE_MOCK === 'true';
 const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY;
 // Network from env - defaults to testnet, set BLUEFIN_NETWORK=mainnet for production
 const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'testnet') as 'mainnet' | 'testnet';
@@ -36,17 +34,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action') || 'status';
 
-    if (USE_MOCK || !BLUEFIN_PRIVATE_KEY) {
-      // Return mock data
-      const positions = await mockBluefinService.getPositions();
+    if (!BLUEFIN_PRIVATE_KEY) {
       return NextResponse.json({
-        success: true,
-        mode: 'mock',
-        network: `sui-${BLUEFIN_NETWORK}`,
-        positions,
-        supportedPairs: Object.keys(BLUEFIN_PAIRS),
-        message: 'Using mock BlueFin service (set BLUEFIN_PRIVATE_KEY for live trading)',
-      });
+        success: false,
+        error: 'BLUEFIN_PRIVATE_KEY not configured — BlueFin service unavailable',
+      }, { status: 503 });
     }
 
     // Initialize real client
@@ -158,26 +150,24 @@ export async function POST(request: NextRequest) {
       portfolioId,
     });
 
-    // Use mock or real service
+    // Use real service
     let result;
-    if (USE_MOCK || !BLUEFIN_PRIVATE_KEY) {
-      result = await mockBluefinService.openHedge({
-        symbol,
-        side: side.toUpperCase() as 'LONG' | 'SHORT',
-        size: parseFloat(size),
-        leverage: parseInt(leverage, 10),
-      });
-    } else {
-      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
-      result = await bluefinService.openHedge({
-        symbol,
-        side: side.toUpperCase() as 'LONG' | 'SHORT',
-        size: parseFloat(size),
-        leverage: parseInt(leverage, 10),
-        portfolioId,
-        reason,
-      });
+    if (!BLUEFIN_PRIVATE_KEY) {
+      return NextResponse.json({
+        success: false,
+        error: 'BLUEFIN_PRIVATE_KEY not configured — BlueFin service unavailable',
+      }, { status: 503 });
     }
+
+    await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
+    result = await bluefinService.openHedge({
+      symbol,
+      side: side.toUpperCase() as 'LONG' | 'SHORT',
+      size: parseFloat(size),
+      leverage: parseInt(leverage, 10),
+      portfolioId,
+      reason,
+    });
 
     if (!result.success) {
       return NextResponse.json({
@@ -200,7 +190,7 @@ export async function POST(request: NextRequest) {
         leverage: parseInt(leverage, 10),
         notionalValue,
         entryPrice: result.executionPrice,
-        simulationMode: USE_MOCK,
+        simulationMode: false,
         reason: reason || `BlueFin ${side} ${asset}`,
         txHash: result.txDigest,
       });
@@ -210,7 +200,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      mode: USE_MOCK ? 'mock' : 'live',
+      mode: 'live',
       chain: 'sui',
       protocol: 'bluefin',
       hedgeId: result.hedgeId,
@@ -252,17 +242,20 @@ export async function DELETE(request: NextRequest) {
 
     logger.info('🌊 Closing BlueFin position', { symbol, size });
 
-    // Use mock or real service
+    // Use real service
     let result;
-    if (USE_MOCK || !BLUEFIN_PRIVATE_KEY) {
-      result = await mockBluefinService.closeHedge({ symbol });
-    } else {
-      await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
-      result = await bluefinService.closeHedge({
-        symbol,
-        size: size ? parseFloat(size) : undefined,
-      });
+    if (!BLUEFIN_PRIVATE_KEY) {
+      return NextResponse.json({
+        success: false,
+        error: 'BLUEFIN_PRIVATE_KEY not configured — BlueFin service unavailable',
+      }, { status: 503 });
     }
+
+    await bluefinService.initialize(BLUEFIN_PRIVATE_KEY, BLUEFIN_NETWORK);
+    result = await bluefinService.closeHedge({
+      symbol,
+      size: size ? parseFloat(size) : undefined,
+    });
 
     if (!result.success) {
       return NextResponse.json({
@@ -282,7 +275,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      mode: USE_MOCK ? 'mock' : 'live',
+      mode: 'live',
       chain: 'sui',
       protocol: 'bluefin',
       hedgeId: result.hedgeId,

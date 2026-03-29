@@ -28,7 +28,7 @@ import {
 import { query } from '@/lib/db/postgres';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
-import { getCetusAggregatorService, type PoolAsset as CetusPoolAsset } from '@/lib/services/CetusAggregatorService';
+import { getBluefinAggregatorService } from '@/lib/services/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 
 export const runtime = 'nodejs';
@@ -364,11 +364,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     let rebalanceSwaps: SuiCronResult['rebalanceSwaps'] = undefined;
     if (aiResult.shouldRebalance && navUsd > 1) {
       try {
-        const aggregator = getCetusAggregatorService(network);
+        const aggregator = getBluefinAggregatorService(network);
 
         const plan = await aggregator.planRebalanceSwaps(
           navUsd,
-          aiResult.allocations as Record<CetusPoolAsset, number>,
+          aiResult.allocations as Record<PoolAsset, number>,
         );
 
         const onChainCount = plan.swaps.filter(s => s.canSwapOnChain).length;

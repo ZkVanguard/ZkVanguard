@@ -1,8 +1,8 @@
 /**
- * Cetus Aggregator Service — Multi-DEX Swap Routing for SUI
+ * BlueFin 7k Aggregator Service — Multi-DEX Swap Routing for SUI
  * 
- * Uses @cetusprotocol/aggregator-sdk to route USDC swaps across
- * multiple DEXs (Cetus, DeepBook, Turbos, BlueFin, FlowX, Aftermath, etc.)
+ * Uses @bluefin-exchange/bluefin7k-aggregator-sdk to route USDC swaps across
+ * multiple DEXs (BlueFin, Cetus, DeepBook, Turbos, FlowX, Aftermath, etc.)
  * for optimal pricing when rebalancing the 4-asset SUI community pool.
  * 
  * Pool Assets: BTC (wBTC), ETH (wETH), SUI, CRO
@@ -12,13 +12,17 @@
  * - QStash cron (/api/cron/sui-community-pool) for AI-driven rebalancing
  * - API routes for swap quotes
  * 
- * @see https://github.com/CetusProtocol/aggregator
- * @see https://cetus-1.gitbook.io/cetus-developer-docs/developer/cetus-plus-aggregator
+ * @see https://www.npmjs.com/package/@bluefin-exchange/bluefin7k-aggregator-sdk
  */
 
 import { logger } from '@/lib/utils/logger';
-import { AggregatorClient, Env, type FindRouterParams, type RouterDataV3 } from '@cetusprotocol/aggregator-sdk';
-import BN from 'bn.js';
+import {
+  Config as BluefinConfig,
+  getQuote as bluefinGetQuote,
+  buildTx as bluefinBuildTx,
+  isSuiTransaction,
+  type QuoteResponse,
+} from '@bluefin-exchange/bluefin7k-aggregator-sdk';
 
 // Dynamic imports for SUI SDK (avoids type conflicts at module level)
 async function getSuiSdk() {
@@ -53,8 +57,8 @@ export const SUI_COIN_TYPES: Record<string, Record<string, string>> = {
 };
 
 /**
- * Mainnet coin types for price discovery via Cetus aggregator.
- * The Cetus aggregator API (api-sui.cetus.zone/router_v3) only indexes MAINNET pools.
+ * Mainnet coin types for price discovery via BlueFin 7k aggregator.
+ * The aggregator API only indexes MAINNET pools.
  * On testnet, we use these mainnet types to get real DEX quotes for price discovery,
  * then execute positions via BlueFin perps hedging.
  */
@@ -100,7 +104,7 @@ export interface SwapQuoteResult {
   expectedAmountOut: string; // Raw amount in target asset decimals
   priceImpact: number;
   route: string;
-  routerData: RouterDataV3 | null;
+  routerData: QuoteResponse | null; // BlueFin 7k quote (passed to buildTx)
   canSwapOnChain: boolean;  // false for CRO (hedged via perps)
   isSimulated?: boolean;    // true when using price-based estimate (testnet)
   hedgeVia?: 'bluefin' | 'virtual'; // how non-swappable assets are handled
@@ -150,7 +154,7 @@ const MIN_GAS_RESERVE_MIST = 100_000_000; // 0.1 SUI always kept in wallet
 // QUOTE CACHE (prevents duplicate API calls)
 // ============================================
 
-/** Short-lived cache for swap quotes — avoids hammering Cetus API */
+/** Short-lived cache for swap quotes — avoids hammering BlueFin API */
 interface QuoteCacheEntry {
   quote: SwapQuoteResult;
   expiresAt: number;
@@ -180,57 +184,60 @@ function getQuoteCacheKey(network: string, asset: string, amount: number, direct
 }
 
 // ============================================
-// RPC TIMEOUT UTILITY
+// BLUEFIN 7K AGGREGATOR SERVICE
 // ============================================
 
-/** Default timeout for external RPC/API calls */
-const RPC_TIMEOUT_MS = 10_000; // 10 seconds
-
-/** Fetch with AbortController timeout */
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = RPC_TIMEOUT_MS): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ============================================
-// CETUS AGGREGATOR SERVICE
-// ============================================
-
-export class CetusAggregatorService {
-  private client: AggregatorClient;
-  /** Mainnet client for price discovery (Cetus aggregator only indexes mainnet) */
-  private priceClient: AggregatorClient;
+export class BluefinAggregatorService {
   private network: NetworkType;
   private coinTypes: Record<string, string>;
+  private suiClient: any | null = null;
 
   constructor(network: NetworkType = 'mainnet') {
     this.network = network;
-
-    // Let the SDK create its own SuiClient to avoid type conflicts
-    this.client = new AggregatorClient({
-      env: network === 'mainnet' ? Env.Mainnet : Env.Testnet,
-    });
-
-    // Mainnet client for price discovery — Cetus aggregator API only indexes mainnet pools.
-    // On testnet, we use this to get real DEX swap rates for accurate pricing.
-    this.priceClient = network === 'mainnet'
-      ? this.client
-      : new AggregatorClient({ env: Env.Mainnet });
-
     this.coinTypes = SUI_COIN_TYPES[network] || SUI_COIN_TYPES.mainnet;
 
     ensureQuoteCacheCleanup();
-    logger.info('[CetusAggregator] Initialized', { network, hasPriceClient: this.priceClient !== this.client });
+    logger.info('[BluefinAggregator] Initialized', { network });
+  }
+
+  /**
+   * Ensure the global BlueFin SDK config has a SUI client set.
+   * Required before calling buildTx() (for on-chain swap construction).
+   */
+  private async ensureSuiClient(): Promise<any> {
+    if (this.suiClient) {
+      BluefinConfig.setSuiClient(this.suiClient);
+      return this.suiClient;
+    }
+
+    const { SuiClient, getFullnodeUrl } = await getSuiSdk();
+    const rpcUrl = this.network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    this.suiClient = new SuiClient({ url: rpcUrl });
+    BluefinConfig.setSuiClient(this.suiClient);
+
+    // Set up Pyth oracle client for oracle-based DEX routing
+    try {
+      const { SuiPythClient, SuiPriceServiceConnection } = await import('@pythnetwork/pyth-sui-js');
+      const pythClient = new SuiPythClient(
+        this.suiClient,
+        '0x1f9310238ee9298fb703c3419030b35b22bb1cc37113e3bb5007c99aec79e5b8',
+        '0xaeab97b96cf236ad2c9be2cff9aafea9783ee88e93e46f246ed3fa2bae0a8e17',
+      );
+      const pythConnection = new SuiPriceServiceConnection('https://hermes.pyth.network');
+      BluefinConfig.setPythClient(pythClient);
+      BluefinConfig.setPythConnection(pythConnection);
+    } catch {
+      // Oracle-based DEX sources may be unavailable — standard DEXs still work
+    }
+
+    return this.suiClient;
   }
 
   /**
    * Estimate expected output from market price when DEX has no liquidity.
-   * Used on testnet or when Cetus returns 0.
+   * Used on testnet or when aggregator returns 0.
    */
   private async estimateOutputFromPrice(
     asset: PoolAsset,
@@ -255,7 +262,7 @@ export class CetusAggregatorService {
   }
 
   /**
-   * Get a real DEX swap quote from Cetus mainnet aggregator for price discovery.
+   * Get a real DEX swap quote from BlueFin 7k mainnet aggregator for price discovery.
    * Uses mainnet coin types to get accurate pricing from real liquidity pools,
    * even when running on testnet.
    */
@@ -270,28 +277,27 @@ export class CetusAggregatorService {
     if (!toCoinType) return null;
 
     try {
-      const amountInRaw = new BN(Math.floor(usdcAmount * 1e6).toString());
-      const routerData = await this.priceClient.findRouters({
-        from: fromCoinType,
-        target: toCoinType,
-        amount: amountInRaw,
-        byAmountIn: true,
+      const amountInRaw = Math.floor(usdcAmount * 1e6).toString();
+      const quoteResponse = await bluefinGetQuote({
+        tokenIn: fromCoinType,
+        tokenOut: toCoinType,
+        amountIn: amountInRaw,
       });
 
-      if (!routerData || routerData.amountOut.toString() === '0') return null;
+      if (!quoteResponse || quoteResponse.returnAmount === '0') return null;
 
-      const expectedOut = routerData.amountOut.toString();
-      const paths = routerData.paths || [];
-      const routeDesc = paths.length > 0
-        ? paths.map((p: { provider: string }) => p.provider).join(' → ')
-        : 'Cetus';
+      const expectedOut = quoteResponse.returnAmount;
+      const routes = quoteResponse.routes || [];
+      const routeDesc = routes.length > 0
+        ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
+        : 'BlueFin7k';
 
       // Derive price from DEX output
       const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[asset] || 8;
       const assetAmount = Number(expectedOut) / Math.pow(10, decimals);
       const effectivePrice = assetAmount > 0 ? usdcAmount / assetAmount : 0;
 
-      logger.info(`[CetusAggregator] Mainnet price quote for ${asset}`, {
+      logger.info(`[BluefinAggregator] Mainnet price quote for ${asset}`, {
         usdcAmount,
         expectedOut,
         effectivePrice: effectivePrice.toFixed(2),
@@ -300,7 +306,7 @@ export class CetusAggregatorService {
 
       return { estimatedOut: expectedOut, price: effectivePrice, route: routeDesc };
     } catch (err) {
-      logger.debug(`[CetusAggregator] Mainnet price query failed for ${asset}`, {
+      logger.debug(`[BluefinAggregator] Mainnet price query failed for ${asset}`, {
         error: err instanceof Error ? err.message : String(err),
       });
       return null;
@@ -312,10 +318,10 @@ export class CetusAggregatorService {
   // ============================================
 
   /**
-   * Get a swap quote for USDC → target asset via Cetus aggregator.
+   * Get a swap quote for USDC → target asset via BlueFin 7k aggregator.
    * 
    * On MAINNET: Routes across multiple DEXs for optimal pricing + on-chain execution.
-   * On TESTNET: Uses mainnet Cetus aggregator for real DEX price discovery,
+   * On TESTNET: Uses mainnet aggregator for real DEX price discovery,
    *   then routes positions via BlueFin perps hedging (testnet has no DEX liquidity).
    *   This is NOT simulated — prices come from real mainnet DEX pools.
    */
@@ -345,12 +351,12 @@ export class CetusAggregatorService {
     const toCoinType = this.coinTypes[coinKey] || '';
     const fromCoinType = this.coinTypes.USDC;
 
-    // ── TESTNET MODE: Use mainnet Cetus for price discovery, BlueFin for execution ──
+    // ── TESTNET MODE: Use mainnet BlueFin for price discovery, BlueFin perps for execution ──
     if (this.network === 'testnet') {
       return this.getTestnetQuote(asset, usdcAmount, fromCoinType, toCoinType);
     }
 
-    // ── MAINNET MODE: Real Cetus on-chain swaps ──
+    // ── MAINNET MODE: Real on-chain swaps via BlueFin 7k aggregator ──
 
     // CRO has no on-chain liquidity on SUI — hedge via perps
     if (!toCoinType || asset === 'CRO') {
@@ -370,24 +376,23 @@ export class CetusAggregatorService {
       };
     }
 
-    const amountInRaw = new BN(Math.floor(usdcAmount * 1e6).toString());
+    const amountInRaw = Math.floor(usdcAmount * 1e6).toString();
 
     try {
-      const routerData = await this.client.findRouters({
-        from: fromCoinType,
-        target: toCoinType,
-        amount: amountInRaw,
-        byAmountIn: true,
+      const quoteResponse = await bluefinGetQuote({
+        tokenIn: fromCoinType,
+        tokenOut: toCoinType,
+        amountIn: amountInRaw,
       });
 
-      if (!routerData) {
-        logger.warn(`[CetusAggregator] No route found for USDC → ${asset}`);
+      if (!quoteResponse) {
+        logger.warn(`[BluefinAggregator] No route found for USDC → ${asset}`);
         const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
         return {
           asset,
           fromCoinType,
           toCoinType,
-          amountIn: amountInRaw.toString(),
+          amountIn: amountInRaw,
           expectedAmountOut: estimate?.estimatedOut || '0',
           priceImpact: 0,
           route: estimate
@@ -400,28 +405,24 @@ export class CetusAggregatorService {
         };
       }
 
-      const expectedOut = routerData.amountOut.toString();
-      const paths = routerData.paths || [];
-      const routeDesc = paths.length > 0
-        ? paths.map((p: { from: string; target: string; provider: string }) =>
-            `${p.provider}`
-          ).join(' → ')
+      const expectedOut = quoteResponse.returnAmount;
+      const routes = quoteResponse.routes || [];
+      const routeDesc = routes.length > 0
+        ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
         : 'direct';
 
-      const priceImpact = routerData.deviationRatio
-        ? Math.abs(routerData.deviationRatio)
-        : 0;
+      const priceImpact = Math.abs(quoteResponse.priceImpact || 0);
 
-      // If Cetus returned 0 output, fall back to BlueFin hedging
+      // If aggregator returned 0 output, fall back to BlueFin hedging
       if (expectedOut === '0' || expectedOut === '') {
         const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
         if (estimate) {
-          logger.info(`[CetusAggregator] Cetus returned 0 for ${asset}, hedging via BlueFin`, { price: estimate.price });
+          logger.info(`[BluefinAggregator] Quote returned 0 for ${asset}, hedging via BlueFin`, { price: estimate.price });
           return {
             asset,
             fromCoinType,
             toCoinType,
-            amountIn: amountInRaw.toString(),
+            amountIn: amountInRaw,
             expectedAmountOut: estimate.estimatedOut,
             priceImpact: 0,
             route: `USDC → ${asset} (hedged via BlueFin perps)`,
@@ -433,7 +434,7 @@ export class CetusAggregatorService {
         }
       }
 
-      logger.info(`[CetusAggregator] Quote USDC → ${asset}`, {
+      logger.info(`[BluefinAggregator] Quote USDC → ${asset}`, {
         amountIn: usdcAmount,
         expectedOut,
         route: routeDesc,
@@ -444,22 +445,22 @@ export class CetusAggregatorService {
         asset,
         fromCoinType,
         toCoinType,
-        amountIn: amountInRaw.toString(),
+        amountIn: amountInRaw,
         expectedAmountOut: expectedOut,
         priceImpact,
         route: `USDC → ${asset} via ${routeDesc}`,
-        routerData,
+        routerData: quoteResponse,
         canSwapOnChain: true,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[CetusAggregator] Quote failed for USDC → ${asset}`, { error: message });
+      logger.error(`[BluefinAggregator] Quote failed for USDC → ${asset}`, { error: message });
       const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
       return {
         asset,
         fromCoinType,
         toCoinType,
-        amountIn: amountInRaw.toString(),
+        amountIn: amountInRaw,
         expectedAmountOut: estimate?.estimatedOut || '0',
         priceImpact: 0,
         route: estimate
@@ -474,10 +475,10 @@ export class CetusAggregatorService {
   }
 
   /**
-   * Testnet quote: Uses mainnet Cetus aggregator for real DEX price discovery,
+   * Testnet quote: Uses mainnet BlueFin 7k aggregator for real DEX price discovery,
    * then marks positions for BlueFin perps hedging.
    * 
-   * The Cetus aggregator API (api-sui.cetus.zone/router_v3) only indexes mainnet pools.
+   * The aggregator API only indexes mainnet pools.
    * We query mainnet DEX routing for accurate pricing, then execute via BlueFin testnet.
    */
   private async getTestnetQuote(
@@ -486,17 +487,17 @@ export class CetusAggregatorService {
     fromCoinType: string,
     toCoinType: string,
   ): Promise<SwapQuoteResult> {
-    // Try mainnet Cetus aggregator for real DEX pricing first
-    const cetusQuote = await this.getMainnetPriceQuote(asset, usdcAmount);
-    if (cetusQuote) {
+    // Try mainnet BlueFin 7k aggregator for real DEX pricing first
+    const bluefinQuote = await this.getMainnetPriceQuote(asset, usdcAmount);
+    if (bluefinQuote) {
       return {
         asset,
         fromCoinType,
         toCoinType: toCoinType || MAINNET_COIN_TYPES[ASSET_TO_COIN_KEY[asset]] || '',
         amountIn: Math.floor(usdcAmount * 1e6).toString(),
-        expectedAmountOut: cetusQuote.estimatedOut,
+        expectedAmountOut: bluefinQuote.estimatedOut,
         priceImpact: 0,
-        route: `USDC → ${asset} via Cetus DEX (${cetusQuote.route}) → BlueFin hedge`,
+        route: `USDC → ${asset} via BlueFin DEX (${bluefinQuote.route}) → BlueFin hedge`,
         routerData: null,
         canSwapOnChain: false, // Testnet: execute via BlueFin, not on-chain swap
         isSimulated: false,    // NOT simulated — real DEX prices from mainnet
@@ -504,7 +505,7 @@ export class CetusAggregatorService {
       };
     }
 
-    // Fallback: use market price API if Cetus aggregator is unreachable
+    // Fallback: use market price API if BlueFin aggregator is unreachable
     const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
     if (estimate) {
       return {
@@ -579,13 +580,8 @@ export class CetusAggregatorService {
   // ============================================
 
   /**
-   * Build a Transaction that swaps USDC → target asset via Cetus aggregator.
+   * Build a Transaction that swaps USDC → target asset via BlueFin 7k aggregator.
    * The caller must sign and execute the transaction.
-   * 
-   * Uses `fastRouterSwap` which automatically handles:
-   * - Input coin creation (coinWithBalance)
-   * - Multi-hop routing across DEXs
-   * - Output coin merge/transfer
    */
   async buildSwapTransaction(
     quote: SwapQuoteResult,
@@ -593,36 +589,35 @@ export class CetusAggregatorService {
     slippage: number = 0.01, // 1% default
   ): Promise<unknown | null> {
     if (!quote.routerData || !quote.canSwapOnChain) {
-      logger.warn(`[CetusAggregator] Cannot build swap tx for ${quote.asset} — no route`);
+      logger.warn(`[BluefinAggregator] Cannot build swap tx for ${quote.asset} — no route`);
       return null;
     }
 
     try {
-      const { Transaction } = await import('@mysten/sui/transactions');
-      const txb = new Transaction();
-      txb.setSender(senderAddress);
+      await this.ensureSuiClient();
 
-      await this.client.fastRouterSwap({
-        router: quote.routerData,
-        txb: txb as any,
+      const { tx } = await bluefinBuildTx({
+        quoteResponse: quote.routerData,
+        accountAddress: senderAddress,
         slippage,
+        commission: { partner: '', commissionBps: 0 },
       });
 
-      logger.info(`[CetusAggregator] Built swap tx: USDC → ${quote.asset}`, {
+      logger.info(`[BluefinAggregator] Built swap tx: USDC → ${quote.asset}`, {
         amountIn: quote.amountIn,
         expectedOut: quote.expectedAmountOut,
       });
 
-      return txb;
+      return tx;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[CetusAggregator] Failed to build swap tx for ${quote.asset}`, { error: message });
+      logger.error(`[BluefinAggregator] Failed to build swap tx for ${quote.asset}`, { error: message });
       return null;
     }
   }
 
   /**
-   * Build a single Transaction that executes all rebalance swaps atomically.
+   * Build a single Transaction that executes all rebalance swaps.
    * Each USDC → asset swap is added to the same PTB (Programmable Transaction Block).
    */
   async buildRebalanceTransaction(
@@ -632,33 +627,36 @@ export class CetusAggregatorService {
   ): Promise<unknown | null> {
     const swappableQuotes = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
     if (swappableQuotes.length === 0) {
-      logger.warn('[CetusAggregator] No on-chain swaps to execute in rebalance plan');
+      logger.warn('[BluefinAggregator] No on-chain swaps to execute in rebalance plan');
       return null;
     }
 
     try {
+      await this.ensureSuiClient();
       const { Transaction } = await import('@mysten/sui/transactions');
-      const txb = new Transaction();
-      txb.setSender(senderAddress);
+      const tx = new Transaction();
+      tx.setSender(senderAddress);
 
       for (const quote of swappableQuotes) {
-        await this.client.fastRouterSwap({
-          router: quote.routerData!,
-          txb: txb as any,
+        await bluefinBuildTx({
+          quoteResponse: quote.routerData!,
+          accountAddress: senderAddress,
           slippage,
+          commission: { partner: '', commissionBps: 0 },
+          extendTx: { tx },
         });
       }
 
-      logger.info('[CetusAggregator] Built rebalance tx', {
+      logger.info('[BluefinAggregator] Built rebalance tx', {
         swapCount: swappableQuotes.length,
         assets: swappableQuotes.map(s => s.asset),
         totalUsdc: plan.totalUsdcToSwap,
       });
 
-      return txb;
+      return tx;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error('[CetusAggregator] Failed to build rebalance tx', { error: message });
+      logger.error('[BluefinAggregator] Failed to build rebalance tx', { error: message });
       return null;
     }
   }
@@ -744,27 +742,38 @@ export class CetusAggregatorService {
         };
       }
 
-      // Build unsigned PTB
-      const txb = new Transaction();
-      txb.setSender(senderAddress);
-      txb.setGasBudget(gasBudget);
+      // Build unsigned PTB via BlueFin 7k
+      BluefinConfig.setSuiClient(suiClient);
+      this.suiClient = suiClient;
 
-      await this.client.fastRouterSwap({
-        router: quote.routerData,
-        txb: txb as any,
+      const { tx } = await bluefinBuildTx({
+        quoteResponse: quote.routerData,
+        accountAddress: senderAddress,
         slippage: safeSlippage,
+        commission: { partner: '', commissionBps: 0 },
       });
+
+      if (!isSuiTransaction(tx)) {
+        return {
+          asset: quote.asset,
+          success: false,
+          amountIn: quote.amountIn,
+          error: 'Unexpected BluefinX routing — only standard SUI transactions supported',
+        };
+      }
+
+      tx.setGasBudget(gasBudget);
 
       // Sign + execute
       const result = await suiClient.signAndExecuteTransaction({
-        transaction: txb,
+        transaction: tx,
         signer: keypair,
         options: { showEffects: true, showEvents: true },
       });
 
       const success = result.effects?.status?.status === 'success';
       
-      logger.info(`[CetusAggregator] Swap executed: USDC → ${quote.asset}`, {
+      logger.info(`[BluefinAggregator] Swap executed: USDC → ${quote.asset}`, {
         txDigest: result.digest,
         success,
         amountIn: quote.amountIn,
@@ -781,7 +790,7 @@ export class CetusAggregatorService {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[CetusAggregator] Swap execution failed for ${quote.asset}`, { error: message });
+      logger.error(`[BluefinAggregator] Swap execution failed for ${quote.asset}`, { error: message });
       return {
         asset: quote.asset,
         success: false,
@@ -829,11 +838,11 @@ export class CetusAggregatorService {
     const hedgeable = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
 
     if (swappable.length === 0 && hedgeable.length === 0) {
-      logger.info('[CetusAggregator] No on-chain swaps or hedges to execute');
+      logger.info('[BluefinAggregator] No on-chain swaps or hedges to execute');
       return { success: true, results: [], totalExecuted: 0, totalFailed: 0 };
     }
 
-    logger.info('[CetusAggregator] Executing rebalance', {
+    logger.info('[BluefinAggregator] Executing rebalance', {
       onChainSwaps: swappable.length,
       hedgedSwaps: hedgeable.length,
       assets: plan.swaps.map(s => s.asset),
@@ -959,7 +968,7 @@ export class CetusAggregatorService {
     const totalExecuted = results.filter(r => r.success).length;
     const totalFailed = results.filter(r => !r.success).length;
 
-    logger.info('[CetusAggregator] Rebalance complete', {
+    logger.info('[BluefinAggregator] Rebalance complete', {
       totalExecuted,
       totalFailed,
       digests: results.filter(r => r.txDigest).map(r => `${r.asset}:${r.txDigest}`),
@@ -977,7 +986,7 @@ export class CetusAggregatorService {
   /**
    * Get a reverse swap quote: target asset → USDC.
    * Used for withdrawals (converting assets back to USDC).
-   * On testnet: uses mainnet Cetus for price discovery.
+   * On testnet: uses mainnet aggregator for price discovery.
    */
   async getReverseSwapQuote(
     asset: PoolAsset,
@@ -1012,27 +1021,25 @@ export class CetusAggregatorService {
 
       if (mainnetFrom) {
         try {
-          const amountInRaw = new BN(amountInStr);
-          const routerData = await this.priceClient.findRouters({
-            from: mainnetFrom,
-            target: mainnetTo,
-            amount: amountInRaw,
-            byAmountIn: true,
+          const quoteResponse = await bluefinGetQuote({
+            tokenIn: mainnetFrom,
+            tokenOut: mainnetTo,
+            amountIn: amountInStr,
           });
 
-          if (routerData && routerData.amountOut.toString() !== '0') {
-            const paths = routerData.paths || [];
-            const routeDesc = paths.length > 0
-              ? paths.map((p: { provider: string }) => p.provider).join(' → ')
-              : 'Cetus';
+          if (quoteResponse && quoteResponse.returnAmount !== '0') {
+            const routes = quoteResponse.routes || [];
+            const routeDesc = routes.length > 0
+              ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
+              : 'BlueFin7k';
             return {
               asset,
               fromCoinType: fromCoinType || mainnetFrom,
               toCoinType: toCoinType || mainnetTo,
               amountIn: amountInStr,
-              expectedAmountOut: routerData.amountOut.toString(),
-              priceImpact: Math.abs(routerData.deviationRatio || 0),
-              route: `${asset} → USDC via Cetus DEX (${routeDesc}) → close BlueFin hedge`,
+              expectedAmountOut: quoteResponse.returnAmount,
+              priceImpact: Math.abs(quoteResponse.priceImpact || 0),
+              route: `${asset} → USDC via BlueFin DEX (${routeDesc}) → close BlueFin hedge`,
               routerData: null, // Don't pass mainnet routerData for testnet execution
               canSwapOnChain: false,
               isSimulated: false,
@@ -1040,7 +1047,7 @@ export class CetusAggregatorService {
             };
           }
         } catch (err) {
-          logger.debug(`[CetusAggregator] Mainnet reverse price query failed for ${asset}`, {
+          logger.debug(`[BluefinAggregator] Mainnet reverse price query failed for ${asset}`, {
             error: err instanceof Error ? err.message : String(err),
           });
         }
@@ -1121,45 +1128,44 @@ export class CetusAggregatorService {
       };
     }
 
-    const amountInRaw = new BN(amountInStr);
+    const amountInRaw = amountInStr;
 
     try {
-      const routerData = await this.client.findRouters({
-        from: fromCoinType,
-        target: toCoinType,
-        amount: amountInRaw,
-        byAmountIn: true,
+      const quoteResponse = await bluefinGetQuote({
+        tokenIn: fromCoinType,
+        tokenOut: toCoinType,
+        amountIn: amountInRaw,
       });
 
-      if (!routerData) {
+      if (!quoteResponse) {
         return {
           asset, fromCoinType, toCoinType,
-          amountIn: amountInRaw.toString(),
+          amountIn: amountInRaw,
           expectedAmountOut: '0', priceImpact: 0,
           route: `No route found for ${asset} → USDC`,
           routerData: null, canSwapOnChain: false,
         };
       }
 
-      const paths = routerData.paths || [];
-      const routeDesc = paths.length > 0
-        ? paths.map((p: any) => p.provider).join(' → ')
+      const routes = quoteResponse.routes || [];
+      const routeDesc = routes.length > 0
+        ? routes.map((r: any) => r.hops.map((h: any) => h.pool.type).join('→')).join(', ')
         : 'direct';
 
       return {
         asset, fromCoinType, toCoinType,
-        amountIn: amountInRaw.toString(),
-        expectedAmountOut: routerData.amountOut.toString(),
-        priceImpact: Math.abs(routerData.deviationRatio || 0),
+        amountIn: amountInRaw,
+        expectedAmountOut: quoteResponse.returnAmount,
+        priceImpact: Math.abs(quoteResponse.priceImpact || 0),
         route: `${asset} → USDC via ${routeDesc}`,
-        routerData, canSwapOnChain: true,
+        routerData: quoteResponse, canSwapOnChain: true,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[CetusAggregator] Reverse quote failed for ${asset} → USDC`, { error: message });
+      logger.error(`[BluefinAggregator] Reverse quote failed for ${asset} → USDC`, { error: message });
       return {
         asset, fromCoinType, toCoinType,
-        amountIn: amountInRaw.toString(),
+        amountIn: amountInRaw,
         expectedAmountOut: '0', priceImpact: 0,
         route: `Reverse quote failed: ${message}`,
         routerData: null, canSwapOnChain: false,
@@ -1202,7 +1208,7 @@ export class CetusAggregatorService {
 
       return { configured: true, address, suiBalance, hasGas };
     } catch (err) {
-      logger.error('[CetusAggregator] Admin wallet check failed', { error: err });
+      logger.error('[BluefinAggregator] Admin wallet check failed', { error: err });
       return { configured: true, hasGas: false };
     }
   }
@@ -1229,11 +1235,6 @@ export class CetusAggregatorService {
     return !!type;
   }
 
-  /** Get the underlying AggregatorClient */
-  getClient(): AggregatorClient {
-    return this.client;
-  }
-
   /** Get current network */
   getNetwork(): NetworkType {
     return this.network;
@@ -1244,21 +1245,29 @@ export class CetusAggregatorService {
 // SINGLETON
 // ============================================
 
-let mainnetInstance: CetusAggregatorService | null = null;
-let testnetInstance: CetusAggregatorService | null = null;
+let mainnetInstance: BluefinAggregatorService | null = null;
+let testnetInstance: BluefinAggregatorService | null = null;
 
-export function getCetusAggregatorService(
+export function getBluefinAggregatorService(
   network: NetworkType = 'mainnet'
-): CetusAggregatorService {
+): BluefinAggregatorService {
   if (network === 'mainnet') {
     if (!mainnetInstance) {
-      mainnetInstance = new CetusAggregatorService('mainnet');
+      mainnetInstance = new BluefinAggregatorService('mainnet');
     }
     return mainnetInstance;
   }
 
   if (!testnetInstance) {
-    testnetInstance = new CetusAggregatorService('testnet');
+    testnetInstance = new BluefinAggregatorService('testnet');
   }
   return testnetInstance;
 }
+
+/** Backward-compatible alias */
+export const getAggregatorService = getBluefinAggregatorService;
+
+/** @deprecated Use getBluefinAggregatorService instead */
+export const getCetusAggregatorService = getBluefinAggregatorService;
+/** @deprecated Use BluefinAggregatorService instead */
+export { BluefinAggregatorService as CetusAggregatorService };

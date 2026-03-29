@@ -803,69 +803,19 @@ export class CentralizedHedgeManager {
           this.recentHedgeKeys.add(dedupKey);
           executed++;
         } else {
-          // Orchestrator failed — fall through to simulation
-          logger.warn('[CentralHedge] Orchestrator failed, recording simulation hedge', {
+          // Orchestrator failed — do NOT silently simulate
+          logger.error('[CentralHedge] Orchestrator failed', {
             asset: rec.asset, error: result.error,
           });
-          await this.recordSimulationHedge(ctx, rec, effectivePrice, snapshot, 'orchestrator_failed');
-          executed++;
-        }
-      } catch (error) {
-        logger.warn('[CentralHedge] Live execution failed, recording simulation hedge', { error, asset: rec.asset });
-        try {
-          await this.recordSimulationHedge(ctx, rec, effectivePrice, snapshot, 'execution_error');
-          executed++;
-        } catch (simError) {
-          logger.error('[CentralHedge] Even simulation recording failed', { simError });
           executionFailed++;
         }
+      } catch (error) {
+        logger.error('[CentralHedge] Live execution failed', { error, asset: rec.asset });
+        executionFailed++;
       }
     }
 
     return { executed, failed: executionFailed };
-  }
-
-  /**
-   * Record a simulation hedge when the exchange is unavailable.
-   * This ensures losses are never ignored just because the exchange is down.
-   */
-  private async recordSimulationHedge(
-    ctx: PortfolioContext,
-    rec: HedgeRecommendation,
-    effectivePrice: number,
-    snapshot: MarketSnapshot,
-    reason: string
-  ): Promise<void> {
-    const orderId = `auto-sim-${ctx.portfolioId}-${Date.now()}`;
-    const market = `${rec.asset}-USD-PERP`;
-    await createHedge({
-      orderId,
-      portfolioId: ctx.portfolioId,
-      walletAddress: ctx.walletAddress,
-      asset: rec.asset,
-      market,
-      side: rec.side,
-      size: rec.suggestedSize / 1000,
-      notionalValue: rec.suggestedSize,
-      leverage: Math.min(rec.leverage, ctx.config.maxLeverage),
-      entryPrice: effectivePrice,
-      simulationMode: true,
-      reason: `[AUTO-SIM] ${rec.reason} (${reason})`,
-      metadata: {
-        confidence: rec.confidence,
-        simulationReason: reason,
-        snapshotSource: snapshot.source,
-        snapshotTimestamp: snapshot.timestamp,
-        priceAtDecision: effectivePrice,
-      },
-    });
-    logger.info('[CentralHedge] Simulation hedge recorded', {
-      portfolioId: ctx.portfolioId,
-      asset: rec.asset,
-      side: rec.side,
-      size: rec.suggestedSize,
-      reason,
-    });
   }
 
   // ─── STEP 6: BATCH PNL UPDATE ─────────────────────────────────────────────

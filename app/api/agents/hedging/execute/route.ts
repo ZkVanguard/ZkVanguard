@@ -5,7 +5,6 @@
  * Supports:
  * - Real on-chain execution via MoonlanderOnChainClient
  * - Privacy-preserving mode with ZK commitments
- * - Simulation mode when no private key is configured
  * - ZK-STARK proof generation for all hedges
  * - ON-CHAIN ZK PROXY VAULT for bulletproof fund escrow (optional)
  * - Unified real-time price validation before execution
@@ -290,7 +289,7 @@ export async function POST(request: NextRequest) {
             takeProfit: takeProfit?.toString(),
             leverage,
             txHash: bluefinResult.txDigest,
-            simulationMode: bluefinResult.mode === 'mock',
+            simulationMode: false,
             privateMode: false,
             walletAddress,
             autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
@@ -298,17 +297,17 @@ export async function POST(request: NextRequest) {
             chain: 'sui',
             protocol: 'bluefin',
             explorerLink: bluefinResult.explorerLink,
-            message: `✅ SUI HEDGE: Created on BlueFin DEX (${bluefinResult.mode === 'mock' ? 'mock' : 'live'})`,
+            message: `✅ SUI HEDGE: Created on BlueFin DEX (live)`,
           });
         } else {
           logger.error('❌ BlueFin hedge failed', { error: bluefinResult.error });
           // Fall through to try other paths
         }
       } catch (bluefinError) {
-        logger.error('❌ BlueFin routing error, falling back to simulation', {
+        logger.error('❌ BlueFin routing error, trying other execution paths', {
           error: bluefinError instanceof Error ? bluefinError.message : String(bluefinError),
         });
-        // Fall through to simulation path
+        // Fall through to try on-chain or Moonlander paths
       }
     }
 
@@ -512,10 +511,10 @@ export async function POST(request: NextRequest) {
         } satisfies HedgeExecutionResponse & { onChain: boolean; chain: string; contractAddress: string });
 
       } catch (hedgeExecutorError) {
-        logger.error('❌ HedgeExecutor on-chain creation failed, falling back to simulation', {
+        logger.error('❌ HedgeExecutor on-chain creation failed, trying Moonlander path', {
           error: hedgeExecutorError instanceof Error ? hedgeExecutorError.message : String(hedgeExecutorError),
         });
-        // Fall through to simulation/Moonlander paths below
+        // Fall through to Moonlander path below
       }
     }
 
@@ -528,232 +527,11 @@ export async function POST(request: NextRequest) {
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
     
     if (!privateKey) {
-      logger.warn('⚠️ No private key configured - running in simulation mode');
-      
-      // Get REAL price from unified price provider (WebSocket or REST fallback)
-      let mockPrice = 0; // No fallback — must get a live price
-      let simPriceContext: HedgePriceContext | null = null;
-      
-      try {
-        simPriceContext = await getHedgeExecutionPrice(asset, side);
-        
-        if (simPriceContext.validation.isValid) {
-          mockPrice = simPriceContext.effectivePrice;
-          logger.info(`📊 Using validated ${asset} price: $${mockPrice}`, {
-            source: simPriceContext.validation.priceSource,
-            staleness: `${simPriceContext.validation.staleness}ms`,
-            slippage: `${simPriceContext.slippageEstimate.toFixed(3)}%`,
-          });
-        } else {
-          // Use best available from price context
-          mockPrice = simPriceContext.entryPrice > 0 ? simPriceContext.entryPrice : 0;
-          logger.warn(`⚠️ Price validation warnings for ${asset}`, {
-            warnings: simPriceContext.validation.warnings,
-            usingPrice: mockPrice,
-          });
-        }
-      } catch (priceError) {
-        logger.error('❌ Failed to fetch price from unified provider', { error: priceError });
-      }
-
-      if (mockPrice <= 0) {
-        return NextResponse.json({
-          success: false,
-          error: `Unable to fetch live price for ${asset}. Cannot execute hedge without real-time pricing.`,
-        }, { status: 503 });
-      }
-      
-      // Return simulated hedge execution with REAL price
-      const market = `${asset.toUpperCase()}-USD-PERP`;
-      const size = ((notionalValue * leverage) / mockPrice).toFixed(4);
-      const liquidationPrice = side === 'SHORT' 
-        ? mockPrice * (1 + 0.8 / leverage) 
-        : mockPrice * (1 - 0.8 / leverage);
-
-      const orderId = `sim-hedge-${Date.now()}`;
-      
-      // Generate ZK-STARK proof for all hedges (privacy layer)
-      let commitmentHash: string | undefined;
-      let stealthAddress: string | undefined;
-      let zkProofGenerated = false;
-      let zkProofHash: string | undefined;
-      
-      // Always generate ZK proof for hedge verification
-      try {
-        logger.info('🔐 Generating ZK-STARK proof for hedge...');
-        const zkProofResult = await generateRebalanceProof(
-          {
-            old_allocations: [100], // Pre-hedge state (100% unhedged)
-            new_allocations: [Math.floor((1 - (notionalValue / 100000)) * 100)], // Post-hedge allocation
-          },
-          body.portfolioId
-        );
-        
-        if (zkProofResult.status === 'completed' && zkProofResult.proof) {
-          zkProofHash = String(zkProofResult.proof.proof_hash || zkProofResult.proof.merkle_root);
-          zkProofGenerated = true;
-          logger.info('✅ ZK-STARK proof generated', { proofHash: zkProofHash?.substring(0, 20) + '...' });
-        } else {
-          // Fallback: generate local commitment hash
-          zkProofHash = crypto.createHash('sha256')
-            .update(JSON.stringify({ orderId, asset, side, size, timestamp: Date.now() }))
-            .digest('hex');
-          zkProofGenerated = true;
-          logger.info('📝 Using local commitment hash (ZK backend unavailable)');
-        }
-      } catch (zkError) {
-        logger.warn('⚠️ ZK proof generation failed, using fallback', { error: String(zkError) });
-        zkProofHash = crypto.createHash('sha256')
-          .update(JSON.stringify({ orderId, asset, side, size, timestamp: Date.now() }))
-          .digest('hex');
-        zkProofGenerated = true;
-      }
-      
-      // Generate additional privacy components if privateMode is enabled
-      if (privateMode) {
-        try {
-          const masterPublicKey = crypto.randomBytes(33).toString('hex');
-          const privateHedge = await privateHedgeService.createPrivateHedge(
-            asset.toUpperCase(),
-            side,
-            parseFloat(size),
-            notionalValue,
-            leverage,
-            mockPrice,
-            masterPublicKey
-          );
-          
-          commitmentHash = privateHedge.commitmentHash;
-          stealthAddress = privateHedge.stealthAddress;
-          
-          logger.info('🔐 Full privacy layer added to hedge', {
-            commitmentHash: commitmentHash.substring(0, 16) + '...',
-            stealthAddress: stealthAddress.substring(0, 10) + '...',
-          });
-        } catch (privacyError) {
-          logger.error('Failed to generate privacy layer', { error: privacyError });
-        }
-      } else {
-        // Use ZK proof hash as commitment for non-private hedges too
-        commitmentHash = zkProofHash;
-      }
-      
-      // Save to PostgreSQL (even in simulation mode)
-      try {
-        logger.info('💾 Attempting to save hedge to database', {
-          orderId,
-          portfolioId: body.portfolioId,
-          asset: privateMode ? '[PRIVATE]' : asset.toUpperCase(),
-          market,
-          size,
-          notionalValue: privateMode ? '[PRIVATE]' : notionalValue,
-        });
-        
-        await createHedge({
-          orderId,
-          portfolioId: body.portfolioId,
-          asset: asset.toUpperCase(),
-          market,
-          side,
-          size: parseFloat(size),
-          notionalValue,
-          leverage,
-          entryPrice: mockPrice,
-          liquidationPrice,
-          stopLoss,
-          takeProfit,
-          simulationMode: true,
-          reason,
-          predictionMarket: reason,
-          txHash: commitmentHash, // Store commitment hash as tx reference
-          zkProofHash, // Store ZK proof hash in dedicated column
-          walletAddress, // Associate hedge with wallet
-        });
-        
-        logger.info('💾 Simulated hedge saved to database', { orderId, privateMode });
-      } catch (dbError) {
-        logger.error('❌ Failed to save hedge to database', { error: dbError });
-        // Continue anyway - don't fail the request if DB is down
-      }
-
-      // Generate wallet ownership proof if wallet address provided
-      let walletOwnershipProof: string | undefined;
-      let walletBinding: string | undefined;
-      
-      if (walletAddress) {
-        try {
-          logger.info('🔐 Generating wallet ownership proof...', { wallet: walletAddress.substring(0, 10) + '...' });
-          
-          const ownershipResult = await generateWalletOwnershipProof(
-            walletAddress,
-            orderId,
-            {
-              asset: asset.toUpperCase(),
-              side,
-              size: parseFloat(size),
-              notionalValue,
-              entryPrice: mockPrice,
-              timestamp: Date.now()
-            }
-          );
-          
-          if (ownershipResult.status === 'completed' && ownershipResult.proof) {
-            walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-            walletBinding = (ownershipResult.proof as unknown as Record<string, unknown>).hedge_binding as string | undefined;
-            logger.info('✅ Wallet ownership proof generated', { 
-              proofHash: walletOwnershipProof?.substring(0, 20) + '...',
-              binding: walletBinding?.substring(0, 20) + '...'
-            });
-          }
-        } catch (ownershipError) {
-          logger.warn('⚠️ Wallet ownership proof generation failed', { error: String(ownershipError) });
-          // Generate fallback binding
-          walletBinding = crypto.createHash('sha256')
-            .update(`${walletAddress.toLowerCase()}:${orderId}`)
-            .digest('hex');
-          walletOwnershipProof = walletBinding;
-        }
-      }
-
+      logger.error('❌ No private key configured — cannot execute hedge. Set MOONLANDER_PRIVATE_KEY or PRIVATE_KEY.');
       return NextResponse.json({
-        success: true,
-        orderId,
-        market,
-        side,
-        size,
-        entryPrice: mockPrice.toString(),
-        stopLoss: stopLoss?.toString(),
-        takeProfit: takeProfit?.toString(),
-        leverage,
-        estimatedLiquidationPrice: liquidationPrice.toFixed(2),
-        simulationMode: true,
-        privateMode,
-        commitmentHash,
-        stealthAddress,
-        zkProofGenerated,
-        zkProofHash, // Include ZK proof hash in response
-        walletAddress,
-        walletOwnershipProof,
-        walletBinding,
-        // PDA Proxy info (like Solana - no private key!)
-        proxyWallet: onChainVaultResult?.proxyAddress || proxyPDA?.proxyAddress,
-        proxyPDA: proxyPDA ? {
-          proxyAddress: proxyPDA.proxyAddress,
-          ownerAddress: proxyPDA.ownerAddress,
-          zkBinding: proxyPDA.zkBinding,
-          nonce: proxyPDA.nonce,
-          hasNoPrivateKey: true, // Key feature: no one can spend from this address directly
-        } : undefined,
-        withdrawalDestination: walletAddress, // Always goes back to owner
-        autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
-        // On-chain ZK vault info (bulletproof mode)
-        onChainVault: onChainVaultResult,
-        message: zkProofGenerated 
-          ? (privateMode 
-            ? '✅ PRIVATE HEDGE: ZK-STARK proof generated, commitment stored, details encrypted'
-            : `✅ ZK-VERIFIED HEDGE: Proof generated${onChainVaultResult?.enabled ? ' with ON-CHAIN ZK VAULT' : (proxyPDA ? ' with PDA proxy (no private key)' : '')}${walletAddress ? ' - withdrawal to owner only' : ''}${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`)
-          : `✅ SIMULATION: Hedge executed (ZK proof pending)`,
-      } satisfies HedgeExecutionResponse);
+        success: false,
+        error: 'No private key configured. Cannot execute hedge without MOONLANDER_PRIVATE_KEY or PRIVATE_KEY environment variable.',
+      }, { status: 503 });
     }
 
     //=================================================================================

@@ -1384,52 +1384,15 @@ class AutoHedgingService {
         });
         return true;
       } else {
-        // Orchestrator failed — fall through to simulation fallback
-        logger.warn('[AutoHedging] Orchestrator execution failed, falling back to simulation', {
+        // Orchestrator failed — do NOT silently simulate
+        logger.error('[AutoHedging] Orchestrator execution failed', {
           error: result.error,
           asset: recommendation.asset,
         });
+        return false;
       }
     } catch (error) {
-      logger.warn('[AutoHedging] Live execution failed, falling back to simulation', { error });
-    }
-
-    // ═══ SIMULATION FALLBACK ═══
-    // When the exchange API is unavailable (Moonlander offline, no API keys, etc.),
-    // record the hedge as a simulation so the system still tracks intended hedges.
-    // This ensures losses are never ignored just because the exchange is down.
-    try {
-      const orderId = `auto-sim-${portfolioId}-${Date.now()}`;
-      await createHedge({
-        orderId,
-        portfolioId,
-        asset: recommendation.asset,
-        market,
-        side: recommendation.side,
-        size: recommendation.suggestedSize / 1000,
-        notionalValue: recommendation.suggestedSize,
-        leverage,
-        entryPrice: priceContext.effectivePrice,
-        simulationMode: true,
-        reason: `[AUTO-SIM] ${recommendation.reason} (exchange unavailable)`,
-        metadata: {
-          confidence: recommendation.confidence,
-          simulationReason: 'exchange_unavailable',
-          priceAtDecision: priceContext.effectivePrice,
-          priceSource: priceContext.validation.priceSource,
-        },
-      });
-
-      logger.info('[AutoHedging] Simulation hedge recorded (exchange unavailable)', {
-        portfolioId,
-        asset: recommendation.asset,
-        side: recommendation.side,
-        size: recommendation.suggestedSize,
-        entryPrice: priceContext.effectivePrice,
-      });
-      return true;
-    } catch (simError) {
-      logger.error('[AutoHedging] Even simulation recording failed', { simError, recommendation });
+      logger.error('[AutoHedging] Live execution failed', { error, asset: recommendation.asset });
       return false;
     }
   }
