@@ -325,6 +325,7 @@ export class AgentOrchestrator {
   public async analyzePortfolio(params: {
     address: string;
     portfolioData?: unknown;
+    chain?: string;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -342,9 +343,11 @@ export class AgentOrchestrator {
           address: params.address,
           includeAssets: true,
           includeRisk: true,
+          chain: params.chain,
         },
         priority: 3,
         createdAt: new Date(),
+        chain: params.chain,
       });
 
       return {
@@ -372,6 +375,7 @@ export class AgentOrchestrator {
   public async assessRisk(params: {
     address: string;
     portfolioData?: unknown;
+    chain?: string;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -387,9 +391,11 @@ export class AgentOrchestrator {
         action: 'assess_portfolio_risk',
         parameters: {
           portfolioAddress: params.address,
+          chain: params.chain,
         },
         priority: 4,
         createdAt: new Date(),
+        chain: params.chain,
       });
 
       // Persist last risk assessment for cold start recovery
@@ -432,6 +438,7 @@ export class AgentOrchestrator {
     portfolioId: string;
     assetSymbol: string;
     notionalValue: number;
+    chain?: string;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -449,9 +456,11 @@ export class AgentOrchestrator {
           portfolioId: params.portfolioId,
           assetSymbol: params.assetSymbol,
           notionalValue: params.notionalValue,
+          chain: params.chain,
         },
         priority: 4,
         createdAt: new Date(),
+        chain: params.chain,
       });
 
       return {
@@ -481,6 +490,7 @@ export class AgentOrchestrator {
     side: 'LONG' | 'SHORT';
     notionalValue: string;
     leverage?: number;
+    chain?: string;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -490,7 +500,7 @@ export class AgentOrchestrator {
         throw new Error('HedgingAgent not initialized');
       }
 
-      // Execute hedge via HedgingAgent (which uses MoonlanderClient)
+      // Execute hedge via HedgingAgent (routes to correct chain adapter)
       const result = await this.hedgingAgent.executeTask({
         id: `execute-hedge-${Date.now()}`,
         action: 'open_hedge',
@@ -499,9 +509,11 @@ export class AgentOrchestrator {
           side: params.side,
           notionalValue: params.notionalValue,
           leverage: params.leverage || 2,
+          chain: params.chain,
         },
         priority: 5,
         createdAt: new Date(),
+        chain: params.chain,
       });
 
       return {
@@ -533,6 +545,7 @@ export class AgentOrchestrator {
     token: string;
     purpose: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    chain?: string;
   }): Promise<AgentOrchestrationResult> {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -553,9 +566,11 @@ export class AgentOrchestrator {
           token: params.token,
           purpose: params.purpose,
           priority: params.priority || 'MEDIUM',
+          chain: params.chain,
         },
         priority: params.priority === 'URGENT' ? 5 : 3,
         createdAt: new Date(),
+        chain: params.chain,
       });
 
       if (!createResult.success) {

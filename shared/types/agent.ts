@@ -70,6 +70,8 @@ export interface AgentTask {
   result?: unknown;
   error?: Error;
   metadata?: Record<string, unknown>;
+  /** Target chain for chain-aware task routing */
+  chain?: string;
   
   // Compatibility aliases for frontend
   agentName?: string;
@@ -123,6 +125,8 @@ export interface AgentContext {
 export interface StrategyInput {
   naturalLanguage: string;
   portfolioId?: number;
+  /** Target chain for the strategy: 'cronos' | 'oasis-sapphire' | 'sui' | 'hedera' etc. */
+  chain?: string;
   constraints?: {
     maxRisk?: number;
     targetYield?: number;
@@ -139,6 +143,8 @@ export interface StrategyInput {
 export interface StrategyIntent {
   action: 'hedge' | 'rebalance' | 'analyze' | 'optimize';
   targetPortfolio: number;
+  /** Target chain: 'cronos' | 'oasis-sapphire' | 'sui' | 'hedera' — determines which on-chain data + hedge adapter to use */
+  chain?: string;
   objectives: {
     yieldTarget?: number;
     riskLimit?: number;
