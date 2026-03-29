@@ -23,15 +23,31 @@ export async function POST(request: NextRequest) {
       
       // Build portfolio data from provided positions
       // Note: calculateRealRiskAssessment expects `usdValue` field
+      // Fetch live prices from MCP instead of using hardcoded values
+      const mcpClient = new MCPClient();
+      await mcpClient.connect();
+      const priceMap = new Map<string, number>();
+      await Promise.all(
+        positions.map(async (p: { symbol: string; value: number }) => {
+          try {
+            const pd = await mcpClient.getPrice(p.symbol);
+            if (pd?.price) priceMap.set(p.symbol, pd.price);
+          } catch { /* price unavailable, balance will derive from value */ }
+        }),
+      );
+
       const portfolioData: PortfolioData = {
         address: '0xSimulation',
-        tokens: positions.map((p: { symbol: string; value: number }) => ({
-          symbol: p.symbol,
-          balance: p.value / 100000, // Approximate balance
-          price: p.symbol === 'BTC' ? 84050 : p.symbol === 'ETH' ? 3037 : 0.12,
-          value: p.value,
-          usdValue: p.value, // Required for risk calculation
-        })),
+        tokens: positions.map((p: { symbol: string; value: number }) => {
+          const price = priceMap.get(p.symbol) || (p.value > 0 ? 1 : 0);
+          return {
+            symbol: p.symbol,
+            balance: price > 0 ? p.value / price : 0,
+            price,
+            value: p.value,
+            usdValue: p.value,
+          };
+        }),
         totalValue: portfolioValue,
       };
 
@@ -39,11 +55,11 @@ export async function POST(request: NextRequest) {
       const riskAssessment = await aiService.assessRisk(portfolioData);
 
       return NextResponse.json({
-        var: riskAssessment.var95 ?? 0.068, // Default 6.8% VaR
-        volatility: riskAssessment.volatility ?? 0.45, // Default 45% volatility
-        sharpeRatio: riskAssessment.sharpeRatio ?? 0.12,
-        riskScore: riskAssessment.riskScore ?? 65, // Default moderate risk
-        overallRisk: riskAssessment.overallRisk ?? 'medium',
+        var: riskAssessment.var95,
+        volatility: riskAssessment.volatility,
+        sharpeRatio: riskAssessment.sharpeRatio,
+        riskScore: riskAssessment.riskScore,
+        overallRisk: riskAssessment.overallRisk,
         factors: riskAssessment.factors,
         realAgent: aiService.isAvailable(),
         simulationMode: false,

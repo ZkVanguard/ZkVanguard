@@ -570,13 +570,13 @@ EFFECTIVENESS: [0-100]`;
   }
 
   private fallbackPortfolioAnalysis(_portfolioData: unknown): PortfolioAnalysis {
-    // Return empty analysis - will be populated from real on-chain data
+    // Return null-equivalent — caller must check for empty data
     return {
       totalValue: 0,
       positions: 0,
       riskScore: 0,
       healthScore: 0,
-      recommendations: [],
+      recommendations: ['AI service unavailable — portfolio analysis requires live data'],
       topAssets: [],
     };
   }
@@ -649,39 +649,9 @@ EFFECTIVENESS: [0-100]`;
   }
 
   private fallbackHedgeRecommendations(_portfolioData: unknown, _riskProfile: unknown): HedgeRecommendation[] {
-    return [
-      {
-        strategy: 'Stablecoin Hedge',
-        confidence: 0.82,
-        expectedReduction: 0.25,
-        description: 'Convert 20-30% of volatile assets to USDC to reduce downside risk',
-        actions: [
-          {
-            action: 'swap',
-            asset: 'ETH',
-            amount: 1000,
-          },
-          {
-            action: 'swap',
-            asset: 'BTC',
-            amount: 500,
-          },
-        ],
-      },
-      {
-        strategy: 'Short Position',
-        confidence: 0.68,
-        expectedReduction: 0.35,
-        description: 'Open short position on correlated assets to hedge against market downturn',
-        actions: [
-          {
-            action: 'short',
-            asset: 'ETH',
-            amount: 500,
-          },
-        ],
-      },
-    ];
+    // No fabricated recommendations — return empty when AI is unavailable
+    // The caller should indicate that no AI-driven recommendations are available
+    return [];
   }
 }
 
