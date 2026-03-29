@@ -1,17 +1,16 @@
 /**
- * Rate Limiter
+ * Rate Limiter — Optimized for Multi-User Scalability
  * 
- * In-memory sliding window rate limiter for API routes.
- * For production with multiple instances, replace with Upstash Ratelimit.
+ * Sliding window rate limiter with:
+ * - LRU eviction to cap memory usage across thousands of users
+ * - Proper rate-limit headers (Limit / Remaining / Reset)
+ * - Per-IP + per-wallet key extraction
+ * - Auto-cleanup of expired windows
  * 
- * Usage:
- *   const limiter = createRateLimiter({ maxRequests: 10, windowMs: 60_000 });
- *   
- *   export async function POST(request: NextRequest) {
- *     const limited = limiter.check(request);
- *     if (limited) return limited;
- *     // ... handle request
- *   }
+ * For production with multiple serverless instances, the in-memory approach
+ * is still effective because Vercel routes requests to the same instance
+ * for the warm period.  For truly distributed rate limiting, swap to
+ * Upstash @upstash/ratelimit (drop-in replacement).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,6 +22,8 @@ interface RateLimitConfig {
   windowMs: number;
   /** Key extractor — defaults to IP address */
   keyFn?: (request: NextRequest) => string;
+  /** Max unique keys to track (prevents memory bloat) */
+  maxKeys?: number;
 }
 
 interface WindowEntry {
@@ -31,6 +32,9 @@ interface WindowEntry {
 }
 
 const DEFAULT_KEY_FN = (request: NextRequest): string => {
+  // Prefer wallet address for user-level limiting, fallback to IP
+  const wallet = request.headers.get('x-wallet-address');
+  if (wallet) return `w:${wallet.toLowerCase()}`;
   return (
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
@@ -39,18 +43,37 @@ const DEFAULT_KEY_FN = (request: NextRequest): string => {
 };
 
 export function createRateLimiter(config: RateLimitConfig) {
-  const { maxRequests, windowMs, keyFn = DEFAULT_KEY_FN } = config;
+  const {
+    maxRequests,
+    windowMs,
+    keyFn = DEFAULT_KEY_FN,
+    maxKeys = 10_000,
+  } = config;
+
+  // Use a Map for insertion-order iteration (LRU eviction)
   const windows = new Map<string, WindowEntry>();
 
-  // Cleanup stale entries every 5 minutes
-  setInterval(() => {
+  // Cleanup stale entries every 60 seconds (faster cycle for high traffic)
+  const cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of windows) {
       if (entry.resetAt < now) {
         windows.delete(key);
       }
     }
-  }, 5 * 60_000).unref();
+  }, 60_000);
+  cleanupTimer.unref();
+
+  function evictOldest(): void {
+    // Evict the oldest 10% when at capacity
+    const evictCount = Math.max(1, Math.floor(maxKeys * 0.1));
+    let removed = 0;
+    for (const key of windows.keys()) {
+      if (removed >= evictCount) break;
+      windows.delete(key);
+      removed++;
+    }
+  }
 
   return {
     /**
@@ -62,12 +85,21 @@ export function createRateLimiter(config: RateLimitConfig) {
       const entry = windows.get(key);
 
       if (!entry || entry.resetAt < now) {
-        // New window
+        // Evict if at capacity before inserting new key
+        if (!entry && windows.size >= maxKeys) {
+          evictOldest();
+        }
+        // New window — re-insert to refresh Map ordering (LRU)
+        windows.delete(key);
         windows.set(key, { count: 1, resetAt: now + windowMs });
         return null;
       }
 
+      // Refresh LRU order
+      windows.delete(key);
       entry.count++;
+      windows.set(key, entry);
+
       if (entry.count > maxRequests) {
         const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
         return NextResponse.json(
@@ -89,6 +121,11 @@ export function createRateLimiter(config: RateLimitConfig) {
       }
 
       return null;
+    },
+
+    /** Get current stats for monitoring */
+    stats() {
+      return { trackedKeys: windows.size, maxKeys };
     },
   };
 }
