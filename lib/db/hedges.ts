@@ -64,13 +64,16 @@ export async function ensureHedgesTable(): Promise<void> {
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_source VARCHAR(50);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_updated_at TIMESTAMP WITH TIME ZONE;
     `);
-    // Indexes
+    // Indexes — including compound indexes for multi-user query patterns
     await query(`
       CREATE INDEX IF NOT EXISTS idx_hedges_order_id ON hedges(order_id);
       CREATE INDEX IF NOT EXISTS idx_hedges_portfolio ON hedges(portfolio_id);
       CREATE INDEX IF NOT EXISTS idx_hedges_status ON hedges(status);
       CREATE INDEX IF NOT EXISTS idx_hedges_asset ON hedges(asset);
       CREATE INDEX IF NOT EXISTS idx_hedges_created ON hedges(created_at);
+      CREATE INDEX IF NOT EXISTS idx_hedges_wallet ON hedges(wallet_address);
+      CREATE INDEX IF NOT EXISTS idx_hedges_wallet_status ON hedges(wallet_address, status);
+      CREATE INDEX IF NOT EXISTS idx_hedges_portfolio_status ON hedges(portfolio_id, status);
     `);
     hedgesTableReady = true;
     logger.debug('[Hedges DB] Table ensured');

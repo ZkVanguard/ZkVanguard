@@ -841,15 +841,19 @@ export async function initCommunityPoolTables(): Promise<void> {
     await query(`UPDATE community_pool_nav_history SET chain = 'sui' WHERE chain = 'cronos' AND source LIKE 'sui%'`).catch(() => {});
 
     // Create indexes (including txHash uniqueness for idempotency and chain filtering)
+    // Compound indexes for common multi-user query patterns
     await query(`
       CREATE INDEX IF NOT EXISTS idx_pool_shares_wallet ON community_pool_shares(wallet_address);
+      CREATE INDEX IF NOT EXISTS idx_pool_shares_wallet_chain ON community_pool_shares(wallet_address, chain);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_type ON community_pool_transactions(type);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_wallet ON community_pool_transactions(wallet_address);
+      CREATE INDEX IF NOT EXISTS idx_pool_tx_wallet_chain ON community_pool_transactions(wallet_address, chain);
       CREATE INDEX IF NOT EXISTS idx_pool_tx_created ON community_pool_transactions(created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_pool_tx_hash ON community_pool_transactions(tx_hash) WHERE tx_hash IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_pool_tx_chain ON community_pool_transactions(chain);
       CREATE INDEX IF NOT EXISTS idx_pool_nav_timestamp ON community_pool_nav_history(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_pool_nav_chain ON community_pool_nav_history(chain);
+      CREATE INDEX IF NOT EXISTS idx_pool_nav_chain_timestamp ON community_pool_nav_history(chain, timestamp DESC);
     `);
     
     // Add case-insensitive unique index for wallet addresses (prevents duplicates due to case differences)
