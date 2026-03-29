@@ -19,6 +19,15 @@ const nextConfig = {
     ],
     // Reduce page data sent to browser
     optimizeCss: true,
+    // Reduce serverless function size
+    outputFileTracingExcludes: {
+      '*': [
+        'node_modules/@swc/core-linux-x64-gnu',
+        'node_modules/@swc/core-linux-x64-musl',
+        'node_modules/@esbuild',
+        'node_modules/sharp',
+      ],
+    },
   },
   
   // Compiler optimizations
@@ -133,16 +142,6 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200], // Fewer sizes = fewer variants to cache
   },
   
-  // Reduce serverless function size
-  outputFileTracingExcludes: {
-    '*': [
-      'node_modules/@swc/core-linux-x64-gnu',
-      'node_modules/@swc/core-linux-x64-musl',
-      'node_modules/@esbuild',
-      'node_modules/sharp',
-    ],
-  },
-
   // Security headers
   async headers() {
     return [

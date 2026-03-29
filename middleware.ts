@@ -276,11 +276,11 @@ async function logGeoBlock(
       // - Analytics database
       // - Compliance audit log
       // - SIEM system
-      logger.info('[GEO-BLOCK]', { component: 'middleware', data: logEntry });
+      console.info('[GEO-BLOCK]', JSON.stringify(logEntry));
     }
   } catch (error) {
     // Don't let logging errors affect the request
-    logger.error('[GEO-BLOCK LOG ERROR]', error, { component: 'middleware' });
+    console.error('[GEO-BLOCK LOG ERROR]', error);
   }
 }
 
