@@ -803,11 +803,13 @@ export class CetusAggregatorService {
   async executeRebalance(
     plan: RebalanceSwapPlan,
     slippage: number = 0.01,
+    options?: { dryRun?: boolean },
   ): Promise<{
     success: boolean;
     results: SwapExecutionResult[];
     totalExecuted: number;
     totalFailed: number;
+    dryRunDetails?: Array<{ asset: string; steps: Array<{ step: string; passed: boolean; detail: string }>; order?: Record<string, unknown> }>;
   }> {
     if (!process.env.SUI_POOL_ADMIN_KEY && !process.env.BLUEFIN_PRIVATE_KEY) {
       return {
@@ -824,14 +826,17 @@ export class CetusAggregatorService {
     }
 
     const swappable = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
-    if (swappable.length === 0) {
-      logger.info('[CetusAggregator] No on-chain swaps to execute');
+    const hedgeable = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
+
+    if (swappable.length === 0 && hedgeable.length === 0) {
+      logger.info('[CetusAggregator] No on-chain swaps or hedges to execute');
       return { success: true, results: [], totalExecuted: 0, totalFailed: 0 };
     }
 
     logger.info('[CetusAggregator] Executing rebalance', {
-      swapCount: swappable.length,
-      assets: swappable.map(s => s.asset),
+      onChainSwaps: swappable.length,
+      hedgedSwaps: hedgeable.length,
+      assets: plan.swaps.map(s => s.asset),
       totalUsdc: plan.totalUsdcToSwap,
     });
 
@@ -848,15 +853,105 @@ export class CetusAggregatorService {
       }
     }
 
-    // Also include non-swappable (hedged via perps) in results
+    // Also include non-swappable (hedged via BlueFin perps) — execute real hedges or dry-run
+    const dryRunDetails: Array<{ asset: string; steps: Array<{ step: string; passed: boolean; detail: string }>; order?: Record<string, unknown> }> = [];
+    if (hedgeable.length > 0) {
+      const { bluefinService, BluefinService } = await import('./BluefinService');
+      const privateKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+      const network = this.network;
+
+      if (!privateKey) {
+        for (const s of hedgeable) {
+          results.push({
+            asset: s.asset,
+            success: false,
+            amountIn: s.amountIn,
+            error: 'BLUEFIN_PRIVATE_KEY not configured — cannot open hedge',
+          });
+        }
+      } else {
+        await bluefinService.initialize(privateKey, network);
+
+        for (const s of hedgeable) {
+          const symbol = BluefinService.assetToPair(s.asset);
+          if (!symbol) {
+            results.push({
+              asset: s.asset,
+              success: false,
+              amountIn: s.amountIn,
+              error: `No BlueFin pair for ${s.asset}`,
+            });
+            continue;
+          }
+
+          // Calculate position size in asset units from expected output
+          const decimals = ASSET_DECIMALS[ASSET_TO_COIN_KEY[s.asset]] || 8;
+          const assetSize = Number(s.expectedAmountOut || '0') / Math.pow(10, decimals);
+          if (assetSize <= 0) {
+            results.push({
+              asset: s.asset,
+              success: false,
+              amountIn: s.amountIn,
+              error: `Cannot determine position size for ${s.asset}`,
+            });
+            continue;
+          }
+
+          if (options?.dryRun) {
+            // Dry-run: validate everything except actual order submission
+            const dryResult = await bluefinService.dryRunHedge({
+              symbol,
+              side: 'LONG',
+              size: assetSize,
+              leverage: 1,
+            });
+            dryRunDetails.push({ asset: s.asset, steps: dryResult.steps, order: dryResult.order });
+            results.push({
+              asset: s.asset,
+              success: dryResult.success,
+              amountIn: s.amountIn,
+              amountOut: s.expectedAmountOut || '0',
+              error: dryResult.success
+                ? `DRY-RUN OK: ${symbol} LONG ${assetSize.toFixed(6)} — all steps passed`
+                : `DRY-RUN: ${dryResult.steps.filter(st => !st.passed).map(st => `${st.step}: ${st.detail}`).join('; ')}`,
+            });
+          } else {
+            const hedgeResult = await bluefinService.openHedge({
+              symbol,
+              side: 'LONG', // Deposit = go long the asset
+              size: assetSize,
+              leverage: 1, // 1x leverage = synthetic spot exposure
+              reason: `Pool rebalance deposit: USDC → ${s.asset}`,
+            });
+
+            results.push({
+              asset: s.asset,
+              success: hedgeResult.success,
+              amountIn: s.amountIn,
+              amountOut: s.expectedAmountOut || '0',
+              txDigest: hedgeResult.txDigest,
+              error: hedgeResult.success
+                ? `Hedged via BlueFin: ${symbol} LONG ${assetSize.toFixed(6)}`
+                : `BlueFin hedge failed: ${hedgeResult.error}`,
+            });
+
+            if (hedgeResult.success) {
+              await new Promise(r => setTimeout(r, 1500));
+            }
+          }
+        }
+      }
+    }
+
+    // Include non-swappable, non-hedgeable (virtual/no pair) assets
     for (const s of plan.swaps) {
-      if (!s.canSwapOnChain) {
+      if (!s.canSwapOnChain && s.hedgeVia !== 'bluefin') {
         results.push({
           asset: s.asset,
-          success: true, // Hedged via perps, not a failure
+          success: false,
           amountIn: s.amountIn,
           amountOut: s.expectedAmountOut || '0',
-          error: `Hedged via ${s.hedgeVia || 'BlueFin perps'} (no on-chain swap)`,
+          error: `No swap route or hedge available for ${s.asset}`,
         });
       }
     }
@@ -875,6 +970,7 @@ export class CetusAggregatorService {
       results,
       totalExecuted,
       totalFailed,
+      ...(dryRunDetails.length > 0 ? { dryRunDetails } : {}),
     };
   }
 

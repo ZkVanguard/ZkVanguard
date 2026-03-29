@@ -515,35 +515,27 @@ export async function POST(request: NextRequest) {
       );
 
       const onChainSwaps = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
-      const simulatedSwaps = plan.swaps.filter(s => s.isSimulated || !s.canSwapOnChain);
+      const hedgedSwaps = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
 
-      if (onChainSwaps.length === 0) {
-        // No real on-chain swaps, but still return simulated positions for tracking
+      if (onChainSwaps.length === 0 && hedgedSwaps.length === 0) {
         return NextResponse.json({
-          success: true,
+          success: false,
           data: {
-            message: 'No on-chain swaps available — positions tracked by price',
+            message: 'No on-chain swaps or hedges available for these assets',
             plan,
-            simulatedPositions: simulatedSwaps.map(s => ({
-              asset: s.asset,
-              usdcAllocated: (Number(s.amountIn) / 1e6).toFixed(2),
-              estimatedQty: s.expectedAmountOut,
-              method: s.hedgeVia || 'price-tracked',
-              route: s.route,
-            })),
           },
           chain: 'sui',
-        });
+        }, { status: 400 });
       }
 
-      // Execute on-chain swaps (1% slippage for direct deposits)
+      // Execute on-chain swaps + BlueFin hedges (1% slippage for direct deposits)
       const result = await aggregator.executeRebalance(plan, 0.01);
 
       logger.info('[SUI-API] Deposit swaps executed', {
         amountUsdc,
         executed: result.totalExecuted,
         failed: result.totalFailed,
-        hedged: simulatedSwaps.length,
+        hedged: hedgedSwaps.length,
         digests: result.results.filter(r => r.txDigest).map(r => `${r.asset}:${r.txDigest}`),
       });
 
@@ -560,13 +552,59 @@ export async function POST(request: NextRequest) {
             amountOut: r.amountOut,
             error: r.error,
           })),
-          simulatedPositions: simulatedSwaps.map(s => ({
-            asset: s.asset,
-            usdcAllocated: (Number(s.amountIn) / 1e6).toFixed(2),
-            estimatedQty: s.expectedAmountOut,
-            method: s.hedgeVia || 'price-tracked',
-            route: s.route,
-          })),
+        },
+        chain: 'sui',
+      });
+    }
+
+    // Dry-run deposit swaps — validates entire pipeline without executing
+    if (action === 'dry-run-deposit-swaps') {
+      const { amountUsdc, allocations } = body;
+
+      if (!amountUsdc || typeof amountUsdc !== 'number' || amountUsdc <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'amountUsdc required (positive number)' },
+          { status: 400 }
+        );
+      }
+      if (!allocations || typeof allocations !== 'object') {
+        return NextResponse.json(
+          { success: false, error: 'allocations required (e.g. { BTC: 30, ETH: 30, SUI: 25, CRO: 15 })' },
+          { status: 400 }
+        );
+      }
+
+      const aggregator = getCetusAggregatorService(network);
+      const wallet = await aggregator.checkAdminWallet();
+
+      const plan = await aggregator.planRebalanceSwaps(
+        amountUsdc,
+        allocations as Record<import('@/lib/services/CetusAggregatorService').PoolAsset, number>,
+      );
+
+      const result = await aggregator.executeRebalance(plan, 0.01, { dryRun: true });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          dryRun: true,
+          wallet: { configured: wallet.configured, hasGas: wallet.hasGas, address: wallet.address },
+          plan: {
+            totalUsdcToSwap: plan.totalUsdcToSwap,
+            swaps: plan.swaps.map(s => ({
+              asset: s.asset,
+              amountIn: s.amountIn,
+              expectedAmountOut: s.expectedAmountOut,
+              canSwapOnChain: s.canSwapOnChain,
+              hedgeVia: s.hedgeVia,
+            })),
+          },
+          execution: {
+            executed: result.totalExecuted,
+            failed: result.totalFailed,
+            results: result.results,
+          },
+          hedgeValidation: result.dryRunDetails || [],
         },
         chain: 'sui',
       });
@@ -638,22 +676,65 @@ export async function POST(request: NextRequest) {
           if (execResult.success) {
             await new Promise(r => setTimeout(r, 1500));
           }
-        } else if (reverseQuote.hedgeVia || forwardQuote.hedgeVia) {
-          // Hedged position (testnet or CRO): close the hedge / mark for settlement
+        } else if (reverseQuote.hedgeVia === 'bluefin' || forwardQuote.hedgeVia === 'bluefin') {
+          // Hedged position: close the BlueFin hedge
+          const { bluefinService, BluefinService } = await import('@/lib/services/BluefinService');
+          const privateKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+          const bfNetwork = (process.env.BLUEFIN_NETWORK || network) as 'mainnet' | 'testnet';
+
+          if (!privateKey) {
+            results.push({
+              asset,
+              success: false,
+              amountIn: forwardQuote.expectedAmountOut,
+              error: 'BLUEFIN_PRIVATE_KEY not configured — cannot close hedge',
+            });
+            continue;
+          }
+
+          await bluefinService.initialize(privateKey, bfNetwork);
+          const symbol = BluefinService.assetToPair(asset);
+
+          if (!symbol) {
+            results.push({
+              asset,
+              success: false,
+              amountIn: forwardQuote.expectedAmountOut,
+              error: `No BlueFin pair for ${asset}`,
+            });
+            continue;
+          }
+
+          const decimals = asset === 'SUI' ? 9 : 8;
+          const closeSize = Number(forwardQuote.expectedAmountOut) / Math.pow(10, decimals);
+
+          const closeResult = await bluefinService.closeHedge({
+            symbol,
+            size: closeSize > 0 ? closeSize : undefined,
+          });
+
           hedgedPositions.push({
             asset,
             usdcValue: assetUsdValue,
             assetAmount: forwardQuote.expectedAmountOut,
-            method: reverseQuote.hedgeVia || forwardQuote.hedgeVia || 'price-tracked',
+            method: 'bluefin',
             route: reverseQuote.route || `${asset} → USDC (close hedge)`,
           });
+
           results.push({
             asset,
-            success: true,
+            success: closeResult.success,
             amountIn: forwardQuote.expectedAmountOut,
             amountOut: Math.floor(assetUsdValue * 1e6).toString(),
-            error: `Hedged via ${reverseQuote.hedgeVia || 'BlueFin'} (no on-chain swap)`,
+            txDigest: closeResult.txDigest,
+            error: closeResult.success
+              ? `Closed BlueFin hedge: ${symbol}`
+              : `BlueFin close failed: ${closeResult.error}`,
           });
+
+          if (closeResult.success) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
         } else {
           results.push({
             asset,
