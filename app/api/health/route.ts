@@ -14,52 +14,35 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    logger.info('[Health Check] Starting comprehensive health check...');
     const startTime = Date.now();
 
-    // Check Exchange API
-    const exchangeHealthy = await cryptocomExchangeService.healthCheck();
-    const exchangeStats = cryptocomExchangeService.getCacheStats();
+    // Run all health checks in PARALLEL for faster response
+    const [exchangeHealthy, platformResult, samplePriceResult] = await Promise.allSettled([
+      cryptocomExchangeService.healthCheck(),
+      cryptocomDeveloperPlatform.healthCheck().then(() => ({ healthy: true, network: 'Cronos EVM' })).catch(() => ({ healthy: false, network: 'not configured' })),
+      cryptocomExchangeService.getMarketData('BTC').then(d => ({ symbol: 'BTC', price: d.price, source: d.source })).catch(() => null),
+    ]);
 
-    // Check Developer Platform
-    let platformHealthy = false;
-    let platformNetwork = 'not configured';
-    try {
-      platformHealthy = await cryptocomDeveloperPlatform.healthCheck();
-      platformNetwork = 'Cronos EVM';
-    } catch (error) {
-      logger.info('[Health Check] Developer Platform not configured', { error: error instanceof Error ? error.message : String(error) });
-    }
+    const exchangeStats = cryptocomExchangeService.getCacheStats();
+    const isExchangeHealthy = exchangeHealthy.status === 'fulfilled' && exchangeHealthy.value;
+    const platform = platformResult.status === 'fulfilled' ? platformResult.value : { healthy: false, network: 'not configured' };
+    const samplePrice = samplePriceResult.status === 'fulfilled' ? samplePriceResult.value : null;
     
-    // Check AI Agent
+    // Check AI Agent (synchronous, no await needed)
     const aiAgentHealthy = cryptocomAIAgent.isReady();
 
     // Get sample price to test the full pipeline
-    let samplePrice = null;
-    let priceFetchTime = 0;
-    try {
-      const priceStart = Date.now();
-      const btcData = await cryptocomExchangeService.getMarketData('BTC');
-      priceFetchTime = Date.now() - priceStart;
-      samplePrice = {
-        symbol: 'BTC',
-        price: btcData.price,
-        source: btcData.source,
-        fetchTime: `${priceFetchTime}ms`,
-      };
-    } catch (error) {
-      logger.error('[Health Check] Sample price fetch failed', error);
-    }
+    const priceFetchTime = Date.now() - startTime;
 
     const totalTime = Date.now() - startTime;
 
     const health = {
-      status: exchangeHealthy && platformHealthy ? 'healthy' : 'degraded',
+      status: isExchangeHealthy && platform.healthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       responseTime: `${totalTime}ms`,
       services: {
         exchangeAPI: {
-          status: exchangeHealthy ? 'operational' : 'down',
+          status: isExchangeHealthy ? 'operational' : 'down',
           endpoint: 'https://api.crypto.com/exchange/v1',
           rateLimit: '100 req/sec',
           cache: {
@@ -68,8 +51,8 @@ export async function GET() {
           },
         },
         developerPlatform: {
-          status: platformHealthy ? 'operational' : 'not configured',
-          network: platformNetwork,
+          status: platform.healthy ? 'operational' : 'not configured',
+          network: platform.network,
           features: ['balances', 'transactions', 'blocks'],
         },
         aiAgent: {
@@ -79,7 +62,7 @@ export async function GET() {
         },
       },
       performance: {
-        samplePriceFetch: samplePrice,
+        samplePriceFetch: samplePrice ? { ...samplePrice, fetchTime: `${priceFetchTime}ms` } : null,
         totalHealthCheckTime: `${totalTime}ms`,
       },
       fallbackChain: [
@@ -99,7 +82,11 @@ export async function GET() {
 
     logger.info('[Health Check] Complete', { data: health });
 
-    return NextResponse.json(health);
+    return NextResponse.json(health, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
+      },
+    });
   } catch (error: unknown) {
     logger.error('[Health Check] Error', error);
     return NextResponse.json(
