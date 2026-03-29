@@ -1,6 +1,11 @@
 /**
- * Simple in-memory cache utility for API responses
- * Reduces network requests and improves performance
+ * Optimized In-Memory Cache — Multi-User Scalable
+ * 
+ * Features:
+ * - LRU eviction with configurable max size (prevents OOM on serverless)
+ * - Per-entry TTL support
+ * - Auto-cleanup on both server and client
+ * - Hit/miss stats for observability
  */
 
 import { logger } from '@/lib/utils/logger';
@@ -8,119 +13,136 @@ import { logger } from '@/lib/utils/logger';
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
+  ttl: number;  // per-entry TTL
+}
+
+interface CacheStats {
+  size: number;
+  hits: number;
+  misses: number;
+  evictions: number;
 }
 
 class CacheManager {
   private cache: Map<string, CacheEntry<unknown>>;
   private defaultTTL: number;
+  private maxSize: number;
+  private _hits = 0;
+  private _misses = 0;
+  private _evictions = 0;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(defaultTTL: number = 60000) {
+  constructor(defaultTTL: number = 60000, maxSize: number = 5000) {
     this.cache = new Map();
-    this.defaultTTL = defaultTTL; // Default 60s TTL
+    this.defaultTTL = defaultTTL;
+    this.maxSize = maxSize;
+
+    // Auto-cleanup every 60 seconds (works on both server and client)
+    this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
+    if (typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
   }
 
-  /**
-   * Get cached data if available and not expired
-   */
   get<T>(key: string, ttl?: number): T | null {
     const entry = this.cache.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      this._misses++;
+      return null;
+    }
 
-    const maxAge = ttl || this.defaultTTL;
+    const maxAge = ttl || entry.ttl;
     const age = Date.now() - entry.timestamp;
 
     if (age > maxAge) {
       this.cache.delete(key);
+      this._misses++;
       return null;
     }
 
-    logger.debug(`[Cache HIT] ${key} (age: ${(age / 1000).toFixed(1)}s)`, { component: 'cache' });
+    this._hits++;
+    // Refresh LRU position: delete + re-set moves to end of Map
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
     return entry.data as T;
   }
 
-  /**
-   * Set data in cache with timestamp and optional custom TTL
-   */
   set<T>(key: string, data: T, customTTL?: number): void {
+    // Evict oldest entries if at capacity
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      this.evictOldest(Math.max(1, Math.floor(this.maxSize * 0.05)));
+    }
+
+    // Delete first to refresh LRU position
+    this.cache.delete(key);
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
-      ...(customTTL ? { ttl: customTTL } : {}),
+      ttl: customTTL ?? this.defaultTTL,
     });
-    logger.debug(`[Cache SET] ${key}${customTTL ? ` (TTL: ${customTTL}ms)` : ''}`, { component: 'cache' });
   }
 
   /**
-   * Invalidate specific cache key
+   * Get-or-fetch: returns cached value or calls fetcher, stores result.
+   * Eliminates duplicate fetcher code at call sites.
    */
+  async getOrFetch<T>(key: string, fetcher: () => Promise<T>, ttl?: number): Promise<T> {
+    const cached = this.get<T>(key, ttl);
+    if (cached !== null) return cached;
+    const result = await fetcher();
+    this.set(key, result, ttl);
+    return result;
+  }
+
   invalidate(key: string): void {
     this.cache.delete(key);
-    logger.debug(`[Cache INVALIDATE] ${key}`, { component: 'cache' });
   }
 
-  /**
-   * Invalidate all cache keys matching pattern
-   */
   invalidatePattern(pattern: string): void {
     const regex = new RegExp(pattern);
-    let count = 0;
-    
     for (const key of this.cache.keys()) {
       if (regex.test(key)) {
         this.cache.delete(key);
-        count++;
       }
     }
-    
-    logger.debug(`[Cache INVALIDATE] ${count} keys matching "${pattern}"`, { component: 'cache' });
   }
 
-  /**
-   * Clear all cache
-   */
   clear(): void {
-    const size = this.cache.size;
     this.cache.clear();
-    logger.debug(`[Cache CLEAR] ${size} entries removed`, { component: 'cache' });
   }
 
-  /**
-   * Get cache stats
-   */
-  stats(): { size: number; keys: string[] } {
+  stats(): CacheStats {
     return {
       size: this.cache.size,
-      keys: Array.from(this.cache.keys()),
+      hits: this._hits,
+      misses: this._misses,
+      evictions: this._evictions,
     };
   }
 
-  /**
-   * Automatic cache cleanup - removes expired entries
-   */
   cleanup(): void {
-    let removed = 0;
     const now = Date.now();
-
     for (const [key, entry] of this.cache.entries()) {
-      if (now - entry.timestamp > this.defaultTTL) {
+      if (now - entry.timestamp > entry.ttl) {
         this.cache.delete(key);
-        removed++;
       }
     }
+  }
 
-    if (removed > 0) {
-      logger.debug(`[Cache CLEANUP] ${removed} expired entries removed`, { component: 'cache' });
+  private evictOldest(count: number): void {
+    let removed = 0;
+    for (const key of this.cache.keys()) {
+      if (removed >= count) break;
+      this.cache.delete(key);
+      removed++;
     }
+    this._evictions += removed;
   }
 }
 
-// Export singleton instance
-export const cache = new CacheManager(60000); // 60s default TTL
-
-// Run cleanup every 5 minutes
-if (typeof window !== 'undefined') {
-  setInterval(() => cache.cleanup(), 5 * 60 * 1000);
-}
+// Export singleton instance — 60s default TTL, 5000 max entries
+export const cache = new CacheManager(60000, 5000);
 
 /**
  * Higher-order function to cache async function results
@@ -139,7 +161,7 @@ export function withCache<T extends (...args: unknown[]) => Promise<unknown>>(
     }
 
     const result = await fn(...args);
-    cache.set(key, result);
+    cache.set(key, result, ttl);
     return result;
   }) as T;
 }

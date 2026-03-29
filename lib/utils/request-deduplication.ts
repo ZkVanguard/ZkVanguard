@@ -1,11 +1,14 @@
 /**
- * Request Deduplication & Caching Utility
+ * Request Deduplication & Caching — Optimized for Multi-User Scalability
  * 
- * Prevents duplicate API requests with two-tier optimization:
+ * Two-tier optimization preventing thundering herd problems:
  * 1. In-flight deduplication: Concurrent requests share the same promise
- * 2. Response caching: Successful responses are cached for a short TTL
+ * 2. Response caching: Successful responses cached with auto-TTL
  * 
- * This dramatically reduces API load during rapid UI interactions
+ * Safeguards:
+ * - Max cache size with LRU eviction (prevents OOM)
+ * - Auto-cleanup of expired entries every 30s
+ * - Stale pending request detection (prevents leaked promises)
  */
 
 import { logger } from '@/lib/utils/logger';
@@ -18,7 +21,6 @@ interface PendingRequest<T> {
 interface CachedResponse<T> {
   data: T;
   timestamp: number;
-  statusCode?: number;
 }
 
 // Default cache TTL for different request types (ms)
@@ -36,19 +38,24 @@ function getCacheTTL(key: string): number {
   return CACHE_TTL.default;
 }
 
+const MAX_CACHE_SIZE = 2000;
+const MAX_PENDING_SIZE = 500;
+
 class RequestDeduplicator {
   private pendingRequests = new Map<string, PendingRequest<unknown>>();
   private responseCache = new Map<string, CachedResponse<unknown>>();
   private requestTimeout = 30000; // 30s timeout for pending requests
   private cacheEnabled = true;
+  private cleanupTimer: ReturnType<typeof setInterval>;
 
-  /**
-   * Execute a request with deduplication and optional response caching
-   * @param key Unique identifier for the request
-   * @param fetcher Function that performs the actual request
-   * @param skipCache If true, bypass response cache (but still use in-flight dedup)
-   * @returns Promise that resolves to the request result
-   */
+  constructor() {
+    // Auto-cleanup every 30s to prevent memory leaks
+    this.cleanupTimer = setInterval(() => this.cleanup(), 30_000);
+    if (typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref();
+    }
+  }
+
   async dedupe<T>(key: string, fetcher: () => Promise<T>, skipCache = false): Promise<T> {
     const now = Date.now();
     
@@ -57,7 +64,9 @@ class RequestDeduplicator {
       const cached = this.responseCache.get(key);
       const ttl = getCacheTTL(key);
       if (cached && (now - cached.timestamp) < ttl) {
-        logger.debug(`Cache HIT: ${key} (age: ${now - cached.timestamp}ms)`, { component: 'deduper' });
+        // Refresh LRU position
+        this.responseCache.delete(key);
+        this.responseCache.set(key, cached);
         return cached.data as T;
       }
     }
@@ -66,71 +75,62 @@ class RequestDeduplicator {
 
     // Return existing promise if request is still pending and not timed out
     if (pending && (now - pending.timestamp) < this.requestTimeout) {
-      logger.debug(`Reusing pending request for: ${key}`, { component: 'deduper' });
       return pending.promise as Promise<T>;
     }
 
+    // Evict oldest if at capacity
+    if (this.pendingRequests.size >= MAX_PENDING_SIZE) {
+      const firstKey = this.pendingRequests.keys().next().value;
+      if (firstKey !== undefined) this.pendingRequests.delete(firstKey);
+    }
+
     // Create new request
-    logger.debug(`Creating new request for: ${key}`, { component: 'deduper' });
     const promise = fetcher()
       .then((result) => {
-        // Clean up pending request
         this.pendingRequests.delete(key);
         
-        // Cache successful response
+        // Cache successful response with LRU eviction
         if (this.cacheEnabled && !skipCache) {
-          this.responseCache.set(key, {
-            data: result,
-            timestamp: Date.now(),
-          });
+          if (this.responseCache.size >= MAX_CACHE_SIZE) {
+            // Evict oldest 5%
+            const evictCount = Math.max(1, Math.floor(MAX_CACHE_SIZE * 0.05));
+            let removed = 0;
+            for (const k of this.responseCache.keys()) {
+              if (removed >= evictCount) break;
+              this.responseCache.delete(k);
+              removed++;
+            }
+          }
+          this.responseCache.delete(key); // refresh LRU position
+          this.responseCache.set(key, { data: result, timestamp: Date.now() });
         }
         
         return result;
       })
       .catch((error) => {
-        // Clean up after error (don't cache errors)
         this.pendingRequests.delete(key);
         throw error;
       });
 
-    // Store pending request
-    this.pendingRequests.set(key, {
-      promise,
-      timestamp: now,
-    });
-
+    this.pendingRequests.set(key, { promise, timestamp: now });
     return promise;
   }
   
-  /**
-   * Enable or disable response caching
-   */
   setCacheEnabled(enabled: boolean): void {
     this.cacheEnabled = enabled;
-    if (!enabled) {
-      this.responseCache.clear();
-    }
+    if (!enabled) this.responseCache.clear();
   }
 
-  /**
-   * Clear a specific pending request
-   */
   clear(key: string): void {
     this.pendingRequests.delete(key);
     this.responseCache.delete(key);
   }
 
-  /**
-   * Clear all pending requests and cache
-   */
   clearAll(): void {
     this.pendingRequests.clear();
     this.responseCache.clear();
   }
   
-  /**
-   * Invalidate cache entries matching a pattern
-   */
   invalidateCache(pattern: string): number {
     let count = 0;
     const regex = new RegExp(pattern, 'i');
@@ -140,18 +140,13 @@ class RequestDeduplicator {
         count++;
       }
     }
-    if (count > 0) {
-      logger.debug(`Invalidated ${count} cache entries matching: ${pattern}`, { component: 'deduper' });
-    }
     return count;
   }
   
-  /**
-   * Clean up expired cache entries
-   */
   cleanup(): number {
     const now = Date.now();
     let cleaned = 0;
+    // Clean expired cache entries
     for (const [key, entry] of this.responseCache.entries()) {
       const ttl = getCacheTTL(key);
       if ((now - entry.timestamp) > ttl) {
@@ -159,17 +154,20 @@ class RequestDeduplicator {
         cleaned++;
       }
     }
+    // Clean stale pending requests (guards against leaked promises)
+    for (const [key, entry] of this.pendingRequests.entries()) {
+      if ((now - entry.timestamp) > this.requestTimeout) {
+        this.pendingRequests.delete(key);
+        cleaned++;
+      }
+    }
     return cleaned;
   }
 
-  /**
-   * Get stats about pending requests and cache
-   */
-  getStats(): { pending: number; cached: number; keys: string[] } {
+  getStats(): { pending: number; cached: number } {
     return {
       pending: this.pendingRequests.size,
       cached: this.responseCache.size,
-      keys: Array.from(this.pendingRequests.keys()),
     };
   }
 }

@@ -1,8 +1,10 @@
 /**
  * Production-safe logging utility
- * - info/debug logs only in development
- * - errors always logged
- * - structured output for monitoring
+ * 
+ * Optimized for multi-user:
+ * - Zero allocation for suppressed log levels
+ * - info/debug only in development
+ * - Structured output for monitoring
  */
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
@@ -13,49 +15,40 @@ interface LogContext {
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isTest = process.env.NODE_ENV === 'test';
+const isProduction = process.env.NODE_ENV === 'production';
 
 class Logger {
-  private log(level: LogLevel, message: string, context?: LogContext): void {
-    // Suppress all logs during test runs to keep output clean
-    if (isTest) {
-      return;
-    }
-
-    if (!isDevelopment && (level === 'info' || level === 'debug')) {
-      return;
-    }
-
-    const _timestamp = new Date().toISOString();
-    const prefix = this.getPrefix(level);
-
-    if (context && Object.keys(context).length > 0) {
-      // eslint-disable-next-line no-console
-      console[level === 'debug' ? 'log' : level](`${prefix} ${message}`, context);
-    } else {
-      // eslint-disable-next-line no-console
-      console[level === 'debug' ? 'log' : level](`${prefix} ${message}`);
-    }
-  }
-
-  private getPrefix(level: LogLevel): string {
-    const prefixes: Record<LogLevel, string> = {
-      info: 'ℹ️ ',
-      warn: '⚠️ ',
-      error: '❌',
-      debug: '🔍'
-    };
-    return prefixes[level] || '';
+  // Fast path: check if level is enabled before doing any work
+  private isEnabled(level: LogLevel): boolean {
+    if (isTest) return false;
+    if (isProduction && (level === 'info' || level === 'debug')) return false;
+    return true;
   }
 
   info(message: string, context?: LogContext): void {
-    this.log('info', message, context);
+    if (!this.isEnabled('info')) return;
+    if (context && Object.keys(context).length > 0) {
+      // eslint-disable-next-line no-console
+      console.info(`ℹ️  ${message}`, context);
+    } else {
+      // eslint-disable-next-line no-console
+      console.info(`ℹ️  ${message}`);
+    }
   }
 
   warn(message: string, context?: LogContext): void {
-    this.log('warn', message, context);
+    if (!this.isEnabled('warn')) return;
+    if (context && Object.keys(context).length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`⚠️  ${message}`, context);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(`⚠️  ${message}`);
+    }
   }
 
   error(message: string, error?: unknown, context?: LogContext): void {
+    if (isTest) return;
     const errorContext = {
       ...context,
       error: error instanceof Error ? {
@@ -64,11 +57,19 @@ class Logger {
         name: error.name
       } : error
     };
-    this.log('error', message, errorContext);
+    // eslint-disable-next-line no-console
+    console.error(`❌ ${message}`, errorContext);
   }
 
   debug(message: string, context?: LogContext): void {
-    this.log('debug', message, context);
+    if (!this.isEnabled('debug')) return;
+    if (context && Object.keys(context).length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`🔍 ${message}`, context);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`🔍 ${message}`);
+    }
   }
 }
 
