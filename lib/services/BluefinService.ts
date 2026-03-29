@@ -149,7 +149,6 @@ export class BluefinService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiresAt: number = 0;
-  private useMockMode: boolean = false;
   
   // Rate limiting state
   private lastRequestTime: Map<string, number> = new Map();
@@ -169,14 +168,12 @@ export class BluefinService {
    */
   getStatus(): {
     initialized: boolean;
-    mockMode: boolean;
     network: string;
     walletAddress: string | null;
     authenticated: boolean;
   } {
     return {
       initialized: this.initialized,
-      mockMode: this.useMockMode,
       network: this.network,
       walletAddress: this.walletAddress,
       authenticated: !!this.accessToken,
@@ -219,23 +216,19 @@ export class BluefinService {
       const authSuccess = await this.authenticate();
       
       if (!authSuccess) {
-        logger.warn('⚠️ BlueFin auth failed, using mock mode for testing');
-        this.useMockMode = true;
+        logger.warn('⚠️ BlueFin auth failed — service will retry auth on next API call');
       }
       
       this.initialized = true;
       logger.info('✅ BlueFin client initialized', { 
         network, 
         address: this.walletAddress,
-        mockMode: this.useMockMode
+        authenticated: authSuccess,
       });
 
     } catch (error) {
       logger.error('❌ Failed to initialize BlueFin client', error instanceof Error ? error : undefined);
-      // Enable mock mode on error
-      this.useMockMode = true;
-      this.initialized = true;
-      logger.warn('⚠️ BlueFin initialization failed, using mock mode');
+      throw new Error(`BlueFin initialization failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -761,6 +754,120 @@ export class BluefinService {
   }
 
   /**
+   * Dry-run validation of a hedge — tests everything except actual order submission.
+   * Validates: auth, account onboarding, pair, leverage, market data, order construction, signing.
+   * Returns detailed step-by-step results for pre-mainnet verification.
+   */
+  async dryRunHedge(params: {
+    symbol: string;
+    side: 'LONG' | 'SHORT';
+    size: number;
+    leverage: number;
+  }): Promise<{
+    success: boolean;
+    steps: { step: string; passed: boolean; detail: string }[];
+    order?: Record<string, unknown>;
+    error?: string;
+  }> {
+    this.ensureInitialized();
+    const steps: { step: string; passed: boolean; detail: string }[] = [];
+
+    try {
+      // Step 1: Authentication
+      const hasToken = !!this.accessToken;
+      steps.push({ step: 'auth', passed: hasToken, detail: hasToken ? `JWT token acquired for ${this.walletAddress}` : 'No token — auth failed' });
+      if (!hasToken) return { success: false, steps, error: 'Authentication failed' };
+
+      // Step 2: Account onboarding check
+      let accountOnboarded = false;
+      let freeCollateral = '0';
+      try {
+        const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
+        accountOnboarded = !!acctResp;
+        freeCollateral = acctResp?.freeCollateral || '0';
+        steps.push({ step: 'account', passed: true, detail: `Onboarded, freeCollateral=${freeCollateral}` });
+      } catch {
+        steps.push({ step: 'account', passed: false, detail: `Account ${this.walletAddress} NOT onboarded — register at https://pro.bluefin.io` });
+      }
+
+      // Step 3: Validate pair
+      const pair = Object.values(BLUEFIN_PAIRS).find(p => p.symbol === params.symbol);
+      if (!pair) {
+        steps.push({ step: 'pair', passed: false, detail: `Invalid pair: ${params.symbol}` });
+        return { success: false, steps, error: `Invalid pair: ${params.symbol}` };
+      }
+      steps.push({ step: 'pair', passed: true, detail: `${pair.symbol} — maxLeverage=${pair.maxLeverage}x` });
+
+      // Step 4: Leverage
+      const leverageOk = params.leverage <= pair.maxLeverage;
+      steps.push({ step: 'leverage', passed: leverageOk, detail: `${params.leverage}x (max ${pair.maxLeverage}x)` });
+
+      // Step 5: Market data
+      const marketData = await this.getMarketData(params.symbol);
+      const price = marketData?.price || 0;
+      steps.push({
+        step: 'market-data',
+        passed: price > 0,
+        detail: price > 0 ? `${params.symbol} price=$${price.toFixed(2)}, funding=${marketData?.fundingRate?.toFixed(6) || 'n/a'}` : 'No price data',
+      });
+
+      // Step 6: Order construction
+      const quantityE9 = Math.floor(params.size * 1e9).toString();
+      const leverageE9 = Math.floor(params.leverage * 1e9).toString();
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      const signedAtMillis = Date.now();
+      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
+      const networkConfig = BLUEFIN_NETWORKS[this.network];
+
+      const signedFields = {
+        idsId: networkConfig.idsId,
+        accountAddress: this.walletAddress!,
+        symbol: params.symbol,
+        priceE9: '0',
+        quantityE9,
+        leverageE9,
+        side: params.side,
+        isIsolated: false,
+        expiresAtMillis: expiresAt,
+        salt,
+        signedAtMillis,
+      };
+
+      const notionalValue = params.size * price;
+      steps.push({
+        step: 'order-construction',
+        passed: true,
+        detail: `${params.side} ${params.size.toFixed(6)} ${pair.baseAsset} (~$${notionalValue.toFixed(2)}) @ market, 1x leverage`,
+      });
+
+      // Step 7: Signature
+      try {
+        const signature = await this.signOrderFields(signedFields);
+        steps.push({ step: 'signature', passed: !!signature, detail: `Signed (${signature.slice(0, 20)}...)` });
+
+        // Return the constructed order for inspection
+        const allPassed = steps.every(s => s.passed);
+        return {
+          success: allPassed,
+          steps,
+          order: {
+            signedFields,
+            signature: signature.slice(0, 30) + '...',
+            type: 'MARKET',
+            notionalValueUsd: notionalValue,
+            wouldSubmitTo: `${networkConfig.tradeApiUrl}/api/v1/trade/orders`,
+          },
+        };
+      } catch (sigErr) {
+        steps.push({ step: 'signature', passed: false, detail: `Signing failed: ${sigErr instanceof Error ? sigErr.message : String(sigErr)}` });
+        return { success: false, steps, error: 'Signature failed' };
+      }
+    } catch (error) {
+      return { success: false, steps, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
    * Close a hedge position on BlueFin
    * Uses wallet signature authentication per BlueFin API docs
    */
@@ -945,143 +1052,3 @@ export class BluefinService {
 
 // Export singleton instance
 export const bluefinService = BluefinService.getInstance();
-
-// Export mock service for testing without private key
-export class MockBluefinService {
-  private positions: Map<string, BluefinPosition> = new Map();
-  private mockBalance = 10000; // 10,000 USDC starting balance
-
-  async getBalance(): Promise<{ available: number; total: number; inPositions: number }> {
-    const inPositions = Array.from(this.positions.values())
-      .reduce((sum, p) => sum + p.margin, 0);
-    return {
-      available: this.mockBalance - inPositions,
-      total: this.mockBalance,
-      inPositions,
-    };
-  }
-
-  async getMarketData(symbol: string): Promise<{
-    price: number;
-    change24h: number;
-    volume24h: number;
-    fundingRate: number;
-  } | null> {
-    const livePrice = await this.getLivePrice(symbol);
-    return {
-      price: livePrice,
-      change24h: 2.5, // Mock 24h change
-      volume24h: 50000000, // Mock volume
-      fundingRate: 0.01, // Mock funding rate 0.01%
-    };
-  }
-
-  async getOrderBook(symbol: string): Promise<{ bids: [number, number][]; asks: [number, number][] } | null> {
-    const price = await this.getLivePrice(symbol);
-    return {
-      bids: [[price * 0.999, 100], [price * 0.998, 200]],
-      asks: [[price * 1.001, 100], [price * 1.002, 200]],
-    };
-  }
-
-  async openHedge(params: {
-    symbol: string;
-    side: 'LONG' | 'SHORT';
-    size: number;
-    leverage: number;
-  }): Promise<BluefinHedgeResult> {
-    const hedgeId = `MOCK_BF_${Date.now()}`;
-    const livePrice = await this.getLivePrice(params.symbol);
-    if (livePrice <= 0) {
-      return {
-        success: false,
-        hedgeId: '',
-        error: `Could not fetch live price for ${params.symbol}`,
-        timestamp: Date.now(),
-      };
-    }
-
-    // Store position with live price
-    this.positions.set(params.symbol, {
-      symbol: params.symbol,
-      side: params.side,
-      size: params.size,
-      leverage: params.leverage,
-      entryPrice: livePrice,
-      markPrice: livePrice,
-      liquidationPrice: params.side === 'LONG' 
-        ? livePrice * (1 - 0.9 / params.leverage)
-        : livePrice * (1 + 0.9 / params.leverage),
-      unrealizedPnl: 0,
-      margin: params.size * livePrice / params.leverage,
-      marginRatio: 1 / params.leverage,
-    });
-
-    logger.info('📡 Mock BlueFin hedge opened (live price)', { hedgeId, price: livePrice, ...params });
-
-    return {
-      success: true,
-      hedgeId,
-      orderId: `ORDER_${hedgeId}`,
-      txDigest: `TX_${hedgeId}`,
-      executionPrice: livePrice,
-      filledSize: params.size,
-      fees: params.size * livePrice * 0.0005, // 0.05% fee
-      timestamp: Date.now(),
-    };
-  }
-
-  async closeHedge(params: { symbol: string }): Promise<BluefinHedgeResult> {
-    const position = this.positions.get(params.symbol);
-    if (!position) {
-      return {
-        success: false,
-        hedgeId: '',
-        error: `No position found for ${params.symbol}`,
-        timestamp: Date.now(),
-      };
-    }
-
-    const closePrice = await this.getLivePrice(params.symbol) || position.markPrice;
-    const pnl = position.side === 'LONG'
-      ? (closePrice - position.entryPrice) * position.size
-      : (position.entryPrice - closePrice) * position.size;
-
-    this.positions.delete(params.symbol);
-
-    logger.info('🧪 Mock BlueFin position closed', {
-      symbol: params.symbol,
-      entryPrice: position.entryPrice,
-      closePrice,
-      pnl,
-    });
-
-    return {
-      success: true,
-      hedgeId: `MOCK_CLOSE_${Date.now()}`,
-      executionPrice: closePrice,
-      filledSize: position.size,
-      fees: position.size * closePrice * 0.0005,
-      timestamp: Date.now(),
-    };
-  }
-
-  async getPositions(): Promise<BluefinPosition[]> {
-    return Array.from(this.positions.values());
-  }
-
-  private async getLivePrice(symbol: string): Promise<number> {
-    // Extract base asset from perp symbol (e.g. 'BTC-PERP' → 'BTC')
-    const baseAsset = symbol.replace('-PERP', '');
-    try {
-      const svc = getMarketDataService();
-      const data = await svc.getTokenPrice(baseAsset);
-      if (data.price > 0) return data.price;
-    } catch (e) {
-      logger.warn(`[MockBluefin] Live price fetch failed for ${baseAsset}`, { error: e });
-    }
-    return 0;
-  }
-}
-
-export const mockBluefinService = new MockBluefinService();
