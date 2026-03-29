@@ -167,6 +167,7 @@ export class RiskAgent extends BaseAgent {
       portfolioId?: number;
       address?: string;
       predictionContext?: string;
+      chain?: string;
       portfolioData?: {
         totalValue: number;
         tokens: Array<{ symbol: string; balance: number; usdValue: number }>;
@@ -176,16 +177,18 @@ export class RiskAgent extends BaseAgent {
     const portfolioId = params.portfolioId ?? parseInt(params.address?.split('-')[1] || '0', 10);
     const portfolioData = params.portfolioData;
     const predictionContext = params.predictionContext || '';
+    const chain = params.chain || 'cronos';
 
     logger.info('Analyzing portfolio risk with AI', {
       agentId: this.id,
       portfolioId,
+      chain,
       hasData: !!portfolioData,
     });
 
     // 1. Calculate mathematical metrics
     const volatility = await this.calculateVolatilityInternal(portfolioId);
-    const exposures = await this.calculateExposures(portfolioId);
+    const exposures = await this.calculateExposures(portfolioId, chain);
     const sentiment = await this.assessMarketSentimentInternal();
 
     // Calculate base risk score (0-100)
@@ -363,19 +366,69 @@ REC3: [third recommendation]`;
   }
 
   /**
-   * Calculate asset exposures from real portfolio data
+   * Calculate asset exposures from real portfolio data.
+   * Routes to the correct chain's data source based on the `chain` parameter.
    */
-  private async calculateExposures(portfolioId: number): Promise<RiskAnalysis['exposures']> {
+  private async calculateExposures(portfolioId: number, chain: string = 'cronos'): Promise<RiskAnalysis['exposures']> {
     try {
-      // Import services for real portfolio data
-      const { getMarketDataService: _getMarketDataService } = await import('../../lib/services/RealMarketDataService');
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _getMarketDataService(); // Service available but not needed in this method
-      const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
+      let portfolio: { positions?: Array<{ symbol?: string; value: number }>; totalValue?: number } = {};
+
+      if (chain === 'sui') {
+        // ── SUI: fetch from SUI community pool service ──
+        try {
+          const { getSuiCommunityPoolService } = await import('../../lib/services/SuiCommunityPoolService');
+          const suiPool = getSuiCommunityPoolService();
+          const stats = await suiPool.getPoolStats();
+          const totalValue = stats.totalNAVUsd || 0;
+          // SUI pool tracks 4 assets — derive positions from target allocations
+          // The pool's NAV is SUI-denominated; totalNAVUsd gives USD value
+          if (totalValue > 0) {
+            // Default target: 30% BTC, 30% ETH, 25% SUI, 15% CRO
+            portfolio = {
+              totalValue,
+              positions: [
+                { symbol: 'BTC', value: totalValue * 0.30 },
+                { symbol: 'ETH', value: totalValue * 0.30 },
+                { symbol: 'SUI', value: totalValue * 0.25 },
+                { symbol: 'CRO', value: totalValue * 0.15 },
+              ],
+            };
+          }
+          logger.info('Using SUI on-chain pool data for exposures', { chain, totalValue });
+        } catch (e) {
+          logger.warn('SUI portfolio data unavailable, falling back to Cronos', { error: e });
+        }
+      } else if (chain === 'oasis-sapphire' || chain === 'oasis') {
+        // ── Oasis Sapphire: fetch from Oasis community pool service ──
+        try {
+          const { getOasisPoolStats } = await import('../../lib/services/OasisCommunityPoolService');
+          const stats = await getOasisPoolStats();
+          const totalValue = parseFloat(stats.totalNAV) || 0;
+          // Oasis pool returns allocation percentages per asset
+          const alloc = stats.allocations;
+          if (totalValue > 0) {
+            portfolio = {
+              totalValue,
+              positions: [
+                { symbol: 'BTC', value: totalValue * (alloc.BTC / 100) },
+                { symbol: 'ETH', value: totalValue * (alloc.ETH / 100) },
+                { symbol: 'SUI', value: totalValue * (alloc.SUI / 100) },
+                { symbol: 'CRO', value: totalValue * (alloc.CRO / 100) },
+              ].filter(p => p.value > 0),
+            };
+          }
+          logger.info('Using Oasis Sapphire on-chain pool data for exposures', { chain, totalValue, allocations: alloc });
+        } catch (e) {
+          logger.warn('Oasis portfolio data unavailable, falling back to Cronos', { error: e });
+        }
+      }
       
-      // Get real portfolio data
-      const portfolioData = await getPortfolioData();
-      const portfolio = (portfolioData?.portfolio ?? {}) as { positions?: Array<{ symbol?: string; value: number }>; totalValue?: number };
+      // ── Default / Cronos: use standard portfolio service ──
+      if (!portfolio.positions || portfolio.positions.length === 0) {
+        const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
+        const portfolioData = await getPortfolioData();
+        portfolio = (portfolioData?.portfolio ?? {}) as { positions?: Array<{ symbol?: string; value: number }>; totalValue?: number };
+      }
       
       if (!portfolio.positions || portfolio.positions.length === 0) {
         logger.info('No portfolio positions - will prompt user to add positions');

@@ -694,29 +694,40 @@ export class SettlementAgent extends BaseAgent {
     action: string;
     estimatedPositionSize: number;
     riskAnalysis?: { totalRisk: number; volatility: number };
+    chain?: string;
   }): Promise<{ approved: boolean; reason: string }> {
     try {
       const totalRisk = proposal.riskAnalysis?.totalRisk ?? 50;
       const positionSize = proposal.estimatedPositionSize;
+      const chain = proposal.chain || 'cronos';
 
       // Settlement feasibility checks:
       //  - Risk ≥ 80 → too risky for automated settlement
       //  - Position > $10M → exceeds automated threshold
       //  - Check pending settlement queue isn't jammed
+      //  - Non-Cronos chains: x402 settlement is Cronos-only, flag for manual review if large
       const isAnalysisOnly = proposal.action === 'analyze' || proposal.action === 'analysis';
       const riskOk = totalRisk < 80;
       const sizeOk = positionSize <= 10_000_000;
-      const queueOk = this.pendingSettlements.size < 50; // Don't accept if queue is backed up
+      const queueOk = this.pendingSettlements.size < 50;
+      // x402 settlement only works on Cronos — non-Cronos chains with large positions need manual review
+      const chainOk = chain === 'cronos' || isAnalysisOnly || positionSize <= 100_000;
 
-      const approved = isAnalysisOnly || (riskOk && sizeOk && queueOk);
+      const approved = isAnalysisOnly || (riskOk && sizeOk && queueOk && chainOk);
 
-      const reason = approved
-        ? `Settlement feasible (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`
-        : `Settlement risk too high (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`;
+      let reason: string;
+      if (!chainOk) {
+        reason = `Chain ${chain} not supported for automated x402 settlement (size: $${positionSize.toLocaleString()}) — needs manual review`;
+      } else if (approved) {
+        reason = `Settlement feasible on ${chain} (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`;
+      } else {
+        reason = `Settlement risk too high on ${chain} (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`;
+      }
 
       logger.info('🗳️ SettlementAgent independent vote', {
         executionId: proposal.executionId,
         approved,
+        chain,
         totalRisk,
         positionSize,
         pendingQueue: this.pendingSettlements.size,

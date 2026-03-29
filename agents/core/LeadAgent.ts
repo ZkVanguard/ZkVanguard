@@ -269,9 +269,18 @@ Respond ONLY with valid JSON, no explanation.`,
       riskLimit = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
     }
 
+    // Detect target chain from explicit input or natural-language keywords
+    let chain = input.chain || 'cronos';
+    if (!input.chain) {
+      if (/\bsui\b/i.test(text)) chain = 'sui';
+      else if (/\boasis|sapphire\b/i.test(text)) chain = 'oasis-sapphire';
+      else if (/\bhedera|hbar\b/i.test(text)) chain = 'hedera';
+    }
+
     const intent: StrategyIntent = {
       action,
       targetPortfolio: input.portfolioId ?? 0,  // Default to user's first portfolio (0)
+      chain,
       objectives: {
         yieldTarget,
         riskLimit,
@@ -329,6 +338,7 @@ Respond ONLY with valid JSON, no explanation.`,
       agentId: this.id,
       executionId,
       action: intent.action,
+      chain: intent.chain,
     });
 
     // Create execution report
@@ -413,6 +423,7 @@ Respond ONLY with valid JSON, no explanation.`,
           portfolioId: intent.targetPortfolio,
           objectives: intent.objectives,
           predictionContext: intent.predictionContext,
+          chain: intent.chain,
         });
         
         if (!riskResult.success) {
@@ -449,6 +460,7 @@ Respond ONLY with valid JSON, no explanation.`,
           executionId,
           action: intent.action,
           estimatedPositionSize,
+          chain: intent.chain,
           riskAnalysis: riskData ? { totalRisk: riskData.totalRisk, volatility: riskData.volatility } : undefined,
         };
 
@@ -522,6 +534,7 @@ Respond ONLY with valid JSON, no explanation.`,
           riskAnalysis: results.riskAnalysis,
           objectives: intent.objectives,
           predictionContext: intent.predictionContext,
+          chain: intent.chain,
         });
         
         if (!hedgingResult.success) {
@@ -541,6 +554,7 @@ Respond ONLY with valid JSON, no explanation.`,
           type: 'settle-payments',
           portfolioId: intent.targetPortfolio,
           hedgingStrategy: results.hedgingStrategy,
+          chain: intent.chain,
         });
         
         if (!settlementResult.success) {
