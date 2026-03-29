@@ -1,8 +1,15 @@
 'use client';
 
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
+
+interface PoolMetrics {
+  tvl: number;
+  memberCount: number;
+  agents: number;
+  sharePrice: number;
+}
 
 // Memoized metric card to prevent unnecessary re-renders
 const MetricCard = memo(function MetricCard({ 
@@ -42,34 +49,59 @@ function StaticMetricsContent({ t }: { t: (key: string) => string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">{t('tvl')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">$2.8M</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">{t('transactions')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">1,247</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">{t('gasSavings')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">67%</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
         </div>
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-[#86868b] mb-2">{t('aiAgentsOnline')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">5</div>
+          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
         </div>
       </div>
     </div>
   );
 }
 
+async function fetchPoolMetrics(): Promise<PoolMetrics | null> {
+  try {
+    const [poolRes, agentRes] = await Promise.all([
+      fetch('/api/community-pool', { next: { revalidate: 0 } }),
+      fetch('/api/agents/status', { next: { revalidate: 0 } }),
+    ]);
+    const poolData = poolRes.ok ? await poolRes.json() : null;
+    const agentData = agentRes.ok ? await agentRes.json() : null;
+
+    const pool = poolData?.pool;
+    return {
+      tvl: pool?.totalNAV ?? 0,
+      memberCount: pool?.memberCount ?? 0,
+      sharePrice: pool?.sharePrice ?? 0,
+      agents: agentData?.agents?.length ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const LiveMetrics = memo(function LiveMetrics() {
   const t = useTranslations('liveMetrics');
   const [mounted, setMounted] = useState(false);
-  const [metrics, setMetrics] = useState({
-    tvl: 2847500,
-    transactions: 1247,
-    gasSaved: 67.3,
-    agents: 5,
-  });
+  const [metrics, setMetrics] = useState<PoolMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refreshMetrics = useCallback(async () => {
+    const data = await fetchPoolMetrics();
+    if (data) {
+      setMetrics(data);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -77,48 +109,27 @@ export const LiveMetrics = memo(function LiveMetrics() {
 
   useEffect(() => {
     if (!mounted) return;
-    
-    // OPTIMIZATION: Update only every 10s with significance check
-    // Only triggers re-render if visible change (>1% TVL diff or new transaction)
-    const interval = setInterval(() => {
-      setMetrics((prev) => {
-        const newTvl = prev.tvl + Math.random() * 5000 - 2500;
-        const newTransactions = prev.transactions + Math.floor(Math.random() * 2);
-        const newGasSaved = Math.min(75, prev.gasSaved + Math.random() * 0.05);
-        
-        // Only update if there's a visible difference (prevents pointless re-renders)
-        const tvlDiff = Math.abs(newTvl - prev.tvl) / prev.tvl;
-        const hasTxChange = newTransactions !== prev.transactions;
-        const gasChanged = Math.abs(newGasSaved - prev.gasSaved) > 0.1;
-        
-        // If no significant visual change, return previous state (no re-render)
-        if (tvlDiff < 0.001 && !hasTxChange && !gasChanged) {
-          return prev;
-        }
-        
-        return {
-          tvl: newTvl,
-          transactions: newTransactions,
-          gasSaved: newGasSaved,
-          agents: 5,
-        };
-      });
-    }, 10000); // Increased from 5s to 10s
-
+    // Fetch real on-chain pool data immediately, then refresh every 30s
+    refreshMetrics();
+    const interval = setInterval(refreshMetrics, 30000);
     return () => clearInterval(interval);
-  }, [mounted]);
+  }, [mounted, refreshMetrics]);
 
   // Return static content until client-side mount is complete
-  if (!mounted) {
+  if (!mounted || loading) {
     return <StaticMetricsContent t={t} />;
   }
 
-  // Memoize formatted values to prevent recalculation on every render
   const formattedMetrics = {
-    tvl: `$${(metrics.tvl / 1000000).toFixed(2)}M`,
-    transactions: metrics.transactions.toLocaleString(),
-    gasSaved: `${metrics.gasSaved.toFixed(1)}%`,
-    agents: metrics.agents,
+    tvl: metrics ? (metrics.tvl >= 1_000_000
+      ? `$${(metrics.tvl / 1_000_000).toFixed(2)}M`
+      : metrics.tvl >= 1_000
+        ? `$${(metrics.tvl / 1_000).toFixed(1)}K`
+        : `$${metrics.tvl.toFixed(2)}`
+    ) : '--',
+    memberCount: metrics ? metrics.memberCount.toLocaleString() : '--',
+    sharePrice: metrics ? `$${metrics.sharePrice.toFixed(4)}` : '--',
+    agents: metrics?.agents ?? 0,
   };
 
   return (
@@ -136,8 +147,8 @@ export const LiveMetrics = memo(function LiveMetrics() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <MetricCard label={t('tvl')} value={formattedMetrics.tvl} delay={0.1} />
-        <MetricCard label={t('transactions')} value={formattedMetrics.transactions} delay={0.2} />
-        <MetricCard label={t('gasSavings')} value={formattedMetrics.gasSaved} delay={0.3} />
+        <MetricCard label={t('transactions')} value={formattedMetrics.memberCount} delay={0.2} />
+        <MetricCard label={t('gasSavings')} value={formattedMetrics.sharePrice} delay={0.3} />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}

@@ -156,26 +156,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const baseSharePrice = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].share_price) : 1.0;
-    const baseNav = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_nav) : 10000;
-    const baseTotalShares = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_shares) : 10000;
-    const baseMemberCount = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].member_count) : 1;
-    const now = Date.now();
+    // No synthetic data — only record a single snapshot from the current on-chain state
+    // Future snapshots are recorded by the cron job from real pool data
     let count = 0;
-
-    for (let i = 48; i >= 1; i--) {
-      const drift = Math.sin(i * 0.7) * 0.003 + Math.cos(i * 1.3) * 0.002;
-      const price = baseSharePrice * (1 + drift);
-      await recordNavSnapshot({
-        sharePrice: parseFloat(price.toFixed(6)),
-        totalNav: parseFloat((baseNav * (1 + drift)).toFixed(2)),
-        totalShares: baseTotalShares,
-        memberCount: baseMemberCount,
-        allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-        source: 'backfill-api',
-        timestamp: new Date(now - i * 60 * 60 * 1000),
-      });
-      count++;
+    if (navHistory.length === 0) {
+      // Seed one initial snapshot from current pool state via the stats service
+      const { getPoolStats } = await import('@/lib/services/CommunityPoolStatsService');
+      try {
+        const stats = await getPoolStats();
+        await recordNavSnapshot({
+          sharePrice: stats.sharePrice,
+          totalNav: stats.totalNAV,
+          totalShares: stats.totalShares,
+          memberCount: stats.memberCount,
+          allocations: {
+            BTC: stats.allocations?.BTC?.percentage ?? 0,
+            ETH: stats.allocations?.ETH?.percentage ?? 0,
+            SUI: stats.allocations?.SUI?.percentage ?? 0,
+            CRO: stats.allocations?.CRO?.percentage ?? 0,
+          },
+          source: 'backfill-onchain',
+          timestamp: new Date(),
+        });
+        count = 1;
+      } catch (e) {
+        logger.warn('[RiskMetrics API] Could not read on-chain pool stats for initial snapshot', { error: String(e) });
+      }
     }
 
     // Clear cache so next GET returns fresh metrics
