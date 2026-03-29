@@ -24,10 +24,10 @@ interface RefreshConfig {
 
 class RefreshCoordinator extends EventEmitter {
   private configs: Map<RefreshTarget, RefreshConfig> = new Map([
-    ['prices', { interval: 5000, priority: 0, enabled: true }],      // 5s - critical
-    ['positions', { interval: 60000, priority: 1, enabled: true }],  // 60s
-    ['hedges', { interval: 30000, priority: 2, enabled: true }],     // 30s
-    ['ai', { interval: 120000, priority: 3, enabled: true }],        // 2min - lowest priority
+    ['prices', { interval: 10000, priority: 0, enabled: true }],      // 10s — reduced from 5s to cut API load
+    ['positions', { interval: 60000, priority: 1, enabled: true }],   // 60s
+    ['hedges', { interval: 45000, priority: 2, enabled: true }],      // 45s — increased from 30s
+    ['ai', { interval: 180000, priority: 3, enabled: true }],         // 3min — lowest priority, expensive
   ]);
   
   private timers: Map<RefreshTarget, NodeJS.Timeout> = new Map();
@@ -47,12 +47,14 @@ class RefreshCoordinator extends EventEmitter {
   
   private handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
-      logger.debug('[RefreshCoordinator] Page visible, resuming refreshes');
       this.resume();
-      // Force immediate refresh of all on visibility restore
-      this.forceRefresh('all');
+      // Only refresh stale targets, not everything
+      for (const [target] of this.configs) {
+        if (this.needsRefresh(target)) {
+          this.emitRefresh(target);
+        }
+      }
     } else {
-      logger.debug('[RefreshCoordinator] Page hidden, pausing refreshes');
       this.pause();
     }
   };
