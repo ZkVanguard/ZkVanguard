@@ -10,8 +10,10 @@ import { getCached, setCached } from '@/lib/db/ui-cache';
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-// Two-tier cache: In-memory (fast) + DB (survives cold starts)
-let listCache: { address: string; data: unknown; timestamp: number } | null = null;
+// Two-tier cache: per-user in-memory (fast) + DB (survives cold starts)
+// Map supports multiple concurrent users instead of single-entry cache
+const MAX_LIST_CACHE = 200;
+const listCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 30000;
 
 async function getDbCachedList(address: string): Promise<unknown | null> {
@@ -23,8 +25,15 @@ async function getDbCachedList(address: string): Promise<unknown | null> {
 }
 
 async function setAllListCaches(address: string, data: unknown): Promise<void> {
-  listCache = { address: address.toLowerCase(), data, timestamp: Date.now() };
-  setCached('portfolio', `list:${address.toLowerCase()}`, data, CACHE_TTL).catch(() => {});
+  const key = address.toLowerCase();
+  // LRU eviction when at capacity
+  if (listCache.size >= MAX_LIST_CACHE && !listCache.has(key)) {
+    const firstKey = listCache.keys().next().value;
+    if (firstKey !== undefined) listCache.delete(firstKey);
+  }
+  listCache.delete(key); // refresh LRU position
+  listCache.set(key, { data, timestamp: Date.now() });
+  setCached('portfolio', `list:${key}`, data, CACHE_TTL).catch(() => {});
 }
 
 /**
@@ -43,16 +52,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Two-tier cache check (memory → DB)
-    // Tier 1: In-memory cache
-    if (listCache && listCache.address === address.toLowerCase() && Date.now() - listCache.timestamp < CACHE_TTL) {
+    // Tier 1: In-memory per-user cache
+    const memCached = listCache.get(address.toLowerCase());
+    if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
       logger.info(`[Portfolio List API] Memory cache HIT for ${address}`);
-      return NextResponse.json(listCache.data);
+      return NextResponse.json(memCached.data);
     }
     
     // Tier 2: DB cache (survives cold starts)
     const dbCached = await getDbCachedList(address);
     if (dbCached) {
-      listCache = { address: address.toLowerCase(), data: dbCached, timestamp: Date.now() };
+      const key = address.toLowerCase();
+      listCache.delete(key);
+      listCache.set(key, { data: dbCached, timestamp: Date.now() });
       logger.info(`[Portfolio List API] DB cache HIT (cold start recovery) for ${address}`);
       return NextResponse.json(dbCached);
     }

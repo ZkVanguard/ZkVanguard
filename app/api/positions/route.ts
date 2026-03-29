@@ -10,6 +10,8 @@ import { getCached, setCached } from '@/lib/db/ui-cache';
 export const dynamic = 'force-dynamic';
 
 // Two-tier cache: In-memory (fast) + DB (survives cold starts)
+// LRU eviction to prevent memory bloat across many users
+const MAX_POSITIONS_CACHE = 500;
 const positionsCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 30000; // 30 seconds
 
@@ -22,6 +24,12 @@ async function getDbCachedPositions(address: string): Promise<unknown | null> {
 }
 
 async function setAllPositionsCaches(address: string, data: unknown): Promise<void> {
+  // LRU: evict oldest entries if at capacity
+  if (positionsCache.size >= MAX_POSITIONS_CACHE && !positionsCache.has(address)) {
+    const firstKey = positionsCache.keys().next().value;
+    if (firstKey !== undefined) positionsCache.delete(firstKey);
+  }
+  positionsCache.delete(address); // refresh LRU position
   positionsCache.set(address, { data, timestamp: Date.now() });
   setCached('portfolio', `positions:${address.toLowerCase()}`, data, CACHE_TTL).catch(() => {});
 }

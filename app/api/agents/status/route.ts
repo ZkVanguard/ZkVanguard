@@ -45,6 +45,10 @@ export async function GET() {
         mcp: { enabled: true },
       },
       timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30',
+      },
     });
   } catch (error) {
     console.error('Status check failed:', error);
