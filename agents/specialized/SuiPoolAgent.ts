@@ -4,24 +4,24 @@
  * Specialized agent for the USDC-denominated 4-asset community pool:
  * - Analyzes market conditions (BTC, ETH, SUI, CRO)
  * - Generates smart allocations aware of on-chain vs hedged positions
- * - Plans and executes rebalance swaps via Cetus aggregator
+ * - Plans and executes rebalance swaps via BlueFin aggregator
  * - Tracks hedge positions for non-swappable assets
  * - Integrates with SafeExecutionGuard for position limits
  * 
  * On testnet: SUI is swappable, BTC/ETH/CRO are virtual (price-tracked)
- * On mainnet: SUI/BTC/ETH are swappable via Cetus, CRO hedged via BlueFin
+ * On mainnet: SUI/BTC/ETH are swappable via BlueFin, CRO hedged via BlueFin perps
  */
 
 import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
 import type { AgentTask, TaskResult } from '@shared/types/agent';
 import {
-  getCetusAggregatorService,
+  getBluefinAggregatorService,
   type PoolAsset,
   type NetworkType,
   type RebalanceSwapPlan,
   type SwapQuoteResult,
-} from '../../lib/services/CetusAggregatorService';
+} from '../../lib/services/BluefinAggregatorService';
 
 // ============================================================================
 // Types
@@ -169,7 +169,7 @@ export class SuiPoolAgent extends BaseAgent {
   async analyzeMarket(): Promise<MarketIndicator[]> {
     const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
     const mds = getMarketDataService();
-    const aggregator = getCetusAggregatorService(this.network);
+    const aggregator = getBluefinAggregatorService(this.network);
     const indicators: MarketIndicator[] = [];
 
     // Determine swappability deterministically (avoids 4x unnecessary $10 test quotes)
@@ -340,7 +340,7 @@ export class SuiPoolAgent extends BaseAgent {
     const indicators = await this.analyzeMarket();
     const decision = this.generateAllocation(indicators, currentAllocations);
 
-    const aggregator = getCetusAggregatorService(this.network);
+    const aggregator = getBluefinAggregatorService(this.network);
     const plan = await aggregator.planRebalanceSwaps(navUsd, decision.allocations);
 
     logger.info('[SuiPoolAgent] Rebalance planned', {
@@ -368,7 +368,7 @@ export class SuiPoolAgent extends BaseAgent {
       return { decision, plan, executionResults: null };
     }
 
-    const aggregator = getCetusAggregatorService(this.network);
+    const aggregator = getBluefinAggregatorService(this.network);
 
     // Execute on-chain swaps
     const onChainSwaps: RebalanceResult['executionResults'] extends infer T ? T extends null ? never : T : never = {

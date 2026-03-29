@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         overallRisk: riskAssessment.overallRisk ?? 'medium',
         factors: riskAssessment.factors,
         realAgent: aiService.isAvailable(),
-        simulationMode: true,
+        simulationMode: false,
         hackathonAPIs: {
           aiSDK: 'Crypto.com AI Agent SDK (FREE)',
         },

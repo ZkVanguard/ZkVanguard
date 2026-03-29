@@ -7,7 +7,7 @@
  * - GET  /api/sui/community-pool?action=members           - Get all members
  * - GET  /api/sui/community-pool?action=contract          - Get contract info (USDC coin type etc)
  * - GET  /api/sui/community-pool?action=allocation        - Get current 4-asset allocation
- * - GET  /api/sui/community-pool?action=swap-quote        - Get Cetus aggregator swap quote
+ * - GET  /api/sui/community-pool?action=swap-quote        - Get BlueFin aggregator swap quote
  * - GET  /api/sui/community-pool?action=admin-wallet      - Check admin wallet status
  * - GET  /api/sui/community-pool?action=user-position     - Get user position from DB
  * - POST /api/sui/community-pool?action=deposit           - Build USDC deposit tx params
@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { getSuiUsdcPoolService } from '@/lib/services/SuiCommunityPoolService';
-import { getCetusAggregatorService, type PoolAsset } from '@/lib/services/CetusAggregatorService';
+import { getBluefinAggregatorService, type PoolAsset, type SwapExecutionResult } from '@/lib/services/BluefinAggregatorService';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     
     const service = getSuiUsdcPoolService(network);
     
-    // Get Cetus aggregator swap quote
+    // Get BlueFin aggregator swap quote
     if (action === 'swap-quote') {
       const asset = (url.searchParams.get('asset') || 'BTC').toUpperCase() as PoolAsset;
       const amountStr = url.searchParams.get('amount') || '100';
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const aggregator = getCetusAggregatorService(network);
+      const aggregator = getBluefinAggregatorService(network);
       const quote = await aggregator.getSwapQuote(asset, amount);
 
       return cachedJsonResponse({
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
 
     // Check admin wallet status (for swap execution readiness)
     if (action === 'admin-wallet') {
-      const aggregator = getCetusAggregatorService(network);
+      const aggregator = getBluefinAggregatorService(network);
       const wallet = await aggregator.checkAdminWallet();
       return NextResponse.json({
         success: true,
@@ -497,7 +497,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const aggregator = getCetusAggregatorService(network);
+      const aggregator = getBluefinAggregatorService(network);
 
       // Verify admin wallet first
       const wallet = await aggregator.checkAdminWallet();
@@ -511,7 +511,7 @@ export async function POST(request: NextRequest) {
       // Plan swaps based on deposit amount + allocations
       const plan = await aggregator.planRebalanceSwaps(
         amountUsdc,
-        allocations as Record<import('@/lib/services/CetusAggregatorService').PoolAsset, number>,
+        allocations as Record<PoolAsset, number>,
       );
 
       const onChainSwaps = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
@@ -574,12 +574,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const aggregator = getCetusAggregatorService(network);
+      const aggregator = getBluefinAggregatorService(network);
       const wallet = await aggregator.checkAdminWallet();
 
       const plan = await aggregator.planRebalanceSwaps(
         amountUsdc,
-        allocations as Record<import('@/lib/services/CetusAggregatorService').PoolAsset, number>,
+        allocations as Record<PoolAsset, number>,
       );
 
       const result = await aggregator.executeRebalance(plan, 0.01, { dryRun: true });
@@ -627,7 +627,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const aggregator = getCetusAggregatorService(network);
+      const aggregator = getBluefinAggregatorService(network);
 
       const wallet = await aggregator.checkAdminWallet();
       if (!wallet.configured || !wallet.hasGas) {
@@ -638,8 +638,8 @@ export async function POST(request: NextRequest) {
       }
 
       // For each asset, calculate how much to sell back to USDC
-      const assets: Array<import('@/lib/services/CetusAggregatorService').PoolAsset> = ['BTC', 'ETH', 'SUI', 'CRO'];
-      const results: Array<import('@/lib/services/CetusAggregatorService').SwapExecutionResult> = [];
+      const assets: PoolAsset[] = ['BTC', 'ETH', 'SUI', 'CRO'];
+      const results: SwapExecutionResult[] = [];
       const hedgedPositions: Array<{ asset: string; usdcValue: number; assetAmount: string; method: string; route: string }> = [];
 
       // Phase 1: Get ALL forward + reverse quotes in parallel (price discovery)
@@ -839,7 +839,7 @@ export async function POST(request: NextRequest) {
 
       // Only attempt server-side swaps for legacy API-only deposits (no on-chain tx)
       if (!isOnChainDeposit && allocations && typeof allocations === 'object') {
-        const aggregator = getCetusAggregatorService(network);
+        const aggregator = getBluefinAggregatorService(network);
         const wallet = await aggregator.checkAdminWallet();
 
         if (wallet.configured && wallet.hasGas) {

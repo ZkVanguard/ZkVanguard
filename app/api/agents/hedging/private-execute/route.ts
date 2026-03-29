@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
           : currentPrice * (1 - 0.8 / leverage),
         stopLoss,
         takeProfit,
-        simulationMode: true,
+        simulationMode: false,
         reason,
         predictionMarket: reason,
         // Privacy metadata
@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
       // General (non-revealing) execution info
       market,
       estimatedSize: size.toFixed(4),
-      simulationMode: !privateKey,
+      simulationMode: false,
       privacyLevel,
     };
 
