@@ -155,7 +155,7 @@ async function checkSuiMainnetReadiness() {
   console.log('   • SuiOnChainHedgeService: ✅ Network-configurable (constructor)');
   console.log('   • SuiCommunityPoolService: ✅ Network-configurable (constructor)');
   console.log('   • SuiPrivateHedgeService: ✅ Network-configurable (constructor)');
-  console.log('   • CetusSwapService: ✅ Network-configurable (constructor)');
+  console.log('   • BluefinAggregatorService: ✅ Network-configurable (singleton)');
 
   ready.push('✅ All SUI services support network configuration');
 

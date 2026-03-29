@@ -166,7 +166,7 @@ function checkApplicationServices() {
     { name: 'SuiCommunityPoolService', path: 'lib/services/SuiCommunityPoolService.ts' },
     { name: 'SuiPrivateHedgeService', path: 'lib/services/SuiPrivateHedgeService.ts' },
     { name: 'SuiExplorerService', path: 'lib/services/SuiExplorerService.ts' },
-    { name: 'CetusSwapService', path: 'lib/services/CetusSwapService.ts' },
+    { name: 'BluefinAggregatorService', path: 'lib/services/BluefinAggregatorService.ts' },
     { name: 'BlueFin Integration', path: 'app/api/agents/hedging/bluefin/route.ts' },
   ];
 
@@ -177,7 +177,7 @@ function checkApplicationServices() {
     'SuiCommunityPoolService': 'OasisCommunityPoolService',
     'SuiPrivateHedgeService': 'OasisPrivateHedgeService (Sapphire confidential)',
     'SuiExplorerService': 'OasisExplorerService',
-    'CetusSwapService': 'Oasis DEX Integration (none identified)',
+    'BluefinAggregatorService': 'Oasis DEX Integration (none identified)',
     'BlueFin Integration': 'Oasis Perps Integration (none identified)',
   };
 
@@ -186,7 +186,7 @@ function checkApplicationServices() {
     const oasisName = oasisEquivalents[svc.name];
     
     // Check if an Oasis equivalent exists
-    const oasisPath = svc.path.replace(/Sui|sui/g, 'Oasis').replace('Cetus', 'Oasis');
+    const oasisPath = svc.path.replace(/Sui|sui/g, 'Oasis').replace('Bluefin', 'Oasis');
     const oasisExists = fs.existsSync(path.join(ROOT, oasisPath));
 
     if (oasisExists) {

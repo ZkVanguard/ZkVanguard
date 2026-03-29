@@ -173,7 +173,7 @@ async function testAuthentication(keypair: Ed25519Keypair, address: string, netw
       // Check if account needs to be registered
       if (responseData.message?.includes('not found') || responseData.message?.includes('onboard')) {
         console.log('\n   ⚠️  Your account may need to be registered on Bluefin Pro:');
-        console.log('   1. Visit https://pro.bluefin.io');
+        console.log('   1. Visit https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet)');
         console.log('   2. Connect your SUI wallet');
         console.log('   3. Complete onboarding');
       }
@@ -349,7 +349,7 @@ async function main() {
     console.log('   - Account not registered on Bluefin');
     console.log('   - API endpoint changes');
     console.log('\n   Steps to fix:');
-    console.log('   1. Visit https://pro.bluefin.io to register your wallet');
+    console.log('   1. Visit https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet) to register your wallet');
     console.log('   2. Connect your SUI wallet and complete onboarding');
     console.log('   3. Run this test again');
   }

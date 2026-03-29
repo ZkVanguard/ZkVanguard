@@ -182,7 +182,7 @@ npx tsx scripts/test-sui-services-e2e.ts   # 9 test suites, 72/72 checks
 | # | Test Suite | What It Validates |
 |---|------------|-------------------|
 | 1 | **Deployed Contract Verification** | Package + shared object IDs on SUI testnet |
-| 2 | **CetusSwapService** | Token resolution, swap quotes, pool info, prices |
+| 2 | **BluefinAggregatorService** | Swap quotes, rebalance planning, wallet checks |
 | 3 | **SuiExplorerService** | On-chain reads (balances, transactions, objects) |
 | 4 | **SuiOnChainHedgeService** | Contract reads, commitment generation, tx builders |
 | 5 | **SuiCommunityPoolService** | Pool stats, deposit/withdraw builders, payment routing |

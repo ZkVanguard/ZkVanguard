@@ -2,7 +2,7 @@
  * SUI Services End-to-End Testnet Test
  * 
  * Tests all 8 SUI services + USDC Pool API against the live SUI testnet:
- * 1. CetusSwapService       - Token resolution, quotes, pool info, prices
+ * 1. BluefinAggregatorService - Swap quotes, rebalance, wallet check
  * 2. SuiOnChainHedgeService - Contract reads, commitment generation, tx builders
  * 3. SuiCommunityPoolService - Pool stats, tx builders, payment routing
  * 4. SuiAutoHedgingAdapter  - Lifecycle, config, risk assessment
@@ -119,145 +119,81 @@ async function testDeployedContracts() {
 }
 
 // ============================================================
-// TEST 2: CetusSwapService — token resolution, quotes, prices
+// TEST 2: BluefinAggregatorService — swap quotes, rebalance, wallet
 // ============================================================
-async function testCetusSwapService() {
-  console.log('\n═══ TEST 2: CetusSwapService ═══');
+async function testBluefinAggregatorService() {
+  console.log('\n═══ TEST 2: BluefinAggregatorService ═══');
 
-  // Test token resolution
   try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
+    const { getBluefinAggregatorService } = await import('../lib/services/BluefinAggregatorService');
+    const agg = getBluefinAggregatorService('testnet');
 
-    // Token lookups
-    const sui = svc.getTokenInfo('SUI');
-    if (sui.symbol === 'SUI' && sui.decimals === 9) {
-      ok('Token resolution: SUI', `type: ${sui.type}`);
+    // Service init
+    if (agg.getNetwork() === 'testnet') {
+      ok('Service initialized', `network: ${agg.getNetwork()}`);
     } else {
-      fail('Token resolution: SUI', 'Wrong tokenInfo');
+      fail('Service init', `expected testnet, got ${agg.getNetwork()}`);
     }
 
-    const usdc = svc.getTokenInfo('USDC');
-    if (usdc.symbol === 'USDC' && usdc.decimals === 6) {
-      ok('Token resolution: USDC', `type: ${usdc.type.slice(0, 20)}...`);
+    // USDC type check
+    const usdcType = agg.getUsdcCoinType();
+    if (usdcType && usdcType.includes('usdc')) {
+      ok('USDC coin type', usdcType.slice(0, 30) + '...');
     } else {
-      fail('Token resolution: USDC', 'Wrong tokenInfo');
+      fail('USDC coin type', `unexpected: ${usdcType}`);
     }
 
-    // Unsupported token should throw
+    // Swap quote: USDC → SUI ($10)
     try {
-      svc.getTokenInfo('FAKECOIN');
-      fail('Unsupported token rejection', 'Should have thrown');
-    } catch {
-      ok('Unsupported token rejection', 'Correctly throws');
-    }
+      const q = await agg.getSwapQuote('SUI', 10);
+      if (q.expectedAmountOut && Number(q.expectedAmountOut) > 0) {
+        ok('Swap quote USDC→SUI', `$10 → ${q.expectedAmountOut} SUI | route: ${q.route}`);
+      } else {
+        fail('Swap quote USDC→SUI', 'expectedAmountOut is 0');
+      }
+    } catch (e) { fail('Swap quote USDC→SUI', e); }
 
-    // isTokenSupported
-    if (svc.isTokenSupported('SUI') && !svc.isTokenSupported('FAKECOIN')) {
-      ok('isTokenSupported()', 'SUI=true, FAKECOIN=false');
-    } else {
-      fail('isTokenSupported()', 'Unexpected results');
-    }
+    // Swap quote: USDC → BTC ($100)
+    try {
+      const q = await agg.getSwapQuote('BTC', 100);
+      if (q.expectedAmountOut && Number(q.expectedAmountOut) > 0) {
+        ok('Swap quote USDC→BTC', `$100 → ${q.expectedAmountOut} BTC | hedge: ${q.hedgeVia || 'n/a'}`);
+      } else {
+        fail('Swap quote USDC→BTC', 'expectedAmountOut is 0');
+      }
+    } catch (e) { fail('Swap quote USDC→BTC', e); }
 
-    // getSupportedTokens
-    const tokens = svc.getSupportedTokens();
-    const tokenNames = Object.keys(tokens);
-    if (tokenNames.includes('SUI') && tokenNames.includes('USDC')) {
-      ok('getSupportedTokens()', `${tokenNames.length} tokens: ${tokenNames.join(', ')}`);
-    } else {
-      fail('getSupportedTokens()', 'Missing SUI or USDC');
-    }
+    // Reverse quote: SUI → USDC (1 SUI)
+    try {
+      const q = await agg.getReverseSwapQuote('SUI', 1);
+      if (q.expectedAmountOut && Number(q.expectedAmountOut) > 0) {
+        ok('Reverse quote SUI→USDC', `1 SUI → ${q.expectedAmountOut} USDC`);
+      } else {
+        fail('Reverse quote SUI→USDC', 'expectedAmountOut is 0');
+      }
+    } catch (e) { fail('Reverse quote SUI→USDC', e); }
 
-    // getConfig
-    const config = svc.getConfig();
-    if (config.apiUrl.includes('devcetus') || config.apiUrl.includes('cetus')) {
-      ok('getConfig()', `apiUrl: ${config.apiUrl}`);
-    } else {
-      fail('getConfig()', 'Unexpected config');
-    }
+    // Plan rebalance
+    try {
+      const plan = await agg.planRebalanceSwaps(500, { BTC: 30, ETH: 25, SUI: 25, CRO: 20 });
+      if (plan.swaps.length === 4) {
+        ok('planRebalanceSwaps', `${plan.swaps.length} swaps, total USDC: ${plan.totalUsdcToSwap}`);
+      } else {
+        fail('planRebalanceSwaps', `expected 4 swaps, got ${plan.swaps.length}`);
+      }
+    } catch (e) { fail('planRebalanceSwaps', e); }
 
-  } catch (e) { fail('CetusSwapService init', e); }
+    // Admin wallet check
+    try {
+      const w = await agg.checkAdminWallet();
+      if (w.configured) {
+        ok('checkAdminWallet', `addr: ${w.address?.slice(0, 16)}... | SUI: ${w.suiBalance} | gas: ${w.hasGas}`);
+      } else {
+        skip('checkAdminWallet', 'No admin wallet configured');
+      }
+    } catch (e) { fail('checkAdminWallet', e); }
 
-  // Swap quote: SUI → USDC (1 SUI)
-  try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
-    const quote = await svc.getSwapQuote({
-      tokenIn: 'SUI',
-      tokenOut: 'USDC',
-      amountIn: 1_000_000_000n, // 1 SUI (9 decimals)
-      slippage: 1.0,
-    });
-
-    if (quote.amountOut > 0n) {
-      const usdcOut = Number(quote.amountOut) / 1e6;
-      ok('Swap quote SUI→USDC', `1 SUI ≈ ${usdcOut.toFixed(4)} USDC | impact: ${quote.priceImpact}% | route: ${quote.route}`);
-    } else {
-      fail('Swap quote SUI→USDC', 'amountOut is 0');
-    }
-
-    // Verify amountOutMin < amountOut (slippage applied)
-    if (quote.amountOutMin <= quote.amountOut) {
-      ok('Slippage calculation', `amountOutMin (${quote.amountOutMin}) <= amountOut (${quote.amountOut})`);
-    } else {
-      fail('Slippage calculation', 'amountOutMin > amountOut');
-    }
-  } catch (e) { fail('Swap quote', e); }
-
-  // Swap quote: USDC → SUI
-  try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
-    const quote = await svc.getSwapQuote({
-      tokenIn: 'USDC',
-      tokenOut: 'SUI',
-      amountIn: 5_000_000n, // 5 USDC
-    });
-    if (quote.amountOut > 0n) {
-      const suiOut = Number(quote.amountOut) / 1e9;
-      ok('Swap quote USDC→SUI', `5 USDC ≈ ${suiOut.toFixed(4)} SUI`);
-    } else {
-      fail('Swap quote USDC→SUI', 'amountOut is 0');
-    }
-  } catch (e) { fail('Swap quote USDC→SUI', e); }
-
-  // Build swap transaction
-  try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
-    const quote = await svc.getSwapQuote({
-      tokenIn: 'SUI',
-      tokenOut: 'USDC',
-      amountIn: 500_000_000n,
-    });
-    const txParams = svc.buildSwapTransaction({
-      tokenIn: 'SUI',
-      tokenOut: 'USDC',
-      amountIn: 500_000_000n,
-      sender: '0x0000000000000000000000000000000000000000000000000000000000000000',
-    }, quote);
-
-    if (txParams.target && txParams.typeArguments.length === 2) {
-      ok('buildSwapTransaction()', `target: ${txParams.target.split('::').slice(-2).join('::')}, typeArgs: ${txParams.typeArguments.length}`);
-    } else {
-      fail('buildSwapTransaction()', 'Invalid tx params');
-    }
-  } catch (e) { fail('buildSwapTransaction()', e); }
-
-  // Token price
-  try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
-    const price = await svc.getTokenPrice('SUI');
-    if (price > 0) {
-      ok('getTokenPrice(SUI)', `$${price}`);
-    } else {
-      fail('getTokenPrice(SUI)', `price = ${price}`);
-    }
-  } catch (e) { fail('getTokenPrice(SUI)', e); }
-
-  // Pool info
-  try {
-    const svc = new (await import('../lib/services/CetusSwapService')).CetusSwapService('testnet');
-    const pools = await svc.getPools(5);
-    // Pools may be empty on testnet — that's fine, just test the call doesn't crash
-    ok('getPools()', `returned ${pools.length} pools`);
-  } catch (e) { fail('getPools()', e); }
+  } catch (e) { fail('BluefinAggregatorService init', e); }
 }
 
 // ============================================================
@@ -1043,7 +979,7 @@ async function main() {
 
   try {
     await testDeployedContracts();
-    await testCetusSwapService();
+    await testBluefinAggregatorService();
     await testSuiExplorerService();
     await testSuiOnChainHedgeService();
     await testSuiCommunityPoolService();

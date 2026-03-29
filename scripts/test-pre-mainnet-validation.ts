@@ -292,7 +292,7 @@ async function main() {
   if (hasAuth && hasMarkets && hasSigs && !hasOnboarding) {
     console.log(`\n  📋 STATUS: Pipeline VERIFIED — only onboarding remains`);
     console.log(`     The entire flow from deposit → quote → order construction → signing works.`);
-    console.log(`     To complete: visit https://pro.bluefin.io, connect wallet, register.`);
+    console.log(`     To complete: visit https://trade.bluefin.io/pro, connect wallet, register.`);
     console.log(`     Then re-run this test to confirm onboarding=YES.`);
   } else if (hasAuth && hasMarkets && hasSigs && hasOnboarding) {
     console.log(`\n  🟢 MAINNET READY — all checks passed`);
