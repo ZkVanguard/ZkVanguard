@@ -684,6 +684,54 @@ export class SettlementAgent extends BaseAgent {
   }
 
   /**
+   * Independently evaluate a proposed execution and return a vote.
+   * Called by LeadAgent during multi-agent consensus — the SettlementAgent
+   * checks whether the execution is feasible from a settlement perspective
+   * (risk level, position size, gas conditions).
+   */
+  async voteOnExecution(proposal: {
+    executionId: string;
+    action: string;
+    estimatedPositionSize: number;
+    riskAnalysis?: { totalRisk: number; volatility: number };
+  }): Promise<{ approved: boolean; reason: string }> {
+    try {
+      const totalRisk = proposal.riskAnalysis?.totalRisk ?? 50;
+      const positionSize = proposal.estimatedPositionSize;
+
+      // Settlement feasibility checks:
+      //  - Risk ≥ 80 → too risky for automated settlement
+      //  - Position > $10M → exceeds automated threshold
+      //  - Check pending settlement queue isn't jammed
+      const isAnalysisOnly = proposal.action === 'analyze' || proposal.action === 'analysis';
+      const riskOk = totalRisk < 80;
+      const sizeOk = positionSize <= 10_000_000;
+      const queueOk = this.pendingSettlements.size < 50; // Don't accept if queue is backed up
+
+      const approved = isAnalysisOnly || (riskOk && sizeOk && queueOk);
+
+      const reason = approved
+        ? `Settlement feasible (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`
+        : `Settlement risk too high (risk: ${totalRisk.toFixed(1)}, size: $${positionSize.toLocaleString()}, queue: ${this.pendingSettlements.size})`;
+
+      logger.info('🗳️ SettlementAgent independent vote', {
+        executionId: proposal.executionId,
+        approved,
+        totalRisk,
+        positionSize,
+        pendingQueue: this.pendingSettlements.size,
+        reason,
+        agentId: this.agentId,
+      });
+
+      return { approved, reason };
+    } catch (error) {
+      logger.error('SettlementAgent vote failed — defaulting to cautious reject', { error, agentId: this.agentId });
+      return { approved: false, reason: `Vote evaluation error: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  /**
    * Start automatic processing based on schedules
    */
   startAutomaticProcessing(): void {

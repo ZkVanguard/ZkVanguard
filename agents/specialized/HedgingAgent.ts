@@ -1188,6 +1188,93 @@ export class HedgingAgent extends BaseAgent {
   }
 
   /**
+   * Independently evaluate a proposed execution and return a vote.
+   * Called by LeadAgent during multi-agent consensus — the HedgingAgent
+   * uses its own market data, Delphi signals, and 5-min Polymarket signal
+   * to independently decide whether execution should proceed.
+   */
+  async voteOnExecution(proposal: {
+    executionId: string;
+    action: string;
+    estimatedPositionSize: number;
+    riskAnalysis?: { totalRisk: number; volatility: number };
+    predictionContext?: string;
+  }): Promise<{ approved: boolean; reason: string }> {
+    try {
+      // Fetch current volatility from real market data
+      let volatility = proposal.riskAnalysis?.volatility ?? -1;
+      if (volatility < 0) {
+        try {
+          volatility = await this.calculateVolatility('BTC');
+        } catch {
+          volatility = 0.5; // Conservative fallback
+        }
+      }
+
+      // Factor in 5-min Polymarket BTC signal
+      let signalPenalty = 0;
+      const signal = this.cachedFiveMinSignal;
+      if (signal && (Date.now() - signal.fetchedAt) < 20_000) {
+        if (signal.direction === 'DOWN' && signal.signalStrength === 'STRONG') {
+          signalPenalty = 15; // Strong bearish → increase risk concern
+        } else if (signal.direction === 'DOWN' && signal.signalStrength === 'MODERATE') {
+          signalPenalty = 5;
+        }
+      }
+
+      // Factor in Delphi prediction insights
+      let delphiPenalty = 0;
+      try {
+        const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+        const btcInsights = await DelphiMarketService.getAssetInsights('BTC');
+        const highRiskHedge = btcInsights.predictions.filter(
+          p => p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
+        );
+        if (highRiskHedge.length >= 2) {
+          delphiPenalty = 10;
+        } else if (highRiskHedge.length >= 1) {
+          delphiPenalty = 5;
+        }
+      } catch {
+        // Delphi unavailable — no adjustment
+      }
+
+      // Decision logic:
+      //  - Annualized volatility ≥ 150% → reject (extreme market)
+      //  - Position > $10M → reject (automated-only safeguard)
+      //  - Effective risk (volatility-based + signal/Delphi) ≥ 80 → reject
+      //  - Analysis-only actions → always approve
+      const isAnalysisOnly = proposal.action === 'analyze' || proposal.action === 'analysis';
+      const effectiveRisk = Math.min(100, volatility * 50 + signalPenalty + delphiPenalty);
+      const volatilityAcceptable = volatility < 1.5;
+      const positionSizeAcceptable = proposal.estimatedPositionSize <= 10_000_000;
+      const riskAcceptable = effectiveRisk < 80;
+
+      const approved = isAnalysisOnly || (volatilityAcceptable && positionSizeAcceptable && riskAcceptable);
+
+      const reason = approved
+        ? `Market conditions acceptable (vol: ${(volatility * 100).toFixed(1)}%, risk: ${effectiveRisk.toFixed(1)}, size: $${proposal.estimatedPositionSize.toLocaleString()})`
+        : `Market conditions unfavorable (vol: ${(volatility * 100).toFixed(1)}%, risk: ${effectiveRisk.toFixed(1)}, size: $${proposal.estimatedPositionSize.toLocaleString()})`;
+
+      logger.info('🗳️ HedgingAgent independent vote', {
+        executionId: proposal.executionId,
+        approved,
+        volatility,
+        effectiveRisk,
+        signalPenalty,
+        delphiPenalty,
+        reason,
+        agentId: this.agentId,
+      });
+
+      return { approved, reason };
+    } catch (error) {
+      logger.error('HedgingAgent vote failed — defaulting to cautious reject', { error, agentId: this.agentId });
+      return { approved: false, reason: `Vote evaluation error: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  /**
    * Start monitoring active strategies
    */
   startMonitoring(intervalMs: number = 60000): void {
