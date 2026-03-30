@@ -15,14 +15,24 @@ import { Redis } from '@upstash/redis';
 
 // ─── Upstash Redis singleton ────────────────────────────────────────
 let _redis: Redis | null = null;
+let _redisInitFailed = false;
 
 function getRedis(): Redis | null {
   if (_redis) return _redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  _redis = new Redis({ url, token });
-  return _redis;
+  if (_redisInitFailed) return null;
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (!url || !token || !url.startsWith('https://')) {
+    _redisInitFailed = true;
+    return null;
+  }
+  try {
+    _redis = new Redis({ url, token });
+    return _redis;
+  } catch {
+    _redisInitFailed = true;
+    return null;
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
