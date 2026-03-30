@@ -6,17 +6,22 @@ import { useTranslations } from 'next-intl';
 export const Stats = memo(function Stats() {
   const t = useTranslations('stats');
   const [isVisible, setIsVisible] = useState(false);
-
-  const stats = [
-    { label: t('aiAgents'), value: '6', prefix: '' },
-    { label: t('gasSavings'), value: '100%', prefix: '' },
-    { label: t('zkProofs'), value: '2K+', prefix: '' },
-    { label: t('chainsSupported'), value: '2', prefix: '' },
-  ];
+  const [liveStats, setLiveStats] = useState<{ agents: number; chains: number; zkProofs: number } | null>(null);
 
   useEffect(() => {
     setIsVisible(true);
+    fetch('/api/platform-stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setLiveStats(data); })
+      .catch(() => {});
   }, []);
+
+  const stats = [
+    { label: t('aiAgents'), value: String(liveStats?.agents ?? 6), prefix: '' },
+    { label: t('gasSavings'), value: '100%', prefix: '' },
+    { label: t('zkProofs'), value: liveStats ? (liveStats.zkProofs > 1000 ? `${(liveStats.zkProofs / 1000).toFixed(1)}K+` : String(liveStats.zkProofs)) : '—', prefix: '' },
+    { label: t('chainsSupported'), value: String(liveStats?.chains ?? 7), prefix: '' },
+  ];
 
   return (
     <div>

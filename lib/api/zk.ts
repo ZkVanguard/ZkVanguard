@@ -448,13 +448,16 @@ export async function generateProofForOnChain(
  * Get ZK proof statistics
  */
 export async function getZKStats() {
+  // Real ZK proof counts are served by /api/platform-stats (queries hedges DB server-side).
+  // This function cannot import DB modules since it's used in client-bundled pages.
+  // Callers needing real stats should fetch /api/platform-stats instead.
   return {
-    totalProofsGenerated: 1247,
-    proofsToday: 23,
-    averageGenerationTime: 1.2, // seconds
-    verificationSuccessRate: 1.0,
-    gassSavedViaZK: 0.67,
-    activeCircuits: ['settlement_batch', 'risk_assessment', 'hedge_execution']
+    totalProofsGenerated: 0,
+    proofsToday: 0,
+    averageGenerationTime: 0,
+    verificationSuccessRate: 0,
+    gassSavedViaZK: 0,
+    activeCircuits: ['settlement_batch', 'risk_assessment', 'hedge_execution'],
   };
 }
 
@@ -469,12 +472,24 @@ export async function checkZKSystemStatus(): Promise<{
   circuitsCompiled: boolean;
   verifierDeployed: boolean;
 }> {
-  return {
-    available: true,
-    cairoInstalled: true, // Check if Cairo is in PATH
-    circuitsCompiled: true, // Check if .json files exist in /zk
-    verifierDeployed: true // Check if Verifier contract is on chain
-  };
+  const zkApiUrl = process.env.ZK_API_URL || process.env.NEXT_PUBLIC_ZK_API_URL;
+  if (!zkApiUrl) {
+    return { available: false, cairoInstalled: false, circuitsCompiled: false, verifierDeployed: false };
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${zkApiUrl}/health`, { signal: controller.signal });
+    clearTimeout(timeout);
+    return {
+      available: res.ok,
+      cairoInstalled: res.ok,
+      circuitsCompiled: res.ok,
+      verifierDeployed: res.ok,
+    };
+  } catch {
+    return { available: false, cairoInstalled: false, circuitsCompiled: false, verifierDeployed: false };
+  }
 }
 
 /**

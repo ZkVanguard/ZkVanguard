@@ -471,7 +471,8 @@ export async function getHedgeStats() {
       SUM(current_pnl) as total_current_pnl,
       SUM(realized_pnl) as total_realized_pnl,
       COUNT(CASE WHEN simulation_mode = true THEN 1 END) as simulated_hedges,
-      COUNT(CASE WHEN simulation_mode = false THEN 1 END) as real_hedges
+      COUNT(CASE WHEN simulation_mode = false THEN 1 END) as real_hedges,
+      COUNT(CASE WHEN zk_proof_hash IS NOT NULL AND zk_proof_hash != '' THEN 1 END) as total_with_zk_proof
     FROM hedges
   `;
   
