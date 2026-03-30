@@ -86,8 +86,8 @@ async function shouldUseAgents(message: string): Promise<boolean> {
  * Generate LLM response for user message, routing through agents when appropriate
  */
 export async function POST(request: NextRequest) {
-  // Rate limit — chat is computationally heavy (LLM + agents)
-  const limited = heavyLimiter.check(request);
+  // Rate limit — distributed enforcement: chat is heavy (LLM + agents)
+  const limited = await heavyLimiter.checkDistributed(request);
   if (limited) return limited;
 
   // SECURITY: Require auth for chat — it can execute real hedges via LeadAgent

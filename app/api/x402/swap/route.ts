@@ -75,7 +75,7 @@ export interface SwapResponse {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<SwapResponse | unknown>> {
-  const rateLimited = mutationLimiter.check(request);
+  const rateLimited = await mutationLimiter.checkDistributed(request);
   if (rateLimited) return rateLimited;
 
   try {

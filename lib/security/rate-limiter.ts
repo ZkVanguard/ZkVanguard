@@ -178,6 +178,13 @@ function createUpstashLimiter(config: RateLimitConfig, redis: Redis) {
       return null;
     },
 
+    /** Raw check — returns success/reset without building a NextResponse */
+    async checkRaw(request: NextRequest): Promise<{ success: boolean; reset: number }> {
+      const key = keyFn(request);
+      const { success, reset } = await ratelimit.limit(key);
+      return { success, reset };
+    },
+
     stats() {
       return { backend: 'upstash' as const };
     },
@@ -188,22 +195,52 @@ function createUpstashLimiter(config: RateLimitConfig, redis: Redis) {
 
 function createHybridLimiter(config: RateLimitConfig) {
   const redis = getRedis();
+  const { keyFn = DEFAULT_KEY_FN } = config;
   const memLimiter = createInMemoryLimiter(config);
   const upstashLimiter = redis ? createUpstashLimiter(config, redis) : null;
 
+  // Cache of last-known distributed state — makes sync check() globally aware
+  // When Upstash says a key is over-limit, subsequent sync checks block it too
+  const _distBlocked = new Map<string, number>(); // key → resetAt timestamp
+
   return {
     /**
-     * Synchronous check — uses in-memory limiter (per-instance protection).
+     * Synchronous check — in-memory + cached distributed state.
      * Returns NextResponse (429) if limited, null if allowed.
+     * Background-fires Upstash check and caches the result for future calls.
      */
     check(request: NextRequest): NextResponse | null {
       // In-memory limiter always runs (fast, catches per-instance bursts)
       const memResult = memLimiter.check(request);
       if (memResult) return memResult;
 
-      // Fire Upstash check in background (non-blocking, eventual consistency)
+      const key = keyFn(request);
+
+      // Check cached distributed block state (set by previous background checks)
+      const blockedUntil = _distBlocked.get(key);
+      if (blockedUntil && blockedUntil > Date.now()) {
+        const retryAfter = Math.max(1, Math.ceil((blockedUntil - Date.now()) / 1000));
+        return NextResponse.json(
+          { success: false, error: 'Too many requests', retryAfter },
+          { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+        );
+      }
+      if (blockedUntil) _distBlocked.delete(key); // Expired, clean up
+
+      // Fire Upstash check in background and cache the result
       if (upstashLimiter) {
-        upstashLimiter.checkAsync(request).catch(() => {});
+        upstashLimiter.checkRaw(request).then(({ success, reset }) => {
+          if (!success) {
+            _distBlocked.set(key, reset);
+          } else {
+            _distBlocked.delete(key);
+          }
+          // Periodic cleanup of expired entries
+          if (_distBlocked.size > 5000) {
+            const now = Date.now();
+            for (const [k, v] of _distBlocked) { if (v < now) _distBlocked.delete(k); }
+          }
+        }).catch(() => {});
       }
 
       return null;
@@ -211,7 +248,8 @@ function createHybridLimiter(config: RateLimitConfig) {
 
     /**
      * Async check — uses both in-memory AND Upstash for globally consistent limiting.
-     * Use this in routes where strict distributed enforcement is critical.
+     * Use this in routes where strict distributed enforcement is critical
+     * (money-moving operations, heavy compute).
      */
     async checkDistributed(request: NextRequest): Promise<NextResponse | null> {
       // In-memory fast check first
@@ -230,6 +268,7 @@ function createHybridLimiter(config: RateLimitConfig) {
       return {
         inMemory: memLimiter.stats(),
         distributed: upstashLimiter ? upstashLimiter.stats() : { backend: 'none' as const },
+        distributedBlockedKeys: _distBlocked.size,
       };
     },
   };
