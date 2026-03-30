@@ -31,8 +31,8 @@ import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provi
 import { getBluefinAggregatorService } from '@/lib/services/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
-import { getBluefinService } from '@/lib/services/BluefinService';
-import { SUI_COMMUNITY_POOL_ID } from '@/lib/constants';
+import { BluefinService } from '@/lib/services/BluefinService';
+import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -465,7 +465,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       // Load auto-hedge config for SUI pool
       const allConfigs = await getAutoHedgeConfigs();
       const suiPoolConfig = allConfigs.find(c => 
-        c.portfolioId === SUI_COMMUNITY_POOL_ID || 
+        isSuiCommunityPool(c.portfolioId) || 
+        c.portfolioId === SUI_COMMUNITY_POOL_PORTFOLIO_ID ||
         (c as any).poolAddress === process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID
       );
 
@@ -487,7 +488,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // Only hedge if BlueFin credentials are configured
           if (process.env.BLUEFIN_PRIVATE_KEY) {
             try {
-              const bluefin = getBluefinService();
+              const bluefin = BluefinService.getInstance();
               const leverage = Math.min(suiPoolConfig.maxLeverage || 3, 5);
 
               // Calculate hedge sizes based on pool NAV and allocations
