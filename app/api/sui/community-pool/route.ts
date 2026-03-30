@@ -10,8 +10,11 @@
  * - GET  /api/sui/community-pool?action=swap-quote        - Get BlueFin aggregator swap quote
  * - GET  /api/sui/community-pool?action=admin-wallet      - Check admin wallet status
  * - GET  /api/sui/community-pool?action=user-position     - Get user position from DB
+ * - GET  /api/sui/community-pool?action=treasury-info     - Get treasury address, pending fees, MSafe status
  * - POST /api/sui/community-pool?action=deposit           - Build USDC deposit tx params
  * - POST /api/sui/community-pool?action=withdraw          - Build withdrawal tx params
+ * - POST /api/sui/community-pool?action=collect-fees      - Build collect_fees tx params (admin)
+ * - POST /api/sui/community-pool?action=set-treasury      - Build set_treasury tx params (admin)
  * - POST /api/sui/community-pool?action=execute-deposit-swaps   - Swap deposited USDC → 4 assets
  * - POST /api/sui/community-pool?action=execute-withdraw-swaps  - Swap assets → USDC for withdrawal
  * - POST /api/sui/community-pool?action=record-deposit    - Record USDC deposit + execute swaps + mint shares
@@ -350,6 +353,18 @@ export async function GET(request: NextRequest) {
         duration: Date.now() - startTime,
       }, 15);
     }
+
+    // Treasury info: on-chain treasury address, pending fees, MSafe status
+    if (action === 'treasury-info') {
+      const treasuryInfo = await service.getTreasuryInfo();
+      return cachedJsonResponse({
+        success: true,
+        data: treasuryInfo,
+        chain: 'sui',
+        network,
+        duration: Date.now() - startTime,
+      }, 30);
+    }
     
     // Default: Get pool summary (cached 30s)
     const stats = await service.getPoolStats();
@@ -405,6 +420,55 @@ export async function POST(request: NextRequest) {
     const service = getSuiUsdcPoolService(network);
     
     logger.info('[SUI-API] POST request', { action, network, body });
+
+    // Build collect_fees transaction params (admin/fee-manager operation)
+    if (action === 'collect-fees') {
+      // Ensure poolStateId is cached
+      await service.getPoolStats();
+
+      const treasuryInfo = await service.getTreasuryInfo();
+      if (treasuryInfo.totalPendingFees <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'No pending fees to collect' },
+          { status: 400 }
+        );
+      }
+
+      const params = service.buildCollectFeesParams();
+      return NextResponse.json({
+        success: true,
+        data: {
+          ...params,
+          pendingFees: treasuryInfo.totalPendingFees,
+          treasuryAddress: treasuryInfo.treasuryAddress,
+          msafeConfigured: treasuryInfo.msafeConfigured,
+        },
+        chain: 'sui',
+        network,
+      });
+    }
+
+    // Build set_treasury transaction params (admin operation)
+    if (action === 'set-treasury') {
+      const { newTreasury } = body;
+      if (!newTreasury || !/^0x[a-fA-F0-9]{64}$/.test(newTreasury)) {
+        return NextResponse.json(
+          { success: false, error: 'Valid SUI address required (0x + 64 hex chars)' },
+          { status: 400 }
+        );
+      }
+
+      // Ensure poolStateId is cached
+      await service.getPoolStats();
+
+      const params = service.buildSetTreasuryParams(newTreasury);
+      return NextResponse.json({
+        success: true,
+        data: params,
+        chain: 'sui',
+        network,
+      });
+    }
     
     // Build deposit transaction params
     if (action === 'deposit') {

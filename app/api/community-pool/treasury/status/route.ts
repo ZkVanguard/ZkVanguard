@@ -1,8 +1,9 @@
 /**
  * Treasury Status API
  * 
- * Returns the status of the server-managed WDK treasury wallet.
- * This endpoint exposes ONLY the public address and operational status.
+ * Returns the status of the server-managed EVM treasury wallet
+ * AND SUI MSafe multisig treasury.
+ * This endpoint exposes ONLY public addresses and operational status.
  * 
  * SECURITY: No private keys or sensitive data are ever returned.
  */
@@ -67,12 +68,31 @@ export async function GET() {
       // Balance fetch failed, but treasury is still operational
       console.warn('[Treasury Status] Balance fetch failed:', err);
     }
+
+    // SUI MSafe treasury info (non-blocking)
+    let suiTreasury = null;
+    try {
+      const { getSuiCommunityPoolService } = await import('@/lib/services/SuiCommunityPoolService');
+      const suiService = getSuiCommunityPoolService('testnet');
+      const info = await suiService.getTreasuryInfo();
+      suiTreasury = {
+        address: info.treasuryAddress,
+        msafeAddress: info.msafeAddress,
+        msafeConfigured: info.msafeConfigured,
+        pendingFees: info.totalPendingFees,
+        lastFeeCollection: info.lastFeeCollection,
+        isOperational: !!info.treasuryAddress,
+      };
+    } catch {
+      // SUI treasury fetch failed — non-critical
+    }
     
     return NextResponse.json({
       address: treasuryAddress,
       balance,
       isOperational: true,
       lastActivity: new Date().toISOString(),
+      sui: suiTreasury,
     });
   } catch (error) {
     console.error('[Treasury Status] Error:', error);

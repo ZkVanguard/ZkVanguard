@@ -163,6 +163,27 @@ export interface SuiTransactionResult {
   explorerUrl?: string;
 }
 
+export interface SuiTreasuryInfo {
+  /** On-chain treasury address receiving collected fees */
+  treasuryAddress: string;
+  /** Accumulated management fees (in SUI/MIST, not yet collected) */
+  accumulatedManagementFees: number;
+  /** Accumulated performance fees */
+  accumulatedPerformanceFees: number;
+  /** Total pending fees (management + performance) */
+  totalPendingFees: number;
+  /** Last fee collection timestamp (ms) */
+  lastFeeCollection: number;
+  /** Management fee rate in basis points */
+  managementFeeBps: number;
+  /** Performance fee rate in basis points */
+  performanceFeeBps: number;
+  /** Whether MSafe address matches on-chain treasury */
+  msafeConfigured: boolean;
+  /** MSafe address from env (if set) */
+  msafeAddress: string | null;
+}
+
 // ============================================
 // IN-MEMORY CACHE (matches EVM CommunityPoolStatsService)
 // ============================================
@@ -610,6 +631,89 @@ export class SuiCommunityPoolService {
       return [];
     }
     }, SUI_MEMBERS_TTL);
+  }
+
+  // ============================================
+  // TREASURY & FEE OPERATIONS
+  // ============================================
+
+  /**
+   * Read on-chain treasury info: address, pending fees, fee rates.
+   */
+  async getTreasuryInfo(): Promise<SuiTreasuryInfo> {
+    const poolStateId = await this.getPoolStateId();
+    const msafeAddr = (process.env.SUI_MSAFE_ADDRESS || '').trim() || null;
+
+    const defaultInfo: SuiTreasuryInfo = {
+      treasuryAddress: '',
+      accumulatedManagementFees: 0,
+      accumulatedPerformanceFees: 0,
+      totalPendingFees: 0,
+      lastFeeCollection: 0,
+      managementFeeBps: 50,
+      performanceFeeBps: 1000,
+      msafeConfigured: false,
+      msafeAddress: msafeAddr,
+    };
+
+    if (!poolStateId) return defaultInfo;
+
+    const fields = await this.fetchObjectFields(poolStateId);
+    if (!fields) return defaultInfo;
+
+    const treasuryAddress = fields.treasury || '';
+    const accMgmt = Number(fields.accumulated_management_fees || 0) / Math.pow(10, SUI_DECIMALS);
+    const accPerf = Number(fields.accumulated_performance_fees || 0) / Math.pow(10, SUI_DECIMALS);
+
+    return {
+      treasuryAddress,
+      accumulatedManagementFees: accMgmt,
+      accumulatedPerformanceFees: accPerf,
+      totalPendingFees: accMgmt + accPerf,
+      lastFeeCollection: Number(fields.last_fee_collection || 0),
+      managementFeeBps: Number(fields.management_fee_bps || 50),
+      performanceFeeBps: Number(fields.performance_fee_bps || 1000),
+      msafeConfigured: !!msafeAddr && msafeAddr === treasuryAddress,
+      msafeAddress: msafeAddr,
+    };
+  }
+
+  /**
+   * Build collect_fees transaction params for frontend/admin signing.
+   * Requires FeeManagerCap object ID.
+   */
+  buildCollectFeesParams(): {
+    target: string;
+    poolStateId: string | null;
+    feeManagerCapId: string;
+    clockId: string;
+  } {
+    return {
+      target: `${this.config.packageId}::${this.config.moduleName}::collect_fees`,
+      poolStateId: this.cachedPoolStateId,
+      feeManagerCapId: this.config.feeManagerCapId,
+      clockId: CLOCK_OBJECT_ID,
+    };
+  }
+
+  /**
+   * Build set_treasury transaction params for admin signing.
+   * Requires AdminCap object ID.
+   */
+  buildSetTreasuryParams(newTreasuryAddress: string): {
+    target: string;
+    poolStateId: string | null;
+    adminCapId: string;
+    newTreasury: string;
+    clockId: string;
+  } {
+    return {
+      target: `${this.config.packageId}::${this.config.moduleName}::set_treasury`,
+      poolStateId: this.cachedPoolStateId,
+      adminCapId: this.config.adminCapId,
+      newTreasury: newTreasuryAddress,
+      clockId: CLOCK_OBJECT_ID,
+    };
   }
 
   // ============================================
@@ -1154,6 +1258,22 @@ export class SuiUsdcPoolService {
 
   getExplorerUrl(txDigest: string): string {
     return `${this.config.explorerUrl}/tx/${txDigest}`;
+  }
+
+  // ============================================
+  // TREASURY & FEE DELEGATION (to native pool service)
+  // ============================================
+
+  async getTreasuryInfo(): Promise<SuiTreasuryInfo> {
+    return this.fallbackService.getTreasuryInfo();
+  }
+
+  buildCollectFeesParams() {
+    return this.fallbackService.buildCollectFeesParams();
+  }
+
+  buildSetTreasuryParams(newTreasuryAddress: string) {
+    return this.fallbackService.buildSetTreasuryParams(newTreasuryAddress);
   }
 }
 
