@@ -81,6 +81,8 @@ export const SUI_CONTRACT_ADDRESSES = {
     communityPoolPackage: ((process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '').trim()) as string,
     adminCap: ((process.env.NEXT_PUBLIC_SUI_MAINNET_ADMIN_CAP || process.env.NEXT_PUBLIC_SUI_ADMIN_CAP || '').trim()) as string,
     feeManagerCap: ((process.env.NEXT_PUBLIC_SUI_MAINNET_FEE_MANAGER_CAP || '').trim()) as string,
+    // MSafe multisig treasury — fee collection and admin operations
+    msafeTreasury: ((process.env.SUI_MSAFE_ADDRESS || '').trim()) as string,
   },
   devnet: {
     packageId: ((process.env.NEXT_PUBLIC_SUI_DEVNET_PACKAGE_ID || '').trim()) as string,

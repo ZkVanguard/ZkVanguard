@@ -40,6 +40,8 @@ export const SUI_POOL_CONFIG = {
     rpcUrl: process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443',
     explorerUrl: 'https://suiscan.xyz/mainnet',
     poolStateId: (process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE || process.env.NEXT_PUBLIC_SUI_COMMUNITY_POOL_STATE || '').trim() || null as string | null,
+    // MSafe multisig treasury — fee collection goes to this address
+    treasuryAddress: (process.env.SUI_MSAFE_ADDRESS || '').trim() || null as string | null,
   },
 } as const;
 
