@@ -30,6 +30,9 @@ import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
 import { getBluefinAggregatorService } from '@/lib/services/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
+import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
+import { getBluefinService } from '@/lib/services/BluefinService';
+import { SUI_COMMUNITY_POOL_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,6 +63,17 @@ interface SuiCronResult {
   };
   riskScore?: number;
   pricesUSD?: Record<string, number>;
+  autoHedge?: {
+    triggered: boolean;
+    hedges?: Array<{
+      symbol: string;
+      side: string;
+      size: number;
+      status: string;
+      orderId?: string;
+      error?: string;
+    }>;
+  };
   rebalanceSwaps?: {
     planned: number;
     executable: number;
@@ -445,7 +459,108 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       }
     }
 
-    // Step 8: Log AI decision to transaction history
+    // Step 8: Auto-Hedge via BlueFin if risk exceeds threshold
+    let autoHedgeResult: { triggered: boolean; hedges?: Array<{ symbol: string; side: string; size: number; status: string; orderId?: string; error?: string }> } = { triggered: false };
+    try {
+      // Load auto-hedge config for SUI pool
+      const allConfigs = await getAutoHedgeConfigs();
+      const suiPoolConfig = allConfigs.find(c => 
+        c.portfolioId === SUI_COMMUNITY_POOL_ID || 
+        (c as any).poolAddress === process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID
+      );
+
+      if (suiPoolConfig?.enabled) {
+        const riskScore = aiResult.riskScore ?? 0;
+        const threshold = suiPoolConfig.riskThreshold ?? 2;
+
+        logger.info('[SUI Cron] Auto-hedge check', {
+          enabled: true,
+          riskScore,
+          threshold,
+          shouldHedge: riskScore >= threshold,
+        });
+
+        if (riskScore >= threshold) {
+          // Risk exceeds threshold - open protective hedges on BlueFin
+          const hedges: typeof autoHedgeResult.hedges = [];
+          
+          // Only hedge if BlueFin credentials are configured
+          if (process.env.BLUEFIN_PRIVATE_KEY) {
+            try {
+              const bluefin = getBluefinService();
+              const leverage = Math.min(suiPoolConfig.maxLeverage || 3, 5);
+
+              // Calculate hedge sizes based on pool NAV and allocations
+              // Open SHORT hedges on overweight assets to protect against downside
+              for (const asset of ['BTC', 'ETH', 'SUI'] as const) {
+                const allocation = aiResult.allocations[asset] || 0;
+                if (allocation >= 25) { // Only hedge significant positions (>25%)
+                  const hedgeValueUSD = navUsd * (allocation / 100) * 0.5; // Hedge 50% of position
+                  const hedgeSizeBase = hedgeValueUSD / (pricesUSD[asset] || 1);
+
+                  if (hedgeSizeBase > 0.001) {
+                    try {
+                      const result = await bluefin.openHedge({
+                        symbol: `${asset}-PERP`,
+                        side: 'SHORT', // Protective short to hedge long spot exposure
+                        size: hedgeSizeBase,
+                        leverage,
+                        portfolioId: -2, // SUI pool special ID
+                        reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
+                      });
+
+                      hedges.push({
+                        symbol: `${asset}-PERP`,
+                        side: 'SHORT',
+                        size: hedgeSizeBase,
+                        status: result.success ? 'OPENED' : 'FAILED',
+                        orderId: result.orderId,
+                        error: result.error,
+                      });
+
+                      logger.info(`[SUI Cron] Opened ${asset} hedge`, {
+                        symbol: `${asset}-PERP`,
+                        side: 'SHORT',
+                        size: hedgeSizeBase,
+                        leverage,
+                        success: result.success,
+                        orderId: result.orderId,
+                      });
+                    } catch (hedgeErr) {
+                      hedges.push({
+                        symbol: `${asset}-PERP`,
+                        side: 'SHORT',
+                        size: hedgeSizeBase,
+                        status: 'ERROR',
+                        error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
+                      });
+                      logger.error(`[SUI Cron] Failed to hedge ${asset}`, { error: hedgeErr });
+                    }
+                  }
+                }
+              }
+
+              autoHedgeResult = { triggered: true, hedges };
+            } catch (bfErr) {
+              logger.error('[SUI Cron] BlueFin hedging failed', { error: bfErr });
+              autoHedgeResult = { 
+                triggered: true, 
+                hedges: [{ symbol: 'ALL', side: 'N/A', size: 0, status: 'ERROR', error: String(bfErr) }] 
+              };
+            }
+          } else {
+            logger.info('[SUI Cron] Risk threshold exceeded but BLUEFIN_PRIVATE_KEY not set (hedge skipped)');
+            autoHedgeResult = { triggered: false };
+          }
+        }
+      } else {
+        logger.debug('[SUI Cron] Auto-hedging disabled for SUI pool');
+      }
+    } catch (hedgeConfigErr) {
+      logger.warn('[SUI Cron] Auto-hedge config check failed (non-critical)', { error: hedgeConfigErr });
+    }
+
+    // Step 9: Log AI decision to transaction history
     try {
       const crypto = require('crypto');
       const decisionId = `sui_ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -495,6 +610,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         riskScore: aiResult.riskScore,
       },
       pricesUSD,
+      autoHedge: autoHedgeResult.triggered ? autoHedgeResult : undefined,
       rebalanceSwaps,
       duration: Date.now() - startTime,
     };
@@ -502,6 +618,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     logger.info('[SUI Cron] Completed successfully', {
       duration: result.duration,
       action: result.aiDecision?.action,
+      autoHedgeTriggered: autoHedgeResult.triggered,
     });
 
     return NextResponse.json(result);
