@@ -3,6 +3,8 @@ import { getOasisPortfolioManager } from '@/lib/services/OasisPortfolioManager';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
 

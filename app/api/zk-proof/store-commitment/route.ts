@@ -4,6 +4,8 @@ import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
 const X402_FACILITATOR_URL = process.env.X402_FACILITATOR_URL;

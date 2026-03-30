@@ -14,6 +14,8 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 
+export const runtime = 'nodejs';
+
 // Pyth contract addresses by chain
 const PYTH_CONTRACTS: Record<number, string> = {
   11155111: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21', // Sepolia

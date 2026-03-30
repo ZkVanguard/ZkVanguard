@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const maxDuration = 15;
+
 /**
  * Server-side RPC proxy to avoid CORS issues with third-party RPC providers.
  * Browser requests go to /api/rpc/{chain}, and the server forwards them upstream.

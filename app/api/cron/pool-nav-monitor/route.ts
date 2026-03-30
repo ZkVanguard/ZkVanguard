@@ -23,6 +23,8 @@ import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/li
 import { ethers } from 'ethers';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
+export const runtime = 'nodejs';
+
 // Types
 interface PoolMetrics {
   poolId: string;

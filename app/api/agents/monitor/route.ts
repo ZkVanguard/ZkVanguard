@@ -13,6 +13,8 @@ import {
   PriceData
 } from '@/agents/specialized/PriceMonitorAgent';
 
+export const runtime = 'nodejs';
+
 // Lazy singleton — only this route uses it directly.
 // The orchestrator manages its own independent instance for centralized data flow.
 let _priceMonitorAgent: PriceMonitorAgent | null = null;

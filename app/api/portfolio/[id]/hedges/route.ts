@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActiveHedges } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
+export const runtime = 'nodejs';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

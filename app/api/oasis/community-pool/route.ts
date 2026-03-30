@@ -3,6 +3,8 @@ import { getOasisPoolStats, getOasisMemberPosition } from '@/lib/services/OasisC
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 

@@ -10,6 +10,8 @@
 import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 
+export const runtime = 'nodejs';
+
 // Cache the treasury address (derived from env var, but only the public address)
 let cachedTreasuryAddress: string | null = null;
 

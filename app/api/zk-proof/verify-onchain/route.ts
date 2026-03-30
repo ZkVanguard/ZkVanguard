@@ -4,6 +4,8 @@ import { CronosTestnet } from '@/lib/chains';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 const GASLESS_VERIFIER_ADDRESS = '0xC81C1c09533f75Bc92a00eb4081909975e73Fd27'; // TRUE gasless contract (x402 + USDC)
 

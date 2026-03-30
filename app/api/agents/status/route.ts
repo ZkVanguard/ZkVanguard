@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 /**
  * Agent Orchestrator Status API
  * Check real-time agent status and capabilities

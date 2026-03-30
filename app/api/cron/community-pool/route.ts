@@ -36,6 +36,8 @@ import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 import { SecureAgentSigner, getSecureAgentSigner } from '@/lib/services/SecureAgentSigner';
 import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
 
+export const runtime = 'nodejs';
+
 // CommunityPool contract details
 const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const COMMUNITY_POOL_ABI = [

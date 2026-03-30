@@ -15,14 +15,26 @@
     "app/api/chat/route.ts": {
       "maxDuration": 30
     },
-    "app/api/agents/*/route.ts": {
-      "maxDuration": 25
+    "app/api/agents/**/route.ts": {
+      "maxDuration": 30
     },
-    "app/api/portfolio/*/route.ts": {
+    "app/api/portfolio/**/route.ts": {
       "maxDuration": 15
     },
-    "app/api/zk-proof/*/route.ts": {
-      "maxDuration": 25
+    "app/api/zk-proof/**/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/zk/**/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/rpc/**/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/cron/**/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/community-pool/**/route.ts": {
+      "maxDuration": 30
     },
     "app/api/health/route.ts": {
       "maxDuration": 10

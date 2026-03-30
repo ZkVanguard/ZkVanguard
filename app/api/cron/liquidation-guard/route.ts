@@ -17,6 +17,8 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 // Types
 interface LeveragedPosition {
   id: string;

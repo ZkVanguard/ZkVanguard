@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 
+export const runtime = 'nodejs';
+
 // PostgreSQL schema (run this in Neon console):
 /*
 CREATE TABLE IF NOT EXISTS analytics_events (

@@ -18,6 +18,7 @@ import { HedgingAgent } from '@/agents/specialized/HedgingAgent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 // Singleton agent instances (avoid re-initializing every request)
 let _cachedLeadAgent: LeadAgent | null = null;

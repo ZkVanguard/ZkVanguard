@@ -5,6 +5,8 @@ import type { RiskAnalysis } from '@shared/types/agent';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 
+export const runtime = 'nodejs';
+
 // ============================================================================
 // Response Cache - prevents redundant AI processing for same predictions
 // ============================================================================

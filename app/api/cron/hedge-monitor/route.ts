@@ -18,6 +18,8 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getActiveHedges as getActiveHedgesFromDB, closeHedge, type Hedge } from '@/lib/db/hedges';
 
+export const runtime = 'nodejs';
+
 // Types
 interface ActiveHedge {
   id: string;

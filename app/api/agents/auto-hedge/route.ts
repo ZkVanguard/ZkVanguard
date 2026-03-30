@@ -21,6 +21,8 @@ import {
 } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 
+export const runtime = 'nodejs';
+
 export async function GET(request: NextRequest) {
   try {
     // Ensure service is running
