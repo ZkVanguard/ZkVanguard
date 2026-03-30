@@ -479,13 +479,21 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      // CRITICAL: Validate positive amount to prevent negative value attacks
+      const amountRaw = BigInt(amount);
+      if (amountRaw <= 0n) {
+        return NextResponse.json(
+          { success: false, error: 'Amount must be positive' },
+          { status: 400 }
+        );
+      }
       
       // Fetch pool stats first to ensure poolStateId is cached
       await service.getPoolStats();
       
       // For USDC pool: amount is in USDC atomic units (6 decimals)
       // 1 USDC = 1,000,000 (6 decimals)
-      const amountRaw = BigInt(amount);
       const amountUsdc = Number(amountRaw) / 1_000_000;
       
       const params = service.buildDepositParams(amountUsdc);
@@ -517,12 +525,20 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      // CRITICAL: Validate positive shares to prevent negative value attacks
+      const sharesScaled = BigInt(shares);
+      if (sharesScaled <= 0n) {
+        return NextResponse.json(
+          { success: false, error: 'Shares must be positive' },
+          { status: 400 }
+        );
+      }
       
       // Fetch pool stats first to ensure poolStateId is cached
       await service.getPoolStats();
       
       // USDC pool uses 6 decimals for shares
-      const sharesScaled = BigInt(shares);
       const sharesNum = Number(sharesScaled) / 1e6;
       
       const params = service.buildWithdrawParams(sharesNum);
