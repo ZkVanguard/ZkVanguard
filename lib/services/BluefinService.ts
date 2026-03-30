@@ -477,7 +477,7 @@ export class BluefinService {
    * Get account balance (USDC)
    */
   async getBalance(): Promise<number> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       const data = await this.apiRequest<{ freeCollateral: string }>('GET', '/api/v1/account');
@@ -494,7 +494,7 @@ export class BluefinService {
    * Falls back to empty array if API is unavailable
    */
   async getPositions(): Promise<BluefinPosition[]> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       // Account data is on the exchange API host (api.sui-staging), not trade API
@@ -536,7 +536,7 @@ export class BluefinService {
     quantity: number;
     status: string;
   }>> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       const orders = await this.apiRequest<Array<Record<string, unknown>>>(
@@ -568,7 +568,7 @@ export class BluefinService {
    * Falls back to null if exchange API is unavailable
    */
   async getMarketData(symbol: string): Promise<{ price: number; fundingRate: number; change24h?: number } | null> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       // Response uses E9 format: lastPriceE9, fundingRateE9, etc.
@@ -631,7 +631,7 @@ export class BluefinService {
     portfolioId?: number;
     reason?: string;
   }): Promise<BluefinHedgeResult> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     const hedgeId = `BF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const startTime = Date.now();
@@ -769,7 +769,7 @@ export class BluefinService {
     order?: Record<string, unknown>;
     error?: string;
   }> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
     const steps: { step: string; passed: boolean; detail: string }[] = [];
 
     try {
@@ -875,7 +875,7 @@ export class BluefinService {
     symbol: string;
     size?: number; // If not provided, closes entire position
   }): Promise<BluefinHedgeResult> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     const hedgeId = `BF_CLOSE_${Date.now()}`;
     const startTime = Date.now();
@@ -979,7 +979,7 @@ export class BluefinService {
     bids: Array<{ price: number; size: number }>;
     asks: Array<{ price: number; size: number }>;
   }> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       const orderbook = await this.apiRequest<{ bids: [string, string][]; asks: [string, string][] }>(
@@ -1006,7 +1006,7 @@ export class BluefinService {
    * Get funding rate history
    */
   async getFundingRates(symbol: string): Promise<Array<{ time: number; rate: number }>> {
-    this.ensureInitialized();
+    await this.ensureInitializedAsync();
 
     try {
       const fundingHistory = await this.apiRequest<Array<{ time: number; fundingRate: string }>>(
@@ -1041,11 +1041,27 @@ export class BluefinService {
   }
 
   /**
-   * Ensure client is initialized
+   * Ensure client is initialized - auto-initializes from env vars if not already initialized
+   */
+  private async ensureInitializedAsync(): Promise<void> {
+    if (!this.initialized) {
+      const privateKey = process.env.BLUEFIN_PRIVATE_KEY;
+      const network = (process.env.SUI_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+      
+      if (!privateKey) {
+        throw new Error('BlueFin client not initialized. Set BLUEFIN_PRIVATE_KEY or call initialize() first.');
+      }
+      
+      await this.initialize(privateKey, network);
+    }
+  }
+
+  /**
+   * Sync version for backward compatibility - throws if not initialized
    */
   private ensureInitialized(): void {
     if (!this.initialized) {
-      throw new Error('BlueFin client not initialized. Call initialize() first.');
+      throw new Error('BlueFin client not initialized. Call initialize() first or use async methods.');
     }
   }
 }
