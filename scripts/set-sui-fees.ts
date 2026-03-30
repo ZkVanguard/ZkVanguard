@@ -12,27 +12,47 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-// Configuration
-const PACKAGE_ID = '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c';
-const POOL_STATE_ID = '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56';
-const FEE_MANAGER_CAP_ID = '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6';
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-// Deployer private key (same as treasury script)
-const SUI_PRIVKEY = 'suiprivkey1qpu6rlng3uzygjusfat4vrj6nvkc7uhx6zztnrg4l27z45k4qm8h2eq0qan';
+// Configuration from environment
+const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c';
+const POOL_STATE_ID = process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56';
+const FEE_MANAGER_CAP_ID = process.env.SUI_FEE_MANAGER_CAP_ID || '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6';
 
-// Target fees
-const MANAGEMENT_FEE_BPS = 50;   // 0.5% annual on NAV
-const PERFORMANCE_FEE_BPS = 2000; // 20% on profit only
+// Target fees (can be overridden via CLI args)
+const MANAGEMENT_FEE_BPS = parseInt(process.env.MANAGEMENT_FEE_BPS || '50');   // 0.5% annual on NAV
+const PERFORMANCE_FEE_BPS = parseInt(process.env.PERFORMANCE_FEE_BPS || '2000'); // 20% on profit only
+
+function getKeypair(): Ed25519Keypair {
+  const privateKey = process.env.SUI_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error(
+      'SUI_PRIVATE_KEY not set. Add it to .env.local for local development ' +
+      'or set it in Vercel environment variables for production.'
+    );
+  }
+  
+  if (privateKey.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(privateKey);
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  if (privateKey.startsWith('0x')) {
+    return Ed25519Keypair.fromSecretKey(Buffer.from(privateKey.slice(2), 'hex'));
+  }
+  throw new Error('Invalid SUI_PRIVATE_KEY format. Must start with "suiprivkey" or "0x"');
+}
 
 async function main() {
   console.log('\n═══════════════════════════════════════════');
   console.log('SET SUI COMMUNITY POOL FEES');
   console.log('═══════════════════════════════════════════\n');
 
-  // Load keypair
-  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
-  const keypair = Ed25519Keypair.fromSecretKey(secretKey);
+  // Load keypair from environment
+  const keypair = getKeypair();
   const feeManager = keypair.getPublicKey().toSuiAddress();
 
   console.log('📍 Fee Manager Account:', feeManager);

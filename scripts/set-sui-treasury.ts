@@ -12,47 +12,51 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 // Configuration
 const CONFIG = {
   network: 'testnet' as const,
-  packageId: '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
+  packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
   moduleName: 'community_pool',
   
   // AdminCap object ID (owned by deployer)
-  adminCapId: '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
+  adminCapId: process.env.SUI_ADMIN_CAP_ID || '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
   
   // Community Pool State (shared object)
-  poolStateId: '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56',
+  poolStateId: process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56',
   
-  // NEW: MSafe Multisig Treasury Address
-  msafeTreasury: '0x83b9f1bc3a2d32685e67fc52dce547e4e817afeeed90a996e8c6931e0ba35f2b',
+  // MSafe Multisig Treasury Address
+  msafeTreasury: process.env.MSAFE_TREASURY_ADDRESS || '0x83b9f1bc3a2d32685e67fc52dce547e4e817afeeed90a996e8c6931e0ba35f2b',
   
   // Clock object (system)
   clockId: '0x6',
 };
 
-// Deployer private key (bech32 encoded)
-const SUI_PRIVKEY = 'suiprivkey1qpu6rlng3uzygjusfat4vrj6nvkc7uhx6zztnrg4l27z45k4qm8h2eq0qan';
-
 function getKeypair(): Ed25519Keypair {
   const privateKey = process.env.SUI_PRIVATE_KEY;
-  if (privateKey) {
-    if (privateKey.startsWith('suiprivkey')) {
-      const { secretKey } = decodeSuiPrivateKey(privateKey);
-      return Ed25519Keypair.fromSecretKey(secretKey);
-    }
-    if (privateKey.startsWith('0x')) {
-      const hexStr = privateKey.slice(2);
-      const bytes = new Uint8Array(hexStr.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-      return Ed25519Keypair.fromSecretKey(bytes);
-    }
-    return Ed25519Keypair.fromSecretKey(Buffer.from(privateKey, 'base64'));
+  if (!privateKey) {
+    throw new Error(
+      'SUI_PRIVATE_KEY not set. Add it to .env.local for local development ' +
+      'or set it in Vercel environment variables for production.'
+    );
   }
   
-  // Use hardcoded bech32 key
-  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
-  return Ed25519Keypair.fromSecretKey(secretKey);
+  if (privateKey.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(privateKey);
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  if (privateKey.startsWith('0x')) {
+    const hexStr = privateKey.slice(2);
+    const bytes = new Uint8Array(hexStr.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    return Ed25519Keypair.fromSecretKey(bytes);
+  }
+  // Assume base64 encoded
+  return Ed25519Keypair.fromSecretKey(Buffer.from(privateKey, 'base64'));
 }
 
 async function main() {
