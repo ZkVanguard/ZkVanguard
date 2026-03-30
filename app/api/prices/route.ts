@@ -6,6 +6,7 @@ import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
+import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-coalescer';
 
 export const runtime = 'nodejs';
 
@@ -28,8 +29,11 @@ export async function GET(request: NextRequest) {
       logger.info(`[Market Data API] Fetching batch prices for: ${symbols.join(', ')}`);
       
       if (source === 'exchange') {
-        // Direct from Exchange API
-        const prices = await cryptocomExchangeService.getBatchPrices(symbols);
+        // Direct from Exchange API — coalesced to deduplicate concurrent requests
+        const cacheKey = `exchange:${symbols.sort().join(',')}`;
+        const prices = await batchPriceCoalescer.get(cacheKey, () =>
+          cryptocomExchangeService.getBatchPrices(symbols)
+        );
         
         // ═══ CIRCUIT BREAKER: Validate prices before use ═══
         const validatedPrices: Record<string, number> = {};
@@ -130,8 +134,11 @@ export async function GET(request: NextRequest) {
     logger.info(`[Market Data API] Fetching price for ${symbol} (source: ${source})`);
 
     if (source === 'exchange') {
-      // Direct from Exchange API with full market data
-      const marketData = await cryptocomExchangeService.getMarketData(symbol);
+      // Direct from Exchange API with full market data — coalesced
+      const marketData = await priceCoalescer.get(`exchange:${symbol}`, async () => {
+        const md = await cryptocomExchangeService.getMarketData(symbol);
+        return { symbol: md.symbol, price: md.price, change24h: md.change24h, volume24h: md.volume24h, source: md.source };
+      });
       
       // ═══ CIRCUIT BREAKER: Validate before accepting ═══
       const cbResult = validatePrice(marketData.symbol, marketData.price);
@@ -161,8 +168,6 @@ export async function GET(request: NextRequest) {
           price: marketData.price,
           change24h: marketData.change24h,
           volume24h: marketData.volume24h,
-          high24h: marketData.high24h,
-          low24h: marketData.low24h,
           source: marketData.source,
         },
         source: 'cryptocom-exchange',

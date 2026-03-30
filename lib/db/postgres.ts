@@ -20,7 +20,11 @@ export function getPoolMetrics() {
 export function getPool(): Pool {
   if (!pool) {
     // Support both Neon serverless and local PostgreSQL
-    let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
+    // Use DATABASE_POOL_URL (Neon pooler endpoint, port 6543) for high concurrency,
+    // falling back to DATABASE_URL (direct connection, port 5432)
+    let connectionString = process.env.DATABASE_POOL_URL 
+      || process.env.DATABASE_URL 
+      || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
     
     // Remove channel_binding parameter if present (not supported by pg module)
     connectionString = connectionString.replace(/&?channel_binding=[^&]*/g, '').replace('?&', '?');
@@ -34,14 +38,17 @@ export function getPool(): Pool {
     }
     
     const isNeon = connectionString.includes('neon.tech');
+    // Neon pooler (port 6543) supports up to 10,000 connections
+    const isPooler = connectionString.includes(':6543') || connectionString.includes('-pooler.');
     
     pool = new Pool({
       connectionString,
       ssl: isNeon ? { rejectUnauthorized: true } : undefined,
-      // Aggressive connection reuse: keep fewer idle, recycle faster
-      max: isNeon ? 8 : 20,                  // Leave 2 slots for admin on Neon (limit 10)
-      min: isNeon ? 1 : 2,                   // Keep warm connections ready
-      idleTimeoutMillis: isNeon ? 8000 : 20000,   // Faster idle reclaim
+      // With Neon pooler: can safely use 25 connections per serverless instance
+      // Without pooler (direct): keep conservative to avoid exhausting Neon's 10 limit
+      max: isPooler ? 25 : (isNeon ? 8 : 20),
+      min: isNeon ? 1 : 2,
+      idleTimeoutMillis: isNeon ? 8000 : 20000,
       connectionTimeoutMillis: isNeon ? 5000 : 3000,
       // Statement timeout: kill queries that run too long (protects pool from hangs)
       statement_timeout: 15000,              // 15s max per query

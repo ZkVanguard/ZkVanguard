@@ -87,6 +87,8 @@
     "@tetherto/wdk": "^1.0.0-beta.6",
     "@tetherto/wdk-wallet-evm": "file:external/wdk-wallet-evm",
     "@upstash/qstash": "^2.9.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
     "@vvs-finance/swap-sdk": "^0.0.5",
     "axios": "^1.6.2",
     "buffer": "^6.0.3",
