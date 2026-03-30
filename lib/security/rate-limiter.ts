@@ -256,9 +256,14 @@ function createHybridLimiter(config: RateLimitConfig) {
       const memResult = memLimiter.check(request);
       if (memResult) return memResult;
 
-      // Upstash distributed check (globally consistent)
+      // Upstash distributed check — gracefully fall back to in-memory if Redis is down
       if (upstashLimiter) {
-        return upstashLimiter.checkAsync(request);
+        try {
+          return await upstashLimiter.checkAsync(request);
+        } catch {
+          // Redis unavailable — in-memory protection still active
+          return null;
+        }
       }
 
       return null;
