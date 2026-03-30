@@ -30,3 +30,13 @@ export function isCommunityPoolPortfolio(portfolioId: number | null | undefined)
  * from lib/contracts/community-pool-config.ts instead.
  */
 export const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
+
+/**
+ * SUI USDC Community Pool Constants
+ */
+export const SUI_COMMUNITY_POOL_ID = 'sui-usdc-pool';
+export const SUI_COMMUNITY_POOL_STATE = '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56';
+
+export function isSuiCommunityPool(poolId: string | number | null | undefined): boolean {
+  return poolId === SUI_COMMUNITY_POOL_ID;
+}
