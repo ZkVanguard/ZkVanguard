@@ -157,8 +157,8 @@ export async function GET(request: NextRequest) {
  * POST - Create or submit USDT deposit UserOp
  */
 export async function POST(request: NextRequest) {
-  // Rate limit
-  const limited = mutationLimiter.check(request);
+  // Rate limit — distributed enforcement for deposit operation
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
   
   const searchParams = request.nextUrl.searchParams;

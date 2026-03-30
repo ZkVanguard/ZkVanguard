@@ -13,8 +13,8 @@ export const runtime = 'nodejs';
  * SECURITY: Requires authentication (internal service or wallet signature)
  */
 export async function POST(request: NextRequest) {
-  // Rate limiting
-  const limited = mutationLimiter.check(request);
+  // Rate limiting — distributed enforcement for money-moving operation
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
   try {

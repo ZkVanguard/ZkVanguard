@@ -7,6 +7,7 @@ import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
 import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-coalescer';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,9 @@ export const dynamic = 'force-dynamic';
  * Supports both single and batch price queries
  */
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol');

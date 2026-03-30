@@ -8,7 +8,7 @@ export const maxDuration = 30;
 const ZK_API_URL = process.env.ZK_API_URL || 'https://zk-api.starknova.xyz';
 
 export async function POST(request: NextRequest) {
-  const rateLimited = heavyLimiter.check(request);
+  const rateLimited = await heavyLimiter.checkDistributed(request);
   if (rateLimited) return rateLimited;
 
   try {

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
   }
   
-  const limited = mutationLimiter.check(request);
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
   // Wrap EVERYTHING in a proper try-catch for better error reporting

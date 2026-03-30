@@ -43,7 +43,7 @@ function generateFallbackProof(scenario: string, statement: Record<string, unkno
 }
 
 export async function POST(request: NextRequest) {
-  const rateLimited = heavyLimiter.check(request);
+  const rateLimited = await heavyLimiter.checkDistributed(request);
   if (rateLimited) return rateLimited;
 
   let body: { scenario?: string; statement?: Record<string, unknown>; witness?: Record<string, unknown> } = {};

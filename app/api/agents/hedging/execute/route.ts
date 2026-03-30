@@ -116,8 +116,8 @@ export interface HedgeExecutionResponse {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
-  // Rate limiting
-  const limited = mutationLimiter.check(request);
+  // Rate limiting — distributed enforcement for hedge execution
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
   try {

@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // Rate limiting
   const { mutationLimiter } = await import('@/lib/security/rate-limiter');
-  const limited = mutationLimiter.check(request);
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
   try {

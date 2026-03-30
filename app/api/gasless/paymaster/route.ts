@@ -120,9 +120,9 @@ export async function GET(request: NextRequest) {
  * - action: "execute" - Relay signed message
  */
 export async function POST(request: NextRequest) {
-  // SECURITY: Rate limit to prevent relayer wallet draining
+  // SECURITY: Distributed rate limit to prevent relayer wallet draining
   // Execute is heavy (on-chain tx), prepare is lighter
-  const limited = heavyLimiter.check(request);
+  const limited = await heavyLimiter.checkDistributed(request);
   if (limited) return limited;
 
   try {

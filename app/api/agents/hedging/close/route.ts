@@ -27,7 +27,7 @@ function verifyOwnership(walletAddress: string, hedgeId: string, storedWallet: s
  * SECURITY: walletAddress is REQUIRED and must match hedge owner.
  */
 export async function POST(request: NextRequest) {
-  const limited = mutationLimiter.check(request);
+  const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
   // Require authentication
