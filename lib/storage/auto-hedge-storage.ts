@@ -82,7 +82,7 @@ async function ensureAutoHedgeTable() {
     await query(`
       CREATE TABLE IF NOT EXISTS auto_hedge_configs (
         portfolio_id INTEGER PRIMARY KEY,
-        wallet_address VARCHAR(42) NOT NULL DEFAULT '',
+        wallet_address VARCHAR(128) NOT NULL DEFAULT '',
         enabled BOOLEAN NOT NULL DEFAULT true,
         risk_threshold INTEGER NOT NULL DEFAULT 5,
         max_leverage INTEGER NOT NULL DEFAULT 3,
@@ -95,6 +95,14 @@ async function ensureAutoHedgeTable() {
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_enabled ON auto_hedge_configs(enabled);
       CREATE INDEX IF NOT EXISTS idx_auto_hedge_wallet ON auto_hedge_configs(wallet_address);
     `);
+    
+    // Ensure column is wide enough for SUI addresses (migration for existing tables)
+    try {
+      await query(`ALTER TABLE auto_hedge_configs ALTER COLUMN wallet_address TYPE VARCHAR(128)`);
+    } catch {
+      // Column might already be the right size
+    }
+    
     _tableVerified = true;
     logger.debug('[AutoHedgeStorage] Table ensured');
   } catch (error) {
