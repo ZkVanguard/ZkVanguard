@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
@@ -102,6 +103,9 @@ interface InsightSummaryResponse {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = heavyLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body: InsightSummaryRequest = await request.json();
     const { predictions } = body;

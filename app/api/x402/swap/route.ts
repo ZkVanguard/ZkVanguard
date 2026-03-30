@@ -12,6 +12,7 @@ import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -73,7 +74,10 @@ export interface SwapResponse {
   error?: string;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<SwapResponse>> {
+export async function POST(request: NextRequest): Promise<NextResponse<SwapResponse | unknown>> {
+  const rateLimited = mutationLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json() as SwapRequestBody;
     

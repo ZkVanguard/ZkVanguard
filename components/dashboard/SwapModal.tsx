@@ -20,7 +20,7 @@ interface SwapModalProps {
 }
 
 // ZK API URL
-const ZK_API_URL = process.env.NEXT_PUBLIC_ZK_API_URL || 'http://localhost:8000';
+const ZK_API_URL = process.env.NEXT_PUBLIC_ZK_API_URL || 'https://zk-api.starknova.xyz';
 
 export function SwapModal({ 
   isOpen, 

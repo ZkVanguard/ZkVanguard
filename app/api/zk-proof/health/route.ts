@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ZK_BACKEND_URL = process.env.ZK_BACKEND_URL || 'http://localhost:8000';
+const ZK_BACKEND_URL = process.env.ZK_BACKEND_URL || 'https://zk-api.starknova.xyz';
 
 export async function GET() {
   try {

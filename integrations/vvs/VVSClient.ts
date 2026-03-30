@@ -162,8 +162,12 @@ export class VVSClient {
       // Calculate price impact (simplified)
       const priceImpact = this.calculatePriceImpact(amountIn, amountOutFormatted, tokenIn, tokenOut);
 
-      // Calculate execution price
-      const executionPrice = (parseFloat(amountIn) / parseFloat(amountOutFormatted)).toFixed(6);
+      // Calculate execution price using BigInt-safe division (no parseFloat)
+      const amountInBig = ethers.parseUnits(amountIn, 18);
+      const amountOutBig = amountOut; // already BigInt from getAmountsOut
+      const executionPrice = amountOutBig > 0n
+        ? ethers.formatUnits(amountInBig * 1000000n / amountOutBig, 6)
+        : '0';
 
       return {
         amountIn,
@@ -208,9 +212,11 @@ export class VVSClient {
       // Get quote
       const quote = await this.getQuote({ tokenIn, tokenOut, amountIn });
 
-      // Calculate min amount out with slippage
-      const minAmount = minAmountOut || 
-        (parseFloat(quote.amountOut) * (1 - slippageTolerance / 100)).toFixed(18);
+      // Calculate min amount out with slippage (BigInt-safe)
+      const minAmount = minAmountOut || ethers.formatUnits(
+        ethers.parseUnits(quote.amountOut, 18) * BigInt(Math.round((1 - slippageTolerance / 100) * 10000)) / 10000n,
+        18
+      );
 
       // Approve token if needed
       await this.approveToken(tokenInAddress, amountIn);
@@ -307,9 +313,9 @@ export class VVSClient {
       await this.approveToken(tokenAAddress, amountA);
       await this.approveToken(tokenBAddress, amountB);
 
-      // Set min amounts (95% of desired by default)
-      const minA = minAmountA || (parseFloat(amountA) * 0.95).toFixed(18);
-      const minB = minAmountB || (parseFloat(amountB) * 0.95).toFixed(18);
+      // Set min amounts (95% of desired by default) — BigInt-safe
+      const minA = minAmountA || ethers.formatUnits(ethers.parseUnits(amountA, 18) * 95n / 100n, 18);
+      const minB = minAmountB || ethers.formatUnits(ethers.parseUnits(amountB, 18) * 95n / 100n, 18);
 
       // Set deadline
       const addDeadline = deadline || Math.floor(Date.now() / 1000) + 600;

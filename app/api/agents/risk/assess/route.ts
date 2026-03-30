@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -16,6 +17,9 @@ export const maxDuration = 30;
  * - Crypto.com MCP (FREE market data with historical prices)
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = heavyLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json();
     const { address, portfolioValue, positions } = body;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db/postgres';
 import crypto from 'crypto';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -77,7 +78,10 @@ function verifyBinding(walletAddress: string, hedgeId: string, storedBinding: st
   return computedBinding === storedBinding;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwnershipResponse>> {
+export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwnershipResponse | unknown>> {
+  const rateLimited = mutationLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body: VerifyOwnershipRequest = await request.json();
     const { walletAddress, hedgeId, zkSecret } = body;

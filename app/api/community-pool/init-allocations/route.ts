@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,9 @@ const POOL_ABI = [
 ];
 
 export async function POST(request: NextRequest) {
+  const rateLimited = mutationLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   const startTime = Date.now();
   
   try {

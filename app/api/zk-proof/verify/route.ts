@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
+const ZK_API_URL = process.env.ZK_API_URL || 'https://zk-api.starknova.xyz';
 
 export async function POST(request: NextRequest) {
+  const rateLimited = heavyLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json();
     const { proof, statement, claim } = body;

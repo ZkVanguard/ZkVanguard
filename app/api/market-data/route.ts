@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readLimiter } from '@/lib/security/rate-limiter';
 import { getMarketDataMCPClient } from '@/lib/services/market-data-mcp';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
@@ -53,6 +54,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = readLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json();
     const { symbols, action = 'price' } = body;
