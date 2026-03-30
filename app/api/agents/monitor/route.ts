@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { 
   PriceMonitorAgent,
   PriceAlert, 
@@ -53,7 +54,10 @@ export interface MonitorControlResponse {
 // Store for streaming connections
 const _eventClients = new Set<ReadableStreamDefaultController>();
 
-export async function POST(request: NextRequest): Promise<NextResponse<MonitorControlResponse>> {
+export async function POST(request: NextRequest): Promise<NextResponse<MonitorControlResponse | unknown>> {
+  const rateLimited = mutationLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json() as MonitorControlRequest;
     

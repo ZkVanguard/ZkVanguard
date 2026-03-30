@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readLimiter } from '@/lib/security/rate-limiter';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
@@ -8,7 +9,10 @@ export const runtime = 'nodejs';
  * Agent Orchestrator Status API
  * Check real-time agent status and capabilities
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rateLimited = readLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const orchestrator = getAgentOrchestrator();
     const status = orchestrator.getStatus();

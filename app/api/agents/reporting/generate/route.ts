@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 /**
  * Portfolio Reporting API Route
  * Generates reports using real portfolio data from ReportingAgent
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = readLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body = await request.json();
     const { address, period } = body;

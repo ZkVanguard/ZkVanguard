@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,9 @@ export interface PortfolioActionRecommendation {
  * Get agent recommendation for portfolio action
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = heavyLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   try {
     const body: PortfolioActionRequest = await request.json();
     const { portfolioId, currentValue, targetYield: _targetYield, riskTolerance, assets, predictions, realMetrics } = body;

@@ -5,6 +5,7 @@ import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
 
 export const runtime = 'nodejs';
 
@@ -30,14 +31,19 @@ export async function GET(request: NextRequest) {
         // Direct from Exchange API
         const prices = await cryptocomExchangeService.getBatchPrices(symbols);
         
-        // ═══ WEBHOOK TRIGGER: Check each asset for significant moves ═══
+        // ═══ CIRCUIT BREAKER: Validate prices before use ═══
+        const validatedPrices: Record<string, number> = {};
         Object.entries(prices).forEach(([sym, price]) => {
-          recordPriceUpdate(sym, price);
+          const result = validatePrice(sym, price);
+          if (result.accepted) {
+            validatedPrices[sym] = price;
+            recordPriceUpdate(sym, price);
+          }
         });
         
         return NextResponse.json({
           success: true,
-          data: Object.entries(prices).map(([sym, price]) => ({
+          data: Object.entries(validatedPrices).map(([sym, price]) => ({
             symbol: sym,
             price,
             source: 'cryptocom-exchange',
@@ -53,14 +59,19 @@ export async function GET(request: NextRequest) {
         const pricePromises = symbols.map(sym => marketData.getTokenPrice(sym));
         const prices = await Promise.all(pricePromises);
         
-        // ═══ WEBHOOK TRIGGER: Check each asset for significant moves ═══
-        prices.forEach(p => {
-          recordPriceUpdate(p.symbol, p.price);
+        // ═══ CIRCUIT BREAKER + WEBHOOK TRIGGER ═══
+        const validatedPrices = prices.filter(p => {
+          const result = validatePrice(p.symbol, p.price);
+          if (result.accepted) {
+            recordPriceUpdate(p.symbol, p.price);
+            return true;
+          }
+          return false;
         });
         
         return NextResponse.json({
           success: true,
-          data: prices.map(p => ({
+          data: validatedPrices.map(p => ({
             symbol: p.symbol,
             price: p.price,
             change24h: p.change24h,
@@ -92,6 +103,8 @@ export async function GET(request: NextRequest) {
           new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)) // 2s timeout
         ]);
         if (cached) {
+          // Seed circuit breaker with known-good cached price
+          seedPrice(cached.symbol, cached.price);
           logger.info(`[Market Data API] Cache HIT for ${symbol}`);
         return NextResponse.json({
           success: true,
@@ -119,6 +132,17 @@ export async function GET(request: NextRequest) {
     if (source === 'exchange') {
       // Direct from Exchange API with full market data
       const marketData = await cryptocomExchangeService.getMarketData(symbol);
+      
+      // ═══ CIRCUIT BREAKER: Validate before accepting ═══
+      const cbResult = validatePrice(marketData.symbol, marketData.price);
+      if (!cbResult.accepted) {
+        logger.warn(`[Market Data API] Circuit breaker rejected ${symbol}: ${cbResult.reason}`);
+        return NextResponse.json(
+          { success: false, error: `Price rejected: ${cbResult.reason}` },
+          { status: 422 }
+        );
+      }
+      
       // Cache in DB for other routes
       upsertPrices([{
         symbol: marketData.symbol,
@@ -128,7 +152,6 @@ export async function GET(request: NextRequest) {
         source: marketData.source,
       }]).catch(() => {});
       
-      // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
       recordPriceUpdate(marketData.symbol, marketData.price);
       
       return NextResponse.json({
@@ -157,6 +180,16 @@ export async function GET(request: NextRequest) {
       
       if (!price) {
         throw new Error('Price fetch returned null');
+      }
+      
+      // ═══ CIRCUIT BREAKER: Validate before accepting ═══
+      const cbResult = validatePrice(price.symbol, price.price);
+      if (!cbResult.accepted) {
+        logger.warn(`[Market Data API] Circuit breaker rejected ${symbol}: ${cbResult.reason}`);
+        return NextResponse.json(
+          { success: false, error: `Price rejected: ${cbResult.reason}` },
+          { status: 422 }
+        );
       }
       
       // Cache in DB (fire and forget)

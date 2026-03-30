@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { ProductionGuard } from '@/lib/security/production-guard';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
+const ZK_API_URL = process.env.ZK_API_URL || 'https://zk-api.starknova.xyz';
 
 // Generate deterministic fallback proof when ZK backend unavailable
 function generateFallbackProof(scenario: string, statement: Record<string, unknown>, _witness: Record<string, unknown>) {
@@ -42,6 +43,9 @@ function generateFallbackProof(scenario: string, statement: Record<string, unkno
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = heavyLimiter.check(request);
+  if (rateLimited) return rateLimited;
+
   let body: { scenario?: string; statement?: Record<string, unknown>; witness?: Record<string, unknown> } = {};
   
   try {
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
       scenario, 
       statementKeys: Object.keys(statement), 
       witnessKeys: Object.keys(witness),
-      zkApiUrl: process.env.ZK_API_URL || 'localhost:8000 (default)'
+      zkApiUrl: process.env.ZK_API_URL || 'https://zk-api.starknova.xyz (default)'
     });
 
     // Prepare data based on scenario type

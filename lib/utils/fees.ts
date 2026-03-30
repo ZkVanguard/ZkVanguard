@@ -67,21 +67,26 @@ export interface HedgeFeeBreakdown {
 
 /**
  * Calculate hedge execution fee
+ * Uses integer BPS arithmetic to avoid floating-point precision loss
  */
 export function calculateHedgeFeeBreakdown(collateralUsdc: number): HedgeFeeBreakdown {
   const feeRateBps = ON_CHAIN_FEES.hedgeExecutor.feeRateBps;
   const feeRatePercent = bpsToPercent(feeRateBps);
-  const feeUsdc = (collateralUsdc * feeRateBps) / BPS_DENOMINATOR;
-  const netCollateralUsdc = collateralUsdc - feeUsdc;
+  // Integer BPS math: multiply first, divide last (avoids precision loss)
+  const collateralRaw = toUsdcRaw(collateralUsdc);
+  const feeRaw = collateralRaw * BigInt(feeRateBps) / BigInt(BPS_DENOMINATOR);
+  const netCollateralRaw = collateralRaw - feeRaw;
+  const feeUsdc = fromUsdcRaw(feeRaw);
+  const netCollateralUsdc = fromUsdcRaw(netCollateralRaw);
 
   return {
     collateralUsdc,
     feeRateBps,
     feeRatePercent,
     feeUsdc,
-    feeRaw: toUsdcRaw(feeUsdc),
+    feeRaw,
     netCollateralUsdc,
-    netCollateralRaw: toUsdcRaw(netCollateralUsdc),
+    netCollateralRaw,
   };
 }
 
@@ -90,9 +95,10 @@ export function calculateHedgeFeeBreakdown(collateralUsdc: number): HedgeFeeBrea
  */
 export function calculateCollateralForNet(netAmountUsdc: number): number {
   const feeRateBps = ON_CHAIN_FEES.hedgeExecutor.feeRateBps;
-  // net = collateral * (1 - fee/10000)
-  // collateral = net / (1 - fee/10000)
-  return netAmountUsdc / (1 - feeRateBps / BPS_DENOMINATOR);
+  // Integer math: net * BPS_DENOMINATOR / (BPS_DENOMINATOR - feeRateBps)
+  const netRaw = toUsdcRaw(netAmountUsdc);
+  const collateralRaw = netRaw * BigInt(BPS_DENOMINATOR) / BigInt(BPS_DENOMINATOR - feeRateBps);
+  return fromUsdcRaw(collateralRaw);
 }
 
 /**
@@ -186,7 +192,10 @@ export interface SuiProtocolFeeBreakdown {
 export function calculateSuiProtocolFee(amountUsdc: number): SuiProtocolFeeBreakdown {
   const feeRateBps = ON_CHAIN_FEES.suiProtocol.feeRateBps;
   const feeRatePercent = bpsToPercent(feeRateBps);
-  const feeUsdc = (amountUsdc * feeRateBps) / BPS_DENOMINATOR;
+  // Integer BPS math
+  const amountRaw = toUsdcRaw(amountUsdc);
+  const feeRaw = amountRaw * BigInt(feeRateBps) / BigInt(BPS_DENOMINATOR);
+  const feeUsdc = fromUsdcRaw(feeRaw);
 
   return {
     amountUsdc,

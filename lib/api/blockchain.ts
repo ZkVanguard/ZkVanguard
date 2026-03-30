@@ -37,10 +37,11 @@ export async function getGasPrice() {
   const client = getPublicClient();
   try {
     const gasPrice = await client.getGasPrice();
+    const gasPriceGwei = Number(gasPrice / 1000000000n) + Number(gasPrice % 1000000000n) / 1e9;
     return {
       gasPrice: gasPrice.toString(),
-      gasPriceGwei: Number(gasPrice) / 1e9,
-      formattedPrice: `${(Number(gasPrice) / 1e9).toFixed(2)} Gwei`
+      gasPriceGwei,
+      formattedPrice: `${gasPriceGwei.toFixed(2)} Gwei`
     };
   } catch (error) {
     console.error('Failed to fetch gas price:', error);
@@ -73,10 +74,14 @@ export async function getBalance(address: string) {
   const client = getPublicClient();
   try {
     const balance = await client.getBalance({ address: address as `0x${string}` });
+    // Use BigInt division for integer part + remainder for fractional to avoid precision loss
+    const wholePart = Number(balance / 1000000000000000000n);
+    const fracPart = Number(balance % 1000000000000000000n) / 1e18;
+    const balanceEther = wholePart + fracPart;
     return {
       balance: balance.toString(),
-      balanceEther: Number(balance) / 1e18,
-      formatted: `${(Number(balance) / 1e18).toFixed(4)} CRO`
+      balanceEther,
+      formatted: `${balanceEther.toFixed(4)} CRO`
     };
   } catch (error) {
     console.error('Failed to fetch balance:', error);
