@@ -407,30 +407,39 @@ async function testApiEndpoints() {
 // =============================================================================
 async function testCronJob() {
   console.log('\n' + '═'.repeat(60));
-  console.log('   6. CRON JOB EXECUTION');
+  console.log('   6. CRON / QSTASH CONFIGURATION');
   console.log('═'.repeat(60));
 
+  // QStash is the primary auth method
+  const qstashCurrentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
+  const qstashNextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
+  const qstashToken = process.env.QSTASH_TOKEN;
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    record('Cron: Secret configured', 'FAIL', 'CRON_SECRET not set', 0);
-    return;
-  }
 
-  await runTest('Cron: Secret configured', async () => {
-    if (!cronSecret) {
-      throw new Error('CRON_SECRET not set');
+  await runTest('QStash: Signing keys configured', async () => {
+    if (!qstashCurrentKey || !qstashNextKey) {
+      // Not a failure - might be using CRON_SECRET for dev
+      if (cronSecret) {
+        return 'Using CRON_SECRET fallback (dev mode)';
+      }
+      throw new Error('Neither QStash keys nor CRON_SECRET configured');
     }
-    // Check for weak/default secrets
-    const weakSecrets = ['test-cron-secret', 'secret', 'password', '12345'];
-    if (weakSecrets.includes(cronSecret)) {
-      // Log warning but don't fail for development
-      console.warn('⚠️  WARNING: Using weak CRON_SECRET - update for production');
+    return 'QStash signing keys configured';
+  });
+
+  await runTest('QStash: API token configured', async () => {
+    if (!qstashToken) {
+      return 'Not set (optional for receive-only)';
     }
     return 'Configured';
   });
 
-  // Test cron endpoint directly
-  await runTest('Cron: SUI pool rebalance trigger', async () => {
+  // Test cron endpoint directly (uses CRON_SECRET for local dev, QStash signature in production)
+  await runTest('Cron: SUI pool rebalance trigger (local auth)', async () => {
+    if (!cronSecret) {
+      throw new Error('CRON_SECRET not set for local testing');
+    }
+    
     const http = await import('http');
     return new Promise((resolve, reject) => {
       const options = {
