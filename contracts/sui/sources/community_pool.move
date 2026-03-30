@@ -51,6 +51,7 @@ module zkvanguard::community_pool {
     const E_OPERATION_NOT_FOUND: u64 = 24;
     const E_EMERGENCY_MODE_REQUIRED: u64 = 25;
     const E_NOTHING_TO_RESCUE: u64 = 26;
+    const E_INVALID_ADDRESS: u64 = 27;  // Treasury cannot be null address
 
     // ============ Constants ============
     const BPS_DENOMINATOR: u64 = 10000;
@@ -698,10 +699,11 @@ module zkvanguard::community_pool {
 
         // Check circuit breaker limits
         let nav = get_total_nav(state);
-        let max_single_withdrawal = (nav * state.max_single_withdrawal_bps) / BPS_DENOMINATOR;
+        // CRITICAL: Use u128 to prevent overflow (nav × bps can overflow u64 at scale)
+        let max_single_withdrawal = ((((nav as u128) * (state.max_single_withdrawal_bps as u128)) / (BPS_DENOMINATOR as u128))) as u64;
         assert!(amount_to_withdraw <= max_single_withdrawal, E_MAX_WITHDRAWAL_EXCEEDED);
 
-        let daily_cap = (nav * state.daily_withdrawal_cap_bps) / BPS_DENOMINATOR;
+        let daily_cap = ((((nav as u128) * (state.daily_withdrawal_cap_bps as u128)) / (BPS_DENOMINATOR as u128))) as u64;
         assert!(
             state.daily_withdrawal_total + amount_to_withdraw <= daily_cap,
             E_DAILY_WITHDRAWAL_EXCEEDED
@@ -826,8 +828,9 @@ module zkvanguard::community_pool {
         let nav = get_total_nav(state);
 
         // management_fee = NAV * fee_bps * time_elapsed / (BPS * SECONDS_PER_YEAR)
-        let fee = (nav * state.management_fee_bps * time_elapsed_sec) / 
-                  (BPS_DENOMINATOR * SECONDS_PER_YEAR);
+        // CRITICAL: Use u128 to prevent overflow at scale (NAV can be 1e15+)
+        let fee = ((((nav as u128) * (state.management_fee_bps as u128)) * (time_elapsed_sec as u128)) / 
+                  (((BPS_DENOMINATOR as u128) * (SECONDS_PER_YEAR as u128)))) as u64;
 
         if (fee > 0) {
             state.accumulated_management_fees = state.accumulated_management_fees + fee;
@@ -845,8 +848,9 @@ module zkvanguard::community_pool {
 
         if (current_nav_per_share > member.high_water_mark) {
             let gain_per_share = current_nav_per_share - member.high_water_mark;
-            let member_gain = (gain_per_share * member.shares) / WAD;
-            let performance_fee = (member_gain * state.performance_fee_bps) / BPS_DENOMINATOR;
+            // CRITICAL: Use u128 to prevent overflow for large positions
+            let member_gain = ((((gain_per_share as u128) * (member.shares as u128)) / (WAD as u128))) as u64;
+            let performance_fee = ((((member_gain as u128) * (state.performance_fee_bps as u128)) / (BPS_DENOMINATOR as u128))) as u64;
 
             if (performance_fee > 0) {
                 state.accumulated_performance_fees = 
@@ -972,6 +976,9 @@ module zkvanguard::community_pool {
         new_treasury: address,
         clock: &Clock,
     ) {
+        // CRITICAL: Prevent setting treasury to null address (all fees would be lost)
+        assert!(new_treasury != @0x0, E_INVALID_ADDRESS);
+        
         let old_treasury = state.treasury;
         state.treasury = new_treasury;
         event::emit(TreasuryUpdated {
