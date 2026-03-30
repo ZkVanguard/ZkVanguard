@@ -562,15 +562,12 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       const baseTotalShares = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_shares) : 10000;
       const baseMemberCount = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].member_count) : 1;
       const now = Date.now();
-      // Seed 24 hourly snapshots going back from now with small realistic variations
+      // Seed 24 hourly snapshots going back from now using base price (no synthetic drift)
       for (let i = 24; i >= 1; i--) {
         const ts = now - i * 60 * 60 * 1000; // i hours ago
-        // Simulate small market-like price drift: ±0.3% per hour
-        const drift = Math.sin(i * 0.7) * 0.003 + Math.cos(i * 1.3) * 0.002;
-        const price = baseSharePrice * (1 + drift);
         await recordNavSnapshot({
-          sharePrice: parseFloat(price.toFixed(6)),
-          totalNav: parseFloat((baseNav * (1 + drift)).toFixed(2)),
+          sharePrice: parseFloat(baseSharePrice.toFixed(6)),
+          totalNav: parseFloat(baseNav.toFixed(2)),
           totalShares: baseTotalShares,
           memberCount: baseMemberCount,
           allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },

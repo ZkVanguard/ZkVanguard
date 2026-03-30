@@ -170,7 +170,8 @@ class BackgroundHedgeController extends EventEmitter {
    * Queue a hedge intent for background execution
    */
   queueIntent(intent: Omit<HedgeIntent, 'id' | 'createdAt' | 'expiresAt'>): string {
-    const id = `hedge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const crypto = require('crypto');
+    const id = `hedge-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     const now = Date.now();
     
     const fullIntent: HedgeIntent = {

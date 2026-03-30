@@ -205,8 +205,9 @@ export class SettlementAgent extends BaseAgent {
     const { portfolioId, beneficiary, amount, token, purpose, priority, validAfter, validBefore } = parameters;
 
     try {
+      const crypto = await import('crypto');
       const settlement: SettlementRequest = {
-        requestId: `settlement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        requestId: `settlement-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,
         portfolioId,
         beneficiary,
         amount,

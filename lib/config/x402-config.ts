@@ -254,7 +254,8 @@ export function createX402Challenge(options: {
   paymentId?: string;
 }): X402PaymentChallenge {
   const networkConfig = X402_NETWORKS[options.network];
-  const paymentId = options.paymentId || `pay_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  const crypto = require('crypto');
+  const paymentId = options.paymentId || `pay_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   
   return {
     x402Version: 1,
@@ -287,7 +288,8 @@ export function createMultiChainX402Challenge(options: {
   resource: string;
   description?: string;
 }): X402PaymentChallenge {
-  const paymentId = `pay_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  const crypto = require('crypto');
+  const paymentId = `pay_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   
   return {
     x402Version: 1,
@@ -318,13 +320,13 @@ export function createMultiChainX402Challenge(options: {
  */
 export function generateAuthorizationNonce(): string {
   const bytes = new Uint8Array(32);
-  if (typeof window !== 'undefined' && window.crypto) {
-    window.crypto.getRandomValues(bytes);
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
   } else {
-    // Node.js fallback
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
+    // Node.js fallback using crypto module
+    const nodeCrypto = require('crypto') as typeof import('crypto');
+    const buf = nodeCrypto.randomBytes(32);
+    bytes.set(buf);
   }
   return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }

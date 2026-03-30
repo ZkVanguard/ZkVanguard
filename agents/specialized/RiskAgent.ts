@@ -740,20 +740,14 @@ REC3: [third recommendation]`;
 
       return zkProof.proofHash;
     } catch (error) {
-      logger.error('Failed to generate ZK-STARK proof, using fallback', {
+      logger.error('ZK-STARK proof generation failed', {
         error,
         agentId: this.id,
         portfolioId: analysis.portfolioId,
       });
 
-      // Fallback to hash-based proof for development
-      const proofData = JSON.stringify({
-        portfolioId: analysis.portfolioId,
-        totalRisk: analysis.totalRisk,
-        timestamp: analysis.timestamp,
-      });
-
-      return `0x${Buffer.from(proofData).toString('hex').substring(0, 64)}`;
+      // Return empty proof hash — do not fabricate a fake proof
+      return '';
     }
   }
 }

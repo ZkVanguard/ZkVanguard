@@ -556,7 +556,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     
     // Step 3.5: Log AI decision to database (always log, even HOLD decisions)
     try {
-      const decisionId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const crypto = require('crypto');
+      const decisionId = `ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
         id: decisionId,
         type: 'AI_DECISION',

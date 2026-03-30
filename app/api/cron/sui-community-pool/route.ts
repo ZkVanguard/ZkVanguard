@@ -447,7 +447,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
     // Step 8: Log AI decision to transaction history
     try {
-      const decisionId = `sui_ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const crypto = require('crypto');
+      const decisionId = `sui_ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
         id: decisionId,
         type: 'AI_DECISION',

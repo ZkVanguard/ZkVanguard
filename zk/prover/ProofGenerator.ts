@@ -252,47 +252,6 @@ export class ProofGenerator {
   }
 
   /**
-   * Generate mock proof for development/testing
-   */
-  private generateMockProof(
-    proofType: string,
-    statement: Record<string, unknown>
-  ): ZKProof {
-    logger.warn('Using mock ZK proof for development', { proofType });
-
-    const mockProof = {
-      version: 'STARK-1.0-MOCK',
-      trace_length: 1024,
-      extended_trace_length: 4096,
-      blowup_factor: 4,
-      trace_merkle_root: this.hashProofSync(statement).substring(0, 64),
-      fri_roots: [
-        this.hashProofSync({ ...statement, layer: 0 }).substring(0, 64),
-        this.hashProofSync({ ...statement, layer: 1 }).substring(0, 64),
-      ],
-      fri_final_polynomial: [1, 2, 3, 4],
-      query_responses: [],
-      field_prime: '6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151',
-      security_level: 20,
-      generation_time: 0.1,
-      protocol: 'ZK-STARK-MOCK',
-      air_satisfied: true,
-      statement,
-      proof_system: 'AIR + FRI (Mock)',
-      public_output: { verified: true, proofType, timestamp: Date.now() },
-    };
-
-    return {
-      proof: mockProof,
-      proofHash: mockProof.trace_merkle_root,
-      proofType,
-      verified: true,
-      generationTime: 100,
-      protocol: 'ZK-STARK-MOCK',
-    };
-  }
-
-  /**
    * Hash proof data to create proof hash
    */
   private hashProofSync(data: unknown): string {

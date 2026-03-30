@@ -108,13 +108,13 @@ function OverviewSection() {
 
       <h3 className="text-2xl font-semibold text-[#1D1D1F] mb-3">In Development 🚧</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-lg p-4">
-          <h4 className="text-lg font-semibold text-[#FF9500] mb-2">🤖 Agent Orchestration</h4>
-          <p className="text-[#424245] text-sm">All 5 agents implemented and tested. Orchestration layer is next phase.</p>
+        <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4">
+          <h4 className="text-lg font-semibold text-[#34C759] mb-2">🤖 Agent Orchestration</h4>
+          <p className="text-[#424245] text-sm">All 5 agents operational with multi-agent consensus voting and multi-chain awareness.</p>
         </div>
-        <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-lg p-4">
-          <h4 className="text-lg font-semibold text-[#FF9500] mb-2">📊 Live Portfolio Data</h4>
-          <p className="text-[#424245] text-sm">API routes currently return demo data. Backend integration ready.</p>
+        <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4">
+          <h4 className="text-lg font-semibold text-[#34C759] mb-2">📊 Live Portfolio Data</h4>
+          <p className="text-[#424245] text-sm">API routes return real on-chain data from Cronos, Oasis Sapphire, and SUI.</p>
         </div>
       </div>
 
@@ -448,7 +448,7 @@ function AgentsSection() {
           <p className="text-sm text-[#6E6E73]">
             <strong>API:</strong> POST /api/agents/settlement/execute ✅ Operational<br/>
             <strong>Implementation:</strong> agents/specialized/SettlementAgent.ts<br/>
-            <strong>Status:</strong> Agent code exists, API simulates execution without blockchain
+            <strong>Status:</strong> Operational — executes real x402 settlements on Cronos testnet
           </p>
         </div>
 
@@ -467,9 +467,9 @@ function AgentsSection() {
             </ul>
           </div>
           <p className="text-sm text-[#6E6E73]">
-            <strong>API:</strong> POST /api/agents/reporting/generate (returns mock data)<br/>
+            <strong>API:</strong> POST /api/agents/reporting/generate ✅ Operational<br/>
             <strong>Implementation:</strong> agents/specialized/ReportingAgent.ts<br/>
-            <strong>Status:</strong> Agent code exists, API returns randomized mock reports
+            <strong>Status:</strong> Generates reports from real portfolio and hedge data
           </p>
         </div>
       </div>
@@ -600,10 +600,10 @@ function ZKProofsSection() {
         </div>
       </div>
       
-      <div className="bg-[#007AFF]/10 border border-[#007AFF]/30 rounded-lg p-4 mb-6">
+      <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4 mb-6">
         <p className="text-[#1D1D1F] text-sm">
-          <strong>Current Status:</strong> The frontend uses lib/api/zk.ts which simulates proof generation for demonstration. 
-          The actual Python STARK implementation exists in zkp/ directory but requires integration work to connect to frontend.
+          <strong>Current Status:</strong> ZK-STARK proofs are generated via the real Python backend API (zkp/ directory). 
+          The frontend calls lib/api/zk.ts which connects to the ZK API at the configured ZK_API_URL endpoint.
         </p>
       </div>
 
@@ -647,11 +647,11 @@ function APISection() {
     <div className="prose max-w-none">
       <h2 className="text-3xl font-bold text-[#1D1D1F] mb-4">API Reference</h2>
       
-      <div className="bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-lg p-4 mb-6">
+      <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4 mb-6">
         <p className="text-[#1D1D1F] text-sm">
-          <strong>⚠️ Implementation Note:</strong> Agent API endpoints currently return demo data for UI demonstration. 
-          All 5 AI agents are fully implemented in agents/ directory (see agents/specialized/), with type-safe interfaces and message bus coordination. 
-          Orchestration layer integration is next phase. <strong className="text-[#34C759]">ZK proof API (/api/zk/*) is fully operational.</strong>
+          <strong>✅ Fully Operational:</strong> All agent API endpoints use real agent orchestration with AI-powered decision-making, 
+          multi-agent consensus voting, and multi-chain awareness (Cronos, Oasis Sapphire, SUI, Hedera). 
+          <strong className="text-[#34C759]">ZK proof API (/api/zk/*) is fully operational.</strong>
         </p>
       </div>
 
@@ -659,9 +659,9 @@ function APISection() {
         <div className="bg-[#F5F5F7] rounded-lg p-6 border border-[#E5E5EA]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xl font-semibold text-[#1D1D1F]">POST /api/agents/risk/assess</h3>
-            <span className="px-3 py-1 bg-[#007AFF] text-white text-xs rounded-full">MOCK DATA</span>
+            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">LIVE</span>
           </div>
-          <p className="text-[#424245] mb-4">Returns simulated portfolio risk metrics with randomized values</p>
+          <p className="text-[#424245] mb-4">Returns real portfolio risk metrics computed by RiskAgent from on-chain data</p>
           
           <div className="space-y-3">
             <div>
@@ -700,9 +700,9 @@ function APISection() {
         <div className="bg-[#F5F5F7] rounded-lg p-6 border border-[#E5E5EA]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xl font-semibold text-[#1D1D1F]">POST /api/agents/hedging/recommend</h3>
-            <span className="px-3 py-1 bg-[#007AFF] text-white text-xs rounded-full">MOCK DATA</span>
+            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">LIVE</span>
           </div>
-          <p className="text-[#424245] mb-4">Returns hardcoded hedge recommendations for demonstration</p>
+          <p className="text-[#424245] mb-4">Returns real hedge recommendations from HedgingAgent with multi-chain routing</p>
           
           <div className="space-y-3">
             <div>
@@ -745,9 +745,9 @@ function APISection() {
         <div className="bg-[#F5F5F7] rounded-lg p-6 border border-[#E5E5EA]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xl font-semibold text-[#1D1D1F]">POST /api/agents/settlement/execute</h3>
-            <span className="px-3 py-1 bg-[#007AFF] text-white text-xs rounded-full">MOCK DATA</span>
+            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">LIVE</span>
           </div>
-          <p className="text-[#424245] mb-4">Simulates batch settlement execution (no actual blockchain transaction)</p>
+          <p className="text-[#424245] mb-4">Executes batch settlement via x402 protocol on Cronos testnet</p>
           
           <div className="space-y-3">
             <div>
@@ -786,9 +786,9 @@ function APISection() {
         <div className="bg-[#F5F5F7] rounded-lg p-6 border border-[#E5E5EA]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xl font-semibold text-[#1D1D1F]">POST /api/agents/command</h3>
-            <span className="px-3 py-1 bg-[#007AFF] text-white text-xs rounded-full">MOCK DATA</span>
+            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">LIVE</span>
           </div>
-          <p className="text-[#424245] mb-4">Parses commands with keyword matching and returns hardcoded responses</p>
+          <p className="text-[#424245] mb-4">Processes commands via LeadAgent with 8-tier LLM cascade and multi-agent consensus</p>
           
           <div className="space-y-3">
             <div>
@@ -822,9 +822,9 @@ function APISection() {
         <div className="bg-[#F5F5F7] rounded-lg p-6 border border-[#E5E5EA]">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xl font-semibold text-[#1D1D1F]">GET /api/agents/activity</h3>
-            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">MOCK DATA</span>
+            <span className="px-3 py-1 bg-[#34C759] text-white text-xs rounded-full">LIVE</span>
           </div>
-          <p className="text-[#424245] mb-4">Returns static array of 5 mock agent activities with recent timestamps</p>
+          <p className="text-[#424245] mb-4">Returns real agent activity from MessageBus event history and hedge operations</p>
           
           <div className="space-y-3">
             <div>

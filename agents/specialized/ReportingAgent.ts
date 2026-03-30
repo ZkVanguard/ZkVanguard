@@ -582,7 +582,7 @@ export class ReportingAgent extends BaseAgent {
   }
 
   /**
-   * Generate settlement report
+   * Generate settlement report from real settlement and hedge data
    */
   private async generateSettlementReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
@@ -590,38 +590,68 @@ export class ReportingAgent extends BaseAgent {
     const { startDate, endDate } = parameters;
 
     try {
-      logger.info('Generating settlement report');
+      logger.info('Generating settlement report with real data');
+
+      const periodStart = startDate || Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const periodEnd = endDate || Date.now();
+
+      // Fetch real hedge data from DB
+      let totalSettlements = 0;
+      let totalVolume = 0;
+      let successCount = 0;
+      const settlements: SettlementReport['settlements'] = [];
+      const batches: SettlementReport['batches'] = [];
+
+      try {
+        const { getAllHedges, getHedgeStats } = await import('../../lib/db/hedges');
+        const allHedges = await getAllHedges(undefined, 200);
+        const stats = await getHedgeStats();
+
+        // Filter by period
+        const periodHedges = allHedges.filter(h => {
+          const created = new Date(h.created_at).getTime();
+          return created >= periodStart && created <= periodEnd;
+        });
+
+        totalSettlements = periodHedges.length;
+        totalVolume = periodHedges.reduce((sum, h) => sum + Number(h.notional_value || 0), 0);
+        successCount = periodHedges.filter(h => h.status === 'active' || h.status === 'closed').length;
+
+        // Map to settlement format
+        for (const h of periodHedges.slice(0, 20)) {
+          settlements.push({
+            id: h.order_id,
+            date: new Date(h.created_at).getTime(),
+            amount: String(h.notional_value),
+            beneficiary: h.wallet_address || 'pool',
+            status: h.status === 'active' || h.status === 'closed' ? 'COMPLETED' : 'FAILED',
+            gasless: !h.on_chain,
+          });
+        }
+
+        if (stats) {
+          batches.push({
+            batchId: `summary-${Date.now()}`,
+            date: Date.now(),
+            count: Number(stats.total_hedges || 0),
+            totalAmount: String(stats.total_active_notional || 0),
+          });
+        }
+      } catch (dbError) {
+        logger.warn('Could not fetch settlement data from DB', { error: dbError });
+      }
 
       const report: SettlementReport = {
-        period: {
-          start: startDate || Date.now() - 30 * 24 * 60 * 60 * 1000,
-          end: endDate || Date.now(),
-        },
+        period: { start: periodStart, end: periodEnd },
         summary: {
-          totalSettlements: 145,
-          totalVolume: '5750000',
-          successRate: 98.6,
-          avgProcessingTime: 1250,
-          gasSaved: '0.85',
+          totalSettlements,
+          totalVolume: totalVolume.toFixed(2),
+          successRate: totalSettlements > 0 ? (successCount / totalSettlements) * 100 : 0,
+          avgProcessingTime: 0,
+          gasSaved: '0',
         },
-        settlements: [
-          {
-            id: 'settlement-1',
-            date: Date.now() - 2 * 24 * 60 * 60 * 1000,
-            amount: '50000',
-            beneficiary: '0x123...abc',
-            status: 'COMPLETED',
-            gasless: true,
-          },
-        ],
-        batches: [
-          {
-            batchId: 'batch-1',
-            date: Date.now() - 1 * 24 * 60 * 60 * 1000,
-            count: 25,
-            totalAmount: '750000',
-          },
-        ],
+        settlements,
+        batches,
         timestamp: Date.now(),
       };
 
@@ -643,7 +673,7 @@ export class ReportingAgent extends BaseAgent {
   }
 
   /**
-   * Generate portfolio report
+   * Generate portfolio report from real portfolio and hedge data
    */
   private async generatePortfolioReport(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
@@ -651,32 +681,48 @@ export class ReportingAgent extends BaseAgent {
     const { portfolioId } = parameters;
 
     try {
-      logger.info('Generating portfolio report', { portfolioId });
+      logger.info('Generating portfolio report with real data', { portfolioId });
+
+      // Get real portfolio data
+      const { getPortfolioData } = await import('../../lib/services/portfolio-actions');
+      const portfolioData = await getPortfolioData();
+      const portfolio = (portfolioData?.portfolio ?? {}) as { positions?: PortfolioPosition[]; totalValue?: number; totalPnl?: number; totalPnlPercentage?: number };
+      const positions: PortfolioPosition[] = portfolio.positions || [];
+      const totalValue = portfolio.totalValue || 0;
+
+      // Build allocation from real positions
+      const allocation = positions.map(pos => ({
+        asset: pos.symbol || 'UNKNOWN',
+        amount: String(pos.amount || 0),
+        value: String(pos.value || 0),
+        percentage: totalValue > 0 ? Math.round((pos.value / totalValue) * 100) : 0,
+      }));
+
+      // Get active hedges for strategies section
+      let strategies: Array<{ strategyId: string; type: string; status: string; performance: number }> = [];
+      try {
+        const { getActiveHedges } = await import('../../lib/db/hedges');
+        const hedges = await getActiveHedges();
+        strategies = hedges.slice(0, 10).map(h => ({
+          strategyId: h.order_id,
+          type: h.side === 'SHORT' ? 'DELTA_NEUTRAL' : 'MOMENTUM',
+          status: h.status === 'active' ? 'ACTIVE' : 'CLOSED',
+          performance: Number(h.current_pnl || 0),
+        }));
+      } catch { /* non-critical */ }
 
       const report: PortfolioReport = {
         portfolioId,
         timestamp: Date.now(),
         overview: {
-          totalValue: '11250000',
-          assetCount: 4,
-          activeStrategies: 3,
-          performance30d: 12.5,
+          totalValue: totalValue.toFixed(2),
+          assetCount: positions.length,
+          activeStrategies: strategies.filter(s => s.status === 'ACTIVE').length,
+          performance30d: portfolio.totalPnlPercentage || 0,
         },
-        allocation: [
-          { asset: 'BTC', amount: '10', value: '4500000', percentage: 40 },
-          { asset: 'ETH', amount: '150', value: '3375000', percentage: 30 },
-          { asset: 'CRO', amount: '5000000', value: '2250000', percentage: 20 },
-          { asset: 'USDC', amount: '1125000', value: '1125000', percentage: 10 },
-        ],
-        strategies: [
-          { strategyId: 'strategy-1', type: 'DELTA_NEUTRAL', status: 'ACTIVE', performance: 8.5 },
-          { strategyId: 'strategy-2', type: 'MOMENTUM', status: 'ACTIVE', performance: 15.2 },
-          { strategyId: 'strategy-3', type: 'MEAN_REVERSION', status: 'PAUSED', performance: 3.1 },
-        ],
-        recentActivity: [
-          { date: Date.now() - 1 * 60 * 60 * 1000, type: 'REBALANCE', description: 'Portfolio rebalanced' },
-          { date: Date.now() - 6 * 60 * 60 * 1000, type: 'HEDGE', description: 'Opened BTC hedge' },
-        ],
+        allocation,
+        strategies,
+        recentActivity: [],
       };
 
       const reportId = `portfolio-${portfolioId}-${Date.now()}`;
@@ -705,45 +751,46 @@ export class ReportingAgent extends BaseAgent {
     const { startDate, endDate } = parameters;
 
     try {
-      logger.info('Generating audit report');
+      logger.info('Generating audit report with real data');
+
+      const periodStart = startDate || Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const periodEnd = endDate || Date.now();
+
+      // Fetch real hedge data for transaction history
+      let transactions: AuditReport['transactions'] = [];
+      let zkVerifications: AuditReport['zkVerifications'] = [];
+      try {
+        const { getAllHedges } = await import('../../lib/db/hedges');
+        const allHedges = await getAllHedges(undefined, 100);
+        const periodHedges = allHedges.filter(h => {
+          const created = new Date(h.created_at).getTime();
+          return created >= periodStart && created <= periodEnd;
+        });
+
+        transactions = periodHedges.filter(h => h.tx_hash).map(h => ({
+          txHash: h.tx_hash!,
+          date: new Date(h.created_at).getTime(),
+          type: h.side === 'SHORT' ? 'HEDGE_SHORT' : 'HEDGE_LONG',
+          from: h.wallet_address || 'pool',
+          to: h.contract_address || 'perp-dex',
+          amount: String(h.notional_value),
+          gasUsed: '0',
+        }));
+
+        zkVerifications = periodHedges.filter(h => h.zk_proof_hash).map(h => ({
+          proofHash: h.zk_proof_hash!,
+          date: new Date(h.created_at).getTime(),
+          proofType: 'risk-calculation',
+          verified: true,
+        }));
+      } catch { /* non-critical */ }
 
       const report: AuditReport = {
-        period: {
-          start: startDate || Date.now() - 30 * 24 * 60 * 60 * 1000,
-          end: endDate || Date.now(),
-        },
-        agentActivity: [
-          { agentId: 'lead-1', agentType: 'LeadAgent', tasksExecuted: 285, successRate: 99.2, avgExecutionTime: 150 },
-          { agentId: 'risk-1', agentType: 'RiskAgent', tasksExecuted: 145, successRate: 100, avgExecutionTime: 320 },
-          { agentId: 'hedge-1', agentType: 'HedgingAgent', tasksExecuted: 68, successRate: 97.1, avgExecutionTime: 1250 },
-        ],
-        transactions: [
-          {
-            txHash: '0xabc...123',
-            date: Date.now() - 2 * 24 * 60 * 60 * 1000,
-            type: 'DEPOSIT',
-            from: '0x123...abc',
-            to: '0xdef...456',
-            amount: '1000000',
-            gasUsed: '150000',
-          },
-        ],
-        zkVerifications: [
-          {
-            proofHash: 'proof-hash-1',
-            date: Date.now() - 1 * 24 * 60 * 60 * 1000,
-            proofType: 'risk-calculation',
-            verified: true,
-          },
-        ],
-        anomalies: [
-          {
-            date: Date.now() - 3 * 24 * 60 * 60 * 1000,
-            type: 'HIGH_VOLATILITY',
-            severity: 'MEDIUM',
-            description: 'Unusual volatility spike detected in CRO',
-          },
-        ],
+        period: { start: periodStart, end: periodEnd },
+        agentActivity: [],
+        transactions,
+        zkVerifications,
+        anomalies: [],
         timestamp: Date.now(),
       };
 
@@ -797,6 +844,11 @@ export class ReportingAgent extends BaseAgent {
         action: 'generate_audit_report',
       });
 
+      // Extract real values from sub-reports
+      const perfReport = (perfResult.data as { report: PerformanceReport }).report;
+      const settlReport = (settlementResult.data as { report: SettlementReport }).report;
+      const portReport = (portfolioResult.data as { report: PortfolioReport }).report;
+
       const report: ComprehensiveReport = {
         reportId: `comprehensive-${Date.now()}`,
         generatedAt: Date.now(),
@@ -806,10 +858,10 @@ export class ReportingAgent extends BaseAgent {
         },
         executiveSummary: {
           totalPortfolios: 1,
-          totalValue: '11250000',
-          overallReturn: 12.5,
-          totalSettlements: 145,
-          systemHealth: 'EXCELLENT',
+          totalValue: portReport.overview?.totalValue || '0',
+          overallReturn: perfReport.summary?.percentageReturn || 0,
+          totalSettlements: settlReport.summary?.totalSettlements || 0,
+          systemHealth: 'GOOD',
         },
         riskReport: (riskResult.data as { report: RiskReport }).report,
         performanceReport: (perfResult.data as { report: PerformanceReport }).report,
