@@ -13,6 +13,8 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 

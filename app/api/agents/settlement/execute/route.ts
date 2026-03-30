@@ -5,6 +5,8 @@ import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
 
+export const runtime = 'nodejs';
+
 /**
  * Settlement Execution API Route
  * Real SettlementAgent integration with x402 gasless transfers

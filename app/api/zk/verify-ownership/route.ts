@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db/postgres';
 import crypto from 'crypto';
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 /**
  * ZK Wallet Ownership Verification API
  * 

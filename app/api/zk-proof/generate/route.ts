@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { ProductionGuard } from '@/lib/security/production-guard';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
 // Generate deterministic fallback proof when ZK backend unavailable

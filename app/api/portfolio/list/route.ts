@@ -7,6 +7,8 @@ import { CRONOS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 

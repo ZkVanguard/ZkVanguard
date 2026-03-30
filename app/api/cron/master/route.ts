@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 
+export const runtime = 'nodejs';
+
 interface SubCronResult {
   name: string;
   success: boolean;

@@ -5,6 +5,8 @@ import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
 
+export const runtime = 'nodejs';
+
 const MAX_AMOUNT = 100_000; // $100k max per demo settlement
 const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 

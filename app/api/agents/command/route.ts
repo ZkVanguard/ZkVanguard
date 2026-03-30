@@ -5,6 +5,9 @@ import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 /**
  * Natural Language Command Processing API Route
  * Routes commands through LeadAgent for intelligent execution

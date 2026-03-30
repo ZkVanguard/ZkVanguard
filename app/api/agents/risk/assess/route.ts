@@ -6,6 +6,9 @@ import type { PortfolioData } from '@/shared/types/portfolio';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 /**
  * Risk Assessment API Route
  * Uses HACKATHON-PROVIDED services:

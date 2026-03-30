@@ -12,6 +12,8 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
 
+export const runtime = 'nodejs';
+
 const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
 const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const POOL_ABI = [

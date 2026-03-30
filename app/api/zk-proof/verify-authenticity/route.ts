@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 const ZK_API_URL = process.env.ZK_API_URL;
 
 /**

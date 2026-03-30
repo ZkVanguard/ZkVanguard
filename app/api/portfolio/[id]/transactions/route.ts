@@ -6,6 +6,8 @@ import { cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCachedTransactions, getLastCachedBlock, insertTransactions } from '@/lib/db/transactions';
 
+export const runtime = 'nodejs';
+
 // Known token addresses
 const MOCK_USDC_ADDRESS = '0x28217daddc55e3c4831b4a48a00ce04880786967';
 

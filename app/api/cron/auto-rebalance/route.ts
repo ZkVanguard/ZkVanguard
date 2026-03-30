@@ -18,6 +18,8 @@ import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
 
+export const runtime = 'nodejs';
+
 // Configuration
 const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours

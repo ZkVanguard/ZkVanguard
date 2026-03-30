@@ -6,6 +6,8 @@ import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 

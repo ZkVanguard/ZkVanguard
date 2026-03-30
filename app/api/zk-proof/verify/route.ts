@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 const ZK_API_URL = process.env.ZK_API_URL || 'http://localhost:8000';
 
 export async function POST(request: NextRequest) {

@@ -9,6 +9,8 @@ import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 import { ProductionGuard } from '@/lib/security/production-guard';
 
+export const runtime = 'nodejs';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PRODUCTION SAFETY: Token configuration with NO hardcoded prices
 // Prices MUST be fetched from market data service in production

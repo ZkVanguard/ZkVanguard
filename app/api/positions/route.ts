@@ -6,6 +6,8 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 
+export const runtime = 'nodejs';
+
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
