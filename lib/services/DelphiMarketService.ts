@@ -420,7 +420,7 @@ export class DelphiMarketService {
           else if (probability < 30 && impact === 'LOW') recommendation = 'IGNORE';
 
           return {
-            id: `polymarket-${(market.id as string) || Math.random()}`,
+            id: `polymarket-${(market.id as string) || Date.now().toString(36)}`,
             question,
             category,
             probability: Math.round(probability * 10) / 10, // Round to 1 decimal

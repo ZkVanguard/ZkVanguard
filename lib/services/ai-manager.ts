@@ -483,7 +483,8 @@ class AIManagerService {
     priority: TaskPriority,
     execute: () => Promise<void>
   ): string {
-    const id = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const crypto = require('crypto');
+    const id = `req-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     
     const request: QueuedRequest = {
       id,

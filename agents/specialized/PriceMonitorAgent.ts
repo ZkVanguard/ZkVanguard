@@ -453,7 +453,8 @@ export class PriceMonitorAgent {
    * Add a price alert
    */
   addAlert(alert: Omit<PriceAlert, 'id' | 'createdAt'>): string {
-    const id = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { generateSecureId } = require('@shared/utils/crypto-id');
+    const id = generateSecureId('alert');
     const fullAlert: PriceAlert = {
       ...alert,
       id,

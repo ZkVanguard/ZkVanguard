@@ -85,11 +85,9 @@ export async function POST(request: NextRequest) {
       } else if (day === DAYS_TO_SEED) {
         sharePrice = INCEPTION_SHARE_PRICE;
       } else {
-        const daysFromInception = DAYS_TO_SEED - day;
-        const expectedReturn = avgDailyReturn * daysFromInception;
-        const noise = Math.sin(day * 2.718) * volatility;
-        const basePrice = INCEPTION_SHARE_PRICE * (1 + expectedReturn);
-        sharePrice = Math.max(0.90, basePrice * (1 + noise));
+        // Linear interpolation from inception to current — no synthetic noise
+        const progress = (DAYS_TO_SEED - day) / DAYS_TO_SEED;
+        sharePrice = INCEPTION_SHARE_PRICE + (currentSharePrice - INCEPTION_SHARE_PRICE) * progress;
       }
       
       const totalNav = sharePrice * currentTotalShares;
