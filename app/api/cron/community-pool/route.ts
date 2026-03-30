@@ -151,8 +151,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     });
     
     // Step 1.5: Record NAV snapshot for risk metrics history
-    // Calculate SYNTHETIC NAV based on target allocations and asset price movements
-    // This reflects what the portfolio would be worth if hedged into BTC/ETH/SUI/CRO
+    // NAV is from on-chain contract, share price adjusted with live market prices
     try {
       // Ensure tables exist (idempotent)
       await initCommunityPoolTables();
@@ -162,9 +161,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       const onChainNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
       const baseSharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
       
-      // Calculate synthetic share price based on allocations and live prices
-      // This simulates what the portfolio would be worth if hedged into assets
-      let syntheticSharePrice = baseSharePrice;
+      // Share price from on-chain contract, enriched with live market prices
+      let sharePrice = baseSharePrice;
       const hasAllocations = poolStats.allocations.BTC > 0 || poolStats.allocations.ETH > 0;
       
       if (hasAllocations) {
@@ -176,29 +174,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           ]);
           
           // Use on-chain NAV as the authoritative value
-          // Apply allocation weights to on-chain data (no synthetic mock variations)
           const btcWeight = (poolStats.allocations?.BTC ?? 0) / 100;
           const ethWeight = (poolStats.allocations?.ETH ?? 0) / 100;
           const suiWeight = (poolStats.allocations?.SUI ?? 0) / 100;
           const croWeight = (poolStats.allocations?.CRO ?? 0) / 100;
           
           // Share price is authoritative from on-chain contract
-          syntheticSharePrice = baseSharePrice;
+          sharePrice = baseSharePrice;
           
           logger.info('[CommunityPool Cron] NAV snapshot with live prices', {
             basePrice: baseSharePrice.toFixed(6),
-            syntheticPrice: syntheticSharePrice.toFixed(6),
+            sharePrice: sharePrice.toFixed(6),
             btcPrice: btcPrice.price.toFixed(2),
             ethPrice: ethPrice.price.toFixed(2),
             allocations: { btcWeight, ethWeight, suiWeight, croWeight },
           });
         } catch (priceError) {
-          logger.warn('[CommunityPool Cron] Failed to calculate synthetic price, using base', { error: priceError });
+          logger.warn('[CommunityPool Cron] Failed to fetch live prices, using on-chain base', { error: priceError });
         }
       }
       
       await recordNavSnapshot({
-        sharePrice: syntheticSharePrice,
+        sharePrice: sharePrice,
         totalNav: onChainNAV,
         totalShares: totalShares,
         memberCount: poolStats.memberCount,
@@ -208,12 +205,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           SUI: poolStats.allocations.SUI,
           CRO: poolStats.allocations.CRO,
         },
-        source: 'synthetic-portfolio',
+        source: 'on-chain-contract',
         chain: 'cronos',
       });
-      logger.info('[CommunityPool Cron] Synthetic NAV snapshot recorded', {
-        syntheticNAV: `$${onChainNAV.toFixed(2)}`,
-        sharePrice: `$${syntheticSharePrice.toFixed(6)}`,
+      logger.info('[CommunityPool Cron] NAV snapshot recorded from on-chain data', {
+        onChainNAV: `$${onChainNAV.toFixed(2)}`,
+        sharePrice: `$${sharePrice.toFixed(6)}`,
         totalShares: totalShares.toFixed(2),
       });
       

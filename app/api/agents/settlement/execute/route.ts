@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const authResult = await requireAuth(request, body);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { transactions, useRealAgent = true } = body;
+    const { transactions } = body;
 
     if (!transactions || !Array.isArray(transactions)) {
       return NextResponse.json(
@@ -31,58 +31,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // PRODUCTION SAFETY: Never allow demo mode in production - real money at stake
-    const forceRealAgent = ProductionGuard.ENFORCE_PRODUCTION_SAFETY || useRealAgent;
+    // Always use real agent orchestration
+    const orchestrator = getAgentOrchestrator();
+    const result = await orchestrator.executeBatchSettlement({ transactions });
 
-    // Use real agent orchestration
-    if (forceRealAgent) {
-      const orchestrator = getAgentOrchestrator();
-      const result = await orchestrator.executeBatchSettlement({ transactions });
-
-      if (result.success) {
-        return NextResponse.json({
-          ...(result.data as Record<string, unknown>),
-          agentId: result.agentId,
-          executionTime: result.executionTime,
-          realAgent: true,
-          x402Powered: true,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      
-      // In production, if real agent fails, return error instead of demo
-      if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
-        ProductionGuard.auditLog({
-          timestamp: Date.now(),
-          operation: 'SETTLEMENT_AGENT_FAILED',
-          result: 'failure',
-          reason: result.error,
-          metadata: {
-            transactionCount: transactions.length,
-          },
-        });
-        
-        return NextResponse.json({
-          error: 'Settlement execution failed',
-          details: result.error,
-          realAgent: true,
-          timestamp: new Date().toISOString(),
-        }, { status: 503 });
-      }
+    if (result.success) {
+      return NextResponse.json({
+        ...(result.data as Record<string, unknown>),
+        agentId: result.agentId,
+        executionTime: result.executionTime,
+        realAgent: true,
+        x402Powered: true,
+        timestamp: new Date().toISOString(),
+      });
     }
     
-    // Fallback demo response (DEVELOPMENT ONLY)
-    return NextResponse.json({
-      batchId: `batch-${Date.now()}`,
-      transactionCount: transactions.length,
-      gasSaved: 0.67,
-      estimatedCost: `${(transactions.length * 0.0001).toFixed(4)} CRO`,
-      status: 'completed',
-      zkProofGenerated: true,
-      realAgent: false,
-      developmentMode: true,
-      timestamp: new Date().toISOString(),
+    // Real agent failed — return error (never fabricate settlement responses)
+    ProductionGuard.auditLog({
+      timestamp: Date.now(),
+      operation: 'SETTLEMENT_AGENT_FAILED',
+      result: 'failure',
+      reason: result.error,
+      metadata: {
+        transactionCount: transactions.length,
+      },
     });
+    
+    return NextResponse.json({
+      error: 'Settlement execution failed',
+      details: result.error,
+      realAgent: true,
+      timestamp: new Date().toISOString(),
+    }, { status: 503 });
   } catch (error) {
     console.error('Settlement execution failed:', error);
     return safeErrorResponse(error, 'Settlement execution');
