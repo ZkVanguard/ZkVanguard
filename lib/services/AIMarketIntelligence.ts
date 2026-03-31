@@ -529,13 +529,25 @@ export class AIMarketIntelligence {
 
   /**
    * Calculate implied price movement
+   * ⚠️ PRODUCTION: No hardcoded fallback - returns zero-impact if no real price available
    */
   private static calculateImpliedMove(
     signal: FiveMinBTCSignal | null,
     history: FiveMinSignalHistory,
     priceData: Record<string, { price: number; change24h: number; volume24h: number }>
   ): ImpliedMove {
-    const btcPrice = priceData['BTC']?.price || signal?.currentPrice || 65000;
+    // Get BTC price from real data sources only - NO hardcoded fallback
+    const btcPrice = priceData['BTC']?.price || signal?.currentPrice || 0;
+    
+    // If no real price available, return neutral with zero confidence
+    if (!btcPrice || btcPrice === 0) {
+      return {
+        expectedChange5Min: 0,
+        priceRange: { low: 0, high: 0 },
+        confidence: 0,
+        basis: ['No real BTC price available - using neutral'],
+      };
+    }
     
     if (!signal) {
       return {
