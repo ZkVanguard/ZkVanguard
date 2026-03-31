@@ -11,6 +11,7 @@
  */
 
 import { ethers } from 'ethers';
+import { randomBytes } from 'crypto';
 
 // ─── Semaphore (concurrency limiter) ───────────────────────────────────────
 
@@ -99,7 +100,8 @@ async function withRetry<T>(
 
       if (!isRetryable || attempt === maxRetries) throw lastError;
 
-      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 200;
+      const jitter = randomBytes(1)[0] / 255 * 200;
+      const delay = baseDelay * Math.pow(2, attempt) + jitter;
       console.warn(`⏳ RPC retry ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms: ${msg.slice(0, 80)}`);
       await new Promise((r) => setTimeout(r, delay));
     }

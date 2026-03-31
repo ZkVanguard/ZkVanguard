@@ -77,7 +77,7 @@ async function setAllCaches(address: string, data: unknown): Promise<void> {
   
   // DB cache (async, survives cold starts)
   const cacheKey = `recommend:${address.toLowerCase()}`;
-  setCached('recommendations', cacheKey, data, CACHE_TTL_MS).catch(() => {});
+  setCached('recommendations', cacheKey, data, CACHE_TTL_MS).catch(err => logger.warn('Recommendation cache write failed', { error: String(err) }));
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

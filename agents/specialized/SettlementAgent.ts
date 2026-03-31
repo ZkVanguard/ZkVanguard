@@ -468,7 +468,7 @@ export class SettlementAgent extends BaseAgent {
       const batchRecord: BatchSettlement = {
         batchId: `batch-${Date.now()}`,
         requests: batch,
-        totalAmount: batch.reduce((sum, s) => sum + parseFloat(s.amount), 0).toString(),
+        totalAmount: batch.reduce((sum, s) => { const v = parseFloat(s.amount); return sum + (isNaN(v) ? 0 : v); }, 0).toString(),
         status: results.every(r => r.status === 'COMPLETED') ? 'COMPLETED' : 'FAILED',
         createdAt: startTime,
         completedAt: Date.now(),
@@ -601,7 +601,7 @@ export class SettlementAgent extends BaseAgent {
         .filter(b => b.createdAt >= start && b.createdAt <= end);
 
       // Calculate statistics
-      const totalAmount = settlements.reduce((sum, s) => sum + parseFloat(s.amount), 0);
+      const totalAmount = settlements.reduce((sum, s) => { const v = parseFloat(s.amount); return sum + (isNaN(v) ? 0 : v); }, 0);
       const successCount = settlements.filter(s => s.status === 'COMPLETED').length;
       const totalProcessingTime = settlements.reduce((sum, s) => 
         s.processedAt ? sum + (s.processedAt - s.createdAt) : sum, 0

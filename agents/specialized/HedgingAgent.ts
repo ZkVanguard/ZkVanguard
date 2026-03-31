@@ -380,7 +380,7 @@ export class HedgingAgent extends BaseAgent {
       let avgFundingRate = 0;
       try {
         const fundingHistory = await this.moonlanderClient.getFundingHistory(hedgeMarket, 24);
-        avgFundingRate = fundingHistory.reduce((sum, f) => sum + parseFloat(f.rate), 0) / fundingHistory.length;
+        avgFundingRate = fundingHistory.reduce((sum, f) => { const v = parseFloat(f.rate); return sum + (isNaN(v) ? 0 : v); }, 0) / (fundingHistory.length || 1);
       } catch (e) {
         logger.warn('Funding rate data unavailable, using 0 (conservative)', { hedgeMarket, error: e });
       }

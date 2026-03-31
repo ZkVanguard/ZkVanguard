@@ -315,9 +315,9 @@ export class PriceMonitorAgent {
         const ticker = data.result.data;
         return {
           symbol,
-          price: parseFloat(ticker.a || ticker.k),
-          change24h: parseFloat(ticker.c || '0'),
-          volume24h: parseFloat(ticker.v || '0'),
+          price: parseFloat(ticker.a || ticker.k) || 0,
+          change24h: parseFloat(ticker.c || '0') || 0,
+          volume24h: parseFloat(ticker.v || '0') || 0,
           timestamp: Date.now(),
           source: 'crypto.com',
         };

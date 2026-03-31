@@ -45,7 +45,7 @@ async function getDbCachedInsight(hash: string): Promise<unknown | null> {
 
 async function setAllInsightCaches(hash: string, data: unknown): Promise<void> {
   setCachedInsight(hash, data);
-  setCached('agent-results', `insight:${hash}`, data, INSIGHT_CACHE_TTL).catch(() => {});
+  setCached('agent-results', `insight:${hash}`, data, INSIGHT_CACHE_TTL).catch(err => logger.warn('Insight cache write failed', { error: String(err) }));
 }
 
 /**

@@ -92,7 +92,7 @@ async function getDbCachedPortfolio(id: string): Promise<unknown | null> {
 
 async function setAllPortfolioCaches(id: string, data: unknown): Promise<void> {
   portfolioCache.set(`portfolio-${id}`, { data, timestamp: Date.now() });
-  setCached('portfolio', `detail:${id}`, data, CACHE_TTL).catch(() => {});
+  setCached('portfolio', `detail:${id}`, data, CACHE_TTL).catch(err => logger.warn('Portfolio detail cache write failed', { error: String(err) }));
 }
 
 export async function GET(

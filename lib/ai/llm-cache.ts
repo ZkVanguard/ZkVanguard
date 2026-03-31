@@ -67,8 +67,9 @@ export function setCachedLLMResponse(promptHash: string, response: LLMResponse):
 }
 
 // Periodic cache cleanup (every 5 minutes)
+let _cacheCleanupTimer: ReturnType<typeof setInterval> | null = null;
 if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
+  _cacheCleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of llmResponseCache.entries()) {
       if (now - entry.timestamp > LLM_CACHE_TTL) {
@@ -76,4 +77,8 @@ if (typeof setInterval !== 'undefined') {
       }
     }
   }, 300000);
+  // Allow Node.js to exit even if timer is running
+  if (_cacheCleanupTimer && typeof _cacheCleanupTimer.unref === 'function') {
+    _cacheCleanupTimer.unref();
+  }
 }
