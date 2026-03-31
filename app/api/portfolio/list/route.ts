@@ -35,7 +35,7 @@ async function setAllListCaches(address: string, data: unknown): Promise<void> {
   }
   listCache.delete(key); // refresh LRU position
   listCache.set(key, { data, timestamp: Date.now() });
-  setCached('portfolio', `list:${key}`, data, CACHE_TTL).catch(() => {});
+  setCached('portfolio', `list:${key}`, data, CACHE_TTL).catch(err => logger.warn('Portfolio list cache write failed', { error: String(err) }));
 }
 
 /**

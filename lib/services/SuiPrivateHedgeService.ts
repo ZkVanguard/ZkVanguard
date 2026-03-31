@@ -439,8 +439,11 @@ export class SuiPrivateHedgeService {
     if (typeof globalThis !== 'undefined' && globalThis.crypto) {
       globalThis.crypto.getRandomValues(array);
     } else {
+      // Node.js fallback using secure crypto
+      const nodeCrypto = require('crypto');
+      const buf = nodeCrypto.randomBytes(bytes);
       for (let i = 0; i < bytes; i++) {
-        array[i] = Math.floor(Math.random() * 256);
+        array[i] = buf[i];
       }
     }
     return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');

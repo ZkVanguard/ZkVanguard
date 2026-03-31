@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
         change24h: marketData.change24h,
         volume24h: marketData.volume24h,
         source: marketData.source,
-      }]).catch(() => {});
+      }]).catch(err => logger.warn('Price cache write failed', { error: String(err) }));
       
       recordPriceUpdate(marketData.symbol, marketData.price);
       
@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
         change24h: price.change24h,
         volume24h: price.volume24h,
         source: price.source,
-      }]).catch(() => {});
+      }]).catch(err => logger.warn('Price cache write failed', { error: String(err) }));
       
       // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
       recordPriceUpdate(price.symbol, price.price);

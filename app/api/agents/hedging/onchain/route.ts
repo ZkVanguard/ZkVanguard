@@ -413,12 +413,12 @@ export async function GET(request: NextRequest) {
             price,
             source: 'cryptocom-exchange',
           }));
-          upsertPrices(priceUpdates).catch(() => {});
+          upsertPrices(priceUpdates).catch(err => logger.warn('Price upsert failed', { error: String(err) }));
           const priceMapForDb: Record<string, { price: number; source: string }> = {};
           for (const [idx, price] of Object.entries(livePrices)) {
             priceMapForDb[PAIR_SYMBOLS[parseInt(idx, 10)]] = { price, source: 'cryptocom-exchange' };
           }
-          batchUpdateHedgePrices(priceMapForDb).catch(() => {});
+          batchUpdateHedgePrices(priceMapForDb).catch(err => logger.warn('Batch hedge price update failed', { error: String(err) }));
         }
 
         // Build response from DB data
@@ -507,7 +507,7 @@ export async function GET(request: NextRequest) {
             .filter(h => h.hedge_id_onchain && h.status === 'active')
             .map(h => h.hedge_id_onchain!);
           if (hedgeIdsToSync.length > 0) {
-            backgroundResyncHedges(hedgeIdsToSync).catch(() => {});
+            backgroundResyncHedges(hedgeIdsToSync).catch(err => logger.warn('Background resync failed', { error: String(err) }));
           }
         }
 
@@ -657,7 +657,7 @@ export async function GET(request: NextRequest) {
         // 3. Persist discovered hashes back to DB (fire-and-forget)
         const newEntries = Object.entries(scannedHashes).map(([hedgeId, txHash]) => ({ hedgeId, txHash }));
         if (newEntries.length > 0) {
-          cacheTxHashes(newEntries).catch(() => {});
+          cacheTxHashes(newEntries).catch(err => logger.warn('TX hash cache failed', { error: String(err) }));
         }
       }
 
@@ -766,7 +766,7 @@ export async function GET(request: NextRequest) {
         status: h.status,
         commitmentHash: h.commitmentHash !== ethers.ZeroHash ? h.commitmentHash : undefined,
         nullifier: h.nullifier !== ethers.ZeroHash ? h.nullifier : undefined,
-      }).catch(() => {});
+      }).catch(err => logger.warn('Resync hedge failed', { error: String(err) }));
     }
     _lastResyncAt = Date.now();
 

@@ -33,7 +33,7 @@ async function setAllPositionsCaches(address: string, data: unknown): Promise<vo
   }
   positionsCache.delete(address); // refresh LRU position
   positionsCache.set(address, { data, timestamp: Date.now() });
-  setCached('portfolio', `positions:${address.toLowerCase()}`, data, CACHE_TTL).catch(() => {});
+  setCached('portfolio', `positions:${address.toLowerCase()}`, data, CACHE_TTL).catch(err => logger.warn('Positions cache write failed', { error: String(err) }));
 }
 
 export async function GET(request: NextRequest) {

@@ -374,8 +374,13 @@ async function executeProtectiveHedge(
     portfolioLoss: `${assessment.pnlPercent.toFixed(2)}%`,
   });
   
+  const hedgeApiUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL;
+  if (!hedgeApiUrl) {
+    throw new Error('Neither NEXTAUTH_URL nor NEXT_PUBLIC_URL set, cannot execute hedge');
+  }
+  
   // Call the hedge execution API
-  const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/agents/hedging/execute`, {
+  const response = await fetch(`${hedgeApiUrl}/api/agents/hedging/execute`, {
     method: 'POST',
     body: JSON.stringify({
       asset: assetToHedge,

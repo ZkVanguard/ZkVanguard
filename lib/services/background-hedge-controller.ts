@@ -273,6 +273,10 @@ class BackgroundHedgeController extends EventEmitter {
         
         // Record and remove from pending
         this.executionHistory.push(execution);
+        // Cap execution history to prevent unbounded memory growth
+        if (this.executionHistory.length > 1000) {
+          this.executionHistory = this.executionHistory.slice(-500);
+        }
         this.pendingIntents.delete(intent.id);
         
         if (execution.success) {
