@@ -1,6 +1,13 @@
 /**
  * Hedging Agent
  * Specialized agent for automated hedging strategies using perpetual futures
+ * 
+ * Enhanced with AIMarketIntelligence for comprehensive market context:
+ * - Multi-timeframe streak analysis
+ * - Cross-market correlation
+ * - Risk cascade detection
+ * - Liquidity analysis
+ * - Implied price movement forecasting
  */
 
 import { BaseAgent } from '../core/BaseAgent';
@@ -9,6 +16,7 @@ import { MoonlanderClient, OrderResult, PerpetualPosition, LiquidationRisk } fro
 import { MCPClient } from '@integrations/mcp/MCPClient';
 import { HedgeExecutorClient, HedgeExecutorConfig, OnChainHedgeResult } from '@integrations/hedge-executor/HedgeExecutorClient';
 import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
+import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/Polymarket5MinService';
@@ -460,6 +468,136 @@ export class HedgingAgent extends BaseAgent {
       logger.error('Failed to analyze hedge opportunity', details);
       throw error;
     }
+  }
+
+  /**
+   * Get comprehensive AI market context for hedging decisions
+   * Uses AIMarketIntelligence service for multi-source, multi-timeframe analysis
+   */
+  async getEnhancedMarketContext(assets: string[] = ['BTC', 'ETH', 'CRO', 'SUI']): Promise<{
+    context: AIMarketContext;
+    hedgingRecommendation: {
+      shouldHedge: boolean;
+      urgency: 'IMMEDIATE' | 'SOON' | 'MONITOR' | 'NO_ACTION';
+      direction: 'SHORT' | 'LONG' | 'NEUTRAL';
+      confidenceScore: number;
+      reasons: string[];
+      riskFactors: string[];
+    };
+  }> {
+    const context = await AIMarketIntelligence.getMarketContext(assets);
+    
+    // Analyze context for hedging decision
+    const reasons: string[] = [];
+    const riskFactors: string[] = [];
+    let shouldHedge = false;
+    let urgency: 'IMMEDIATE' | 'SOON' | 'MONITOR' | 'NO_ACTION' = 'NO_ACTION';
+    let direction: 'SHORT' | 'LONG' | 'NEUTRAL' = 'NEUTRAL';
+    let confidenceScore = 50;
+    
+    // 1. Check risk cascade
+    if (context.riskCascade.detected) {
+      shouldHedge = true;
+      urgency = context.riskCascade.recommendation === 'HEDGE_IMMEDIATELY' ? 'IMMEDIATE' : 'SOON';
+      reasons.push(`Risk cascade detected (severity: ${context.riskCascade.severity}%)`);
+      context.riskCascade.signals.forEach(s => riskFactors.push(s.description));
+      confidenceScore = Math.max(confidenceScore, context.riskCascade.confidence);
+    }
+    
+    // 2. Check 5-min signal
+    if (context.fiveMinSignal) {
+      const signal = context.fiveMinSignal;
+      if (signal.signalStrength === 'STRONG') {
+        shouldHedge = true;
+        direction = signal.direction === 'DOWN' ? 'SHORT' : 'LONG';
+        urgency = urgency === 'NO_ACTION' ? 'SOON' : urgency;
+        reasons.push(`Strong 5-min signal: ${signal.direction} (${signal.probability}%)`);
+        confidenceScore = Math.max(confidenceScore, signal.confidence);
+      }
+    }
+    
+    // 3. Check streak analysis
+    if (context.streaks.streak5Min.count >= 4 && context.streaks.streak5Min.direction !== 'MIXED') {
+      const streakDir = context.streaks.streak5Min.direction;
+      direction = streakDir === 'DOWN' ? 'SHORT' : streakDir === 'UP' ? 'LONG' : 'NEUTRAL';
+      if (context.streaks.streak5Min.count >= 5) {
+        shouldHedge = true;
+        urgency = urgency === 'NO_ACTION' ? 'MONITOR' : urgency;
+      }
+      reasons.push(`${context.streaks.streak5Min.count}-signal ${streakDir} streak`);
+    }
+    
+    // 4. Check 30-min and 4-hour trends for confirmation
+    if (context.streaks.streak30Min.direction === context.streaks.streak5Min.direction && 
+        context.streaks.trend4Hour.direction === context.streaks.streak5Min.direction) {
+      confidenceScore = Math.min(confidenceScore + 15, 95);
+      reasons.push('Multi-timeframe trend alignment');
+    }
+    
+    // 5. Check market sentiment
+    if (context.marketSentiment.label === 'EXTREME_FEAR') {
+      shouldHedge = true;
+      direction = 'SHORT';
+      reasons.push('Extreme fear sentiment detected');
+      riskFactors.push('Market sentiment at extreme fear levels');
+    } else if (context.marketSentiment.label === 'EXTREME_GREED') {
+      riskFactors.push('Market sentiment at extreme greed - potential reversal risk');
+    }
+    
+    // 6. Check cross-market correlation
+    if (context.correlation.divergingAssets.length >= 2) {
+      riskFactors.push(`${context.correlation.divergingAssets.length} assets diverging from BTC`);
+    }
+    if (context.correlation.correlationBoost > 0) {
+      confidenceScore = Math.min(confidenceScore + context.correlation.correlationBoost, 95);
+    }
+    
+    // 7. Adjust confidence for liquidity
+    if (!context.liquidity.sufficientLiquidity) {
+      confidenceScore += context.liquidity.liquidityConfidencePenalty;
+      riskFactors.push('Low prediction market liquidity - signals less reliable');
+    }
+    
+    // 8. Check HEDGE predictions
+    const hedgePredictions = context.predictions.filter(p => p.recommendation === 'HEDGE');
+    if (hedgePredictions.length >= 2) {
+      shouldHedge = true;
+      urgency = urgency === 'NO_ACTION' ? 'MONITOR' : urgency;
+      reasons.push(`${hedgePredictions.length} prediction markets recommend HEDGE`);
+      hedgePredictions.slice(0, 2).forEach(p => {
+        riskFactors.push(`${p.question}: ${p.probability}%`);
+      });
+    }
+    
+    // Ensure confidence is bounded
+    confidenceScore = Math.max(20, Math.min(95, confidenceScore));
+    
+    // If not hedging, set urgency appropriately
+    if (!shouldHedge) {
+      urgency = riskFactors.length > 0 ? 'MONITOR' : 'NO_ACTION';
+      direction = 'NEUTRAL';
+    }
+    
+    logger.info('Enhanced market context analyzed for hedging', {
+      shouldHedge,
+      urgency,
+      direction,
+      confidenceScore,
+      reasonCount: reasons.length,
+      riskFactorCount: riskFactors.length,
+    });
+    
+    return {
+      context,
+      hedgingRecommendation: {
+        shouldHedge,
+        urgency,
+        direction,
+        confidenceScore,
+        reasons,
+        riskFactors,
+      },
+    };
   }
 
   /**
