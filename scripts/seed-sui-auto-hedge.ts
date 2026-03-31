@@ -36,9 +36,15 @@ async function main() {
   }
 
   // Create SUI pool config
+  const suiAdminAddress = process.env.SUI_ADMIN_ADDRESS;
+  if (!suiAdminAddress) {
+    console.error('\n❌ SUI_ADMIN_ADDRESS not set in environment');
+    process.exit(1);
+  }
+  
   const suiPoolConfig = {
     portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID, // -2
-    walletAddress: process.env.SUI_ADMIN_ADDRESS || '0xb157ee4953f0f552c7aa554d614762acf6ed6d6c8407f96aee18010724712126',
+    walletAddress: suiAdminAddress,
     enabled: true,
     riskThreshold: 2, // Hedge when risk >= 2/10
     maxLeverage: 3,

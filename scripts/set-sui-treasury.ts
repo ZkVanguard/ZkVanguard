@@ -18,24 +18,45 @@ import * as path from 'path';
 // Load environment variables from .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-// Configuration
+// Configuration - ALL values MUST be explicitly set via environment variables
 const CONFIG = {
   network: 'testnet' as const,
-  packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c',
+  packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID,
   moduleName: 'community_pool',
   
   // AdminCap object ID (owned by deployer)
-  adminCapId: process.env.SUI_ADMIN_CAP_ID || '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6',
+  adminCapId: process.env.SUI_ADMIN_CAP_ID,
   
   // Community Pool State (shared object)
-  poolStateId: process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56',
+  poolStateId: process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID,
   
   // MSafe Multisig Treasury Address
-  msafeTreasury: process.env.MSAFE_TREASURY_ADDRESS || '0x83b9f1bc3a2d32685e67fc52dce547e4e817afeeed90a996e8c6931e0ba35f2b',
+  msafeTreasury: process.env.MSAFE_TREASURY_ADDRESS,
   
   // Clock object (system)
   clockId: '0x6',
 };
+
+/**
+ * Validate all required configuration is present
+ */
+function validateConfig(): void {
+  const required: Array<{ key: keyof typeof CONFIG; envVar: string }> = [
+    { key: 'packageId', envVar: 'NEXT_PUBLIC_SUI_PACKAGE_ID' },
+    { key: 'adminCapId', envVar: 'SUI_ADMIN_CAP_ID' },
+    { key: 'poolStateId', envVar: 'NEXT_PUBLIC_SUI_POOL_STATE_ID' },
+    { key: 'msafeTreasury', envVar: 'MSAFE_TREASURY_ADDRESS' },
+  ];
+  
+  const missing = required.filter(r => !CONFIG[r.key]);
+  
+  if (missing.length > 0) {
+    console.error('\n❌ Missing required environment variables:');
+    missing.forEach(r => console.error(`   - ${r.envVar}`));
+    console.error('\nPlease set these in .env.local before running this script.');
+    process.exit(1);
+  }
+}
 
 function getKeypair(): Ed25519Keypair {
   const privateKey = process.env.SUI_PRIVATE_KEY;
@@ -60,6 +81,9 @@ function getKeypair(): Ed25519Keypair {
 }
 
 async function main() {
+  // Validate all required configuration before starting
+  validateConfig();
+  
   console.log('\n' + '═'.repeat(60));
   console.log('   SET SUI COMMUNITY POOL TREASURY TO MSAFE');
   console.log('═'.repeat(60) + '\n');
