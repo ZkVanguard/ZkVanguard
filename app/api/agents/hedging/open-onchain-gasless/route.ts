@@ -38,6 +38,7 @@ import { upsertOnChainHedge } from '@/lib/db/hedges';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCurrentChainId, getUsdcAddress, getRpcUrl, isMainnet, isTestnet } from '@/lib/utils/network';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`✅ EIP-712 signature verified: ${recoveredAddress} authorized hedge`);
       } catch (sigErr) {
-        console.error('Signature verification error:', sigErr);
+        logger.error('Signature verification error:', sigErr);
         return NextResponse.json(
           { success: false, error: 'Invalid signature format. Please try again.' },
           { status: 401 }
@@ -283,7 +284,7 @@ export async function POST(request: NextRequest) {
       console.log(`📈 Validated entry price for ${asset}: $${entryPrice} (source: ${priceSource})`);
     } catch (priceErr) {
       // Price validation failed - DO NOT proceed with hedge
-      console.error('❌ Strict price validation failed:', priceErr);
+      logger.error('Strict price validation failed:', priceErr);
       return NextResponse.json({
         success: false,
         error: `Price validation failed: ${priceErr instanceof Error ? priceErr.message : 'Unknown error'}`,
@@ -455,7 +456,7 @@ export async function POST(request: NextRequest) {
       elapsed: `${elapsed}ms`,
     });
   } catch (error) {
-    console.error('x402 Gasless open error:', error);
+    logger.error('x402 Gasless open error:', error);
     return safeErrorResponse(error, 'Gasless hedge open');
   }
 }

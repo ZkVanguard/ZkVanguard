@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db/postgres';
 import crypto from 'crypto';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwn
     });
 
   } catch (error) {
-    console.error('Wallet ownership verification error:', error);
+    logger.error('Wallet ownership verification error:', error);
     return NextResponse.json({
       success: false,
       verified: false,

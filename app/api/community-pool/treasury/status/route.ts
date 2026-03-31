@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -95,7 +96,7 @@ export async function GET() {
       sui: suiTreasury,
     });
   } catch (error) {
-    console.error('[Treasury Status] Error:', error);
+    logger.error('[Treasury Status] Error:', error);
     return NextResponse.json({
       address: '0x0000000000000000000000000000000000000000',
       balance: '0',

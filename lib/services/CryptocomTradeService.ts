@@ -129,8 +129,8 @@ To enable real trading on Crypto.com Exchange:
 
 1. Create API keys at: https://crypto.com/exchange/user/settings/api
 2. Add to your .env.local:
-   NEXT_PUBLIC_CRYPTOCOM_API_KEY=your_api_key
-   NEXT_PUBLIC_CRYPTOCOM_API_SECRET=your_api_secret
+   CRYPTOCOM_API_KEY=your_api_key
+   CRYPTOCOM_API_SECRET=your_api_secret
 3. Restart the dev server
 
 ⚠️ IMPORTANT:

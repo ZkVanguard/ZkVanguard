@@ -80,11 +80,12 @@ const DAILY_LOSS_WARNING_PERCENT = 2; // Warn on 2%+ daily loss (lowered from 3%
 const AUTO_HEDGE_THRESHOLD_PERCENT = 1.5; // Trigger hedge at 1.5%+ loss (lowered from 2%)
 
 // Pool contract addresses - V3 upgraded 2026-03-12
+const COMMUNITY_POOL_ADDRESS = process.env.NEXT_PUBLIC_COMMUNITY_POOL_PROXY_ADDRESS || '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const POOLS = [
   {
     id: 'community-pool',
     name: 'Community Pool',
-    address: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
+    address: COMMUNITY_POOL_ADDRESS, // V3 Proxy from env
     abi: [
       'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
       'function poolCreationTime() view returns (uint256)',

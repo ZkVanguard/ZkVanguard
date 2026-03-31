@@ -20,6 +20,7 @@ import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { logger } from '@/lib/utils/logger';
 
 // Live price sync v2
 export const runtime = 'nodejs';
@@ -838,7 +839,7 @@ export async function GET(request: NextRequest) {
       protocolStats,
     });
   } catch (error) {
-    console.error('On-chain hedge fetch error:', error);
+    logger.error('On-chain hedge fetch error:', error);
     return safeErrorResponse(error, 'On-chain hedge fetch');
   }
 }

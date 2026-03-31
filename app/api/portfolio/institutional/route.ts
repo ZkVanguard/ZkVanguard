@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getInstitutionalPortfolioManager } from '@/lib/services/InstitutionalPortfolioManager';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { requireAuth } from '@/lib/security/auth-middleware';
+import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 
 /**
  * Institutional Portfolio API
@@ -16,6 +18,13 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
+  // Authentication required
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'summary';
@@ -66,8 +75,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await mutationLimiter.checkDistributed(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
+
+    // Authentication required
+    const authResult = await requireAuth(request, body);
+    if (authResult instanceof NextResponse) return authResult;
+
     const { action } = body;
 
     const manager = getInstitutionalPortfolioManager();

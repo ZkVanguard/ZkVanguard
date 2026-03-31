@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { getMarketDataMCPClient } from '@/lib/services/market-data-mcp';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { logger } from '@/lib/utils/logger';
 
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error('Market data fetch failed:', error);
+    logger.error('Market data fetch failed:', error);
     return safeErrorResponse(error, 'Market data fetch');
   }
 }
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    console.error('Market data operation failed:', error);
+    logger.error('Market data operation failed:', error);
     return safeErrorResponse(error, 'Market data operation');
   }
 }

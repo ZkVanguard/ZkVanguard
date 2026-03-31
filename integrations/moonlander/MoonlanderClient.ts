@@ -112,7 +112,8 @@ export class MoonlanderClient {
 
     // API credentials (optional, for authenticated endpoints)
     // API secrets must NEVER use NEXT_PUBLIC_ prefix (would be exposed to browser)
-    this.apiKey = process.env.MOONLANDER_API_KEY || process.env.NEXT_PUBLIC_MOONLANDER_API_KEY || '';
+    // API keys must be server-only (never NEXT_PUBLIC_ prefix)
+    this.apiKey = process.env.MOONLANDER_API_KEY || '';
     this.apiSecret = process.env.MOONLANDER_API_SECRET || '';
 
     logger.info('MoonlanderClient initialized', {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSimulatedPortfolioManager } from '@/lib/services/SimulatedPortfolioManager';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Simulated Portfolio Management API
@@ -26,7 +27,7 @@ export async function GET() {
       note: 'Using REAL market data from Crypto.com MCP (FREE hackathon service)',
     });
   } catch (error) {
-    console.error('Simulated portfolio error:', error);
+    logger.error('Simulated portfolio error:', error);
     return safeErrorResponse(error, 'Simulated portfolio');
   }
 }
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       realData: true,
     });
   } catch (error) {
-    console.error('Simulated portfolio action error:', error);
+    logger.error('Simulated portfolio action error:', error);
     return safeErrorResponse(error, 'Simulated portfolio action');
   }
 }

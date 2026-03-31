@@ -110,7 +110,7 @@ const nextConfig = {
     return config;
   },
 
-  // Environment variables exposed to the browser
+  // Environment variables exposed to the browser (NEVER expose secrets here)
   env: {
     NEXT_PUBLIC_CRONOS_RPC_URL: process.env.NEXT_PUBLIC_CRONOS_RPC_URL,
     NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
@@ -119,10 +119,8 @@ const nextConfig = {
     NEXT_PUBLIC_MCP_API: process.env.NEXT_PUBLIC_MCP_API,
     NEXT_PUBLIC_X402_API: process.env.NEXT_PUBLIC_X402_API,
     NEXT_PUBLIC_DELPHI_API: process.env.NEXT_PUBLIC_DELPHI_API,
-    // Crypto.com AI API Keys (for both client and server)
-    NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY: process.env.CRYPTOCOM_DEVELOPER_API_KEY || process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY,
-    CRYPTOCOM_DEVELOPER_API_KEY: process.env.CRYPTOCOM_DEVELOPER_API_KEY,
-    CRYPTOCOM_AI_API_KEY: process.env.CRYPTOCOM_AI_API_KEY,
+    // NOTE: API keys are server-only — accessed via process.env on server routes
+    // Do NOT expose CRYPTOCOM_DEVELOPER_API_KEY or secrets to the browser
   },
 
   // Production optimizations

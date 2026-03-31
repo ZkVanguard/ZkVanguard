@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * Agent Activity Feed API Route
@@ -30,7 +31,7 @@ export async function GET() {
 
     return NextResponse.json(baseActivities);
   } catch (error) {
-    console.error('Activity feed error:', error);
+    logger.error('Activity feed error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

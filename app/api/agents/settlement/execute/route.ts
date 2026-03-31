@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
         { error: 'Transactions array is required' },
         { status: 400 }
       );
+    }
+
+    // Validate individual transaction amounts
+    for (const tx of transactions) {
+      if (tx.amount !== undefined) {
+        ProductionGuard.validateFinancialAmount(tx.amount, 'settlement amount');
+      }
     }
 
     // Always use real agent orchestration
@@ -66,7 +74,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     }, { status: 503 });
   } catch (error) {
-    console.error('Settlement execution failed:', error);
+    logger.error('Settlement execution failed:', error);
     return safeErrorResponse(error, 'Settlement execution');
   }
 }

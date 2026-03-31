@@ -19,6 +19,7 @@ import { getCronosProvider } from '@/lib/throttled-provider';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getHedgeByNumericId } from '@/lib/db/hedges';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     const rateModule = await import('@/lib/security/rate-limiter');
     mutationLimiter = rateModule.mutationLimiter;
   } catch (importErr) {
-    console.error('Failed to import rate-limiter:', importErr);
+    logger.error('Failed to import rate-limiter:', importErr);
     return NextResponse.json(
       { success: false, error: 'Server configuration error (rate-limiter)' },
       { status: 500 }
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
       || process.env.SERVER_WALLET_PRIVATE_KEY
       || process.env.AGENT_PRIVATE_KEY;
     if (!relayerKey) {
-      console.error('No relayer private key configured (checked RELAYER_PRIVATE_KEY, MOONLANDER_PRIVATE_KEY, PRIVATE_KEY, SERVER_WALLET_PRIVATE_KEY, AGENT_PRIVATE_KEY)');
+      logger.error('No relayer private key configured (checked RELAYER_PRIVATE_KEY, MOONLANDER_PRIVATE_KEY, PRIVATE_KEY, SERVER_WALLET_PRIVATE_KEY, AGENT_PRIVATE_KEY)');
       return NextResponse.json(
         { success: false, error: 'Server not configured for gasless operations (missing relayer)' },
         { status: 503 }
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
     try {
       hedgeData = await contract.hedges(hedgeId);
     } catch (readErr) {
-      console.error(`[close-onchain] Failed to read hedge from chain:`, readErr);
+      logger.error(`[close-onchain] Failed to read hedge from chain:`, readErr);
       const errMsg = readErr instanceof Error ? readErr.message : String(readErr);
       // Check if it's an invalid bytes32 format
       if (errMsg.includes('invalid') || errMsg.includes('hex') || errMsg.includes('format')) {
@@ -260,7 +261,7 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Signature verified: ${recoveredAddress} owns hedge ${hedgeId.slice(0, 18)}...`);
         console.log(`🛡️ DUAL VERIFICATION PASSED: ZK commitment + wallet signature verified`);
       } catch (sigErr) {
-        console.error('Signature verification error:', sigErr);
+        logger.error('Signature verification error:', sigErr);
         return NextResponse.json(
           { success: false, error: 'Invalid signature format' },
           { status: 401 }
@@ -421,13 +422,13 @@ export async function POST(request: NextRequest) {
             fundsForwarded = amountToForward;
             console.log(`✅ Funds forwarded to ${trueOwner.slice(0,10)}...: ${fundsForwarded} USDC | Tx: ${forwardTxHash}`);
           } else {
-            console.error(`❌ Fund forwarding failed: tx reverted`);
+            logger.error(`Fund forwarding failed: tx reverted`);
           }
         } else {
           console.log(`⚠️ No funds to forward (liquidated or zero return)`);
         }
       } catch (forwardErr) {
-        console.error(`❌ Fund forwarding error:`, forwardErr instanceof Error ? forwardErr.message : forwardErr);
+        logger.error(`Fund forwarding error:`, forwardErr instanceof Error ? forwardErr.message : forwardErr);
         // Don't fail the whole request - the hedge is closed, just logging the forwarding issue
       }
     } else {
@@ -493,7 +494,7 @@ export async function POST(request: NextRequest) {
       elapsed: `${elapsed}ms`,
     });
   } catch (error) {
-    console.error('On-chain close error:', error);
+    logger.error('On-chain close error:', error);
     
     // Provide more informative error messages for financial operations
     // (without leaking sensitive internals)

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getX402FacilitatorService } from '@/lib/services/x402-facilitator';
+import { logger } from '@/lib/utils/logger';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Return 402 Payment Required with challenge
     return NextResponse.json(challenge, { status: 402 });
   } catch (error) {
-    console.error('[X402 Challenge] Error:', error);
+    logger.error('[X402 Challenge] Error:', error);
     return NextResponse.json(
       { error: 'Failed to create payment challenge' },
       { status: 500 }
