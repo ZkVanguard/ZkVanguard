@@ -18,14 +18,31 @@ import * as path from 'path';
 // Load environment variables from .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-// Configuration from environment
-const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xcb37e4ea0109e5c91096c0733821e4b603a5ef8faa995cfcf6c47aa2e325b70c';
-const POOL_STATE_ID = process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xb9b9c58c8c023723f631455c95c21ad3d3b00ba0fef91e42a90c9f648fa68f56';
-const FEE_MANAGER_CAP_ID = process.env.SUI_FEE_MANAGER_CAP_ID || '0x705d008ef94b9efdb6ed5a5c1e02e93a4e638fffe6714c1924537ac653c97af6';
+// Configuration from environment - NO HARDCODED FALLBACKS
+const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID;
+const POOL_STATE_ID = process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID;
+const FEE_MANAGER_CAP_ID = process.env.SUI_FEE_MANAGER_CAP_ID;
 
 // Target fees (can be overridden via CLI args)
 const MANAGEMENT_FEE_BPS = parseInt(process.env.MANAGEMENT_FEE_BPS || '50');   // 0.5% annual on NAV
 const PERFORMANCE_FEE_BPS = parseInt(process.env.PERFORMANCE_FEE_BPS || '2000'); // 20% on profit only
+
+/**
+ * Validate required configuration
+ */
+function validateConfig(): void {
+  const missing: string[] = [];
+  if (!PACKAGE_ID) missing.push('NEXT_PUBLIC_SUI_PACKAGE_ID');
+  if (!POOL_STATE_ID) missing.push('NEXT_PUBLIC_SUI_POOL_STATE_ID');
+  if (!FEE_MANAGER_CAP_ID) missing.push('SUI_FEE_MANAGER_CAP_ID');
+  
+  if (missing.length > 0) {
+    console.error('\n❌ Missing required environment variables:');
+    missing.forEach(v => console.error(`   - ${v}`));
+    console.error('\nPlease set these in .env.local before running this script.');
+    process.exit(1);
+  }
+}
 
 function getKeypair(): Ed25519Keypair {
   const privateKey = process.env.SUI_PRIVATE_KEY;
@@ -47,6 +64,9 @@ function getKeypair(): Ed25519Keypair {
 }
 
 async function main() {
+  // Validate required configuration before starting
+  validateConfig();
+  
   console.log('\n═══════════════════════════════════════════');
   console.log('SET SUI COMMUNITY POOL FEES');
   console.log('═══════════════════════════════════════════\n');
