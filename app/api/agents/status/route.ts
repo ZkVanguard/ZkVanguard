@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Status check failed:', error);
+    logger.error('Status check failed:', error);
     return safeErrorResponse(error, 'Agent status check');
   }
 }
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Orchestrator initialization failed:', error);
+    logger.error('Orchestrator initialization failed:', error);
     return safeErrorResponse(error, 'Orchestrator initialization');
   }
 }

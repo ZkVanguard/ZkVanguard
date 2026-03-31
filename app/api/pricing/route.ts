@@ -12,6 +12,7 @@ import {
   type SubscriptionTier,
 } from '@/lib/config/pricing';
 import type { PricingDisplayData } from '@/lib/config/subscription-types';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-static';
@@ -128,7 +129,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error('[Pricing API] Error:', error);
+    logger.error('[Pricing API] Error:', error);
     return NextResponse.json(
       {
         success: false,
@@ -173,7 +174,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('[Pricing API] POST Error:', error);
+    logger.error('[Pricing API] POST Error:', error);
     return NextResponse.json(
       {
         success: false,

@@ -37,8 +37,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 2 min for multi-TX deposit flows
 
-// Default chain is Sepolia for testing
-const DEFAULT_CHAIN_ID = 11155111;
+// Default chain is configurable via env (Sepolia for testing)
+const DEFAULT_CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID || '11155111', 10);
 
 // Rate limiter for gas funding: 3 requests per address per hour
 const fundGasLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60 * 60 * 1000 });
@@ -52,14 +52,14 @@ const CHAIN_RPC_URLS: Record<number, string> = {
   296: 'https://testnet.hashio.io/api',
 };
 
-// Community pool addresses per chain
+// Community pool addresses per chain (from env vars with deployed defaults)
 const COMMUNITY_POOL_ADDRESSES: Record<number, string> = {
-  11155111: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086', // Sepolia
-  25: '0x2fBD41568d63B0D31c4FFc074c9a2e0c71AE5F29', // Cronos EVM mainnet (use x402)
-  338: '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos EVM testnet (use x402)
-  388: '0x...', // Cronos zkEVM mainnet - TODO: Deploy
-  282: '0x...', // Cronos zkEVM testnet - TODO: Deploy
-  296: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6', // Hedera Testnet
+  11155111: process.env.COMMUNITY_POOL_SEPOLIA || '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086', // Sepolia
+  25: process.env.COMMUNITY_POOL_CRONOS_MAINNET || '0x2fBD41568d63B0D31c4FFc074c9a2e0c71AE5F29', // Cronos EVM mainnet
+  338: process.env.COMMUNITY_POOL_CRONOS_TESTNET || '0x15b8922e74f8A5e3Ad428483Eb08B76Ba6a21f60', // Cronos EVM testnet
+  388: '0x0000000000000000000000000000000000000000', // Cronos zkEVM mainnet - TODO: Deploy
+  282: '0x0000000000000000000000000000000000000000', // Cronos zkEVM testnet - TODO: Deploy
+  296: process.env.COMMUNITY_POOL_HEDERA_TESTNET || '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6', // Hedera Testnet
   295: '0x0000000000000000000000000000000000000000', // Hedera Mainnet - TODO: Deploy
 };
 

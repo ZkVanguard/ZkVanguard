@@ -35,6 +35,10 @@ const ALLOWED_CHAINS = new Set(Object.keys(UPSTREAM_RPC_URLS));
 
 const RPC_TIMEOUT_MS = 8000;
 
+// Blocked JSON-RPC methods that could be dangerous when proxied
+const BLOCKED_METHOD_PREFIXES = ['debug_', 'miner_', 'admin_', 'personal_', 'txpool_'];
+const BLOCKED_METHODS = new Set(['eth_sendTransaction', 'eth_sign', 'eth_signTransaction']);
+
 async function fetchWithTimeout(url: string, body: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -63,6 +67,19 @@ export async function POST(
   const upstreams = UPSTREAM_RPC_URLS[chain];
   const body = await request.text();
 
+  // Validate JSON-RPC request and block dangerous methods
+  try {
+    const parsed = JSON.parse(body);
+    const method = parsed?.method;
+    if (typeof method === 'string') {
+      if (BLOCKED_METHODS.has(method) || BLOCKED_METHOD_PREFIXES.some(p => method.startsWith(p))) {
+        return NextResponse.json({ error: 'Method not allowed' }, { status: 403 });
+      }
+    }
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
   for (const upstream of upstreams) {
     try {
       const response = await fetchWithTimeout(upstream, body, RPC_TIMEOUT_MS);
@@ -81,7 +98,7 @@ export async function POST(
   }
 
   return NextResponse.json(
-    { error: 'All RPC providers failed' },
+    { error: 'RPC request failed' },
     { status: 502 }
   );
 }

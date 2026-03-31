@@ -13,6 +13,7 @@ import {
   AgentStatus, 
   PriceData
 } from '@/agents/specialized/PriceMonitorAgent';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<MonitorCo
         );
     }
   } catch (error) {
-    console.error('[agents/monitor] Error:', error);
+    logger.error('[agents/monitor] Error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -173,7 +174,7 @@ export async function GET(): Promise<NextResponse<MonitorControlResponse>> {
       data: { status, alerts, prices },
     });
   } catch (error) {
-    console.error('[agents/monitor] GET error:', error);
+    logger.error('[agents/monitor] GET error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to get agent status' },
       { status: 500 }

@@ -5,6 +5,7 @@ import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCached, setCached } from '@/lib/db/ui-cache';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -778,7 +779,7 @@ Return ONLY valid JSON.`,
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Insight summary error:', error);
+    logger.error('Insight summary error:', error);
     return safeErrorResponse(error, 'Insight summary');
   }
 }

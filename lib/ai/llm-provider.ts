@@ -39,20 +39,16 @@ class LLMProvider {
 
   private async initializeClient() {
     try {
-      // Configuration
+      // Configuration — API keys are server-only (never NEXT_PUBLIC_)
       const cryptocomKey = process.env.CRYPTOCOM_DEVELOPER_API_KEY || 
-                           process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY ||
                            process.env.CRYPTOCOM_AI_API_KEY;
       
-      const openaiKey = process.env.OPENAI_API_KEY ||
-                        process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+      const openaiKey = process.env.OPENAI_API_KEY;
       
-      const anthropicKey = process.env.ANTHROPIC_API_KEY ||
-                           process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
+      const anthropicKey = process.env.ANTHROPIC_API_KEY;
       
       // ASI API key for production AI (Fetch.ai's ASI:One platform)
       const asiApiKey = (process.env.ASI_API_KEY ||
-                        process.env.NEXT_PUBLIC_ASI_API_KEY ||
                         process.env.ASI_ONE_API_KEY || '').trim() || null;
       
       this.ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
