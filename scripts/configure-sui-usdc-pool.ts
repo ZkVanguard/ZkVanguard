@@ -19,17 +19,34 @@ import { Transaction } from '@mysten/sui/transactions';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 
 // USDC Pool Configuration (the one the UI uses)
+// NOTE: All addresses MUST be set via environment variables - no hardcoded fallbacks
 const CONFIG = {
   network: 'testnet' as const,
-  packageId: process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9',
-  poolStateId: process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971',
-  adminCapId: process.env.NEXT_PUBLIC_SUI_USDC_ADMIN_CAP || '0x21ecdca39b66a545d8029201f4c70dbeee8ea826245705ace58717e8e901c321',
+  packageId: process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID,
+  poolStateId: process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET,
+  adminCapId: process.env.NEXT_PUBLIC_SUI_USDC_ADMIN_CAP,
   
-  // Target settings
-  msafeTreasury: process.env.SUI_MSAFE_ADDRESS || '0x83b9f1bc3a2d32685e67fc52dce547e4e817afeeed90a996e8c6931e0ba35f2b',
+  // Target settings - MSafe treasury MUST be explicitly configured
+  msafeTreasury: process.env.SUI_MSAFE_ADDRESS,
   managementFeeBps: 50,    // 0.5% annual
   performanceFeeBps: 2000, // 20% on profit
 };
+
+// Validate required configuration
+function validateConfig() {
+  const required = ['packageId', 'poolStateId', 'adminCapId', 'msafeTreasury'] as const;
+  const missing = required.filter(key => !CONFIG[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.map(k => {
+      switch(k) {
+        case 'packageId': return 'NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID';
+        case 'poolStateId': return 'NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET';
+        case 'adminCapId': return 'NEXT_PUBLIC_SUI_USDC_ADMIN_CAP';
+        case 'msafeTreasury': return 'SUI_MSAFE_ADDRESS';
+      }
+    }).join(', ')}`);
+  }
+}
 
 function getKeypair(): Ed25519Keypair {
   // Try SUI_POOL_ADMIN_KEY first (deployer of USDC pool)
@@ -58,6 +75,9 @@ function getKeypair(): Ed25519Keypair {
 }
 
 async function main() {
+  // Validate all required configuration before starting
+  validateConfig();
+  
   console.log('\n' + '═'.repeat(60));
   console.log('   CONFIGURE SUI USDC POOL (UI POOL)');
   console.log('═'.repeat(60) + '\n');
