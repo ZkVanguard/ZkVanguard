@@ -513,7 +513,9 @@ export class AIMarketIntelligence {
     predictions: PredictionMarket[]
   ): LiquidityAnalysis {
     const predictionMarketLiquidity = signal?.liquidity || 10000;
-    const exchangeLiquidity = 50000000; // Estimated DEX/CEX liquidity - would be fetched in production
+    // WARNING: Exchange liquidity should be fetched from live APIs (DEX AMMs, CEX orderbooks)
+    // Using 0 signals unknown liquidity - caller should handle appropriately
+    const exchangeLiquidity = 0; // TODO: Integrate real liquidity feeds
     
     const liquidityRatio = predictionMarketLiquidity / exchangeLiquidity;
     const liquidityConfidencePenalty = liquidityRatio < 0.001 ? -15 : liquidityRatio < 0.01 ? -10 : liquidityRatio < 0.1 ? -5 : 0;

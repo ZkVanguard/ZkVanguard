@@ -125,12 +125,14 @@ export async function openPosition(
   try {
     logger.info('Opening position', { type, size, asset, leverage });
     
-    // In production, this calls Moonlander smart contract
-    // For demo, simulate successful position opening
+    // CRITICAL: Moonlander smart contract integration NOT YET IMPLEMENTED
+    // This must call the Moonlander perpetuals protocol on SUI
+    // See: https://moonlander.sui.io/docs/integration
+    logger.error('Moonlander integration not implemented - cannot open real positions');
     
     return {
-      success: true,
-      positionId: `pos-${Date.now()}`
+      success: false,
+      error: 'Moonlander integration pending - position opening disabled'
     };
   } catch (error) {
     return {

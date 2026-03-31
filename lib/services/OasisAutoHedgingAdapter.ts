@@ -18,6 +18,7 @@
  */
 
 import { ethers } from 'ethers';
+import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
 import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
@@ -407,7 +408,7 @@ export class OasisAutoHedgingAdapter {
         return { success: false };
       }
 
-      const hedgeId = `oasis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const hedgeId = `oasis-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
       const hedge: OasisHedgePosition = {
         hedgeId,

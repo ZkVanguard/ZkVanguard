@@ -20,6 +20,7 @@
  */
 
 import { ethers, ContractTransactionResponse, Contract } from 'ethers';
+import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { 
@@ -299,7 +300,7 @@ export class SecureAgentSigner {
       description?: string;
     }
   ): Promise<{ success: boolean; txHash?: string; error?: string; tx?: SignerTransaction }> {
-    const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const txId = `tx_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     
     // Pre-flight checks
     const availability = this.isAvailable();

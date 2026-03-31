@@ -11,7 +11,12 @@ const client = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' });
 async function checkOwnership() {
   console.log('\n═══ SUI KEY OWNERSHIP CHECK ═══\n');
   
-  const adminCapId = '0xef6d5702f58c020ff4b04e081ddb13c6e493715156ddb1d8123d502655d0e6e6';
+  // REQUIRED: Admin cap ID must be explicitly configured
+  const adminCapId = process.env.NEXT_PUBLIC_SUI_USDC_ADMIN_CAP;
+  if (!adminCapId) {
+    console.error('❌ NEXT_PUBLIC_SUI_USDC_ADMIN_CAP not set in environment');
+    process.exit(1);
+  }
   
   // Check AdminCap
   console.log('📍 AdminCap:', adminCapId);
