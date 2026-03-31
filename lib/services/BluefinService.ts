@@ -34,6 +34,7 @@ import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from './RealMarketDataService';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import crypto from 'crypto';
 
 // Network configurations - Updated per BlueFin Pro API docs
 export const BLUEFIN_NETWORKS = {
@@ -633,7 +634,7 @@ export class BluefinService {
   }): Promise<BluefinHedgeResult> {
     await this.ensureInitializedAsync();
 
-    const hedgeId = `BF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const hedgeId = `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const startTime = Date.now();
 
     try {
@@ -685,7 +686,7 @@ export class BluefinService {
       const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
       const signedAtMillis = Date.now();
-      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
+      const salt = (Date.now() + crypto.randomInt(1000000)).toString();
 
       // Create signedFields object per BlueFin Pro SDK format
       // Uses SDK-compatible field names (camelCase)
@@ -816,7 +817,7 @@ export class BluefinService {
       const leverageE9 = Math.floor(params.leverage * 1e9).toString();
       const expiresAt = Date.now() + 10 * 60 * 1000;
       const signedAtMillis = Date.now();
-      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
+      const salt = (Date.now() + crypto.randomInt(1000000)).toString();
       const networkConfig = BLUEFIN_NETWORKS[this.network];
 
       const signedFields = {
@@ -906,7 +907,7 @@ export class BluefinService {
       const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000;
       const signedAtMillis = Date.now();
-      const salt = (Date.now() + Math.floor(Math.random() * 1000000)).toString();
+      const salt = (Date.now() + crypto.randomInt(1000000)).toString();
 
       // Create signedFields for close order per SDK format
       const networkConfig = BLUEFIN_NETWORKS[this.network];

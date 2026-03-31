@@ -117,8 +117,11 @@ export class EnhancedAIAgent {
     const var95 = portfolioData.totalValue * zScore95 * portfolioVolatility;
 
     // Calculate Sharpe ratio (simplified)
-    const riskFreeRate = 0.05; // 5% annual
-    const expectedReturn = 0.12; // 12% expected
+    // NOTE: These are INDUSTRY STANDARD constants for risk calculations:
+    // - riskFreeRate: Current US Treasury ~5% (should be fetched for accuracy)
+    // - expectedReturn: SPY historical average (should be computed from portfolio)
+    const riskFreeRate = 0.05; // TODO: Fetch from treasury API
+    const expectedReturn = 0.12; // TODO: Calculate from actual portfolio returns
     const sharpeRatio = (expectedReturn - riskFreeRate) / portfolioVolatility;
 
     // Determine overall risk level

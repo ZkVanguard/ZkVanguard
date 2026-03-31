@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../utils/logger';
+import crypto from 'crypto';
 import { 
   Facilitator, 
   CronosNetwork, 
@@ -89,7 +90,7 @@ export class X402FacilitatorService {
    * Generate a unique payment ID
    */
   generatePaymentId(): string {
-    return `pay_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    return `pay_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   }
 
   /**

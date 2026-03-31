@@ -255,7 +255,10 @@ export async function POST(request: NextRequest) {
         });
 
         // Call BlueFin API endpoint
-        const bluefinResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3010'}/api/agents/hedging/bluefin`, {
+        const baseUrl = process.env.VERCEL 
+          ? 'https://zkvanguard.xyz' 
+          : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const bluefinResponse = await fetch(`${baseUrl}/api/agents/hedging/bluefin`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

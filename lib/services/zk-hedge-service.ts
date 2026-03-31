@@ -3,6 +3,7 @@
  * Generates and executes hedges with ZK-STARK proofs for privacy
  */
 
+import crypto from 'crypto';
 import { logger } from '../utils/logger';
 import { generateRebalanceProof } from '../api/zk';
 
@@ -56,7 +57,7 @@ export async function generatePrivateHedges(
       const zkProof = await generateHedgeProof(hedge);
       
       privateHedges.push({
-        hedgeId: `hedge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        hedgeId: `hedge-${Date.now()}-${crypto.randomBytes(5).toString('hex')}`,
         zkProofHash: zkProof.proofHash,
         verified: zkProof.verified,
         timestamp: Date.now(),
