@@ -245,8 +245,11 @@ class OnChainPortfolioManager {
       );
       logger.info('✅ Wallet connected for signing', { address: this.walletAddress });
     } else {
-      // Use provided address or deployer address for read-only
-      this.walletAddress = walletAddressOrPrivateKey || '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';
+      // Use provided address - NO hardcoded fallback
+      if (!walletAddressOrPrivateKey) {
+        throw new Error('Wallet address required for read-only mode. Set NEXT_PUBLIC_SERVER_WALLET_ADDRESS.');
+      }
+      this.walletAddress = walletAddressOrPrivateKey;
       this.usdtContract = new ethers.Contract(
         this.deployment.USDT,
         USDT_ABI,

@@ -738,7 +738,7 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
       params.txHash,
       params.chain || 'cronos-testnet',
       params.chainId || 338,
-      params.contractAddress || '0x090b6221137690EbB37667E4644287487CE462B9',
+      params.contractAddress || process.env.NEXT_PUBLIC_HEDGE_EXECUTOR_ADDRESS || '',
       params.hedgeIdOnchain,
       params.commitmentHash || null,
       params.nullifier || null,
