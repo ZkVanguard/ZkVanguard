@@ -370,6 +370,7 @@ class BackgroundHedgeController extends EventEmitter {
       const response = await fetch(`${appUrl}/api/agents/hedging/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           portfolioId: intent.portfolioId,
           asset: intent.asset,

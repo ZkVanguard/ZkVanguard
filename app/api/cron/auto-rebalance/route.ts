@@ -382,6 +382,7 @@ async function executeProtectiveHedge(
   // Call the hedge execution API
   const response = await fetch(`${hedgeApiUrl}/api/agents/hedging/execute`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       asset: assetToHedge,
       side: 'SHORT',

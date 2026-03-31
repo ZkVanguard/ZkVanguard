@@ -162,6 +162,7 @@ export class MoonlanderClient {
    */
   async getMarketInfo(market: string): Promise<MarketInfo> {
     const EXCHANGE_API = 'https://api.crypto.com/exchange/v1/public';
+    const FETCH_TIMEOUT = 5_000;
 
     try {
       // Primary: Use Crypto.com Exchange API for real market data
@@ -169,61 +170,54 @@ export class MoonlanderClient {
       const perpInstrument = `${spotSymbol}USD-PERP`;
       const spotInstrument = `${spotSymbol}_USDT`;
 
-      // Try perp ticker first, then spot
+      // Fetch perp ticker, spot ticker, funding rate, and instruments IN PARALLEL
+      const [perpResult, spotResult, fundingResult, instrResult] = await Promise.allSettled([
+        fetch(`${EXCHANGE_API}/get-tickers?instrument_name=${perpInstrument}`, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(r => r.json()),
+        fetch(`${EXCHANGE_API}/get-tickers?instrument_name=${spotInstrument}`, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(r => r.json()),
+        fetch(`${EXCHANGE_API}/get-valuations?instrument_name=${perpInstrument}&valuation_type=funding_rate&count=1`, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(r => r.json()),
+        fetch(`${EXCHANGE_API}/get-instruments`, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(r => r.json()),
+      ]);
+
+      // Prefer perp ticker, fall back to spot
       let ticker: Record<string, string> | null = null;
       let usedInstrument = '';
-      for (const instrument of [perpInstrument, spotInstrument]) {
-        try {
-          const resp = await fetch(`${EXCHANGE_API}/get-tickers?instrument_name=${instrument}`);
-          const json = await resp.json();
-          if (json.code === 0 && json.result?.data?.[0]) {
-            ticker = json.result.data[0];
-            usedInstrument = instrument;
-            break;
-          }
-        } catch { continue; }
+      if (perpResult.status === 'fulfilled' && perpResult.value.code === 0 && perpResult.value.result?.data?.[0]) {
+        ticker = perpResult.value.result.data[0];
+        usedInstrument = perpInstrument;
+      } else if (spotResult.status === 'fulfilled' && spotResult.value.code === 0 && spotResult.value.result?.data?.[0]) {
+        ticker = spotResult.value.result.data[0];
+        usedInstrument = spotInstrument;
       }
 
       if (!ticker) {
         throw new Error(`No ticker data from Exchange API for ${market}`);
       }
 
-      // Get real funding rate if perp exists
+      // Extract funding rate from parallel result
       let fundingRate = '0';
-      if (usedInstrument.includes('PERP')) {
-        try {
-          const fundingResp = await fetch(`${EXCHANGE_API}/get-valuations?instrument_name=${perpInstrument}&valuation_type=funding_rate&count=1`);
-          const fundingJson = await fundingResp.json();
-          if (fundingJson.code === 0 && fundingJson.result?.data?.[0]) {
-            fundingRate = fundingJson.result.data[0].v;
-          }
-        } catch { /* funding rate not available for this instrument */ }
+      if (usedInstrument.includes('PERP') && fundingResult.status === 'fulfilled' &&
+          fundingResult.value.code === 0 && fundingResult.value.result?.data?.[0]) {
+        fundingRate = fundingResult.value.result.data[0].v;
       }
 
-      // Get real instrument parameters (leverage, tick sizes) from instruments endpoint
+      // Extract instrument parameters from parallel result
       let maxLeverage = 50;
       let minOrderSize = '0.0001';
       let maxOrderSize = '1000000';
       let tickSize = '0.01';
-      try {
-        const instrResp = await fetch(`${EXCHANGE_API}/get-instruments`);
-        const instrJson = await instrResp.json();
-        if (instrJson.code === 0 && instrJson.result?.data) {
-          // Try perp first, fall back to spot instrument
-          const perpInfo = instrJson.result.data.find((i: Record<string, string>) => i.symbol === perpInstrument);
-          const spotInfo = instrJson.result.data.find((i: Record<string, string>) => i.symbol === spotInstrument);
-          const instrInfo = perpInfo || spotInfo;
-          if (instrInfo) {
-            if (instrInfo.max_leverage) maxLeverage = parseInt(instrInfo.max_leverage, 10);
-            if (instrInfo.qty_tick_size) minOrderSize = instrInfo.qty_tick_size;
-            if (instrInfo.price_tick_size) tickSize = instrInfo.price_tick_size;
-            // Derive max order size from quantity_decimals: e.g. 4 decimals → 10^(10-4) = 1000000
-            if (instrInfo.quantity_decimals != null) {
-              maxOrderSize = String(Math.pow(10, Math.max(1, 10 - instrInfo.quantity_decimals)));
-            }
+      if (instrResult.status === 'fulfilled' && instrResult.value.code === 0 && instrResult.value.result?.data) {
+        const perpInfo = instrResult.value.result.data.find((i: Record<string, string>) => i.symbol === perpInstrument);
+        const spotInfo = instrResult.value.result.data.find((i: Record<string, string>) => i.symbol === spotInstrument);
+        const instrInfo = perpInfo || spotInfo;
+        if (instrInfo) {
+          if (instrInfo.max_leverage) maxLeverage = parseInt(instrInfo.max_leverage, 10);
+          if (instrInfo.qty_tick_size) minOrderSize = instrInfo.qty_tick_size;
+          if (instrInfo.price_tick_size) tickSize = instrInfo.price_tick_size;
+          if (instrInfo.quantity_decimals != null) {
+            maxOrderSize = String(Math.pow(10, Math.max(1, 10 - instrInfo.quantity_decimals)));
           }
         }
-      } catch { /* data unavailable, will use defaults from API fallback */ }
+      }
 
       // Compute next funding time: funding settles at the top of each hour
       const now = Date.now();
@@ -465,7 +459,7 @@ export class MoonlanderClient {
       const perpInstrument = `${spotSymbol}USD-PERP`;
 
       const url = `${EXCHANGE_API}/get-valuations?instrument_name=${perpInstrument}&valuation_type=funding_hist&count=${Math.min(limit, 300)}`;
-      const resp = await fetch(url);
+      const resp = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       const json = await resp.json();
 
       if (json.code === 0 && json.result?.data?.length > 0) {
@@ -488,7 +482,7 @@ export class MoonlanderClient {
       try {
         const spotSymbol = market.split('-')[0];
         const spotInstrument = `${spotSymbol}_USDT`;
-        const tickerResp = await fetch(`https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=${spotInstrument}`);
+        const tickerResp = await fetch(`https://api.crypto.com/exchange/v1/public/get-tickers?instrument_name=${spotInstrument}`, { signal: AbortSignal.timeout(5_000) });
         const tickerJson = await tickerResp.json();
         const ticker = tickerJson.result?.data?.[0];
 
