@@ -339,12 +339,17 @@ export async function POST(request: NextRequest) {
 
     //=================================================================================
     // ON-CHAIN HEDGE EXECUTOR PATH (Primary - uses HedgeExecutor.sol on Cronos testnet)
+    // ⚠️ TESTNET ONLY: These addresses are testnet contracts
     //=================================================================================
-    const hedgeExecutorAddress = process.env.HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9';
-    const mockUsdcAddress = process.env.MOCK_USDC_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+    const hedgeExecutorAddress = process.env.HEDGE_EXECUTOR_ADDRESS;
+    const mockUsdcAddress = process.env.MOCK_USDC_ADDRESS;
     const executorPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || process.env.MOONLANDER_PRIVATE_KEY;
 
-    if (executorPrivateKey && hedgeExecutorAddress) {
+    if (!hedgeExecutorAddress || !mockUsdcAddress) {
+      logger.warn('⚠️ Missing HEDGE_EXECUTOR_ADDRESS or MOCK_USDC_ADDRESS env vars - on-chain hedge disabled');
+    }
+
+    if (executorPrivateKey && hedgeExecutorAddress && mockUsdcAddress) {
       try {
         logger.info('🔗 Executing hedge via HedgeExecutor contract on-chain', {
           asset, side, notionalValue, leverage,

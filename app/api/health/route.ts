@@ -70,7 +70,7 @@ export async function GET() {
         'Crypto.com MCP Server',
         'VVS Finance',
         'Cache (stale)',
-        'Mock data',
+        // No mock fallback - production returns 503 if all sources fail
       ],
       contracts: {
         rwaManager: (process.env.NEXT_PUBLIC_RWAMANAGER_ADDRESS || '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189 (default)').trim(),

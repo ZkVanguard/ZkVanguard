@@ -1,6 +1,9 @@
 // API Interceptor to block WalletConnect Cloud 403 errors
 // This must run before any wallet initialization code
+// ⚠️ DEVELOPMENT ONLY: In production, these requests are allowed through (may fail gracefully)
 import { logger } from '../lib/utils/logger';
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 if (typeof window !== 'undefined') {
   // Add BigInt serialization support to prevent "Invalid value" fetch errors
@@ -11,32 +14,34 @@ if (typeof window !== 'undefined') {
     };
   }
   
-  const blockedDomains = [
-    'api.web3modal.org',
-    'pulse.walletconnect.org',
-    'explorer-api.walletconnect.com',
-  ];
+  // Only intercept in development mode - production uses real responses
+  if (!IS_PRODUCTION) {
+    const blockedDomains = [
+      'api.web3modal.org',
+      'pulse.walletconnect.org',
+      'explorer-api.walletconnect.com',
+    ];
 
-  const mockResponses: Record<string, unknown> = {
-    'api.web3modal.org/appkit/v1/config': {
-      success: true,
-      data: {
-        enableAnalytics: false,
-        enableOnramp: false,
-        features: {},
+    const mockResponses: Record<string, unknown> = {
+      'api.web3modal.org/appkit/v1/config': {
+        success: true,
+        data: {
+          enableAnalytics: false,
+          enableOnramp: false,
+          features: {},
+        },
       },
-    },
-    'api.web3modal.org/getWallets': {
-      success: true,
-      data: {
-        wallets: [],
-        total: 0,
+      'api.web3modal.org/getWallets': {
+        success: true,
+        data: {
+          wallets: [],
+          total: 0,
+        },
       },
-    },
-    'pulse.walletconnect.org': {
-      success: true,
-    },
-  };
+      'pulse.walletconnect.org': {
+        success: true,
+      },
+    };
 
   // Intercept fetch API
   const originalFetch = window.fetch;
@@ -128,7 +133,8 @@ if (typeof window !== 'undefined') {
     return originalXHROpen.call(this, method, url, async, username, password);
   };
 
-  logger.info('[API Interceptor] WalletConnect Cloud API blocker initialized');
+  logger.info('[API Interceptor] WalletConnect Cloud API blocker initialized (dev mode)');
+  } // End of !IS_PRODUCTION block
 }
 
 export {};
