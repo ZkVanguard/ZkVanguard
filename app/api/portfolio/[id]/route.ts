@@ -8,6 +8,7 @@ import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 import { ProductionGuard } from '@/lib/security/production-guard';
+import { isMainnet } from '@/lib/utils/network';
 
 export const runtime = 'nodejs';
 
@@ -255,14 +256,11 @@ export async function GET(
       chain: string;
     }> = [];
     
-    // Entry prices when portfolio was created (Portfolio #3 created on 2/11/2026)
-    // These are the historical prices at creation time
-    const entryPrices: Record<string, number> = {
-      'BTC': 67212.36,  // From hedge creation logs
-      'ETH': 1968.17,   // From hedge creation logs
-      'CRO': 0.0765,    // From hedge creation logs
-      'SUI': 0.9100,    // Approximate entry
-    };
+    // ⚠️ TESTNET ONLY: Entry prices should come from on-chain transaction history
+    // On mainnet, MockUSDC doesn't exist so this code path is never hit
+    // For demo, we use current market prices (P&L will be minimal)
+    const entryPrices: Record<string, number> = {};
+    // Entry prices are fetched dynamically below from market service
     
     // For institutional portfolios with MockUSDC, use the ACTUAL wallet balance
     // This ensures the portfolio value matches the wallet balance
@@ -294,13 +292,16 @@ export async function GET(
     // Recalculate finalValueUSD after potential update
     const finalEntryValue = Math.max(calculatedValue, finalValueUSD);
     
-    if (mockUsdcAsset && finalEntryValue > 1000000) {
-      // This is an institutional portfolio with MockUSDC - create virtual allocations
+    // ⚠️ TESTNET ONLY: Virtual allocations for MockUSDC demo portfolios
+    // MockUSDC only exists on testnet - this code never runs on mainnet
+    if (mockUsdcAsset && finalEntryValue > 1000000 && !isMainnet()) {
+      // Get allocation percentages from env or use testnet defaults
+      // In production, portfolios hold actual assets - not virtual allocations
       const allocations = [
-        { symbol: 'BTC', percentage: 35, chain: 'cronos' },
-        { symbol: 'ETH', percentage: 30, chain: 'cronos' },
-        { symbol: 'CRO', percentage: 20, chain: 'cronos' },
-        { symbol: 'SUI', percentage: 15, chain: 'sui' },
+        { symbol: 'BTC', percentage: Number(process.env.DEMO_ALLOC_BTC || 35), chain: 'cronos' },
+        { symbol: 'ETH', percentage: Number(process.env.DEMO_ALLOC_ETH || 30), chain: 'cronos' },
+        { symbol: 'CRO', percentage: Number(process.env.DEMO_ALLOC_CRO || 20), chain: 'cronos' },
+        { symbol: 'SUI', percentage: Number(process.env.DEMO_ALLOC_SUI || 15), chain: 'sui' },
       ];
       
       const marketService = getMarketDataService();
