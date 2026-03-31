@@ -49,6 +49,8 @@ export function getCachedLLMResponse(promptHash: string): LLMResponse | null {
   }
   
   logger.debug(`[LLM] Cache HIT for prompt (age: ${Date.now() - cached.timestamp}ms)`);
+  // Update timestamp on hit for LRU eviction
+  cached.timestamp = Date.now();
   return cached.response;
 }
 
@@ -59,9 +61,16 @@ export function setCachedLLMResponse(promptHash: string, response: LLMResponse):
     promptHash,
   });
   
-  // Cleanup: limit cache size to prevent memory leaks
+  // Cleanup: limit cache size to prevent memory leaks (LRU eviction)
   if (llmResponseCache.size > 50) {
-    const oldestKey = llmResponseCache.keys().next().value;
+    let oldestKey: string | undefined;
+    let oldestTime = Infinity;
+    for (const [key, entry] of llmResponseCache.entries()) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
     if (oldestKey) llmResponseCache.delete(oldestKey);
   }
 }

@@ -681,15 +681,12 @@ class LLMProvider {
     } catch (error) {
       logger.error('ASI API call failed:', error);
       
-      // Try OpenAI as fallback
-      if (this.openAIClient) {
-        return this.generateWithOpenAI(history, context);
-      }
-      // Try Anthropic as fallback
+      // Fallback chain: Anthropic → Ollama → rule-based
+      // NOTE: Do NOT fall back to OpenAI here — OpenAI falls back to ASI,
+      // creating a circular chain (ASI → OpenAI → ASI → stack overflow).
       if (this.anthropicClient) {
         return this.generateWithAnthropic(history, context);
       }
-      // Try Ollama as fallback
       if (this.ollamaAvailable) {
         return this.generateWithOllama(history, context);
       }
@@ -740,15 +737,12 @@ class LLMProvider {
       };
     } catch (error) {
       logger.error('OpenAI call failed:', error);
-      // Try ASI API as fallback
-      if (this.asiAvailable) {
-        return this.generateWithASI(history, context);
-      }
-      // Try Anthropic as fallback
+      // Fallback chain: Anthropic → Ollama → rule-based
+      // NOTE: Do NOT fall back to ASI here — ASI falls back to Anthropic/Ollama,
+      // and CryptocomAI already tries ASI before OpenAI, avoiding circular chains.
       if (this.anthropicClient) {
         return this.generateWithAnthropic(history, context);
       }
-      // Try Ollama as fallback
       if (this.ollamaAvailable) {
         return this.generateWithOllama(history, context);
       }
@@ -804,11 +798,9 @@ class LLMProvider {
       };
     } catch (error) {
       logger.error('Anthropic Claude call failed:', error);
-      // Try ASI API as fallback
-      if (this.asiAvailable) {
-        return this.generateWithASI(history, context);
-      }
-      // Try Ollama as fallback
+      // Fallback chain: Ollama → rule-based
+      // NOTE: Do NOT fall back to ASI/OpenAI here — they already fall back
+      // to Anthropic, which would create circular chains.
       if (this.ollamaAvailable) {
         return this.generateWithOllama(history, context);
       }
@@ -877,12 +869,10 @@ class LLMProvider {
         confidence: 0.88,
       };
     } catch (error) {
-      logger.error('Ollama call failed, trying ASI API fallback:', error);
-      // Try ASI API as fallback (production AI)
-      if (this.asiAvailable) {
-        return this.generateWithASI(history, context);
-      }
+      logger.error('Ollama call failed:', error);
       // Last resort: rule-based fallback
+      // NOTE: Do NOT fall back to ASI/OpenAI/Anthropic here — they already
+      // fall back to Ollama at the end of their chains.
       return this.generateFallbackResponse(
         history[history.length - 1].content,
         context
