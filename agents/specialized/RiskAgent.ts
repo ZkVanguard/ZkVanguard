@@ -1,6 +1,12 @@
 /**
  * @fileoverview Risk Agent - Analyzes portfolio risk and provides recommendations
  * @module agents/specialized/RiskAgent
+ * 
+ * Enhanced with AIMarketIntelligence for comprehensive risk assessment:
+ * - Multi-timeframe streak analysis
+ * - Cross-market correlation
+ * - Risk cascade detection
+ * - Market sentiment analysis
  */
 
 import { BaseAgent } from '../core/BaseAgent';
@@ -8,6 +14,7 @@ import { logger } from '@shared/utils/logger';
 import { AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
 import { ethers } from 'ethers';
 import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
+import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
 
 /**
  * Risk Agent specializing in risk analysis and assessment
@@ -279,6 +286,193 @@ REC3: [third recommendation]`;
     analysis.zkProofHash = zkProofHash;
 
     return analysis;
+  }
+
+  /**
+   * Get comprehensive AI market context for risk assessment
+   * Uses AIMarketIntelligence service for multi-source, multi-timeframe analysis
+   */
+  async getEnhancedRiskContext(assets: string[] = ['BTC', 'ETH', 'CRO', 'SUI']): Promise<{
+    context: AIMarketContext;
+    riskAssessment: {
+      overallRisk: 'HIGH' | 'MODERATE' | 'LOW';
+      riskScore: number;
+      marketCondition: 'BEARISH' | 'BULLISH' | 'NEUTRAL' | 'VOLATILE';
+      confidenceLevel: number;
+      alerts: Array<{
+        severity: 'CRITICAL' | 'WARNING' | 'INFO';
+        message: string;
+        source: string;
+      }>;
+      recommendations: string[];
+    };
+  }> {
+    const context = await AIMarketIntelligence.getMarketContext(assets);
+    
+    // Analyze context for risk assessment
+    const alerts: Array<{ severity: 'CRITICAL' | 'WARNING' | 'INFO'; message: string; source: string }> = [];
+    const recommendations: string[] = [];
+    let riskScore = 50; // Base risk score
+    
+    // 1. Check risk cascade (highest priority)
+    if (context.riskCascade.detected) {
+      const severity = context.riskCascade.severity >= 75 ? 'CRITICAL' : 'WARNING';
+      alerts.push({
+        severity,
+        message: `Risk cascade detected: ${context.riskCascade.recommendation}`,
+        source: 'Risk Cascade Detection',
+      });
+      riskScore += context.riskCascade.severity * 0.3;
+      recommendations.push(context.riskCascade.recommendation === 'HEDGE_IMMEDIATELY' 
+        ? 'Open protective hedge position immediately'
+        : 'Prepare hedge parameters and monitor closely');
+    }
+    
+    // 2. Check 5-min signal
+    if (context.fiveMinSignal) {
+      const signal = context.fiveMinSignal;
+      if (signal.signalStrength === 'STRONG') {
+        alerts.push({
+          severity: 'WARNING',
+          message: `Strong ${signal.direction} signal detected (${signal.probability}% probability)`,
+          source: 'Polymarket 5-Min Signal',
+        });
+        riskScore += signal.direction === 'DOWN' ? 15 : -5;
+      }
+    }
+    
+    // 3. Check streak analysis
+    if (context.streaks.streak5Min.count >= 4) {
+      const dir = context.streaks.streak5Min.direction;
+      alerts.push({
+        severity: 'INFO',
+        message: `${context.streaks.streak5Min.count}-signal ${dir} streak in progress`,
+        source: 'Signal Streak Analysis',
+      });
+      if (dir === 'DOWN') riskScore += context.streaks.streak5Min.count * 3;
+      
+      // Check for potential reversal
+      if (context.streaks.reversalProbability > 50) {
+        alerts.push({
+          severity: 'INFO',
+          message: `${context.streaks.reversalProbability}% probability of reversal`,
+          source: 'Pattern Analysis',
+        });
+      }
+    }
+    
+    // 4. Check multi-timeframe alignment
+    if (context.streaks.streak30Min.direction === context.streaks.streak5Min.direction &&
+        context.streaks.trend4Hour.direction === context.streaks.streak5Min.direction) {
+      const dir = context.streaks.streak5Min.direction;
+      alerts.push({
+        severity: dir === 'DOWN' ? 'WARNING' : 'INFO',
+        message: `Multi-timeframe ${dir} alignment (5m, 30m, 4h agree)`,
+        source: 'Multi-Timeframe Analysis',
+      });
+      if (dir === 'DOWN') {
+        riskScore += 20;
+        recommendations.push('Strong bearish alignment - consider reducing exposure');
+      }
+    }
+    
+    // 5. Check market sentiment
+    if (context.marketSentiment.label === 'EXTREME_FEAR') {
+      alerts.push({
+        severity: 'WARNING',
+        message: `Extreme fear sentiment (score: ${context.marketSentiment.score})`,
+        source: 'Market Sentiment',
+      });
+      riskScore += 15;
+      recommendations.push('Market in extreme fear - defensive positioning advised');
+    } else if (context.marketSentiment.label === 'EXTREME_GREED') {
+      alerts.push({
+        severity: 'INFO',
+        message: `Extreme greed sentiment - potential reversal risk`,
+        source: 'Market Sentiment',
+      });
+      riskScore += 5;
+    }
+    
+    // 6. Check correlation
+    if (context.correlation.divergingAssets.length >= 2) {
+      alerts.push({
+        severity: 'INFO',
+        message: `${context.correlation.divergingAssets.join(', ')} diverging from BTC`,
+        source: 'Cross-Market Correlation',
+      });
+    }
+    
+    // 7. Check liquidity
+    if (!context.liquidity.sufficientLiquidity) {
+      alerts.push({
+        severity: 'WARNING',
+        message: 'Low prediction market liquidity - signals may be unreliable',
+        source: 'Liquidity Analysis',
+      });
+      riskScore += 5;
+    }
+    
+    // 8. Check HEDGE predictions
+    const hedgePredictions = context.predictions.filter(p => p.recommendation === 'HEDGE');
+    if (hedgePredictions.length > 0) {
+      alerts.push({
+        severity: hedgePredictions.length >= 2 ? 'WARNING' : 'INFO',
+        message: `${hedgePredictions.length} prediction market(s) recommend HEDGE`,
+        source: 'Prediction Markets',
+      });
+      riskScore += hedgePredictions.length * 5;
+      hedgePredictions.slice(0, 2).forEach(p => {
+        recommendations.push(`Monitor: ${p.question}`);
+      });
+    }
+    
+    // Bound risk score
+    riskScore = Math.max(10, Math.min(95, riskScore));
+    
+    // Determine overall risk level
+    const overallRisk: 'HIGH' | 'MODERATE' | 'LOW' = 
+      riskScore >= 70 ? 'HIGH' : riskScore >= 40 ? 'MODERATE' : 'LOW';
+    
+    // Determine market condition
+    let marketCondition: 'BEARISH' | 'BULLISH' | 'NEUTRAL' | 'VOLATILE';
+    if (context.marketSentiment.score <= -30) marketCondition = 'BEARISH';
+    else if (context.marketSentiment.score >= 30) marketCondition = 'BULLISH';
+    else if (context.streaks.streak5Min.direction === 'MIXED') marketCondition = 'VOLATILE';
+    else marketCondition = 'NEUTRAL';
+    
+    // Add default recommendations if none generated
+    if (recommendations.length === 0) {
+      if (overallRisk === 'HIGH') {
+        recommendations.push('Consider opening protective hedge positions');
+        recommendations.push('Reduce exposure to volatile assets');
+      } else if (overallRisk === 'MODERATE') {
+        recommendations.push('Monitor positions closely');
+        recommendations.push('Prepare contingency hedge parameters');
+      } else {
+        recommendations.push('Risk levels acceptable - maintain positions');
+      }
+    }
+    
+    logger.info('Enhanced risk context generated', {
+      overallRisk,
+      riskScore,
+      marketCondition,
+      alertCount: alerts.length,
+      recommendationCount: recommendations.length,
+    });
+    
+    return {
+      context,
+      riskAssessment: {
+        overallRisk,
+        riskScore,
+        marketCondition,
+        confidenceLevel: Math.max(context.signalHistory.avgConfidence, 50),
+        alerts,
+        recommendations,
+      },
+    };
   }
 
   /**

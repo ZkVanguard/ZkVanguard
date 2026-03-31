@@ -8,6 +8,12 @@
  * - Tracks hedge positions for non-swappable assets
  * - Integrates with SafeExecutionGuard for position limits
  * 
+ * Enhanced with AIMarketIntelligence for comprehensive market context:
+ * - Multi-timeframe streak analysis
+ * - Cross-market correlation
+ * - Risk cascade detection
+ * - Market sentiment integration
+ * 
  * On testnet: SUI is swappable, BTC/ETH/CRO are virtual (price-tracked)
  * On mainnet: SUI/BTC/ETH are swappable via BlueFin, CRO hedged via BlueFin perps
  */
@@ -22,6 +28,7 @@ import {
   type RebalanceSwapPlan,
   type SwapQuoteResult,
 } from '../../lib/services/BluefinAggregatorService';
+import { AIMarketIntelligence, type AIMarketContext, type EnhancedPrediction } from '../../lib/services/AIMarketIntelligence';
 
 // ============================================================================
 // Types
@@ -324,6 +331,134 @@ export class SuiPoolAgent extends BaseAgent {
     };
 
     return this.lastDecision;
+  }
+
+  /**
+   * Enhanced allocation using AIMarketIntelligence for comprehensive market context.
+   * Provides AI-driven allocation recommendations based on prediction markets,
+   * cross-market correlations, and risk cascade analysis.
+   */
+  async getEnhancedAllocationContext(): Promise<{
+    allocations: Record<PoolAsset, number>;
+    confidence: number;
+    marketSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    recommendations: string[];
+    riskAlerts: string[];
+    correlationInsight: string;
+    predictionSignals: Array<{ market: string; signal: string; probability: number }>;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    reasoning: string;
+  }> {
+    const context = await AIMarketIntelligence.getMarketContext();
+    
+    // Get base allocation from market indicators
+    const indicators = await this.analyzeMarket();
+    const baseDecision = this.generateAllocation(indicators);
+    
+    // Adjust allocations based on AI context
+    const adjustedAllocations = { ...baseDecision.allocations };
+    const recommendations: string[] = [];
+    const riskAlerts: string[] = [];
+    
+    // 1. Adjust for risk cascade (severity is 0-100)
+    if (context.riskCascade.detected) {
+      const cascadeSignals = context.riskCascade.signals.map(s => s.source).join(', ');
+      riskAlerts.push(`RISK CASCADE: Severity ${context.riskCascade.severity}/100 - ${cascadeSignals}`);
+      
+      if (context.riskCascade.severity > 70) {
+        // High severity - reduce risk exposure by shifting to more stable allocation
+        recommendations.push('Reduce volatile asset exposure due to high risk cascade');
+        const suiBoost = 10;
+        adjustedAllocations['SUI'] = Math.min(50, (adjustedAllocations['SUI'] || 25) + suiBoost);
+        adjustedAllocations['BTC'] = Math.max(15, (adjustedAllocations['BTC'] || 25) - suiBoost / 2);
+        adjustedAllocations['ETH'] = Math.max(15, (adjustedAllocations['ETH'] || 25) - suiBoost / 2);
+      }
+    }
+    
+    // 2. Adjust for BTC/ETH correlation (btcEthCorrelation is 0-1)
+    const btcEthAligned = context.correlation.btcEthCorrelation > 0.7;
+    if (btcEthAligned) {
+      // Check direction from aligned assets
+      const isBullish = context.correlation.marketAlignment > 50;
+      if (isBullish) {
+        recommendations.push('BTC/ETH highly correlated with positive alignment - consider overweight crypto majors');
+        adjustedAllocations['BTC'] = Math.min(40, (adjustedAllocations['BTC'] || 25) + 5);
+        adjustedAllocations['ETH'] = Math.min(35, (adjustedAllocations['ETH'] || 25) + 5);
+        adjustedAllocations['SUI'] = Math.max(10, (adjustedAllocations['SUI'] || 25) - 10);
+      } else {
+        recommendations.push('BTC/ETH correlated with weak alignment - defensive allocation recommended');
+        adjustedAllocations['SUI'] = Math.min(45, (adjustedAllocations['SUI'] || 25) + 10);
+        adjustedAllocations['BTC'] = Math.max(15, (adjustedAllocations['BTC'] || 25) - 5);
+        adjustedAllocations['ETH'] = Math.max(15, (adjustedAllocations['ETH'] || 25) - 5);
+      }
+    }
+    
+    // 3. Analyze prediction market signals (probability in PredictionMarket is 0-100, not 0-1)
+    const predictionSignals: Array<{ market: string; signal: string; probability: number }> = [];
+    for (const pred of context.predictions.slice(0, 5)) {
+      let signal = 'NEUTRAL';
+      if (pred.probability > 70) signal = 'BULLISH';
+      else if (pred.probability < 30) signal = 'BEARISH';
+      
+      predictionSignals.push({
+        market: pred.question.substring(0, 60),
+        signal,
+        probability: pred.probability,
+      });
+    }
+    
+    // 4. Calculate overall sentiment from marketSentiment.score (-100 to +100)
+    let marketSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+    const sentimentScore = context.marketSentiment.score; // -100 to +100
+    if (sentimentScore > 30) marketSentiment = 'BULLISH';
+    else if (sentimentScore < -30) marketSentiment = 'BEARISH';
+    
+    // 5. Determine urgency based on streak and risk
+    let urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+    const streakActive = context.streaks.streak5Min.count > 2;
+    if (context.riskCascade.severity > 70) urgency = 'CRITICAL';
+    else if (streakActive && context.streaks.streak5Min.direction === 'DOWN' && context.streaks.streak5Min.count > 4) urgency = 'HIGH';
+    else if (context.riskCascade.detected || streakActive) urgency = 'MEDIUM';
+    
+    // 6. Liquidity-based adjustments
+    if (!context.liquidity.sufficientLiquidity) {
+      riskAlerts.push('Low market liquidity detected - reduce position sizes');
+    }
+    if (context.liquidity.liquidityRatio < 0.5) {
+      recommendations.push('Low exchange liquidity relative to prediction markets - proceed with caution');
+    }
+    
+    // 7. Correlation insight
+    const correlationInsight = btcEthAligned
+      ? `BTC/ETH ${context.correlation.btcEthCorrelation > 0.8 ? 'strongly' : 'moderately'} correlated (${(context.correlation.btcEthCorrelation * 100).toFixed(0)}%)`
+      : `BTC/ETH decoupled (${(context.correlation.btcEthCorrelation * 100).toFixed(0)}%) - divergent market dynamics`;
+    
+    // Normalize allocations to 100%
+    const total = Object.values(adjustedAllocations).reduce((a, b) => a + b, 0);
+    if (total !== 100) {
+      const diff = 100 - total;
+      adjustedAllocations['SUI'] = (adjustedAllocations['SUI'] || 25) + diff;
+    }
+    
+    // Build comprehensive reasoning
+    const reasoning = `AI-Enhanced Allocation [${this.network}]: ` +
+      `Sentiment=${marketSentiment} (${context.marketSentiment.label}). ` +
+      `${streakActive ? `Active ${context.streaks.streak5Min.direction} streak (${context.streaks.streak5Min.count} periods).` : 'No active streak.'} ` +
+      `${context.riskCascade.detected ? `Risk cascade: ${context.riskCascade.severity}/100.` : ''} ` +
+      `Allocations: BTC=${adjustedAllocations['BTC']}%, ETH=${adjustedAllocations['ETH']}%, SUI=${adjustedAllocations['SUI']}%, CRO=${adjustedAllocations['CRO']}%. ` +
+      `Urgency: ${urgency}. ${recommendations.length} recommendations, ${riskAlerts.length} alerts.`;
+    
+    return {
+      allocations: adjustedAllocations as Record<PoolAsset, number>,
+      confidence: baseDecision.confidence,
+      marketSentiment,
+      recommendations,
+      riskAlerts,
+      correlationInsight,
+      predictionSignals,
+      urgency,
+      reasoning,
+    };
   }
 
   // ============================================================================

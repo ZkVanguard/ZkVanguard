@@ -27,6 +27,7 @@ import { ethers } from 'ethers';
 import type { RiskAgent } from '../specialized/RiskAgent';
 import type { HedgingAgent } from '../specialized/HedgingAgent';
 import type { SettlementAgent } from '../specialized/SettlementAgent';
+import { AIMarketIntelligence, type AIMarketContext, type EnhancedPrediction } from '../../lib/services/AIMarketIntelligence';
 
 /**
  * Lead Agent class - Orchestrates all specialized agents
@@ -137,6 +138,103 @@ export class LeadAgent extends BaseAgent {
     logger.info('Lead Agent shutting down...', { agentId: this.id });
     this.messageBus.removeAllListeners('strategy-input');
     this.messageBus.removeAllListeners('agent-result');
+  }
+
+  /**
+   * Get comprehensive AI market context for orchestration decisions.
+   * Combines prediction markets, cross-market correlations, and risk analysis
+   * to provide actionable intelligence for agent coordination.
+   */
+  async getOrchestrationContext(): Promise<{
+    aiContext: AIMarketContext;
+    orchestrationRecommendations: string[];
+    agentPriorities: Array<{ agent: AgentType; priority: number; reason: string }>;
+    marketCondition: 'STABLE' | 'VOLATILE' | 'TRENDING' | 'CRISIS';
+    urgencyLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  }> {
+    const aiContext = await AIMarketIntelligence.getMarketContext();
+    
+    const orchestrationRecommendations: string[] = [];
+    const agentPriorities: Array<{ agent: AgentType; priority: number; reason: string }> = [];
+    
+    // Determine market condition (severity is 0-100)
+    let marketCondition: 'STABLE' | 'VOLATILE' | 'TRENDING' | 'CRISIS' = 'STABLE';
+    const streakActive = aiContext.streaks.streak5Min.count > 2;
+    if (aiContext.riskCascade.severity > 70) {
+      marketCondition = 'CRISIS';
+    } else if (streakActive && aiContext.streaks.streak5Min.count > 3) {
+      marketCondition = 'TRENDING';
+    } else if (aiContext.riskCascade.detected) {
+      marketCondition = 'VOLATILE';
+    }
+    
+    // Determine urgency
+    let urgencyLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+    if (marketCondition === 'CRISIS') {
+      urgencyLevel = 'CRITICAL';
+      orchestrationRecommendations.push('CRITICAL: Engage RiskAgent immediately for defensive positioning');
+      orchestrationRecommendations.push('CRITICAL: HedgingAgent should increase hedge ratios');
+    } else if (marketCondition === 'VOLATILE') {
+      urgencyLevel = 'HIGH';
+      orchestrationRecommendations.push('Reduce position sizes across all agents');
+      orchestrationRecommendations.push('Monitor liquidation thresholds closely');
+    } else if (marketCondition === 'TRENDING') {
+      urgencyLevel = 'MEDIUM';
+      const direction = aiContext.streaks.streak5Min.direction;
+      orchestrationRecommendations.push(`Market trending ${direction} - adjust allocations accordingly`);
+    }
+    
+    // Set agent priorities based on market condition
+    if (marketCondition === 'CRISIS' || marketCondition === 'VOLATILE') {
+      agentPriorities.push({ agent: 'risk', priority: 1, reason: 'Risk management critical in volatile conditions' });
+      agentPriorities.push({ agent: 'hedging', priority: 2, reason: 'Hedge positions against downside' });
+      agentPriorities.push({ agent: 'settlement', priority: 3, reason: 'Ensure liquidity for potential exits' });
+    } else if (marketCondition === 'TRENDING') {
+      // marketSentiment.score is -100 to +100
+      const bullish = aiContext.marketSentiment.score > 30;
+      if (bullish) {
+        agentPriorities.push({ agent: 'hedging', priority: 1, reason: 'Optimize entry positions for uptrend' });
+        agentPriorities.push({ agent: 'risk', priority: 2, reason: 'Set stop-losses for trend reversal' });
+      } else {
+        agentPriorities.push({ agent: 'risk', priority: 1, reason: 'Bearish trend - prioritize capital preservation' });
+        agentPriorities.push({ agent: 'hedging', priority: 2, reason: 'Increase short hedges' });
+      }
+    } else {
+      // Stable market
+      agentPriorities.push({ agent: 'risk', priority: 1, reason: 'Standard risk monitoring' });
+      agentPriorities.push({ agent: 'hedging', priority: 2, reason: 'Optimize yield positions' });
+      agentPriorities.push({ agent: 'settlement', priority: 3, reason: 'Standard settlement operations' });
+    }
+    
+    // Add prediction-based recommendations (probability is 0-100)
+    const highProbPredictions = aiContext.predictions.filter((p: EnhancedPrediction) => p.probability > 80 || p.probability < 20);
+    if (highProbPredictions.length > 0) {
+      orchestrationRecommendations.push(`${highProbPredictions.length} high-confidence prediction signals available`);
+    }
+    
+    // Correlation-based recommendations (btcEthCorrelation is 0-1)
+    const btcEthAligned = aiContext.correlation.btcEthCorrelation > 0.7;
+    if (btcEthAligned) {
+      const direction = aiContext.correlation.marketAlignment > 50 ? 'bullish' : 'bearish';
+      orchestrationRecommendations.push(
+        `BTC/ETH correlation ${direction} - synchronized moves expected`
+      );
+    }
+    
+    logger.info('[LeadAgent] Orchestration context generated', {
+      marketCondition,
+      urgencyLevel,
+      recommendationCount: orchestrationRecommendations.length,
+      sentiment: aiContext.marketSentiment.label,
+    });
+    
+    return {
+      aiContext,
+      orchestrationRecommendations,
+      agentPriorities,
+      marketCondition,
+      urgencyLevel,
+    };
   }
 
   /**
