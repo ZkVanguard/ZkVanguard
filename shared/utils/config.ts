@@ -280,9 +280,10 @@ export const config = {
   gasPriceMultiplier: parseFloat(process.env.GAS_PRICE_MULTIPLIER || '1.1'),
   maxGasLimit: parseInt(process.env.MAX_GAS_LIMIT || '8000000', 10),
 
-  // Security
-  jwtSecret: process.env.JWT_SECRET || 'your-jwt-secret',
-  encryptionKey: process.env.ENCRYPTION_KEY || 'your-encryption-key',
+  // Security - CRITICAL: These MUST be set in production
+  // In development, generate random secrets to prevent accidental insecure deployments
+  jwtSecret: process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : `dev-secret-${Date.now()}`),
+  encryptionKey: process.env.ENCRYPTION_KEY || (process.env.NODE_ENV === 'production' ? '' : `dev-key-${Date.now()}`),
 
   // Monitoring
   sentryDsn: process.env.SENTRY_DSN || '',
@@ -297,7 +298,7 @@ export function validateConfig(): void {
   const required = ['privateKey'];
   
   if (config.isProduction) {
-    required.push('cryptocomAiApiKey', 'x402ApiKey', 'mcpApiKey');
+    required.push('cryptocomAiApiKey', 'x402ApiKey', 'mcpApiKey', 'jwtSecret', 'encryptionKey');
   }
 
   const missing = required.filter((key) => !config[key as keyof typeof config]);

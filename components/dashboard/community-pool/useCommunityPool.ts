@@ -1044,7 +1044,9 @@ export function useCommunityPool(propAddress?: string) {
     let permitAttempted = false;
     
     // Server relayer wallet address (deposits on behalf of proxy)
-    const SERVER_WALLET = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c' as `0x${string}`;
+    // NOTE: This is ALWAYS the same testnet server wallet until mainnet launch
+    // After mainnet, this should be read from env: process.env.NEXT_PUBLIC_SERVER_WALLET_ADDRESS
+    const SERVER_WALLET = (process.env.NEXT_PUBLIC_SERVER_WALLET_ADDRESS || '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c') as `0x${string}`;
     
     // Use permit details from parallel fetch above
     const permitDetails = permitResult.status === 'fulfilled' ? permitResult.value : { supported: false };
@@ -1452,15 +1454,13 @@ export function useCommunityPool(propAddress?: string) {
     // e.g. 10.55 * 1_000_000 = 10549999.999... → Math.round gives correct 10550000
     const amountMicroUsdc = Math.round(usdAmount * 1_000_000);
     
-    // Contract config — use env vars with hardcoded testnet fallbacks
+    // Contract config — use env vars (required for mainnet, testnet has fallbacks)
     // NOTE: Do NOT use poolState.suiPoolStateId here — API may return the native
     // SUI pool state (PoolState) rather than the USDC pool state (UsdcPoolState<T>),
     // which causes a TypeMismatch error in the Move contract call.
-    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
-      || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
     const poolStateId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
-      || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
+      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
     const usdcCoinType = suiNetwork === 'mainnet'
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';

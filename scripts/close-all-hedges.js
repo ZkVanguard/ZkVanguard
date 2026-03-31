@@ -7,7 +7,13 @@ const { ethers } = require('ethers');
 
 const RPC_URL = 'https://evm-t3.cronos.org';
 const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
-const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY || '0x05dd15c75542f4ecdffb076bae5401f74f22f819b509c841c9ed3cff0b13005d';
+
+// CRITICAL: Private key MUST be set via environment variable
+const RELAYER_PK = process.env.RELAYER_PRIVATE_KEY;
+if (!RELAYER_PK) {
+  console.error('❌ RELAYER_PRIVATE_KEY not set in environment');
+  process.exit(1);
+}
 
 const HEDGE_EXECUTOR_ABI = [
   'function getUserHedges(address) view returns (bytes32[])',

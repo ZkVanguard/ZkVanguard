@@ -47,7 +47,11 @@ function getSessionId(): string {
   
   let sessionId = sessionStorage.getItem('zk_session_id');
   if (!sessionId) {
-    sessionId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // Use crypto.randomUUID if available, otherwise fall back to timestamp
+    const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID().slice(0, 8)
+      : Date.now().toString(36);
+    sessionId = `s_${Date.now()}_${randomPart}`;
     sessionStorage.setItem('zk_session_id', sessionId);
   }
   return sessionId;

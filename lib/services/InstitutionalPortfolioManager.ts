@@ -89,7 +89,11 @@ class InstitutionalPortfolioManager {
     portfolioName: string = 'Mock USDC Institutional Portfolio',
     allocations: AllocationConfig[] = DEFAULT_ALLOCATIONS
   ) {
-    this.portfolioId = `INST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Use crypto for ID generation if available, fallback to Date.now() for uniqueness
+    const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID().slice(0, 8) 
+      : Date.now().toString(36);
+    this.portfolioId = `INST-${Date.now()}-${randomPart}`;
     this.portfolioName = portfolioName;
     this.positions = new Map();
     this.initialCapital = initialCapital;
