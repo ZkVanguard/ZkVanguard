@@ -54,78 +54,14 @@ export async function getMoonlanderPositions(address: string): Promise<Position[
         }
       }
     } catch (err) {
-      logger.error('Moonlander API fetch failed, falling back to simulator', { err });
+      logger.error('Moonlander API fetch failed', { err });
     }
   }
 
-  // Fallback: For demo, return realistic simulated positions
-  return [
-    {
-      id: '1',
-      asset: 'BTC-PERP',
-      type: 'SHORT',
-      size: 0.5,
-      entryPrice: 42000,
-      currentPrice: 41500,
-      pnl: 250,
-      pnlPercent: 1.19,
-      leverage: 5,
-      liquidationPrice: 44100,
-      margin: 4200
-    },
-    {
-      id: '2',
-      asset: 'ETH-PERP',
-      type: 'LONG',
-      size: 2.5,
-      entryPrice: 2200,
-      currentPrice: 2250,
-      pnl: 125,
-      pnlPercent: 2.27,
-      leverage: 3,
-      liquidationPrice: 1833,
-      margin: 1833
-    },
-    {
-      id: '3',
-      asset: 'CRO-PERP',
-      type: 'LONG',
-      size: 1000,
-      entryPrice: 0.08,
-      currentPrice: 0.082,
-      pnl: 20,
-      pnlPercent: 2.5,
-      leverage: 2,
-      liquidationPrice: 0.068,
-      margin: 40
-    },
-    {
-      id: '4',
-      asset: 'MATIC-PERP',
-      type: 'SHORT',
-      size: 500,
-      entryPrice: 0.95,
-      currentPrice: 0.98,
-      pnl: -15,
-      pnlPercent: -3.16,
-      leverage: 4,
-      liquidationPrice: 1.01,
-      margin: 118.75
-    },
-    {
-      id: '5',
-      asset: 'BTC-PERP',
-      type: 'LONG',
-      size: 0.3,
-      entryPrice: 41800,
-      currentPrice: 41500,
-      pnl: -90,
-      pnlPercent: -0.72,
-      leverage: 5,
-      liquidationPrice: 39710,
-      margin: 2508
-    },
-  ];
+  // ⚠️ PRODUCTION: Return empty array instead of fake positions
+  // Never show simulated positions as real holdings
+  logger.warn('Moonlander API unavailable - returning empty positions (no mock data)');
+  return [];
 }
 
 /**

@@ -363,6 +363,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       : 0;
 
     // Fallback volatility estimates (only used if real data unavailable)
+    // WARNING: These are CONSERVATIVE ESTIMATES for display purposes only.
+    // Real volatility should come from pos.volatility via market data APIs.
+    // Values represent approximate 30-day annualized volatility (as decimal).
     const fallbackVolatilityMap: Record<string, number> = {
       'BTC': 0.45, 'WBTC': 0.45,
       'ETH': 0.50, 'WETH': 0.50,
