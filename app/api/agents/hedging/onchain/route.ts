@@ -43,6 +43,11 @@ const PAIR_SYMBOLS: Record<number, string> = {
   0: 'BTC', 1: 'ETH', 2: 'CRO', 3: 'ATOM', 4: 'DOGE', 5: 'SOL'
 };
 
+// Reverse lookup: symbol → pair index (O(1) instead of O(n) find)
+const SYMBOL_TO_PAIR_INDEX: Record<string, number> = Object.fromEntries(
+  Object.entries(PAIR_SYMBOLS).map(([idx, sym]) => [sym, parseInt(idx, 10)])
+);
+
 // No hardcoded fallback prices — all prices come from live Crypto.com API
 // If the API is unreachable, prices stay at 0 and PnL won't be calculated
 const FALLBACK_PRICES: Record<number, number> = {};
@@ -88,10 +93,10 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
     const priceMap = await marketDataService.getTokenPrices(symbols);
     
     for (const [symbol, priceData] of priceMap) {
-      // Find pair index for this symbol
-      const idx = Object.entries(PAIR_SYMBOLS).find(([, s]) => s === symbol)?.[0];
-      if (idx !== undefined && priceData.price > 0) {
-        prices[parseInt(idx, 10)] = priceData.price;
+      // O(1) reverse lookup instead of O(n) find()
+      const pairIdx = SYMBOL_TO_PAIR_INDEX[symbol];
+      if (pairIdx !== undefined && priceData.price > 0) {
+        prices[pairIdx] = priceData.price;
       }
     }
 

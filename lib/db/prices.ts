@@ -69,19 +69,14 @@ export async function upsertPrices(prices: Array<{
 }>): Promise<void> {
   if (prices.length === 0) return;
   try {
-    for (const p of prices) {
-      await query(`
-        INSERT INTO price_cache (symbol, price, change_24h, volume_24h, high_24h, low_24h, source, updated_at)
-        VALUES (UPPER($1), $2, $3, $4, $5, $6, $7, NOW())
-        ON CONFLICT (symbol) DO UPDATE SET
-          price = EXCLUDED.price,
-          change_24h = EXCLUDED.change_24h,
-          volume_24h = EXCLUDED.volume_24h,
-          high_24h = EXCLUDED.high_24h,
-          low_24h = EXCLUDED.low_24h,
-          source = EXCLUDED.source,
-          updated_at = NOW()
-      `, [
+    // Build a single multi-row UPSERT instead of N individual queries
+    const values: unknown[] = [];
+    const rows: string[] = [];
+    for (let i = 0; i < prices.length; i++) {
+      const p = prices[i];
+      const offset = i * 7;
+      rows.push(`(UPPER($${offset + 1}), $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, NOW())`);
+      values.push(
         p.symbol,
         p.price,
         p.change24h ?? 0,
@@ -89,8 +84,20 @@ export async function upsertPrices(prices: Array<{
         p.high24h ?? null,
         p.low24h ?? null,
         p.source ?? 'cryptocom-exchange',
-      ]);
+      );
     }
+    await query(`
+      INSERT INTO price_cache (symbol, price, change_24h, volume_24h, high_24h, low_24h, source, updated_at)
+      VALUES ${rows.join(', ')}
+      ON CONFLICT (symbol) DO UPDATE SET
+        price = EXCLUDED.price,
+        change_24h = EXCLUDED.change_24h,
+        volume_24h = EXCLUDED.volume_24h,
+        high_24h = EXCLUDED.high_24h,
+        low_24h = EXCLUDED.low_24h,
+        source = EXCLUDED.source,
+        updated_at = NOW()
+    `, values);
   } catch (err) {
     console.warn('upsertPrices failed:', err instanceof Error ? err.message : err);
   }

@@ -31,7 +31,9 @@ export async function getMoonlanderPositions(address: string): Promise<Position[
   const apiBase = process.env.MOONLANDER_API_URL;
   if (apiBase) {
     try {
-      const res = await fetch(`${apiBase}/positions?address=${encodeURIComponent(address)}`);
+      const res = await fetch(`${apiBase}/positions?address=${encodeURIComponent(address)}`, {
+        signal: AbortSignal.timeout(5_000),
+      });
       if (!res.ok) {
         logger.warn('Moonlander API returned non-OK', { status: res.status });
       } else {

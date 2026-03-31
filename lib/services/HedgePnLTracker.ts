@@ -127,8 +127,9 @@ export class HedgePnLTracker {
           .map(r => [r.asset, r.price as number])
       );
 
-      // Calculate PnL for each hedge
+      // Calculate PnL for each hedge and batch DB updates
       const updates: HedgePnLUpdate[] = [];
+      const dbWritePromises: Promise<void>[] = [];
 
       for (const hedge of activeHedges) {
         const currentPrice = priceMap.get(hedge.asset);
@@ -141,31 +142,36 @@ export class HedgePnLTracker {
         const pnlUpdate = this.calculatePnL(hedge, currentPrice);
         updates.push(pnlUpdate);
 
-        // Update in database
-        try {
-          await updateHedgePnL(hedge.order_id, pnlUpdate.unrealizedPnL);
-          
-          // Log significant PnL changes
-          if (Math.abs(pnlUpdate.pnlPercentage) > 10) {
-            logger.info(`💰 Significant PnL on ${hedge.order_id}`, {
-              asset: hedge.asset,
-              pnl: pnlUpdate.unrealizedPnL.toFixed(2),
-              percentage: pnlUpdate.pnlPercentage.toFixed(2) + '%',
-            });
-          }
+        // Collect DB writes for parallel execution
+        dbWritePromises.push(
+          updateHedgePnL(hedge.order_id, pnlUpdate.unrealizedPnL)
+            .then(() => {
+              // Log significant PnL changes
+              if (Math.abs(pnlUpdate.pnlPercentage) > 10) {
+                logger.info(`💰 Significant PnL on ${hedge.order_id}`, {
+                  asset: hedge.asset,
+                  pnl: pnlUpdate.unrealizedPnL.toFixed(2),
+                  percentage: pnlUpdate.pnlPercentage.toFixed(2) + '%',
+                });
+              }
 
-          // Alert if near liquidation
-          if (pnlUpdate.isNearLiquidation) {
-            logger.warn(`⚠️ Hedge near liquidation: ${hedge.order_id}`, {
-              asset: hedge.asset,
-              currentPrice,
-              liquidationPrice: hedge.liquidation_price,
-            });
-          }
-        } catch (dbErr) {
-          logger.error(`Failed to update PnL in database for ${hedge.order_id}`, { error: dbErr });
-        }
+              // Alert if near liquidation
+              if (pnlUpdate.isNearLiquidation) {
+                logger.warn(`⚠️ Hedge near liquidation: ${hedge.order_id}`, {
+                  asset: hedge.asset,
+                  currentPrice,
+                  liquidationPrice: hedge.liquidation_price,
+                });
+              }
+            })
+            .catch(dbErr => {
+              logger.error(`Failed to update PnL in database for ${hedge.order_id}`, { error: dbErr });
+            })
+        );
       }
+
+      // Execute all DB writes in parallel
+      await Promise.allSettled(dbWritePromises);
 
       return updates;
 

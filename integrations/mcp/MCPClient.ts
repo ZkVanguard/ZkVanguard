@@ -299,7 +299,7 @@ export class MCPClient extends EventEmitter {
 
       logger.info('Fetching real candlestick data from Exchange API', { symbol, instrumentName, timeframe, limit });
 
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
       if (!response.ok) {
         throw new Error(`Exchange API HTTP error: ${response.status}`);
       }

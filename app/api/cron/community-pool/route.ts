@@ -428,6 +428,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
         const aiResponse = await fetch(`${baseUrl}/api/community-pool/ai-decision`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(10_000),
           body: JSON.stringify({
             action: 'generateAllocation',
             marketConditions: {

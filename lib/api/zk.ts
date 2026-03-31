@@ -60,7 +60,9 @@ export interface ZKSystemHealth {
  */
 export async function checkZKSystemHealth(): Promise<ZKSystemHealth> {
   try {
-    const response = await fetch(`${ZK_API_URL}/health`);
+    const response = await fetch(`${ZK_API_URL}/health`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     if (!response.ok) {
       throw new Error(`Health check failed: ${response.statusText}`);
     }
@@ -90,6 +92,7 @@ export async function generateSettlementProof(
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         proof_type: 'settlement',
         data: {
@@ -151,6 +154,7 @@ export async function generateRiskProof(
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         proof_type: 'risk',
         data: {
@@ -198,6 +202,7 @@ export async function generateRebalanceProof(
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         proof_type: 'rebalance',
         data: {
@@ -233,7 +238,9 @@ export async function generateRebalanceProof(
  */
 export async function getProofStatus(jobId: string): Promise<ZKProofStatus> {
   try {
-    const response = await fetch(`${ZK_API_URL}/api/zk/proof/${jobId}`);
+    const response = await fetch(`${ZK_API_URL}/api/zk/proof/${jobId}`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to get proof status: ${response.statusText}`);
@@ -295,6 +302,7 @@ export async function verifyProofOffChain(
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
         proof,
         claim,
@@ -531,6 +539,7 @@ export async function generateWalletOwnershipProof(
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         proof_type: 'wallet_ownership',
         data: {
