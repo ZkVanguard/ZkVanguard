@@ -52,8 +52,9 @@ const SYMBOL_TO_PAIR_INDEX: Record<string, number> = Object.fromEntries(
 // If the API is unreachable, prices stay at 0 and PnL won't be calculated
 const FALLBACK_PRICES: Record<number, number> = {};
 
-// MockMoonlander contract — reads actual openPrice for each trade
-const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
+// PerpetualDEX contract — reads actual openPrice for each trade
+// Perpetual DEX contract — env-driven for mainnet/testnet switching
+const PERPETUAL_DEX = process.env.PERPETUAL_DEX_ADDRESS || '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
 const MOONLANDER_ABI = [
   'function getTrade(address trader, uint256 pairIndex, uint256 tradeIndex) view returns (tuple(address trader, uint256 pairIndex, uint256 index, uint256 collateralAmount, uint256 positionSizeUsd, uint256 openPrice, bool isLong, uint256 leverage, uint256 tp, uint256 sl, bool isOpen))',
   'function mockPrices(uint256) view returns (uint256)',
@@ -134,7 +135,7 @@ async function backgroundResyncHedges(hedgeIdOnchains: string[]): Promise<void> 
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
-    const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
+    const moonlander = new ethers.Contract(PERPETUAL_DEX, MOONLANDER_ABI, provider);
 
     let synced = 0;
     for (const hedgeId of hedgeIdOnchains) {
@@ -146,7 +147,7 @@ async function backgroundResyncHedges(hedgeIdOnchains: string[]): Promise<void> 
         const isLong = h.isLong;
         const status = Number(h.status);
 
-        // Get actual entry price from MockMoonlander
+        // Get actual entry price from PerpetualDEX
         let entryPrice = 0;
         try {
           const trade = await moonlander.getTrade(HEDGE_EXECUTOR, pairIndex, Number(h.tradeIndex));
@@ -621,10 +622,10 @@ export async function GET(request: NextRequest) {
       }))
     );
 
-    // ── Step 3: Fetch entry prices from MockMoonlander in parallel ──
+    // ── Step 3: Fetch entry prices from Perpetual DEX in parallel ──
     const entryPriceMap: Record<string, number> = {};
     try {
-      const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, provider);
+      const moonlander = new ethers.Contract(PERPETUAL_DEX, MOONLANDER_ABI, provider);
       const tradeResults = await tp.throttledAll(
         rawHedges.map(({ hedgeId, data: h }) => ({
           key: `trade-${hedgeId}`,
@@ -642,7 +643,7 @@ export async function GET(request: NextRequest) {
         if (openPrice > 0) entryPriceMap[hedgeId] = openPrice;
       }
     } catch {
-      console.warn('Could not fetch entry prices from MockMoonlander');
+      console.warn('Could not fetch entry prices from Perpetual DEX');
     }
 
     // ── Step 3b: DB-first tx hash lookup (instant), event scan only for misses ──
@@ -696,7 +697,7 @@ export async function GET(request: NextRequest) {
         const isLong = h.isLong;
         const status = Number(h.status);
 
-        // Use actual entry price from MockMoonlander, fallback to live price
+        // Use actual entry price from PerpetualDEX, fallback to live price
         const entryPrice = entryPriceMap[hedgeId] || livePrices[pairIndex] || FALLBACK_PRICES[pairIndex] || 0;
         const currentPrice = status === 1 ? (livePrices[pairIndex] || entryPrice) : entryPrice;
 

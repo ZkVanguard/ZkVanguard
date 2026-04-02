@@ -63,8 +63,7 @@ export async function GET(request: NextRequest) {
         source: 'InstitutionalPortfolioManager',
         realAPITracking: true,
         aiRiskManagement: true,
-        mockUSDC: true,
-        totalCapital: '$150M',
+        onChainUSDC: true,
         timestamp: Date.now(),
       },
     });
@@ -129,7 +128,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         realAPITracking: true,
         aiRiskManagement: true,
-        mockUSDC: true,
+        onChainUSDC: true,
         timestamp: Date.now(),
       },
     });

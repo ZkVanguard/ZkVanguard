@@ -21,21 +21,21 @@ export const runtime = 'nodejs';
 const TOKEN_DECIMALS: Record<string, number> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 6,   // devUSDC = 6 decimals
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 18,  // WCRO = 18 decimals
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 6,   // MockUSDC = 6 decimals
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 6,   // Testnet USDC = 6 decimals
 };
 
 // Token symbols (for price lookup)
 const TOKEN_SYMBOLS: Record<string, string> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'USDC',  // Treat devUSDC as USDC
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'CRO',   // WCRO -> CRO price
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC',  // MockUSDC -> USDC price
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC',  // Testnet USDC -> USDC price
 };
 
 // Token display names
 const TOKEN_DISPLAY_NAMES: Record<string, string> = {
   '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'devUSDC',
   '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'WCRO',
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'MockUSDC',
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC',
 };
 
 /**
@@ -239,8 +239,8 @@ export async function GET(
     // Use the calculated value from asset allocations (more accurate), fall back to contract value
     const finalValueUSD = calculatedValue > 0 ? calculatedValue : normalizedContractValue;
 
-    // Check if portfolio contains MockUSDC - if so, create virtual allocations for BTC/ETH/CRO/SUI
-    const mockUsdcAsset = assetBalances.find(a => 
+    // Check if portfolio contains testnet USDC - if so, create virtual allocations for BTC/ETH/CRO/SUI
+    const testnetUsdcAsset = assetBalances.find(a => 
       a.token.toLowerCase() === '0x28217daddc55e3c4831b4a48a00ce04880786967'
     );
     
@@ -257,44 +257,44 @@ export async function GET(
     }> = [];
     
     // ⚠️ TESTNET ONLY: Entry prices should come from on-chain transaction history
-    // On mainnet, MockUSDC doesn't exist so this code path is never hit
+    // On mainnet, testnet USDC doesn't exist so this code path is never hit
     // For demo, we use current market prices (P&L will be minimal)
     const entryPrices: Record<string, number> = {};
     // Entry prices are fetched dynamically below from market service
     
-    // For institutional portfolios with MockUSDC, use the ACTUAL wallet balance
+    // For institutional portfolios with testnet USDC, use the ACTUAL wallet balance
     // This ensures the portfolio value matches the wallet balance
-    let actualMockUsdcBalance = 0;
-    if (mockUsdcAsset && mockUsdcAsset.valueUSD > 1000000) {
+    let actualUsdcBalance = 0;
+    if (testnetUsdcAsset && testnetUsdcAsset.valueUSD > 1000000) {
       try {
-        // Read actual MockUSDC balance from wallet (not from portfolio allocation)
-        const mockUsdcAddress = '0x28217daddc55e3c4831b4a48a00ce04880786967' as `0x${string}`;
+        // Read actual USDC balance from wallet (not from portfolio allocation)
+        const usdcAddress = '0x28217daddc55e3c4831b4a48a00ce04880786967' as `0x${string}`;
         const walletBalance = await client.readContract({
-          address: mockUsdcAddress,
+          address: usdcAddress,
           abi: erc20Abi,
           functionName: 'balanceOf',
           args: [portfolio[0] as `0x${string}`], // portfolio owner
         }) as bigint;
         
-        actualMockUsdcBalance = Number(walletBalance) / 1e6; // MockUSDC has 6 decimals
-        logger.info(`[Portfolio API] Actual wallet MockUSDC balance: $${actualMockUsdcBalance.toLocaleString()}`);
+        actualUsdcBalance = Number(walletBalance) / 1e6; // USDC has 6 decimals
+        logger.info(`[Portfolio API] Actual wallet USDC balance: $${actualUsdcBalance.toLocaleString()}`);
         
         // Use actual wallet balance if it's greater than the on-chain allocation
-        if (actualMockUsdcBalance > finalValueUSD) {
-          logger.info(`[Portfolio API] Using wallet balance ($${actualMockUsdcBalance.toLocaleString()}) instead of allocation ($${finalValueUSD.toLocaleString()})`);
-          calculatedValue = actualMockUsdcBalance;
+        if (actualUsdcBalance > finalValueUSD) {
+          logger.info(`[Portfolio API] Using wallet balance ($${actualUsdcBalance.toLocaleString()}) instead of allocation ($${finalValueUSD.toLocaleString()})`);
+          calculatedValue = actualUsdcBalance;
         }
       } catch (error) {
-        logger.warn(`[Portfolio API] Failed to read actual MockUSDC balance`, { error: String(error) });
+        logger.warn(`[Portfolio API] Failed to read actual USDC balance`, { error: String(error) });
       }
     }
     
     // Recalculate finalValueUSD after potential update
     const finalEntryValue = Math.max(calculatedValue, finalValueUSD);
     
-    // ⚠️ TESTNET ONLY: Virtual allocations for MockUSDC demo portfolios
-    // MockUSDC only exists on testnet - this code never runs on mainnet
-    if (mockUsdcAsset && finalEntryValue > 1000000 && !isMainnet()) {
+    // ⚠️ TESTNET ONLY: Virtual allocations for testnet USDC demo portfolios
+    // Testnet USDC only exists on testnet - this code never runs on mainnet
+    if (testnetUsdcAsset && finalEntryValue > 1000000 && !isMainnet()) {
       // Get allocation percentages from env or use testnet defaults
       // In production, portfolios hold actual assets - not virtual allocations
       const allocations = [
