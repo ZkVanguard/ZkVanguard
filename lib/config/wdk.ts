@@ -36,8 +36,8 @@ export const USDT_ADDRESSES = {
   },
   // Hedera - USDT  
   hedera: {
-    mainnet: '0x0000000000000000000000000000000000000000', // USDT on Hedera mainnet - TODO
-    testnet: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO
+    mainnet: null, // USDT on Hedera mainnet - not yet deployed
+    testnet: null, // USDT on Hedera testnet - not yet deployed
   },
   // Ethereum Mainnet (for reference)
   ethereum: {

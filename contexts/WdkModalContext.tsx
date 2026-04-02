@@ -26,13 +26,13 @@ export function WdkModalProvider({ children }: { children: ReactNode }) {
   const { state: wdkState } = useWdk();
 
   const openWdkModal = useCallback(() => {
-    // If passkey exists and not unlocked, default to unlock screen
-    if (wdkState.hasPasskey && !wdkState.isUnlocked) {
+    // If a wallet exists and not unlocked, default to unlock screen
+    if (wdkState.hasWallet && !wdkState.isUnlocked) {
       setMode('unlock');
     } else {
       setMode('connect');
     }
-  }, [wdkState.hasPasskey, wdkState.isUnlocked]);
+  }, [wdkState.hasWallet, wdkState.isUnlocked]);
 
   const closeWdkModal = useCallback(() => setMode('none'), []);
 
@@ -56,13 +56,15 @@ function WdkModalOverlay({
   onClose: () => void;
   onModeChange: (mode: ModalMode) => void;
 }) {
-  const { state: wdkState, createWallet, importWallet, loginWithPasskey, registerPasskey, lockWallet } = useWdk();
+  const { state: wdkState, createWallet, importWallet, loginWithPasskey, registerPasskey, lockWallet, unlockWallet } = useWdk();
   const [seedPhrase, setSeedPhrase] = useState('');
   const [seedCopied, setSeedCopied] = useState(false);
   const [seedConfirmed, setSeedConfirmed] = useState(false);
   const [importPhrase, setImportPhrase] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPasswordFallback, setShowPasswordFallback] = useState(false);
+  const [password, setPassword] = useState('');
 
   const handleCreate = async () => {
     setLoading(true);
@@ -107,11 +109,35 @@ function WdkModalOverlay({
         onClose();
       } else {
         console.error('[WdkModal]   ❌ loginWithPasskey returned false');
-        setError('Passkey verification failed. Check console for details.');
+        setError('Passkey verification failed. Try password fallback below.');
+        setShowPasswordFallback(true);
       }
     } catch (e: any) {
       console.error('[WdkModal]   ❌ handleUnlock exception:', e?.message, e);
-      setError(e?.message || 'Unexpected error during unlock');
+      setError(e?.message || 'Passkey failed. Try password fallback below.');
+      setShowPasswordFallback(true);
+    }
+    setLoading(false);
+  };
+
+  const handlePasswordUnlock = async () => {
+    if (!password.trim()) {
+      setError('Please enter your password');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const success = await unlockWallet(password);
+      if (success) {
+        setPassword('');
+        setShowPasswordFallback(false);
+        onClose();
+      } else {
+        setError(wdkState.error || 'Unlock failed — check your password');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Unlock failed');
     }
     setLoading(false);
   };
@@ -227,8 +253,30 @@ function WdkModalOverlay({
                   className="w-full px-4 py-6 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex flex-col items-center justify-center gap-2"
                 >
                   <span className="text-2xl">🔐</span>
-                  <span>{loading ? 'Verifying...' : 'Authenticate with Passkey'}</span>
+                  <span>{loading && !showPasswordFallback ? 'Verifying...' : 'Authenticate with Passkey'}</span>
                 </button>
+
+                {/* Password fallback — shown when passkey fails */}
+                {showPasswordFallback && (
+                  <div className="p-3 bg-gray-800 rounded-lg space-y-2">
+                    <p className="text-gray-400 text-xs">Or unlock with password:</p>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handlePasswordUnlock()}
+                      placeholder="Enter password"
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={handlePasswordUnlock}
+                      disabled={loading || !password.trim()}
+                      className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
+                    >
+                      {loading ? 'Unlocking...' : 'Unlock with Password'}
+                    </button>
+                  </div>
+                )}
                 
                 <div className="text-center">
                     <button

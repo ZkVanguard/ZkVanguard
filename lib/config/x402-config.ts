@@ -69,7 +69,7 @@ export const X402_NETWORKS = {
     chainId: 295,
     rpcUrl: 'https://mainnet.hashio.io/api',
     explorerUrl: 'https://hashscan.io/mainnet',
-    usdt0Address: '0x0000000000000000000000000000000000000000', // USDT on Hedera - TODO
+    usdt0Address: null as unknown as string, // USDT on Hedera - not yet deployed
     nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
   },
   'hedera-testnet': {
@@ -78,7 +78,7 @@ export const X402_NETWORKS = {
     chainId: 296,
     rpcUrl: 'https://testnet.hashio.io/api',
     explorerUrl: 'https://hashscan.io/testnet',
-    usdt0Address: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO
+    usdt0Address: null as unknown as string, // USDT on Hedera testnet - not yet deployed
     nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
   },
 } as const;
@@ -224,8 +224,10 @@ export function getX402NetworkByChainId(chainId: number): typeof X402_NETWORKS[X
 /**
  * Get USD₮0 address for a network
  */
-export function getUsdt0Address(networkKey: X402NetworkKey): string {
-  return X402_NETWORKS[networkKey].usdt0Address;
+export function getUsdt0Address(networkKey: X402NetworkKey): string | null {
+  const addr = X402_NETWORKS[networkKey].usdt0Address;
+  if (!addr || addr === '0x0000000000000000000000000000000000000000') return null;
+  return addr;
 }
 
 /**

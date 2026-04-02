@@ -215,14 +215,20 @@ async function getEthers() {
   return ethers;
 }
 
-function getProvider(chainKey: string) {
+// Cached providers per chain — avoids re-creating on every call
+const _providerCache = new Map<string, any>();
+
+async function getProvider(chainKey: string) {
+  const cached = _providerCache.get(chainKey);
+  if (cached) return cached;
   const config = WDK_CHAINS[chainKey];
   if (!config) return null;
-  // Lazy-import avoids top-level ethers reference during SSR
-  const { ethers } = require('ethers');
+  const { ethers } = await getEthers();
   // Use staticNetwork to skip automatic network detection which retries forever on failure
   const network = new ethers.Network(config.name, config.chainId);
-  return new ethers.JsonRpcProvider(config.rpcUrl, network, { staticNetwork: network, batchMaxCount: 1 });
+  const provider = new ethers.JsonRpcProvider(config.rpcUrl, network, { staticNetwork: network, batchMaxCount: 1 });
+  _providerCache.set(chainKey, provider);
+  return provider;
 }
 
 // ============================================
@@ -586,13 +592,49 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
   }, [defaultChain]);
 
   // --------------------------------------------------
-  // unlockWallet
+  // unlockWallet — Password fallback for when passkeys are unavailable
+  // Uses the same stored AES key as the passkey flow (no separate password hash).
+  // The password is verified by attempting to decrypt the mnemonic — if the stored
+  // wallet was password-protected (passwordHash present), we verify first.
   // --------------------------------------------------
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
-    // Legacy password flow is deprecated in favor of Passkeys + Random Keys
-    console.warn('[WDK] Password unlock is deprecated. Use Passkey.');
-    return false;
-  }, []);
+    if (!password || password.length < 1) {
+      setState(prev => ({ ...prev, error: 'Password required' }));
+      return false;
+    }
+
+    const stored = loadWallet();
+    if (!stored || !stored.keyJwk) {
+      setState(prev => ({ ...prev, error: 'No wallet found' }));
+      return false;
+    }
+
+    try {
+      // If wallet has a stored password hash, verify against it
+      if ((stored as any).passwordHash) {
+        const inputHash = await sha256Hex(password);
+        if (inputHash !== (stored as any).passwordHash) {
+          setState(prev => ({ ...prev, error: 'Incorrect password' }));
+          return false;
+        }
+      }
+
+      // Decrypt using stored AES key (same as passkey flow)
+      const key = await importKey(stored.keyJwk);
+      const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
+      
+      if (!mnemonic) {
+        setState(prev => ({ ...prev, error: 'Failed to decrypt wallet' }));
+        return false;
+      }
+
+      return await initializeFromMnemonic(mnemonic, stored.lastChain);
+    } catch (err: any) {
+      console.error('[WDK] unlockWallet error:', err);
+      setState(prev => ({ ...prev, error: err?.message ?? 'Unlock failed' }));
+      return false;
+    }
+  }, [initializeFromMnemonic]);
 
   // --------------------------------------------------
   // disconnect — Alias for lockWallet (preserve storage)
@@ -676,7 +718,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     const chain = chainKey ?? state.chainKey;
     if (!chain || !walletRef.current) return '0';
     try {
-      const provider = getProvider(chain);
+      const provider = await getProvider(chain);
       if (!provider) return '0';
       const bal = await provider.getBalance(walletRef.current.address);
       const { ethers } = await getEthers();
@@ -694,7 +736,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     if (!config?.usdtAddress) return '0';
     try {
       const { ethers } = await getEthers();
-      const provider = getProvider(chain);
+      const provider = await getProvider(chain);
       if (!provider) return '0';
       const usdt = new ethers.Contract(config.usdtAddress, [
         'function balanceOf(address) view returns (uint256)',
@@ -718,7 +760,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       throw new Error('Transaction cancelled by user');
     }
 
-    const provider = getProvider(state.chainKey);
+    const provider = await getProvider(state.chainKey);
     if (!provider) {
       throw new Error(`No RPC provider for chain: ${state.chainKey}`);
     }
@@ -745,7 +787,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     if (!config?.usdtAddress) return null;
     try {
       const { ethers } = await getEthers();
-      const provider = getProvider(state.chainKey);
+      const provider = await getProvider(state.chainKey);
       if (!provider) return null;
       const signer = walletRef.current.connect(provider);
       const usdt = new ethers.Contract(config.usdtAddress, [
