@@ -16,7 +16,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  *
  * ARCHITECTURE:
  * =============
- * Agent → HedgeExecutor.sol → MockMoonlander.sol  (on-chain positions)
+ * Agent → HedgeExecutor.sol → PerpetualDEX.sol     (on-chain positions)
  *                            → ZKHedgeCommitment.sol (on-chain ZK proofs)
  *
  * Each hedge:

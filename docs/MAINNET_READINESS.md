@@ -64,7 +64,7 @@ Mainnet uses official Tether USDT via WDK integration:
 | Cronos Mainnet | `0x66e428c3f67a68878562e79A0234c1F83c208770` | ✅ |
 | Hedera Mainnet | `0x0000000000000000000000000000000000000000` | ❌ (not yet deployed) |
 
-### Testnet Tokens (MockUSDC)
+### Testnet Tokens (Testnet USDC)
 
 | Chain | Address | Purpose |
 |-------|---------|---------|
