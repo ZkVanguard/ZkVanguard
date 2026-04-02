@@ -22,7 +22,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY;
+const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY?.trim() || null;
 // Network from env - defaults to testnet, set BLUEFIN_NETWORK=mainnet for production
 const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'testnet') as 'mainnet' | 'testnet';
 

@@ -40,15 +40,14 @@ const walletLocks = new Map<string, Promise<void>>();
 
 async function withWalletLock<T>(wallet: string, fn: () => Promise<T>): Promise<T> {
   const key = wallet.toLowerCase();
-  // Wait for any existing operation on this wallet to finish
-  const existing = walletLocks.get(key);
-  if (existing) {
-    await existing.catch(() => {}); // Don't propagate previous errors
-  }
+  // Chain onto any existing lock BEFORE awaiting — prevents race between concurrent callers
+  const existing = walletLocks.get(key) ?? Promise.resolve();
   let resolve: () => void;
   const lock = new Promise<void>((r) => { resolve = r; });
+  // Register our lock immediately so the next caller chains onto us
   walletLocks.set(key, lock);
   try {
+    await existing; // Wait for previous operation to finish
     return await fn();
   } finally {
     resolve!();

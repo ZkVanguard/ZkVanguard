@@ -12,6 +12,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice, type HedgePriceContext } from './unified-price-provider';
 
@@ -170,7 +171,6 @@ class BackgroundHedgeController extends EventEmitter {
    * Queue a hedge intent for background execution
    */
   queueIntent(intent: Omit<HedgeIntent, 'id' | 'createdAt' | 'expiresAt'>): string {
-    const crypto = require('crypto');
     const id = `hedge-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     const now = Date.now();
     
