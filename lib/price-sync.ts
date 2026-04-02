@@ -1,13 +1,13 @@
 /**
- * Sync live Crypto.com prices to MockMoonlander on-chain.
+ * Sync live Crypto.com prices to Perpetual DEX on-chain.
  * 
- * ⚠️ TESTNET ONLY - This module is for syncing mock prices during development.
- * On mainnet, Moonlander has its own oracle and this module should not be used.
+ * ⚠️ TESTNET ONLY - This module is for syncing prices during testnet development.
+ * On mainnet, the Perpetual DEX has its own oracle and this module should not be used.
  * 
  * Called before every open/close to ensure the contract uses real market data
  * instead of stale hardcoded prices.
  * 
- * Also ensures MockMoonlander has enough USDT to settle trades
+ * Also ensures the Perpetual DEX has enough USDT to settle trades
  * (mints if needed — this is a test contract).
  */
 import { ethers } from 'ethers';
@@ -15,16 +15,16 @@ import { getCurrentChainId, CHAIN_IDS, isMainnet, getRpcUrl } from '@/lib/utils/
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 
 // ⚠️ TESTNET-ONLY ADDRESSES
-// On mainnet, use real Moonlander oracle (no price sync needed)
-const MOCK_MOONLANDER_TESTNET = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
+// On mainnet, use real oracle (no price sync needed)
+const TESTNET_PERPETUAL_DEX = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
 const USDT_TESTNET = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 
 // Dynamic getters that throw on mainnet to prevent accidental usage
-function getMockMoonlanderAddress(): string {
+function getPerpetualDexAddress(): string {
   if (isMainnet()) {
-    throw new Error('MockMoonlander price sync is testnet-only. Mainnet uses real Moonlander oracle.');
+    throw new Error('Testnet price sync is testnet-only. Mainnet uses real oracle.');
   }
-  return MOCK_MOONLANDER_TESTNET;
+  return TESTNET_PERPETUAL_DEX;
 }
 
 function getUsdtAddress(): string {
@@ -103,9 +103,9 @@ export async function fetchLivePricesFromCDC(): Promise<Record<number, number>> 
 }
 
 /**
- * Sync live Crypto.com prices to MockMoonlander on-chain.
+ * Sync live Crypto.com prices to Perpetual DEX on-chain.
  * 
- * @param ownerSigner - The deployer wallet that owns MockMoonlander
+ * @param ownerSigner - The deployer wallet that owns the Perpetual DEX contract
  * @param pairIndices - Which pairs to update (default: all)
  * @returns The live prices that were synced
  */
@@ -119,7 +119,7 @@ export async function syncPricesToChain(
     return {};
   }
 
-  const moonlander = new ethers.Contract(getMockMoonlanderAddress(), MOONLANDER_ABI, ownerSigner);
+  const perpetualDex = new ethers.Contract(getPerpetualDexAddress(), MOONLANDER_ABI, ownerSigner);
   const feeData = await ownerSigner.provider!.getFeeData();
   const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
 
@@ -129,14 +129,14 @@ export async function syncPricesToChain(
     const usdPrice = livePrices[idx];
     if (!usdPrice) continue;
 
-    // MockMoonlander stores prices scaled to 10 decimals
+    // Perpetual DEX stores prices scaled to 10 decimals
     const scaledPrice = BigInt(Math.round(usdPrice * 1e10));
 
     txPromises.push(
       (async () => {
         try {
           // Check current on-chain price to avoid unnecessary txs
-          const currentOnChain = await moonlander.mockPrices(idx);
+          const currentOnChain = await perpetualDex.mockPrices(idx);
           const currentUsd = Number(currentOnChain) / 1e10;
           const pctDiff = Math.abs((usdPrice - currentUsd) / currentUsd) * 100;
 
@@ -145,7 +145,7 @@ export async function syncPricesToChain(
             return;
           }
 
-          const tx = await moonlander.setMockPrice(idx, scaledPrice, { gasPrice });
+          const tx = await perpetualDex.setMockPrice(idx, scaledPrice, { gasPrice });
           await tx.wait();
           console.log(`  ✅ ${PAIR_NAMES[idx]}: $${currentUsd.toFixed(2)} → $${usdPrice.toFixed(2)} (${pctDiff > 0 ? '+' : ''}${pctDiff.toFixed(1)}%)`);
         } catch (err) {
@@ -174,13 +174,13 @@ export async function syncSinglePriceToChain(
     return 0;
   }
 
-  const moonlander = new ethers.Contract(getMockMoonlanderAddress(), MOONLANDER_ABI, ownerSigner);
+  const perpetualDex = new ethers.Contract(getPerpetualDexAddress(), MOONLANDER_ABI, ownerSigner);
   const scaledPrice = BigInt(Math.round(usdPrice * 1e10));
 
   try {
     const feeData = await ownerSigner.provider!.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
-    const tx = await moonlander.setMockPrice(pairIndex, scaledPrice, { gasPrice });
+    const tx = await perpetualDex.setMockPrice(pairIndex, scaledPrice, { gasPrice });
     await tx.wait();
     console.log(`📈 Synced ${PAIR_NAMES[pairIndex]} price on-chain: $${usdPrice}`);
   } catch (err) {
@@ -191,34 +191,34 @@ export async function syncSinglePriceToChain(
 }
 
 /**
- * Ensure MockMoonlander has enough USDT to settle a trade.
- * Mints additional USDT if needed (test contract — permissionless mint).
+ * Ensure Perpetual DEX has enough USDT to settle a trade.
+ * Mints additional USDT if needed (testnet contract — permissionless mint).
  */
 export async function ensureMoonlanderLiquidity(
   signer: ethers.Wallet,
   requiredAmount: bigint
 ): Promise<void> {
   const usdt = new ethers.Contract(getUsdtAddress(), USDC_ABI, signer);
-  const moonBalance = await usdt.balanceOf(getMockMoonlanderAddress());
+  const dexBalance = await usdt.balanceOf(getPerpetualDexAddress());
 
   // Need at least 2x the trade amount to cover potential PnL returns
   const cushion = requiredAmount * 3n;
-  if (moonBalance >= cushion) return;
+  if (dexBalance >= cushion) return;
 
-  const deficit = cushion - moonBalance;
-  console.log(`💰 MockMoonlander needs ${ethers.formatUnits(deficit, 6)} more USDT (has ${ethers.formatUnits(moonBalance, 6)}, needs ${ethers.formatUnits(cushion, 6)})`);
+  const deficit = cushion - dexBalance;
+  console.log(`💰 Perpetual DEX needs ${ethers.formatUnits(deficit, 6)} more USDT (has ${ethers.formatUnits(dexBalance, 6)}, needs ${ethers.formatUnits(cushion, 6)})`);
 
   try {
     const feeData = await signer.provider!.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
-    const tx = await usdt.mint(getMockMoonlanderAddress(), deficit, { gasPrice });
+    const tx = await usdt.mint(getPerpetualDexAddress(), deficit, { gasPrice });
     await tx.wait();
-    const newBal = await usdt.balanceOf(getMockMoonlanderAddress());
-    console.log(`  ✅ Minted ${ethers.formatUnits(deficit, 6)} USDT to MockMoonlander (new balance: ${ethers.formatUnits(newBal, 6)})`);
+    const newBal = await usdt.balanceOf(getPerpetualDexAddress());
+    console.log(`  ✅ Minted ${ethers.formatUnits(deficit, 6)} USDT to Perpetual DEX (new balance: ${ethers.formatUnits(newBal, 6)})`);
   } catch (err) {
-    console.warn('⚠️ Failed to mint USDT to MockMoonlander:', err instanceof Error ? err.message : err);
+    console.warn('⚠️ Failed to mint USDT to Perpetual DEX:', err instanceof Error ? err.message : err);
   }
 }
 
 // Export getter functions for testnet addresses (throws on mainnet)
-export { getMockMoonlanderAddress, getUsdtAddress, PAIR_NAMES, PAIR_TO_TICKER };
+export { getPerpetualDexAddress, getUsdtAddress, PAIR_NAMES, PAIR_TO_TICKER };

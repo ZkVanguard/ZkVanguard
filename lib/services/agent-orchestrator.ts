@@ -151,7 +151,7 @@ export class AgentOrchestrator {
 
       logger.info('Creating HedgingAgent...');
       
-      // Configure on-chain hedge execution via HedgeExecutor + MockMoonlander (Cronos testnet)
+      // Configure on-chain hedge execution via HedgeExecutor + Perpetual DEX (Cronos)
       let hedgeExecutorConfig: HedgeExecutorConfig | undefined;
       try {
         // Get addresses from centralized address config

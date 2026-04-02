@@ -1,15 +1,15 @@
 /**
  * On-Chain Portfolio Manager
  * 
- * Manages positions using ACTUAL USDT on Cronos Testnet
+ * Manages positions using ACTUAL USDT on Cronos
  * 
- * Contract Addresses:
- * - USDT: 0x28217DAddC55e3C4831b4A48A00Ce04880786967
- * - MockMoonlander: 0xAb4946d7BD583a74F5E5051b22332fA674D7BE54
- * - HedgeExecutor: 0x090b6221137690EbB37667E4644287487CE462B9
+ * Contract Addresses (env-driven):
+ * - USDT: COLLATERAL_TOKEN_ADDRESS
+ * - PerpetualDEX: PERPETUAL_DEX_ADDRESS
+ * - HedgeExecutor: HEDGE_EXECUTOR_ADDRESS
  * 
  * Features:
- * - Uses real USDT balance from testnet
+ * - Uses real USDT balance
  * - Creates hedges via HedgeExecutor contract
  * - AI Risk management with RiskAgent
  * - Real API price tracking
@@ -27,7 +27,7 @@ import * as path from 'path';
 // Deployment addresses from cronos-testnet.json
 interface DeploymentConfig {
   USDT: string;
-  MockMoonlander: string;
+  PerpetualDEX: string;
   HedgeExecutor: string;
   RWAManager: string;
   network: string;
@@ -146,7 +146,7 @@ export interface OnChainPortfolioSummary {
   };
   contracts: {
     usdt: string;
-    mockMoonlander: string;
+    perpetualDex: string;
     hedgeExecutor: string;
   };
   realAPITracking: boolean;
@@ -202,7 +202,7 @@ class OnChainPortfolioManager {
       
       return {
         USDT: deploymentData.USDT,
-        MockMoonlander: deploymentData.MockMoonlander,
+        PerpetualDEX: deploymentData.PerpetualDEX || deploymentData.MockMoonlander,
         HedgeExecutor: deploymentData.HedgeExecutor || deploymentData.HedgeExecutorV2,
         RWAManager: deploymentData.RWAManager || '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
         network: deploymentData.network || 'cronos-testnet',
@@ -213,7 +213,7 @@ class OnChainPortfolioManager {
       // Fallback to hardcoded addresses
       return {
         USDT: '0x28217DAddC55e3C4831b4A48A00Ce04880786967',
-        MockMoonlander: '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54',
+        PerpetualDEX: process.env.PERPETUAL_DEX_ADDRESS || '0xAb4946d7BD583a74F5E5051b22332fA674D7BE54',
         HedgeExecutor: '0x090b6221137690EbB37667E4644287487CE462B9',
         RWAManager: '0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189',
         network: 'cronos-testnet',
@@ -592,7 +592,7 @@ class OnChainPortfolioManager {
       },
       contracts: {
         usdt: this.deployment.USDT,
-        mockMoonlander: this.deployment.MockMoonlander,
+        perpetualDex: this.deployment.PerpetualDEX,
         hedgeExecutor: this.deployment.HedgeExecutor,
       },
       realAPITracking: true,

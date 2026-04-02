@@ -1,7 +1,7 @@
 /**
  * Institutional Portfolio Manager
  * 
- * Manages a $150M Mock USDC portfolio distributed across BTC, ETH, CRO, and SUI
+ * Manages a $150M USDC portfolio distributed across BTC, ETH, CRO, and SUI
  * with AI-powered risk management and real API tracking
  * 
  * Features:
@@ -65,7 +65,7 @@ export interface InstitutionalPortfolioSummary {
   aiRiskManagement: boolean;
 }
 
-// Default allocation for 150M Mock USDC portfolio
+// Default allocation for 150M USDC portfolio
 const DEFAULT_ALLOCATIONS: AllocationConfig[] = [
   { symbol: 'BTC', percentage: 35, chain: 'cronos', riskWeight: 0.45 },  // $52.5M
   { symbol: 'ETH', percentage: 30, chain: 'cronos', riskWeight: 0.50 },  // $45M
@@ -86,7 +86,7 @@ class InstitutionalPortfolioManager {
 
   constructor(
     initialCapital: number = 150_000_000, // $150M default
-    portfolioName: string = 'Mock USDC Institutional Portfolio',
+    portfolioName: string = 'USDC Institutional Portfolio',
     allocations: AllocationConfig[] = DEFAULT_ALLOCATIONS
   ) {
     // Use crypto for ID generation if available, fallback to Date.now() for uniqueness

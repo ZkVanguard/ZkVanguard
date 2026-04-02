@@ -237,7 +237,7 @@ class CryptocomDeveloperPlatformService {
       //   tag: 'latest',
       //   network: this.network,
       // });
-      // Mock block data for now until SDK is properly configured
+      // Placeholder block data until SDK is properly configured
       const blockData = { 
         number: Math.floor(Date.now() / 1000).toString(), 
         hash: '0x' + 'a'.repeat(64),
