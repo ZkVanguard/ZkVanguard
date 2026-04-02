@@ -52,7 +52,7 @@ async function checkOnChainData() {
     // Check if using Mock contracts
     console.log('\n   Contract Types:');
     const code = await provider.getCode('0x28217DAddC55e3C4831b4A48A00Ce04880786967');
-    console.log(`   • MockUSDC: ${code.length > 2 ? '⚠️  TESTNET Mock Token' : 'Not deployed'}`);
+    console.log(`   • Testnet USDC: ${code.length > 2 ? '⚠️  TESTNET Token' : 'Not deployed'}`);
     console.log(`   • Network: Cronos Testnet (Chain ID: 338)`);
     console.log(`   • Purpose: Testnet for development/testing before mainnet`);
   } catch (error: any) {
@@ -126,8 +126,8 @@ function checkExecutionModes() {
   console.log(`   • BlueFin DEX: ${hasBluefinKey ? '✅ Real trades' : '❌ BLUEFIN_PRIVATE_KEY not set — BlueFin hedges will fail'}`);
   
   console.log('\n   Contract Types (Testnet):');
-  console.log('   • MockUSDC: ⚠️  Testnet token (simulates USDC)');
-  console.log('   • MockMoonlander: ⚠️  Testnet Moonlander (simulates mainnet)');
+  console.log('   • Testnet USDC: ⚠️  Testnet token (simulates USDC)');
+  console.log('   • PerpetualDEX: ⚠️  Testnet perpetual DEX (simulates mainnet)');
   console.log('   • Purpose: Safe testing before mainnet deployment');
 }
 
@@ -150,8 +150,8 @@ console.log('   • PostgreSQL database for persistence');
 console.log('   • Real STARK ZK proofs (with mock fallback)');
 
   console.log('\n   ⚠️  TESTNET COMPONENTS (Not Production):');
-  console.log('   • MockUSDC - Testnet USDC simulation');
-  console.log('   • MockMoonlander - Testnet Moonlander simulation');
+  console.log('   • Testnet USDC - Testnet USDC simulation');
+  console.log('   • PerpetualDEX - Testnet perpetual DEX simulation');
   console.log('   • Cronos Testnet (Chain 338) - Not mainnet');
 
   console.log('\n   ❌ NO STATIC/MOCK DATA IN:');

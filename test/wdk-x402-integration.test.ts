@@ -321,7 +321,7 @@ describe('WDK x402 Full Integration', () => {
 
   // ===========================================
   // ON-CHAIN TOKEN VERIFICATION (Integration) 
-  // Note: On-chain contracts return 'USDC' (MockUSDC symbol)
+  // Note: On-chain contracts return 'USDC' (testnet USDC symbol)
   // but we label them 'USDT' in UI for WDK consistency
   // ===========================================
   describe('On-Chain Token Verification', () => {
@@ -330,14 +330,14 @@ describe('WDK x402 Full Integration', () => {
         name: 'Cronos Testnet',
         rpcUrl: 'https://evm-t3.cronos.org',
         tokenAddress: USDT_ADDRESSES.cronos.testnet,
-        expectedSymbol: 'USDC', // On-chain MockUSDC (labeled USDT in app)
+        expectedSymbol: 'USDC', // On-chain testnet USDC (labeled USDT in app)
         expectedDecimals: 6,
       },
       {
         name: 'Hedera Testnet',
         rpcUrl: 'https://testnet.hashio.io/api',
         tokenAddress: USDT_ADDRESSES.hedera.testnet,
-        expectedSymbol: 'USDC', // On-chain MockUSDC (labeled USDT in app)
+        expectedSymbol: 'USDC', // On-chain testnet USDC (labeled USDT in app)
         expectedDecimals: 6,
       },
     ];

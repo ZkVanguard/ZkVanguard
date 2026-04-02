@@ -1,5 +1,5 @@
 /**
- * Mint MockUSDC + Create BTC/ETH/CRO Hedges
+ * Mint testnet USDC + Create BTC/ETH/CRO Hedges
  * 
  * Usage:
  *   npx hardhat run scripts/test-mint-and-hedge.cjs --network cronos-testnet
@@ -7,10 +7,10 @@
 const { ethers } = require("hardhat");
 
 const HEDGE_EXECUTOR = "0x090b6221137690EbB37667E4644287487CE462B9";
-const MOCK_USDC = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
+const USDC_ADDRESS = "0x28217DAddC55e3C4831b4A48A00Ce04880786967";
 const ORACLE_FEE = ethers.parseEther("0.06"); // 0.06 tCRO
 
-const MOCK_USDC_ABI = [
+const USDC_ABI = [
   "function mint(address to, uint256 amount) external",
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function balanceOf(address account) view returns (uint256)",
@@ -26,14 +26,14 @@ const HEDGE_EXECUTOR_ABI = [
 async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("\n" + "=".repeat(60));
-  console.log("  MINT MockUSDC + CREATE BTC/ETH/CRO HEDGES");
+  console.log("  MINT USDC + CREATE BTC/ETH/CRO HEDGES");
   console.log("  Wallet:", deployer.address);
   console.log("=".repeat(60));
 
   const balance = await ethers.provider.getBalance(deployer.address);
   console.log("  CRO Balance:", ethers.formatEther(balance), "tCRO");
 
-  const usdc = new ethers.Contract(MOCK_USDC, MOCK_USDC_ABI, deployer);
+  const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, deployer);
   const hedge = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, deployer);
 
   // ── Check current stats ──

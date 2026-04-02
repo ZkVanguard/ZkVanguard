@@ -400,7 +400,7 @@ async function testHedgeExecutorContract() {
   console.log('\n══ Test 9: HedgeExecutor Contract ══');
 
   const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
-  const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+  const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
   const RPC = 'https://evm-t3.cronos.org';
 
   try {
@@ -409,8 +409,8 @@ async function testHedgeExecutorContract() {
     const code = await provider.getCode(HEDGE_EXECUTOR);
     assert(code.length > 2, 'HedgeExecutor contract deployed');
 
-    const usdcCode = await provider.getCode(MOCK_USDC);
-    assert(usdcCode.length > 2, 'MockUSDC contract deployed');
+    const usdcCode = await provider.getCode(USDC_ADDRESS);
+    assert(usdcCode.length > 2, 'USDC contract deployed');
 
     // Check deployer wallet balance
     const pk = process.env.PRIVATE_KEY || process.env.AGENT_PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY;
@@ -424,7 +424,7 @@ async function testHedgeExecutorContract() {
         croBalance <= 0.01 ? 'Need more tCRO for gas' : undefined);
 
       // Check USDC allowance for HedgeExecutor
-      const usdc = new ethers.Contract(MOCK_USDC, [
+      const usdc = new ethers.Contract(USDC_ADDRESS, [
         'function balanceOf(address) view returns (uint256)',
         'function allowance(address,address) view returns (uint256)',
       ], provider);

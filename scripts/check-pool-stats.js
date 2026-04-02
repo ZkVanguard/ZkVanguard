@@ -30,7 +30,7 @@ async function main() {
     }
   }
   
-  // Check USDC balance using MockUSDC
+  // Check USDC balance using testnet USDC contract
   const usdc = await ethers.getContractAt("MockUSDC", "0x28217DAddC55e3C4831b4A48A00Ce04880786967");
   const usdcBalance = await usdc.balanceOf(pool.target);
   console.log("\nPool USDC Balance:", ethers.formatUnits(usdcBalance, 6), "USDC");
