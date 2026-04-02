@@ -78,9 +78,9 @@ module zkvanguard::hedge_executor {
         leverage: u64,
         /// Direction: true = long, false = short
         is_long: bool,
-        /// Mock open price (scaled by 1e8)
+        /// Open price from oracle feed (scaled by 1e8)
         open_price: u64,
-        /// Mock close price (scaled by 1e8)
+        /// Close price from oracle feed (scaled by 1e8)
         close_price: u64,
         /// ZK commitment hash
         commitment_hash: vector<u8>,
@@ -126,8 +126,8 @@ module zkvanguard::hedge_executor {
         hedge_ids: Table<vector<u8>, ID>,
         /// User hedge IDs
         user_hedges: Table<address, vector<vector<u8>>>,
-        /// Mock prices per pair (scaled by 1e8)
-        mock_prices: Table<u64, u64>,
+        /// Oracle price feeds per pair (scaled by 1e8) — admin-updated from off-chain oracle (e.g. Pyth)
+        price_feeds: Table<u64, u64>,
         /// Protocol fee balance
         fee_balance: Balance<SUI>,
         /// Collateral pool
@@ -175,14 +175,9 @@ module zkvanguard::hedge_executor {
         let admin_cap = AdminCap { id: object::new(ctx) };
         transfer::transfer(admin_cap, tx_context::sender(ctx));
 
-        let mut mock_prices = table::new<u64, u64>(ctx);
-        // Set initial mock prices (scaled by 1e8)
-        table::add(&mut mock_prices, 0, 9_500_000_000_000); // BTC ~$95,000
-        table::add(&mut mock_prices, 1, 320_000_000_000);    // ETH ~$3,200
-        table::add(&mut mock_prices, 2, 10_000_000);          // CRO ~$0.10
-        table::add(&mut mock_prices, 3, 800_000_000);         // ATOM ~$8
-        table::add(&mut mock_prices, 4, 35_000_000);          // DOGE ~$0.35
-        table::add(&mut mock_prices, 5, 20_000_000_000);      // SOL ~$200
+        let price_feeds = table::new<u64, u64>(ctx);
+        // Price feeds are populated by admin from off-chain oracle (Pyth/Switchboard)
+        // No hardcoded prices — admin must call update_price_feed() before hedging is enabled
 
         let state = HedgeExecutorState {
             id: object::new(ctx),
@@ -199,7 +194,7 @@ module zkvanguard::hedge_executor {
             nullifier_used: table::new<vector<u8>, bool>(ctx),
             hedge_ids: table::new<vector<u8>, ID>(ctx),
             user_hedges: table::new<address, vector<vector<u8>>>(ctx),
-            mock_prices,
+            price_feeds,
             fee_balance: balance::zero<SUI>(),
             collateral_pool: balance::zero<SUI>(),
         };
@@ -237,12 +232,9 @@ module zkvanguard::hedge_executor {
         balance::join(&mut state.fee_balance, fee_balance);
         balance::join(&mut state.collateral_pool, payment_balance);
 
-        // Get mock price for pair
-        let open_price = if (table::contains(&state.mock_prices, pair_index)) {
-            *table::borrow(&state.mock_prices, pair_index)
-        } else {
-            1_000_000_000 // Default $10
-        };
+        // Get oracle price for pair — revert if no price feed exists (no defaults)
+        assert!(table::contains(&state.price_feeds, pair_index), E_INVALID_PAIR);
+        let open_price = *table::borrow(&state.price_feeds, pair_index);
 
         // Generate hedge ID
         let timestamp = clock::timestamp_ms(clock);
@@ -326,12 +318,9 @@ module zkvanguard::hedge_executor {
 
         let timestamp = clock::timestamp_ms(clock);
 
-        // Get current price
-        let current_price = if (table::contains(&state.mock_prices, position.pair_index)) {
-            *table::borrow(&state.mock_prices, position.pair_index)
-        } else {
-            position.open_price
-        };
+        // Get current oracle price — revert if no price feed exists
+        assert!(table::contains(&state.price_feeds, position.pair_index), E_INVALID_PAIR);
+        let current_price = *table::borrow(&state.price_feeds, position.pair_index);
 
         // Calculate PnL
         let leveraged_value = position.collateral_amount * position.leverage;
@@ -455,11 +444,9 @@ module zkvanguard::hedge_executor {
         balance::join(&mut state.fee_balance, fee_bal);
         balance::join(&mut state.collateral_pool, payment_balance);
 
-        let open_price = if (table::contains(&state.mock_prices, pair_index)) {
-            *table::borrow(&state.mock_prices, pair_index)
-        } else {
-            1_000_000_000
-        };
+        // Get oracle price — revert if no price feed exists
+        assert!(table::contains(&state.price_feeds, pair_index), E_INVALID_PAIR);
+        let open_price = *table::borrow(&state.price_feeds, pair_index);
 
         let timestamp = clock::timestamp_ms(clock);
         let mut hedge_id_data = b"agent_hedge_";
@@ -532,18 +519,20 @@ module zkvanguard::hedge_executor {
         transfer::transfer(agent_cap, agent_address);
     }
 
-    /// Set mock price for a pair (for testing)
-    public entry fun set_mock_price(
+    /// Update oracle price feed for a pair (called by admin from off-chain oracle like Pyth)
+    public entry fun update_price_feed(
         _cap: &AdminCap,
         state: &mut HedgeExecutorState,
         pair_index: u64,
         price: u64,
     ) {
-        if (table::contains(&state.mock_prices, pair_index)) {
-            let price_ref = table::borrow_mut(&mut state.mock_prices, pair_index);
+        assert!(pair_index <= MAX_PAIRS, E_INVALID_PAIR);
+        assert!(price > 0, E_BELOW_MIN_COLLATERAL); // Price must be positive
+        if (table::contains(&state.price_feeds, pair_index)) {
+            let price_ref = table::borrow_mut(&mut state.price_feeds, pair_index);
             *price_ref = price;
         } else {
-            table::add(&mut state.mock_prices, pair_index, price);
+            table::add(&mut state.price_feeds, pair_index, price);
         };
     }
 
