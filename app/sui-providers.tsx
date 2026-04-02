@@ -277,6 +277,13 @@ function SuiContextProvider({
       throw new Error('Wallet not connected');
     }
 
+    // SECURITY: Block transactions when wallet is on wrong network
+    if (isWrongNetwork) {
+      const msg = `Transaction blocked: wallet is on ${walletNetwork || 'unknown'} but app expects ${network}. Please switch your wallet network.`;
+      logger.error(msg, undefined, { component: 'SuiProvider' });
+      throw new Error(msg);
+    }
+
     try {
       const result = await signAndExecute({
         transaction: tx as Parameters<typeof signAndExecute>[0]['transaction'],
@@ -288,12 +295,16 @@ function SuiContextProvider({
       };
     } catch (error: unknown) {
       logger.error('Transaction failed', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
+      // Distinguish user rejection from other errors
+      const message = error instanceof Error ? error.message : String(error);
+      const isUserRejection = message.includes('Rejected') || message.includes('User rejected') || message.includes('cancelled');
       return {
         digest: '',
         success: false,
-      };
+        ...(isUserRejection ? {} : { error: message }),
+      } as { digest: string; success: boolean };
     }
-  }, [isConnected, signAndExecute]);
+  }, [isConnected, isWrongNetwork, walletNetwork, network, signAndExecute]);
 
   const getExplorerUrl = useCallback((type: 'tx' | 'address' | 'object', value: string): string => {
     const baseUrl = network === 'mainnet' 

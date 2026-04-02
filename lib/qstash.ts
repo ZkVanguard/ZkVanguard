@@ -95,17 +95,17 @@ export async function verifyCronRequest(
     return true;
   }
 
-  // No auth configured — reject in production, allow in dev
+  // No auth configured — only allow in local development, reject everywhere else
   if (!cronSecret && !signature) {
-    if (process.env.NODE_ENV === 'production') {
-      logger.error(`[QStash] ❌ CRITICAL: No CRON_SECRET configured in production — rejecting ${routeName}`);
-      return NextResponse.json(
-        { success: false, error: 'Server misconfiguration: auth not configured' },
-        { status: 500 }
-      );
+    if (process.env.NODE_ENV === 'development') {
+      logger.warn(`[QStash] ⚠️ No auth configured — allowing ${routeName} (local dev only)`);
+      return true;
     }
-    logger.warn(`[QStash] ⚠️ No auth configured — allowing ${routeName} (dev mode only)`);
-    return true;
+    logger.error(`[QStash] ❌ CRITICAL: No CRON_SECRET or QStash signature — rejecting ${routeName} (NODE_ENV=${process.env.NODE_ENV})`);
+    return NextResponse.json(
+      { success: false, error: 'Server misconfiguration: auth not configured' },
+      { status: 500 }
+    );
   }
 
   // Unauthorized
