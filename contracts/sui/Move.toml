@@ -3,8 +3,8 @@ name = "zkvanguard"
 version = "0.1.0"
 edition = "2024.beta"
 
-# No explicit Sui dependency - let the CLI auto-add the correct version
 [dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
 
 [addresses]
 zkvanguard = "0x0"

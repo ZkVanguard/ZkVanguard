@@ -48,6 +48,8 @@
     "test",
     "scripts",
     "archive",
-    "lib/wdk/wdk-context-native.tsx"
+    "lib/wdk/wdk-context-native.tsx",
+    "test-e2e-ai-pipeline.ts",
+    "test-ai-intelligence.ts"
   ]
 }
