@@ -143,7 +143,7 @@ const MAX_SLIPPAGE: Record<NetworkType, number> = {
 
 /** Gas budget in MIST (1 SUI = 1e9 MIST) */
 const GAS_BUDGET: Record<NetworkType, number> = {
-  mainnet: 50_000_000,   // 0.05 SUI
+  mainnet: 100_000_000,  // 0.1 SUI — conservative for mainnet (higher gas costs)
   testnet: 50_000_000,   // 0.05 SUI
 };
 
@@ -713,15 +713,57 @@ export class BluefinAggregatorService {
       };
     }
 
+    // Safety: oracle price deviation check (mainnet only)
+    // Reject if DEX effective price deviates >3% from oracle price
+    if (this.network === 'mainnet' && quote.expectedAmountOut && quote.expectedAmountOut !== '0') {
+      const MAX_ORACLE_DEVIATION = 0.03; // 3%
+      try {
+        const oracleEstimate = await this.estimateOutputFromPrice(quote.asset, swapUsdcAmount);
+        if (oracleEstimate && oracleEstimate.estimatedOut !== '0') {
+          const oracleOut = Number(oracleEstimate.estimatedOut);
+          const dexOut = Number(quote.expectedAmountOut);
+          if (oracleOut > 0 && dexOut > 0) {
+            const deviation = Math.abs(dexOut - oracleOut) / oracleOut;
+            if (deviation > MAX_ORACLE_DEVIATION) {
+              logger.error(`[BluefinAggregator] Oracle deviation too high for ${quote.asset}`, {
+                dexOut, oracleOut, deviation: (deviation * 100).toFixed(2) + '%',
+              });
+              return {
+                asset: quote.asset,
+                success: false,
+                amountIn: quote.amountIn,
+                error: `DEX price deviates ${(deviation * 100).toFixed(1)}% from oracle — swap blocked for safety`,
+              };
+            }
+          }
+        }
+      } catch {
+        // Oracle check failed — proceed with DEX price (non-blocking)
+        logger.debug(`[BluefinAggregator] Oracle check unavailable for ${quote.asset}, proceeding`);
+      }
+    }
+
     try {
       const { Ed25519Keypair, Transaction, SuiClient, getFullnodeUrl } = await getSuiSdk();
 
-      // Derive keypair from env (supports base64 or hex)
-      const keypair = adminKey.startsWith('suiprivkey')
-        ? Ed25519Keypair.fromSecretKey(adminKey)
-        : Ed25519Keypair.fromSecretKey(
-            Buffer.from(adminKey.replace(/^0x/, ''), 'hex')
-          );
+      // Derive keypair from env (supports suiprivkey bech32 or hex)
+      let keypair: InstanceType<typeof Ed25519Keypair>;
+      try {
+        keypair = adminKey.startsWith('suiprivkey')
+          ? Ed25519Keypair.fromSecretKey(adminKey)
+          : Ed25519Keypair.fromSecretKey(
+              Buffer.from(adminKey.replace(/^0x/, ''), 'hex')
+            );
+      } catch (keyErr) {
+        const msg = keyErr instanceof Error ? keyErr.message : String(keyErr);
+        logger.error('[BluefinAggregator] Invalid admin key format', { error: msg });
+        return {
+          asset: quote.asset,
+          success: false,
+          amountIn: quote.amountIn,
+          error: `Invalid SUI_POOL_ADMIN_KEY format: ${msg}`,
+        };
+      }
       const senderAddress = keypair.getPublicKey().toSuiAddress();
 
       // Safety: check gas reserve before executing
@@ -762,7 +804,25 @@ export class BluefinAggregatorService {
         };
       }
 
-      tx.setGasBudget(gasBudget);
+      // Estimate gas via dry run, fall back to static budget
+      let finalGasBudget = gasBudget;
+      try {
+        tx.setGasBudget(gasBudget);
+        tx.setSender(senderAddress);
+        const dryRun = await suiClient.dryRunTransactionBlock({
+          transactionBlock: await tx.build({ client: suiClient }),
+        });
+        const gasUsed = dryRun.effects?.gasUsed;
+        if (gasUsed) {
+          const totalGas = Number(gasUsed.computationCost) + Number(gasUsed.storageCost) - Number(gasUsed.storageRebate);
+          // Add 20% buffer on top of dry-run estimate
+          finalGasBudget = Math.max(Math.ceil(totalGas * 1.2), gasBudget);
+        }
+      } catch {
+        // Dry run failed — use static budget
+        logger.debug(`[BluefinAggregator] Gas dry-run failed for ${quote.asset}, using static budget`);
+      }
+      tx.setGasBudget(finalGasBudget);
 
       // Sign + execute
       const result = await suiClient.signAndExecuteTransaction({
