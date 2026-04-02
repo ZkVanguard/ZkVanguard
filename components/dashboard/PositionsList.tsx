@@ -732,19 +732,19 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
               const isActivePortfolio = hasFunds || hasRegisteredAssets;
               
               // Get all registered asset symbols - prefer assetBalances if they have symbols
-              // For institutional portfolios with MockUSDC, use virtual allocation symbols (BTC, ETH, CRO, SUI)
+              // For institutional portfolios with testnet USDC, use virtual allocation symbols (BTC, ETH, CRO, SUI)
               let registeredAssets: string[] = [];
               if (portfolio.assetBalances && portfolio.assetBalances.length > 0) {
                 registeredAssets = portfolio.assetBalances.map(ab => ab.symbol);
               } else if (valueUSD > 1000000) {
-                // Large portfolio with MockUSDC - show virtual allocations
+                // Large portfolio with USDC - show virtual allocations
                 registeredAssets = ['BTC', 'ETH', 'CRO', 'SUI'];
               } else {
                 registeredAssets = portfolio.assets.map(a => {
                   const addr = a.toLowerCase();
                   if (addr === '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0') return 'devUSDC';
                   if (addr === '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4') return 'WCRO';
-                  if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'MockUSDC';
+                  if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') return 'USDC';
                   return a.slice(0, 6);
                 });
               }

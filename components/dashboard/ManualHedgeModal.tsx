@@ -7,7 +7,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicCl
 import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
-import { MOCK_USDC_ABI } from './MockUSDCFaucet';
+import { TESTNET_USDC_ABI } from './MockUSDCFaucet';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 import { getUsdcAddress, getExplorerUrl, CHAIN_IDS } from '@/lib/utils/network';
@@ -472,7 +472,7 @@ export function ManualHedgeModal({
 
     const balNum = parseFloat(usdcBalance);
     if (balNum < collateralAmount) {
-      setError(`Insufficient MockUSDC. Have ${balNum.toLocaleString()}, need ${collateralAmount.toLocaleString()}. Mint more below.`);
+      setError(`Insufficient USDC. Have ${balNum.toLocaleString()}, need ${collateralAmount.toLocaleString()}. Mint more below.`);
       return;
     }
 
@@ -641,7 +641,7 @@ export function ManualHedgeModal({
     // Check USDC balance
     const balNum = parseFloat(usdcBalance);
     if (balNum < collateralAmount) {
-      setError(`Insufficient MockUSDC. You have ${balNum.toLocaleString()} but need ${collateralAmount.toLocaleString()}. Mint more below.`);
+      setError(`Insufficient USDC. You have ${balNum.toLocaleString()} but need ${collateralAmount.toLocaleString()}. Mint more below.`);
       return;
     }
 
@@ -676,7 +676,7 @@ export function ManualHedgeModal({
     resetMintTracked();
     writeMintTracked({
       address: usdcAddress,
-      abi: MOCK_USDC_ABI,
+      abi: TESTNET_USDC_ABI,
       functionName: 'mint',
       args: [address, parseUnits(amount, 6)],
     });
@@ -720,7 +720,7 @@ export function ManualHedgeModal({
     idle: '',
     signing: 'Sign hedge request in your wallet...',
     checking: 'Checking allowance...',
-    approving: 'Approve MockUSDC in your wallet...',
+    approving: 'Approve USDC in your wallet...',
     'approve-confirming': 'Waiting for approval confirmation...',
     opening: 'Sign openHedge in your wallet...',
     'open-confirming': 'Waiting for on-chain confirmation...',
@@ -930,7 +930,7 @@ export function ManualHedgeModal({
                         {address ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : 'Not connected'}
                       </span>
                       <span className="text-[12px] font-semibold text-[#1d1d1f]">
-                        {parseFloat(usdcBalance).toLocaleString('en-US', { maximumFractionDigits: 2 })} MockUSDC
+                        {parseFloat(usdcBalance).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
                       </span>
                     </div>
                   </div>
@@ -1102,7 +1102,7 @@ export function ManualHedgeModal({
                     </div>
                   )}
 
-                  {/* MockUSDC Faucet Inline */}
+                  {/* Testnet USDC Faucet Inline */}
                   <div className="p-3 bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px] space-y-2">
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-[#FF9500]" />
