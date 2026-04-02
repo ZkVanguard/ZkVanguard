@@ -67,7 +67,7 @@ function getRelayerKey(): string {
   return key;
 }
 
-// Deployer wallet — OWNER of MockMoonlander (needed for setMockPrice calls)
+// Deployer wallet — OWNER of PerpetualDEX (needed for price sync calls)
 const DEPLOYER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
 
 const PAIR_NAMES: Record<number, string> = {
@@ -294,24 +294,24 @@ export async function POST(request: NextRequest) {
     
     console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} (${priceSource}) | relayer: ${relayer.address} (user hidden)`);
 
-    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN (TESTNET ONLY) ═══
-    // On mainnet, Moonlander has real oracle - no price sync needed
-    // On testnet, sync mock prices so PnL calculation works correctly
+    // ═══ SYNC LIVE CRYPTO.COM PRICE TO PERPETUAL DEX ON-CHAIN (TESTNET ONLY) ═══
+    // On mainnet, PerpetualDEX has real oracle - no price sync needed
+    // On testnet, sync prices so PnL calculation works correctly
     if (isTestnet() && DEPLOYER_PK) {
       try {
         const deployerWallet = new ethers.Wallet(DEPLOYER_PK, provider);
-        // 1) Sync the live price so MockMoonlander records the correct openPrice
+        // 1) Sync the live price so PerpetualDEX records the correct openPrice
         const syncedPrice = await syncSinglePriceToChain(deployerWallet, pairIndex);
         if (syncedPrice > 0) {
           console.log(`📈 On-chain price synced: ${asset} → $${syncedPrice} (was stale)`);
         }
-        // 2) Ensure MockMoonlander has enough USDC to settle this trade later
+        // 2) Ensure PerpetualDEX has enough USDC to settle this trade later
         await ensureMoonlanderLiquidity(deployerWallet, collateralRaw * BigInt(leverage));
       } catch (syncErr) {
         console.warn('⚠️ Price sync failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
       }
     } else if (isTestnet() && !DEPLOYER_PK) {
-      console.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to MockMoonlander');
+      console.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to PerpetualDEX');
     }
     // On mainnet, skip price sync entirely - real Moonlander oracle handles it
 

@@ -3,7 +3,7 @@
  * Server-relayed gasless close — user pays $0.00 gas
  * 
  * Calls HedgeExecutor.closeHedge() which:
- * 1. Closes the trade on MockMoonlander
+ * 1. Closes the trade on PerpetualDEX
  * 2. Calculates realized PnL
  * 3. Transfers collateral ± PnL back to the trader's wallet
  * 
@@ -24,11 +24,11 @@ import { logger } from '@/lib/utils/logger';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const HEDGE_EXECUTOR = '0x090b6221137690EbB37667E4644287487CE462B9';
-const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
-const RPC_URL = 'https://evm-t3.cronos.org';
+const HEDGE_EXECUTOR = process.env.HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9';
+const COLLATERAL_TOKEN = process.env.COLLATERAL_TOKEN_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+const RPC_URL = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
 
-// Deployer/Owner wallet — required for setMockPrice calls on MockMoonlander
+// Deployer/Owner wallet — required for price sync calls on PerpetualDEX
 const OWNER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
 
 const HEDGE_EXECUTOR_ABI = [
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     console.log(`[close-onchain] Step 2: Created wallet from relayer key`);
     
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
-    const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, provider);
+    const usdc = new ethers.Contract(COLLATERAL_TOKEN, USDC_ABI, provider);
     console.log(`[close-onchain] Step 3: Contract instances created`);
 
     // ── STEP 1: Read on-chain hedge data for ZK verification ──────────────────
@@ -324,8 +324,8 @@ export async function POST(request: NextRequest) {
     // Get TRUE OWNER's USDC balance before close (for accurate reporting)
     const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
 
-    // ═══ SYNC LIVE CRYPTO.COM PRICE TO MOCKMOONLANDER ON-CHAIN ═══
-    // CRITICAL: Without this, closeTrade() uses stale mock prices for PnL → fake liquidations
+    // ═══ SYNC LIVE CRYPTO.COM PRICE TO PERPETUAL DEX ON-CHAIN ═══
+    // CRITICAL: Without this, closeTrade() uses stale prices for PnL → fake liquidations
     if (OWNER_PK) {
       try {
         const ownerWallet = new ethers.Wallet(OWNER_PK, provider);
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
         if (syncedPrice > 0) {
           console.log(`📈 Close: On-chain price synced: ${PAIR_NAMES[pairIndex]} → $${syncedPrice}`);
         }
-        // 2) Ensure MockMoonlander has enough USDC to return collateral ± PnL
+        // 2) Ensure PerpetualDEX has enough USDC to return collateral ± PnL
         const collateralRaw = ethers.parseUnits(String(collateral), 6);
         await ensureMoonlanderLiquidity(ownerWallet, collateralRaw * BigInt(leverage));
       } catch (syncErr) {
@@ -394,8 +394,8 @@ export async function POST(request: NextRequest) {
     if (isGaslessHedge && trueOwner.toLowerCase() !== onChainTraderAddress.toLowerCase()) {
       console.log(`✨ FUND FORWARDING TRIGGERED - gasless hedge with different true owner`);
       try {
-        // Get the USDC contract with signer for transfer
-        const usdcWithSigner = new ethers.Contract(MOCK_USDC, USDC_ABI, wallet);
+        // Get the collateral token contract with signer for transfer
+        const usdcWithSigner = new ethers.Contract(COLLATERAL_TOKEN, USDC_ABI, wallet);
         
         // Check relayer's USDC balance (funds from closeHedge)
         const relayerBalance = await usdc.balanceOf(wallet.address);

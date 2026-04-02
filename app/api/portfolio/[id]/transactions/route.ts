@@ -8,8 +8,8 @@ import { getCachedTransactions, getLastCachedBlock, insertTransactions } from '@
 
 export const runtime = 'nodejs';
 
-// Known token addresses
-const MOCK_USDC_ADDRESS = '0x28217daddc55e3c4831b4a48a00ce04880786967';
+// Collateral token address — env-driven for mainnet/testnet
+const COLLATERAL_TOKEN_ADDRESS = process.env.COLLATERAL_TOKEN_ADDRESS || '0x28217daddc55e3c4831b4a48a00ce04880786967';
 
 // Disable caching for this API route
 export const dynamic = 'force-dynamic';
@@ -174,7 +174,7 @@ export async function GET(
         // Transfers TO the wallet (deposits/mints)
         eventPromises.push(
           client.getLogs({
-            address: MOCK_USDC_ADDRESS as `0x${string}`,
+            address: COLLATERAL_TOKEN_ADDRESS as `0x${string}`,
             event: {
               type: 'event',
               name: 'Transfer',
@@ -192,7 +192,7 @@ export async function GET(
         // Transfers FROM the wallet (withdraws/sends)
         eventPromises.push(
           client.getLogs({
-            address: MOCK_USDC_ADDRESS as `0x${string}`,
+            address: COLLATERAL_TOKEN_ADDRESS as `0x${string}`,
             event: {
               type: 'event',
               name: 'Transfer',
@@ -331,8 +331,8 @@ export async function GET(
         transactions.push({
           type: 'deposit',
           timestamp: Number(block.timestamp) * 1000,
-          amount: Number(value) / Math.pow(10, 6), // MockUSDC has 6 decimals
-          token: isMint ? 'MockUSDC (Minted)' : 'MockUSDC',
+          amount: Number(value) / Math.pow(10, 6), // USDC has 6 decimals
+          token: isMint ? 'USDC (Minted)' : 'USDC',
           txHash: log.transactionHash || '',
           blockNumber: Number(log.blockNumber),
         });
@@ -354,8 +354,8 @@ export async function GET(
         transactions.push({
           type: 'withdraw',
           timestamp: Number(block.timestamp) * 1000,
-          amount: Number(value) / Math.pow(10, 6), // MockUSDC has 6 decimals
-          token: isBurn ? 'MockUSDC (Burned)' : 'MockUSDC',
+          amount: Number(value) / Math.pow(10, 6), // USDC has 6 decimals
+          token: isBurn ? 'USDC (Burned)' : 'USDC',
           txHash: log.transactionHash || '',
           blockNumber: Number(log.blockNumber),
         });

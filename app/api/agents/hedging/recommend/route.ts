@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
           strategy: 'Connect & Fund Wallet',
           confidence: 1.0,
           expectedReduction: 0,
-          description: 'No tokens detected in this wallet. Deposit CRO, BTC, ETH or mint MockUSDC to enable AI-powered hedge recommendations.',
+          description: 'No tokens detected in this wallet. Deposit CRO, BTC, ETH or testnet USDC to enable AI-powered hedge recommendations.',
           agentSource: 'system',
           actions: [],
         }],

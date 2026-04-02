@@ -345,14 +345,14 @@ export async function POST(request: NextRequest) {
     // ⚠️ TESTNET ONLY: These addresses are testnet contracts
     //=================================================================================
     const hedgeExecutorAddress = process.env.HEDGE_EXECUTOR_ADDRESS;
-    const mockUsdcAddress = process.env.MOCK_USDC_ADDRESS;
+    const collateralTokenAddress = process.env.COLLATERAL_TOKEN_ADDRESS;
     const executorPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || process.env.MOONLANDER_PRIVATE_KEY;
 
-    if (!hedgeExecutorAddress || !mockUsdcAddress) {
-      logger.warn('⚠️ Missing HEDGE_EXECUTOR_ADDRESS or MOCK_USDC_ADDRESS env vars - on-chain hedge disabled');
+    if (!hedgeExecutorAddress || !collateralTokenAddress) {
+      logger.warn('⚠️ Missing HEDGE_EXECUTOR_ADDRESS or COLLATERAL_TOKEN_ADDRESS env vars - on-chain hedge disabled');
     }
 
-    if (executorPrivateKey && hedgeExecutorAddress && mockUsdcAddress) {
+    if (executorPrivateKey && hedgeExecutorAddress && collateralTokenAddress) {
       try {
         logger.info('🔗 Executing hedge via HedgeExecutor contract on-chain', {
           asset, side, notionalValue, leverage,
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
 
         const hedgeClient = new HedgeExecutorClient({
           contractAddress: hedgeExecutorAddress,
-          collateralTokenAddress: mockUsdcAddress,
+          collateralTokenAddress: collateralTokenAddress,
           provider,
           signer,
           gasLimitOverride: 500_000,

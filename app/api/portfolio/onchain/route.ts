@@ -14,7 +14,7 @@ const MAX_MINT_AMOUNT = 1_000_000_000; // $1B max
 /**
  * On-Chain Portfolio API
  * 
- * Manages the portfolio using ACTUAL MockUSDC on Cronos Testnet
+ * Manages the portfolio using ACTUAL USDC on Cronos Testnet
  * SECURITY: POST requires auth. Mint requires admin auth. Amount bounds enforced.
  */
 
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         chainId: 338,
         realAPITracking: true,
         aiRiskManagement: true,
-        onChainMockUSDC: true,
+        onChainUSDC: true,
         timestamp: Date.now(),
       },
     });
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         }
         
         result = {
-          message: `Portfolio #${createResult.portfolioId} created with $${depositAmount.toLocaleString()} MockUSDC`,
+          message: `Portfolio #${createResult.portfolioId} created with $${depositAmount.toLocaleString()} USDC`,
           portfolioId: createResult.portfolioId,
           txHashes: createResult.txHashes,
           allocations: createResult.allocations,
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
         chainId: 338,
         realAPITracking: true,
         aiRiskManagement: true,
-        onChainMockUSDC: true,
+        onChainUSDC: true,
         timestamp: Date.now(),
       },
     });
