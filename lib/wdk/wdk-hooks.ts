@@ -305,14 +305,12 @@ export function useWaitForTransactionReceipt(args?: { hash?: `0x${string}` }): U
   useEffect(() => {
     if (!args?.hash || !state.chainKey) return;
     
-    const chainConfig = WDK_CHAINS[state.chainKey];
-    if (!chainConfig) return;
-    
     const checkReceipt = async () => {
       setIsLoading(true);
       
       try {
-        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrl);
+        const provider = getCachedProvider(state.chainKey!);
+        if (!provider) throw new Error(`No provider for chain ${state.chainKey}`);
         const receipt = await provider.waitForTransaction(args.hash!, 1, 60000);
         
         if (receipt) {

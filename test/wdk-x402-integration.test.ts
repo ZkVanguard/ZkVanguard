@@ -52,13 +52,11 @@ describe('WDK x402 Full Integration', () => {
       expect(USDT_ADDRESSES.cronos.testnet).toBe('0x28217DAddC55e3C4831b4A48A00Ce04880786967');
       expect(USDT_ADDRESSES.cronos.testnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
       
-      // Hedera Mainnet
-      expect(USDT_ADDRESSES.hedera.mainnet).toBe('0x0000000000000000000000000000000000000000');
-      expect(USDT_ADDRESSES.hedera.mainnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      // Hedera Mainnet - not yet deployed
+      expect(USDT_ADDRESSES.hedera.mainnet).toBeNull();
       
-      // Hedera Testnet
-      expect(USDT_ADDRESSES.hedera.testnet).toBe('0x0000000000000000000000000000000000000000');
-      expect(USDT_ADDRESSES.hedera.testnet).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      // Hedera Testnet - not yet deployed
+      expect(USDT_ADDRESSES.hedera.testnet).toBeNull();
       
       // Ethereum Mainnet (reference)
       expect(USDT_ADDRESSES.ethereum.mainnet).toBe('0xdAC17F958D2ee523a2206206994597C13D831ec7');

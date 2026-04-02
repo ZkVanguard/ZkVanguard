@@ -60,7 +60,6 @@ export function WdkConnectButton({ className, showBalance = false }: WdkConnectB
   const [modalView, setModalView] = useState<ModalView>('none');
   const [seedPhrase, setSeedPhrase] = useState<string>('');
   const [importPhrase, setImportPhrase] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
   const [seedCopied, setSeedCopied] = useState(false);
   const [seedConfirmed, setSeedConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -145,7 +144,6 @@ export function WdkConnectButton({ className, showBalance = false }: WdkConnectB
     setModalView('none');
     setError(null);
     setImportPhrase('');
-    setPassword('');
   }, []);
   
   // Get chain info
