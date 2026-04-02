@@ -61,6 +61,44 @@ export class SuiService {
   }
 
   /**
+   * Internal: fetch with timeout and retry for RPC reliability.
+   * Uses AbortController for timeout and exponential backoff for retries.
+   */
+  private async rpcFetchWithRetry(
+    body: unknown,
+    { timeoutMs = 8000, maxRetries = 2 }: { timeoutMs?: number; maxRetries?: number } = {}
+  ): Promise<Record<string, unknown>> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(this.rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+        return data;
+      } catch (error) {
+        clearTimeout(timer);
+        lastError = error;
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+          await new Promise(r => setTimeout(r, delay));
+          logger.warn(`[SuiService] RPC attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  /**
    * Get current network configuration
    */
   getNetworkConfig() {
@@ -83,24 +121,14 @@ export class SuiService {
    */
   async getBalance(address: string): Promise<{ balance: string; balanceRaw: string }> {
     try {
-      const response = await fetch(this.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'suix_getBalance',
-          params: [address, '0x2::sui::SUI'],
-        }),
+      const data = await this.rpcFetchWithRetry({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'suix_getBalance',
+        params: [address, '0x2::sui::SUI'],
       });
 
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-
-      const totalBalance = data.result?.totalBalance || '0';
+      const totalBalance = (data.result as Record<string, string>)?.totalBalance || '0';
       // SUI has 9 decimals
       const balanceInSui = (BigInt(totalBalance) / BigInt(10 ** 9)).toString();
       
@@ -119,24 +147,14 @@ export class SuiService {
    */
   async getAllBalances(address: string): Promise<Array<{ coinType: string; balance: string }>> {
     try {
-      const response = await fetch(this.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'suix_getAllBalances',
-          params: [address],
-        }),
+      const data = await this.rpcFetchWithRetry({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'suix_getAllBalances',
+        params: [address],
       });
 
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-
-      return data.result || [];
+      return (data.result as Array<{ coinType: string; balance: string }>) || [];
     } catch (error) {
       logger.error('[SuiService] Failed to get all balances', error, { component: 'SuiService' });
       return [];
@@ -148,22 +166,12 @@ export class SuiService {
    */
   async getTransaction(digest: string): Promise<unknown> {
     try {
-      const response = await fetch(this.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getTransactionBlock',
-          params: [digest, { showEffects: true, showInput: true }],
-        }),
+      const data = await this.rpcFetchWithRetry({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'sui_getTransactionBlock',
+        params: [digest, { showEffects: true, showInput: true }],
       });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
 
       return data.result;
     } catch (error) {

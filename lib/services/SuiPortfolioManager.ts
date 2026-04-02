@@ -196,8 +196,11 @@ export class SuiPortfolioManager {
    */
   private async syncFromChain(): Promise<void> {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
@@ -216,6 +219,7 @@ export class SuiPortfolioManager {
       });
 
       const data = await response.json();
+      clearTimeout(timer);
       const objects = data.result?.data || [];
 
       for (const obj of objects) {

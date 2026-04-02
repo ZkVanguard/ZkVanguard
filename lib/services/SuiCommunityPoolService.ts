@@ -106,6 +106,30 @@ const SUI_DECIMALS = 9;
 const SHARE_DECIMALS = 9;
 const CLOCK_OBJECT_ID = '0x6';
 
+/**
+ * Safely convert a raw on-chain integer string to a decimal number.
+ * Uses BigInt arithmetic to avoid precision loss for values > Number.MAX_SAFE_INTEGER (2^53).
+ * E.g. "9007199254740992" with 9 decimals → 9007199.254740992 (exact)
+ */
+function safeRawToDecimal(raw: string | number | bigint, decimals: number): number {
+  const value = BigInt(raw || 0);
+  const divisor = BigInt(10 ** decimals);
+  const wholePart = value / divisor;
+  const fractionalPart = value % divisor;
+  return Number(wholePart) + Number(fractionalPart) / Number(divisor);
+}
+
+/**
+ * Safely convert a decimal amount to raw integer (BigInt) using string math.
+ * Avoids floating-point multiplication errors (e.g. 1.1 * 1e9 !== 1100000000).
+ */
+function safeDecimalToRaw(amount: number, decimals: number): bigint {
+  const str = amount.toFixed(decimals);
+  const [whole, frac = ''] = str.split('.');
+  const padded = frac.padEnd(decimals, '0').slice(0, decimals);
+  return BigInt(whole + padded);
+}
+
 // ============================================
 // TYPES
 // ============================================
@@ -202,16 +226,74 @@ const SUI_MEMBERS_TTL = 120_000; // 2m all members (leaderboard)
 
 /** Default timeout for SUI RPC calls */
 const SUI_RPC_TIMEOUT_MS = 10_000; // 10 seconds
+const SUI_RPC_MAX_RETRIES = 2;
 
-/** Fetch with AbortController timeout — prevents hanging on slow RPC nodes */
+// ============================================
+// CIRCUIT BREAKER
+// ============================================
+
+/** Simple in-memory circuit breaker for SUI RPC calls */
+const circuitBreaker = {
+  failures: 0,
+  lastFailure: 0,
+  state: 'closed' as 'closed' | 'open' | 'half-open',
+  /** Max consecutive failures before opening circuit */
+  threshold: 5,
+  /** Time to wait before trying again (ms) */
+  resetTimeout: 30_000,
+  
+  recordSuccess() {
+    this.failures = 0;
+    this.state = 'closed';
+  },
+  recordFailure() {
+    this.failures++;
+    this.lastFailure = Date.now();
+    if (this.failures >= this.threshold) {
+      this.state = 'open';
+      logger.error('[SUI-RPC] Circuit breaker OPEN — too many consecutive failures', { failures: this.failures });
+    }
+  },
+  canAttempt(): boolean {
+    if (this.state === 'closed') return true;
+    if (this.state === 'open' && Date.now() - this.lastFailure > this.resetTimeout) {
+      this.state = 'half-open';
+      logger.info('[SUI-RPC] Circuit breaker half-open — attempting probe request');
+      return true;
+    }
+    return this.state === 'half-open';
+  },
+};
+
+/** Fetch with AbortController timeout, retry with backoff, and circuit breaker */
 async function suiFetchWithTimeout(url: string, init: RequestInit, timeoutMs = SUI_RPC_TIMEOUT_MS): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
+  if (!circuitBreaker.canAttempt()) {
+    throw new Error('SUI RPC circuit breaker is OPEN — requests blocked');
   }
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= SUI_RPC_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timer);
+      circuitBreaker.recordSuccess();
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      if (attempt < SUI_RPC_MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+        logger.warn(`[SUI-RPC] Attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  circuitBreaker.recordFailure();
+  throw lastError;
 }
 
 /**
@@ -256,6 +338,17 @@ export class SuiCommunityPoolService {
   constructor(network: SuiNetworkType = 'testnet') {
     this.network = network;
     this.config = SUI_POOL_CONFIG[network];
+
+    // MAINNET SAFETY: Validate that required contract addresses are configured
+    if (network === 'mainnet') {
+      const missing: string[] = [];
+      if (!this.config.packageId) missing.push('NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID');
+      if (!this.config.poolStateId) missing.push('NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE');
+      if (missing.length > 0) {
+        logger.error('[SuiCommunityPool] MAINNET CONFIG INCOMPLETE — missing env vars', { missing });
+      }
+    }
+
     logger.info('[SuiCommunityPool] Initialized', { network, packageId: this.config.packageId });
   }
 
@@ -355,8 +448,8 @@ export class SuiCommunityPoolService {
         const balanceValue = typeof fields.balance === 'string' 
           ? fields.balance 
           : (fields.balance?.fields?.value || fields.balance?.value || '0');
-        const totalNAV = Number(balanceValue) / Math.pow(10, SUI_DECIMALS);
-        const totalShares = Number(fields.total_shares || 0) / Math.pow(10, SHARE_DECIMALS);
+        const totalNAV = safeRawToDecimal(balanceValue, SUI_DECIMALS);
+        const totalShares = safeRawToDecimal(fields.total_shares || 0, SHARE_DECIMALS);
         
         // Calculate share price
         const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
@@ -458,7 +551,7 @@ export class SuiCommunityPoolService {
         return defaultPosition; // Member not found
       }
 
-      const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+      const shares = safeRawToDecimal(memberFields.shares || 0, SHARE_DECIMALS);
       const valueSui = shares * stats.sharePrice;
 
       // Get SUI price
@@ -474,11 +567,11 @@ export class SuiCommunityPoolService {
       return {
         address,
         shares,
-        depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
-        withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+        depositedSui: safeRawToDecimal(memberFields.deposited_sui || 0, SUI_DECIMALS),
+        withdrawnSui: safeRawToDecimal(memberFields.withdrawn_sui || 0, SUI_DECIMALS),
         joinedAt: Number(memberFields.joined_at || 0),
         lastDepositAt: Number(memberFields.last_deposit_at || 0),
-        highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+        highWaterMark: safeRawToDecimal(memberFields.high_water_mark || 0, 9),
         valueSui,
         valueUsd: valueSui * suiPrice,
         percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
@@ -563,18 +656,18 @@ export class SuiCommunityPoolService {
                                 objects[j]?.data?.content?.fields;
             const memberAddress = batchAddrs[j];
             if (memberFields && memberFields.shares) {
-              const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+              const shares = safeRawToDecimal(memberFields.shares || 0, SHARE_DECIMALS);
               const valueSui = shares * stats.sharePrice;
 
               if (shares > 0) {
                 members.push({
                   address: memberAddress,
                   shares,
-                  depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
-                  withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                  depositedSui: safeRawToDecimal(memberFields.deposited_sui || 0, SUI_DECIMALS),
+                  withdrawnSui: safeRawToDecimal(memberFields.withdrawn_sui || 0, SUI_DECIMALS),
                   joinedAt: Number(memberFields.joined_at || 0),
                   lastDepositAt: Number(memberFields.last_deposit_at || 0),
-                  highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+                  highWaterMark: safeRawToDecimal(memberFields.high_water_mark || 0, 9),
                   valueSui,
                   valueUsd: valueSui * suiPrice,
                   percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
@@ -602,17 +695,17 @@ export class SuiCommunityPoolService {
               const memberFields = memberData.result?.data?.content?.fields?.value?.fields ||
                                   memberData.result?.data?.content?.fields;
               if (memberFields && memberFields.shares) {
-                const shares = Number(memberFields.shares || 0) / Math.pow(10, SHARE_DECIMALS);
+                const shares = safeRawToDecimal(memberFields.shares || 0, SHARE_DECIMALS);
                 const valueSui = shares * stats.sharePrice;
                 if (shares > 0) {
                   members.push({
                     address: memberAddress,
                     shares,
-                    depositedSui: Number(memberFields.deposited_sui || 0) / Math.pow(10, SUI_DECIMALS),
-                    withdrawnSui: Number(memberFields.withdrawn_sui || 0) / Math.pow(10, SUI_DECIMALS),
+                    depositedSui: safeRawToDecimal(memberFields.deposited_sui || 0, SUI_DECIMALS),
+                    withdrawnSui: safeRawToDecimal(memberFields.withdrawn_sui || 0, SUI_DECIMALS),
                     joinedAt: Number(memberFields.joined_at || 0),
                     lastDepositAt: Number(memberFields.last_deposit_at || 0),
-                    highWaterMark: Number(memberFields.high_water_mark || 0) / 1e9,
+                    highWaterMark: safeRawToDecimal(memberFields.high_water_mark || 0, 9),
                     valueSui,
                     valueUsd: valueSui * suiPrice,
                     percentage: stats.totalShares > 0 ? (shares / stats.totalShares) * 100 : 0,
@@ -662,8 +755,8 @@ export class SuiCommunityPoolService {
     if (!fields) return defaultInfo;
 
     const treasuryAddress = fields.treasury || '';
-    const accMgmt = Number(fields.accumulated_management_fees || 0) / Math.pow(10, SUI_DECIMALS);
-    const accPerf = Number(fields.accumulated_performance_fees || 0) / Math.pow(10, SUI_DECIMALS);
+    const accMgmt = safeRawToDecimal(fields.accumulated_management_fees || 0, SUI_DECIMALS);
+    const accPerf = safeRawToDecimal(fields.accumulated_performance_fees || 0, SUI_DECIMALS);
 
     return {
       treasuryAddress,
@@ -730,7 +823,7 @@ export class SuiCommunityPoolService {
     amountMist: bigint;
     clockId: string;
   } {
-    const amountMist = BigInt(Math.floor(amountSui * Math.pow(10, SUI_DECIMALS)));
+    const amountMist = safeDecimalToRaw(amountSui, SUI_DECIMALS);
     return {
       target: `${this.config.packageId}::${this.config.moduleName}::deposit`,
       poolStateId: this.cachedPoolStateId,
@@ -942,6 +1035,17 @@ export class SuiUsdcPoolService {
     this.config = SUI_USDC_POOL_CONFIG[network];
     // Fallback to SUI-native pool until USDC pool is deployed
     this.fallbackService = new SuiCommunityPoolService(network);
+
+    // MAINNET SAFETY: Validate that USDC pool addresses are configured
+    if (network === 'mainnet') {
+      const missing: string[] = [];
+      if (!this.config.packageId) missing.push('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID');
+      if (!this.config.poolStateId) missing.push('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE');
+      if (missing.length > 0) {
+        logger.error('[SuiUsdcPool] MAINNET CONFIG INCOMPLETE — missing env vars', { missing });
+      }
+    }
+
     logger.info('[SuiUsdcPool] Initialized', { network, packageId: this.config.packageId || '(pending deploy)' });
   }
 
@@ -1280,6 +1384,25 @@ export class SuiUsdcPoolService {
 // ============================================
 // SINGLETON
 // ============================================
+
+/**
+ * Validate that all required mainnet environment variables are set.
+ * Returns an array of missing variable names (empty = all good).
+ */
+export function validateSuiMainnetConfig(): string[] {
+  const missing: string[] = [];
+  const check = (envVar: string) => {
+    const val = process.env[envVar]?.trim();
+    if (!val) missing.push(envVar);
+  };
+  check('NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID');
+  check('NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE');
+  check('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID');
+  check('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE');
+  check('NEXT_PUBLIC_SUI_MAINNET_ADMIN_CAP');
+  check('NEXT_PUBLIC_SUI_MAINNET_FEE_MANAGER_CAP');
+  return missing;
+}
 
 let testnetServiceInstance: SuiCommunityPoolService | null = null;
 let mainnetServiceInstance: SuiCommunityPoolService | null = null;

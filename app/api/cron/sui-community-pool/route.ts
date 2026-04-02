@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { getSuiCommunityPoolService } from '@/lib/services/SuiCommunityPoolService';
+import { getSuiCommunityPoolService, validateSuiMainnetConfig } from '@/lib/services/SuiCommunityPoolService';
 import {
   initCommunityPoolTables,
   recordNavSnapshot,
@@ -37,6 +37,10 @@ import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/const
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+// Rate limiting: prevent duplicate cron runs within 5 minutes
+let lastSuccessfulRunTimestamp = 0;
+const MIN_CRON_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // 4 pool assets
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
@@ -223,6 +227,31 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
   const network = (process.env.SUI_NETWORK as 'mainnet' | 'testnet') || 'testnet';
   logger.info('[SUI Cron] Starting SUI community pool AI management', { network });
+
+  // MAINNET SAFETY: Reject if contract addresses not configured
+  if (network === 'mainnet') {
+    const missing = validateSuiMainnetConfig();
+    if (missing.length > 0) {
+      logger.error('[SUI Cron] MAINNET CONFIG INCOMPLETE — aborting cron', { missing });
+      return NextResponse.json(
+        { success: false, chain: 'sui' as const, error: `Mainnet not configured. Missing: ${missing.join(', ')}`, duration: Date.now() - startTime },
+        { status: 503 }
+      );
+    }
+  }
+
+  // Rate limit: reject if last successful run was less than 5 minutes ago
+  const timeSinceLastRun = startTime - lastSuccessfulRunTimestamp;
+  if (lastSuccessfulRunTimestamp > 0 && timeSinceLastRun < MIN_CRON_INTERVAL_MS) {
+    logger.warn('[SUI Cron] Rate limited — too soon since last run', {
+      secondsSinceLast: Math.round(timeSinceLastRun / 1000),
+      minIntervalSeconds: MIN_CRON_INTERVAL_MS / 1000,
+    });
+    return NextResponse.json(
+      { success: false, chain: 'sui' as const, error: `Rate limited. Last run ${Math.round(timeSinceLastRun / 1000)}s ago, min interval is ${MIN_CRON_INTERVAL_MS / 1000}s`, duration: Date.now() - startTime },
+      { status: 429 }
+    );
+  }
 
   try {
     // Step 0: Ensure DB tables exist
@@ -621,6 +650,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       action: result.aiDecision?.action,
       autoHedgeTriggered: autoHedgeResult.triggered,
     });
+
+    // Update rate limit timestamp on success
+    lastSuccessfulRunTimestamp = Date.now();
 
     return NextResponse.json(result);
   } catch (error) {
