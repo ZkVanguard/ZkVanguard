@@ -23,14 +23,41 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { getSuiUsdcPoolService } from '@/lib/services/SuiCommunityPoolService';
+import { getSuiUsdcPoolService, validateSuiMainnetConfig } from '@/lib/services/SuiCommunityPoolService';
 import { getBluefinAggregatorService, type PoolAsset, type SwapExecutionResult } from '@/lib/services/BluefinAggregatorService';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
+import { verifyCronRequest } from '@/lib/qstash';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type NetworkType = 'testnet' | 'mainnet';
+
+// ============================================
+// PER-WALLET MUTEX LOCK (prevents race conditions on concurrent deposits/withdrawals)
+// ============================================
+const walletLocks = new Map<string, Promise<void>>();
+
+async function withWalletLock<T>(wallet: string, fn: () => Promise<T>): Promise<T> {
+  const key = wallet.toLowerCase();
+  // Wait for any existing operation on this wallet to finish
+  const existing = walletLocks.get(key);
+  if (existing) {
+    await existing.catch(() => {}); // Don't propagate previous errors
+  }
+  let resolve: () => void;
+  const lock = new Promise<void>((r) => { resolve = r; });
+  walletLocks.set(key, lock);
+  try {
+    return await fn();
+  } finally {
+    resolve!();
+    // Only delete if our lock is still the active one
+    if (walletLocks.get(key) === lock) {
+      walletLocks.delete(key);
+    }
+  }
+}
 
 function getNetwork(request: NextRequest): NetworkType {
   const url = new URL(request.url);
@@ -38,6 +65,20 @@ function getNetwork(request: NextRequest): NetworkType {
   if (network === 'mainnet' || network === 'testnet') return network;
   // Default to env var, then testnet as safe fallback
   return (process.env.SUI_NETWORK as NetworkType) || 'testnet';
+}
+
+/** Reject requests if mainnet config is incomplete */
+function requireValidNetwork(network: NetworkType): NextResponse | null {
+  if (network !== 'mainnet') return null;
+  const missing = validateSuiMainnetConfig();
+  if (missing.length > 0) {
+    logger.error('[SUI-API] Mainnet config incomplete — blocking request', { missing });
+    return NextResponse.json(
+      { success: false, error: `Mainnet not configured. Missing: ${missing.join(', ')}` },
+      { status: 503 }
+    );
+  }
+  return null;
 }
 
 /** JSON response with CDN cache headers */
@@ -65,6 +106,10 @@ export async function GET(request: NextRequest) {
     const action = url.searchParams.get('action');
     const user = url.searchParams.get('user');
     const network = getNetwork(request);
+
+    // MAINNET SAFETY: Reject if contract addresses not configured
+    const configError = requireValidNetwork(network);
+    if (configError) return configError;
     
     logger.info('[SUI-API] Request', { action, user, network });
     
@@ -144,6 +189,7 @@ export async function GET(request: NextRequest) {
 
       // On-chain is the source of truth — read member position from contract
       let onChainPosition;
+      let onChainReadFailed = false;
       try {
         onChainPosition = await service.getMemberPosition(wallet);
       } catch (err) {
@@ -152,6 +198,22 @@ export async function GET(request: NextRequest) {
           error: err instanceof Error ? err.message : err,
         });
         onChainPosition = null;
+        onChainReadFailed = true;
+      }
+
+      // If on-chain read failed, return a clear error instead of faking success with zero shares
+      if (onChainReadFailed) {
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to read on-chain position — RPC may be unavailable',
+          fallback: {
+            wallet,
+            depositCount: txCounts.depositCount,
+            withdrawalCount: txCounts.withdrawalCount,
+          },
+          chain: 'sui',
+          network,
+        }, { status: 503 });
       }
 
       const shares = onChainPosition?.isMember ? onChainPosition.shares : 0;
@@ -415,6 +477,10 @@ export async function POST(request: NextRequest) {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
     const network = getNetwork(request);
+
+    // MAINNET SAFETY: Reject if contract addresses not configured
+    const configError = requireValidNetwork(network);
+    if (configError) return configError;
     
     const body = await request.json();
     const service = getSuiUsdcPoolService(network);
@@ -423,6 +489,12 @@ export async function POST(request: NextRequest) {
 
     // Build collect_fees transaction params (admin/fee-manager operation)
     if (action === 'collect-fees') {
+      // SECURITY: Admin-only — require QStash signature or CRON_SECRET
+      const authResult = await verifyCronRequest(request, 'SUI collect-fees');
+      if (authResult !== true) {
+        return NextResponse.json({ success: false, error: 'Unauthorized — admin operation requires authentication' }, { status: 401 });
+      }
+
       // Ensure poolStateId is cached
       await service.getPoolStats();
 
@@ -450,6 +522,12 @@ export async function POST(request: NextRequest) {
 
     // Build set_treasury transaction params (admin operation)
     if (action === 'set-treasury') {
+      // SECURITY: Admin-only — require QStash signature or CRON_SECRET
+      const authResult = await verifyCronRequest(request, 'SUI set-treasury');
+      if (authResult !== true) {
+        return NextResponse.json({ success: false, error: 'Unauthorized — admin operation requires authentication' }, { status: 401 });
+      }
+
       const { newTreasury } = body;
       if (!newTreasury || !/^0x[a-fA-F0-9]{64}$/.test(newTreasury)) {
         return NextResponse.json(
@@ -562,6 +640,12 @@ export async function POST(request: NextRequest) {
     
     // Execute post-deposit swaps: USDC → 4 assets per AI allocation
     if (action === 'execute-deposit-swaps') {
+      // SECURITY: Admin-only — requires QStash signature or CRON_SECRET
+      const authResult = await verifyCronRequest(request, 'SUI execute-deposit-swaps');
+      if (authResult !== true) {
+        return NextResponse.json({ success: false, error: 'Unauthorized — admin operation requires authentication' }, { status: 401 });
+      }
+
       const { amountUsdc, allocations } = body;
 
       if (!amountUsdc || typeof amountUsdc !== 'number' || amountUsdc <= 0) {
@@ -692,6 +776,12 @@ export async function POST(request: NextRequest) {
 
     // Execute pre-withdraw swaps: assets → USDC
     if (action === 'execute-withdraw-swaps') {
+      // SECURITY: Admin-only — requires QStash signature or CRON_SECRET
+      const authResult = await verifyCronRequest(request, 'SUI execute-withdraw-swaps');
+      if (authResult !== true) {
+        return NextResponse.json({ success: false, error: 'Unauthorized — admin operation requires authentication' }, { status: 401 });
+      }
+
       const { withdrawUsdc, allocations } = body;
 
       if (!withdrawUsdc || typeof withdrawUsdc !== 'number' || withdrawUsdc <= 0) {
@@ -914,6 +1004,9 @@ export async function POST(request: NextRequest) {
       // Determine if deposit was already executed on-chain (real txDigest from wallet signing)
       const isOnChainDeposit = txDigest && !txDigest.startsWith('usdc-deposit-');
 
+      // SAFETY: Per-wallet lock prevents race conditions from parallel deposits
+      return withWalletLock(walletAddress, async () => {
+
       let swapResult = { totalExecuted: 0, totalFailed: 0, results: [] as Array<{ asset: string; success: boolean; txDigest?: string; amountIn?: string; amountOut?: string; error?: string }> };
       const hedgeResults: Array<{ asset: string; success: boolean; hedgeId?: string; method: string; error?: string }> = [];
 
@@ -1051,6 +1144,8 @@ export async function POST(request: NextRequest) {
         chain: 'sui',
         network,
       });
+
+      }); // end withWalletLock
     }
 
     // Record withdrawal: sync DB with on-chain state after user's on-chain withdrawal
@@ -1100,6 +1195,9 @@ export async function POST(request: NextRequest) {
       }
 
       // On-chain is the source of truth — read actual position after withdrawal
+      // SAFETY: Per-wallet lock prevents race conditions from parallel withdrawals
+      return withWalletLock(walletAddress, async () => {
+
       let remainingShares = 0;
       let onChainVerified = false;
       try {
@@ -1172,6 +1270,8 @@ export async function POST(request: NextRequest) {
         chain: 'sui',
         network,
       });
+
+      }); // end withWalletLock
     }
     
     return NextResponse.json(
