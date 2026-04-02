@@ -72,9 +72,9 @@ class CryptocomExchangeService {
     'SUI': 'SUI_USD',
   };
 
-  // Testnet/mock tokens that should return $1 without API call
-  private readonly MOCK_STABLECOINS = new Set([
-    'MOCKUSDC', 'DEVUSDC', 'DEVUSDCE', 'TESTUSDC', 'MOCKWETH', 'MOCKCRO',
+  // Testnet tokens that should return $1 without API call
+  private readonly TESTNET_STABLECOINS = new Set([
+    'DEVUSDC', 'DEVUSDCE', 'TESTUSDC', 'TESTWETH', 'TESTCRO',
   ]);
 
   constructor() {
@@ -113,8 +113,8 @@ class CryptocomExchangeService {
   async getMarketData(symbol: string): Promise<MarketPrice> {
     const normalizedSymbol = symbol.toUpperCase();
     
-    // Handle testnet/mock tokens - return $1 without API call
-    if (this.MOCK_STABLECOINS.has(normalizedSymbol)) {
+    // Handle testnet tokens - return $1 without API call
+    if (this.TESTNET_STABLECOINS.has(normalizedSymbol)) {
       const now = Date.now();
       return {
         symbol: normalizedSymbol,
@@ -173,7 +173,7 @@ class CryptocomExchangeService {
     const prices: Record<string, number> = {};
     
     // Handle stablecoins and testnet tokens directly (always $1)
-    const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE', 'MOCKUSDC', 'TESTUSDC'];
+    const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE', 'TESTUSDC'];
     
     // Separate stablecoins from market tokens
     const stablecoins = symbols.filter(s => STABLECOINS.includes(s.toUpperCase()));

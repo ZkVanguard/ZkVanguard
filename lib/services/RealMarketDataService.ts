@@ -297,7 +297,7 @@ class RealMarketDataService {
     const now = Date.now();
 
     // Handle stablecoins (always $1)
-    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI', 'MOCKUSDC'].includes(cacheKey)) {
+    if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI'].includes(cacheKey)) {
       return {
         symbol,
         price: 1,
@@ -479,12 +479,12 @@ class RealMarketDataService {
       const portfolioStart = Date.now();
       logger.info(`[RealMarketData] Fetching portfolio for ${address}`);
       
-      // Define all tokens upfront (including MockUSDC from Moonlander)
+      // Define all tokens upfront (including testnet USDC)
       const testnetTokens = [
         { address: 'native', symbol: 'CRO', decimals: 18 },
         { address: '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0', symbol: 'devUSDC', decimals: 6 },
         { address: '0x6a3173618859C7cd40fAF6921b5E9eB6A76f1fD4', symbol: 'WCRO', decimals: 18 },
-        { address: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', symbol: 'MockUSDC', decimals: 6 }, // MockMoonlander USDC
+        { address: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', symbol: 'USDC', decimals: 6 }, // Testnet USDC
       ];
 
       // PARALLEL: Fetch all balances simultaneously with timeout for serverless
@@ -550,7 +550,7 @@ class RealMarketDataService {
         logger.debug(`[RealMarketData] Fetched ${Object.keys(batchPrices).length} prices via batch in ${Date.now() - priceStart}ms`);
         
         // Map balances to final token data
-        const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE', 'MOCKUSDC'];
+        const STABLECOINS = ['USDC', 'USDT', 'DAI', 'DEVUSDC', 'DEVUSDCE'];
         for (const tokenBalance of balances) {
           let price = batchPrices[tokenBalance.symbol];
           
