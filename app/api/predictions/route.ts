@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic';
  * Fetch prediction market data for portfolio assets
  */
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const assetsParam = searchParams.get('assets') || 'BTC,ETH,CRO';
@@ -43,6 +47,9 @@ export async function GET(request: NextRequest) {
  * Fetch predictions with body { assets: string[] }
  */
 export async function POST(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const assets = body.assets || ['BTC', 'ETH', 'CRO'];

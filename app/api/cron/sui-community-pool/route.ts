@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { getSuiCommunityPoolService, validateSuiMainnetConfig } from '@/lib/services/SuiCommunityPoolService';
@@ -286,7 +287,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       pricesFetched = Object.keys(pricesUSD).length === POOL_ASSETS.length;
       logger.info('[SUI Cron] Prices fetched', pricesUSD);
     } catch (priceErr) {
-      logger.warn('[SUI Cron] Price fetch failed (non-critical)', { error: priceErr });
+      logger.error('[SUI Cron] Price fetch failed - aborting allocation decisions', { error: priceErr });
+      return NextResponse.json({
+        success: false,
+        chain: 'sui' as const,
+        duration: Date.now() - startTime,
+        error: 'Price fetch failed - cannot make allocation decisions without prices',
+      }, { status: 500 });
+    }
+
+    if (!pricesFetched) {
+      logger.error('[SUI Cron] Incomplete prices - only got prices for: ' + Object.keys(pricesUSD).join(', '));
+      return NextResponse.json({
+        success: false,
+        chain: 'sui' as const,
+        duration: Date.now() - startTime,
+        error: `Incomplete price data: got ${Object.keys(pricesUSD).length}/${POOL_ASSETS.length} prices`,
+      }, { status: 500 });
     }
 
     // Step 3: Get AI allocation decision via SuiPoolAgent
@@ -592,7 +609,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
     // Step 9: Log AI decision to transaction history
     try {
-      const crypto = require('crypto');
       const decisionId = `sui_ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
         id: decisionId,

@@ -12,12 +12,11 @@ export const dynamic = 'force-dynamic';
  * SECURITY: Requires admin key or dev environment only
  */
 export async function GET(request: Request) {
-  // Only allow in development or with admin key
-  const url = new URL(request.url);
-  const adminKey = url.searchParams.get('key') || new Headers(request.headers).get('x-admin-key');
+  // Only allow with admin key (header-based only for security)
+  const adminKey = new Headers(request.headers).get('x-admin-key');
   const isAdmin = adminKey === process.env.INTERNAL_API_SECRET;
 
-  if (process.env.NODE_ENV === 'production' && !isAdmin) {
+  if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

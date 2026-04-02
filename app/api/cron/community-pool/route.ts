@@ -24,6 +24,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
@@ -561,7 +562,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
     
     // Step 3.5: Log AI decision to database (always log, even HOLD decisions)
     try {
-      const crypto = require('crypto');
       const decisionId = `ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
         id: decisionId,

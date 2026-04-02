@@ -8,6 +8,7 @@
  */
 
 import { logger } from '../utils/logger';
+import crypto from 'crypto';
 import {
   getPoolStateFromDb,
   savePoolStateToDb,
@@ -293,7 +294,6 @@ export async function getPoolHistory(limit: number = 50, chain?: string): Promis
 export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>, chain?: string): Promise<PoolTransaction> {
   await ensureTablesInitialized();
   
-  const crypto = require('crypto');
   const transaction: PoolTransaction = {
     ...tx,
     id: `pool-tx-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,

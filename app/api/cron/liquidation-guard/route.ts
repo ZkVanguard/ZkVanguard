@@ -18,6 +18,8 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 // Types
 interface LeveragedPosition {
@@ -450,6 +452,3 @@ export async function GET(request: NextRequest): Promise<NextResponse<Liquidatio
     return safeErrorResponse(error, 'Liquidation guard') as NextResponse<LiquidationGuardResult>;
   }
 }
-
-export const dynamic = 'force-dynamic';
-export const maxDuration = 30;

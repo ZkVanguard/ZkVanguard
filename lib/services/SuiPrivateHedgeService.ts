@@ -19,6 +19,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import crypto from 'crypto';
 
 // ============================================
 // DEPLOYED CONTRACT ADDRESSES
@@ -440,8 +441,7 @@ export class SuiPrivateHedgeService {
       globalThis.crypto.getRandomValues(array);
     } else {
       // Node.js fallback using secure crypto
-      const nodeCrypto = require('crypto');
-      const buf = nodeCrypto.randomBytes(bytes);
+      const buf = crypto.randomBytes(bytes);
       for (let i = 0; i < bytes; i++) {
         array[i] = buf[i];
       }

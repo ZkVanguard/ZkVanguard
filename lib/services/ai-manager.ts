@@ -15,6 +15,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import crypto from 'crypto';
 import { AIPriceIntegration, SERVICE_CONFIGS } from './ai-price-integration';
 import { onAIEvent, invalidateCache, AIEvent } from './ai-decisions';
 
@@ -483,7 +484,6 @@ class AIManagerService {
     priority: TaskPriority,
     execute: () => Promise<void>
   ): string {
-    const crypto = require('crypto');
     const id = `req-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     
     const request: QueuedRequest = {

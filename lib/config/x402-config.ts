@@ -14,6 +14,8 @@
  * Note: We also support Cronos and Hedera for broader compatibility.
  */
 
+import crypto from 'crypto';
+
 // ============================================
 // x402 NETWORK CONFIGURATION
 // ============================================
@@ -256,7 +258,6 @@ export function createX402Challenge(options: {
   paymentId?: string;
 }): X402PaymentChallenge {
   const networkConfig = X402_NETWORKS[options.network];
-  const crypto = require('crypto');
   const paymentId = options.paymentId || `pay_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   
   return {
@@ -290,7 +291,6 @@ export function createMultiChainX402Challenge(options: {
   resource: string;
   description?: string;
 }): X402PaymentChallenge {
-  const crypto = require('crypto');
   const paymentId = `pay_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   
   return {
@@ -326,8 +326,7 @@ export function generateAuthorizationNonce(): string {
     globalThis.crypto.getRandomValues(bytes);
   } else {
     // Node.js fallback using crypto module
-    const nodeCrypto = require('crypto') as typeof import('crypto');
-    const buf = nodeCrypto.randomBytes(32);
+    const buf = crypto.randomBytes(32);
     bytes.set(buf);
   }
   return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
