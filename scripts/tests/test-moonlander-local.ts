@@ -35,7 +35,7 @@ function logSection(title: string) {
 }
 
 // Mock contract ABIs (simplified for testing)
-const MOCK_USDC_ABI = [
+const USDC_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function decimals() view returns (uint8)',
   'function approve(address, uint256) returns (bool)',
@@ -44,7 +44,7 @@ const MOCK_USDC_ABI = [
   'function allowance(address, address) view returns (uint256)',
 ];
 
-const MOCK_MOONLANDER_ABI = [
+const PERPETUAL_DEX_ABI = [
   'function collateral() view returns (address)',
   'function openTradesCount(address, uint256) view returns (uint256)',
   'function mockPrices(uint256) view returns (uint256)',
@@ -157,8 +157,8 @@ async function deployContracts(provider: ethers.JsonRpcProvider, wallet: NonceMa
   log(`   ✅ MockMoonlander deployed at: ${moonlanderAddress}`, colors.green);
   
   return {
-    usdc: new ethers.Contract(usdcAddress, MOCK_USDC_ABI, wallet),
-    moonlander: new ethers.Contract(moonlanderAddress, MOCK_MOONLANDER_ABI, wallet),
+    usdc: new ethers.Contract(usdcAddress, USDC_ABI, wallet),
+    moonlander: new ethers.Contract(moonlanderAddress, PERPETUAL_DEX_ABI, wallet),
   };
 }
 

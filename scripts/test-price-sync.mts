@@ -1,17 +1,17 @@
 /**
- * Test: Verify live Crypto.com prices sync to MockMoonlander on-chain
+ * Test: Verify live Crypto.com prices sync to PerpetualDEX on-chain
  */
 import { ethers } from 'ethers';
 
 const RPC = 'https://evm-t3.cronos.org';
-const MOCK_MOONLANDER = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
-const MOCK_USDC = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+const PERPETUAL_DEX = '0x22E2F34a0637b0e959C2F10D2A0Ec7742B9956D7';
+const USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
 const DEPLOYER_PK = process.env.DEPLOYER_PRIVATE_KEY;
 if (!DEPLOYER_PK) {
   throw new Error('DEPLOYER_PRIVATE_KEY environment variable is required. Never hardcode private keys.');
 }
 
-const MOONLANDER_ABI = [
+const DEX_ABI = [
   'function setMockPrice(uint256 pairIndex, uint256 price) external',
   'function mockPrices(uint256) view returns (uint256)',
   'function owner() view returns (address)',
@@ -28,14 +28,14 @@ const CDC_TICKERS: Record<number, string> = { 0: 'BTC_USDT', 1: 'ETH_USDT', 2: '
 async function main() {
   const provider = new ethers.JsonRpcProvider(RPC);
   const deployer = new ethers.Wallet(DEPLOYER_PK, provider);
-  const moonlander = new ethers.Contract(MOCK_MOONLANDER, MOONLANDER_ABI, deployer);
-  const usdc = new ethers.Contract(MOCK_USDC, USDC_ABI, deployer);
+  const perpetualDex = new ethers.Contract(PERPETUAL_DEX, DEX_ABI, deployer);
+  const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, deployer);
 
   console.log('=== BEFORE SYNC ===');
   for (const [idx, name] of Object.entries(PAIR_NAMES)) {
     const i = Number(idx);
     if (i > 2) continue;
-    const price = await moonlander.mockPrices(i);
+    const price = await perpetualDex.mockPrices(i);
     console.log(`  ${name}: $${(Number(price) / 1e10).toFixed(4)}`);
   }
 
@@ -60,7 +60,7 @@ async function main() {
   }
 
   // Sync each price on-chain
-  console.log('\n🔄 Syncing to MockMoonlander on-chain...');
+  console.log('\n🔄 Syncing to PerpetualDEX on-chain...');
   const feeData = await provider.getFeeData();
   const gasPrice = feeData.gasPrice || ethers.parseUnits('5000', 'gwei');
 
@@ -68,7 +68,7 @@ async function main() {
     const i = Number(idx);
     const scaled = BigInt(Math.round(price * 1e10));
     try {
-      const tx = await moonlander.setMockPrice(i, scaled, { gasPrice });
+      const tx = await perpetualDex.setMockPrice(i, scaled, { gasPrice });
       await tx.wait();
       console.log(`  ✅ ${PAIR_NAMES[i]}: set to $${price} (scaled: ${scaled})`);
     } catch (err: any) {
@@ -81,22 +81,22 @@ async function main() {
   for (const [idx, name] of Object.entries(PAIR_NAMES)) {
     const i = Number(idx);
     if (i > 2) continue;
-    const price = await moonlander.mockPrices(i);
+    const price = await perpetualDex.mockPrices(i);
     console.log(`  ${name}: $${(Number(price) / 1e10).toFixed(4)}`);
   }
 
-  // Check MockMoonlander USDC balance
-  const balance = await usdc.balanceOf(MOCK_MOONLANDER);
-  console.log(`\n💰 MockMoonlander USDC balance: ${ethers.formatUnits(balance, 6)}`);
+  // Check PerpetualDEX USDC balance
+  const balance = await usdc.balanceOf(PERPETUAL_DEX);
+  console.log(`\n💰 PerpetualDEX USDC balance: ${ethers.formatUnits(balance, 6)}`);
 
   // Mint some extra USDC to ensure liquidity for testing
   const targetBalance = ethers.parseUnits('500000000', 6); // 500M USDC
   if (balance < targetBalance) {
     const deficit = targetBalance - balance;
-    console.log(`  Minting ${ethers.formatUnits(deficit, 6)} USDC to MockMoonlander...`);
-    const tx = await usdc.mint(MOCK_MOONLANDER, deficit, { gasPrice });
+    console.log(`  Minting ${ethers.formatUnits(deficit, 6)} USDC to PerpetualDEX...`);
+    const tx = await usdc.mint(PERPETUAL_DEX, deficit, { gasPrice });
     await tx.wait();
-    const newBal = await usdc.balanceOf(MOCK_MOONLANDER);
+    const newBal = await usdc.balanceOf(PERPETUAL_DEX);
     console.log(`  ✅ New balance: ${ethers.formatUnits(newBal, 6)} USDC`);
   }
 
