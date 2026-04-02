@@ -79,7 +79,7 @@ const SettingsModal = nextDynamic(() => import('@/components/dashboard/SettingsM
   ssr: false
 });
 
-const MockUSDCFaucet = nextDynamic(() => import('@/components/dashboard/MockUSDCFaucet').then(mod => ({ default: mod.MockUSDCFaucet })), {
+const TestnetUSDCFaucet = nextDynamic(() => import('@/components/dashboard/MockUSDCFaucet').then(mod => ({ default: mod.MockUSDCFaucet })), {
   ssr: false
 });
 
@@ -761,7 +761,7 @@ export default function DashboardPage() {
               />
               <ActiveHedges address={displayAddress} onCreateHedge={() => setHedgeModalOpen(true)} onOpenChat={() => setShowChat(true)} />
             </Card>
-            <MockUSDCFaucet />
+            <TestnetUSDCFaucet />
           </div>
         );
         

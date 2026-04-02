@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink, AlertTriangle } from 'lucide-react';
@@ -7,17 +7,17 @@ import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
 import { CHAIN_IDS, getUsdcAddress, isTestnet as checkIsTestnet, getExplorerUrl } from '@/lib/utils/network';
 
-// ⚠️ TESTNET ONLY - MockUSDC with public mint() function
+// âš ï¸ TESTNET ONLY - Testnet USDC with public mint() function
 // This component should ONLY be rendered on testnet (chainId 338)
 // On mainnet, users must acquire real USDC through exchanges
 
-// Testnet MockUSDC address (has permissionless mint function)
-const TESTNET_MOCK_USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as `0x${string}`;
+// Testnet USDC address (has permissionless mint function)
+const TESTNET_USDC_ADDRESS = '0x28217DAddC55e3C4831b4A48A00Ce04880786967' as `0x${string}`;
 
 // Legacy export for backward compatibility (use getUsdcAddress from network.ts instead)
-export const MOCK_USDC_ADDRESS = TESTNET_MOCK_USDC_ADDRESS;
+export const TESTNET_FAUCET_USDC_ADDRESS = TESTNET_USDC_ADDRESS;
 
-const MOCK_USDC_ABI = [
+const TESTNET_USDC_ABI = [
   {
     type: 'function',
     name: 'mint',
@@ -51,12 +51,12 @@ const MINT_AMOUNTS = [
   { label: '1,000,000 USDC', value: '1000000' },
 ];
 
-interface MockUSDCFaucetProps {
+interface TestnetUSDCFaucetProps {
   compact?: boolean;
   onMintSuccess?: () => void;
 }
 
-export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFaucetProps) {
+export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFaucetProps) {
   const { evmAddress, isSUI } = useWallet();
   const address = evmAddress as `0x${string}` | undefined;
   const publicClient = usePublicClient();
@@ -68,7 +68,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
   const [selectedAmount, setSelectedAmount] = useState('10000');
   const [mintSuccess, setMintSuccess] = useState(false);
 
-  // ⚠️ MAINNET GUARD - This faucet only works on testnet
+  // âš ï¸ MAINNET GUARD - This faucet only works on testnet
   if (!isTestnet) {
     return (
       <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 shadow-sm">
@@ -112,8 +112,8 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
       if (!address || !publicClient) return;
       try {
         const bal = await publicClient.readContract({
-          address: TESTNET_MOCK_USDC_ADDRESS,
-          abi: MOCK_USDC_ABI,
+          address: TESTNET_USDC_ADDRESS,
+          abi: TESTNET_USDC_ABI,
           functionName: 'balanceOf',
           args: [address],
         });
@@ -141,8 +141,8 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 
     const amountInWei = parseUnits(selectedAmount, 6);
     writeMint({
-      address: TESTNET_MOCK_USDC_ADDRESS,
-      abi: MOCK_USDC_ABI,
+      address: TESTNET_USDC_ADDRESS,
+      abi: TESTNET_USDC_ABI,
       functionName: 'mint',
       args: [address, amountInWei],
     });
@@ -165,7 +165,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
     return null;
   }
 
-  // Compact mode — small inline button for use inside modals
+  // Compact mode â€” small inline button for use inside modals
   if (compact) {
     return (
       <div className="flex items-center gap-2 p-3 bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px]">
@@ -173,7 +173,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[#1d1d1f]">
-              MockUSDC: {parseFloat(balance).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              Testnet USDC: {parseFloat(balance).toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
             {mintSuccess ? (
               <span className="text-[11px] text-[#34C759] font-medium flex items-center gap-1">
@@ -210,13 +210,13 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
         </div>
         <div>
           <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Testnet USDC Faucet</h3>
-          <p className="text-[12px] text-[#86868b]">Mint MockUSDC for testing hedges</p>
+          <p className="text-[12px] text-[#86868b]">Mint testnet USDC for testing hedges</p>
         </div>
       </div>
 
       {/* Current Balance */}
       <div className="p-3 bg-[#f5f5f7] rounded-[12px] flex items-center justify-between">
-        <span className="text-[13px] text-[#86868b]">Your MockUSDC Balance</span>
+        <span className="text-[13px] text-[#86868b]">Your Testnet USDC Balance</span>
         <span className="text-[15px] font-bold text-[#1d1d1f]">
           {parseFloat(balance).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
         </span>
@@ -261,7 +261,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
         ) : (
           <>
             <Coins className="w-4 h-4" />
-            Mint {parseInt(selectedAmount).toLocaleString()} MockUSDC
+            Mint {parseInt(selectedAmount).toLocaleString()} USDC
           </>
         )}
       </button>
@@ -288,7 +288,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 
       {/* Contract Info */}
       <div className="text-[10px] text-[#86868b] text-center space-y-0.5">
-        <p>MockUSDC: {TESTNET_MOCK_USDC_ADDRESS.substring(0, 10)}...{TESTNET_MOCK_USDC_ADDRESS.substring(38)}</p>
+        <p>Testnet USDC: {TESTNET_USDC_ADDRESS.substring(0, 10)}...{TESTNET_USDC_ADDRESS.substring(38)}</p>
         <p>Cronos Testnet (Chain ID: 338) &bull; 6 decimals</p>
       </div>
     </div>
@@ -296,4 +296,4 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: MockUSDCFauce
 }
 
 // Re-export ABI for backward compatibility (address is exported above)
-export { MOCK_USDC_ABI };
+export { TESTNET_USDC_ABI };
