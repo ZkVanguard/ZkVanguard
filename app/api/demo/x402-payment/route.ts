@@ -16,7 +16,7 @@ const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
  */
 export async function POST(request: NextRequest) {
   // SECURITY: Block in production — demo routes must not execute real settlements
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
     return NextResponse.json(
       { success: false, error: 'Demo endpoints are disabled in production' },
       { status: 403 }

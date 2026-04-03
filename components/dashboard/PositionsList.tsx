@@ -428,7 +428,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (loading) {
-        console.warn('[PositionsList] Forcing loading=false after timeout');
+        logger.warn('[PositionsList] Forcing loading=false after timeout');
         setLoading(false);
         setHasInitiallyLoaded(true);
       }

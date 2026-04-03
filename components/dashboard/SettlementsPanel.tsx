@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { Clock, CheckCircle, XCircle, Loader2, ExternalLink, Wallet, Plus, Trash2, Zap, Shield } from 'lucide-react';
 import { useAccount, useWalletClient } from '@/lib/wdk/wdk-hooks';
 import { useProcessSettlement, useContractAddresses } from '../../lib/contracts/hooks';
@@ -72,7 +73,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
 
       processSettlement(BigInt(portfolioId), formattedPayments);
     } catch (err) {
-      console.error('Failed to process settlement:', err);
+      logger.error('Failed to process settlement', err instanceof Error ? err : undefined);
     }
   };
 
@@ -179,7 +180,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
         throw new Error(settleResult.error || 'Settlement failed - no transaction hash returned');
       }
     } catch (err) {
-      console.error('X402 settlement error:', err);
+      logger.error('X402 settlement error', err instanceof Error ? err : undefined);
       setX402Error(err instanceof Error ? err.message : 'Settlement failed');
       setX402Status('error');
     }

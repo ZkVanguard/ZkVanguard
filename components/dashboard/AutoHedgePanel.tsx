@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { 
   Shield, 
   Brain, 
@@ -152,7 +153,7 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
         setData(prev => prev ? { ...prev, enabled: json.config.enabled } : null);
       }
     } catch (err) {
-      console.error('Failed to toggle auto-hedge:', err);
+      logger.error('Failed to toggle auto-hedge', err instanceof Error ? err : undefined);
     } finally {
       setUpdating(false);
     }

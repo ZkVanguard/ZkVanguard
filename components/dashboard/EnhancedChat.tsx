@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { Send, Bot, User, Sparkles, TrendingUp, Shield, Zap, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -278,7 +279,7 @@ export function EnhancedChat({ address, onActionTrigger, hideHeader = false }: E
           actions = JSON.parse(actionMatch[1]);
           content = content.replace(/<!--ACTIONS:.+?-->/s, '').trim();
         } catch (e) {
-          console.error('Failed to parse actions:', e);
+          logger.error('Failed to parse actions', e instanceof Error ? e : undefined);
         }
       }
 
@@ -292,7 +293,7 @@ export function EnhancedChat({ address, onActionTrigger, hideHeader = false }: E
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Chat error:', error);
+      logger.error('Chat error', error instanceof Error ? error : undefined);
       setIsTyping(false);
       
       const errorMessage: Message = {

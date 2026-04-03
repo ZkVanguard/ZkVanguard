@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { X, Loader2, CheckCircle, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useChainId } from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits, parseEther } from 'viem';
@@ -241,7 +242,7 @@ export function DepositModal({
           setAllowance(currentAllowance);
           setTokenBalance(nativeBalance);
         } catch (error) {
-          console.error('Failed to fetch WCRO allowance:', error);
+          logger.error('Failed to fetch WCRO allowance', error instanceof Error ? error : undefined);
           setAllowance(0n);
         }
         return;
@@ -264,7 +265,7 @@ export function DepositModal({
         });
         setAllowance(currentAllowance);
       } catch (error) {
-        console.error('Failed to fetch balance:', error);
+        logger.error('Failed to fetch balance', error instanceof Error ? error : undefined);
         setTokenBalance('0');
       }
     }

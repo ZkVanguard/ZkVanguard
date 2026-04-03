@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio, useUserPortfolios } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
@@ -21,7 +22,7 @@ export function CreatePortfolioButton() {
       const risk = BigInt(riskTolerance);
       createPortfolio(yieldBps, risk);
     } catch (err) {
-      console.error('Failed to create portfolio:', err);
+      logger.error('Failed to create portfolio', err instanceof Error ? err : undefined);
     }
   };
 

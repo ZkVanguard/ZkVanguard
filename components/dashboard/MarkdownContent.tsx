@@ -118,8 +118,8 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       // Italic: *text* or _text_
       .replace(/\*([^*]+)\*/g, '<em class="italic text-[#1d1d1f]">$1</em>')
       .replace(/_([^_]+)_/g, '<em class="italic text-[#1d1d1f]">$1</em>')
-      // Links: [text](url)
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#007AFF] hover:text-[#0051D5] underline decoration-[#007AFF]/40 transition-colors">$1</a>');
+      // Links: [text](url) — only allow http/https URLs to prevent javascript: XSS
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-[#007AFF] hover:text-[#0051D5] underline decoration-[#007AFF]/40 transition-colors">$1</a>');
 
     return result;
   };

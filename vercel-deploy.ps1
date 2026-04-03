@@ -8,7 +8,14 @@ $out += $result
 $out += ""
 
 $out += "=== Step 2: Add new DATABASE_URL ==="
-$newUrl = "postgresql://neondb_owner:npg_1mRrCDxHT3lU@ep-frosty-heart-amx8tu79-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# SECURITY: Read DATABASE_URL from environment variable — NEVER hardcode credentials
+$newUrl = $env:DATABASE_URL
+if (-not $newUrl) {
+    $out += "ERROR: DATABASE_URL environment variable not set. Set it before running this script."
+    $out += "  Example: `$env:DATABASE_URL = 'postgresql://...' ; .\vercel-deploy.ps1"
+    $out | Set-Content "c:\Users\mrare\OneDrive\Documents\Chronos-Vanguard\vercel-deploy-result.txt"
+    exit 1
+}
 $result2 = $newUrl | cmd /c "npx vercel env add DATABASE_URL production 2>&1"
 $out += $result2
 $out += ""

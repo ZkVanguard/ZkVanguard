@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from '@/lib/utils/logger';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -181,7 +182,7 @@ export default function PerformanceChart({
           onMetricsLoaded?.(data.metrics);
         }
       } catch (err) {
-        console.error('[PerformanceChart] Error:', err);
+        logger.error('[PerformanceChart] Error', err instanceof Error ? err : undefined);
         setError(err instanceof Error ? err.message : 'Failed to load');
         setChartData([]);
       } finally {

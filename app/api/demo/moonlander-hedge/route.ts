@@ -18,7 +18,7 @@ const MAX_LEVERAGE = 10;
  */
 export async function POST(request: NextRequest) {
   // SECURITY: Block in production — demo routes must not execute real trades
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
     return NextResponse.json(
       { success: false, error: 'Demo endpoints are disabled in production' },
       { status: 403 }
