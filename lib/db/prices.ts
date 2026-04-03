@@ -4,6 +4,7 @@
  * Prices are written by a single refresh call and read by all consumers.
  */
 import { query, queryOne } from './postgres';
+import { logger } from '../utils/logger';
 
 export interface CachedPrice {
   symbol: string;
@@ -99,7 +100,7 @@ export async function upsertPrices(prices: Array<{
         updated_at = NOW()
     `, values);
   } catch (err) {
-    console.warn('upsertPrices failed:', err instanceof Error ? err.message : err);
+    logger.warn('upsertPrices failed:', err instanceof Error ? err.message : err);
   }
 }
 

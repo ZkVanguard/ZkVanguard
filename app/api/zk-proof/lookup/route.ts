@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeByZkProofHash, getHedgeById } from '@/lib/db/hedges';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
-const RPC_URL = process.env.RPC_URL || 'https://evm-t3.cronos.org';
+const RPC_URL = getCronosRpcUrl();
 const X402_VERIFIER_ADDRESS = process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852';
 
 // ABI for decoding transaction and reading events
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
           error: 'No hedge found with this proof hash',
         });
       } catch (dbError) {
-        console.error('Database lookup error:', dbError);
+        logger.error('Database lookup error:', dbError);
         return NextResponse.json({
           success: false,
           found: false,
@@ -200,7 +201,7 @@ export async function POST(request: NextRequest) {
             };
           }
         } catch (decodeErr) {
-          console.error('Failed to decode transaction:', decodeErr);
+          logger.error('Failed to decode transaction:', decodeErr);
         }
       }
     }
@@ -223,7 +224,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Lookup error:', error);
+    logger.error('Lookup error:', error);
     return safeErrorResponse(error, 'ZK proof lookup');
   }
 }

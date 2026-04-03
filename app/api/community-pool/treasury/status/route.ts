@@ -67,7 +67,7 @@ export async function GET() {
       balance = ethers.formatUnits(rawBalance, 6);
     } catch (err) {
       // Balance fetch failed, but treasury is still operational
-      console.warn('[Treasury Status] Balance fetch failed:', err);
+      logger.warn('[Treasury Status] Balance fetch failed:', err);
     }
 
     // SUI MSafe treasury info (non-blocking)

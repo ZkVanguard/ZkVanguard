@@ -25,22 +25,24 @@ class Logger {
     return true;
   }
 
-  info(message: string, context?: LogContext): void {
+  info(message: string, context?: LogContext | unknown): void {
     if (!this.isEnabled('info')) return;
-    if (context && Object.keys(context).length > 0) {
+    const ctx = context && typeof context === 'object' && context !== null ? context as LogContext : context !== undefined ? { detail: context } : undefined;
+    if (ctx && Object.keys(ctx).length > 0) {
       // eslint-disable-next-line no-console
-      console.info(`ℹ️  ${message}`, context);
+      console.info(`\u2139\ufe0f  ${message}`, ctx);
     } else {
       // eslint-disable-next-line no-console
       console.info(`ℹ️  ${message}`);
     }
   }
 
-  warn(message: string, context?: LogContext): void {
+  warn(message: string, context?: LogContext | unknown): void {
     if (!this.isEnabled('warn')) return;
-    if (context && Object.keys(context).length > 0) {
+    const ctx = context && typeof context === 'object' && context !== null ? context as LogContext : context !== undefined ? { detail: context } : undefined;
+    if (ctx && Object.keys(ctx).length > 0) {
       // eslint-disable-next-line no-console
-      console.warn(`⚠️  ${message}`, context);
+      console.warn(`⚠️  ${message}`, ctx);
     } else {
       // eslint-disable-next-line no-console
       console.warn(`⚠️  ${message}`);
@@ -61,11 +63,12 @@ class Logger {
     console.error(`❌ ${message}`, errorContext);
   }
 
-  debug(message: string, context?: LogContext): void {
+  debug(message: string, context?: LogContext | unknown): void {
     if (!this.isEnabled('debug')) return;
-    if (context && Object.keys(context).length > 0) {
+    const ctx = context && typeof context === 'object' && context !== null ? context as LogContext : context !== undefined ? { detail: context } : undefined;
+    if (ctx && Object.keys(ctx).length > 0) {
       // eslint-disable-next-line no-console
-      console.log(`🔍 ${message}`, context);
+      console.log(`\ud83d\udd0d ${message}`, ctx);
     } else {
       // eslint-disable-next-line no-console
       console.log(`🔍 ${message}`);

@@ -5,6 +5,7 @@
 
 import type { Address } from 'viem';
 import type { ZKProof } from '../api/zk';
+import { logger } from '../utils/logger';
 
 /**
  * Convert ZK-STARK proof to contract-compatible format
@@ -84,7 +85,7 @@ export async function verifyProofOnChain(
 
     return { hash, success: true };
   } catch (error) {
-    console.error('On-chain verification failed:', error);
+    logger.error('On-chain verification failed:', error);
     throw error;
   }
 }
@@ -135,7 +136,7 @@ export async function verifyProofGasless(
     const result = await response.json();
     return { hash: result.txHash, success: true };
   } catch (error) {
-    console.error('Gasless verification failed:', error);
+    logger.error('Gasless verification failed:', error);
     throw error;
   }
 }
@@ -166,7 +167,7 @@ export async function isProofVerifiedOnChain(
 
     return result as boolean;
   } catch (error) {
-    console.error('Failed to check on-chain verification status:', error);
+    logger.error('Failed to check on-chain verification status:', error);
     return false;
   }
 }
@@ -209,7 +210,7 @@ export async function getVerificationHistory(
       };
     });
   } catch (error) {
-    console.error('Failed to get verification history:', error);
+    logger.error('Failed to get verification history:', error);
     return [];
   }
 }

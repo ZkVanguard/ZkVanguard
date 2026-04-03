@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
@@ -193,7 +194,7 @@ export async function GET(_request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error('Authenticity verification error:', error);
+    logger.error('Authenticity verification error:', error);
     return safeErrorResponse(error, 'ZK authenticity verification');
   }
 }

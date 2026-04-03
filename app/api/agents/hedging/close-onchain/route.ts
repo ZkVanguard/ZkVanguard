@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TYPES } from '@/lib/hedge-ownership';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getHedgeByNumericId } from '@/lib/db/hedges';
@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic';
 
 const HEDGE_EXECUTOR = process.env.HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9';
 const COLLATERAL_TOKEN = process.env.COLLATERAL_TOKEN_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
-const RPC_URL = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
+const RPC_URL = getCronosRpcUrl();
 
 // Deployer/Owner wallet — required for price sync calls on PerpetualDEX
 const OWNER_PK = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || '';
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     const rateModule = await import('@/lib/security/rate-limiter');
     mutationLimiter = rateModule.mutationLimiter;
   } catch (importErr) {
-    logger.error('Failed to import rate-limiter:', importErr);
+    logger.error('Failed to import rate-limiter', { error: importErr instanceof Error ? importErr.message : String(importErr) });
     return NextResponse.json(
       { success: false, error: 'Server configuration error (rate-limiter)' },
       { status: 500 }
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       || process.env.SERVER_WALLET_PRIVATE_KEY
       || process.env.AGENT_PRIVATE_KEY;
     if (!relayerKey) {
-      logger.error('No relayer private key configured (checked RELAYER_PRIVATE_KEY, MOONLANDER_PRIVATE_KEY, PRIVATE_KEY, SERVER_WALLET_PRIVATE_KEY, AGENT_PRIVATE_KEY)');
+      logger.error('No relayer private key configured');
       return NextResponse.json(
         { success: false, error: 'Server not configured for gasless operations (missing relayer)' },
         { status: 503 }
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      console.log(`📝 Resolved DB hedge #${numericId} to on-chain ID: ${dbHedge.order_id}`);
+      logger.info(`📝 Resolved DB hedge #${numericId} to on-chain ID: ${dbHedge.order_id}`);
       hedgeId = dbHedge.order_id;
       // Auto-populate wallet address from DB if not provided
       if (!walletAddress && dbHedge.wallet_address) {
@@ -147,22 +147,22 @@ export async function POST(request: NextRequest) {
 
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
-    console.log(`[close-onchain] Step 1: Got provider`);
+    logger.info(`[close-onchain] Step 1: Got provider`);
     
     const wallet = new ethers.Wallet(relayerKey, provider);
-    console.log(`[close-onchain] Step 2: Created wallet from relayer key`);
+    logger.info(`[close-onchain] Step 2: Created wallet from relayer key`);
     
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, wallet);
     const usdc = new ethers.Contract(COLLATERAL_TOKEN, USDC_ABI, provider);
-    console.log(`[close-onchain] Step 3: Contract instances created`);
+    logger.info(`[close-onchain] Step 3: Contract instances created`);
 
     // ── STEP 1: Read on-chain hedge data for ZK verification ──────────────────
-    console.log(`[close-onchain] Step 4: Reading on-chain hedge for ID: ${hedgeId}`);
+    logger.info(`[close-onchain] Step 4: Reading on-chain hedge for ID: ${hedgeId}`);
     let hedgeData;
     try {
       hedgeData = await contract.hedges(hedgeId);
     } catch (readErr) {
-      logger.error(`[close-onchain] Failed to read hedge from chain:`, readErr);
+      logger.error('[close-onchain] Failed to read hedge from chain', { error: readErr instanceof Error ? readErr.message : String(readErr) });
       const errMsg = readErr instanceof Error ? readErr.message : String(readErr);
       // Check if it's an invalid bytes32 format
       if (errMsg.includes('invalid') || errMsg.includes('hex') || errMsg.includes('format')) {
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
       }
       throw readErr;
     }
-    console.log(`[close-onchain] Step 5: Got hedge data from chain`);
+    logger.info(`[close-onchain] Step 5: Got hedge data from chain`);
     
     const onChainCommitmentHash = hedgeData[7] as string; // commitmentHash field (index 7)
     const onChainTrader = hedgeData[1] as string;
@@ -198,13 +198,13 @@ export async function POST(request: NextRequest) {
       if (registryCommitment && onChainCommitmentHash !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
         // Both have commitments - verify they match
         if (registryCommitment.toLowerCase() !== onChainCommitmentHash.toLowerCase()) {
-          console.warn(`🔐 ZK MISMATCH: registry=${registryCommitment.slice(0,18)}... vs on-chain=${onChainCommitmentHash.slice(0,18)}...`);
+          logger.warn(`🔐 ZK MISMATCH: registry=${registryCommitment.slice(0,18)}... vs on-chain=${onChainCommitmentHash.slice(0,18)}...`);
           return NextResponse.json(
             { success: false, error: 'ZK commitment verification failed. On-chain commitment does not match registry.' },
             { status: 403 }
           );
         }
-        console.log(`🔐 ZK verified: commitment ${onChainCommitmentHash.slice(0, 18)}... matches registry`);
+        logger.info(`🔐 ZK verified: commitment ${onChainCommitmentHash.slice(0, 18)}... matches registry`);
       }
 
       // ── WALLET SIGNATURE VERIFICATION: Require EIP-712 signature ────────────
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
 
       // Check for legacy 'anonymous' wallet (gasless hedges created without proper wallet binding)
       if (ownerEntry.walletAddress === 'anonymous' || !ownerEntry.walletAddress.startsWith('0x')) {
-        console.warn(`🚫 Hedge has anonymous/invalid owner: ${ownerEntry.walletAddress}`);
+        logger.warn(`🚫 Hedge has anonymous/invalid owner: ${ownerEntry.walletAddress}`);
         return NextResponse.json(
           { success: false, error: 'This hedge was created without wallet binding and cannot be closed with signature verification. Please contact support for manual closure.' },
           { status: 403 }
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
         );
 
         if (recoveredAddress.toLowerCase() !== ownerEntry.walletAddress.toLowerCase()) {
-          console.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${ownerEntry.walletAddress}`);
+          logger.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${ownerEntry.walletAddress}`);
           const expectedShort = `${ownerEntry.walletAddress.slice(0, 6)}...${ownerEntry.walletAddress.slice(-4)}`;
           const signedShort = `${recoveredAddress.slice(0, 6)}...${recoveredAddress.slice(-4)}`;
           return NextResponse.json(
@@ -258,10 +258,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`✅ Signature verified: ${recoveredAddress} owns hedge ${hedgeId.slice(0, 18)}...`);
-        console.log(`🛡️ DUAL VERIFICATION PASSED: ZK commitment + wallet signature verified`);
+        logger.info(`✅ Signature verified: ${recoveredAddress} owns hedge ${hedgeId.slice(0, 18)}...`);
+        logger.info(`🛡️ DUAL VERIFICATION PASSED: ZK commitment + wallet signature verified`);
       } catch (sigErr) {
-        logger.error('Signature verification error:', sigErr);
+        logger.error('Signature verification error', { error: sigErr instanceof Error ? sigErr.message : String(sigErr) });
         return NextResponse.json(
           { success: false, error: 'Invalid signature format' },
           { status: 401 }
@@ -285,19 +285,19 @@ export async function POST(request: NextRequest) {
           const relayerAddress = new ethers.Wallet(relayerKey).address;
           if (recoveredAddress.toLowerCase() !== onChainTrader.toLowerCase() &&
               recoveredAddress.toLowerCase() !== relayerAddress.toLowerCase()) {
-            console.warn(`🚫 Legacy hedge: signer ${recoveredAddress} is not trader ${onChainTrader}`);
+            logger.warn(`🚫 Legacy hedge: signer ${recoveredAddress} is not trader ${onChainTrader}`);
             return NextResponse.json(
               { success: false, error: 'Signature does not match on-chain trader.' },
               { status: 403 }
             );
           }
-          console.log(`✅ Legacy hedge: signature verified from ${recoveredAddress}`);
+          logger.info(`✅ Legacy hedge: signature verified from ${recoveredAddress}`);
         } catch {
           // Signature verification failed - continue without for legacy
-          console.warn(`⚠️ Legacy hedge signature verification failed, allowing close`);
+          logger.warn(`⚠️ Legacy hedge signature verification failed, allowing close`);
         }
       } else {
-        console.warn(`⚠️ No ownership record for hedge ${hedgeId.slice(0, 18)}... — allowing legacy close without signature`);
+        logger.warn(`⚠️ No ownership record for hedge ${hedgeId.slice(0, 18)}... — allowing legacy close without signature`);
       }
     }
 
@@ -314,12 +314,12 @@ export async function POST(request: NextRequest) {
     const trueOwner = ownerEntry?.walletAddress || onChainTraderAddress;
     const isGaslessHedge = ownerEntry && ownerEntry.walletAddress.toLowerCase() !== onChainTraderAddress.toLowerCase();
     
-    console.log(`🔍 DEBUG ownerEntry:`, ownerEntry ? JSON.stringify({
+    logger.debug('ownerEntry', ownerEntry ? {
       walletAddress: ownerEntry.walletAddress,
       commitmentHash: ownerEntry.commitmentHash?.slice(0, 18),
       onChainHedgeId: ownerEntry.onChainHedgeId?.slice(0, 18)
-    }) : 'NULL');
-    console.log(`🔍 Fund routing: on-chain trader=${onChainTraderAddress}, true owner=${trueOwner}, gasless=${isGaslessHedge}`);
+    } : { value: 'NULL' });
+    logger.debug('Fund routing', { onChainTrader: onChainTraderAddress, trueOwner, isGaslessHedge });
 
     // Get TRUE OWNER's USDC balance before close (for accurate reporting)
     const balanceBefore = Number(ethers.formatUnits(await usdc.balanceOf(trueOwner), 6));
@@ -332,20 +332,20 @@ export async function POST(request: NextRequest) {
         // 1) Sync the live current price so PnL is computed against real market data
         const syncedPrice = await syncSinglePriceToChain(ownerWallet, pairIndex);
         if (syncedPrice > 0) {
-          console.log(`📈 Close: On-chain price synced: ${PAIR_NAMES[pairIndex]} → $${syncedPrice}`);
+          logger.info(`📈 Close: On-chain price synced: ${PAIR_NAMES[pairIndex]} → $${syncedPrice}`);
         }
         // 2) Ensure PerpetualDEX has enough USDC to return collateral ± PnL
         const collateralRaw = ethers.parseUnits(String(collateral), 6);
         await ensureMoonlanderLiquidity(ownerWallet, collateralRaw * BigInt(leverage));
       } catch (syncErr) {
-        console.warn('⚠️ Price sync before close failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
+        logger.warn('Price sync before close failed (non-blocking)', { error: syncErr instanceof Error ? syncErr.message : String(syncErr) });
       }
     } else {
-      console.warn('⚠️ OWNER_PK not set — cannot sync live prices before close');
+      logger.warn('⚠️ OWNER_PK not set — cannot sync live prices before close');
     }
 
     // Execute gasless closeHedge via x402 relayer — this triggers fund withdrawal back to on-chain trader
-    console.log(`🔐 x402 Gasless closeHedge: ${hedgeId.slice(0, 18)}... | ${PAIR_NAMES[pairIndex]} ${isLong ? 'LONG' : 'SHORT'} | ${collateral} USDC x${leverage}`);
+    logger.info(`🔐 x402 Gasless closeHedge: ${hedgeId.slice(0, 18)}... | ${PAIR_NAMES[pairIndex]} ${isLong ? 'LONG' : 'SHORT'} | ${collateral} USDC x${leverage}`);
 
     // Use dynamic gas price based on current network conditions (fallback to 1500 gwei)
     const feeData = await provider.getFeeData();
@@ -356,10 +356,10 @@ export async function POST(request: NextRequest) {
     try {
       const estimated = await contract.closeHedge.estimateGas(hedgeId, { gasPrice });
       gasLimit = (estimated * 120n) / 100n;
-      console.log(`⛽ Estimated gas: ${estimated.toString()} → using ${gasLimit.toString()} (with 20% buffer)`);
+      logger.info(`⛽ Estimated gas: ${estimated.toString()} → using ${gasLimit.toString()} (with 20% buffer)`);
     } catch (estErr: unknown) {
       gasLimit = 300_000n; // Conservative fallback (actual ~153K)
-      console.warn(`⚠️ Gas estimation failed, using fallback ${gasLimit.toString()}:`, (estErr as Error).message?.slice(0, 100));
+      logger.warn(`Gas estimation failed, using fallback ${gasLimit.toString()}`, { error: (estErr as Error).message?.slice(0, 100) });
     }
 
     const tx = await contract.closeHedge(hedgeId, {
@@ -389,10 +389,10 @@ export async function POST(request: NextRequest) {
     let forwardTxHash: string | null = null;
     let fundsForwarded = 0;
     
-    console.log(`🔍 DEBUG forwarding check: isGaslessHedge=${isGaslessHedge}, trueOwner=${trueOwner}, onChainTrader=${onChainTraderAddress}`);
+    logger.debug('Forwarding check', { isGaslessHedge, hasTrueOwner: !!trueOwner, trueOwnerMatchesTrader: trueOwner?.toLowerCase() === onChainTraderAddress.toLowerCase() });
     
     if (isGaslessHedge && trueOwner.toLowerCase() !== onChainTraderAddress.toLowerCase()) {
-      console.log(`✨ FUND FORWARDING TRIGGERED - gasless hedge with different true owner`);
+      logger.info(`✨ FUND FORWARDING TRIGGERED - gasless hedge with different true owner`);
       try {
         // Get the collateral token contract with signer for transfer
         const usdcWithSigner = new ethers.Contract(COLLATERAL_TOKEN, USDC_ABI, wallet);
@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
         if (amountToForward > 0) {
           const amountWei = ethers.parseUnits(amountToForward.toFixed(6), 6);
           
-          console.log(`💸 Forwarding ${amountToForward} USDC to true owner: ${trueOwner}`);
+          logger.info(`💸 Forwarding ${amountToForward} USDC to true owner: ${trueOwner}`);
           
           // Forward the funds to the true owner
           const forwardTx = await usdcWithSigner.transfer(trueOwner, amountWei, {
@@ -420,19 +420,19 @@ export async function POST(request: NextRequest) {
           if (forwardReceipt.status === 1) {
             forwardTxHash = forwardTx.hash;
             fundsForwarded = amountToForward;
-            console.log(`✅ Funds forwarded to ${trueOwner.slice(0,10)}...: ${fundsForwarded} USDC | Tx: ${forwardTxHash}`);
+            logger.info(`✅ Funds forwarded to ${trueOwner.slice(0,10)}...: ${fundsForwarded} USDC | Tx: ${forwardTxHash}`);
           } else {
             logger.error(`Fund forwarding failed: tx reverted`);
           }
         } else {
-          console.log(`⚠️ No funds to forward (liquidated or zero return)`);
+          logger.info(`⚠️ No funds to forward (liquidated or zero return)`);
         }
       } catch (forwardErr) {
-        logger.error(`Fund forwarding error:`, forwardErr instanceof Error ? forwardErr.message : forwardErr);
+        logger.error('Fund forwarding error', { error: forwardErr instanceof Error ? forwardErr.message : String(forwardErr) });
         // Don't fail the whole request - the hedge is closed, just logging the forwarding issue
       }
     } else {
-      console.log(`⚠️ FUND FORWARDING SKIPPED - isGaslessHedge=${isGaslessHedge}, trueOwner===onChainTrader=${trueOwner.toLowerCase() === onChainTraderAddress.toLowerCase()}`);
+      logger.info(`⚠️ FUND FORWARDING SKIPPED - isGaslessHedge=${isGaslessHedge}, trueOwner===onChainTrader=${trueOwner.toLowerCase() === onChainTraderAddress.toLowerCase()}`);
     }
 
     // Get TRUE OWNER's USDC balance after close + forwarding
@@ -452,12 +452,12 @@ export async function POST(request: NextRequest) {
     try {
       const { closeOnChainHedge } = await import('@/lib/db/hedges');
       await closeOnChainHedge(hedgeId, realizedPnl, tx.hash);
-      console.log(`✅ DB updated: hedge ${hedgeId.slice(0,18)}... marked as closed`);
+      logger.info(`✅ DB updated: hedge ${hedgeId.slice(0,18)}... marked as closed`);
     } catch (dbErr) {
-      console.warn('Failed to update DB (non-critical):', dbErr instanceof Error ? dbErr.message : dbErr);
+      logger.warn('Failed to update DB (non-critical)', { error: dbErr instanceof Error ? dbErr.message : String(dbErr) });
     }
 
-    console.log(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC to ${trueOwner.slice(0,10)}... | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}${forwardTxHash ? ` | Forward: ${forwardTxHash}` : ''}`);
+    logger.info(`✅ x402 Gasless close: ${STATUS_NAMES[closedStatus]} | PnL: ${realizedPnl} | Returned: ${fundsReturned} USDC to ${trueOwner.slice(0,10)}... | Saved: $${gasCostUSD.toFixed(4)} gas | Tx: ${tx.hash}${forwardTxHash ? ` | Forward: ${forwardTxHash}` : ''}`);
 
     return NextResponse.json({
       success: true,
@@ -494,7 +494,7 @@ export async function POST(request: NextRequest) {
       elapsed: `${elapsed}ms`,
     });
   } catch (error) {
-    logger.error('On-chain close error:', error);
+    logger.error('On-chain close error', { error: error instanceof Error ? error.message : String(error) });
     
     // Provide more informative error messages for financial operations
     // (without leaking sensitive internals)

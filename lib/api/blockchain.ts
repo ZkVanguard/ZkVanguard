@@ -5,6 +5,7 @@
 
 import { createPublicClient, http, type PublicClient } from 'viem';
 import { CronosTestnet } from '../chains';
+import { logger } from '../utils/logger';
 
 // Contract addresses (deployed on testnet)
 export const CONTRACTS = {
@@ -44,7 +45,7 @@ export async function getGasPrice() {
       formattedPrice: `${gasPriceGwei.toFixed(2)} Gwei`
     };
   } catch (error) {
-    console.error('Failed to fetch gas price:', error);
+    logger.error('Failed to fetch gas price:', error);
     return {
       gasPrice: '0',
       gasPriceGwei: 0,
@@ -62,7 +63,7 @@ export async function getTransactionCount(address: string) {
     const count = await client.getTransactionCount({ address: address as `0x${string}` });
     return count;
   } catch (error) {
-    console.error('Failed to fetch transaction count:', error);
+    logger.error('Failed to fetch transaction count:', error);
     return 0;
   }
 }
@@ -84,7 +85,7 @@ export async function getBalance(address: string) {
       formatted: `${balanceEther.toFixed(4)} CRO`
     };
   } catch (error) {
-    console.error('Failed to fetch balance:', error);
+    logger.error('Failed to fetch balance:', error);
     return {
       balance: '0',
       balanceEther: 0,
@@ -115,7 +116,7 @@ export async function estimateBatchGas(transactions: unknown[]) {
       estimatedCostCRO: (batchedGas * 0.00000001).toFixed(6) // Approximate
     };
   } catch (error) {
-    console.error('Failed to estimate gas:', error);
+    logger.error('Failed to estimate gas:', error);
     return {
       individualGas: 0,
       batchedGas: 0,
@@ -140,7 +141,7 @@ export async function getLatestBlock() {
       transactions: block.transactions.length
     };
   } catch (error) {
-    console.error('Failed to fetch latest block:', error);
+    logger.error('Failed to fetch latest block:', error);
     return {
       number: 0,
       timestamp: 0,
@@ -185,7 +186,7 @@ export async function getNetworkStats() {
       explorer: CronosTestnet.blockExplorers?.default.url
     };
   } catch (error) {
-    console.error('Failed to fetch network stats:', error);
+    logger.error('Failed to fetch network stats:', error);
     return {
       chainId: CronosTestnet.id,
       chainName: CronosTestnet.name,

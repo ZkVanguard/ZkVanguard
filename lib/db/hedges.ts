@@ -253,7 +253,7 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
     return result;
   } catch (error) {
     // Fallback without ZK columns (migration not yet run)
-    console.warn('ZK columns may not exist, falling back to simple insert:', error);
+    logger.warn('ZK columns may not exist, falling back to simple insert:', error);
     const simpleSql = `
       INSERT INTO hedges (
         order_id, portfolio_id, wallet_address, asset, market, side, 
@@ -361,7 +361,7 @@ export async function getActiveHedgesByZKOwnership(walletAddress: string): Promi
     });
   } catch (error) {
     // ZK columns may not exist yet
-    console.warn('ZK ownership query failed, columns may not exist:', error);
+    logger.warn('ZK ownership query failed, columns may not exist:', error);
     return [];
   }
 }
@@ -403,7 +403,7 @@ export async function getOwnedHedges(walletAddress: string, activeOnly = true): 
     });
   } catch (error) {
     // Fallback if ZK columns don't exist yet (migration not run)
-    console.warn('ZK columns may not exist, falling back to simple wallet query:', error);
+    logger.warn('ZK columns may not exist, falling back to simple wallet query:', error);
     const simpleSql = `
       SELECT * FROM hedges 
       WHERE LOWER(wallet_address) = LOWER($1)
@@ -545,7 +545,7 @@ export async function updateHedgePrice(hedgeIdOnchain: string, currentPrice: num
       WHERE hedge_id_onchain = $3 OR order_id = $3
     `, [currentPrice, source, hedgeIdOnchain]);
   } catch (err) {
-    console.warn('updateHedgePrice failed:', err instanceof Error ? err.message : err);
+    logger.warn('updateHedgePrice failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -573,9 +573,9 @@ export async function fixHedgeEntryPrice(
         updated_at = NOW()
       WHERE id = $3 AND entry_price IS NULL
     `, [fixedEntryPrice, currentPrice, hedgeId]);
-    console.log(`[DB] Fixed entry_price for hedge ${hedgeId}: $${fixedEntryPrice.toFixed(4)}`);
+    logger.info(`[DB] Fixed entry_price for hedge ${hedgeId}: $${fixedEntryPrice.toFixed(4)}`);
   } catch (err) {
-    console.warn('fixHedgeEntryPrice failed:', err instanceof Error ? err.message : err);
+    logger.warn('fixHedgeEntryPrice failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -596,7 +596,7 @@ export async function batchUpdateHedgePrices(priceMap: Record<string, { price: n
       `, [price, source, asset]);
     }
   } catch (err) {
-    console.warn('batchUpdateHedgePrices failed:', err instanceof Error ? err.message : err);
+    logger.warn('batchUpdateHedgePrices failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -615,7 +615,7 @@ export async function closeOnChainHedge(hedgeIdOnchain: string, realizedPnl: num
       WHERE hedge_id_onchain = $3 OR order_id = $3
     `, [realizedPnl, closeTxHash || null, hedgeIdOnchain]);
   } catch (err) {
-    console.warn('closeOnChainHedge failed:', err instanceof Error ? err.message : err);
+    logger.warn('closeOnChainHedge failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -749,7 +749,7 @@ export async function upsertOnChainHedge(params: OnChainHedgeParams): Promise<He
     ]);
   } catch (error) {
     // If on-chain columns don't exist yet, log and return null (non-fatal)
-    console.warn('upsertOnChainHedge failed (migration may not be run yet):', error instanceof Error ? error.message : error);
+    logger.warn('upsertOnChainHedge failed (migration may not be run yet):', error instanceof Error ? error.message : error);
     return null;
   }
 }
@@ -799,7 +799,7 @@ export async function resyncOnChainHedge(hedgeIdOnchain: string, data: {
       hedgeIdOnchain,
     ]);
   } catch (err) {
-    console.warn('resyncOnChainHedge failed:', err instanceof Error ? err.message : err);
+    logger.warn('resyncOnChainHedge failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -873,6 +873,6 @@ export async function cacheTxHashes(entries: Array<{ hedgeId: string; txHash: st
       `, [hedgeId, hedgeId, txHash, blockNumber || null, explorerLink]);
     }
   } catch (error) {
-    console.warn('cacheTxHashes failed:', error instanceof Error ? error.message : error);
+    logger.warn('cacheTxHashes failed:', error instanceof Error ? error.message : error);
   }
 }

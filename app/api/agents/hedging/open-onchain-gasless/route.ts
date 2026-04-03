@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         );
 
         if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
-          console.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${walletAddress}`);
+          logger.warn(`🚫 Signature mismatch: recovered ${recoveredAddress}, expected ${walletAddress}`);
           return NextResponse.json(
             { 
               success: false, 
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`✅ EIP-712 signature verified: ${recoveredAddress} authorized hedge`);
+        logger.info(`✅ EIP-712 signature verified: ${recoveredAddress} authorized hedge`);
       } catch (sigErr) {
         logger.error('Signature verification error:', sigErr);
         return NextResponse.json(
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      console.log(`🔑 Internal/system call - bypassing EIP-712 signature verification`);
+      logger.info(`🔑 Internal/system call - bypassing EIP-712 signature verification`);
     }
 
     // Dynamic address resolution
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       
       entryPrice = priceContext.effectivePrice;
       priceSource = priceContext.source;
-      console.log(`📈 Validated entry price for ${asset}: $${entryPrice} (source: ${priceSource})`);
+      logger.info(`📈 Validated entry price for ${asset}: $${entryPrice} (source: ${priceSource})`);
     } catch (priceErr) {
       // Price validation failed - DO NOT proceed with hedge
       logger.error('Strict price validation failed:', priceErr);
@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
       }, { status: 503 });
     }
     
-    console.log(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} (${priceSource}) | relayer: ${relayer.address} (user hidden)`);
+    logger.info(`🔐 x402 ZK-Private openHedge: ${asset} ${side} | ${collateralAmount} USDC x${leverage} | entry: $${entryPrice} (${priceSource}) | relayer: ${relayer.address} (user hidden)`);
 
     // ═══ SYNC LIVE CRYPTO.COM PRICE TO PERPETUAL DEX ON-CHAIN (TESTNET ONLY) ═══
     // On mainnet, PerpetualDEX has real oracle - no price sync needed
@@ -303,15 +303,15 @@ export async function POST(request: NextRequest) {
         // 1) Sync the live price so PerpetualDEX records the correct openPrice
         const syncedPrice = await syncSinglePriceToChain(deployerWallet, pairIndex);
         if (syncedPrice > 0) {
-          console.log(`📈 On-chain price synced: ${asset} → $${syncedPrice} (was stale)`);
+          logger.info(`📈 On-chain price synced: ${asset} → $${syncedPrice} (was stale)`);
         }
         // 2) Ensure PerpetualDEX has enough USDC to settle this trade later
         await ensureMoonlanderLiquidity(deployerWallet, collateralRaw * BigInt(leverage));
       } catch (syncErr) {
-        console.warn('⚠️ Price sync failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
+        logger.warn('⚠️ Price sync failed (non-blocking):', syncErr instanceof Error ? syncErr.message : syncErr);
       }
     } else if (isTestnet() && !DEPLOYER_PK) {
-      console.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to PerpetualDEX');
+      logger.warn('⚠️ DEPLOYER_PK not set — cannot sync live prices to PerpetualDEX');
     }
     // On mainnet, skip price sync entirely - real Moonlander oracle handles it
 
@@ -327,9 +327,9 @@ export async function POST(request: NextRequest) {
         { value: ethers.parseEther('0.06') }
       );
       gasLimit = Math.ceil(Number(estimatedGas) * 1.2); // 20% buffer
-      console.log(`⛽ Estimated gas: ${estimatedGas} → using ${gasLimit} (with 20% buffer)`);
+      logger.info(`⛽ Estimated gas: ${estimatedGas} → using ${gasLimit} (with 20% buffer)`);
     } catch {
-      console.log(`⛽ Gas estimation failed, using default ${gasLimit}`);
+      logger.info(`⛽ Gas estimation failed, using default ${gasLimit}`);
     }
 
     // Calculate gas savings for the user
@@ -417,9 +417,9 @@ export async function POST(request: NextRequest) {
       explorerLink: `https://explorer.cronos.org/${chainId === 25 ? '' : 'testnet/'}tx/${tx.hash}`,
       walletAddress: userWallet !== 'anonymous' ? userWallet : undefined,
       metadata: { gasless: true, x402: true, priceSource },
-    }).catch(err => console.warn('DB persist skipped:', err instanceof Error ? err.message : err));
+    }).catch(err => logger.warn('DB persist skipped:', err instanceof Error ? err.message : err));
 
-    console.log(`✅ x402 Gasless hedge created: ${tx.hash} | Entry: $${entryPrice} (${priceSource}) | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
+    logger.info(`✅ x402 Gasless hedge created: ${tx.hash} | Entry: $${entryPrice} (${priceSource}) | Gas used: ${receipt.gasUsed} | Time: ${elapsed}ms`);
 
     return NextResponse.json({
       success: true,
