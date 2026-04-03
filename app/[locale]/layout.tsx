@@ -58,8 +58,8 @@ export default async function LocaleLayout({
         {/* Resource hints for faster loading */}
         <link rel="preconnect" href="https://api.crypto.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://api.crypto.com" />
-        <link rel="preconnect" href="https://testnet.cronos.org" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://testnet.cronos.org" />
+        <link rel="preconnect" href={process.env.NEXT_PUBLIC_CRONOS_RPC || 'https://evm.cronos.org'} crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_CRONOS_RPC || 'https://evm.cronos.org'} />
         
         {/* Preload critical fonts (system fonts, no external fonts needed) */}
         <style dangerouslySetInnerHTML={{ __html: `

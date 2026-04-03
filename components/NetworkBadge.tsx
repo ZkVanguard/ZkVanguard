@@ -14,9 +14,9 @@ interface NetworkInfo {
 }
 
 // Detect network from environment variable or default to testnet
-const OASIS_NETWORK = (process.env.NEXT_PUBLIC_OASIS_NETWORK || 'testnet') as 'mainnet' | 'testnet';
-const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'testnet') as 'mainnet' | 'testnet';
-const CRONOS_NETWORK = (process.env.NEXT_PUBLIC_CRONOS_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+const OASIS_NETWORK = (process.env.NEXT_PUBLIC_OASIS_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
+const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
+const CRONOS_NETWORK = (process.env.NEXT_PUBLIC_CRONOS_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
 
 const NETWORKS: NetworkInfo[] = [
   {

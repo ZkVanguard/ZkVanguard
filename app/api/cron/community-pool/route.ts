@@ -39,6 +39,7 @@ import { SecureAgentSigner, getSecureAgentSigner } from '@/lib/services/SecureAg
 import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
 
 export const runtime = 'nodejs';
+export const maxDuration = 180;
 
 // CommunityPool contract details
 const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';

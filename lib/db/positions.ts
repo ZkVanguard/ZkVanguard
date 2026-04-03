@@ -27,10 +27,10 @@ export async function getCachedPositions(walletAddress: string, maxAgeMs = 60_00
     const sql = `
       SELECT * FROM wallet_positions 
       WHERE LOWER(wallet_address) = LOWER($1)
-        AND updated_at > NOW() - INTERVAL '${Math.floor(maxAgeMs / 1000)} seconds'
+        AND updated_at > NOW() - make_interval(secs => $2)
       ORDER BY balance_usd DESC
     `;
-    return await query<CachedPosition>(sql, [walletAddress]);
+    return await query<CachedPosition>(sql, [walletAddress, Math.floor(maxAgeMs / 1000)]);
   } catch {
     return [];
   }

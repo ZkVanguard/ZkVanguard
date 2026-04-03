@@ -217,7 +217,7 @@ export function ConnectButton() {
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                     <a
-                      href={`${currentChain?.explorerUrl || 'https://sepolia.etherscan.io'}/address/${wdkAddress}`}
+                      href={`${currentChain?.explorerUrl || 'https://explorer.cronos.org'}/address/${wdkAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 py-1.5 bg-[#F5F5F7] dark:bg-[#2c2c2e] hover:bg-[#E5E5EA] dark:hover:bg-[#3c3c3e] rounded-lg text-[12px] font-medium text-[#1D1D1F] dark:text-white flex items-center justify-center gap-1 transition-colors"
@@ -325,7 +325,7 @@ export function ConnectButton() {
                           {copied ? 'Copied' : 'Copy'}
                         </button>
                         <a
-                          href={`https://suiscan.xyz/testnet/address/${suiAddress}`}
+                          href={`https://suiscan.xyz/${process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet'}/address/${suiAddress}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 py-1.5 bg-[#F5F5F7] dark:bg-[#2c2c2e] rounded-lg text-[12px] font-medium flex items-center justify-center gap-1"

@@ -4,7 +4,7 @@ import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 
 /**
- * Combined Middleware: i18n + Geo-Blocking
+ * Combined Middleware: i18n + Geo-Blocking + Security Headers
  * 
  * Optimized for multi-user throughput:
  * - Set-based O(1) lookups instead of Array.some() for path matching
@@ -14,6 +14,18 @@ import { routing } from './i18n/routing';
 
 // Create i18n middleware handler once (module-level singleton)
 const intlMiddleware = createIntlMiddleware(routing);
+
+/** Add security headers to all responses */
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  return response;
+}
 
 // O(1) lookup for blocked countries
 const BLOCKED_COUNTRIES = new Set([
@@ -78,11 +90,16 @@ export function middleware(request: NextRequest) {
         return createBlockedResponse(country, pathname);
       }
     }
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
   
   // Apply i18n for non-API routes
   const intlResponse = intlMiddleware(request);
+  
+  // Add security headers to all i18n responses
+  if (intlResponse instanceof NextResponse) {
+    addSecurityHeaders(intlResponse);
+  }
   
   // Skip geo-blocking for public paths
   if (isPublic(pathname)) {

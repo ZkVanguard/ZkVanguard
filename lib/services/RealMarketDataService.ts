@@ -115,11 +115,11 @@ class RealMarketDataService {
     if (this.refreshTimer) return; // Already running
     
     // Initial fetch
-    this._proactiveRefresh().catch(() => {});
+    this._proactiveRefresh().catch((err) => { logger.warn('[RealMarketData] Initial proactive refresh failed', { error: err }); });
     
     // Set up interval
     this.refreshTimer = setInterval(() => {
-      this._proactiveRefresh().catch(() => {});
+      this._proactiveRefresh().catch((err) => { logger.warn('[RealMarketData] Proactive refresh failed', { error: err }); });
     }, this.REFRESH_INTERVAL);
     
     // Cleanup on process exit (Node.js)
