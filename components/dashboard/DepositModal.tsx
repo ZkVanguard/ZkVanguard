@@ -409,6 +409,9 @@ export function DepositModal({
 
   const handleSubmit = () => {
     if (!amount || parseFloat(amount) <= 0) return;
+    
+    // Clear previous error state on new attempt
+    setErrorMessage('');
 
     // For native token, need to wrap first, then approve, then deposit
     if (selectedToken.isNative) {

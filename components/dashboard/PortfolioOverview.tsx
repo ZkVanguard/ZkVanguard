@@ -117,7 +117,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
             <button
               onClick={() => refetch()}
               className="sm:hidden w-9 h-9 flex items-center justify-center bg-[#f5f5f7] active:bg-[#e8e8ed] rounded-full transition-all active:scale-95"
-              title="Refresh"
+              aria-label="Refresh portfolio data"
               disabled={isPending}
             >
               <RefreshCw className={`w-4 h-4 text-[#86868b] ${isPending ? 'animate-spin' : ''}`} strokeWidth={2} />
@@ -126,7 +126,7 @@ export function PortfolioOverview({ address, onNavigateToPositions, onNavigateTo
           <button
             onClick={() => refetch()}
             className="hidden sm:flex w-10 h-10 items-center justify-center bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-full transition-all active:scale-95"
-            title="Refresh"
+            aria-label="Refresh portfolio data"
             disabled={isPending}
           >
             <RefreshCw className={`w-[18px] h-[18px] text-[#86868b] ${isPending ? 'animate-spin' : ''}`} strokeWidth={2} />

@@ -235,6 +235,8 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
     // Guard: skip if another fetch is in-flight (dedup at widget level)
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    // Clear error at start of fetch so stale errors don't persist
+    setError(null);
     try {
       const mod = await getService();
       const [latestSignal, signalHistory] = await Promise.all([

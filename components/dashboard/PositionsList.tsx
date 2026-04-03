@@ -415,7 +415,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
     if (address && isConnected) {
       loadAll();
     }
-  }, [address, isConnected, userPortfolios, positionsData]); // Re-fetch when userPortfolios changes
+  }, [address, isConnected, userPortfolios]); // Re-fetch when address or portfolios change (not positionsData — avoids loop)
 
   // Only set loading to false when BOTH positions AND portfolios are ready
   useEffect(() => {

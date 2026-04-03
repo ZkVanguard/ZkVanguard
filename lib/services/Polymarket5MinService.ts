@@ -479,7 +479,9 @@ export class Polymarket5MinService {
       );
       if (res.ok) {
         const data = await res.json();
-        const price = parseFloat(data?.price ?? '0') || 0;
+        // API returns { success, data: { price } } — unwrap correctly
+        const rawPrice = data?.data?.price ?? data?.price ?? '0';
+        const price = parseFloat(String(rawPrice)) || 0;
         if (price > 0) {
           this.btcPriceCache = { price, ts: Date.now() };
         }
