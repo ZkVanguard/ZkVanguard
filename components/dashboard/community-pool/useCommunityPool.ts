@@ -789,6 +789,13 @@ export function useCommunityPool(propAddress?: string) {
           blockExplorerUrls: ['https://sepolia.etherscan.io'],
           nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
         },
+        25: { // Cronos Mainnet
+          chainId: '0x19',
+          chainName: 'Cronos',
+          rpcUrls: ['https://evm.cronos.org', 'https://cronos-evm-rpc.publicnode.com'],
+          blockExplorerUrls: ['https://explorer.cronos.org'],
+          nativeCurrency: { name: 'Cronos', symbol: 'CRO', decimals: 18 },
+        },
         338: { // Cronos Testnet
           chainId: '0x152',
           chainName: 'Cronos Testnet',
@@ -1319,6 +1326,13 @@ export function useCommunityPool(propAddress?: string) {
           rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
           blockExplorerUrls: ['https://sepolia.etherscan.io'],
           nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        },
+        25: { // Cronos Mainnet
+          chainId: '0x19',
+          chainName: 'Cronos',
+          rpcUrls: ['https://evm.cronos.org', 'https://cronos-evm-rpc.publicnode.com'],
+          blockExplorerUrls: ['https://explorer.cronos.org'],
+          nativeCurrency: { name: 'Cronos', symbol: 'CRO', decimals: 18 },
         },
         338: { // Cronos Testnet
           chainId: '0x152',

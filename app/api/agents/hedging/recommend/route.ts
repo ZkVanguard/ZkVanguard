@@ -142,9 +142,7 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     // STEP 1: Initialize Multi-Agent System
     // ========================================================================
-    const provider = getCronosProvider(
-      process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    ).provider;
+    const provider = getCronosProvider().provider;
     
     // Trim private key to remove any trailing whitespace from env vars
     const rawPrivateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;

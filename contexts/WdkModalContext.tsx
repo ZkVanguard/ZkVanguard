@@ -97,15 +97,11 @@ function WdkModalOverlay({
   };
 
   const handleUnlock = async () => {
-    console.log('[WdkModal] 🔓 handleUnlock called');
     setLoading(true);
     setError(null);
     try {
-      console.log('[WdkModal]   Calling loginWithPasskey()...');
       const success = await loginWithPasskey();
-      console.log('[WdkModal]   loginWithPasskey() returned:', success);
       if (success) {
-        console.log('[WdkModal]   ✅ Unlock successful, closing modal');
         onClose();
       } else {
         console.error('[WdkModal]   ❌ loginWithPasskey returned false');

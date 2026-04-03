@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
+import { isMainnet } from '@/lib/utils/network';
 
 export const runtime = 'nodejs';
 
@@ -149,6 +150,12 @@ export async function GET(request: NextRequest) {
   }
   
   logger.info('[PythUpdate] Starting price update cron...');
+
+  // Pyth auto-updates on mainnet — this cron is for testnets only
+  if (isMainnet()) {
+    logger.info('[PythUpdate] Skipping — Pyth auto-updates on mainnet');
+    return NextResponse.json({ success: true, skipped: true, reason: 'mainnet' });
+  }
   
   // Step 1: Fetch latest prices from Hermes
   const updateData = await fetchPriceUpdates();

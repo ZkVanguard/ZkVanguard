@@ -45,9 +45,8 @@ export class AgentOrchestrator {
   private currentSnapshot: MarketSnapshot | null = null;
 
   private constructor() {
-    // Initialize provider
-    const rpcUrl = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
-    this.provider = getCronosProvider(rpcUrl).provider;
+    // Initialize provider — resolves mainnet vs testnet from NEXT_PUBLIC_CHAIN_ID
+    this.provider = getCronosProvider().provider;
 
     // Initialize signer if private key available
     // Check multiple env var names for compatibility
@@ -160,8 +159,9 @@ export class AgentOrchestrator {
         const addresses = CRONOS_CONTRACT_ADDRESSES[network];
         
         const hedgeExecutorAddress = addresses.hedgeExecutor;
-        // USDT on Cronos Testnet
-        const collateralTokenAddress = process.env.NEXT_PUBLIC_USDT_ADDRESS || '0x28217DAddC55e3C4831b4A48A00Ce04880786967';
+        // USDT address resolved by network
+        const collateralTokenAddress = process.env.NEXT_PUBLIC_USDT_ADDRESS 
+          || (network === 'mainnet' ? '0x66e428c3f67a68878562e79A0234c1F83c208770' : '0x28217DAddC55e3C4831b4A48A00Ce04880786967');
         
         // Only enable on-chain if we have a real signer (not demo) and valid HedgeExecutor address
         const isValidHedgeExecutor = hedgeExecutorAddress && hedgeExecutorAddress !== '0x0000000000000000000000000000000000000000';

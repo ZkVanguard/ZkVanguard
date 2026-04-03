@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../utils/logger';
+import { getCronosRpcUrl } from '@/lib/throttled-provider';
 
 // Note: @crypto.com/ai-agent-client types will be available at runtime
 // Using interface for now until proper types are available
@@ -91,7 +92,7 @@ class CryptocomAIService {
           if (createClient) {
             this.client = createClient({
               openaiApiKey: this.apiKey,
-              blockchainRpcUrl: process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org',
+              blockchainRpcUrl: getCronosRpcUrl(),
             }) as AIAgentClient;
             logger.info('Crypto.com AI Agent SDK initialized successfully');
           } else {

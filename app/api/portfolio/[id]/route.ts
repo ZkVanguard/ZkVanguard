@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createPublicClient, http, erc20Abi } from 'viem';
-import { cronosTestnet } from 'viem/chains';
+import { cronos, cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 import { ProductionGuard } from '@/lib/security/production-guard';
 import { isMainnet } from '@/lib/utils/network';
+import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
@@ -129,17 +130,17 @@ export async function GET(
     
     logger.info(`[Portfolio API] Fetching portfolio ${portfolioId}${bypassCache ? ' (cache bypassed)' : ''}...`);
     
-    // Create public client for Cronos Testnet (with retry for rate-limit protection)
+    // Create public client for Cronos (with retry for rate-limit protection)
     const client = createPublicClient({
-      chain: cronosTestnet,
-      transport: http('https://evm-t3.cronos.org', {
+      chain: getCronosChainId() === 25 ? cronos : cronosTestnet,
+      transport: http(getCronosRpcUrl(), {
         retryCount: 3,
         retryDelay: 500,
         batch: { batchSize: 1 },
       }),
     });
 
-    const addresses = getContractAddresses(338); // Cronos Testnet chain ID
+    const addresses = getContractAddresses(getCronosChainId());
     logger.info(`[Portfolio API] Using RWA Manager: ${addresses.rwaManager}`);
 
     // Read portfolio data from contract using 'portfolios' mapping getter

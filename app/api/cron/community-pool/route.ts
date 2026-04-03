@@ -33,6 +33,7 @@ import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb, getAllUserSharesFromDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
 import { calculatePoolNAV } from '@/lib/services/CommunityPoolService';
 import { ethers } from 'ethers';
+import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 import { SecureAgentSigner, getSecureAgentSigner } from '@/lib/services/SecureAgentSigner';
 import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
@@ -131,7 +132,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
   
   try {
     // Step 1: Fetch on-chain pool stats
-    const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+    const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
     const poolContract = new ethers.Contract(COMMUNITY_POOL_ADDRESS, COMMUNITY_POOL_ABI, provider);
     
     const stats = await poolContract.getPoolStats();
@@ -472,7 +473,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
                 if (amountUSD > 0) {
                   // Create contract instance for SecureAgentSigner
                   // The signer gets the wallet internally
-                  const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+                  const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
                   const poolContract = new ethers.Contract(
                     COMMUNITY_POOL_ADDRESS,
                     COMMUNITY_POOL_ABI,

@@ -20,6 +20,7 @@ import { getAgentOrchestrator } from './agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataService';
 import { getUnifiedPriceProvider } from './unified-price-provider';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
@@ -125,9 +126,7 @@ const CENTRAL_CONFIG = {
   // Execution
   MIN_CONFIDENCE_FOR_EXECUTION: 0.65,
   
-  // Cronos Testnet
-  RPC_URL: 'https://evm-t3.cronos.org',
-  CHAIN_ID: 338,
+  // Cronos — resolved at runtime via getCronosRpcUrl()
   COMMUNITY_POOL_ADDRESS: '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30', // V3 Proxy
 };
 
@@ -404,8 +403,8 @@ export class CentralizedHedgeManager {
     snapshot: MarketSnapshot
   ): Promise<PortfolioContext> {
     try {
-      const provider = new ethers.JsonRpcProvider(CENTRAL_CONFIG.RPC_URL);
-      const addresses = getContractAddresses(CENTRAL_CONFIG.CHAIN_ID);
+      const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
+      const addresses = getContractAddresses(getCronosChainId());
       const rwaManager = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
 
       // On-chain portfolio data

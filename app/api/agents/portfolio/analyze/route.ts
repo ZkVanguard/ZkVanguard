@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       CRO: 18, BTC: 8, ETH: 18, USDC: 6, USDT: 6,
     };
     const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
-    const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
+    const provider = getCronosProvider().provider;
 
     // Fetch all token data in parallel
     const tokenResults = await Promise.allSettled(
