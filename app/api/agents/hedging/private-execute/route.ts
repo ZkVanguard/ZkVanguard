@@ -167,9 +167,7 @@ export async function POST(request: NextRequest) {
     let txHash: string | undefined;
     let onChainStored = false;
 
-    const _provider = getCronosProvider(
-      process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    ).provider;
+    const _provider = getCronosProvider().provider;
 
     const privateKey = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY;
     

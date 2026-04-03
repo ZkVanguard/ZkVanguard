@@ -179,14 +179,37 @@ export class ThrottledProvider {
   }
 }
 
+// ─── Cronos Network Resolution ─────────────────────────────────────────────
+
 /**
- * Get a singleton ThrottledProvider for the Cronos testnet RPC.
+ * Resolve the correct Cronos RPC URL based on NEXT_PUBLIC_CHAIN_ID.
+ * - Chain ID 25  → Cronos Mainnet
+ * - Chain ID 338 → Cronos Testnet (default)
+ */
+export function getCronosRpcUrl(): string {
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID?.trim();
+  if (chainId === '25') {
+    return process.env.CRONOS_MAINNET_RPC || process.env.NEXT_PUBLIC_CRONOS_MAINNET_RPC || 'https://evm.cronos.org';
+  }
+  return process.env.CRONOS_TESTNET_RPC || process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
+}
+
+/**
+ * Returns the active Cronos chain ID based on NEXT_PUBLIC_CHAIN_ID.
+ */
+export function getCronosChainId(): number {
+  return process.env.NEXT_PUBLIC_CHAIN_ID?.trim() === '25' ? 25 : 338;
+}
+
+/**
+ * Get a singleton ThrottledProvider for the active Cronos RPC.
+ * Uses getCronosRpcUrl() to resolve mainnet vs testnet based on env config.
  * Reuses the same provider + cache across requests within the same
  * serverless function invocation (cold start shares the instance).
  */
-export function getCronosProvider(rpcUrl: string = 'https://evm-t3.cronos.org'): ThrottledProvider {
+export function getCronosProvider(rpcUrl?: string): ThrottledProvider {
   if (!_cachedProvider) {
-    _cachedProvider = new ThrottledProvider(rpcUrl, {
+    _cachedProvider = new ThrottledProvider(rpcUrl || getCronosRpcUrl(), {
       maxConcurrency: 5,   // Max 5 parallel RPC calls
       cacheTTL: 30_000,    // Cache responses for 30s
       maxRetries: 3,       // Retry 429s up to 3 times with backoff

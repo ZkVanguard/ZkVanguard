@@ -3,8 +3,8 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
-import { CRONOS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { CRONOS_CONTRACT_ADDRESSES, getContractAddresses } from '@/lib/contracts/addresses';
+import { getCronosProvider, getCronosChainId } from '@/lib/throttled-provider';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 
 export const runtime = 'nodejs';
@@ -74,10 +74,9 @@ export async function GET(request: NextRequest) {
     logger.info(`[Portfolio List API] Fetching portfolios for ${address}`);
     const startTime = Date.now();
 
-    const rwaManager = CRONOS_CONTRACT_ADDRESSES.testnet.rwaManager;
-    const throttled = getCronosProvider(
-      process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
-    );
+    const addresses = getContractAddresses(getCronosChainId());
+    const rwaManager = addresses.rwaManager;
+    const throttled = getCronosProvider();
     const provider = throttled.provider;
 
     const contract = new ethers.Contract(rwaManager, RWA_MANAGER_ABI, provider);

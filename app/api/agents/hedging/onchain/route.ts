@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, getTxHashesFromDb, cacheTxHashes, resyncOnChainHedge } from '@/lib/db/hedges';
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
@@ -31,7 +31,7 @@ const HEDGE_EXECUTOR = process.env.NEXT_PUBLIC_HEDGE_EXECUTOR_ADDRESS || '0x090b
 const ZK_PROXY_VAULT = process.env.NEXT_PUBLIC_ZK_PROXY_VAULT_ADDRESS || '0x7F75Ca65D32752607fF481F453E4fbD45E61FdFd';
 const DEPLOYER = process.env.NEXT_PUBLIC_SERVER_WALLET_ADDRESS || '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c';
 const RELAYER = process.env.NEXT_PUBLIC_RELAYER_ADDRESS || '0xb61C1cF5152015E66d547F9c1c45cC592a870D10';
-const RPC_URL = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
+const RPC_URL = getCronosRpcUrl();
 
 // Pair names
 const PAIR_NAMES: Record<number, string> = {

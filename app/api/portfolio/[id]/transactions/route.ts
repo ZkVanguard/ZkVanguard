@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createPublicClient, http, type PublicClient, type Block } from 'viem';
-import { cronosTestnet } from 'viem/chains';
+import { cronos, cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCachedTransactions, getLastCachedBlock, insertTransactions } from '@/lib/db/transactions';
+import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
@@ -20,8 +21,8 @@ let _viemClient: PublicClient | null = null;
 function getViemClient(): PublicClient {
   if (!_viemClient) {
     _viemClient = createPublicClient({
-      chain: cronosTestnet,
-      transport: http('https://evm-t3.cronos.org', {
+      chain: getCronosChainId() === 25 ? cronos : cronosTestnet,
+      transport: http(getCronosRpcUrl(), {
         retryCount: 3,
         retryDelay: 500,
         batch: { batchSize: 1 },

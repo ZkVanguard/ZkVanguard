@@ -21,6 +21,7 @@ import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/c
 import { getPoolSummary } from '@/lib/services/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
+import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
@@ -178,7 +179,7 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
     }
     
     // Fallback to on-chain values
-    const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+    const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
     const contract = new ethers.Contract(pool.address, pool.abi, provider);
     
     const stats = await contract.getPoolStats();
@@ -404,7 +405,7 @@ async function recordSnapshot(
   try {
     const pool = POOLS.find(p => p.id === poolId);
     if (pool) {
-      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+      const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
       const contract = new ethers.Contract(pool.address, pool.abi, provider);
       
       const memberCount = Number(await contract.getMemberCount());

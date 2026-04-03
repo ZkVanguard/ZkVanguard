@@ -16,6 +16,7 @@ import { getAgentOrchestrator } from './agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService } from './RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
@@ -969,8 +970,8 @@ class AutoHedgingService {
   }> {
     try {
       // Setup on-chain connection
-      const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
-      const addresses = getContractAddresses(338); // Cronos Testnet
+      const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
+      const addresses = getContractAddresses(getCronosChainId());
       const rwaManager = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
       const marketDataService = getMarketDataService();
 

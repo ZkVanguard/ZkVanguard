@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
 
     const volatilities = new Map<string, number>();
-    const provider = getCronosProvider('https://evm-t3.cronos.org').provider;
+    const provider = getCronosProvider().provider;
 
     // Fetch all token data in parallel
     const tokenResults = await Promise.allSettled(

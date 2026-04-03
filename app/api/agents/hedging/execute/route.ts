@@ -16,7 +16,7 @@ import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
           contract: hedgeExecutorAddress.slice(0, 10) + '...',
         });
 
-        const rpcUrl = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org/';
+        const rpcUrl = getCronosRpcUrl();
         const provider = getCronosProvider(rpcUrl).provider;
         const signer = new ethers.Wallet(executorPrivateKey, provider);
 
@@ -526,10 +526,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Initialize Moonlander client for Cronos Testnet
-    const _provider = getCronosProvider(
-      process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org'
-    ).provider;
+    // Initialize Moonlander client
+    const _provider = getCronosProvider().provider;
 
     // Use wallet for signing (in production, use secure key management)
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
@@ -551,14 +549,14 @@ export async function POST(request: NextRequest) {
     
     // Determine network (mainnet or testnet)
     const network = process.env.MOONLANDER_NETWORK === 'mainnet' ? 'CRONOS_EVM' : 'CRONOS_TESTNET';
-    const rpcUrl = network === 'CRONOS_EVM' 
+    const moonlanderRpcUrl = network === 'CRONOS_EVM' 
       ? MOONLANDER_CONTRACTS.CRONOS_EVM.RPC_URL 
-      : (process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
+      : getCronosRpcUrl();
     
     // Create on-chain client (pass throttled provider for testnet)
     const moonlanderProvider = network === 'CRONOS_EVM' 
-      ? rpcUrl 
-      : getCronosProvider(rpcUrl).provider;
+      ? moonlanderRpcUrl 
+      : getCronosProvider(moonlanderRpcUrl).provider;
     const moonlander = new MoonlanderOnChainClient(moonlanderProvider, network as NetworkType);
     await moonlander.initialize(privateKey);
 

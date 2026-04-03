@@ -23,8 +23,17 @@ export const dynamic = 'force-dynamic';
 
 // Contract address (update after deployment)
 const ZK_PAYMASTER_ADDRESS = process.env.ZK_PAYMASTER_ADDRESS || '0x0000000000000000000000000000000000000000';
-const RPC_URL = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
-const CHAIN_ID = 338; // Cronos Testnet
+
+// Dynamic: resolved from getCronosRpcUrl() + getCronosChainId() at import time is too early
+// so we use lazy resolution
+function getRpcConfig() {
+  // Inline import to avoid circular deps at module level
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID?.trim() === '25' ? 25 : 338;
+  const rpcUrl = chainId === 25
+    ? (process.env.CRONOS_MAINNET_RPC || process.env.NEXT_PUBLIC_CRONOS_MAINNET_RPC || 'https://evm.cronos.org')
+    : (process.env.CRONOS_TESTNET_RPC || process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org');
+  return { chainId, rpcUrl };
+}
 
 // Minimal ABI
 const ZK_PAYMASTER_ABI = [
@@ -38,7 +47,8 @@ const ZK_PAYMASTER_ABI = [
 let _readContract: ethers.Contract | null = null;
 function getPaymasterReadContract() {
   if (!_readContract) {
-    const provider = getCronosProvider(RPC_URL).provider;
+    const { rpcUrl } = getRpcConfig();
+    const provider = getCronosProvider(rpcUrl).provider;
     _readContract = new ethers.Contract(
       ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, provider
     );
@@ -46,13 +56,16 @@ function getPaymasterReadContract() {
   return _readContract;
 }
 
-// EIP-712 Domain
-const DOMAIN = {
-  name: 'ZKPaymaster',
-  version: '1',
-  chainId: CHAIN_ID,
-  verifyingContract: ZK_PAYMASTER_ADDRESS,
-};
+// EIP-712 Domain (lazy — resolved per-request to pick up env)
+function getDomain() {
+  const { chainId } = getRpcConfig();
+  return {
+    name: 'ZKPaymaster',
+    version: '1',
+    chainId,
+    verifyingContract: ZK_PAYMASTER_ADDRESS,
+  };
+}
 
 // EIP-712 Types
 const TYPES = {
@@ -84,7 +97,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const provider = getCronosProvider(RPC_URL).provider;
+    const provider = getCronosProvider().provider;
     const contract = getPaymasterReadContract();
 
     const [totalCommitments, totalGasSponsored, totalTxRelayed, balance] = await contract.getStats();
@@ -93,7 +106,7 @@ export async function GET(request: NextRequest) {
       success: true,
       deployed: true,
       contract: ZK_PAYMASTER_ADDRESS,
-      chainId: CHAIN_ID,
+      chainId: getRpcConfig().chainId,
       stats: {
         totalCommitments: Number(totalCommitments),
         totalGasSponsored: ethers.formatEther(totalGasSponsored) + ' CRO',
@@ -163,7 +176,7 @@ async function handlePrepare(body: {
     }, { status: 400 });
   }
 
-  const provider = getCronosProvider(RPC_URL).provider;
+  const provider = getCronosProvider().provider;
   const contract = getPaymasterReadContract();
 
   // Get user's nonce
@@ -188,7 +201,7 @@ async function handlePrepare(body: {
   return NextResponse.json({
     success: true,
     signatureRequest: {
-      domain: DOMAIN,
+      domain: getDomain(),
       types: TYPES,
       primaryType: 'StoreCommitment',
       message,
@@ -240,7 +253,7 @@ async function handleExecute(body: {
     }, { status: 500 });
   }
 
-  const provider = getCronosProvider(RPC_URL).provider;
+  const provider = getCronosProvider().provider;
   const relayer = new ethers.Wallet(relayerPrivateKey, provider);
   const contract = new ethers.Contract(ZK_PAYMASTER_ADDRESS, ZK_PAYMASTER_ABI, relayer);
 

@@ -12,10 +12,11 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { query } from '@/lib/db/postgres';
 import { ethers } from 'ethers';
+import { getCronosRpcUrl } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
-const CRONOS_TESTNET_RPC = 'https://evm-t3.cronos.org';
+const CRONOS_RPC = getCronosRpcUrl();
 const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     logger.info('[Seed NAV] Starting NAV history seeding...');
     
     // Fetch current on-chain data
-    const provider = new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+    const provider = new ethers.JsonRpcProvider(CRONOS_RPC);
     const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
     const stats = await pool.getPoolStats();
     

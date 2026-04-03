@@ -7,7 +7,7 @@ import { logger } from '@/lib/utils/logger';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from '@/lib/wdk/wdk-hooks';
 import { getContractAddresses } from './addresses';
 import { RWA_MANAGER_ABI, ZK_VERIFIER_ABI, PAYMENT_ROUTER_ABI } from './abis';
-import { getCronosProvider } from '@/lib/throttled-provider';
+import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 
 // In-memory cache for user portfolios (60s TTL)
 const portfolioCache = new Map<string, { data: UserPortfolio[]; timestamp: number }>();
@@ -158,7 +158,7 @@ export function useUserPortfolios(userAddress?: string) {
         // Last resort: direct RPC (works in Node.js/SSR, may fail in browser)
         try {
           const { ethers } = await import('ethers');
-          const provider = new ethers.JsonRpcProvider('https://evm-t3.cronos.org');
+          const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
           const contract = new ethers.Contract(addresses.rwaManager, RWA_MANAGER_ABI, provider);
           const directCount = await contract.portfolioCount();
           logger.info(`[useUserPortfolios] Direct RPC portfolioCount = ${directCount.toString()}`, { component: 'hooks' });
@@ -205,9 +205,7 @@ export function useUserPortfolios(userAddress?: string) {
 
       try {
         const { ethers } = await import('ethers');
-        const throttled = getCronosProvider(
-          process.env.NEXT_PUBLIC_CRONOS_RPC_URL || 'https://evm-t3.cronos.org'
-        );
+        const throttled = getCronosProvider();
         const provider = throttled.provider;
         
         const contract = new ethers.Contract(

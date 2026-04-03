@@ -272,8 +272,13 @@ export function getContractAddresses(chainId: number) {
   switch (chainId) {
     case 338: // Cronos Testnet
       return CRONOS_CONTRACT_ADDRESSES.testnet;
-    case 25: // Cronos Mainnet
-      return CRONOS_CONTRACT_ADDRESSES.mainnet;
+    case 25: { // Cronos Mainnet
+      const addrs = CRONOS_CONTRACT_ADDRESSES.mainnet;
+      if (addrs.rwaManager === ZERO_ADDRESS || addrs.zkVerifier === ZERO_ADDRESS) {
+        console.warn('[MAINNET] Cronos mainnet contract addresses not configured — set NEXT_PUBLIC_MAINNET_* env vars');
+      }
+      return addrs;
+    }
     case 11155111: // Sepolia
       return SEPOLIA_CONTRACT_ADDRESSES.testnet;
     case 296: // Hedera Testnet
