@@ -73,7 +73,9 @@ function getChainTypeFromEvmId(chainId: number): ChainType | null {
 
 function MultiChainContextProvider({ children }: { children: ReactNode }) {
   const [activeChain, setActiveChain] = useState<ChainType>('sui'); // Default to SUI
-  const [network, setNetwork] = useState<NetworkType>('testnet');
+  const [network, setNetwork] = useState<NetworkType>(
+    (process.env.NEXT_PUBLIC_NETWORK as NetworkType) || 'mainnet'
+  );
   const userSelectedChainRef = useRef(false); // Track if user manually selected
   
   // EVM (Cronos) wallet state

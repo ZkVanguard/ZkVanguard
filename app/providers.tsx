@@ -46,9 +46,9 @@ export function Providers({ children }: { children: ReactNode }) {
     <CustomThemeProvider>
       <QueryClientProvider client={queryClient}>
         {/* Tether WDK Provider - Native self-custodial wallet */}
-        <WdkProvider defaultChain="sepolia">
+        <WdkProvider defaultChain={process.env.NEXT_PUBLIC_DEFAULT_CHAIN || 'cronos-mainnet'}>
           {/* Sui Provider with full context support */}
-          <SuiWalletProviders defaultNetwork="testnet" skipQueryProvider>
+          <SuiWalletProviders skipQueryProvider>
             {/* WdkModalProvider renders the modal as a sibling of Navbar,
                 outside the backdrop-filter stacking context */}
             <WdkModalProvider>

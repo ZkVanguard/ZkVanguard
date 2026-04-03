@@ -216,9 +216,9 @@ export class AIMarketIntelligence {
       predictions,
       priceData,
     ] = await Promise.all([
-      Polymarket5MinService.getLatest5MinSignal().catch(() => null),
-      DelphiMarketService.getRelevantMarkets(assets).catch(() => []),
-      this.fetchPriceData(assets).catch(() => ({})),
+      Polymarket5MinService.getLatest5MinSignal().catch((err) => { logger.warn('[AIMarketIntelligence] 5min signal fetch failed', { error: err }); return null; }),
+      DelphiMarketService.getRelevantMarkets(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Predictions fetch failed', { error: err }); return []; }),
+      this.fetchPriceData(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Price data fetch failed', { error: err }); return {}; }),
     ]);
 
     const signalHistory = Polymarket5MinService.getSignalHistory();

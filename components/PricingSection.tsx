@@ -160,8 +160,6 @@ export function PricingSection() {
   const [isAnnual, setIsAnnual] = useState(true);
 
   const handleSelect = (tier: SubscriptionTier) => {
-    // Handle tier selection - could navigate to checkout or show modal
-    console.log('Selected tier:', tier);
     if (tier === 'enterprise') {
       window.location.href = '/contact';
     } else {

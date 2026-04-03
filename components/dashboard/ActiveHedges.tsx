@@ -424,14 +424,16 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           // and let the signature verification handle it properly.
           
           // Debug logging
-          console.log('[DEBUG] Close position - ZK hedge flow:', {
-            hedgeId: selectedHedge.hedgeId,
-            displayedWallet: selectedHedge.walletAddress, // Might be proxy
-            connectedWallet: address, // User's actual wallet
-            proxyWallet: selectedHedge.proxyWallet,
-            commitmentHash: selectedHedge.commitmentHash,
-            zkVerified: selectedHedge.zkVerified,
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[DEBUG] Close position - ZK hedge flow:', {
+              hedgeId: selectedHedge.hedgeId,
+              displayedWallet: selectedHedge.walletAddress,
+              connectedWallet: address,
+              proxyWallet: selectedHedge.proxyWallet,
+              commitmentHash: selectedHedge.commitmentHash,
+              zkVerified: selectedHedge.zkVerified,
+            });
+          }
           
           // The user signs with their REAL wallet, and the backend verifies
           // this signature against the TRUE owner from hedge_ownership table

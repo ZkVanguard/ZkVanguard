@@ -139,6 +139,7 @@ async function getCurrentPrices(assets: string[]): Promise<Record<string, number
     
     const response = await fetch(`${baseUrl}/api/prices?assets=${assets.join(',')}`, {
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
     });
     
     if (!response.ok) {

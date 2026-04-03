@@ -25,9 +25,9 @@ export async function getCachedPrice(symbol: string, maxAgeMs = 30_000): Promise
     const sql = `
       SELECT * FROM price_cache 
       WHERE UPPER(symbol) = UPPER($1)
-        AND updated_at > NOW() - INTERVAL '${Math.floor(maxAgeMs / 1000)} seconds'
+        AND updated_at > NOW() - make_interval(secs => $2)
     `;
-    return await queryOne<CachedPrice>(sql, [symbol]);
+    return await queryOne<CachedPrice>(sql, [symbol, Math.floor(maxAgeMs / 1000)]);
   } catch {
     return null;
   }
@@ -43,9 +43,9 @@ export async function getCachedPrices(symbols: string[], maxAgeMs = 30_000): Pro
     const sql = `
       SELECT * FROM price_cache 
       WHERE UPPER(symbol) = ANY($1)
-        AND updated_at > NOW() - INTERVAL '${Math.floor(maxAgeMs / 1000)} seconds'
+        AND updated_at > NOW() - make_interval(secs => $2)
     `;
-    const rows = await query<CachedPrice>(sql, [upperSymbols]);
+    const rows = await query<CachedPrice>(sql, [upperSymbols, Math.floor(maxAgeMs / 1000)]);
     const map: Record<string, CachedPrice> = {};
     for (const row of rows) {
       map[row.symbol.toUpperCase()] = row;
@@ -111,9 +111,9 @@ export async function getAllCachedPrices(maxAgeMs = 30_000): Promise<CachedPrice
   try {
     const sql = `
       SELECT * FROM price_cache 
-      WHERE updated_at > NOW() - INTERVAL '${Math.floor(maxAgeMs / 1000)} seconds'
+      WHERE updated_at > NOW() - make_interval(secs => $1)
     `;
-    return await query<CachedPrice>(sql);
+    return await query<CachedPrice>(sql, [Math.floor(maxAgeMs / 1000)]);
   } catch {
     return [];
   }
