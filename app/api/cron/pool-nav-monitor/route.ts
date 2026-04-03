@@ -154,7 +154,7 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
         // Convert allocations to percentages
         const allocations: Record<string, number> = {};
         for (const [asset, data] of Object.entries(summary.allocations)) {
-          allocations[asset] = (data as any).percentage || 0;
+          allocations[asset] = data.percentage || 0;
         }
         
         // Estimate creation time from NAV history

@@ -5,6 +5,7 @@
 
 import { getCryptocomAIService } from './cryptocom-service';
 import { getMarketDataService } from '../services/RealMarketDataService';
+import { logger } from '../utils/logger';
 import type { PortfolioAnalysis, RiskAssessment, HedgeRecommendation } from './cryptocom-service';
 
 export class EnhancedAIAgent {
@@ -214,7 +215,7 @@ export class EnhancedAIAgent {
           volatility = this.marketData.calculateVolatility(prices);
         }
       } catch (error) {
-        console.warn('Failed to get volatility, using default');
+        logger.warn('Failed to get volatility, using default');
       }
 
       // Recommend short hedge

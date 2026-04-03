@@ -202,7 +202,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwn
       );
     } catch (zkError) {
       // ZK columns may not exist, fallback to simple query
-      console.warn('ZK columns may not exist, falling back:', zkError);
+      logger.warn('ZK columns may not exist, falling back:', zkError);
       walletHedges = await query<HedgeRow>(
         `SELECT * FROM hedges 
          WHERE LOWER(wallet_address) = $1

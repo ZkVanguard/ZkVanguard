@@ -89,6 +89,12 @@ interface SuiCronResult {
       route: string;
       canSwap: boolean;
     }>;
+    simulated?: number;
+    swappableAssets?: string[];
+    hedgedAssets?: string[];
+    executed?: number;
+    failed?: number;
+    txDigests?: Array<{ asset: string; digest: string }>;
   };
   duration: number;
   error?: string;
@@ -447,9 +453,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         };
 
         // Attach agent metadata
-        (rebalanceSwaps as any).simulated = simulatedCount;
-        (rebalanceSwaps as any).swappableAssets = aiResult.swappableAssets;
-        (rebalanceSwaps as any).hedgedAssets = aiResult.hedgedAssets;
+        rebalanceSwaps.simulated = simulatedCount;
+        rebalanceSwaps.swappableAssets = aiResult.swappableAssets;
+        rebalanceSwaps.hedgedAssets = aiResult.hedgedAssets;
 
         logger.info('[SUI Cron] Agent rebalance plan', {
           planned: plan.swaps.length,
@@ -465,10 +471,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           try {
             const execResult = await aggregator.executeRebalance(plan, 0.015);
             
-            (rebalanceSwaps as any).executed = execResult.totalExecuted;
-            (rebalanceSwaps as any).failed = execResult.totalFailed;
-            (rebalanceSwaps as any).txDigests = execResult.results
-              .filter(r => r.txDigest)
+            rebalanceSwaps.executed = execResult.totalExecuted;
+            rebalanceSwaps.failed = execResult.totalFailed;
+            rebalanceSwaps.txDigests = execResult.results
+              .filter((r): r is typeof r & { txDigest: string } => !!r.txDigest)
               .map(r => ({ asset: r.asset, digest: r.txDigest }));
 
             logger.info('[SUI Cron] On-chain swaps executed', {

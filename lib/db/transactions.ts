@@ -4,6 +4,7 @@
  * Only scans new blocks since last synced block — incremental sync.
  */
 import { query, queryOne } from './postgres';
+import { logger } from '../utils/logger';
 
 export interface PortfolioTransaction {
   id: number;
@@ -151,6 +152,6 @@ export async function setSyncBlock(syncKey: string, blockNumber: number): Promis
         last_sync_at = NOW()
     `, [syncKey, blockNumber]);
   } catch (err) {
-    console.warn('setSyncBlock failed:', err instanceof Error ? err.message : err);
+    logger.warn('setSyncBlock failed:', err instanceof Error ? err.message : err);
   }
 }

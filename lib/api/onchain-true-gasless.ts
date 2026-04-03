@@ -15,9 +15,12 @@
 
 import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
+import { getCronosRpcUrl } from '@/lib/throttled-provider';
+import { getContractAddresses } from '@/lib/contracts/addresses';
+import { getCronosChainId } from '@/lib/throttled-provider';
 
-// RPC URL for Cronos Testnet
-const CRONOS_TESTNET_RPC = process.env.NEXT_PUBLIC_CRONOS_TESTNET_RPC || 'https://evm-t3.cronos.org';
+// RPC URL resolved from env
+const CRONOS_RPC = getCronosRpcUrl();
 
 // Import X402Client only on server-side to avoid node:crypto issues in browser
 const getX402Client = async () => {
@@ -28,8 +31,8 @@ const getX402Client = async () => {
   throw new Error('X402Client can only be used server-side');
 };
 
-const X402_VERIFIER_ADDRESS = '0x85bC6BE2ee9AD8E0f48e94Eae90464723EE4E852' as `0x${string}`; // TRUE gasless contract
-const USDC_TOKEN = '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0' as `0x${string}`; // DevUSDCe testnet
+const X402_VERIFIER_ADDRESS = (process.env.NEXT_PUBLIC_X402_GASLESS_VERIFIER || getContractAddresses(getCronosChainId()).gaslessZKCommitmentVerifier) as `0x${string}`;
+const USDC_TOKEN = (getContractAddresses(getCronosChainId()).usdtToken) as `0x${string}`; // USDC/USDT token
 
 const X402_VERIFIER_ABI = [
   {
@@ -124,7 +127,7 @@ const USDC_ABI = [
 
 // Get ethers provider for read operations
 function getProvider() {
-  return new ethers.JsonRpcProvider(CRONOS_TESTNET_RPC);
+  return new ethers.JsonRpcProvider(CRONOS_RPC);
 }
 
 // Get contract instance for read operations

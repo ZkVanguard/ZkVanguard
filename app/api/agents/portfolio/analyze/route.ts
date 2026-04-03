@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
             value,
           };
         } catch (error) {
-          console.warn(`Failed to fetch ${symbol} data:`, error);
+          logger.warn(`Failed to fetch ${symbol} data:`, error);
           return null;
         }
       })

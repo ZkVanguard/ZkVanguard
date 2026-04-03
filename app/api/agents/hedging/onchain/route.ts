@@ -107,7 +107,7 @@ async function fetchLivePrices(pairIndices: number[]): Promise<LivePriceResult> 
       _priceCache = { prices: { ...prices }, expiresAt: Date.now() + 15_000 };
     }
   } catch (err) {
-    console.warn('⚠️ Central price service failed:', err instanceof Error ? err.message : err);
+    logger.warn('Central price service failed', { error: err instanceof Error ? err.message : String(err) });
   }
 
   // Fill in missing with fallbacks (only when central service failed)
@@ -169,14 +169,14 @@ async function backgroundResyncHedges(hedgeIdOnchains: string[]): Promise<void> 
         });
         synced++;
       } catch (err) {
-        console.warn(`⚠️ Resync failed for hedge ${hedgeId.slice(0, 10)}:`, err instanceof Error ? err.message : err);
+        logger.warn(`Resync failed for hedge ${hedgeId.slice(0, 10)}`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
 
     _lastResyncAt = Date.now();
-    console.log(`🔄 Background resync: updated ${synced}/${hedgeIdOnchains.length} hedges from RPC`);
+    logger.info(`🔄 Background resync: updated ${synced}/${hedgeIdOnchains.length} hedges from RPC`);
   } catch (err) {
-    console.warn('Background resync error:', err instanceof Error ? err.message : err);
+    logger.warn('Background resync error', { error: err instanceof Error ? err.message : String(err) });
   } finally {
     _resyncInProgress = false;
   }
@@ -269,10 +269,10 @@ async function fetchTxHashes(
     }
     
     if (remainingIds.size > 0) {
-      console.warn(`Could not find tx hashes for ${remainingIds.size}/${hedgeIds.length} hedges (may be outside ${MAX_SCAN_BLOCKS}-block scan window)`);
+      logger.warn(`Could not find tx hashes for ${remainingIds.size}/${hedgeIds.length} hedges (may be outside ${MAX_SCAN_BLOCKS}-block scan window)`);
     }
   } catch (err) {
-    console.warn('Could not fetch events for tx hashes:', err instanceof Error ? err.message : err);
+    logger.warn('Could not fetch events for tx hashes', { error: err instanceof Error ? err.message : String(err) });
   }
   return txHashMap;
 }
@@ -282,8 +282,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const address = searchParams.get('address') || searchParams.get('walletAddress');
     const includeStats = searchParams.get('stats') === 'true';
-    const forceRpc = searchParams.get('forceRpc') === 'true'; // Debug flag to bypass DB
-    const forceResync = searchParams.get('resync') === 'true'; // Force RPC resync + DB update
+    // Debug flags gated behind internal auth to prevent abuse in production
+    const hasInternalAuth = request.headers.get('authorization') === `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`;
+    const forceRpc = hasInternalAuth && searchParams.get('forceRpc') === 'true';
+    const forceResync = hasInternalAuth && searchParams.get('resync') === 'true';
 
     // SECURITY: Require wallet address - users should only see their own hedges
     if (!address) {
@@ -389,12 +391,12 @@ export async function GET(request: NextRequest) {
             return false;
           });
           
-          console.log(`🔍 Filtered hedges for ${address.slice(0,10)}...: ${filteredHedges.length}/${dbHedges.length}`);
+          logger.info(`🔍 Filtered hedges for ${address.slice(0,10)}...: ${filteredHedges.length}/${dbHedges.length}`);
         }
 
         // ALWAYS fetch live prices from Crypto.com (in-memory 15s cache prevents spam)
         const { prices: livePrices, isLive: pricesAreLive } = await fetchLivePrices([0, 1, 2, 3, 4, 5]);
-        console.log(`📡 Prices: BTC=$${livePrices[0]} ETH=$${livePrices[1]} CRO=$${livePrices[2]} live=${pricesAreLive}`);
+        logger.info(`📡 Prices: BTC=$${livePrices[0]} ETH=$${livePrices[1]} CRO=$${livePrices[2]} live=${pricesAreLive}`);
         const priceMap: Record<string, number> = {};
         let actualPriceSource: 'crypto.com' | 'db-cache' | 'fallback' = 'fallback';
         for (const symbol of ['BTC', 'ETH', 'CRO', 'ATOM', 'DOGE', 'SOL']) {
@@ -504,7 +506,7 @@ export async function GET(request: NextRequest) {
           };
         }
 
-        console.log(`⚡ DB-first onchain: ${hedgeDetails.length} hedges in ${Date.now() - dbStart}ms (NO RPC calls)`);
+        logger.info(`⚡ DB-first onchain: ${hedgeDetails.length} hedges in ${Date.now() - dbStart}ms (NO RPC calls)`);
 
         // ── Background resync: validate DB against chain every 5 min (fire-and-forget) ──
         const timeSinceResync = Date.now() - _lastResyncAt;
@@ -585,7 +587,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('⚠️ DB empty or forceRpc=true — falling back to RPC (slow)');
+    logger.info('⚠️ DB empty or forceRpc=true — falling back to RPC (slow)');
     const tp = getCronosProvider(RPC_URL);
     const provider = tp.provider;
     const contract = new ethers.Contract(HEDGE_EXECUTOR, HEDGE_EXECUTOR_ABI, provider);
@@ -643,7 +645,7 @@ export async function GET(request: NextRequest) {
         if (openPrice > 0) entryPriceMap[hedgeId] = openPrice;
       }
     } catch {
-      console.warn('Could not fetch entry prices from Perpetual DEX');
+      logger.warn('Could not fetch entry prices from Perpetual DEX');
     }
 
     // ── Step 3b: DB-first tx hash lookup (instant), event scan only for misses ──
@@ -685,7 +687,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (dbHits > 0) {
-        console.log(`⚡ TX hashes: ${dbHits} from DB, ${Object.keys(txHashMap).length - dbHits} from scan/deploy`);
+        logger.info(`⚡ TX hashes: ${dbHits} from DB, ${Object.keys(txHashMap).length - dbHits} from scan/deploy`);
       }
     }
 
@@ -845,7 +847,7 @@ export async function GET(request: NextRequest) {
       protocolStats,
     });
   } catch (error) {
-    logger.error('On-chain hedge fetch error:', error);
+    logger.error('On-chain hedge fetch error', { error: error instanceof Error ? error.message : String(error) });
     return safeErrorResponse(error, 'On-chain hedge fetch');
   }
 }

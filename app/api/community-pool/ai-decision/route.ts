@@ -153,7 +153,7 @@ async function generateAIAllocation(marketConditions?: {
   // Sort by score for deterministic allocation
   const sortedIndicators = [...indicators].sort((a, b) => b.score - a.score);
   
-  let allocations: Record<SupportedAsset, number> = {} as any;
+  const allocations = {} as Record<SupportedAsset, number>;
   let remainingPercentage = 100;
   
   for (let i = 0; i < sortedIndicators.length; i++) {

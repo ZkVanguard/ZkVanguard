@@ -4,6 +4,7 @@
  * Serves /api/positions instantly from DB; background refresh via RPC.
  */
 import { query } from './postgres';
+import { logger } from '../utils/logger';
 
 export interface CachedPosition {
   wallet_address: string;
@@ -75,7 +76,7 @@ export async function upsertPositions(walletAddress: string, positions: Array<{
       ]);
     }
   } catch (err) {
-    console.warn('upsertPositions failed:', err instanceof Error ? err.message : err);
+    logger.warn('upsertPositions failed:', err instanceof Error ? err.message : err);
   }
 }
 
