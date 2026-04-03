@@ -165,7 +165,7 @@ export function ManualHedgeModal({
   // ── Apply initial values from AI recommendation ───────────────
   useEffect(() => {
     if (isOpen && initialValues) {
-      console.log('[ManualHedgeModal] Applying initial values:', initialValues);
+      logger.debug('[ManualHedgeModal] Applying initial values');
       if (initialValues.asset) setAsset(initialValues.asset);
       if (initialValues.side) setHedgeType(initialValues.side);
       if (initialValues.leverage) setLeverage(Math.max(1, Math.round(initialValues.leverage)));

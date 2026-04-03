@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, createContext, useContext, ReactNode } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { useAccount, useDisconnect } from '@/lib/wdk/wdk-hooks';
 import { useWdk } from '@/lib/wdk/wdk-context';
 import { Wallet, ChevronDown, Copy, Check, LogOut, Plus, Key, Loader2 } from 'lucide-react';
@@ -117,7 +118,7 @@ async function connectSuiWallet() {
       window.open('https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil', '_blank');
     }
   } catch (error) {
-    console.error('Failed to connect Sui wallet:', error);
+    logger.error('Failed to connect Sui wallet', error instanceof Error ? error : undefined);
   }
 }
 

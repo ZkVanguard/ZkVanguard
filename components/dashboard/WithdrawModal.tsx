@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { X, Loader2, CheckCircle, AlertCircle, ArrowDownToLine, ExternalLink } from 'lucide-react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits } from 'viem';
@@ -74,7 +75,7 @@ export function WithdrawModal({
         });
         setAssetBalance(formatUnits(balance as bigint, tokenInfo.decimals));
       } catch (error) {
-        console.error('Failed to fetch asset balance:', error);
+        logger.error('Failed to fetch asset balance', error instanceof Error ? error : undefined);
         // Fallback: estimate from totalValue (assuming single asset)
         if (assets.length === 1) {
           setAssetBalance(formatUnits(BigInt(Math.floor(totalValue * (10 ** tokenInfo.decimals))), tokenInfo.decimals));

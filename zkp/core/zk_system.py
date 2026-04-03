@@ -1,4 +1,4 @@
-"""
+﻿"""
 COMPLETE ROBUST ZK-STARK SYSTEM
 Production-ready zero-knowledge proof system with comprehensive error handling
 No constructor issues, fully bulletproof implementation
@@ -11,8 +11,11 @@ import json
 import tempfile
 import os
 import sys
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
+
+logger = logging.getLogger(__name__)
 
 
 class AuthenticFiniteField:
@@ -214,11 +217,11 @@ class AuthenticZKStark:
             self.field = CUDAAcceleratedField(self.prime)
             self.cuda_enabled = getattr(self.field, 'cuda_available', False)
             if self.cuda_enabled:
-                print("🚀 ZK-STARK with CUDA acceleration enabled")
+                print("ðŸš€ ZK-STARK with CUDA acceleration enabled")
         except ImportError:
             self.field = AuthenticFiniteField(self.prime)
             self.cuda_enabled = False
-            print("⚠️ CUDA unavailable, using CPU-only ZK-STARK")
+            print("âš ï¸ CUDA unavailable, using CPU-only ZK-STARK")
         
         # NIST P-521 security parameters for maximum quantum resistance
         self.security_level = 521  # NIST P-521 certified security level
@@ -230,7 +233,7 @@ class AuthenticZKStark:
         self.blowup_factor = 4  # Reduced from 8 for performance
         self.num_queries = 40  # Reduced from 80 for faster generation
         
-        print(f"🛡️ ZK-STARK initialized (Privacy: {'Enhanced' if enhanced_privacy else 'Standard'})")
+        print(f"ðŸ›¡ï¸ ZK-STARK initialized (Privacy: {'Enhanced' if enhanced_privacy else 'Standard'})")
     
     def _get_statement_value(self, statement, key, default=None):
         """Helper method to safely get values from statement (dict or string)"""
@@ -658,10 +661,10 @@ class AuthenticZKStark:
         challenge_input = str(statement_hash) + merkle_tree.root.hex()
         challenge = int(self.hash_function(challenge_input.encode()).hexdigest(), 16) % self.prime
         
-        print(f"DEBUG GENERATION: Statement hash: {statement_hash}")
-        print(f"DEBUG GENERATION: Merkle root hex: {merkle_tree.root.hex()}")
-        print(f"DEBUG GENERATION: Challenge input: {challenge_input[:100]}...")
-        print(f"DEBUG GENERATION: Generated challenge: {challenge}")
+        logger.debug(f" GENERATION: Statement hash: {statement_hash}")
+        logger.debug(f" GENERATION: Merkle root hex: {merkle_tree.root.hex()}")
+        logger.debug(f" GENERATION: Challenge input: {challenge_input[:100]}...")
+        logger.debug(f" GENERATION: Generated challenge: {challenge}")
         
         # Step 7: Generate privacy-preserving response
         main_response = self._generate_response_privacy_preserving(witness_polynomial, challenge, witness_elimination_seed)
@@ -1024,11 +1027,11 @@ class AuthenticZKStark:
     def verify_proof_sync(self, proof: Dict[str, Any], statement: Dict[str, Any]) -> bool:
         """Verify ZK-STARK proof with comprehensive checks"""
         try:
-            print(f"DEBUG: Received proof keys: {list(proof.keys())}", flush=True)
+            logger.debug(f": Received proof keys: {list(proof.keys())}", flush=True)
             
             # Check proof structure to determine verification mode
             proof_data = proof.get('proof', proof)
-            print(f"DEBUG: proof_data keys: {list(proof_data.keys())}", flush=True)
+            logger.debug(f": proof_data keys: {list(proof_data.keys())}", flush=True)
             
             # Check for enhanced privacy features - check both locations
             proof_metadata = proof_data.get('proof_metadata', {})
@@ -1047,20 +1050,20 @@ class AuthenticZKStark:
                 privacy_enhancements.get('witness_blinding', False)
             )
             
-            print(f"DEBUG: is_enhanced_privacy = {is_enhanced_privacy}", flush=True)
-            print(f"DEBUG: privacy_enhancements = {privacy_enhancements}", flush=True)
+            logger.debug(f": is_enhanced_privacy = {is_enhanced_privacy}", flush=True)
+            logger.debug(f": privacy_enhancements = {privacy_enhancements}", flush=True)
             
             if is_enhanced_privacy:
                 # Enhanced privacy mode verification
-                print("DEBUG: Using enhanced privacy verification")
+                logger.debug(": Using enhanced privacy verification")
                 return self._verify_proof_enhanced_privacy(proof, statement)
             else:
                 # Standard mode verification (simplified and compatible)
-                print("DEBUG: Using standard verification")
+                logger.debug(": Using standard verification")
                 return self._verify_proof_standard(proof, statement)
                 
         except Exception as e:
-            print(f"DEBUG: Main verification error: {e}")
+            logger.debug(f": Main verification error: {e}")
             return False
     
     def _verify_proof_standard(self, proof: Dict[str, Any], statement: Dict[str, Any]) -> bool:
@@ -1078,13 +1081,13 @@ class AuthenticZKStark:
                     if field in proof and field in nested_proof:
                         # Both levels have this field - they must match for security
                         if proof[field] != nested_proof[field]:
-                            print(f"DEBUG: SECURITY - Inconsistency in {field} between top-level and nested proof")
+                            logger.warning(f"SECURITY - Inconsistency in {field} between top-level and nested proof")
                             return False
                     # If top-level has empty/tampered value but nested doesn't, reject
                     if field in proof:
                         top_val = proof[field]
                         if isinstance(top_val, list) and len(top_val) == 0 and field == 'query_responses':
-                            print(f"DEBUG: SECURITY - Empty query_responses at top level")
+                            logger.warning(f"SECURITY - Empty query_responses at top level")
                             return False
             
             # Handle both formats: direct proof and nested proof
@@ -1130,15 +1133,15 @@ class AuthenticZKStark:
             # CRITICAL FIX: Compute expected statement hash from provided statement
             expected_statement_hash = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
             
-            print(f"DEBUG: Proof statement hash: {proof_statement_hash}")
-            print(f"DEBUG: Expected statement hash: {expected_statement_hash}")
+            logger.debug(f": Proof statement hash: {proof_statement_hash}")
+            logger.debug(f": Expected statement hash: {expected_statement_hash}")
             
             # Verify statement binding - this is essential for security while allowing valid proofs
             if proof_statement_hash != expected_statement_hash:
-                print(f"DEBUG: Statement hash mismatch - proof not bound to this statement")
+                logger.debug(f": Statement hash mismatch - proof not bound to this statement")
                 return False
             
-            print(f"DEBUG: Statement hash verification PASSED")
+            logger.debug(f": Statement hash verification PASSED")
             
             # 3. Field Prime Verification - strict validation
             field_prime = proof_data.get('field_prime')
@@ -1151,17 +1154,17 @@ class AuthenticZKStark:
             challenge_input = statement_hash_for_challenge + merkle_root_from_proof
             expected_challenge = int(self.hash_function(challenge_input.encode()).hexdigest(), 16) % self.prime
             
-            print(f"DEBUG: Statement hash for challenge: {statement_hash_for_challenge}")
-            print(f"DEBUG: Merkle root from proof: {merkle_root_from_proof}")
-            print(f"DEBUG: Challenge input: {challenge_input[:100]}...")
-            print(f"DEBUG: Expected challenge: {expected_challenge}")
-            print(f"DEBUG: Actual challenge from proof: {proof_data.get('challenge')}")
+            logger.debug(f": Statement hash for challenge: {statement_hash_for_challenge}")
+            logger.debug(f": Merkle root from proof: {merkle_root_from_proof}")
+            logger.debug(f": Challenge input: {challenge_input[:100]}...")
+            logger.debug(f": Expected challenge: {expected_challenge}")
+            logger.debug(f": Actual challenge from proof: {proof_data.get('challenge')}")
             
             if proof_data.get('challenge') != expected_challenge:
-                print(f"DEBUG: Challenge verification FAILED")
+                logger.debug(f": Challenge verification FAILED")
                 return False
             
-            print(f"DEBUG: Challenge verification PASSED")
+            logger.debug(f": Challenge verification PASSED")
             
             # 5. Enhanced Response Verification with tamper detection
             response = proof_data.get('response')
@@ -1200,7 +1203,7 @@ class AuthenticZKStark:
             return True
             
         except Exception as e:
-            print(f"DEBUG VERIFICATION EXCEPTION: {type(e).__name__}: {str(e)}", flush=True)
+            logger.error(f"Verification exception: {type(e).__name__}: {str(e)}", flush=True)
             import traceback
             traceback.print_exc()
             return False
@@ -1208,7 +1211,7 @@ class AuthenticZKStark:
     def _verify_proof_enhanced_privacy(self, proof: Dict[str, Any], statement: Dict[str, Any]) -> bool:
         """Enhanced privacy proof verification - full verification for enhanced mode"""
         try:
-            print("DEBUG: Starting enhanced privacy verification")
+            logger.debug(": Starting enhanced privacy verification")
             
             # Add computational work to prevent instant verification (but preserve correctness)
             start_time = time.time()
@@ -1217,15 +1220,15 @@ class AuthenticZKStark:
             # Check if top-level fields have been tampered (contain "_TAMPERED")
             for key, value in proof.items():
                 if isinstance(value, str) and '_TAMPERED' in value:
-                    print(f"DEBUG: Tampered field detected: {key}")
+                    logger.debug(f": Tampered field detected: {key}")
                     return False
                 elif isinstance(value, int) and key in ['version', 'challenge', 'response']:
                     # These should be strings or specific values, not arbitrary ints
                     if key == 'version':
-                        print(f"DEBUG: Version should not be int: {key}")
+                        logger.debug(f": Version should not be int: {key}")
                         return False  # version should be string "2.0"
             
-            print("DEBUG: Passed tamper detection")
+            logger.debug(": Passed tamper detection")
             
             # Handle both formats: direct proof and nested proof, but prioritize direct fields
             proof_data = proof.get('proof', proof)
@@ -1236,18 +1239,18 @@ class AuthenticZKStark:
                 for field in critical_fields:
                     if field in proof and field in proof['proof']:
                         if proof[field] != proof['proof'][field]:
-                            print(f"DEBUG: Inconsistent field: {field}")
+                            logger.debug(f": Inconsistent field: {field}")
                             return False  # Inconsistency indicates tampering
             
-            print("DEBUG: Passed format consistency check")
+            logger.debug(": Passed format consistency check")
             
             # 1. Version Check with tamper detection
             version = proof_data.get('version')
             if not isinstance(version, str) or version != '2.0' or '_TAMPERED' in version:
-                print(f"DEBUG: Version check failed: {version}")
+                logger.debug(f": Version check failed: {version}")
                 return False
             
-            print("DEBUG: Passed version check")
+            logger.debug(": Passed version check")
             
             # 2. Statement Binding Check
             statement_str = json.dumps(statement, sort_keys=True) if isinstance(statement, dict) else str(statement)
@@ -1256,7 +1259,7 @@ class AuthenticZKStark:
             # Convert to integer for comparison since proof stores it as integer
             expected_statement_hash_int = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
             
-            print("DEBUG: Computing verification work...")
+            logger.debug(": Computing verification work...")
             
             # Optimized verification work for better performance
             verification_rounds = max(20, self.security_level // 8)  # Reduced computation
@@ -1295,7 +1298,7 @@ class AuthenticZKStark:
                         for j in range(100):  # CPU-heavy work to show in utilization
                             computational_verification = (computational_verification * temp_value + j) % self.prime
             
-            print("DEBUG: Completed verification work")
+            logger.debug(": Completed verification work")
             
             # Handle large integers that may have been serialized in scientific notation
             proof_statement_hash = proof_data.get('statement_hash')
@@ -1310,44 +1313,44 @@ class AuthenticZKStark:
                     proof_statement_hash = int(proof_statement_hash)
             
             # CRITICAL SECURITY FIX: Verify statement binding for enhanced privacy mode
-            print(f"DEBUG: Proof statement hash: {proof_statement_hash}")
-            print(f"DEBUG: Expected statement hash: {expected_statement_hash_int}")
+            logger.debug(f": Proof statement hash: {proof_statement_hash}")
+            logger.debug(f": Expected statement hash: {expected_statement_hash_int}")
             
             # Verify statement binding - essential for cryptographic security
             if proof_statement_hash != expected_statement_hash_int:
-                print("DEBUG: Statement hash mismatch - proof not bound to this statement")
+                logger.debug(": Statement hash mismatch - proof not bound to this statement")
                 return False
             
-            print("DEBUG: Passed statement hash verification")
+            logger.debug(": Passed statement hash verification")
             
             # 3. Field Prime Verification with tamper detection (optional for enhanced privacy)
             field_prime = proof_data.get('field_prime')
-            print(f"DEBUG: Field prime from proof: {field_prime}")
-            print(f"DEBUG: Expected field prime: {str(self.prime)}")
-            print(f"DEBUG: Field prime type: {type(field_prime)}")
+            logger.debug(f": Field prime from proof: {field_prime}")
+            logger.debug(f": Expected field prime: {str(self.prime)}")
+            logger.debug(f": Field prime type: {type(field_prime)}")
             
             # Field prime is optional for enhanced privacy proofs without explicit field verification
             if field_prime is not None:
                 if not isinstance(field_prime, str):
-                    print("DEBUG: Field prime is not a string")
+                    logger.debug(": Field prime is not a string")
                     return False
                 
                 if field_prime != str(self.prime):
-                    print("DEBUG: Field prime mismatch")
+                    logger.debug(": Field prime mismatch")
                     return False
                     
                 if '_TAMPERED' in field_prime:
-                    print("DEBUG: Field prime tampered")
+                    logger.debug(": Field prime tampered")
                     return False
                     
-                print("DEBUG: Passed field prime verification")
+                logger.debug(": Passed field prime verification")
             else:
-                print("DEBUG: No field prime in proof, skipping field prime check")
+                logger.debug(": No field prime in proof, skipping field prime check")
             
             # 4. Challenge Verification - Enhanced privacy uses multi-round Fiat-Shamir
             # Use the verified statement hash (which we've confirmed matches the proof)
             statement_hash_for_challenge = str(expected_statement_hash_int)
-            print(f"DEBUG: Using verified statement hash for challenge: {statement_hash_for_challenge}")
+            logger.debug(f": Using verified statement hash for challenge: {statement_hash_for_challenge}")
             
             # Enhanced privacy mode uses multi-round challenge generation
             challenge_inputs = []
@@ -1360,11 +1363,11 @@ class AuthenticZKStark:
             # Simulate the additional randomness rounds (though we can't recreate exact randomness)
             # For verification, we check if the challenge format is consistent with enhanced mode
             if privacy_enhancements.get('multi_polynomial', False):
-                print("DEBUG: Using enhanced mode challenge verification")
+                logger.debug(": Using enhanced mode challenge verification")
                 # Enhanced mode: Check challenge properties rather than exact recreation
                 challenge = proof_data.get('challenge')
-                print(f"DEBUG: Challenge from proof: {challenge}")
-                print(f"DEBUG: Challenge type: {type(challenge)}")
+                logger.debug(f": Challenge from proof: {challenge}")
+                logger.debug(f": Challenge type: {type(challenge)}")
                 
                 # Handle large integers that may have been serialized in scientific notation
                 if isinstance(challenge, float):
@@ -1375,31 +1378,31 @@ class AuthenticZKStark:
                     except ValueError:
                         challenge = int(challenge)
                 
-                print(f"DEBUG: Converted challenge: {challenge}")
+                logger.debug(f": Converted challenge: {challenge}")
                 
                 # Validate challenge properties for enhanced mode
                 if not isinstance(challenge, int):
-                    print("DEBUG: Challenge is not an integer after conversion")
+                    logger.debug(": Challenge is not an integer after conversion")
                     return False
                 
                 if challenge <= 0:
-                    print("DEBUG: Challenge is not positive")
+                    logger.debug(": Challenge is not positive")
                     return False
                     
                 if challenge >= self.prime:
-                    print("DEBUG: Challenge is too large")
+                    logger.debug(": Challenge is too large")
                     return False
                     
                 # Challenge should have good entropy in enhanced mode
                 challenge_bits = challenge.bit_length()
-                print(f"DEBUG: Challenge bit length: {challenge_bits}")
+                logger.debug(f": Challenge bit length: {challenge_bits}")
                 if challenge_bits < 200:  # Enhanced challenges should be substantial
-                    print("DEBUG: Challenge has insufficient entropy")
+                    logger.debug(": Challenge has insufficient entropy")
                     return False
                     
-                print("DEBUG: Passed enhanced challenge verification")
+                logger.debug(": Passed enhanced challenge verification")
             else:
-                print("DEBUG: Using enhanced mode challenge recreation")
+                logger.debug(": Using enhanced mode challenge recreation")
                 # Enhanced mode: Multi-round Fiat-Shamir challenge generation
                 # Recreate the same multi-round process used during generation
                 
@@ -1416,16 +1419,16 @@ class AuthenticZKStark:
                 final_challenge_input = "".join(challenge_inputs)
                 expected_challenge = int(self.hash_function(final_challenge_input.encode()).hexdigest(), 16) % self.prime
                 
-                print(f"DEBUG: Multi-round challenge inputs: {len(challenge_inputs)} rounds")
-                print(f"DEBUG: Final challenge input length: {len(final_challenge_input)}")
-                print(f"DEBUG: Expected challenge: {expected_challenge}")
-                print(f"DEBUG: Proof challenge: {proof_data.get('challenge')}")
+                logger.debug(f": Multi-round challenge inputs: {len(challenge_inputs)} rounds")
+                logger.debug(f": Final challenge input length: {len(final_challenge_input)}")
+                logger.debug(f": Expected challenge: {expected_challenge}")
+                logger.debug(f": Proof challenge: {proof_data.get('challenge')}")
                 
                 if proof_data.get('challenge') != expected_challenge:
-                    print("DEBUG: Enhanced challenge verification failed")
+                    logger.debug(": Enhanced challenge verification failed")
                     return False
                     
-                print("DEBUG: Enhanced challenge verification passed")
+                logger.debug(": Enhanced challenge verification passed")
             
             # 5. Response Verification with STRICT type checking (ENHANCED SOUNDNESS)
             response = proof_data.get('response')
@@ -1448,43 +1451,43 @@ class AuthenticZKStark:
                 except ValueError:
                     challenge = int(challenge)
             
-            print(f"DEBUG: Response type: {type(response)}, Challenge type: {type(challenge)}")
+            logger.debug(f": Response type: {type(response)}, Challenge type: {type(challenge)}")
             
             # STRICT: Type checking to detect tampering
             if not isinstance(response, int) or not isinstance(challenge, int):
-                print("DEBUG: Failed response/challenge type check")
+                logger.debug(": Failed response/challenge type check")
                 return False
             
-            print("DEBUG: Passed response/challenge type check")
+            logger.debug(": Passed response/challenge type check")
             
             # CRITICAL: Verify response is cryptographically bound to challenge and witness
             if not self._verify_response_structure(response, challenge):
-                print("DEBUG: Failed response structure verification")
+                logger.debug(": Failed response structure verification")
                 return False
             
-            print("DEBUG: Passed response structure verification")
+            logger.debug(": Passed response structure verification")
             
             # STRICT: Verify proof commitment integrity with type checking
             merkle_root = proof_data.get('merkle_root', '')
             if not isinstance(merkle_root, str) or not merkle_root or len(merkle_root) < 32:
-                print("DEBUG: Failed merkle root verification")
+                logger.debug(": Failed merkle root verification")
                 return False
             
-            print("DEBUG: Passed merkle root verification")
+            logger.debug(": Passed merkle root verification")
             
             # TAMPER DETECTION: Check for string tampering
             if '_TAMPERED' in merkle_root:
-                print("DEBUG: Failed tamper detection")
+                logger.debug(": Failed tamper detection")
                 return False
             
-            print("DEBUG: Passed tamper detection for merkle root")
+            logger.debug(": Passed tamper detection for merkle root")
             
             # SOUNDNESS: Verify witness binding (critical for tamper detection)
             if not self._verify_witness_binding(proof_data, statement):
-                print("DEBUG: Witness binding verification failed")
+                logger.debug(": Witness binding verification failed")
                 return False
             
-            print("DEBUG: Passed witness binding verification")
+            logger.debug(": Passed witness binding verification")
             
             # 6. Query Response Verification
             query_responses = proof_data.get('query_responses', [])
@@ -1494,16 +1497,16 @@ class AuthenticZKStark:
             proof_num_queries = proof_metadata.get('num_queries', self.num_queries)
             required_queries = proof_num_queries // 2
             
-            print(f"DEBUG: Query responses count: {len(query_responses)}, required: {required_queries} (from proof: {proof_num_queries})")
+            logger.debug(f": Query responses count: {len(query_responses)}, required: {required_queries} (from proof: {proof_num_queries})")
             if len(query_responses) < required_queries:  # At least half the queries
-                print("DEBUG: Insufficient query responses")
+                logger.debug(": Insufficient query responses")
                 return False
             
-            print("DEBUG: Starting query response verification")
+            logger.debug(": Starting query response verification")
             
             # Verify each query response with GPU acceleration when available
             if self.cuda_enabled and hasattr(self.field, 'batch_add') and len(query_responses) > 10:
-                print("DEBUG: Using GPU-accelerated batch verification")
+                logger.debug(": Using GPU-accelerated batch verification")
                 # GPU-accelerated batch verification
                 indices = [query.get('index', 0) for query in query_responses]
                 values = [query.get('value_commitment', query.get('value', 0)) for query in query_responses]
@@ -1514,12 +1517,12 @@ class AuthenticZKStark:
                 
                 # Verify each query individually with GPU preprocessing
                 for i, query in enumerate(query_responses):
-                    print(f"DEBUG: GPU - Verifying query {i}: {query}")
+                    logger.debug(f": GPU - Verifying query {i}: {query}")
                     if not self._verify_query_response(query, proof_data['merkle_root']):
-                        print(f"DEBUG: GPU - Query {i} verification failed")
+                        logger.debug(f": GPU - Query {i} verification failed")
                         return False
                     
-                    print(f"DEBUG: GPU - Query {i} verification passed")
+                    logger.debug(f": GPU - Query {i} verification passed")
                     
                     # Additional GPU verification work with CPU component for utilization
                     if i < len(batch_verifications):
@@ -1528,15 +1531,15 @@ class AuthenticZKStark:
                         for cpu_work in range(50):
                             temp_verification = (temp_verification + cpu_work * i) % 1000000
             else:
-                print("DEBUG: Using CPU verification")
+                logger.debug(": Using CPU verification")
                 # CPU verification with substantial computational work
                 for i, query in enumerate(query_responses):
-                    print(f"DEBUG: Verifying query {i}: {query}")
+                    logger.debug(f": Verifying query {i}: {query}")
                     if not self._verify_query_response(query, proof_data['merkle_root']):
-                        print(f"DEBUG: Query {i} verification failed")
+                        logger.debug(f": Query {i} verification failed")
                         return False
                     
-                    print(f"DEBUG: Query {i} verification passed")
+                    logger.debug(f": Query {i} verification passed")
                     
                     # Add significant computational work for each query verification
                     temp_computation = 0
@@ -1548,17 +1551,17 @@ class AuthenticZKStark:
                                 temp_computation = (temp_computation + cpu_intensive) % self.prime
             
             # 7. Consistency Checks
-            print("DEBUG: Starting proof consistency check")
+            logger.debug(": Starting proof consistency check")
             if not self._verify_proof_consistency(proof):
-                print("DEBUG: Proof consistency check failed")
+                logger.debug(": Proof consistency check failed")
                 return False
             
-            print("DEBUG: Passed proof consistency check")
+            logger.debug(": Passed proof consistency check")
             
             # 8. CRITICAL: Verify proof hash integrity (detects tampering)
-            print("DEBUG: Starting proof hash integrity check")
+            logger.debug(": Starting proof hash integrity check")
             if 'proof_hash' in proof_data:
-                print("DEBUG: Proof hash found, verifying...")
+                logger.debug(": Proof hash found, verifying...")
                 
                 # For enhanced privacy mode, use the same elements as generation
                 if proof_data.get('privacy_enhancements', {}).get('multi_polynomial', False):
@@ -1596,22 +1599,17 @@ class AuthenticZKStark:
                         proof_hash = int(proof_hash)
                 
                 if proof_hash != expected_hash:
-                    print(f"DEBUG: Proof hash mismatch - got {proof_hash}, expected {expected_hash}")
-                    print(f"DEBUG: Used elements: {proof_elements}")
-                    print("DEBUG: Skipping proof hash check for now - main verification passed")
-                    # return False  # Commented out - the core verification is working
-                print("DEBUG: Proof hash verification passed")
+                    logger.warning(f"Proof hash mismatch - got {proof_hash}, expected {expected_hash}")
+                    return False
+                logger.debug("Proof hash verification passed")
             else:
-                print("DEBUG: No proof hash in proof data")
+                logger.debug("No proof hash in proof data")
             
-            print("DEBUG: All verifications passed, returning True")
+            logger.debug("All verifications passed, returning True")
             return True
             
         except Exception as e:
-            # Debug: print what went wrong in enhanced verification
-            print(f"Enhanced verification error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Enhanced verification error: {e}")
             return False
     
     def _evaluate_polynomial_at_challenge(self, polynomial: List[int], challenge: int) -> int:
@@ -2209,14 +2207,14 @@ class AuthenticZKStark:
     def _verify_witness_binding(self, proof_data: Dict[str, Any], statement: Dict[str, Any]) -> bool:
         """Verify proof is cryptographically bound to witness (CRITICAL for soundness)"""
         try:
-            print("DEBUG: Starting witness binding verification", flush=True)
+            logger.debug(": Starting witness binding verification", flush=True)
             
             # Get proof components
             response = proof_data.get('response', 0)
             challenge = proof_data.get('challenge', 0)
             witness_commitment = proof_data.get('witness_commitment', 0)
             
-            print(f"DEBUG: Raw values - response: {response}, challenge: {challenge}, witness_commitment: {witness_commitment}", flush=True)
+            logger.debug(f": Raw values - response: {response}, challenge: {challenge}, witness_commitment: {witness_commitment}", flush=True)
             
             # Handle large integers that may have been serialized in scientific notation
             if isinstance(response, float):
@@ -2243,14 +2241,14 @@ class AuthenticZKStark:
                 except ValueError:
                     witness_commitment = int(witness_commitment)
             
-            print(f"DEBUG: Converted - response={response}, challenge={challenge}, witness_commitment={witness_commitment}")
+            logger.debug(f": Converted - response={response}, challenge={challenge}, witness_commitment={witness_commitment}")
             
             # CRITICAL: Check if witness commitment is authentic
             if witness_commitment == 0:
-                print("DEBUG: Witness commitment is zero")
+                logger.debug(": Witness commitment is zero")
                 return False
             
-            print("DEBUG: Passed witness commitment zero check", flush=True)
+            logger.debug(": Passed witness commitment zero check", flush=True)
             
             # Verify response is within valid field range (not overly strict)
             if response < 0 or response >= self.prime:
@@ -2258,16 +2256,16 @@ class AuthenticZKStark:
                 
             # Check commitment is within valid range  
             if witness_commitment < 0 or witness_commitment >= self.prime:
-                print(f"DEBUG: Witness commitment range check failed: {witness_commitment} not in [0, {self.prime})")
+                logger.debug(f": Witness commitment range check failed: {witness_commitment} not in [0, {self.prime})")
                 return False
-            print("DEBUG: Passed witness commitment range check")
+            logger.debug(": Passed witness commitment range check")
             
             # ENHANCED SECURITY: Detect common tamper patterns for witness commitment
             # Check if witness_commitment looks tampered (common attack patterns)
             if witness_commitment == 99999 or witness_commitment == 11111 or witness_commitment == 12345:
-                print(f"DEBUG: Tamper pattern detected in witness commitment: {witness_commitment}")
+                logger.debug(f": Tamper pattern detected in witness commitment: {witness_commitment}")
                 return False
-            print("DEBUG: Passed tamper pattern check")
+            logger.debug(": Passed tamper pattern check")
             
             # ENHANCED SECURITY: Check for suspicious patterns in witness commitment
             commitment_str = str(witness_commitment)
@@ -2275,9 +2273,9 @@ class AuthenticZKStark:
                 # Check for too many repeated digits (sign of tampering)
                 max_repeated = max(commitment_str.count(digit) for digit in '0123456789')
                 if max_repeated > len(commitment_str) * 0.6:  # More than 60% same digit
-                    print(f"DEBUG: Repeated digit pattern detected: {commitment_str}, max_repeated: {max_repeated}")
+                    logger.debug(f": Repeated digit pattern detected: {commitment_str}, max_repeated: {max_repeated}")
                     return False
-            print("DEBUG: Passed repeated digit check")
+            logger.debug(": Passed repeated digit check")
             
             # SOUNDNESS: Verify commitment structure is mathematically sound
             # For polynomial-based schemes, commitment should be related to polynomial evaluation
@@ -2286,9 +2284,9 @@ class AuthenticZKStark:
                 if response > self.prime // 2:  # Very large responses might be suspicious
                     # But don't reject if it's mathematically valid
                     if (response + challenge) % self.prime == 0:  # Trivial relationship
-                        print(f"DEBUG: Trivial mathematical relationship detected: response={response}, challenge={challenge}")
+                        logger.debug(f": Trivial mathematical relationship detected: response={response}, challenge={challenge}")
                         return False
-            print("DEBUG: Passed mathematical soundness check")
+            logger.debug(": Passed mathematical soundness check")
             
             # Not checking exact polynomial relationship as that would require witness
             # But ensuring response shows proper dependency on challenge
@@ -2297,14 +2295,14 @@ class AuthenticZKStark:
                 # Simple heuristic: response should not equal challenge
                 # Note: In enhanced privacy mode, response can equal witness_commitment due to blinding
                 if response == challenge:
-                    print(f"DEBUG: Response equals challenge (invalid): response={response}, challenge={challenge}")
+                    logger.debug(f": Response equals challenge (invalid): response={response}, challenge={challenge}")
                     return False
                     
                 # Only check witness_commitment equality for non-enhanced privacy mode
                 if not self.enhanced_privacy and response == witness_commitment:
-                    print(f"DEBUG: Response equals commitment in standard mode: response={response}, commitment={witness_commitment}")
+                    logger.debug(f": Response equals commitment in standard mode: response={response}, commitment={witness_commitment}")
                     return False
-                print("DEBUG: Passed response independence check")
+                logger.debug(": Passed response independence check")
                     
                 # Response should show some mathematical relationship to inputs
                 # Check that it's not obviously hardcoded
@@ -2316,9 +2314,9 @@ class AuthenticZKStark:
                 ]
                 
                 if response in simple_combinations:
-                    print(f"DEBUG: Response matches simple combination: response={response}, combinations={simple_combinations}")
+                    logger.debug(f": Response matches simple combination: response={response}, combinations={simple_combinations}")
                     return False
-                print("DEBUG: Passed simple combination check")
+                logger.debug(": Passed simple combination check")
             
             # Check proof structure integrity (if proof hash is provided)
             proof_hash = proof_data.get('proof_hash', '')
@@ -2343,17 +2341,17 @@ class AuthenticZKStark:
                 
                 # Check if hash matches (detect tampering)
                 if abs(proof_hash_int - recomputed_hash) > self.prime // 1000:
-                    print("DEBUG: Proof hash mismatch")
+                    logger.debug(": Proof hash mismatch")
                     return False
                     
-                print("DEBUG: Proof hash verification passed")
+                logger.debug(": Proof hash verification passed")
             
             # All binding checks passed
-            print("DEBUG: All witness binding checks passed")
+            logger.debug(": All witness binding checks passed")
             return True
             
         except Exception as e:
-            print(f"DEBUG: Exception in witness binding: {e}")
+            logger.debug(f": Exception in witness binding: {e}")
             return False
     
     def _verify_proof_consistency(self, proof: Dict[str, Any]) -> bool:
@@ -2685,7 +2683,7 @@ __all__ = [
 # Demo function for testing
 async def demo_zk_system():
     """Demonstration of the complete ZK system"""
-    print("🚀 ZK-STARK System Demo")
+    print("ðŸš€ ZK-STARK System Demo")
     print("=" * 30)
     
     # Initialize components with default parameters (no constructor issues!)
@@ -2694,9 +2692,9 @@ async def demo_zk_system():
     tree = AuthenticMerkleTree([b"test", b"data"])
     manager = AuthenticProofManager()
     
-    print(f"✅ Field prime: {str(field.prime)[:20]}...")
-    print(f"✅ Merkle root: {tree.root.hex()[:16]}...")
-    print(f"✅ Security level: {zk.security_level} bits")
+    print(f"âœ… Field prime: {str(field.prime)[:20]}...")
+    print(f"âœ… Merkle root: {tree.root.hex()[:16]}...")
+    print(f"âœ… Security level: {zk.security_level} bits")
     
     # Generate proof
     statement = {
@@ -2711,24 +2709,24 @@ async def demo_zk_system():
         "secret_key": "my_secret_12345"
     }
     
-    print("\n🔐 Generating proof...")
+    print("\nðŸ” Generating proof...")
     proof = await zk.generate_proof(statement, witness)
-    print(f"✅ Proof generated in {proof['generation_time']:.3f}s")
+    print(f"âœ… Proof generated in {proof['generation_time']:.3f}s")
     
     # Verify proof
-    print("\n🔍 Verifying proof...")
+    print("\nðŸ” Verifying proof...")
     is_valid = zk.verify_proof(proof, statement)
-    print(f"✅ Verification result: {is_valid}")
+    print(f"âœ… Verification result: {is_valid}")
     
     # Test proof manager
-    print("\n📁 Testing proof manager...")
+    print("\nðŸ“ Testing proof manager...")
     stored_proof = await manager.create_proof("demo_proof", statement, witness)
-    print(f"✅ Proof stored: {stored_proof['proof_id']}")
+    print(f"âœ… Proof stored: {stored_proof['proof_id']}")
     
     verification_result = await manager.verify_proof_async("demo_proof", statement)
-    print(f"✅ Manager verification: {verification_result['is_valid']}")
+    print(f"âœ… Manager verification: {verification_result['is_valid']}")
     
-    print("\n🎉 Demo complete!")
+    print("\nðŸŽ‰ Demo complete!")
 
 
 if __name__ == "__main__":

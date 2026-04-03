@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { X, Settings, Shield, Bell, Eye, Wallet, Zap, Moon, Sun } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -59,7 +60,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       try {
         setSettings({ ...defaultSettings, ...JSON.parse(savedSettings) });
       } catch (e) {
-        console.error('Failed to load settings:', e);
+        logger.error('Failed to load settings', e instanceof Error ? e : undefined);
       }
     }
   }, []);
@@ -72,7 +73,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       await new Promise(resolve => setTimeout(resolve, 500));
       onClose();
     } catch (e) {
-      console.error('Failed to save settings:', e);
+      logger.error('Failed to save settings', e instanceof Error ? e : undefined);
     } finally {
       setSaving(false);
     }

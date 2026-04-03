@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { DelphiMarketService, PredictionMarket } from '@/lib/services/DelphiMarketService';
 import { usePolling, useLoading } from '@/lib/hooks';
 import { useMarketInsights } from '@/contexts/AIDecisionsContext';
@@ -116,7 +117,7 @@ export const PredictionInsights = memo(function PredictionInsights({
       setPredictions(markets);
       stopLoading();
     } catch (err) {
-      console.error('Error fetching Delphi predictions:', err);
+      logger.error('Error fetching Delphi predictions', err instanceof Error ? err : undefined);
       setError('Failed to fetch predictions');
     } finally {
       setRefreshing(false);
@@ -140,7 +141,7 @@ export const PredictionInsights = memo(function PredictionInsights({
       source: p.source,
     }));
     
-    console.log('[PredictionInsights] Refreshing insights via context');
+    logger.debug('[PredictionInsights] Refreshing insights via context');
     refreshInsights(predictionData, force);
   }, [refreshInsights]);
 
@@ -505,15 +506,6 @@ export const PredictionInsights = memo(function PredictionInsights({
                                         stopLoss = Math.round(entryPrice * 1.03 * 100) / 100;    // +3% stop
                                       }
                                     }
-                                    
-                                    console.log('[PredictionInsights] Creating hedge:', { 
-                                      asset: lr.symbol, 
-                                      side: lr.direction, 
-                                      leverage: leverageNum, 
-                                      entryPrice,
-                                      targetPrice,
-                                      stopLoss 
-                                    });
                                     
                                     onCreateRecommendedHedge({
                                       asset: lr.symbol,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, memo, useMemo } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { Activity, CheckCircle, Clock, XCircle, Shield, Brain, Zap, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
@@ -47,7 +48,7 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
       }
     }
   } catch (error) {
-    console.error('ZK proof generation failed:', error);
+    logger.error('ZK proof generation failed', error instanceof Error ? error : undefined);
   }
   
   return {

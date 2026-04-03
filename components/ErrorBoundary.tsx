@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -25,7 +26,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log to error reporting service
-    console.error('ErrorBoundary caught error:', error, errorInfo);
+    logger.error('ErrorBoundary caught error', error instanceof Error ? error : undefined, { componentStack: errorInfo?.componentStack });
   }
 
   render(): ReactNode {

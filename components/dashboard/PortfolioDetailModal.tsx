@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { X, TrendingUp, PieChart, History, Brain, Settings, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 import PerformanceChart from './PerformanceChart';
 
@@ -445,7 +446,7 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
                         throw new Error(result.error || 'Failed to save settings');
                       }
                     } catch (error) {
-                      console.error('Failed to save settings:', error);
+                      logger.error('Failed to save settings', error instanceof Error ? error : undefined);
                       alert(`Error: ${error instanceof Error ? error.message : 'Failed to save settings'}`);
                     } finally {
                       setSaving(false);
