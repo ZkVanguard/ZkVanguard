@@ -99,8 +99,11 @@ export const RiskMetrics = memo(function RiskMetrics({ address }: { address?: st
           return (
             <div key={index} className={`${colors.bg} rounded-[12px] sm:rounded-xl p-3 sm:p-4`}>
               <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text}`} />
-                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 ${colors.dot} rounded-full`} />
+                <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text}`} aria-hidden="true" />
+                <div className="flex items-center gap-1">
+                  <span className="sr-only">{metric.status} risk</span>
+                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 ${colors.dot} rounded-full`} aria-hidden="true" />
+                </div>
               </div>
               <div className="text-[18px] sm:text-[22px] font-semibold text-[#1d1d1f] mb-0.5 leading-none">
                 {metric.value}

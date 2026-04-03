@@ -236,25 +236,27 @@ REC3: [third recommendation]`;
 
       const aiResponse = await llmProvider.generateDirectResponse(aiPrompt, systemPrompt);
       
-      // Extract AI recommendations
+      // Extract AI recommendations — validate length/content
       const lines = aiResponse.content.split('\n').filter(l => l.trim());
       
-      // Parse recommendations
+      // Parse recommendations with validation
       for (const line of lines) {
         const recMatch = line.match(/^REC\d*:?\s*(.+)/i);
-        if (recMatch && recMatch[1].length > 5) {
-          aiRecommendations.push(`🤖 ${recMatch[1].trim()}`);
+        if (recMatch && recMatch[1].length > 5 && recMatch[1].length < 200) {
+          const rec = recMatch[1].trim();
+          // Reject suspicious LLM output
+          if (!/unlimited|ignore|override|bypass/i.test(rec)) {
+            aiRecommendations.push(`🤖 ${rec}`);
+          }
         }
       }
       
-      // Try to extract adjusted risk score
+      // Try to extract adjusted risk score — clamp to 0-100
       const scoreMatch = aiResponse.content.match(/RISK_SCORE:?\s*(\d+)/i);
       if (scoreMatch) {
-        const aiRiskScore = parseInt(scoreMatch[1], 10);
-        if (aiRiskScore >= 0 && aiRiskScore <= 100) {
-          totalRisk = Math.round((baseRiskScore + aiRiskScore) / 2);
-          logger.info('🤖 AI adjusted risk score', { base: baseRiskScore, ai: aiRiskScore, final: totalRisk });
-        }
+        const aiRiskScore = Math.min(100, Math.max(0, parseInt(scoreMatch[1], 10)));
+        totalRisk = Math.min(100, Math.round((baseRiskScore + aiRiskScore) / 2));
+        logger.info('🤖 AI adjusted risk score', { base: baseRiskScore, ai: aiRiskScore, final: totalRisk });
       }
       
       logger.info('🤖 AI risk analysis completed', { model: aiResponse.model, recommendations: aiRecommendations.length });

@@ -551,6 +551,7 @@ export const RecentTransactions = memo(function RecentTransactions({ address }: 
             }}
             disabled={refreshing}
             className="w-8 h-8 flex items-center justify-center bg-[#f5f5f7] rounded-full"
+            aria-label="Refresh transactions"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#86868b] ${refreshing ? 'animate-spin' : ''}`} />
           </button>

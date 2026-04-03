@@ -71,6 +71,7 @@ export class DelphiMarketService {
   private static readonly API_URL = process.env.NEXT_PUBLIC_DELPHI_API || 'https://api.delphi.markets';
   private static readonly POLYMARKET_API = 'https://gamma-api.polymarket.com/markets';
   private static readonly CRYPTOCOM_API = 'https://api.crypto.com/exchange/v1/public';
+  private static _cryptoErrorCacheUntil: number = 0;
 
   // 🔥 OPTIMIZATION: Static regex patterns (compiled once, not per-call)
   private static readonly CRYPTO_PATTERNS: RegExp[] = [
@@ -129,6 +130,10 @@ export class DelphiMarketService {
    * Generate crypto-specific predictions based on REAL market data from Crypto.com
    */
   static async generateCryptoPredictions(_assets: string[]): Promise<PredictionMarket[]> {
+    // Skip if within error cooldown to prevent retry storm
+    if (this._cryptoErrorCacheUntil && Date.now() < this._cryptoErrorCacheUntil) {
+      return [];
+    }
     const predictions: PredictionMarket[] = [];
     
     try {
@@ -321,6 +326,8 @@ export class DelphiMarketService {
 
     } catch (error) {
       logger.error('Failed to generate crypto predictions', error, { component: 'DelphiMarket' });
+      // Cache empty result for 60s to prevent retry storm on persistent failures
+      this._cryptoErrorCacheUntil = Date.now() + 60_000;
       return [];
     }
   }

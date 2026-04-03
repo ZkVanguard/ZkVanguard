@@ -269,6 +269,9 @@ function SuiContextProvider({
   }, [connect, wallets]);
 
   const disconnectWallet = useCallback(() => {
+    // Clear stale balance/state before disconnect
+    setBalance('0');
+    setBalanceRaw(BigInt(0));
     disconnect();
   }, [disconnect]);
 

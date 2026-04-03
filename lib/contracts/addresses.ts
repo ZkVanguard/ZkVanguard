@@ -11,6 +11,8 @@
  * MAINNET READY: Set NEXT_PUBLIC_CHAIN_ID and configure mainnet addresses via env vars
  */
 
+import { logger } from '@/lib/utils/logger';
+
 // ============================================
 // CRONOS (EVM) CONTRACT ADDRESSES
 // ============================================
@@ -275,7 +277,7 @@ export function getContractAddresses(chainId: number) {
     case 25: { // Cronos Mainnet
       const addrs = CRONOS_CONTRACT_ADDRESSES.mainnet;
       if (addrs.rwaManager === ZERO_ADDRESS || addrs.zkVerifier === ZERO_ADDRESS) {
-        console.warn('[MAINNET] Cronos mainnet contract addresses not configured — set NEXT_PUBLIC_MAINNET_* env vars');
+        logger.warn('[MAINNET] Cronos mainnet contract addresses not configured — set NEXT_PUBLIC_MAINNET_* env vars');
       }
       return addrs;
     }

@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
       predictions,
       analysis,
       timestamp: Date.now(),
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
     });
   } catch (error) {
     logger.error('Failed to fetch predictions', { error: String(error) });

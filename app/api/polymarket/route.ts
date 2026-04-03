@@ -16,6 +16,10 @@ export async function GET(req: NextRequest) {
     // Build upstream URL — forward every query parameter the caller sent
     const upstream = new URL('https://gamma-api.polymarket.com/markets');
     searchParams.forEach((value, key) => {
+      // Validate slug format to prevent injection
+      if (key === 'slug' && !/^[a-zA-Z0-9_-]+$/.test(value)) {
+        return; // Skip malformed slugs
+      }
       upstream.searchParams.set(key, value);
     });
 
@@ -37,6 +41,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!response.ok) {
+      logger.warn(`[Polymarket Proxy] Upstream error: ${response.status} ${response.statusText}`, { url });
       throw new Error(`Polymarket API returned ${response.status}`);
     }
 
