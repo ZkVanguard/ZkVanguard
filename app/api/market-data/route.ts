@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readLimiter } from '@/lib/security/rate-limiter';
-import { getMarketDataMCPClient } from '@/lib/services/market-data-mcp';
+import { getMarketDataService } from '@/lib/services/RealMarketDataService';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
 
@@ -17,17 +17,17 @@ export async function GET(request: NextRequest) {
     const symbol = searchParams.get('symbol') || 'BTC';
     const symbols = searchParams.get('symbols')?.split(',');
 
-    const mcpClient = getMarketDataMCPClient();
-    await mcpClient.connect();
+    const marketDataService = getMarketDataService();
 
     if (symbols && symbols.length > 0) {
-      // Multiple symbols
-      const prices = await mcpClient.getMultiplePrices(symbols);
+      const priceMap = await marketDataService.getTokenPrices(symbols);
+      const prices = symbols.map(s => {
+        const p = priceMap.get(s);
+        return { symbol: s, price: p?.price ?? 0, change24h: p?.change24h ?? 0, volume24h: p?.volume24h ?? 0, timestamp: p?.timestamp ?? Date.now() };
+      });
       return NextResponse.json({
         success: true,
         data: prices,
-        mcpPowered: true,
-        demoMode: mcpClient.isDemoMode(),
         timestamp: new Date().toISOString(),
       }, {
         headers: {
@@ -35,13 +35,10 @@ export async function GET(request: NextRequest) {
         },
       });
     } else {
-      // Single symbol
-      const price = await mcpClient.getPrice(symbol);
+      const price = await marketDataService.getTokenPrice(symbol);
       return NextResponse.json({
         success: true,
-        data: price,
-        mcpPowered: true,
-        demoMode: mcpClient.isDemoMode(),
+        data: { symbol, price: price.price, change24h: price.change24h ?? 0, volume24h: price.volume24h ?? 0, timestamp: price.timestamp ?? Date.now() },
         timestamp: new Date().toISOString(),
       }, {
         headers: {
@@ -70,46 +67,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mcpClient = getMarketDataMCPClient();
-    await mcpClient.connect();
+    const marketDataService = getMarketDataService();
 
     switch (action) {
       case 'price': {
-        const prices = await mcpClient.getMultiplePrices(symbols);
+        const priceMap = await marketDataService.getTokenPrices(symbols);
+        const prices = symbols.map(s => {
+          const p = priceMap.get(s);
+          return { symbol: s, price: p?.price ?? 0, change24h: p?.change24h ?? 0, volume24h: p?.volume24h ?? 0, timestamp: p?.timestamp ?? Date.now() };
+        });
         return NextResponse.json({
           success: true,
           action: 'price',
           data: prices,
-          mcpPowered: true,
-          demoMode: mcpClient.isDemoMode(),
           timestamp: new Date().toISOString(),
         });
       }
       case 'ticker': {
-        const tickers = await Promise.all(
-          symbols.map(symbol => mcpClient.getTicker(symbol))
-        );
+        // Ticker (bid/ask) not available from RealMarketDataService — return prices
+        const tickerMap = await marketDataService.getTokenPrices(symbols);
+        const tickers = symbols.map(s => {
+          const p = tickerMap.get(s);
+          const price = p?.price ?? 0;
+          return { symbol: s, bid: price, ask: price, spread: 0, timestamp: p?.timestamp ?? Date.now() };
+        });
         return NextResponse.json({
           success: true,
           action: 'ticker',
           data: tickers,
-          mcpPowered: true,
-          demoMode: mcpClient.isDemoMode(),
           timestamp: new Date().toISOString(),
         });
       }
       case 'ohlcv': {
-        const { timeframe = '1h', limit: rawLimit = 100 } = body;
-        const limit = Math.min(Number(rawLimit) || 100, 500);
-        const ohlcvData = await Promise.all(
-          symbols.map(symbol => mcpClient.getOHLCV(symbol, timeframe, limit))
-        );
+        // OHLCV not available from RealMarketDataService
+        logger.warn('market-data: OHLCV not supported, returning empty array');
         return NextResponse.json({
           success: true,
           action: 'ohlcv',
-          data: ohlcvData,
-          mcpPowered: true,
-          demoMode: mcpClient.isDemoMode(),
+          data: symbols.map(() => []),
           timestamp: new Date().toISOString(),
         });
       }

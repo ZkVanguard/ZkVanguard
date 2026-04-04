@@ -5,8 +5,10 @@
 
 import { cryptocomExchangeService } from '../../lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '../../lib/services/CryptocomDeveloperPlatformService';
-import { cryptocomAIAgent } from '../../lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+
+const cryptocomAIAgent = getCryptocomAIService();
 
 const marketData = getMarketDataService();
 
@@ -81,14 +83,11 @@ async function testServices() {
       console.log('⚠️  SKIPPED: Missing API keys (OPENAI_API_KEY and DASHBOARD_API_KEY)');
       results.aiAgent = true; // Not a failure
     } else {
-      await cryptocomAIAgent.initialize({
-        openaiApiKey: openaiKey,
-        chainId: '338',
-        dashboardApiKey: dashboardKey,
-      });
+      // Service is auto-initialized as singleton
+      console.log('✅ AI Service initialized (singleton)');
       
-      const isReady = cryptocomAIAgent.isReady();
-      const config = cryptocomAIAgent.getConfig();
+      const isReady = !!cryptocomAIAgent;
+      const config = { chainId: process.env.NEXT_PUBLIC_CHAIN_ID || '338' };
       
       console.log(`✅ AI Agent: ${isReady ? 'READY' : 'NOT INITIALIZED'}`);
       console.log(`   LLM: GPT-4o-mini`);

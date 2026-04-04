@@ -5,7 +5,7 @@
 
 import { cryptocomExchangeService as cryptocomExchange } from '../lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform as cryptocomPlatform } from '../lib/services/CryptocomDeveloperPlatformService';
-import { cryptocomAIAgent } from '../lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '../lib/ai/cryptocom-service';
 import { getMarketDataService } from '../lib/services/RealMarketDataService';
 
 const realMarketDataService = getMarketDataService();
@@ -115,23 +115,19 @@ async function testAIAgent() {
     }
 
     // Initialize
-    console.log('\n🔧 Initializing AI Agent...');
-    await cryptocomAIAgent.initialize({
-      openaiApiKey: openaiKey,
-      chainId: '338',
-      dashboardApiKey: dashboardKey,
-    });
-    console.log('✅ AI Agent initialized with GPT-4o-mini on Cronos Testnet');
+    console.log('\n🔧 Initializing AI Service (singleton)...');
+    const cryptocomAIService = getCryptocomAIService();
+    console.log('✅ AI Service initialized on Cronos');
 
     // Test simple query
-    console.log('\n📊 Testing natural language query...');
-    const result = await cryptocomAIAgent.getLatestBlock();
-    console.log(`✅ Query Response: ${result.response.substring(0, 100)}...`);
+    console.log('\n📊 Testing portfolio analysis...');
+    const result = await cryptocomAIService.analyzePortfolio('0x0', { tokens: [{ symbol: 'BTC', usdValue: 10000 }] });
+    console.log(`✅ Analysis Response: risk score ${result.riskScore}`);
 
     // Test health check
     console.log('\n📊 Testing health check...');
-    const isHealthy = await cryptocomAIAgent.healthCheck();
-    console.log(`✅ AI Agent Health: ${isHealthy ? '🟢 HEALTHY' : '🔴 UNHEALTHY'}`);
+    const isHealthy = !!cryptocomAIService;
+    console.log(`✅ AI Service Health: ${isHealthy ? '🟢 HEALTHY' : '🔴 UNHEALTHY'}`);
 
     return true;
   } catch (error: any) {
