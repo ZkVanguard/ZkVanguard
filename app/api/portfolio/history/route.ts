@@ -30,6 +30,7 @@ import {
 import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 interface HistoryResponse {

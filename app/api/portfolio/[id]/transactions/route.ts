@@ -9,6 +9,7 @@ import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // Collateral token address — env-driven for mainnet/testnet
 const COLLATERAL_TOKEN_ADDRESS = process.env.COLLATERAL_TOKEN_ADDRESS || '0x28217daddc55e3c4831b4a48a00ce04880786967';
 

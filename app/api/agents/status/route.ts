@@ -6,6 +6,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 /**
  * Agent Orchestrator Status API
  * Check real-time agent status and capabilities

@@ -20,6 +20,7 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY?.trim() || null;

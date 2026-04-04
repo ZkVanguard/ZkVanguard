@@ -451,6 +451,7 @@ async function triggerRebalanceIfNeeded(pool: typeof POOLS[0], maxDrift: number)
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.CRON_SECRET}`,
       },
+      signal: AbortSignal.timeout(15000),
     });
     
     if (response.ok) {
@@ -508,6 +509,7 @@ async function triggerPoolHedge(
         'X-Pool-Hedge-Trigger': 'true',
         'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,  // Community pool uses reserved ID (-1)
         asset: largestAsset,

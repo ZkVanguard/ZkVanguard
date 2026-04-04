@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 // Force dynamic rendering (uses request.url)
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 10;
 
 /**
  * Proxy endpoint for Polymarket API to avoid CORS issues.
@@ -10,6 +13,9 @@ export const dynamic = 'force-dynamic';
  * to gamma-api.polymarket.com/markets.
  */
 export async function GET(req: NextRequest) {
+  const limited = readLimiter.check(req);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(req.url);
 

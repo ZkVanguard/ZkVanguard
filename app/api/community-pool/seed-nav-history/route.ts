@@ -16,6 +16,7 @@ import { getCronosRpcUrl } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 const CRONOS_RPC = getCronosRpcUrl();
 const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const POOL_ABI = [

@@ -17,6 +17,7 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // PostgreSQL schema (run this in Neon console):
 /*
 CREATE TABLE IF NOT EXISTS analytics_events (

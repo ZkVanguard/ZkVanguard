@@ -18,8 +18,10 @@ import { calculateRiskMetrics, getRiskRating, calculateRealTimeVolatility } from
 import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 // Cache duration for risk metrics (5 minutes)
@@ -27,6 +29,9 @@ const CACHE_DURATION_MS = 5 * 60 * 1000;
 const cachedMetricsByChain = new Map<string, { data: any; timestamp: number }>();
 
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const forceRefresh = searchParams.get('refresh') === 'true';

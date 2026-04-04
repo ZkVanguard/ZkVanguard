@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getX402FacilitatorService } from '@/lib/services/x402-facilitator';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+
+export const maxDuration = 15;
 
 /**
  * POST /api/x402/settle
@@ -16,6 +19,9 @@ import { logger } from '@/lib/utils/logger';
  * Verifies and settles an x402 payment using the official Facilitator SDK.
  */
 export async function POST(request: NextRequest) {
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const { paymentId, paymentHeader, paymentRequirements } = body;

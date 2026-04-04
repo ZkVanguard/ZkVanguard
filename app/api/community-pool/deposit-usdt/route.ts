@@ -447,7 +447,7 @@ export async function POST(request: NextRequest) {
         try {
           // Fetch latest VAA from Pyth Hermes
           const hermesUrl = 'https://hermes.pyth.network/v2/updates/price/latest?ids[]=' + PYTH_PRICE_IDS.join('&ids[]=');
-          const hermesResp = await fetch(hermesUrl);
+          const hermesResp = await fetch(hermesUrl, { signal: AbortSignal.timeout(8000) });
           if (!hermesResp.ok) {
             throw new Error(`Hermes API returned ${hermesResp.status}`);
           }

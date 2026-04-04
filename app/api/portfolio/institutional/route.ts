@@ -17,6 +17,7 @@ import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 10;
 export async function GET(request: NextRequest) {
   const limited = readLimiter.check(request);
   if (limited) return limited;

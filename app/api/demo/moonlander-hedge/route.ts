@@ -6,6 +6,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // SECURITY: Demo routes are DISABLED in production to prevent unauthenticated hedge execution
 const ALLOWED_MARKETS = ['BTC-USD-PERP', 'ETH-USD-PERP', 'CRO-USD-PERP'];
 const MAX_NOTIONAL_VALUE = 100_000; // $100k max per demo trade

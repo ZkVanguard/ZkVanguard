@@ -17,6 +17,7 @@ import { isMainnet } from '@/lib/utils/network';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 30;
 // Pyth contract addresses by chain
 const PYTH_CONTRACTS: Record<number, string> = {
   11155111: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21', // Sepolia

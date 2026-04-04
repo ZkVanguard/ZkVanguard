@@ -31,6 +31,7 @@ import { getHedgeExecutionPrice, type HedgePriceContext } from '@/lib/services/u
 import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 export interface HedgeExecutionRequest {
@@ -261,6 +262,7 @@ export async function POST(request: NextRequest) {
         const bluefinResponse = await fetch(`${baseUrl}/api/agents/hedging/bluefin`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(12000),
           body: JSON.stringify({
             asset,
             side,

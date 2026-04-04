@@ -8,6 +8,7 @@ import { getCached, setCached } from '@/lib/db/ui-cache';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 

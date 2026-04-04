@@ -4,6 +4,7 @@ import { logger } from '@/lib/utils/logger';
 // Force dynamic rendering — uses searchParams
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 /**
  * Oasis Explorer API Proxy
  * 

@@ -17,6 +17,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 10;
 /**
  * GET: Get current price alert status
  */

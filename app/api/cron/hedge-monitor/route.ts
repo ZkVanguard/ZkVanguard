@@ -200,6 +200,7 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         portfolioId: hedge.portfolioId || 1,
         asset: hedge.asset,

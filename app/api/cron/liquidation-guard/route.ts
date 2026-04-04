@@ -113,6 +113,7 @@ async function getCurrentPrices(assets: string[]): Promise<Record<string, number
     
     const response = await fetch(`${baseUrl}/api/prices?assets=${assets.join(',')}`, {
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(8000),
     });
     
     if (!response.ok) {
@@ -214,6 +215,7 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         portfolioId: position.portfolioId || 1,
         asset: position.asset,
@@ -256,6 +258,7 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
       },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         portfolioId: position.portfolioId || 1,
         asset: position.asset,

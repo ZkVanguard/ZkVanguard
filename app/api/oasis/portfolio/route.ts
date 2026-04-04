@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOasisPortfolioManager } from '@/lib/services/OasisPortfolioManager';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
@@ -17,6 +19,9 @@ export const dynamic = 'force-dynamic';
  */
 
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'summary';

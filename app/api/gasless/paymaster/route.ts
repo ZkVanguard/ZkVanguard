@@ -15,10 +15,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { mutationLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
+import { mutationLimiter, heavyLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 // Contract address (update after deployment)
@@ -85,7 +86,7 @@ const TYPES = {
  */
 export async function GET(request: NextRequest) {
   // Rate limit read endpoint
-  const limited = mutationLimiter.check(request);
+  const limited = readLimiter.check(request);
   if (limited) return limited;
 
   try {

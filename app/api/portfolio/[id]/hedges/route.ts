@@ -7,13 +7,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveHedges } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const portfolioId = parseInt(params.id, 10);
 

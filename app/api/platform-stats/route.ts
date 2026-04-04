@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { SUPPORTED_CHAINS } from '@/lib/chains';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 export async function GET() {

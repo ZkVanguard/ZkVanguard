@@ -8,6 +8,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 /**
  * Settlement Execution API Route
  * Real SettlementAgent integration with x402 gasless transfers

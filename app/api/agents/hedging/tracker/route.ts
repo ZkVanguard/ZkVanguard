@@ -7,15 +7,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/agents/hedging/tracker
  * Check tracker status
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   const isRunning = hedgePnLTracker.isTrackingActive();
 
   return NextResponse.json({
@@ -33,6 +38,9 @@ export async function GET() {
  * Body: { action: 'start' | 'stop' }
  */
 export async function POST(request: NextRequest) {
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   // Admin auth required to control tracker
   const { requireAdminAuth } = await import('@/lib/security/auth-middleware');
   const authCheck = requireAdminAuth(request);

@@ -9,6 +9,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 30;
 // ============================================================================
 // Response Cache - prevents redundant AI processing for same predictions
 // ============================================================================

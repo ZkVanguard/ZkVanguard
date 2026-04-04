@@ -6,8 +6,10 @@ import type { PortfolioData } from '@/shared/types/portfolio';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
+import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 /**
  * AI-Powered Portfolio Analysis API
@@ -16,6 +18,9 @@ export const runtime = 'nodejs';
  * - Crypto.com MCP (FREE market data)
  */
 export async function POST(request: NextRequest) {
+  const limited = heavyLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const { address } = body;

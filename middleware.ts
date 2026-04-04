@@ -78,6 +78,48 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
+/**
+ * Cache-Control policies for GET API routes.
+ * Matched in order; first prefix match wins.
+ * POST/PUT/DELETE requests never get cache headers.
+ */
+const API_CACHE_POLICIES: Array<{ prefix: string; value: string }> = [
+  // Private / no-store (user-specific or mutation-adjacent)
+  { prefix: '/api/gasless/', value: 'private, no-store' },
+  { prefix: '/api/x402/', value: 'private, no-store' },
+  { prefix: '/api/debug/', value: 'no-store' },
+  { prefix: '/api/chat/health', value: 'public, s-maxage=10, stale-while-revalidate=20' },
+  // Fast-changing operational data (15s)
+  { prefix: '/api/agents/hedging/list', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/hedging/onchain', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/hedging/tracker', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/hedging/bluefin', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/hedging/pnl', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/agents/activity', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/monitor', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/agents/auto-hedge', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/agents/auto-rebalance', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/portfolio/[', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  { prefix: '/api/portfolio/', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/price-alerts', value: 'public, s-maxage=15, stale-while-revalidate=30' },
+  // Medium-lived data (30s)
+  { prefix: '/api/community-pool/', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/community-pool', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  { prefix: '/api/oasis/', value: 'public, s-maxage=30, stale-while-revalidate=60' },
+  // Slow-changing data (60s+)
+  { prefix: '/api/analytics', value: 'public, s-maxage=60, stale-while-revalidate=120' },
+];
+
+/** Get Cache-Control value for a GET API route, or null if none applies */
+function getApiCachePolicy(pathname: string): string | null {
+  for (let i = 0; i < API_CACHE_POLICIES.length; i++) {
+    if (pathname.startsWith(API_CACHE_POLICIES[i].prefix)) {
+      return API_CACHE_POLICIES[i].value;
+    }
+  }
+  return null;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
@@ -90,7 +132,17 @@ export function middleware(request: NextRequest) {
         return createBlockedResponse(country, pathname);
       }
     }
-    return addSecurityHeaders(NextResponse.next());
+    const response = addSecurityHeaders(NextResponse.next());
+
+    // Add Cache-Control headers for GET requests only
+    if (request.method === 'GET') {
+      const cachePolicy = getApiCachePolicy(pathname);
+      if (cachePolicy) {
+        response.headers.set('Cache-Control', cachePolicy);
+      }
+    }
+
+    return response;
   }
   
   // Apply i18n for non-API routes

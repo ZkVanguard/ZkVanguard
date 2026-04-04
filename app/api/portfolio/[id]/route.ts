@@ -13,6 +13,7 @@ import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // ═══════════════════════════════════════════════════════════════════════════
 // PRODUCTION SAFETY: Token configuration with NO hardcoded prices
 // Prices MUST be fetched from market data service in production

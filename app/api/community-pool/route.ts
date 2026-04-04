@@ -46,6 +46,7 @@ import {
 } from '@/lib/community-pool/on-chain-reader';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 /**

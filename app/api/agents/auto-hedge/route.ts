@@ -23,6 +23,7 @@ import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/con
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 export async function GET(request: NextRequest) {
   try {
     // Ensure service is running

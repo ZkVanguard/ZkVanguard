@@ -21,6 +21,7 @@ import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 export interface PrivateHedgeRequest {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     
     let currentPrice = 1000;
     try {
-      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers');
+      const tickerResponse = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', { signal: AbortSignal.timeout(8000) });
       const tickerData = await tickerResponse.json();
       const ticker = tickerData.result.data.find((t: { i: string; a: string }) => t.i === `${baseAsset}_USDT`);
       if (ticker) {
