@@ -7,6 +7,7 @@ import { logger } from '@/lib/utils/logger';
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 /**
  * Market Data API via Crypto.com MCP Server
  */

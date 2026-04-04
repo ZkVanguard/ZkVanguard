@@ -5,6 +5,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 

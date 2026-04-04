@@ -8,6 +8,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 // SECURITY: Max mint amount to prevent unlimited minting
 const MAX_MINT_AMOUNT = 1_000_000_000; // $1B max
 

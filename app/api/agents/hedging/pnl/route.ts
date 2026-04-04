@@ -13,6 +13,7 @@ import { readLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 /**

@@ -29,6 +29,7 @@ import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 import { verifyCronRequest } from '@/lib/qstash';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 type NetworkType = 'testnet' | 'mainnet';

@@ -6,8 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
 /**
@@ -15,6 +17,9 @@ export const dynamic = 'force-dynamic';
  * Store portfolio strategy with ZK proof on-chain
  */
 export async function POST(request: NextRequest) {
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const {

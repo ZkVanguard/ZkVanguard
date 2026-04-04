@@ -3,13 +3,18 @@
  * Check if LLM service is available and operational
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { llmProvider } from '@/lib/ai/llm-provider';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = readLimiter.check(req);
+  if (limited) return limited;
+
   // Wait for LLM provider to initialize
   await llmProvider.waitForInit();
   

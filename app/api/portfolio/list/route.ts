@@ -9,6 +9,7 @@ import { getCached, setCached } from '@/lib/db/ui-cache';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 

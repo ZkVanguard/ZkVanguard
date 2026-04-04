@@ -41,6 +41,7 @@ import { getCurrentChainId, getUsdcAddress, getRpcUrl, isMainnet, isTestnet } fr
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 // Dynamic address resolution based on NEXT_PUBLIC_CHAIN_ID

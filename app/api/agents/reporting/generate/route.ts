@@ -3,6 +3,8 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
+export const maxDuration = 30;
+
 /**
  * Portfolio Reporting API Route
  * Generates reports using real portfolio data from ReportingAgent

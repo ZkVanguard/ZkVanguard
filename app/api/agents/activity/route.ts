@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 
+export const maxDuration = 10;
+
 /**
  * Agent Activity Feed API Route
  * 

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSimulatedPortfolioManager } from '@/lib/services/SimulatedPortfolioManager';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
+
+export const maxDuration = 10;
 
 /**
  * Simulated Portfolio Management API
@@ -10,7 +13,10 @@ import { logger } from '@/lib/utils/logger';
  * to demonstrate the full system capabilities
  */
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = readLimiter.check(req);
+  if (limited) return limited;
+
   try {
     const manager = getSimulatedPortfolioManager();
     await manager.initialize();

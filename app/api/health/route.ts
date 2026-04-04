@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '@/lib/services/CryptocomDeveloperPlatformService';
 import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
@@ -7,12 +8,16 @@ import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
 // Force dynamic rendering - health checks need runtime secrets
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 15;
 
 /**
  * Health Check API for all Crypto.com services
  * GET /api/health
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = readLimiter.check(req);
+  if (limited) return limited;
+
   try {
     const startTime = Date.now();
 

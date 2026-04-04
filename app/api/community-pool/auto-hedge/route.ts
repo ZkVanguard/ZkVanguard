@@ -20,6 +20,7 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 // In-memory cache for auto-hedge status (expensive risk assessment)
 let autoHedgeCache: { data: unknown; expiresAt: number } | null = null;
 const AUTO_HEDGE_CACHE_TTL = 300_000; // 5 min — reduce DB load

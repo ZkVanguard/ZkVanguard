@@ -15,6 +15,7 @@ import type { PricingDisplayData } from '@/lib/config/subscription-types';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
+export const maxDuration = 10;
 export const dynamic = 'force-static';
 export const revalidate = 3600; // Cache for 1 hour
 

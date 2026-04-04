@@ -20,6 +20,7 @@ import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/li
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 30;
 // Configuration
 const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours

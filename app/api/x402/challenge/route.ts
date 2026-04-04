@@ -8,16 +8,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getX402FacilitatorService } from '@/lib/services/x402-facilitator';
 import { logger } from '@/lib/utils/logger';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 /**
  * POST /api/x402/challenge
  * 
  * Creates a payment challenge for accessing a protected resource.
  */
 export async function POST(request: NextRequest) {
+  const limited = mutationLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const { 

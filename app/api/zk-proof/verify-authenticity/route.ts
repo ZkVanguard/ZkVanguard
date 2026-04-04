@@ -4,6 +4,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 const ZK_API_URL = process.env.ZK_API_URL;
 
 /**

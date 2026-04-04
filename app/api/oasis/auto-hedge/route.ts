@@ -8,6 +8,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 /**
  * Oasis Auto-Hedging API
  * 

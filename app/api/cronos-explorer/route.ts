@@ -4,6 +4,7 @@ import { logger } from '@/lib/utils/logger';
 // Force dynamic rendering - this route uses searchParams
 export const dynamic = 'force-dynamic';
 
+export const maxDuration = 15;
 interface BlockscoutTransaction {
   hash: string;
   from?: string;

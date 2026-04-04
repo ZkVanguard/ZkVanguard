@@ -16,6 +16,7 @@ import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 15;
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 

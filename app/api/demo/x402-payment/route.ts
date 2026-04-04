@@ -7,6 +7,7 @@ import { ethers } from 'ethers';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 const MAX_AMOUNT = 100_000; // $100k max per demo settlement
 const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 

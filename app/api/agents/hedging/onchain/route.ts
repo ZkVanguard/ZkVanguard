@@ -24,6 +24,7 @@ import { logger } from '@/lib/utils/logger';
 
 // Live price sync v2
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 // Contract addresses from deployment - should be env vars but these are known testnet addresses

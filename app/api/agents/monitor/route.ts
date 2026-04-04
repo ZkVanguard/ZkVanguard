@@ -17,6 +17,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
+export const maxDuration = 10;
 // Lazy singleton — only this route uses it directly.
 // The orchestrator manages its own independent instance for centralized data flow.
 let _priceMonitorAgent: PriceMonitorAgent | null = null;

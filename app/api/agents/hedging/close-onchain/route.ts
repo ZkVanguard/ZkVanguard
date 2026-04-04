@@ -22,6 +22,7 @@ import { getHedgeByNumericId } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
+export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 const HEDGE_EXECUTOR = process.env.HEDGE_EXECUTOR_ADDRESS || '0x090b6221137690EbB37667E4644287487CE462B9';
