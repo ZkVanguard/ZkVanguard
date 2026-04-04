@@ -1,34 +1,19 @@
 /**
  * @fileoverview x402 Facilitator API client for REAL gasless payments (Server-only)
- * Uses @crypto.com/facilitator-client SDK for true gasless transactions
+ * Server-specific variant with explicit network/privateKey constructor.
+ * Shares interfaces with the main X402Client.
  * @module integrations/x402/X402Client.server
  */
 
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 import { ethers } from 'ethers';
 import { logger } from '../../shared/utils/logger';
+import type { X402TransferRequest, X402BatchRequest } from './X402Client';
 
-export interface X402TransferRequest {
-  token: string;
-  from: string;
-  to: string;
-  amount: string;
-  validAfter?: number;
-  validBefore?: number;
-  nonce?: string;
-}
+// Re-export shared interfaces from main client
+export type { X402TransferRequest, X402BatchRequest } from './X402Client';
 
-export interface X402BatchRequest {
-  token: string;
-  from: string;
-  recipients: string[];
-  amounts: string[];
-  validAfter?: number;
-  validBefore?: number;
-  nonces?: string[];
-}
-
-export interface X402TransferResponse {
+export interface X402ServerTransferResponse {
   success: boolean;
   txHash?: string;
   error?: string;
@@ -81,7 +66,7 @@ export class X402Client {
   /**
    * Execute gasless transfer via x402 Facilitator
    */
-  async executeGaslessTransfer(request: X402TransferRequest): Promise<X402TransferResponse> {
+  async executeGaslessTransfer(request: X402TransferRequest): Promise<X402ServerTransferResponse> {
     if (!this.signer) {
       throw new Error('Signer not set. Call setSigner() first.');
     }

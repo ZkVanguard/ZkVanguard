@@ -34,7 +34,7 @@ import {
 } from '@/lib/security/production-guard';
 import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
 // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
-import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './AutoHedgingService';
+import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES

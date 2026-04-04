@@ -26,6 +26,10 @@ import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import { PredictionAggregatorService, type AggregatedPrediction } from './PredictionAggregatorService';
+import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
+
+// Re-export shared types for existing consumers
+export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 // Configuration
 const CONFIG = {
@@ -43,48 +47,6 @@ const CONFIG = {
   DEFAULT_STOP_LOSS_PERCENT: 10,
   DEFAULT_TAKE_PROFIT_PERCENT: 20,
 };
-
-export interface AutoHedgeConfig {
-  portfolioId: number;
-  walletAddress: string;
-  enabled: boolean;
-  riskThreshold: number; // 1-10 scale
-  maxLeverage: number;
-  allowedAssets: string[];
-}
-
-export interface RiskAssessment {
-  portfolioId: number;
-  totalValue: number;
-  drawdownPercent: number;
-  volatility: number;
-  riskScore: number; // 1-10
-  recommendations: HedgeRecommendation[];
-  aggregatedPrediction?: {
-    direction: string;
-    confidence: number;
-    consensus: number;
-    recommendation: string;
-    sizeMultiplier: number;
-    sources: Array<{
-      name: string;
-      available: boolean;
-      weight: number;
-      direction?: string;
-      confidence?: number;
-    }>;
-  } | null;
-  timestamp: number;
-}
-
-export interface HedgeRecommendation {
-  asset: string;
-  side: 'LONG' | 'SHORT';
-  reason: string;
-  suggestedSize: number;
-  leverage: number;
-  confidence: number; // 0-1
-}
 
 class AutoHedgingService {
   private isRunning = false;

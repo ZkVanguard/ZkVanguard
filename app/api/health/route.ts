@@ -3,7 +3,7 @@ import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '@/lib/services/CryptocomDeveloperPlatformService';
-import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 // Force dynamic rendering - health checks need runtime secrets
 export const runtime = 'nodejs';
@@ -33,8 +33,9 @@ export async function GET(req: NextRequest) {
     const platform = platformResult.status === 'fulfilled' ? platformResult.value : { healthy: false, network: 'not configured' };
     const samplePrice = samplePriceResult.status === 'fulfilled' ? samplePriceResult.value : null;
     
-    // Check AI Agent (synchronous, no await needed)
-    const aiAgentHealthy = cryptocomAIAgent.isReady();
+    // Check AI Agent
+    const aiService = getCryptocomAIService();
+    const aiAgentHealthy = !!aiService;
 
     // Get sample price to test the full pipeline
     const priceFetchTime = Date.now() - startTime;
@@ -62,7 +63,6 @@ export async function GET(req: NextRequest) {
         },
         aiAgent: {
           status: aiAgentHealthy ? 'ready' : 'not initialized',
-          config: cryptocomAIAgent.getConfig(),
           features: ['natural language queries', 'blockchain operations', 'portfolio analysis'],
         },
       },
