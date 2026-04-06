@@ -23,6 +23,7 @@ import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/li
 import { ethers } from 'ethers';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -128,8 +129,8 @@ async function loadStateFromDb(): Promise<void> {
         lastPoolHedgeTimeCache.set(pool.id, lastHedge);
       }
     }
-  } catch (error: any) {
-    logger.warn('[PoolNAVMonitor] Failed to load state from DB — using defaults', { error: error?.message });
+  } catch (error: unknown) {
+    logger.warn('[PoolNAVMonitor] Failed to load state from DB — using defaults', { error: errMsg(error) });
   }
 }
 
@@ -205,8 +206,8 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
     };
     
     return { totalNAV, memberCount, sharePrice, allocations, creationTime };
-  } catch (error: any) {
-    logger.error(`[PoolNAVMonitor] Failed to fetch pool stats for ${pool.id}:`, { error: error?.message || String(error) });
+  } catch (error: unknown) {
+    logger.error(`[PoolNAVMonitor] Failed to fetch pool stats for ${pool.id}:`, { error: errMsg(error) || String(error) });
     return null;
   }
 }
@@ -397,8 +398,8 @@ async function recordSnapshot(
       source: 'pool-nav-monitor-cron',
     });
     logger.info(`[PoolNAVMonitor] Snapshot recorded: NAV=$${stats.totalNAV.toFixed(2)}, SharePrice=$${stats.sharePrice.toFixed(4)}, Members=${stats.memberCount}`);
-  } catch (error: any) {
-    logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: error?.message || String(error) });
+  } catch (error: unknown) {
+    logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: errMsg(error) || String(error) });
   }
   
   // Sync on-chain members to DB for fast queries
@@ -427,8 +428,8 @@ async function recordSnapshot(
       
       logger.info(`[PoolNAVMonitor] Members synced to DB: ${syncedMembers}`);
     }
-  } catch (syncError: any) {
-    logger.warn(`[PoolNAVMonitor] Failed to sync members (non-critical):`, { error: syncError?.message || String(syncError) });
+  } catch (syncError: unknown) {
+    logger.warn(`[PoolNAVMonitor] Failed to sync members (non-critical):`, { error: errMsg(syncError) || String(syncError) });
   }
 }
 
@@ -583,8 +584,8 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       }
       logger.info('[PoolNAVMonitor] Backfilled 24 hourly snapshots for risk metrics');
     }
-  } catch (backfillErr: any) {
-    logger.warn('[PoolNAVMonitor] Backfill failed (non-fatal)', { error: backfillErr?.message });
+  } catch (backfillErr: unknown) {
+    logger.warn('[PoolNAVMonitor] Backfill failed (non-fatal)', { error: errMsg(backfillErr) });
   }
   
   for (const pool of POOLS) {
@@ -783,7 +784,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PoolMonito
       duration: Date.now() - startTime,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[PoolNAVMonitor] Error:', error);
     return safeErrorResponse(error, 'Pool NAV monitor') as NextResponse<PoolMonitorResult>;
   }

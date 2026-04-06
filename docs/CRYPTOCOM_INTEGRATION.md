@@ -151,7 +151,9 @@ await cryptocomPlatform.switchNetwork('CronosZkEvm.Mainnet');
 
 ### 3. AI Agent Service
 
-**File:** `lib/services/CryptocomAIAgentService.ts`
+**File:** `lib/ai/cryptocom-service.ts`
+
+> **Note:** The original `lib/services/CryptocomAIAgentService.ts` was consolidated into `lib/ai/cryptocom-service.ts`. Use `getCryptocomAIService()` instead.
 
 **Features:**
 - Natural language blockchain queries
@@ -162,14 +164,9 @@ await cryptocomPlatform.switchNetwork('CronosZkEvm.Mainnet');
 
 **Usage:**
 ```typescript
-import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
-// Initialize (automatic on first use)
-await cryptocomAIAgent.initialize({
-  openaiApiKey: process.env.OPENAI_API_KEY,
-  chainId: '338', // Cronos Testnet
-  dashboardApiKey: process.env.DASHBOARD_API_KEY,
-});
+const aiService = getCryptocomAIService();
 
 // Natural language queries
 const result = await cryptocomAIAgent.query(
@@ -295,11 +292,12 @@ async function getPortfolioValue(address: string) {
 ### Example 2: AI-Powered Trading Assistant
 
 ```typescript
-import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 async function tradingAssistant(userQuery: string) {
+  const aiService = getCryptocomAIService();
   // Process user's natural language request
-  const result = await cryptocomAIAgent.query(userQuery);
+  const result = await aiService.query(userQuery);
   
   // Parse intent
   const intent = await cryptocomAIAgent.parseIntent(userQuery);
@@ -396,15 +394,15 @@ testMarketData();
 
 ### Test AI Agent
 ```typescript
-import { cryptocomAIAgent } from '@/lib/services/CryptocomAIAgentService';
+import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 
 async function testAIAgent() {
-  await cryptocomAIAgent.initialize();
+  const aiService = getCryptocomAIService();
   
-  const result = await cryptocomAIAgent.query("What is the latest block on Cronos?");
+  const result = await aiService.query("What is the latest block on Cronos?");
   console.log('AI Response:', result.response);
   
-  const isHealthy = await cryptocomAIAgent.healthCheck();
+  const isHealthy = await aiService.healthCheck();
   console.log('Health:', isHealthy ? '✅' : '❌');
 }
 

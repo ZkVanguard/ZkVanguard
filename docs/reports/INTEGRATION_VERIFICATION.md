@@ -107,7 +107,7 @@ Component Status:
 ### ✅ Backend Services
 - [x] `lib/services/CryptocomExchangeService.ts` - Exchange API wrapper
 - [x] `lib/services/CryptocomDeveloperPlatformService.ts` - On-chain data
-- [x] `lib/services/CryptocomAIAgentService.ts` - AI-powered operations
+- [x] `lib/ai/cryptocom-service.ts` - AI-powered operations (consolidated from CryptocomAIAgentService)
 - [x] `lib/services/RealMarketDataService.ts` - Multi-source fallback system
 
 ### ✅ API Endpoints

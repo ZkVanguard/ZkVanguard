@@ -13,6 +13,7 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SwapRespo
     // Use ProductionGuard to validate amount bounds
     try {
       ProductionGuard.validateFinancialAmount(amountNum, 'amountIn');
-    } catch (error: any) {
+    } catch (error: unknown) {
       return NextResponse.json(
         { success: false, error: 'Swap validation failed' },
         { status: 400 }
@@ -220,7 +221,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     } catch (vvsError) {
       // VVS API failed - try RealMarketDataService as fallback
-      logger.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', { error: vvsError instanceof Error ? vvsError.message : String(vvsError) });
+      logger.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', { error: vvsError instanceof Error ? errMsg(vvsError) : String(vvsError) });
       
       try {
         const { getMarketDataService } = await import('../../../../lib/services/RealMarketDataService');

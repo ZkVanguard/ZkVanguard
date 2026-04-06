@@ -32,6 +32,7 @@ import {
 import { mutationLimiter, readLimiter, createRateLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -401,8 +402,8 @@ export async function POST(request: NextRequest) {
             message: `Funded ${ethers.formatEther(GAS_FUND_AMOUNT)} ETH for gas`,
           });
 
-        } catch (fundError: any) {
-          logger.error('[FundGas] Failed to fund gas', { error: fundError.message });
+        } catch (fundError: unknown) {
+          logger.error('[FundGas] Failed to fund gas', { error: errMsg(fundError) });
           return NextResponse.json({
             success: false,
             error: 'Failed to send gas funding',
@@ -487,8 +488,8 @@ export async function POST(request: NextRequest) {
             txHash: receipt?.hash,
             message: 'Oracle prices updated',
           });
-        } catch (priceError: any) {
-          logger.error('[UpdatePrices] Failed to update prices', { error: priceError.message });
+        } catch (priceError: unknown) {
+          logger.error('[UpdatePrices] Failed to update prices', { error: errMsg(priceError) });
           // Non-fatal: prices might still be fresh enough
           return NextResponse.json({
             success: false,
@@ -585,8 +586,8 @@ export async function POST(request: NextRequest) {
               );
               await permitTx.wait(1);
               logger.info('[DepositProxy] Permit executed');
-            } catch (permitErr: any) {
-              logger.warn('[DepositProxy] Permit failed, checking existing allowance', { error: permitErr.message });
+            } catch (permitErr: unknown) {
+              logger.warn('[DepositProxy] Permit failed, checking existing allowance', { error: errMsg(permitErr) });
             }
           }
 
@@ -665,11 +666,11 @@ export async function POST(request: NextRequest) {
               message: `Deposited ${amount} USDT to treasury proxy wallet`,
             });
 
-          } catch (depositErr: any) {
+          } catch (depositErr: unknown) {
             // CRITICAL: depositFor failed but transferFrom succeeded.
             // User's USDT is in the server wallet. Refund immediately.
             logger.error('[DepositProxy] depositFor FAILED — refunding USDT to user', { 
-              error: depositErr.message,
+              error: errMsg(depositErr),
               walletAddress,
               amount,
             });
@@ -684,15 +685,15 @@ export async function POST(request: NextRequest) {
                 error: 'Pool deposit failed but your USDT has been refunded to your wallet.',
                 refunded: true,
                 refundTxHash: refundReceipt?.hash,
-                originalError: depositErr.message,
+                originalError: errMsg(depositErr),
               }, { status: 500 });
-            } catch (refundErr: any) {
+            } catch (refundErr: unknown) {
               // Refund also failed — log critical error for manual recovery
               logger.error('[DepositProxy] CRITICAL: Refund ALSO failed — manual recovery needed', {
                 walletAddress,
                 amount,
-                depositError: depositErr.message,
-                refundError: refundErr.message,
+                depositError: errMsg(depositErr),
+                refundError: errMsg(refundErr),
               });
 
               return NextResponse.json({
@@ -706,11 +707,11 @@ export async function POST(request: NextRequest) {
             }
           }
 
-        } catch (proxyErr: any) {
-          logger.error('[DepositProxy] Failed', { error: proxyErr.message });
+        } catch (proxyErr: unknown) {
+          logger.error('[DepositProxy] Failed', { error: errMsg(proxyErr) });
           return NextResponse.json({
             success: false,
-            error: proxyErr.message || 'Proxy deposit failed',
+            error: errMsg(proxyErr) || 'Proxy deposit failed',
           }, { status: 500 });
         }
       }
@@ -787,8 +788,8 @@ export async function POST(request: NextRequest) {
             message: `Recovered ${ethers.formatUnits(serverBalance, 6)} USDT to your wallet`,
           });
 
-        } catch (recoverErr: any) {
-          logger.error('[RecoverDeposit] Recovery failed', { error: recoverErr.message });
+        } catch (recoverErr: unknown) {
+          logger.error('[RecoverDeposit] Recovery failed', { error: errMsg(recoverErr) });
           return NextResponse.json({
             success: false,
             error: 'Recovery check failed',

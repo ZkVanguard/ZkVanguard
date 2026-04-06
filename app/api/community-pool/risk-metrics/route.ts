@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic';
 
 // Cache duration for risk metrics (5 minutes)
 const CACHE_DURATION_MS = 5 * 60 * 1000;
-const cachedMetricsByChain = new Map<string, { data: any; timestamp: number }>();
+const cachedMetricsByChain = new Map<string, { data: Record<string, unknown>; timestamp: number }>();
 
 export async function GET(request: NextRequest) {
   const limited = readLimiter.check(request);
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       cached: false,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[RiskMetrics API] Failed to calculate metrics', error);
     
     return safeErrorResponse(error, 'Risk metrics calculation');
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
 
     logger.info('[RiskMetrics API] Backfilled NAV snapshots', { count });
     return NextResponse.json({ success: true, backfilled: count, existingSnapshots: navHistory.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[RiskMetrics API] Backfill failed', error);
     return safeErrorResponse(error, 'Risk metrics backfill');
   }

@@ -277,7 +277,7 @@ export async function GET(request: NextRequest) {
       cached: false,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     return safeErrorResponse(error, 'CommunityPool AI GET');
   }
 }
@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
       timestamp: Date.now(),
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     return safeErrorResponse(error, 'CommunityPool AI POST');
   }
 }

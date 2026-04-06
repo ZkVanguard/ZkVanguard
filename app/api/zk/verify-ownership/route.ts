@@ -62,18 +62,24 @@ interface VerifyOwnershipResponse {
 }
 
 // Server-side secret for HMAC-based wallet binding (never user-provided)
-const BINDING_SECRET = process.env.ZK_BINDING_SECRET || process.env.INTERNAL_API_SECRET || 'zkvanguard-default-binding-key';
+function getBindingSecret(): string {
+  const secret = process.env.ZK_BINDING_SECRET || process.env.INTERNAL_API_SECRET;
+  if (!secret) {
+    throw new Error('FATAL: ZK_BINDING_SECRET or INTERNAL_API_SECRET must be set. Wallet binding is insecure without a secret.');
+  }
+  return secret;
+}
 
 // Generate deterministic wallet binding hash for verification using HMAC
 function generateWalletBinding(walletAddress: string, hedgeId: string, secret?: string): string {
   const data = `wallet:${walletAddress.toLowerCase()}:hedge:${hedgeId}${secret ? `:${secret}` : ''}`;
-  return crypto.createHmac('sha256', BINDING_SECRET).update(data).digest('hex');
+  return crypto.createHmac('sha256', getBindingSecret()).update(data).digest('hex');
 }
 
 // Generate owner commitment (for privacy - doesn't reveal wallet in plain text)
 function generateOwnerCommitment(walletAddress: string, timestamp: number): string {
   const data = `owner:${walletAddress.toLowerCase()}:ts:${timestamp}`;
-  return crypto.createHmac('sha256', BINDING_SECRET).update(data).digest('hex');
+  return crypto.createHmac('sha256', getBindingSecret()).update(data).digest('hex');
 }
 
 // Verify the wallet binding proof — timing-safe comparison

@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +26,7 @@ interface SubCronResult {
   name: string;
   success: boolean;
   duration: number;
-  data?: any;
+  data?: Record<string, unknown>;
   error?: string;
 }
 
@@ -79,9 +80,9 @@ async function runSubCron(name: string, path: string, cronSecret: string): Promi
       logger.warn(`[MasterCron] ⚠️ ${name} returned ${response.status} in ${duration}ms`);
       return { name, success: false, duration, error: `HTTP ${response.status}`, data };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     const duration = Date.now() - start;
-    const errorMsg = error.name === 'AbortError' ? 'Timeout (25s)' : error.message;
+    const errorMsg = errName(error) === 'AbortError' ? 'Timeout (25s)' : errMsg(error);
     logger.error(`[MasterCron] ❌ ${name} failed in ${duration}ms: ${errorMsg}`);
     return { name, success: false, duration, error: errorMsg };
   }

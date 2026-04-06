@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,8 +97,8 @@ async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
       return [];
     }
     return data.positions;
-  } catch (error: any) {
-    logger.error('[LiquidationGuard] Error fetching positions — returning empty (no mock data)', { error: error?.message || String(error) });
+  } catch (error: unknown) {
+    logger.error('[LiquidationGuard] Error fetching positions — returning empty (no mock data)', { error: errMsg(error) || String(error) });
     return [];
   }
 }
@@ -450,7 +451,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<Liquidatio
       duration: Date.now() - startTime,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[LiquidationGuard] Error:', error);
     return safeErrorResponse(error, 'Liquidation guard') as NextResponse<LiquidationGuardResult>;
   }

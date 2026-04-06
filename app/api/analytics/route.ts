@@ -111,8 +111,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid event type' }, { status: 400 });
     }
     
-    // Check if database is configured
-    const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+    // Check if database is configured (match priority from lib/db/postgres.ts)
+    const databaseUrl = process.env.DATABASE_POOL_URL || process.env.DATABASE_URL;
     
     if (!databaseUrl) {
       // Store in memory/log for development

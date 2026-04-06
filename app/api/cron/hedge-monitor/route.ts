@@ -17,6 +17,7 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getActiveHedges as getActiveHedgesFromDB, closeHedge, type Hedge } from '@/lib/db/hedges';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -107,8 +108,8 @@ async function fetchActiveHedges(): Promise<ActiveHedge[]> {
       dbId: h.id, // Keep original DB ID for status updates
       orderId: h.order_id, // Original order_id for closeHedge
     }));
-  } catch (error: any) {
-    logger.error('[HedgeMonitor] Failed to fetch hedges from database:', { error: error?.message || String(error) });
+  } catch (error: unknown) {
+    logger.error('[HedgeMonitor] Failed to fetch hedges from database:', { error: errMsg(error) || String(error) });
     return []; // Return empty array on error - DO NOT USE MOCK DATA
   }
 }
@@ -432,7 +433,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<HedgeMonit
       duration: Date.now() - startTime,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[HedgeMonitor] Error:', error);
     return NextResponse.json({
       success: false,
@@ -450,7 +451,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<HedgeMonit
         healthyCount: 0,
       },
       duration: Date.now() - startTime,
-      error: error.message,
+      error: errMsg(error),
     }, { status: 500 });
   }
 }
