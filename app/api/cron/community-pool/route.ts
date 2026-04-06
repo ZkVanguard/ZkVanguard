@@ -46,14 +46,35 @@ const COMMUNITY_POOL_ADDRESS = '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
 const COMMUNITY_POOL_ABI = [
   'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
   'function setTargetAllocation(uint256[4] newAllocationBps, string reasoning)',
+  'function executeRebalanceTrade(uint8 assetIndex, uint256 amount, bool isBuy, uint256 minAmountOut)',
   'function getMemberCount() view returns (uint256)',
   'function memberList(uint256) view returns (address)',
   'function members(address) view returns (uint256 shares, uint256 depositedUSD, uint256 withdrawnUSD, uint256 joinTime)',
   'function openPoolHedge(address hedgeContract, uint256 collateralAmount, bytes32 positionId, uint256 expectedPayout)',
+  'function depositToken() view returns (address)',
+  'function assetTokens(uint256) view returns (address)',
+  'function assetBalances(uint256) view returns (uint256)',
+  'function dexRouter() view returns (address)',
   'function MIN_RESERVE_RATIO_BPS() view returns (uint256)',
   'function MAX_SINGLE_HEDGE_BPS() view returns (uint256)',
   'function DAILY_HEDGE_CAP_BPS() view returns (uint256)',
 ];
+
+const VVS_ROUTER_ABI = [
+  'function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)',
+];
+
+// Asset indices matching CommunityPool.sol constants
+const ASSET_BTC = 0;
+const ASSET_ETH = 1;
+const ASSET_SUI = 2;
+const ASSET_CRO = 3;
+const ASSET_NAMES = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
+
+// Minimum USDC to allocate per asset ($1 min to avoid wasting gas)
+const MIN_TRADE_USDC = 1_000_000n; // $1 in 6 decimals
+// Accept up to 3% slippage from DEX quote
+const MAX_SLIPPAGE_BPS = 300n;
 
 interface CronResult {
   success: boolean;
@@ -77,6 +98,18 @@ interface CronResult {
     executionError?: string;
   };
   hedgesExecuted?: number;
+  rebalanceTrades?: {
+    executed: number;
+    failed: number;
+    skipped: number;
+    trades: Array<{
+      asset: string;
+      amountUsdc: string;
+      amountReceived: string;
+      txHash?: string;
+      error?: string;
+    }>;
+  };
   priceValidation?: {
     BTC?: { price: number; confidence: string };
     ETH?: { price: number; confidence: string };
@@ -528,7 +561,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
                     aiDecision.executed = true;
                     aiDecision.txHash = result.txHash;
                     
-                    logger.info('[CommunityPool Cron] Rebalance executed successfully', {
+                    logger.info('[CommunityPool Cron] Allocation targets updated on-chain', {
                       txHash: result.txHash,
                     });
                   } else {
@@ -560,7 +593,165 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       }
     }
     
-    // Step 3.5: Log AI decision to database (always log, even HOLD decisions)
+    // Step 3.5: Execute on-chain trades to convert USDC into target assets
+    // This is the CRITICAL step that actually buys BTC/ETH/SUI/CRO via VVS Finance DEX
+    let rebalanceTrades: CronResult['rebalanceTrades'] = undefined;
+    if (aiDecision.executed || poolStats.allocations.BTC > 0) {
+      try {
+        const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
+        const tradeContract = new ethers.Contract(COMMUNITY_POOL_ADDRESS, COMMUNITY_POOL_ABI, provider);
+        
+        // Read unallocated USDC balance in the contract
+        const depositTokenAddr: string = await tradeContract.depositToken();
+        const usdcContract = new ethers.Contract(
+          depositTokenAddr,
+          ['function balanceOf(address) view returns (uint256)'],
+          provider,
+        );
+        const usdcBalance: bigint = await usdcContract.balanceOf(COMMUNITY_POOL_ADDRESS);
+        
+        // Read DEX router address
+        const routerAddr: string = await tradeContract.dexRouter();
+        
+        // Read current asset balances
+        const currentBalances: bigint[] = [];
+        const assetAddrs: string[] = [];
+        for (let i = 0; i < 4; i++) {
+          currentBalances.push(await tradeContract.assetBalances(i));
+          assetAddrs.push(await tradeContract.assetTokens(i));
+        }
+        
+        // Only proceed if there is meaningful USDC to allocate and DEX router is configured
+        const minPoolUsdc = 10_000_000n; // $10 minimum pool USDC to trigger trades
+        if (usdcBalance > minPoolUsdc && routerAddr !== ethers.ZeroAddress) {
+          // Reserve 5% of USDC for withdrawal liquidity (matching MIN_RESERVE_RATIO_BPS)
+          let reserveBps = 500n;
+          try {
+            reserveBps = BigInt(Number(await tradeContract.MIN_RESERVE_RATIO_BPS()));
+          } catch { /* use default 5% */ }
+          const reserveUsdc = (usdcBalance * reserveBps) / 10000n;
+          const allocatableUsdc = usdcBalance - reserveUsdc;
+          
+          if (allocatableUsdc > minPoolUsdc) {
+            const router = new ethers.Contract(routerAddr, VVS_ROUTER_ABI, provider);
+            const trades: NonNullable<CronResult['rebalanceTrades']>['trades'] = [];
+            let executed = 0;
+            let failed = 0;
+            let skipped = 0;
+            
+            // Use current on-chain target allocations (just set by setTargetAllocation)
+            const targetBps = [
+              poolStats.allocations.BTC * 100,
+              poolStats.allocations.ETH * 100,
+              poolStats.allocations.SUI * 100,
+              poolStats.allocations.CRO * 100,
+            ];
+            
+            for (let i = 0; i < 4; i++) {
+              const assetName = ASSET_NAMES[i];
+              const assetAddr = assetAddrs[i];
+              
+              // Skip if asset token not configured on this chain
+              if (assetAddr === ethers.ZeroAddress) {
+                trades.push({ asset: assetName, amountUsdc: '0', amountReceived: '0', error: 'Asset token not configured' });
+                skipped++;
+                continue;
+              }
+              
+              // Calculate USDC allocation for this asset
+              const assetUsdc = (allocatableUsdc * BigInt(Math.round(targetBps[i]))) / 10000n;
+              if (assetUsdc < MIN_TRADE_USDC) {
+                trades.push({ asset: assetName, amountUsdc: ethers.formatUnits(assetUsdc, 6), amountReceived: '0', error: 'Below minimum trade size' });
+                skipped++;
+                continue;
+              }
+              
+              try {
+                // Get DEX quote for slippage protection
+                const path = [depositTokenAddr, assetAddr];
+                const amounts: bigint[] = await router.getAmountsOut(assetUsdc, path);
+                const expectedOut = amounts[amounts.length - 1];
+                
+                // Apply slippage tolerance
+                const minOut = (expectedOut * (10000n - MAX_SLIPPAGE_BPS)) / 10000n;
+                
+                // Execute trade via SecureAgentSigner
+                if (secureSigner) {
+                  const tradeResult = await secureSigner.signAndSend(
+                    tradeContract,
+                    'executeRebalanceTrade',
+                    [i, assetUsdc, true, minOut], // assetIndex, amount, isBuy=true, minAmountOut
+                    Number(ethers.formatUnits(assetUsdc, 6)),
+                    { description: `Buy ${assetName} with $${ethers.formatUnits(assetUsdc, 6)} USDC` },
+                  );
+                  
+                  if (tradeResult.success) {
+                    trades.push({
+                      asset: assetName,
+                      amountUsdc: ethers.formatUnits(assetUsdc, 6),
+                      amountReceived: expectedOut.toString(),
+                      txHash: tradeResult.txHash,
+                    });
+                    executed++;
+                    logger.info(`[CommunityPool Cron] Trade executed: $${ethers.formatUnits(assetUsdc, 6)} USDC → ${assetName}`, {
+                      txHash: tradeResult.txHash,
+                      expectedOut: expectedOut.toString(),
+                    });
+                  } else {
+                    trades.push({
+                      asset: assetName,
+                      amountUsdc: ethers.formatUnits(assetUsdc, 6),
+                      amountReceived: '0',
+                      error: tradeResult.error || 'Trade failed',
+                    });
+                    failed++;
+                  }
+                } else {
+                  trades.push({
+                    asset: assetName,
+                    amountUsdc: ethers.formatUnits(assetUsdc, 6),
+                    amountReceived: '0',
+                    error: 'SecureAgentSigner unavailable',
+                  });
+                  skipped++;
+                }
+              } catch (tradeErr) {
+                const errStr = tradeErr instanceof Error ? tradeErr.message : String(tradeErr);
+                trades.push({
+                  asset: assetName,
+                  amountUsdc: ethers.formatUnits(assetUsdc, 6),
+                  amountReceived: '0',
+                  error: errStr,
+                });
+                failed++;
+                logger.error(`[CommunityPool Cron] Trade failed for ${assetName}`, { error: errStr });
+              }
+            }
+            
+            rebalanceTrades = { executed, failed, skipped, trades };
+            logger.info('[CommunityPool Cron] Rebalance trades complete', { executed, failed, skipped });
+          } else {
+            logger.info('[CommunityPool Cron] Allocatable USDC below threshold after reserve', {
+              usdcBalance: ethers.formatUnits(usdcBalance, 6),
+              reserve: ethers.formatUnits(reserveUsdc, 6),
+              allocatable: ethers.formatUnits(allocatableUsdc, 6),
+            });
+          }
+        } else if (routerAddr === ethers.ZeroAddress) {
+          logger.warn('[CommunityPool Cron] DEX router not configured — cannot execute trades');
+        } else {
+          logger.info('[CommunityPool Cron] No significant USDC to allocate', {
+            usdcBalance: ethers.formatUnits(usdcBalance, 6),
+          });
+        }
+      } catch (tradeError) {
+        logger.error('[CommunityPool Cron] Trade execution step failed', {
+          error: tradeError instanceof Error ? tradeError.message : String(tradeError),
+        });
+      }
+    }
+
+    // Step 3.6: Log AI decision to database (always log, even HOLD decisions)
     try {
       const decisionId = `ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
@@ -577,6 +768,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
           volatility: riskAssessment.volatility,
           allocations: poolStats.allocations,
           priceValidation,
+          rebalanceTrades: rebalanceTrades ?? null,
         },
         txHash: aiDecision.txHash,
       });
@@ -626,6 +818,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       },
       aiDecision,
       hedgesExecuted,
+      rebalanceTrades,
       priceValidation,
       signerStatus,
       agentStatus,
@@ -636,6 +829,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       success: result.success,
       duration: result.duration,
       hedgesExecuted: result.hedgesExecuted,
+      tradesExecuted: rebalanceTrades?.executed ?? 0,
       riskScore: result.riskAssessment?.riskScore,
       activeAgents: agentStatus.active,
     });

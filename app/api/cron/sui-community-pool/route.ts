@@ -427,8 +427,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     }
 
     // Step 7: Plan + Execute rebalance via SuiPoolAgent
+    // Trigger swaps when:
+    //  a) AI detects allocation drift and recommends rebalancing, OR
+    //  b) Pool has USDC that hasn't been allocated to any asset yet (post-deposit)
     let rebalanceSwaps: SuiCronResult['rebalanceSwaps'] = undefined;
-    if (aiResult.shouldRebalance && navUsd > 1) {
+    const hasUnallocatedUsdc = navUsd > 1 && (
+      currentAllocations.BTC === 0 &&
+      currentAllocations.ETH === 0 &&
+      currentAllocations.SUI === 0 &&
+      currentAllocations.CRO === 0
+    );
+    const shouldExecuteSwaps = (aiResult.shouldRebalance || hasUnallocatedUsdc) && navUsd > 1;
+    if (hasUnallocatedUsdc) {
+      logger.info('[SUI Cron] Unallocated USDC detected — triggering initial asset allocation', { navUsd });
+    }
+    if (shouldExecuteSwaps) {
       try {
         const aggregator = getBluefinAggregatorService(network);
 
