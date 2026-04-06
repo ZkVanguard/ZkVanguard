@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { getSuiCommunityPoolService, validateSuiMainnetConfig } from '@/lib/services/SuiCommunityPoolService';
+import { getSuiCommunityPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/SuiCommunityPoolService';
 import {
   initCommunityPoolTables,
   recordNavSnapshot,
@@ -214,6 +214,142 @@ function generateAllocation(
     reasoning,
     shouldRebalance,
   };
+}
+
+// ============================================================================
+// Pool → Admin USDC Transfer via open_hedge
+// ============================================================================
+
+/**
+ * Transfer USDC from SUI pool contract to admin wallet using open_hedge.
+ * The Move contract's open_hedge splits USDC from the pool Balance<T> and
+ * sends a Coin<T> to state.treasury (the admin/treasury wallet).
+ *
+ * Requires: SUI_AGENT_CAP_ID env var (the AgentCap object owned by admin).
+ *
+ * Returns the tx digest on success, or null if transfer is not possible.
+ */
+async function transferUsdcFromPoolToAdmin(
+  network: 'mainnet' | 'testnet',
+  amountUsdc: number,
+): Promise<{ success: boolean; txDigest?: string; error?: string }> {
+  const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+  const agentCapId = process.env.SUI_AGENT_CAP_ID;
+  const poolConfig = SUI_USDC_POOL_CONFIG[network];
+
+  if (!adminKey) {
+    return { success: false, error: 'SUI_POOL_ADMIN_KEY not configured' };
+  }
+  if (!agentCapId) {
+    return { success: false, error: 'SUI_AGENT_CAP_ID not configured — cannot call open_hedge' };
+  }
+  if (!poolConfig.packageId || !poolConfig.poolStateId) {
+    return { success: false, error: 'Pool package or state ID not configured' };
+  }
+
+  try {
+    const { Ed25519Keypair, Transaction, SuiClient, getFullnodeUrl } = await import('@mysten/sui/keypairs/ed25519')
+      .then(kp => import('@mysten/sui/transactions').then(tx => import('@mysten/sui/client').then(cl => ({
+        Ed25519Keypair: kp.Ed25519Keypair,
+        Transaction: tx.Transaction,
+        SuiClient: cl.SuiClient,
+        getFullnodeUrl: cl.getFullnodeUrl,
+      }))));
+
+    let keypair: InstanceType<typeof Ed25519Keypair>;
+    try {
+      keypair = adminKey.startsWith('suiprivkey')
+        ? Ed25519Keypair.fromSecretKey(adminKey)
+        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    } catch {
+      return { success: false, error: 'Invalid SUI_POOL_ADMIN_KEY format' };
+    }
+
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+
+    const amountRaw = Math.floor(amountUsdc * 1e6); // USDC has 6 decimals on SUI
+    const usdcType = SUI_USDC_COIN_TYPE[network];
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::open_hedge`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(agentCapId),              // AgentCap
+        tx.object(poolConfig.poolStateId!), // UsdcPoolState
+        tx.pure.u8(0),                       // pair_index (0 = rebalance)
+        tx.pure.u64(amountRaw),             // collateral_usdc
+        tx.pure.u64(1),                     // leverage (1x = spot)
+        tx.pure.bool(true),                 // is_long (buying assets)
+        tx.pure.string('Cron rebalance: transfer USDC from pool to admin for DEX swaps'),
+        tx.object('0x6'),                   // Clock
+      ],
+    });
+
+    tx.setGasBudget(50_000_000);
+
+    const result = await suiClient.signAndExecuteTransaction({
+      transaction: tx,
+      signer: keypair,
+      options: { showEffects: true },
+    });
+
+    const success = result.effects?.status?.status === 'success';
+    if (success) {
+      logger.info('[SUI Cron] Pool → admin USDC transfer via open_hedge', {
+        txDigest: result.digest,
+        amountUsdc,
+      });
+    } else {
+      logger.error('[SUI Cron] Pool → admin USDC transfer failed', {
+        txDigest: result.digest,
+        error: result.effects?.status?.error,
+      });
+    }
+
+    return { success, txDigest: result.digest, error: success ? undefined : result.effects?.status?.error };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error('[SUI Cron] transferUsdcFromPoolToAdmin failed', { error: msg });
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Check admin wallet's USDC balance on SUI.
+ */
+async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promise<number> {
+  const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+  if (!adminKey) return 0;
+
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+
+    let keypair: InstanceType<typeof Ed25519Keypair>;
+    try {
+      keypair = adminKey.startsWith('suiprivkey')
+        ? Ed25519Keypair.fromSecretKey(adminKey)
+        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    } catch {
+      return 0;
+    }
+
+    const address = keypair.getPublicKey().toSuiAddress();
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+
+    const usdcType = SUI_USDC_COIN_TYPE[network];
+    const balance = await suiClient.getBalance({ owner: address, coinType: usdcType });
+    return Number(balance.totalBalance) / 1e6; // USDC 6 decimals
+  } catch {
+    return 0;
+  }
 }
 
 // ============================================================================
@@ -479,8 +615,43 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           ),
         });
 
-        // Step 7b: Execute on-chain swaps if admin wallet is configured
+        // Step 7b: Ensure admin wallet has USDC for swaps (transfer from pool if needed)
         if (process.env.SUI_POOL_ADMIN_KEY && onChainCount > 0) {
+          // Calculate total USDC needed for on-chain swaps
+          const totalUsdcNeeded = plan.swaps
+            .filter(s => s.canSwapOnChain)
+            .reduce((sum, s) => sum + Number(s.amountIn) / 1e6, 0);
+
+          // Check admin wallet USDC balance
+          const adminUsdcBalance = await getAdminUsdcBalance(network);
+          logger.info('[SUI Cron] Admin wallet USDC check', {
+            available: adminUsdcBalance.toFixed(2),
+            needed: totalUsdcNeeded.toFixed(2),
+          });
+
+          // If admin wallet doesn't have enough USDC, transfer from pool via open_hedge
+          if (adminUsdcBalance < totalUsdcNeeded * 0.95) { // 5% tolerance
+            const deficit = totalUsdcNeeded - adminUsdcBalance;
+            logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
+              deficit: deficit.toFixed(2),
+            });
+
+            const transferResult = await transferUsdcFromPoolToAdmin(network, deficit);
+            if (transferResult.success) {
+              logger.info('[SUI Cron] Pool → admin USDC transfer successful', {
+                txDigest: transferResult.txDigest,
+                amount: deficit.toFixed(2),
+              });
+              // Small delay for state propagation
+              await new Promise(r => setTimeout(r, 2000));
+            } else {
+              logger.warn('[SUI Cron] Pool → admin USDC transfer failed (proceeding with available balance)', {
+                error: transferResult.error,
+              });
+            }
+          }
+
+          // Step 7c: Execute on-chain swaps
           try {
             const execResult = await aggregator.executeRebalance(plan, 0.015);
             
@@ -503,7 +674,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           logger.info('[SUI Cron] Swap execution skipped — SUI_POOL_ADMIN_KEY not set (quotes only)');
         }
 
-        // Step 7c: Log hedged/simulated positions
+        // Step 7d: Log hedged/simulated positions
         const hedgedPositions = plan.swaps.filter(s => s.isSimulated || !s.canSwapOnChain);
         if (hedgedPositions.length > 0) {
           (rebalanceSwaps as any).hedgedPositions = hedgedPositions.map(s => ({

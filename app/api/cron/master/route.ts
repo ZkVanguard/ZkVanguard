@@ -123,6 +123,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
     { name: 'Pyth Price Update',      path: '/api/cron/pyth-update' },        // Update oracle prices first
     { name: 'Community Pool Snapshot', path: '/api/cron/community-pool' },
     { name: 'SUI Community Pool',      path: '/api/cron/sui-community-pool' },
+    { name: 'Hedera Community Pool',   path: '/api/cron/hedera-community-pool' },
+    { name: 'WDK Community Pool',      path: '/api/cron/wdk-community-pool' },
     { name: 'Pool NAV Monitor',       path: '/api/cron/pool-nav-monitor' },
     { name: 'Auto Rebalance',         path: '/api/cron/auto-rebalance' },
     { name: 'Hedge Monitor',          path: '/api/cron/hedge-monitor' },
