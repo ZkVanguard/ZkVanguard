@@ -423,11 +423,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       // Only proceed if price validation passed with good confidence
       if (priceValidationPassed) {
         try {
-        const baseUrl = process.env.NEXT_PUBLIC_URL;
-        if (!baseUrl) {
-          logger.warn('NEXT_PUBLIC_URL not set, skipping AI decision fetch');
-          throw new Error('NEXT_PUBLIC_URL is required for AI decision endpoint');
-        }
+        const baseUrl = process.env.VERCEL 
+          ? 'https://zkvanguard.xyz'
+          : process.env.NEXT_PUBLIC_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const aiResponse = await fetch(`${baseUrl}/api/community-pool/ai-decision`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

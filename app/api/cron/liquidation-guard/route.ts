@@ -17,6 +17,8 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg, errName } from '@/lib/utils/error-handler';
+import { getActiveHedges } from '@/lib/db/hedges';
+import type { Hedge } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,32 +75,37 @@ const COLLATERAL_TOP_UP_PERCENT = 20; // Add 20% more collateral when needed
 const SIZE_REDUCTION_PERCENT = 25; // Reduce size by 25% if collateral unavailable
 
 /**
- * Fetch all leveraged positions
+ * Fetch all leveraged positions from the hedge database
  */
 async function fetchLeveragedPositions(): Promise<LeveragedPosition[]> {
   try {
-    const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.xyz' 
-      : process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const hedges = await getActiveHedges();
     
-    const response = await fetch(`${baseUrl}/api/positions?type=leveraged&status=active`, {
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(15000),
-    });
-    
-    if (!response.ok) {
-      logger.error('[LiquidationGuard] Failed to fetch positions — returning empty (no mock data)', { status: response.status });
-      return [];
-    }
-    
-    const data = await response.json();
-    if (!data.positions || !Array.isArray(data.positions)) {
-      logger.warn('[LiquidationGuard] No positions array in response');
-      return [];
-    }
-    return data.positions;
+    // Convert Hedge DB records to LeveragedPosition format
+    // Only include leveraged positions (leverage > 1)
+    return hedges
+      .filter((h: Hedge) => h.leverage > 1 && h.entry_price && h.entry_price > 0)
+      .map((h: Hedge) => {
+        const collateral = h.notional_value / h.leverage;
+        return {
+          id: h.order_id,
+          asset: h.asset,
+          side: h.side,
+          entryPrice: h.entry_price!,
+          currentPrice: h.current_price || h.entry_price!,
+          size: h.size,
+          leverage: h.leverage,
+          collateral,
+          notionalValue: h.notional_value,
+          marginLevel: 200, // Will be recalculated with live prices
+          liquidationPrice: h.liquidation_price || 0,
+          healthScore: 100, // Will be recalculated
+          walletAddress: h.wallet_address || '',
+          portfolioId: h.portfolio_id || undefined,
+        };
+      });
   } catch (error: unknown) {
-    logger.error('[LiquidationGuard] Error fetching positions — returning empty (no mock data)', { error: errMsg(error) || String(error) });
+    logger.error('[LiquidationGuard] Error fetching positions from hedge DB', { error: errMsg(error) });
     return [];
   }
 }
@@ -176,25 +183,13 @@ function getDistanceToLiquidation(position: LeveragedPosition, currentPrice: num
 }
 
 /**
- * Execute add collateral
+ * Execute add collateral — falls back to position reduction if unavailable
  */
 async function addCollateral(position: LeveragedPosition, amount: number): Promise<{ success: boolean; txHash?: string }> {
-  try {
-    const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.xyz' 
-      : process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    
-    // For adding collateral, call the collateral management endpoint
-    // Not the hedge execute endpoint (which is for opening/closing positions)
-    logger.info(`[LiquidationGuard] Adding collateral to ${position.id}: $${amount}`);
-    
-    // Simulate collateral addition (in production this would call a real endpoint)
-    // The hedge execute endpoint is for trades, not collateral management
-    return { success: false }; // Not implemented - needs dedicated collateral endpoint
-  } catch (error) {
-    logger.error(`[LiquidationGuard] Error adding collateral:`, { error: (error as Error)?.message || String(error) });
-    return { success: false };
-  }
+  // Collateral top-up is not supported by the current hedge execution pipeline.
+  // Log the need and return false so the caller falls through to reducePosition().
+  logger.warn(`[LiquidationGuard] Collateral top-up not available for ${position.id} ($${amount.toFixed(2)}) — will attempt position reduction`);
+  return { success: false };
 }
 
 /**
@@ -238,7 +233,7 @@ async function reducePosition(position: LeveragedPosition, reductionPercent: num
     const result = await response.json();
     return { success: result.success, txHash: result.txHash };
   } catch (error) {
-    logger.error(`[LiquidationGuard] Error reducing position:`, { error: (error as Error)?.message || String(error) });
+    logger.error(`[LiquidationGuard] Error reducing position:`, { error: errMsg(error) });
     return { success: false };
   }
 }
@@ -281,7 +276,7 @@ async function emergencyClose(position: LeveragedPosition, reason: string): Prom
     const result = await response.json();
     return { success: result.success, txHash: result.txHash };
   } catch (error) {
-    logger.error(`[LiquidationGuard] Error in emergency close:`, { error: (error as Error)?.message || String(error) });
+    logger.error(`[LiquidationGuard] Error in emergency close:`, { error: errMsg(error) });
     return { success: false };
   }
 }
