@@ -6,7 +6,7 @@ import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
-import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-coalescer';
+import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-deduplication';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
