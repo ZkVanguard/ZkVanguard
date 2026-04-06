@@ -53,6 +53,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return NextResponse.json(
+        { error: 'Invalid Ethereum address' },
+        { status: 400 }
+      );
+    }
+
     // Check cache first (two-tier: memory → DB)
     const memCached = positionsCache.get(address);
     if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {

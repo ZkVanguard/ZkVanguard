@@ -61,22 +61,26 @@ interface VerifyOwnershipResponse {
   error?: string;
 }
 
-// Generate deterministic wallet binding hash for verification
+// Server-side secret for HMAC-based wallet binding (never user-provided)
+const BINDING_SECRET = process.env.ZK_BINDING_SECRET || process.env.INTERNAL_API_SECRET || 'zkvanguard-default-binding-key';
+
+// Generate deterministic wallet binding hash for verification using HMAC
 function generateWalletBinding(walletAddress: string, hedgeId: string, secret?: string): string {
   const data = `wallet:${walletAddress.toLowerCase()}:hedge:${hedgeId}${secret ? `:${secret}` : ''}`;
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return crypto.createHmac('sha256', BINDING_SECRET).update(data).digest('hex');
 }
 
 // Generate owner commitment (for privacy - doesn't reveal wallet in plain text)
 function generateOwnerCommitment(walletAddress: string, timestamp: number): string {
   const data = `owner:${walletAddress.toLowerCase()}:ts:${timestamp}`;
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return crypto.createHmac('sha256', BINDING_SECRET).update(data).digest('hex');
 }
 
-// Verify the wallet binding proof (ZK approach)
+// Verify the wallet binding proof — timing-safe comparison
 function verifyBinding(walletAddress: string, hedgeId: string, storedBinding: string, secret?: string): boolean {
   const computedBinding = generateWalletBinding(walletAddress, hedgeId, secret);
-  return computedBinding === storedBinding;
+  if (computedBinding.length !== storedBinding.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(computedBinding), Buffer.from(storedBinding));
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwnershipResponse | unknown>> {

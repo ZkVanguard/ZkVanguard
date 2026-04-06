@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { SUPPORTED_CHAINS } from '@/lib/chains';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 10;
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
   try {
     // Real agent count from orchestrator registration
     const agentCount = 6; // LeadAgent, RiskAgent, HedgingAgent, SettlementAgent, ReportingAgent, PriceMonitorAgent
