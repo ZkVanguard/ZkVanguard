@@ -5,6 +5,16 @@
 
 import { logger } from './logger';
 
+/** Extract message from unknown catch variable */
+export function errMsg(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Extract name from unknown catch variable */
+export function errName(error: unknown): string {
+  return error instanceof Error ? error.name : 'Error';
+}
+
 export interface ErrorHandlerOptions {
   context: string;
   logError?: boolean;

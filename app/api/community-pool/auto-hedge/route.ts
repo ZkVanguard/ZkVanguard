@@ -17,6 +17,7 @@ import { getActiveHedges } from '@/lib/db/hedges';
 import { query, ensureAllTables } from '@/lib/db/postgres';
 import { autoHedgingService } from '@/lib/services/AutoHedgingService';
 import { readLimiter } from '@/lib/security/rate-limiter';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -125,8 +126,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             logger.warn('[AutoHedge API] Could not seed default config', { error: seedErr });
           }
         }
-      } catch (e: any) {
-        logger.warn('[AutoHedge API] Could not fetch config', { error: e.message });
+      } catch (e: unknown) {
+        logger.warn('[AutoHedge API] Could not fetch config', { error: errMsg(e) });
       }
     }
     
@@ -135,8 +136,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (dbAvailable) {
       try {
         hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
-      } catch (e: any) {
-        logger.warn('[AutoHedge API] Could not fetch hedges', { error: e.message });
+      } catch (e: unknown) {
+        logger.warn('[AutoHedge API] Could not fetch hedges', { error: errMsg(e) });
       }
     }
     

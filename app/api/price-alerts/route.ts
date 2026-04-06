@@ -14,6 +14,7 @@ import {
   forceCommunityPoolCheck,
 } from '@/lib/services/PriceAlertWebhook';
 import { logger } from '@/lib/utils/logger';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,8 +98,8 @@ export async function POST(request: NextRequest) {
       message,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
-    logger.error('[PriceAlerts API] Error:', { error: error?.message });
+  } catch (error: unknown) {
+    logger.error('[PriceAlerts API] Error:', { error: errMsg(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to trigger monitoring' },
       { status: 500 }

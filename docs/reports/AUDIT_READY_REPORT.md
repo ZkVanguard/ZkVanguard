@@ -37,7 +37,7 @@
 
 **Fixed Issues:**
 1. ✅ Dashboard JSX closing tag mismatch (TS17002)
-2. ✅ StreamableMCPClient SDK type mismatches (2 errors)
+2. ✅ MCPClient SDK type mismatches (2 errors)
 3. ✅ X402Client payment requirements type (1 error)
 4. ✅ Agent orchestrator constructor patterns (5 errors)
 5. ✅ Logger imports in 3 files (17 errors)
@@ -45,7 +45,7 @@
 
 **Files Modified:**
 - `app/dashboard/page.tsx` - Fixed JSX closing tag
-- `integrations/mcp/StreamableMCPClient.ts` - Type assertions & null checks
+- `integrations/mcp/MCPClient.ts` - Type assertions & null checks
 - `integrations/x402/X402Client.ts` - SDK compatibility fixes
 - `lib/services/agent-orchestrator.ts` - Constructor signatures
 - `lib/api/onchain-true-gasless.ts` - Logger import
@@ -93,8 +93,10 @@ logger.info('USDC approved via x402', {
 
 **New Foundational Utilities Created:**
 
-#### A. Unified Price Service Interface
-**File:** `lib/services/price-service-interface.ts` (40 lines)
+#### A. ~~Unified Price Service Interface~~ (REMOVED)
+> This file was consolidated during service deduplication. Price service logic is now inline in `RealMarketDataService.ts`.
+
+~~**File:** `lib/services/price-service-interface.ts` (40 lines)~~
 
 ```typescript
 export interface IPriceService {

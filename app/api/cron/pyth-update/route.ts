@@ -14,6 +14,7 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { isMainnet } from '@/lib/utils/network';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -78,8 +79,8 @@ async function fetchPriceUpdates(): Promise<string[] | null> {
     }
     
     return ['0x' + data.binary.data[0]];
-  } catch (error: any) {
-    logger.error('[PythUpdate] Failed to fetch from Hermes:', error.message);
+  } catch (error: unknown) {
+    logger.error('[PythUpdate] Failed to fetch from Hermes:', errMsg(error));
     return null;
   }
 }
@@ -134,9 +135,9 @@ async function updateChain(chainId: number, updateData: string[]): Promise<PythU
       txHash: tx.hash,
       pricesUpdated: PRICE_IDS.length,
     };
-  } catch (error: any) {
-    logger.error(`[PythUpdate] ${chainName} failed:`, error.message);
-    return { chainId, chainName, success: false, error: error.message?.slice(0, 100) };
+  } catch (error: unknown) {
+    logger.error(`[PythUpdate] ${chainName} failed:`, errMsg(error));
+    return { chainId, chainName, success: false, error: errMsg(error)?.slice(0, 100) };
   }
 }
 

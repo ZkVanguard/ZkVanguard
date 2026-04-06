@@ -15,8 +15,11 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/lib/storage/auto-rebalance-storage';
+import type { AutoRebalanceConfig } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
+import type { RebalanceAssessment } from '@/lib/services/rebalance-executor';
 import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
+import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -47,8 +50,8 @@ async function loadStateFromDb(portfolioIds: number[]): Promise<void> {
       if (peakVal > 0) peakPortfolioValuesCache.set(id, peakVal);
     }
     logger.info(`[AutoRebalance] Loaded loss-protection state from DB for ${portfolioIds.length} portfolios`);
-  } catch (error: any) {
-    logger.warn('[AutoRebalance] Failed to load state from DB — using defaults', { error: error?.message });
+  } catch (error: unknown) {
+    logger.warn('[AutoRebalance] Failed to load state from DB — using defaults', { error: errMsg(error) });
   }
 }
 
@@ -119,12 +122,12 @@ export async function GET(request: NextRequest) {
       try {
         const result = await processPortfolio(config);
         results.push(result);
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error(`[AutoRebalance Cron] Error processing portfolio ${config.portfolioId}:`, error);
         results.push({
           portfolioId: config.portfolioId,
           status: 'error',
-          error: error.message,
+          error: errMsg(error),
         });
       }
     }
@@ -148,7 +151,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[AutoRebalance Cron] Fatal error:', error);
     return safeErrorResponse(error, 'Auto-rebalance cron');
   }
@@ -157,7 +160,7 @@ export async function GET(request: NextRequest) {
 /**
  * Process a single portfolio - handles both rebalancing AND loss protection
  */
-async function processPortfolio(config: any): Promise<ProcessingResult> {
+async function processPortfolio(config: AutoRebalanceConfig): Promise<ProcessingResult> {
   const { portfolioId, threshold = DRIFT_THRESHOLD_DEFAULT, autoApprovalEnabled, autoApprovalThreshold, lossProtection } = config;
   const now = Date.now();
   
@@ -244,13 +247,13 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
             txHash: hedgeResult.txHash,
             reason: `Loss protection triggered at ${assessment.pnlPercent.toFixed(2)}% → hedged ${(lossConfig.hedgeRatio * 100).toFixed(0)}% of portfolio`,
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           logger.error(`[LossProtection] Failed to execute hedge for portfolio ${portfolioId}:`, error);
           return {
             portfolioId,
             status: 'error',
             pnlPercent: assessment.pnlPercent,
-            error: `Hedge failed: ${error.message}`,
+            error: `Hedge failed: ${errMsg(error)}`,
           };
         }
       }
@@ -339,13 +342,13 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
       reason: `Rebalanced (max drift: ${maxAbsoluteDrift.toFixed(2)}%)`,
     };
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(`[Auto Rebalance Cron] Failed to rebalance portfolio ${portfolioId}:`, error);
     return {
       portfolioId,
       status: 'error',
       drift: maxAbsoluteDrift,
-      error: error.message,
+      error: errMsg(error),
     };
   }
 }
@@ -356,13 +359,13 @@ async function processPortfolio(config: any): Promise<ProcessingResult> {
 async function executeProtectiveHedge(
   portfolioId: number,
   walletAddress: string,
-  assessment: any,
+  assessment: RebalanceAssessment,
   lossConfig: LossProtectionConfig
 ): Promise<{ txHash: string }> {
-  // Find the largest losing asset to hedge
+  // Find the most underallocated assets to hedge (negative drift = underperforming target)
   const losers = assessment.drifts
-    .filter((d: any) => d.pnlPercent < 0)
-    .sort((a: any, b: any) => a.pnlPercent - b.pnlPercent);
+    .filter((d) => d.drift < 0)
+    .sort((a, b) => a.drift - b.drift);
   
   const assetToHedge = losers[0]?.asset || 'BTC';
   const hedgeSize = assessment.totalValue * lossConfig.hedgeRatio;

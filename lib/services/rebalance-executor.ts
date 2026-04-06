@@ -40,7 +40,7 @@ export interface RebalanceResult {
     proofHash: string;
     verified: boolean;
   };
-  actions: any[];
+  actions: { asset: string; action: string; amount: number }[];
   timestamp: number;
 }
 
