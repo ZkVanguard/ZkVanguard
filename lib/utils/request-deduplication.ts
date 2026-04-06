@@ -210,3 +210,33 @@ export function withDeduplication<T>(
 }
 
 export { deduplicator };
+
+/**
+ * Simple coalescer API (wrapper around deduplicator)
+ * Provides `.get(key, factory)` for callers that prefer a typed, per-resource API.
+ */
+export function createCoalescer<T>(_ttlMs?: number) {
+  return {
+    async get(key: string, factory: () => Promise<T>): Promise<T> {
+      return deduplicator.dedupe(key, factory) as Promise<T>;
+    },
+    invalidate(key: string): void {
+      deduplicator.clear(key);
+    },
+    stats() {
+      return deduplicator.getStats();
+    },
+  };
+}
+
+/** Pre-configured coalescer for single price data */
+export const priceCoalescer = createCoalescer<{
+  symbol: string;
+  price: number;
+  change24h?: number;
+  volume24h?: number;
+  source: string;
+}>();
+
+/** Pre-configured coalescer for batch price data */
+export const batchPriceCoalescer = createCoalescer<Record<string, number>>();
