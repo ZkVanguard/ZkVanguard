@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import {
   deposit,
@@ -48,6 +49,15 @@ import {
 export const runtime = 'nodejs';
 export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
+
+/** Timing-safe cron secret verification to prevent timing attacks */
+function verifyCronSecret(request: NextRequest): boolean {
+  const cronSecret = request.headers.get('x-cron-secret');
+  const expectedSecret = process.env.CRON_SECRET;
+  if (!cronSecret || !expectedSecret) return false;
+  if (cronSecret.length !== expectedSecret.length) return false;
+  return timingSafeEqual(Buffer.from(cronSecret), Buffer.from(expectedSecret));
+}
 
 /**
  * GET - Fetch pool info
@@ -356,10 +366,7 @@ export async function GET(request: NextRequest) {
     
     // Reset NAV history (admin only - requires cron secret)
     if (action === 'insert-inception') {
-      const cronSecret = request.headers.get('x-cron-secret');
-      const expectedSecret = process.env.CRON_SECRET;
-      
-      if (!cronSecret || cronSecret !== expectedSecret) {
+      if (!verifyCronSecret(request)) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
       
@@ -421,10 +428,7 @@ export async function GET(request: NextRequest) {
     }
     
     if (action === 'reset-nav-history') {
-      const cronSecret = request.headers.get('x-cron-secret');
-      const expectedSecret = process.env.CRON_SECRET;
-      
-      if (!cronSecret || cronSecret !== expectedSecret) {
+      if (!verifyCronSecret(request)) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
       
@@ -792,10 +796,7 @@ export async function POST(request: NextRequest) {
       
       case 'sync-from-chain': {
         // Admin only - sync database with on-chain state
-        const cronSecret = request.headers.get('x-cron-secret');
-        const expectedSecret = process.env.CRON_SECRET;
-        
-        if (!cronSecret || cronSecret !== expectedSecret) {
+        if (!verifyCronSecret(request)) {
           return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
         }
         
@@ -869,10 +870,7 @@ export async function POST(request: NextRequest) {
       
       case 'delete-user': {
         // Admin only - delete stale user from database
-        const cronSecret = request.headers.get('x-cron-secret');
-        const expectedSecret = process.env.CRON_SECRET;
-        
-        if (!cronSecret || cronSecret !== expectedSecret) {
+        if (!verifyCronSecret(request)) {
           return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
         }
         
@@ -891,10 +889,7 @@ export async function POST(request: NextRequest) {
       case 'full-reset': {
         // Admin only - COMPLETE reset of all pool data to match on-chain V3 contract
         // Use this when stats are corrupted and need to start fresh
-        const cronSecret = request.headers.get('x-cron-secret');
-        const expectedSecret = process.env.CRON_SECRET;
-        
-        if (!cronSecret || cronSecret !== expectedSecret) {
+        if (!verifyCronSecret(request)) {
           return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
         }
         

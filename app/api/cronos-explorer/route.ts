@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 // Force dynamic rendering - this route uses searchParams
 export const dynamic = 'force-dynamic';
@@ -21,15 +22,26 @@ interface BlockscoutTransaction {
  */
 
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
-  const limit = String(Math.min(parseInt(searchParams.get('limit') || '50', 10), 200));
+  const rawLimit = parseInt(searchParams.get('limit') || '50', 10);
+  const limit = String(Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200));
   const network = searchParams.get('network') || 'testnet';
   const contracts = searchParams.get('contracts'); // Comma-separated list of contract addresses
 
   if (!address && !contracts) {
     return NextResponse.json(
       { error: 'Address or contracts parameter is required' },
+      { status: 400 }
+    );
+  }
+
+  if (address && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return NextResponse.json(
+      { error: 'Invalid Ethereum address' },
       { status: 400 }
     );
   }

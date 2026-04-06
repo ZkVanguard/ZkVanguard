@@ -54,6 +54,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address parameter is required' }, { status: 400 });
     }
 
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return NextResponse.json({ error: 'Invalid Ethereum address' }, { status: 400 });
+    }
+
     // Two-tier cache check (memory → DB)
     // Tier 1: In-memory per-user cache
     const memCached = listCache.get(address.toLowerCase());

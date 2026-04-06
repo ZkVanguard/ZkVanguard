@@ -282,7 +282,7 @@ export async function POST(request: NextRequest) {
         const dataPromises = symbols.map(sym => 
           cryptocomExchangeService.getMarketData(sym).catch((err: unknown) => ({
             symbol: sym,
-            error: err instanceof Error ? err.message : 'Unknown error',
+            error: 'Failed to fetch market data',
           }))
         );
         const marketData = await Promise.all(dataPromises);

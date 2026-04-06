@@ -75,6 +75,14 @@ export async function GET(request: NextRequest) {
   const chainId = parseInt(searchParams.get('chainId') || String(DEFAULT_CHAIN_ID), 10);
   const amount = parseFloat(searchParams.get('amount') || '100');
   const provider = (searchParams.get('provider') || 'pimlico') as PaymasterProvider;
+
+  // Validate parsed numbers
+  if (isNaN(chainId) || !COMMUNITY_POOL_ADDRESSES[chainId]) {
+    return NextResponse.json({ success: false, error: 'Unsupported chain' }, { status: 400 });
+  }
+  if (isNaN(amount) || amount <= 0 || amount > 1_000_000) {
+    return NextResponse.json({ success: false, error: 'Invalid amount' }, { status: 400 });
+  }
   
   try {
     // Check if this chain should use x402 instead of AA
@@ -485,7 +493,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: false,
             error: 'Price update failed, deposit may still succeed if prices are recent',
-            details: priceError.message,
           }, { status: 200 }); // 200 so frontend doesn't block
         }
       }

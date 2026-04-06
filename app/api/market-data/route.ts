@@ -12,6 +12,9 @@ export const maxDuration = 15;
  * Market Data API via Crypto.com MCP Server
  */
 export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol') || 'BTC';

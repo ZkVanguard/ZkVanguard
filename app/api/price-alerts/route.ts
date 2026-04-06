@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     logger.error('[PriceAlerts API] Error:', { error: error?.message });
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to trigger monitoring' },
+      { success: false, error: 'Failed to trigger monitoring' },
       { status: 500 }
     );
   }
