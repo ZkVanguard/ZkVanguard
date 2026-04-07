@@ -565,7 +565,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // Step 7: Plan + Execute rebalance via SuiPoolAgent
     // Trigger swaps when:
     //  a) AI detects allocation drift and recommends rebalancing, OR
-    //  b) Pool has USDC that hasn't been allocated to any asset yet (post-deposit)
+    //  b) Pool has USDC that hasn't been converted to assets yet (first allocation)
+    //     If all previous DB-stored allocations are 0, it's the first run and all USDC
+    //     needs to be swapped/hedged into assets. Also force rebalance when the pool has
+    //     never had successful swaps (no DB swap records).
     let rebalanceSwaps: SuiCronResult['rebalanceSwaps'] = undefined;
     const hasUnallocatedUsdc = navUsd > 1 && (
       currentAllocations.BTC === 0 &&
@@ -573,7 +576,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       currentAllocations.SUI === 0 &&
       currentAllocations.CRO === 0
     );
-    const shouldExecuteSwaps = (aiResult.shouldRebalance || hasUnallocatedUsdc) && navUsd > 1;
+    // Always execute swaps if pool has value — on SUI, "swaps" are BlueFin perp hedges
+    // that need to be opened/adjusted to reflect AI allocations
+    const shouldExecuteSwaps = navUsd > 1;
     if (hasUnallocatedUsdc) {
       logger.info('[SUI Cron] Unallocated USDC detected — triggering initial asset allocation', { navUsd });
     }
@@ -616,10 +621,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         });
 
         // Step 7b: Ensure admin wallet has USDC for swaps (transfer from pool if needed)
-        if (process.env.SUI_POOL_ADMIN_KEY && onChainCount > 0) {
-          // Calculate total USDC needed for on-chain swaps
+        const hedgeableCount = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin').length;
+        if (process.env.SUI_POOL_ADMIN_KEY && (onChainCount > 0 || hedgeableCount > 0)) {
+          // Calculate total USDC needed for on-chain swaps + hedges
           const totalUsdcNeeded = plan.swaps
-            .filter(s => s.canSwapOnChain)
+            .filter(s => s.canSwapOnChain || s.hedgeVia === 'bluefin')
             .reduce((sum, s) => sum + Number(s.amountIn) / 1e6, 0);
 
           // Check admin wallet USDC balance
