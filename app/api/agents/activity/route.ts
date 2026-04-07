@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const maxDuration = 10;
 
@@ -12,7 +13,10 @@ export const maxDuration = 10;
  * - Risk assessments performed
  * - API calls made
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
+
   try {
     // Activities are tracked client-side in localStorage
     // This endpoint returns a template for the client to merge with local data

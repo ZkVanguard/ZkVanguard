@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useSignMessage } from './wdk-hooks';
 import { ethers } from 'ethers';
+import { logger } from '@/lib/utils/logger';
 import { SafeUtils } from '@/lib/services/safe-utils';
 
 interface UserOperation {
@@ -41,7 +42,7 @@ export function useSmartAccount() {
           // Ideally we'd check if deployed here too, but that needs provider
         }
       } catch (e) {
-        console.warn('Failed to predict Safe address', e);
+        logger.warn('Failed to predict Safe address', e);
       }
     }
     fetchSafeAddress();
@@ -65,11 +66,11 @@ export function useSmartAccount() {
                 smartAccountAddress = safeInfo.address as `0x${string}`;
                 factory = safeInfo.factory;
                 factoryData = safeInfo.factoryData;
-                console.log('Using counterfactual Safe:', safeInfo);
+                logger.debug('Using counterfactual Safe:', safeInfo);
             }
         }
       } catch (e) {
-        console.warn('Could not determine Safe address, falling back to EOA:', e);
+        logger.warn('Could not determine Safe address, falling back to EOA:', e);
       }
 
       // 1. Get UserOp from Server
@@ -134,7 +135,7 @@ export function useSmartAccount() {
       const result = await submitResponse.json();
       return result.txHash;
     } catch (err: any) {
-      console.error('Gasless deposit failed:', err);
+      logger.error('Gasless deposit failed:', err);
       setError(err.message || 'Gasless deposit failed');
       throw err;
     } finally {

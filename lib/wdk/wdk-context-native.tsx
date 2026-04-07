@@ -17,6 +17,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { WDK_CHAINS, USDT_ADDRESSES } from '@/lib/config/wdk';
 
 // ============================================
@@ -191,7 +192,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
         // Store module refs for later use
         setWdkInstance({ WDK, WalletManagerEvm });
       } catch (err) {
-        console.error('[WDK] Init error:', err);
+        logger.error('[WDK] Init error:', err);
         setState(prev => ({
           ...prev,
           isLoading: false,
@@ -209,7 +210,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
     try {
       return wdkInstance.WDK.getRandomSeedPhrase();
     } catch (err) {
-      console.error('[WDK] Mnemonic generation failed:', err);
+      logger.error('[WDK] Mnemonic generation failed:', err);
       return null;
     }
   }, [wdkInstance]);
@@ -226,7 +227,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const chainConfig = WDK_CHAINS[chainKey];
       
       if (!chainConfig) {
-        console.error('[WDK] Unknown chain:', chainKey);
+        logger.error('[WDK] Unknown chain:', chainKey);
         return false;
       }
       
@@ -274,7 +275,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       
       return true;
     } catch (err) {
-      console.error('[WDK] Wallet init failed:', err);
+      logger.error('[WDK] Wallet init failed:', err);
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -429,7 +430,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       
       return true;
     } catch (err) {
-      console.error('[WDK] Chain switch failed:', err);
+      logger.error('[WDK] Chain switch failed:', err);
       setState(prev => ({ ...prev, error: 'Failed to switch chain' }));
       return false;
     }
@@ -447,7 +448,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const balance = await account.getBalance();
       return balance.toString();
     } catch (err) {
-      console.error('[WDK] Balance fetch failed:', err);
+      logger.error('[WDK] Balance fetch failed:', err);
       return '0';
     }
   }, [walletManager, state.chainKey]);
@@ -465,7 +466,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const balance = await account.getTokenBalance?.() ?? await account.getBalance();
       return balance.toString();
     } catch (err) {
-      console.error('[WDK] USDT balance fetch failed:', err);
+      logger.error('[WDK] USDT balance fetch failed:', err);
       return '0';
     }
   }, [walletManager, state.chainKey]);
@@ -484,7 +485,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       
       return result.hash;
     } catch (err) {
-      console.error('[WDK] Transaction failed:', err);
+      logger.error('[WDK] Transaction failed:', err);
       setState(prev => ({ ...prev, error: 'Transaction failed' }));
       return null;
     }
@@ -515,7 +516,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       
       return result?.hash ?? null;
     } catch (err) {
-      console.error('[WDK] USDT transfer failed:', err);
+      logger.error('[WDK] USDT transfer failed:', err);
       setState(prev => ({ ...prev, error: 'USDT transfer failed' }));
       return null;
     }
@@ -530,7 +531,7 @@ export function WdkProvider({ children, defaultChain = 'sepolia' }: WdkProviderP
       const signature = await account.signMessage?.(message);
       return signature ?? null;
     } catch (err) {
-      console.error('[WDK] Sign message failed:', err);
+      logger.error('[WDK] Sign message failed:', err);
       return null;
     }
   }, [walletManager, state.chainKey]);

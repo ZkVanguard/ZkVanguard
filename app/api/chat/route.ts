@@ -106,6 +106,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate message length to prevent abuse
+    if (message.length > 10000) {
+      return NextResponse.json(
+        { error: 'Message too long (max 10,000 characters)' },
+        { status: 400 }
+      );
+    }
+
     // Check if this should go through agent orchestration
     // LeadAgent orchestrates all specialized agents for complex operations
     const useAgents = await shouldUseAgents(message);
@@ -141,10 +149,8 @@ export async function POST(request: NextRequest) {
         }
       } catch (agentError) {
         const errorMessage = agentError instanceof Error ? agentError.message : String(agentError);
-        const errorStack = agentError instanceof Error ? agentError.stack : undefined;
         logger.error('LeadAgent execution failed, falling back to LLM', { 
           error: errorMessage,
-          stack: errorStack,
           message: message.substring(0, 100)
         });
         // Fall through to LLM response

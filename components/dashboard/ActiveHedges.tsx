@@ -425,7 +425,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
           
           // Debug logging
           if (process.env.NODE_ENV === 'development') {
-            console.log('[DEBUG] Close position - ZK hedge flow:', {
+            logger.debug('[DEBUG] Close position - ZK hedge flow:', {
               hedgeId: selectedHedge.hedgeId,
               displayedWallet: selectedHedge.walletAddress,
               connectedWallet: address,

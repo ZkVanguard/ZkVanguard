@@ -1,7 +1,7 @@
-﻿/**
+/**
  * WDK Wallet Context (Browser-Safe via ethers.js)
  * 
- * Full self-custodial wallet for Tether WDK USDT â€” no native Node.js
+ * Full self-custodial wallet for Tether WDK USDT — no native Node.js
  * bindings required. Uses ethers.js HDNodeWallet for BIP-39 mnemonic
  * generation, key derivation, signing, and on-chain transactions.
  * 
@@ -14,13 +14,14 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { logger } from '@/lib/utils/logger';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { PasskeyService } from './passkey-service';
 import { generateKey, exportKey, importKey, encryptData, decryptData } from './encryption';
 
-// Dev-only debug logging â€” tree-shaken in production builds
+// Dev-only debug logging — tree-shaken in production builds
 const wdkLog = process.env.NODE_ENV === 'development'
-  ? (...args: unknown[]) => console.log(...args)
+  ? (...args: unknown[]) => logger.debug(...args)
   : (..._args: unknown[]) => {};
 
 // ============================================
@@ -131,7 +132,7 @@ async function generateZKPasskeyBinding(walletAddress: string, passkeyId: string
     version: '1.0.0'
   });
   
-  // 2. Generate binding hash (public commitment â€” deterministic, reproducible)
+  // 2. Generate binding hash (public commitment — deterministic, reproducible)
   const bindingHash = await sha256Hex(bindingInput);
   
   // 3. Generate witness commitment (proves knowledge, includes entropy)
@@ -194,7 +195,7 @@ function loadWallet(): StoredWallet | null {
     const parsed = JSON.parse(data);
     // Basic validation to ensure migration from old format
     if (!parsed.encryptedData || !parsed.iv || !parsed.keyJwk) {
-      console.warn('[WDK] Detected old wallet format, clearing storage.');
+      logger.warn('[WDK] Detected old wallet format, clearing storage.');
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
@@ -220,7 +221,7 @@ async function getEthers() {
   return ethers;
 }
 
-// Cached providers per chain â€” avoids re-creating on every call
+// Cached providers per chain — avoids re-creating on every call
 const _providerCache = new Map<string, any>();
 
 async function getProvider(chainKey: string) {
@@ -250,7 +251,7 @@ interface WdkProviderProps {
 const SUPPORTED_CHAINS = ['sepolia', 'cronos-mainnet', 'hedera-mainnet'];
 
 /**
- * WDK Provider â€” browser-safe, ethers.js-backed wallet management.
+ * WDK Provider — browser-safe, ethers.js-backed wallet management.
  */
 export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_DEFAULT_CHAIN || 'cronos-mainnet' }: WdkProviderProps) {
   const [state, setState] = useState<WdkWalletState>({
@@ -328,7 +329,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
       }));
       return true;
     } catch (err: any) {
-      console.error('[WDK] Wallet init failed:', err);
+      logger.error('[WDK] Wallet init failed:', err);
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -361,7 +362,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
         walletRef.current.address, 
         credential.rawId
       );
-      wdkLog('[WDK-ZK] âœ… Passkey bound to wallet via ZK proof:', zkProofHash.slice(0, 16) + '...');
+      wdkLog('[WDK-ZK] ✅ Passkey bound to wallet via ZK proof:', zkProofHash.slice(0, 16) + '...');
 
       // Save passkey ID + ZK proof to local storage
       const stored = loadWallet();
@@ -393,15 +394,15 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
           })
         }).then(r => r.json()).then(result => {
           if (result.success) {
-            wdkLog('[WDK-ZK] âœ… Server-side ZK-STARK proof generated:', result.proof?.proof_hash?.toString().slice(0, 16) + '...');
+            wdkLog('[WDK-ZK] ✅ Server-side ZK-STARK proof generated:', result.proof?.proof_hash?.toString().slice(0, 16) + '...');
           }
-        }).catch(e => console.warn('[WDK-ZK] Server ZK proof unavailable (local binding still valid):', e.message));
+        }).catch(e => logger.warn('[WDK-ZK] Server ZK proof unavailable (local binding still valid):', e.message));
         
         return true;
       }
       return false;
     } catch (err: any) {
-      console.error('[WDK] registerPasskey error:', err);
+      logger.error('[WDK] registerPasskey error:', err);
       setState(prev => ({ ...prev, error: err.message || 'Failed to register passkey' }));
       return false;
     }
@@ -411,7 +412,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
   // loginWithPasskey - Unlock using Passkey OR Local Key (if no passkey)
   // --------------------------------------------------
   const loginWithPasskey = useCallback(async (): Promise<boolean> => {
-    wdkLog('[WDK] ðŸ” === loginWithPasskey START ===');
+    wdkLog('[WDK] 🔐 === loginWithPasskey START ===');
     const stored = loadWallet();
     wdkLog('[WDK]   Stored wallet found:', !!stored);
     wdkLog('[WDK]   Has keyJwk:', !!stored?.keyJwk);
@@ -423,7 +424,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
     wdkLog('[WDK]   Last chain:', stored?.lastChain);
     
     if (!stored || !stored.keyJwk) {
-      console.error('[WDK] âŒ No wallet or keyJwk found. Aborting.');
+      logger.error('[WDK] ❌ No wallet or keyJwk found. Aborting.');
       setState(prev => ({ ...prev, error: 'No wallet found' }));
       return false;
     }
@@ -435,26 +436,26 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
       wdkLog('[WDK]   credentialId array:', credentialId);
       
       if (stored.passkeyId) {
-        wdkLog('[WDK]   ðŸ” Calling PasskeyService.authenticate()...');
+        wdkLog('[WDK]   🔐 Calling PasskeyService.authenticate()...');
         
         // Check if WebAuthn API exists (Chrome, Edge, Firefox, Safari all have it)
         const supported = await PasskeyService.isSupported();
         wdkLog('[WDK]   WebAuthn API available:', supported);
         if (!supported) {
-          console.warn('[WDK]   âš ï¸ WebAuthn API not available (very old browser or non-browser environment). Skipping passkey check.');
-          // Fall through to decrypt without passkey â€” extremely rare case
+          logger.warn('[WDK]   ⚠️ WebAuthn API not available (very old browser or non-browser environment). Skipping passkey check.');
+          // Fall through to decrypt without passkey — extremely rare case
         } else {
-          // Always attempt authentication â€” Chrome handles passkeys via:
+          // Always attempt authentication — Chrome handles passkeys via:
           // Windows Hello, phone-based passkey, security key, or built-in passkey manager
-          wdkLog('[WDK]   ðŸ“¡ Requesting passkey authentication (Chrome will show its own UI)...');
+          wdkLog('[WDK]   📡 Requesting passkey authentication (Chrome will show its own UI)...');
           const verified = await PasskeyService.authenticate(credentialId);
           wdkLog('[WDK]   PasskeyService.authenticate() returned:', verified);
           if (!verified) {
-            console.error('[WDK]   âŒ Passkey verification returned false â€” user cancelled or no matching passkey found');
-            console.error('[WDK]   ðŸ’¡ Tip: Make sure you registered a passkey first, and are on the same domain/browser');
+            logger.error('[WDK]   ❌ Passkey verification returned false — user cancelled or no matching passkey found');
+            logger.error('[WDK]   💡 Tip: Make sure you registered a passkey first, and are on the same domain/browser');
             throw new Error('Passkey verification failed. Please try again or re-register your passkey.');
           }
-          wdkLog('[WDK]   âœ… Passkey authentication passed');
+          wdkLog('[WDK]   ✅ Passkey authentication passed');
         }
         
         // 2. Verify ZK-STARK binding (passkey is cryptographically bound to this wallet)
@@ -465,42 +466,42 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
             stored.zkBindingHash
           );
           if (!zkValid) {
-            console.warn('[WDK-ZK] âš ï¸ ZK binding verification failed â€” possible tampering');
+            logger.warn('[WDK-ZK] ⚠️ ZK binding verification failed — possible tampering');
             throw new Error('ZK wallet binding verification failed');
           }
-          wdkLog('[WDK-ZK] âœ… ZK passkey-wallet binding verified');
+          wdkLog('[WDK-ZK] ✅ ZK passkey-wallet binding verified');
         } else {
-          wdkLog('[WDK-ZK] â„¹ï¸ No ZK binding found (legacy passkey). Consider re-registering.');
+          wdkLog('[WDK-ZK] ℹ️ No ZK binding found (legacy passkey). Consider re-registering.');
         }
       }
       
       // 3. Unlock wallet using the stored AES key
       wdkLog('[WDK]   Step 3: Decrypting wallet...');
       const key = await importKey(stored.keyJwk);
-      wdkLog('[WDK]   AES key imported âœ…');
+      wdkLog('[WDK]   AES key imported ✅');
       const mnemonic = await decryptData(stored.encryptedData, stored.iv, key);
       wdkLog('[WDK]   Mnemonic decrypted:', !!mnemonic, 'length:', mnemonic?.split(' ').length, 'words');
       
       if (!mnemonic) {
-        console.error('[WDK]   âŒ Decryption returned empty mnemonic');
+        logger.error('[WDK]   ❌ Decryption returned empty mnemonic');
         throw new Error('Failed to decrypt wallet');
       }
 
       wdkLog('[WDK]   Step 4: Initializing wallet from mnemonic...');
       const result = await initializeFromMnemonic(mnemonic, stored.lastChain);
-      wdkLog('[WDK] ðŸ” === loginWithPasskey END (success:', result, ') ===');
+      wdkLog('[WDK] 🔐 === loginWithPasskey END (success:', result, ') ===');
       return result;
     } catch (err: any) {
-      console.error('[WDK] âŒ loginWithPasskey error:', err?.name, err?.message);
-      console.error('[WDK]   Full error:', err);
+      logger.error('[WDK] ❌ loginWithPasskey error:', err?.name, err?.message);
+      logger.error('[WDK]   Full error:', err);
       setState(prev => ({ ...prev, error: err.message || 'Unlock failed' }));
-      wdkLog('[WDK] ðŸ” === loginWithPasskey END (failed) ===');
+      wdkLog('[WDK] 🔐 === loginWithPasskey END (failed) ===');
       return false;
     }
   }, [initializeFromMnemonic]);
 
   // --------------------------------------------------
-  // createWallet â€” BIP-39 via ethers.js
+  // createWallet — BIP-39 via ethers.js
   // --------------------------------------------------
   const createWallet = useCallback(async (): Promise<string | null> => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -535,14 +536,14 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
 
       return mnemonic;
     } catch (err: any) {
-      console.error('[WDK] createWallet error:', err);
+      logger.error('[WDK] createWallet error:', err);
       setState(prev => ({ ...prev, isLoading: false, error: err?.message ?? 'Create wallet failed' }));
       return null;
     }
   }, [initializeFromMnemonic, defaultChain]);
 
   // --------------------------------------------------
-  // importWallet â€” validate + derive from mnemonic
+  // importWallet — validate + derive from mnemonic
   // --------------------------------------------------
   const importWallet = useCallback(async (mnemonic: string): Promise<boolean> => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -597,9 +598,9 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
   }, [defaultChain]);
 
   // --------------------------------------------------
-  // unlockWallet â€” Password fallback for when passkeys are unavailable
+  // unlockWallet — Password fallback for when passkeys are unavailable
   // Uses the same stored AES key as the passkey flow (no separate password hash).
-  // The password is verified by attempting to decrypt the mnemonic â€” if the stored
+  // The password is verified by attempting to decrypt the mnemonic — if the stored
   // wallet was password-protected (passwordHash present), we verify first.
   // --------------------------------------------------
   const unlockWallet = useCallback(async (password: string): Promise<boolean> => {
@@ -635,21 +636,21 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
 
       return await initializeFromMnemonic(mnemonic, stored.lastChain);
     } catch (err: any) {
-      console.error('[WDK] unlockWallet error:', err);
+      logger.error('[WDK] unlockWallet error:', err);
       setState(prev => ({ ...prev, error: err?.message ?? 'Unlock failed' }));
       return false;
     }
   }, [initializeFromMnemonic]);
 
   // --------------------------------------------------
-  // disconnect â€” Alias for lockWallet (preserve storage)
+  // disconnect — Alias for lockWallet (preserve storage)
   // --------------------------------------------------
   const disconnect = useCallback(() => {
     lockWallet();
   }, [lockWallet]);
 
   // --------------------------------------------------
-  // resetWallet â€” Wipe storage (Factory Reset)
+  // resetWallet — Wipe storage (Factory Reset)
   // --------------------------------------------------
   const resetWallet = useCallback(() => {
     walletRef.current = null;
@@ -664,7 +665,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
   }, [defaultChain]);
 
   // --------------------------------------------------
-  // verifyAction â€” ZK-secured action with passkey if available
+  // verifyAction — ZK-secured action with passkey if available
   // --------------------------------------------------
   const verifyAction = useCallback(async (): Promise<boolean> => {
     const stored = loadWallet();
@@ -680,14 +681,14 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
           const walletAddr = stored.addresses?.[stored.lastChain] || state.address || '';
           const zkValid = await verifyZKPasskeyBinding(walletAddr, stored.passkeyId, stored.zkBindingHash);
           if (!zkValid) {
-            throw new Error('ZK binding verification failed â€” unauthorized');
+            throw new Error('ZK binding verification failed — unauthorized');
           }
-          wdkLog('[WDK-ZK] âœ… Transaction authorized via ZK + Passkey');
+          wdkLog('[WDK-ZK] ✅ Transaction authorized via ZK + Passkey');
         }
         
         return true;
       } catch (e: any) {
-        console.error('[WDK-ZK] Action verification failed:', e);
+        logger.error('[WDK-ZK] Action verification failed:', e);
         setState(prev => ({ ...prev, error: e.message || 'Authorization failed' }));
         return false;
       }
@@ -801,7 +802,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
       const tx = await usdt.transfer(to, ethers.parseUnits(amount, 6));
       return tx.hash;
     } catch (err: any) {
-      console.error('[WDK] sendUsdt failed:', err);
+      logger.error('[WDK] sendUsdt failed:', err);
       setState(prev => ({ ...prev, error: err?.message ?? 'USDT transfer failed' }));
       return null;
     }
@@ -820,7 +821,7 @@ export function WdkProvider({ children, defaultChain = process.env.NEXT_PUBLIC_D
     try {
       return await walletRef.current.signMessage(message);
     } catch (err: any) {
-      console.error('[WDK] signMessage failed:', err);
+      logger.error('[WDK] signMessage failed:', err);
       return null;
     }
   }, [verifyAction]);

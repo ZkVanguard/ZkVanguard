@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
@@ -160,9 +161,12 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint for admin dashboard (protected)
 export async function GET(request: NextRequest) {
-  // Only allow in development or with admin key
+  // Only allow in development or with admin key (timing-safe comparison)
   const adminKey = request.headers.get('x-admin-key');
-  const isAdmin = adminKey === process.env.ANALYTICS_ADMIN_KEY;
+  const expectedKey = process.env.ANALYTICS_ADMIN_KEY;
+  const isAdmin = adminKey !== null && expectedKey !== undefined &&
+    adminKey.length === expectedKey.length &&
+    crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(expectedKey));
   
   if (process.env.NODE_ENV === 'production' && !isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
