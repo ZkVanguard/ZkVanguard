@@ -194,24 +194,47 @@ export async function GET(request: NextRequest): Promise<NextResponse<HederaCron
     const provider = new ethers.JsonRpcProvider(getHederaRpcUrl());
     const poolContract = new ethers.Contract(poolAddress, COMMUNITY_POOL_ABI, provider);
 
-    const stats = await poolContract.getPoolStats();
-    const poolStats: NonNullable<HederaCronResult['poolStats']> = {
-      totalNAV: ethers.formatUnits(stats._totalNAV, 6),
-      memberCount: Number(stats._memberCount),
-      sharePrice: ethers.formatUnits(stats._sharePrice, 6),
-      allocations: {
-        BTC: Number(stats._allocations[0]) / 100,
-        ETH: Number(stats._allocations[1]) / 100,
-        SUI: Number(stats._allocations[2]) / 100,
-        CRO: Number(stats._allocations[3]) / 100,
-      },
-    };
+    let poolStats: NonNullable<HederaCronResult['poolStats']>;
+    let onChainNAV = 0;
+    let sharePrice = 0;
+    let totalShares = 0;
+    let contractInitialized = false;
 
-    logger.info('[Hedera Cron] Pool stats fetched', {
-      totalNAV: `$${poolStats.totalNAV}`,
-      members: poolStats.memberCount,
-      allocations: poolStats.allocations,
-    });
+    try {
+      const stats = await poolContract.getPoolStats();
+      poolStats = {
+        totalNAV: ethers.formatUnits(stats._totalNAV, 6),
+        memberCount: Number(stats._memberCount),
+        sharePrice: ethers.formatUnits(stats._sharePrice, 6),
+        allocations: {
+          BTC: Number(stats._allocations[0]) / 100,
+          ETH: Number(stats._allocations[1]) / 100,
+          SUI: Number(stats._allocations[2]) / 100,
+          CRO: Number(stats._allocations[3]) / 100,
+        },
+      };
+      onChainNAV = parseFloat(poolStats.totalNAV);
+      sharePrice = parseFloat(poolStats.sharePrice);
+      totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
+      contractInitialized = true;
+
+      logger.info('[Hedera Cron] Pool stats fetched', {
+        totalNAV: `$${poolStats.totalNAV}`,
+        members: poolStats.memberCount,
+        allocations: poolStats.allocations,
+      });
+    } catch (statsErr) {
+      // Contract may not be initialized yet (depositToken = 0x0 causes revert)
+      logger.warn('[Hedera Cron] getPoolStats() reverted — contract likely not initialized', {
+        error: errMsg(statsErr),
+      });
+      poolStats = {
+        totalNAV: '0',
+        memberCount: 0,
+        sharePrice: '0',
+        allocations: { BTC: 25, ETH: 25, SUI: 25, CRO: 25 },
+      };
+    }
 
     // Step 2: Fetch validated prices
     const pricesUSD: Record<string, number> = {};
@@ -234,10 +257,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<HederaCron
     }
 
     // Step 3: Record NAV snapshot
-    const onChainNAV = parseFloat(poolStats.totalNAV);
-    const sharePrice = parseFloat(poolStats.sharePrice);
-    const totalShares = parseFloat(ethers.formatUnits(stats._totalShares, 18));
-
     try {
       await recordNavSnapshot({
         sharePrice,
@@ -266,7 +285,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<HederaCron
     let rebalanceTrades: HederaCronResult['rebalanceTrades'] = undefined;
     const adminKey = process.env.HEDERA_PRIVATE_KEY;
 
-    if (aiDecision.shouldRebalance && onChainNAV > 1 && adminKey) {
+    if (aiDecision.shouldRebalance && onChainNAV > 1 && adminKey && contractInitialized) {
       try {
         // Read unallocated USDC in the contract
         const depositTokenAddr: string = await poolContract.depositToken();
@@ -385,6 +404,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<HederaCron
       }
     } else if (!adminKey) {
       logger.info('[Hedera Cron] Swap execution skipped — HEDERA_PRIVATE_KEY not set');
+    } else if (!contractInitialized) {
+      logger.info('[Hedera Cron] Swap execution skipped — contract not initialized (depositToken = 0x0)');
     }
 
     // Step 6: Log decision to DB

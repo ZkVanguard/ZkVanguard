@@ -448,7 +448,7 @@ let bridgeInstance: WdkBridgeService | null = null;
 export function getWdkBridgeService(): WdkBridgeService | null {
   if (bridgeInstance) return bridgeInstance;
 
-  const key = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY;
+  const key = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
   if (!key) {
     logger.warn('[WdkBridge] No private key configured — bridge disabled');
     return null;
