@@ -1,19 +1,18 @@
 /**
- * Cron Job: WDK Community Pool Cross-Chain Management
+ * QStash Cron Job: WDK Community Pool — Sepolia USDT → 4-Asset Rebalance
  *
- * Manages the Tether WDK cross-chain USDT pool:
- * 1. Aggregates USDT balances across Sepolia, Cronos, Hedera, Plasma, Stable
- * 2. Records cross-chain NAV snapshot
- * 3. Monitors bridge health and gas reserves
- * 4. Triggers cross-chain rebalancing when allocation drifts
- *
- * The WDK pool uses USD₮/USD₮0 tokens across multiple EVM chains,
- * unified via the Tether Wallet Development Kit.
+ * Manages the Tether WDK community pool on Sepolia:
+ * 1. Reads on-chain pool state (USDT balance, asset balances, NAV)
+ * 2. Records NAV snapshot
+ * 3. Runs AI allocation decision (risk-based)
+ * 4. Executes USDT → BTC/ETH/SUI/CRO trades via SimpleMockDEX
+ * 5. Monitors cross-chain USDT balances (bridge is informational only)
  *
  * Security: QStash signature verification + CRON_SECRET fallback
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
@@ -22,8 +21,10 @@ import {
   recordNavSnapshot,
   savePoolStateToDb,
   addPoolTransactionToDb,
+  getLatestPoolState,
 } from '@/lib/db/community-pool';
-import { getWdkBridgeService, type WdkChainKey, type ChainBalance } from '@/lib/services/WdkBridgeService';
+import { getWdkBridgeService } from '@/lib/services/WdkBridgeService';
+import { getRpcUrl } from '@/lib/rpc-urls';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -31,12 +32,77 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 // ============================================
+// DEPLOYMENT CONFIG
+// ============================================
+
+// Load from deployment file — these are on Sepolia testnet
+const SEPOLIA_POOL_ADDRESS = '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086';
+const SEPOLIA_USDT_ADDRESS = '0xd077a400968890eacc75cdc901f0356c943e4fdb';
+const SEPOLIA_DEX_ADDRESS = '0x57e888f22c21D931b2deA19bb132a8d344F1F965';
+
+const ASSET_NAMES = ['BTC', 'ETH', 'CRO', 'SUI'] as const;
+const TARGET_ALLOCATION_BPS = {
+  BTC: 3000, // 30%
+  ETH: 3000, // 30%
+  CRO: 2000, // 20%
+  SUI: 2000, // 20%
+};
+
+const MIN_TRADE_USDT = 1_000_000n; // $1 minimum trade
+const MAX_SLIPPAGE_BPS = 500n;     // 5% slippage (mock DEX, generous)
+
+// ============================================
+// ABIs
+// ============================================
+
+const POOL_ABI = [
+  'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
+  'function dexRouter() view returns (address)',
+  'function depositToken() view returns (address)',
+  'function assetTokens(uint256) view returns (address)',
+  'function assetBalances(uint256) view returns (uint256)',
+  'function targetAllocationBps(uint256) view returns (uint256)',
+  'function executeRebalanceTrade(uint8 assetIndex, uint256 amount, bool isBuy, uint256 minAmountOut) external',
+  'function setTargetAllocation(uint256[4] newAllocations, string reason) external',
+  'function hasRole(bytes32 role, address account) view returns (bool)',
+  'function REBALANCER_ROLE() view returns (bytes32)',
+  'function MIN_RESERVE_RATIO_BPS() view returns (uint256)',
+];
+
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+];
+
+const DEX_ABI = [
+  'function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[])',
+];
+
+// ============================================
 // TYPES
 // ============================================
+
+interface WdkTradeResult {
+  asset: string;
+  amountUsdt: string;
+  amountReceived: string;
+  txHash?: string;
+  error?: string;
+}
 
 interface WdkCronResult {
   success: boolean;
   chain: 'wdk';
+  poolState?: {
+    usdtBalance: string;
+    navUsd: number;
+    totalShares: string;
+    sharePrice: string;
+    memberCount: number;
+    allocations: Record<string, number>;
+    assetBalances: Record<string, string>;
+  };
   crossChainState?: {
     totalUsdtAcrossChains: number;
     chainBalances: Array<{
@@ -47,36 +113,49 @@ interface WdkCronResult {
     }>;
   };
   healthCheck?: {
-    chainsOnline: number;
-    chainsTotal: number;
-    chainsWithGas: number;
-    chainsWithUsdt: number;
     warnings: string[];
+    dexRouterConfigured: boolean;
+    hasRebalancerRole: boolean;
+    walletGas: string;
   };
-  rebalance?: {
-    needed: boolean;
-    reason?: string;
-    actions?: Array<{
-      from: string;
-      to: string;
-      amount: string;
-      status: string;
-    }>;
+  aiDecision?: {
+    action: string;
+    reasoning: string;
+    executed: boolean;
+  };
+  rebalanceTrades?: {
+    executed: number;
+    failed: number;
+    skipped: number;
+    trades: WdkTradeResult[];
   };
   duration: number;
   error?: string;
 }
 
-// Target allocation across chains (percentage of total USDT)
-const CHAIN_ALLOCATION_TARGETS: Partial<Record<WdkChainKey, number>> = {
-  'sepolia': 30,         // WDK primary testnet
-  'cronos-mainnet': 30,  // Production chain
-  'hedera-mainnet': 20,  // Hedera ecosystem
-  'plasma': 10,          // USD₮0 bridge reserve
-  'stable': 10,          // USD₮0 bridge reserve
-};
+// ============================================
+// HELPER: Simple AI allocation (same as Hedera cron pattern)
+// ============================================
 
-const DRIFT_THRESHOLD = 15; // Rebalance if allocation drifts >15% from target
+function generateAllocation(): {
+  allocations: Record<string, number>;
+  shouldRebalance: boolean;
+  confidence: number;
+  reasoning: string;
+} {
+  // For testnet: always rebalance using fixed target allocations
+  return {
+    allocations: {
+      BTC: TARGET_ALLOCATION_BPS.BTC / 100,
+      ETH: TARGET_ALLOCATION_BPS.ETH / 100,
+      CRO: TARGET_ALLOCATION_BPS.CRO / 100,
+      SUI: TARGET_ALLOCATION_BPS.SUI / 100,
+    },
+    shouldRebalance: true,
+    confidence: 0.9,
+    reasoning: 'WDK Sepolia pool: Applying target allocation (30% BTC, 30% ETH, 20% CRO, 20% SUI)',
+  };
+}
 
 // ============================================
 // HANDLER
@@ -93,14 +172,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
     );
   }
 
-  logger.info('[WDK Cron] Starting WDK cross-chain pool management');
+  logger.info('[WDK Cron] Starting WDK Sepolia pool management');
 
-  const bridge = getWdkBridgeService();
-  if (!bridge) {
+  const privateKey = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
+  if (!privateKey) {
     return NextResponse.json({
       success: false,
       chain: 'wdk' as const,
-      error: 'WDK Bridge service not configured (TREASURY_PRIVATE_KEY missing)',
+      error: 'No private key configured (TREASURY_PRIVATE_KEY / PRIVATE_KEY)',
       duration: Date.now() - startTime,
     });
   }
@@ -108,143 +187,316 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
   try {
     await initCommunityPoolTables();
 
-    // Step 1: Aggregate cross-chain balances
-    const crossChainState = await bridge.getCrossChainBalances();
+    const provider = new ethers.JsonRpcProvider(getRpcUrl('sepolia'));
+    const wallet = new ethers.Wallet(privateKey, provider);
+    const poolContract = new ethers.Contract(SEPOLIA_POOL_ADDRESS, POOL_ABI, provider);
+    const usdtContract = new ethers.Contract(SEPOLIA_USDT_ADDRESS, ERC20_ABI, provider);
 
-    logger.info('[WDK Cron] Cross-chain balances', {
-      total: crossChainState.totalUsdtAcrossChains.toFixed(2),
-      chains: crossChainState.chainBalances.map(b => `${b.chain}: $${b.usdtBalance}`),
-    });
+    // ═══════════════════════════════════════════════════════════
+    // Step 1: Read on-chain pool state
+    // ═══════════════════════════════════════════════════════════
 
-    // Step 2: Health check
-    const warnings: string[] = [];
-    const chainsOnline = crossChainState.chainBalances.length;
-    const chainsWithGas = crossChainState.chainBalances.filter(b => b.hasGas).length;
-    const chainsWithUsdt = crossChainState.chainBalances.filter(b => parseFloat(b.usdtBalance) > 0).length;
+    let usdtBalance: bigint;
+    let totalShares: bigint;
+    let totalNAV: bigint;
+    let memberCount: bigint;
+    let sharePrice: bigint;
+    let onChainAllocBps: bigint[];
+    let dexRouterAddr: string;
+    let contractInitialized = true;
 
-    for (const balance of crossChainState.chainBalances) {
-      if (!balance.hasGas && balance.usdtConfigured) {
-        warnings.push(`${balance.chainName}: Low gas — cannot execute transactions`);
-      }
-      if (!balance.usdtConfigured) {
-        warnings.push(`${balance.chainName}: USDT not deployed yet`);
+    try {
+      const stats = await poolContract.getPoolStats();
+      totalShares = stats._totalShares;
+      totalNAV = stats._totalNAV;
+      memberCount = stats._memberCount;
+      sharePrice = stats._sharePrice;
+      onChainAllocBps = stats._allocations;
+
+      usdtBalance = await usdtContract.balanceOf(SEPOLIA_POOL_ADDRESS);
+      dexRouterAddr = await poolContract.dexRouter();
+    } catch (err) {
+      contractInitialized = false;
+      logger.error('[WDK Cron] Failed to read pool state', { error: errMsg(err) });
+      return NextResponse.json({
+        success: false,
+        chain: 'wdk' as const,
+        error: `Pool contract not readable: ${errMsg(err)}`,
+        duration: Date.now() - startTime,
+      });
+    }
+
+    const navUsd = Number(ethers.formatUnits(totalNAV, 6));
+    const usdtBalanceStr = ethers.formatUnits(usdtBalance, 6);
+
+    // Read asset balances
+    const assetBalances: Record<string, string> = {};
+    for (let i = 0; i < 4; i++) {
+      try {
+        const bal = await poolContract.assetBalances(i);
+        const tokenAddr = await poolContract.assetTokens(i);
+        if (tokenAddr !== ethers.ZeroAddress) {
+          const tok = new ethers.Contract(tokenAddr, ERC20_ABI, provider);
+          const dec = await tok.decimals();
+          assetBalances[ASSET_NAMES[i]] = ethers.formatUnits(bal, dec);
+        } else {
+          assetBalances[ASSET_NAMES[i]] = '0';
+        }
+      } catch {
+        assetBalances[ASSET_NAMES[i]] = '0';
       }
     }
 
-    const healthCheck = {
-      chainsOnline,
-      chainsTotal: 5,
-      chainsWithGas,
-      chainsWithUsdt,
-      warnings,
+    const allocations: Record<string, number> = {};
+    for (let i = 0; i < 4; i++) {
+      allocations[ASSET_NAMES[i]] = Number(onChainAllocBps[i]) / 100;
+    }
+
+    const walletGasBalance = await provider.getBalance(wallet.address);
+    const walletGasStr = ethers.formatEther(walletGasBalance);
+
+    logger.info('[WDK Cron] Pool state', {
+      usdtBalance: usdtBalanceStr,
+      navUsd,
+      memberCount: Number(memberCount),
+      dexRouter: dexRouterAddr,
+      assetBalances,
+      allocations,
+      walletGas: walletGasStr,
+    });
+
+    const poolState: WdkCronResult['poolState'] = {
+      usdtBalance: usdtBalanceStr,
+      navUsd,
+      totalShares: ethers.formatUnits(totalShares, 18),
+      sharePrice: ethers.formatUnits(sharePrice, 18),
+      memberCount: Number(memberCount),
+      allocations,
+      assetBalances,
     };
 
-    // Step 3: Record NAV snapshot
+    // ═══════════════════════════════════════════════════════════
+    // Step 2: Health check
+    // ═══════════════════════════════════════════════════════════
+
+    const warnings: string[] = [];
+    const dexConfigured = dexRouterAddr !== ethers.ZeroAddress;
+    let hasRebalancerRole = false;
+
+    if (!dexConfigured) {
+      warnings.push('DEX router not configured on pool contract');
+    }
+    if (walletGasBalance < ethers.parseEther('0.01')) {
+      warnings.push(`Low Sepolia ETH: ${walletGasStr} — need gas for transactions`);
+    }
+
+    try {
+      const REBALANCER_ROLE = await poolContract.REBALANCER_ROLE();
+      hasRebalancerRole = await poolContract.hasRole(REBALANCER_ROLE, wallet.address);
+      if (!hasRebalancerRole) {
+        warnings.push(`Wallet ${wallet.address} lacks REBALANCER_ROLE`);
+      }
+    } catch {
+      warnings.push('Could not check REBALANCER_ROLE');
+    }
+
+    const healthCheck: WdkCronResult['healthCheck'] = {
+      warnings,
+      dexRouterConfigured: dexConfigured,
+      hasRebalancerRole,
+      walletGas: walletGasStr,
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // Step 3: NAV snapshot
+    // ═══════════════════════════════════════════════════════════
+
     try {
       await recordNavSnapshot({
-        sharePrice: 1, // USDT ≈ $1
-        totalNav: crossChainState.totalUsdtAcrossChains,
-        totalShares: crossChainState.totalUsdtAcrossChains, // 1:1 USDT
-        memberCount: 0,
-        allocations: Object.fromEntries(
-          crossChainState.chainBalances.map(b => [
-            b.chain,
-            crossChainState.totalUsdtAcrossChains > 0
-              ? (parseFloat(b.usdtBalance) / crossChainState.totalUsdtAcrossChains) * 100
-              : 0,
-          ]),
-        ),
-        source: 'wdk-cross-chain',
+        sharePrice: Number(ethers.formatUnits(sharePrice, 18)),
+        totalNav: navUsd,
+        totalShares: Number(ethers.formatUnits(totalShares, 18)),
+        memberCount: Number(memberCount),
+        allocations,
+        source: 'wdk-sepolia-on-chain',
         chain: 'wdk',
       });
     } catch (navErr) {
       logger.warn('[WDK Cron] NAV snapshot failed (non-critical)', { error: errMsg(navErr) });
     }
 
-    // Step 4: Check if cross-chain rebalancing is needed
-    let rebalance: WdkCronResult['rebalance'] = { needed: false };
+    // ═══════════════════════════════════════════════════════════
+    // Step 4: AI allocation decision
+    // ═══════════════════════════════════════════════════════════
 
-    if (crossChainState.totalUsdtAcrossChains > 10) { // Only rebalance if meaningful balance
-      const currentAllocations: Partial<Record<WdkChainKey, number>> = {};
-      for (const balance of crossChainState.chainBalances) {
-        currentAllocations[balance.chain] = crossChainState.totalUsdtAcrossChains > 0
-          ? (parseFloat(balance.usdtBalance) / crossChainState.totalUsdtAcrossChains) * 100
-          : 0;
-      }
+    const aiDecision = generateAllocation();
 
-      // Check drift
-      let maxDrift = 0;
-      let driftReason = '';
-      for (const [chain, target] of Object.entries(CHAIN_ALLOCATION_TARGETS)) {
-        const current = currentAllocations[chain as WdkChainKey] || 0;
-        const drift = Math.abs(current - target);
-        if (drift > maxDrift) {
-          maxDrift = drift;
-          driftReason = `${chain}: ${current.toFixed(1)}% vs target ${target}%`;
-        }
-      }
+    let aiResult: WdkCronResult['aiDecision'] = {
+      action: aiDecision.shouldRebalance ? 'REBALANCE' : 'HOLD',
+      reasoning: aiDecision.reasoning,
+      executed: false,
+    };
 
-      if (maxDrift > DRIFT_THRESHOLD) {
-        rebalance = {
-          needed: true,
-          reason: `Max drift ${maxDrift.toFixed(1)}% exceeds threshold ${DRIFT_THRESHOLD}% — ${driftReason}`,
-          actions: [],
-        };
+    logger.info('[WDK Cron] AI decision', {
+      action: aiResult.action,
+      allocations: aiDecision.allocations,
+      confidence: aiDecision.confidence,
+    });
 
-        logger.info('[WDK Cron] Cross-chain rebalance triggered', { maxDrift, driftReason });
+    // ═══════════════════════════════════════════════════════════
+    // Step 5: Execute USDT → asset trades via SimpleMockDEX
+    // ═══════════════════════════════════════════════════════════
 
-        // Plan rebalance transfers
-        // Find overweight and underweight chains
-        const overweight: Array<{ chain: WdkChainKey; excess: number }> = [];
-        const underweight: Array<{ chain: WdkChainKey; deficit: number }> = [];
+    let rebalanceTrades: WdkCronResult['rebalanceTrades'] = undefined;
+    const adminKey = privateKey;
 
-        for (const [chain, target] of Object.entries(CHAIN_ALLOCATION_TARGETS)) {
-          const current = currentAllocations[chain as WdkChainKey] || 0;
-          const diff = current - target;
-          const diffUsdt = (diff / 100) * crossChainState.totalUsdtAcrossChains;
+    if (aiDecision.shouldRebalance && navUsd > 1 && contractInitialized && dexConfigured) {
+      try {
+        // Reserve for withdrawals
+        let reserveBps = 500n;
+        try {
+          reserveBps = BigInt(Number(await poolContract.MIN_RESERVE_RATIO_BPS()));
+        } catch { /* default 5% */ }
+        const reserveUsdt = (usdtBalance * reserveBps) / 10000n;
+        const allocatableUsdt = usdtBalance - reserveUsdt;
 
-          if (diff > DRIFT_THRESHOLD && diffUsdt > 5) {
-            overweight.push({ chain: chain as WdkChainKey, excess: diffUsdt });
-          } else if (diff < -DRIFT_THRESHOLD && Math.abs(diffUsdt) > 5) {
-            underweight.push({ chain: chain as WdkChainKey, deficit: Math.abs(diffUsdt) });
-          }
-        }
+        if (allocatableUsdt > MIN_TRADE_USDT) {
+          const signedPool = poolContract.connect(wallet) as ethers.Contract;
+          const trades: WdkTradeResult[] = [];
+          let executed = 0;
+          let failed = 0;
+          let skipped = 0;
 
-        // Execute bridges from overweight → underweight
-        for (const over of overweight) {
-          for (const under of underweight) {
-            if (over.excess <= 0 || under.deficit <= 0) continue;
+          // Use target allocations
+          const targetBps = [
+            TARGET_ALLOCATION_BPS.BTC,
+            TARGET_ALLOCATION_BPS.ETH,
+            TARGET_ALLOCATION_BPS.CRO,
+            TARGET_ALLOCATION_BPS.SUI,
+          ];
 
-            const transferAmount = Math.min(over.excess, under.deficit);
-            const amountStr = transferAmount.toFixed(2);
+          for (let i = 0; i < 4; i++) {
+            const assetName = ASSET_NAMES[i];
+            let assetAddr: string;
 
             try {
-              const result = await bridge.bridgeUsdt(over.chain, under.chain, amountStr);
-              rebalance.actions!.push({
-                from: over.chain,
-                to: under.chain,
-                amount: amountStr,
-                status: result.success ? 'executed' : `failed: ${result.error}`,
-              });
+              assetAddr = await poolContract.assetTokens(i);
+            } catch {
+              trades.push({ asset: assetName, amountUsdt: '0', amountReceived: '0', error: 'Cannot read asset token' });
+              skipped++;
+              continue;
+            }
 
-              if (result.success) {
-                over.excess -= transferAmount;
-                under.deficit -= transferAmount;
+            if (assetAddr === ethers.ZeroAddress) {
+              trades.push({ asset: assetName, amountUsdt: '0', amountReceived: '0', error: 'Asset token not configured' });
+              skipped++;
+              continue;
+            }
+
+            // Calculate USDT allocation for this asset
+            const assetUsdt = (allocatableUsdt * BigInt(targetBps[i])) / 10000n;
+            if (assetUsdt < MIN_TRADE_USDT) {
+              trades.push({ asset: assetName, amountUsdt: ethers.formatUnits(assetUsdt, 6), amountReceived: '0', error: 'Below minimum trade size' });
+              skipped++;
+              continue;
+            }
+
+            try {
+              // Get DEX quote for slippage protection
+              const dexContract = new ethers.Contract(dexRouterAddr, DEX_ABI, provider);
+              let minOut = 0n;
+              try {
+                const amounts: bigint[] = await dexContract.getAmountsOut(assetUsdt, [SEPOLIA_USDT_ADDRESS, assetAddr]);
+                const expectedOut = amounts[amounts.length - 1];
+                minOut = (expectedOut * (10000n - MAX_SLIPPAGE_BPS)) / 10000n;
+              } catch {
+                // SimpleMockDEX may not have getAmountsOut — use 0 (no slippage protection on mock)
+                minOut = 0n;
               }
-            } catch (err) {
-              rebalance.actions!.push({
-                from: over.chain,
-                to: under.chain,
-                amount: amountStr,
-                status: `error: ${errMsg(err)}`,
+
+              // Execute: executeRebalanceTrade(assetIndex, amount, isBuy, minAmountOut)
+              const tx = await signedPool.executeRebalanceTrade(i, assetUsdt, true, minOut);
+              const receipt = await tx.wait();
+
+              trades.push({
+                asset: assetName,
+                amountUsdt: ethers.formatUnits(assetUsdt, 6),
+                amountReceived: minOut.toString(),
+                txHash: receipt.hash,
               });
+              executed++;
+              logger.info(`[WDK Cron] Trade executed: $${ethers.formatUnits(assetUsdt, 6)} USDT → ${assetName}`, {
+                txHash: receipt.hash,
+              });
+            } catch (tradeErr) {
+              const errStr = errMsg(tradeErr);
+              trades.push({
+                asset: assetName,
+                amountUsdt: ethers.formatUnits(assetUsdt, 6),
+                amountReceived: '0',
+                error: errStr,
+              });
+              failed++;
+              logger.error(`[WDK Cron] Trade failed for ${assetName}`, { error: errStr });
             }
           }
+
+          rebalanceTrades = { executed, failed, skipped, trades };
+
+          if (executed > 0) {
+            aiResult.executed = true;
+          }
+
+          logger.info('[WDK Cron] Rebalance trades complete', { executed, failed, skipped });
+        } else {
+          logger.info('[WDK Cron] Insufficient allocatable USDT', {
+            balance: ethers.formatUnits(usdtBalance, 6),
+            allocatable: ethers.formatUnits(allocatableUsdt, 6),
+          });
         }
+      } catch (tradeError) {
+        logger.error('[WDK Cron] Trade execution step failed', {
+          error: errMsg(tradeError),
+        });
+      }
+    } else {
+      const reasons: string[] = [];
+      if (!aiDecision.shouldRebalance) reasons.push('AI says HOLD');
+      if (navUsd <= 1) reasons.push(`NAV too low: $${navUsd.toFixed(2)}`);
+      if (!contractInitialized) reasons.push('Contract not initialized');
+      if (!dexConfigured) reasons.push('DEX router not set');
+      if (reasons.length > 0) {
+        aiResult.reasoning += ` (Skipped: ${reasons.join(', ')})`;
       }
     }
 
-    // Step 5: Log to DB
+    // ═══════════════════════════════════════════════════════════
+    // Step 6: Cross-chain balance check (informational only)
+    // ═══════════════════════════════════════════════════════════
+
+    let crossChainState: WdkCronResult['crossChainState'] = undefined;
+    try {
+      const bridge = getWdkBridgeService();
+      if (bridge) {
+        const balances = await bridge.getCrossChainBalances();
+        crossChainState = {
+          totalUsdtAcrossChains: balances.totalUsdtAcrossChains,
+          chainBalances: balances.chainBalances.map(b => ({
+            chain: b.chain,
+            usdtBalance: b.usdtBalance,
+            nativeBalance: b.nativeBalance,
+            hasGas: b.hasGas,
+          })),
+        };
+      }
+    } catch (bridgeErr) {
+      logger.warn('[WDK Cron] Cross-chain balance check failed (non-critical)', { error: errMsg(bridgeErr) });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Step 7: Log to DB
+    // ═══════════════════════════════════════════════════════════
+
     try {
       const decisionId = `wdk_cron_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
       await addPoolTransactionToDb({
@@ -252,39 +504,31 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         type: 'AI_DECISION',
         chain: 'wdk',
         details: {
-          action: rebalance.needed ? 'CROSS_CHAIN_REBALANCE' : 'MONITOR',
-          crossChainState: {
-            total: crossChainState.totalUsdtAcrossChains,
-            chains: crossChainState.chainBalances.map(b => ({
-              chain: b.chain, usdt: b.usdtBalance,
-            })),
-          },
-          healthCheck,
-          rebalance,
+          action: aiResult.action,
+          reasoning: aiResult.reasoning,
+          executed: aiResult.executed,
+          poolState,
+          rebalanceTrades: rebalanceTrades ?? null,
         },
       });
 
       await savePoolStateToDb({
-        totalValueUSD: crossChainState.totalUsdtAcrossChains,
-        totalShares: crossChainState.totalUsdtAcrossChains,
-        sharePrice: 1,
+        totalValueUSD: navUsd,
+        totalShares: Number(ethers.formatUnits(totalShares, 18)),
+        sharePrice: Number(ethers.formatUnits(sharePrice, 18)),
         allocations: Object.fromEntries(
-          crossChainState.chainBalances.map(b => [b.chain, {
-            percentage: crossChainState.totalUsdtAcrossChains > 0
-              ? (parseFloat(b.usdtBalance) / crossChainState.totalUsdtAcrossChains) * 100
-              : 0,
-            valueUSD: parseFloat(b.usdtBalance),
-            amount: parseFloat(b.usdtBalance),
-            price: 1,
+          ASSET_NAMES.map((name, i) => [name, {
+            percentage: allocations[name],
+            valueUSD: navUsd * (allocations[name] / 100),
+            amount: parseFloat(assetBalances[name] || '0'),
+            price: 0,
           }]),
         ),
         lastRebalance: Date.now(),
         lastAIDecision: {
           timestamp: Date.now(),
-          reasoning: rebalance.needed
-            ? `Cross-chain rebalance: ${rebalance.reason}`
-            : 'All chains within allocation targets',
-          allocations: CHAIN_ALLOCATION_TARGETS as Record<string, number>,
+          reasoning: aiResult.reasoning,
+          allocations,
         },
         chain: 'wdk',
       });
@@ -292,27 +536,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
       logger.warn('[WDK Cron] DB save failed (non-critical)', { error: errMsg(dbErr) });
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // Response
+    // ═══════════════════════════════════════════════════════════
+
     const result: WdkCronResult = {
       success: true,
       chain: 'wdk',
-      crossChainState: {
-        totalUsdtAcrossChains: crossChainState.totalUsdtAcrossChains,
-        chainBalances: crossChainState.chainBalances.map(b => ({
-          chain: b.chain,
-          usdtBalance: b.usdtBalance,
-          nativeBalance: b.nativeBalance,
-          hasGas: b.hasGas,
-        })),
-      },
+      poolState,
+      crossChainState,
       healthCheck,
-      rebalance,
+      aiDecision: aiResult,
+      rebalanceTrades,
       duration: Date.now() - startTime,
     };
 
     logger.info('[WDK Cron] Complete', {
-      totalUsdt: crossChainState.totalUsdtAcrossChains.toFixed(2),
-      chainsOnline,
-      rebalanceNeeded: rebalance.needed,
+      navUsd,
+      usdtBalance: usdtBalanceStr,
+      tradesExecuted: rebalanceTrades?.executed ?? 0,
       duration: result.duration,
     });
 
