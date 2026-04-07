@@ -21,6 +21,10 @@ import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
 import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
 
+// Re-export types from the dedicated types module
+export { type HedgeStrategy, type HedgeAnalysis } from '@/lib/types/hedge-strategy-types';
+import type { HedgeStrategy, HedgeAnalysis } from '@/lib/types/hedge-strategy-types';
+
 /** Extended client interface for duck-typing compatibility with varying implementations */
 interface MoonlanderClientExt {
   openHedge?: (params: { market: string; side: 'LONG' | 'SHORT'; notionalValue: string; leverage?: number; stopLoss?: string; takeProfit?: string }) => Promise<OrderResult>;
@@ -28,43 +32,6 @@ interface MoonlanderClientExt {
   getPosition?: (market: string) => Promise<PerpetualPosition | null>;
   getPositions?: () => Promise<PerpetualPosition[]>;
   calculateLiquidationRisk?: () => Promise<LiquidationRisk[]>;
-}
-
-export interface HedgeStrategy {
-  strategyId: string;
-  portfolioId: string;
-  targetMarket: string;
-  hedgeRatio: number; // 0-1, percentage of exposure to hedge
-  rebalanceThreshold: number; // percentage change triggering rebalance
-  stopLoss?: number; // percentage
-  takeProfit?: number;
-  maxLeverage: number;
-  active: boolean;
-}
-
-export interface HedgeAnalysis {
-  portfolioId: string;
-  exposure: {
-    asset: string;
-    notionalValue: string;
-    currentPrice: string;
-    volatility: number;
-  };
-  recommendation: {
-    action: 'OPEN' | 'CLOSE' | 'REBALANCE' | 'HOLD';
-    market: string;
-    side: 'LONG' | 'SHORT';
-    size: string;
-    leverage: number;
-    reason: string;
-  };
-  riskMetrics: {
-    portfolioVar: number; // Value at Risk
-    hedgeEffectiveness: number;
-    basisRisk: number;
-    fundingCost: number;
-  };
-  timestamp: number;
 }
 
 export class HedgingAgent extends BaseAgent {

@@ -11,102 +11,16 @@ import { TESTNET_USDC_ABI } from './MockUSDCFaucet';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 import { getUsdcAddress, getExplorerUrl, CHAIN_IDS } from '@/lib/utils/network';
-
-// ── Asset → pairIndex mapping (must match HedgeExecutor) ────────
-const PAIR_INDEX: Record<string, number> = {
-  BTC: 0,
-  ETH: 1,
-  CRO: 2,
-  ATOM: 3,
-  DOGE: 4,
-  SOL: 5,
-};
-
-// ── Oracle fee required as msg.value ────────────────────────────
-const ORACLE_FEE = parseEther('0.06'); // 0.06 tCRO
-
-// ── Minimal ABIs ────────────────────────────────────────────────
-const ERC20_ABI = [
-  {
-    type: 'function',
-    name: 'approve',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'allowance',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'spender', type: 'address' },
-    ],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
-
-const HEDGE_EXECUTOR_ABI = [
-  {
-    type: 'function',
-    name: 'openHedge',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'pairIndex', type: 'uint256' },
-      { name: 'collateralAmount', type: 'uint256' },
-      { name: 'leverage', type: 'uint256' },
-      { name: 'isLong', type: 'bool' },
-      { name: 'commitmentHash', type: 'bytes32' },
-      { name: 'nullifier', type: 'bytes32' },
-      { name: 'merkleRoot', type: 'bytes32' },
-    ],
-    outputs: [
-      { name: 'hedgeId', type: 'bytes32' },
-    ],
-  },
-] as const;
-
-// ── Interfaces ──────────────────────────────────────────────────
-interface HedgeInitialValues {
-  asset?: string;
-  side?: 'LONG' | 'SHORT';
-  leverage?: number;
-  size?: number;
-  reason?: string;
-  entryPrice?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-}
-
-interface ManualHedgeModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  availableAssets?: string[];
-  walletAddress?: string;
-  initialValues?: HedgeInitialValues;
-}
-
-interface HedgeSuccess {
-  hedgeId: string;
-  txHash: string;
-  asset: string;
-  hedgeType: string;
-  collateral: string;
-  leverage: number;
-  entryPrice: string;
-}
-
-type TxStep = 'idle' | 'checking' | 'signing' | 'approving' | 'approve-confirming' | 'opening' | 'open-confirming' | 'done' | 'error';
+import {
+  PAIR_INDEX,
+  ORACLE_FEE,
+  ERC20_ABI,
+  HEDGE_EXECUTOR_ABI,
+  type HedgeInitialValues,
+  type ManualHedgeModalProps,
+  type HedgeSuccess,
+  type TxStep,
+} from '@/lib/types/hedge-modal-types';
 
 // ── Tx Hash Display with copy ───────────────────────────────────
 function TxHashDisplay({ hash, label }: { hash: string; label: string }) {
