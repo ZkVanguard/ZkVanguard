@@ -1,0 +1,16 @@
+{
+  "network": "Hedera Testnet",
+  "chainId": 296,
+  "timestamp": "2026-04-06T00:00:00.000Z",
+  "deployer": "0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c",
+  "contracts": {
+    "CommunityPool": {
+      "proxy": "0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B",
+      "implementation": "0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6"
+    }
+  },
+  "tokens": {
+    "USDC": "0x0000000000000000000000000000000000001549",
+    "PythOracle": "0xA2aa501b19aff244D90cc15a4Cf739D2725B5729"
+  }
+}

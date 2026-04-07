@@ -163,7 +163,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     },
     contracts: {
       testnet: {
-        communityPool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6',
+        communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
         usdt: '0x0000000000000000000000000000000000000000', // USDT on Hedera testnet - TODO: Deploy
         pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729', // Pyth on Hedera testnet
       },
