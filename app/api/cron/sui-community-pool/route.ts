@@ -234,14 +234,14 @@ async function transferUsdcFromPoolToAdmin(
   amountUsdc: number,
 ): Promise<{ success: boolean; txDigest?: string; error?: string }> {
   const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
-  const agentCapId = process.env.SUI_AGENT_CAP_ID;
+  const agentCapId = process.env.SUI_AGENT_CAP_ID || process.env.SUI_ADMIN_CAP_ID;
   const poolConfig = SUI_USDC_POOL_CONFIG[network];
 
   if (!adminKey) {
     return { success: false, error: 'SUI_POOL_ADMIN_KEY not configured' };
   }
   if (!agentCapId) {
-    return { success: false, error: 'SUI_AGENT_CAP_ID not configured — cannot call open_hedge' };
+    return { success: false, error: 'SUI_AGENT_CAP_ID / SUI_ADMIN_CAP_ID not configured — cannot call open_hedge' };
   }
   if (!poolConfig.packageId || !poolConfig.poolStateId) {
     return { success: false, error: 'Pool package or state ID not configured' };
