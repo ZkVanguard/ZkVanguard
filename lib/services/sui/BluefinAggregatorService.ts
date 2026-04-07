@@ -32,123 +32,38 @@ async function getSuiSdk() {
   return { Ed25519Keypair, Transaction, SuiClient, getFullnodeUrl };
 }
 
-// ============================================
-// COIN TYPE CONSTANTS (SUI mainnet)
-// ============================================
+// Re-export all types and configs from the dedicated types module
+export {
+  SUI_COIN_TYPES,
+  ASSET_DECIMALS,
+  ASSET_TO_COIN_KEY,
+  MAINNET_COIN_TYPES,
+  MAX_SWAP_SIZE_USD,
+  MAX_SLIPPAGE,
+  GAS_BUDGET,
+  MIN_GAS_RESERVE_MIST,
+  type NetworkType,
+  type PoolAsset,
+  type SwapQuoteResult,
+  type RebalanceSwapPlan,
+  type SwapExecutionResult,
+} from '@/lib/types/bluefin-types';
 
-/** Canonical on-chain coin types for the 4 pool assets + USDC */
-export const SUI_COIN_TYPES: Record<string, Record<string, string>> = {
-  mainnet: {
-    USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
-    SUI:  '0x2::sui::SUI',
-    WBTC: '0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN',
-    WETH: '0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN',
-    // CRO does not have native liquidity on SUI — hedged via BlueFin perpetuals.
-    CRO:  '',
-  },
-  testnet: {
-    USDC: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
-    SUI:  '0x2::sui::SUI',
-    // Testnet has no wrapped BTC/ETH/CRO tokens — all hedged via BlueFin perps
-    WBTC: '',
-    WETH: '',
-    CRO:  '',
-  },
-};
-
-/**
- * Mainnet coin types for price discovery via BlueFin 7k aggregator.
- * The aggregator API only indexes MAINNET pools.
- * On testnet, we use these mainnet types to get real DEX quotes for price discovery,
- * then execute positions via BlueFin perps hedging.
- */
-const MAINNET_COIN_TYPES: Record<string, string> = {
-  USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
-  SUI:  '0x2::sui::SUI',
-  WBTC: '0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN',
-  WETH: '0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN',
-  CRO:  '', // No CRO on SUI at all
-};
-
-/** Decimal precision for each asset */
-export const ASSET_DECIMALS: Record<string, number> = {
-  USDC: 6,
-  SUI:  9,
-  WBTC: 8,
-  WETH: 8,
-  CRO:  8,
-  BTC:  8,
-  ETH:  8,
-};
-
-/** Map pool asset names to coin type keys */
-const ASSET_TO_COIN_KEY: Record<string, string> = {
-  BTC: 'WBTC',
-  ETH: 'WETH',
-  SUI: 'SUI',
-  CRO: 'CRO', // No on-chain swap — hedged via perps
-};
-
-// ============================================
-// TYPES
-// ============================================
-
-export type NetworkType = 'mainnet' | 'testnet';
-export type PoolAsset = 'BTC' | 'ETH' | 'SUI' | 'CRO';
-
-export interface SwapQuoteResult {
-  asset: PoolAsset;
-  fromCoinType: string;
-  toCoinType: string;
-  amountIn: string;        // Raw amount (USDC, 6 decimals)
-  expectedAmountOut: string; // Raw amount in target asset decimals
-  priceImpact: number;
-  route: string;
-  routerData: QuoteResponse | null; // BlueFin 7k quote (passed to buildTx)
-  canSwapOnChain: boolean;  // false for CRO (hedged via perps)
-  isSimulated?: boolean;    // true when using price-based estimate (testnet)
-  hedgeVia?: 'bluefin' | 'virtual'; // how non-swappable assets are handled
-}
-
-export interface RebalanceSwapPlan {
-  totalUsdcToSwap: number;
-  swaps: SwapQuoteResult[];
-  timestamp: number;
-}
-
-export interface SwapExecutionResult {
-  asset: PoolAsset;
-  success: boolean;
-  txDigest?: string;
-  amountIn: string;
-  amountOut?: string;
-  error?: string;
-}
-
-// ============================================
-// SAFETY CONSTANTS
-// ============================================
-
-/** Maximum USDC value per single swap transaction */
-const MAX_SWAP_SIZE_USD: Record<NetworkType, number> = {
-  mainnet: 50_000,   // $50k max per swap on mainnet
-  testnet: 100_000,  // Higher on testnet for testing
-};
-
-/** Maximum slippage allowed (prevents sandwich attacks) */
-const MAX_SLIPPAGE: Record<NetworkType, number> = {
-  mainnet: 0.02,    // 2% max on mainnet
-  testnet: 0.05,    // 5% on testnet (low liquidity)
-};
-
-/** Gas budget in MIST (1 SUI = 1e9 MIST) */
-const GAS_BUDGET: Record<NetworkType, number> = {
-  mainnet: 100_000_000,  // 0.1 SUI — conservative for mainnet (higher gas costs)
-  testnet: 50_000_000,   // 0.05 SUI
-};
-
-/** Minimum SUI balance required for gas (prevents wallet drain) */
-const MIN_GAS_RESERVE_MIST = 100_000_000; // 0.1 SUI always kept in wallet
+import {
+  SUI_COIN_TYPES,
+  ASSET_DECIMALS,
+  ASSET_TO_COIN_KEY,
+  MAINNET_COIN_TYPES,
+  MAX_SWAP_SIZE_USD,
+  MAX_SLIPPAGE,
+  GAS_BUDGET,
+  MIN_GAS_RESERVE_MIST,
+  type NetworkType,
+  type PoolAsset,
+  type SwapQuoteResult,
+  type RebalanceSwapPlan,
+  type SwapExecutionResult,
+} from '@/lib/types/bluefin-types';
 
 // ============================================
 // QUOTE CACHE (prevents duplicate API calls)
