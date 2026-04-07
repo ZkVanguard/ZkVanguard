@@ -18,7 +18,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { BluefinService, BLUEFIN_PAIRS } from './BluefinService';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
 
 // ============================================
 // DEPLOYED CONTRACTS

@@ -506,7 +506,7 @@ async function step10_swapSimulation(): Promise<void> {
   console.log('══════════════════════════════════════════════');
 
   try {
-    const { getBluefinAggregatorService } = await import('../lib/services/BluefinAggregatorService');
+    const { getBluefinAggregatorService } = await import('../lib/services/sui/BluefinAggregatorService');
     const agg = getBluefinAggregatorService('testnet');
 
     // Get swap quote: USDC → SUI ($10)

@@ -12,7 +12,7 @@
  * 6. Role verification - validates AGENT_ROLE before signing
  * 
  * Usage:
- *   import { getSecureAgentSigner } from '@/lib/services/SecureAgentSigner';
+ *   import { getSecureAgentSigner } from '@/lib/services/hedging/SecureAgentSigner';
  *   const signer = await getSecureAgentSigner();
  *   if (signer) {
  *     const tx = await signer.signAndSend(contract, 'method', [...args]);

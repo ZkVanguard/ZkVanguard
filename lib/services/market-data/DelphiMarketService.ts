@@ -11,7 +11,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { cache } from '../utils/cache';
+import { cache } from '../../utils/cache';
 
 export interface PredictionMarket {
   id: string;

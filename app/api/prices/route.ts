@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '@/lib/services/CryptocomExchangeService';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getCachedPrice, getCachedPrices, upsertPrices } from '@/lib/db/prices';
-import { recordPriceUpdate } from '@/lib/services/PriceAlertWebhook';
+import { recordPriceUpdate } from '@/lib/services/market-data/PriceAlertWebhook';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
 import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-deduplication';

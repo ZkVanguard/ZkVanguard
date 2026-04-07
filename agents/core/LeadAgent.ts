@@ -286,7 +286,7 @@ export class LeadAgent extends BaseAgent {
     // Fetch Polymarket predictions for context
     let predictionContext = '';
     try {
-      const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+      const { DelphiMarketService } = await import('../../lib/services/market-data/DelphiMarketService');
       const predictions = await DelphiMarketService.getRelevantMarkets(['BTC', 'ETH', 'CRO']);
       const significantPredictions = predictions
         .filter(p => p.impact === 'HIGH' || p.probability > 70 || p.probability < 30)

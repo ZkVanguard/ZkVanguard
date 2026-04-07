@@ -13,7 +13,7 @@ import { LeadAgent } from '@/agents/core/LeadAgent';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { saveAgentState, loadAgentState } from '@/lib/db/agent-state';
-import type { MarketSnapshot } from './CentralizedHedgeManager';
+import type { MarketSnapshot } from './hedging/CentralizedHedgeManager';
 import type { HedgeExecutorConfig } from '@/integrations/hedge-executor/HedgeExecutorClient';
 
 export interface AgentOrchestrationResult {
@@ -262,7 +262,7 @@ export class AgentOrchestrator {
 
       // Start auto-hedging PnL tracking (but not auto-execute hedges by default)
       try {
-        const { autoHedgingService } = await import('./AutoHedgingService');
+        const { autoHedgingService } = await import('./hedging/AutoHedgingService');
         await autoHedgingService.start();
         logger.info('✅ AutoHedgingService started for PnL tracking');
       } catch (err) {

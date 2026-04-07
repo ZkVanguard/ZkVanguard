@@ -5,7 +5,7 @@ import { X, Loader2, CheckCircle, AlertCircle, RefreshCw, ArrowDownUp, Shield } 
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from '@/lib/wdk/wdk-hooks';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { parseUnits, formatUnits } from 'viem';
-import { getVVSFinanceService } from '@/lib/services/VVSFinanceService';
+import { getVVSFinanceService } from '@/lib/services/cronos/VVSFinanceService';
 import { logger } from '@/lib/utils/logger';
 
 // Using VVS Finance SDK via API route

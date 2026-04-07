@@ -4,8 +4,8 @@
  */
 
 import crypto from 'crypto';
-import { logger } from '../utils/logger';
-import { generateRebalanceProof } from '../api/zk';
+import { logger } from '../../utils/logger';
+import { generateRebalanceProof } from '../../api/zk';
 
 /** Internal hedge strategy (private details not exposed to frontend) */
 interface HedgeStrategy {

@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { bluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/BluefinService';
+import { bluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/sui/BluefinService';
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';

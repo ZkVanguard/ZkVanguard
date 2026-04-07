@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
     let priceSource: string;
     
     try {
-      const { getStrictHedgePrice } = await import('@/lib/services/unified-price-provider');
+      const { getStrictHedgePrice } = await import('@/lib/services/market-data/unified-price-provider');
       const priceContext = await getStrictHedgePrice(asset, side as 'LONG' | 'SHORT', {
         maxStalenessMs: 15000, // 15s max staleness for executions
         maxSpreadPercent: 3.0, // Allow higher spread on testnet

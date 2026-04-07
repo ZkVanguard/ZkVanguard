@@ -15,7 +15,7 @@ import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS } from '@/lib/const
 import { getAutoHedgeConfig, saveAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { getActiveHedges } from '@/lib/db/hedges';
 import { query, ensureAllTables } from '@/lib/db/postgres';
-import { autoHedgingService } from '@/lib/services/AutoHedgingService';
+import { autoHedgingService } from '@/lib/services/hedging/AutoHedgingService';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { errMsg, errName } from '@/lib/utils/error-handler';
 

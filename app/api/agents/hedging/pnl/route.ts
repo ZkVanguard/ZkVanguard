@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
+import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
 import { getActiveHedges, getHedgeByOrderId, getActiveHedgesByWallet } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';

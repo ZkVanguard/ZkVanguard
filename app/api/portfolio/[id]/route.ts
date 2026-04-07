@@ -5,7 +5,7 @@ import { createPublicClient, http, erc20Abi } from 'viem';
 import { cronos, cronosTestnet } from 'viem/chains';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 import { ProductionGuard } from '@/lib/security/production-guard';
 import { isMainnet } from '@/lib/utils/network';

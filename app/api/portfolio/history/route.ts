@@ -26,8 +26,8 @@ import {
   getOnChainHistoryService,
   type ChartDataPoint,
   type PerformanceMetrics 
-} from '@/lib/services/OnChainPortfolioHistoryService';
-import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
+} from '@/lib/services/cronos/OnChainPortfolioHistoryService';
+import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
 
 export const runtime = 'nodejs';
 export const maxDuration = 10;

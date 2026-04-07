@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 import { ethers } from 'ethers';
 import { addTransactionToCache } from '../utils/transactionCache';
 import { ON_CHAIN_FEES } from '@/lib/config/pricing';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from './market-data/RealMarketDataService';
 import { ProductionGuard, requireLivePrice } from '@/lib/security/production-guard';
 
 export interface X402Config {

@@ -23,7 +23,7 @@
  */
 
 import * as crypto from 'crypto';
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 // Types for private hedging
 export interface PrivateHedge {

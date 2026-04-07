@@ -948,7 +948,7 @@ export async function calculateRealTimeVolatility(chain: string): Promise<{
   timestamp: string;
 }> {
   // Import dynamically to avoid circular dependencies
-  const { getMarketDataService } = await import('./RealMarketDataService');
+  const { getMarketDataService } = await import('./market-data/RealMarketDataService');
   
   // Chain-specific assets and target allocations
   const chainAssets: Record<string, { symbols: string[]; weights: number[] }> = {

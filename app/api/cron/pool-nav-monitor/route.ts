@@ -18,7 +18,7 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
-import { getPoolSummary } from '@/lib/services/CommunityPoolService';
+import { getPoolSummary } from '@/lib/services/cronos/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';

@@ -14,7 +14,7 @@
 import { logger } from '@/lib/utils/logger';
 import { getCryptocomAIService } from '@/lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 export interface Position {
   symbol: string;

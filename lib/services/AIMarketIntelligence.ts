@@ -19,8 +19,8 @@
 
 import { logger } from '@/lib/utils/logger';
 import { cache } from '../utils/cache';
-import { Polymarket5MinService, type FiveMinBTCSignal, type FiveMinSignalHistory } from './Polymarket5MinService';
-import { DelphiMarketService, type PredictionMarket } from './DelphiMarketService';
+import { Polymarket5MinService, type FiveMinBTCSignal, type FiveMinSignalHistory } from './market-data/Polymarket5MinService';
+import { DelphiMarketService, type PredictionMarket } from './market-data/DelphiMarketService';
 
 // ============================================================================
 // Enhanced Types for AI Agents

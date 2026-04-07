@@ -313,7 +313,7 @@ async function generateAnalysisFromOnChainData(
 export async function getPortfolioData(): Promise<Record<string, unknown> | null> {
   try {
     // Import directly to avoid circular fetch issues
-    const { getMarketDataService } = await import('./RealMarketDataService');
+    const { getMarketDataService } = await import('./market-data/RealMarketDataService');
     const { ethers } = await import('ethers');
     
     // Get wallet address from environment

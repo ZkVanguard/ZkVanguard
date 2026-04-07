@@ -222,7 +222,7 @@ const contract = await cryptocomAIAgent.getContractInfo('0xContractAddress');
 
 **Usage:**
 ```typescript
-import { realMarketDataService } from '@/lib/services/RealMarketDataService';
+import { realMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 // Get single token price (automatically uses best source)
 const price = await realMarketDataService.getTokenPrice('BTC');
@@ -321,7 +321,7 @@ const result = await tradingAssistant("Swap 100 CRO to USDC");
 ### Example 3: Multi-Source Price Aggregation
 
 ```typescript
-import { realMarketDataService } from '@/lib/services/RealMarketDataService';
+import { realMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 async function getReliablePrice(symbol: string) {
   try {
@@ -378,7 +378,7 @@ const prices = await cryptocomExchange.getBatchPrices(['BTC', 'ETH', 'CRO']);
 
 ### Test Market Data Service
 ```typescript
-import { realMarketDataService } from '@/lib/services/RealMarketDataService';
+import { realMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 async function testMarketData() {
   const symbols = ['BTC', 'ETH', 'CRO', 'USDC'];

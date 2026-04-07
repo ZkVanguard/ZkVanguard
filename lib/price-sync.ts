@@ -12,7 +12,7 @@
  */
 import { ethers } from 'ethers';
 import { getCurrentChainId, CHAIN_IDS, isMainnet, getRpcUrl } from '@/lib/utils/network';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 // ⚠️ TESTNET-ONLY ADDRESSES
 // On mainnet, use real oracle (no price sync needed)

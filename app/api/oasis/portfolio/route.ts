@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOasisPortfolioManager } from '@/lib/services/OasisPortfolioManager';
+import { getOasisPortfolioManager } from '@/lib/services/oasis/OasisPortfolioManager';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { readLimiter } from '@/lib/security/rate-limiter';

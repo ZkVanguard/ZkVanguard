@@ -17,7 +17,7 @@ import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { createHedge } from '@/lib/db/hedges';
-import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
+import { privateHedgeService } from '@/lib/services/cronos/PrivateHedgeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
 
 export const runtime = 'nodejs';

@@ -12,7 +12,7 @@ import {
   forceHeartbeat,
   triggerPoolNavUpdate,
   forceCommunityPoolCheck,
-} from '@/lib/services/PriceAlertWebhook';
+} from '@/lib/services/market-data/PriceAlertWebhook';
 import { logger } from '@/lib/utils/logger';
 import { errMsg, errName } from '@/lib/utils/error-handler';
 

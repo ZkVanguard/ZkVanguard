@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOnChainPortfolioManager } from '@/lib/services/OnChainPortfolioManager';
+import { getOnChainPortfolioManager } from '@/lib/services/cronos/OnChainPortfolioManager';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';

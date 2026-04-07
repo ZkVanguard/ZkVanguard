@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { autoHedgingService, AUTO_HEDGE_CONFIG } from '@/lib/services/AutoHedgingService';
+import { autoHedgingService, AUTO_HEDGE_CONFIG } from '@/lib/services/hedging/AutoHedgingService';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';

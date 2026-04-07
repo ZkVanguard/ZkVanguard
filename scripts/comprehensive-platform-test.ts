@@ -257,14 +257,14 @@ async function testBluefinIntegration() {
 
   // Test BlueFin service can be imported
   await runTest('BlueFin: Service import', async () => {
-    const { BluefinService } = await import('../lib/services/BluefinService');
+    const { BluefinService } = await import('../lib/services/sui/BluefinService');
     if (!BluefinService) throw new Error('BluefinService not found');
     return 'Imported';
   });
 
   // Test BlueFin service initialization
   await runTest('BlueFin: Service initialization', async () => {
-    const { BluefinService } = await import('../lib/services/BluefinService');
+    const { BluefinService } = await import('../lib/services/sui/BluefinService');
     const service = BluefinService.getInstance();
     const privateKey = process.env.BLUEFIN_PRIVATE_KEY;
     if (!privateKey) throw new Error('BLUEFIN_PRIVATE_KEY not set');
@@ -274,7 +274,7 @@ async function testBluefinIntegration() {
 
   // Test BlueFin can get market data (crucial test)
   await runTest('BlueFin: Market data fetch (BTC-PERP)', async () => {
-    const { BluefinService } = await import('../lib/services/BluefinService');
+    const { BluefinService } = await import('../lib/services/sui/BluefinService');
     const service = BluefinService.getInstance();
     
     // Get BTC market data
@@ -287,7 +287,7 @@ async function testBluefinIntegration() {
 
   // Test account balance (needs funded account for real trading)
   await runTest('BlueFin: Account accessible', async () => {
-    const { BluefinService } = await import('../lib/services/BluefinService');
+    const { BluefinService } = await import('../lib/services/sui/BluefinService');
     const service = BluefinService.getInstance();
     
     try {

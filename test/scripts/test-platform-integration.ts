@@ -6,7 +6,7 @@
 import { cryptocomExchangeService } from '../../lib/services/CryptocomExchangeService';
 import { cryptocomDeveloperPlatform } from '../../lib/services/CryptocomDeveloperPlatformService';
 import { getCryptocomAIService } from '../../lib/ai/cryptocom-service';
-import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { getMarketDataService } from '../../lib/services/market-data/RealMarketDataService';
 
 const cryptocomAIAgent = getCryptocomAIService();
 

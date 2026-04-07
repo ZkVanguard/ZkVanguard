@@ -4,7 +4,7 @@
  */
 
 import { getCryptocomAIService } from './cryptocom-service';
-import { getMarketDataService } from '../services/RealMarketDataService';
+import { getMarketDataService } from '../services/market-data/RealMarketDataService';
 import { logger } from '../utils/logger';
 import type { PortfolioAnalysis, RiskAssessment, HedgeRecommendation } from './cryptocom-service';
 

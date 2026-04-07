@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { DelphiMarketService, type PredictionMarket } from '@/lib/services/market-data/DelphiMarketService';
 import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 

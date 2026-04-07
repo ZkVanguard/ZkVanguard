@@ -3,7 +3,7 @@
  * Wrapper for @vvs-finance/swap-sdk to enable swaps on Cronos Testnet
  */
 
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 import { 
   fetchBestTrade, 
   executeTrade,
@@ -15,8 +15,8 @@ import {
 } from '@vvs-finance/swap-sdk';
 import { ethers } from 'ethers';
 import type { Signer } from 'ethers';
-import { X402GaslessService } from './X402GaslessService';
-import { addTransactionToCache } from '../utils/transactionCache';
+import { X402GaslessService } from '../X402GaslessService';
+import { addTransactionToCache } from '../../utils/transactionCache';
 
 export interface VVSSwapQuote {
   amountIn: string;

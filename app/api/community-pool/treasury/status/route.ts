@@ -74,7 +74,7 @@ export async function GET() {
     // SUI MSafe treasury info (non-blocking)
     let suiTreasury = null;
     try {
-      const { getSuiCommunityPoolService } = await import('@/lib/services/SuiCommunityPoolService');
+      const { getSuiCommunityPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
       const suiService = getSuiCommunityPoolService('testnet');
       const info = await suiService.getTreasuryInfo();
       suiTreasury = {

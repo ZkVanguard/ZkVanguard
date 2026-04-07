@@ -2,7 +2,7 @@
  * Quick test: BlueFin Aggregator Service on testnet
  * Verifies the renamed service works correctly
  */
-import { getBluefinAggregatorService } from '../lib/services/BluefinAggregatorService';
+import { getBluefinAggregatorService } from '../lib/services/sui/BluefinAggregatorService';
 
 async function main() {
   console.log('=== BlueFin Aggregator Service: Testnet Test ===\n');

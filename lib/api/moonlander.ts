@@ -5,7 +5,7 @@
 
 import { logger } from '../utils/logger';
 import fetch from 'node-fetch';
-import { getMarketDataService } from '../services/RealMarketDataService';
+import { getMarketDataService } from '../services/market-data/RealMarketDataService';
 
 export interface Position {
   id: string;

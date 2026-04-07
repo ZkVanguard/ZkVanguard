@@ -19,7 +19,7 @@ import {
   applyAIDecision,
   getPoolSummary,
   fetchExtendedMarketData,
-} from '@/lib/services/CommunityPoolService';
+} from '@/lib/services/cronos/CommunityPoolService';
 import {
   getPoolState,
   SUPPORTED_ASSETS,

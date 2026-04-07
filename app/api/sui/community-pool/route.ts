@@ -23,8 +23,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { getSuiUsdcPoolService, validateSuiMainnetConfig } from '@/lib/services/SuiCommunityPoolService';
-import { getBluefinAggregatorService, type PoolAsset, type SwapExecutionResult } from '@/lib/services/BluefinAggregatorService';
+import { getSuiUsdcPoolService, validateSuiMainnetConfig } from '@/lib/services/sui/SuiCommunityPoolService';
+import { getBluefinAggregatorService, type PoolAsset, type SwapExecutionResult } from '@/lib/services/sui/BluefinAggregatorService';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 import { verifyCronRequest } from '@/lib/qstash';
 
@@ -286,7 +286,7 @@ export async function GET(request: NextRequest) {
     if (action === 'contract') {
       const info = service.getContractInfo();
       // Also include the deployed SUI-native pool contract info
-      const { getSuiCommunityPoolService } = await import('@/lib/services/SuiCommunityPoolService');
+      const { getSuiCommunityPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
       const nativeInfo = getSuiCommunityPoolService(network).getContractInfo();
       
       // Check BlueFin hedging status
@@ -848,7 +848,7 @@ export async function POST(request: NextRequest) {
           }
         } else if (reverseQuote.hedgeVia === 'bluefin' || forwardQuote.hedgeVia === 'bluefin') {
           // Hedged position: close the BlueFin hedge
-          const { bluefinService, BluefinService } = await import('@/lib/services/BluefinService');
+          const { bluefinService, BluefinService } = await import('@/lib/services/sui/BluefinService');
           const privateKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
           const bfNetwork = (process.env.BLUEFIN_NETWORK || network) as 'mainnet' | 'testnet';
 

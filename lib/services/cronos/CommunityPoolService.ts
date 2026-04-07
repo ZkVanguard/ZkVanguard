@@ -25,14 +25,14 @@
  * - Network-aware RPC and contract address handling
  */
 
-import { logger } from '../utils/logger';
-import { isMainnet, getCurrentChainId } from '../utils/network';
-import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataService';
+import { logger } from '../../utils/logger';
+import { isMainnet, getCurrentChainId } from '../../utils/network';
+import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
 import {
   getPoolStats as getOnChainPoolStats,
   clearCaches as clearStatsCaches,
   type ChainStatsConfig,
-} from './CommunityPoolStatsService';
+} from '../CommunityPoolStatsService';
 import {
   getPoolState,
   savePoolState,
@@ -46,7 +46,7 @@ import {
   type PoolState,
   type UserShares,
   type SupportedAsset,
-} from '../storage/community-pool-storage';
+} from '../../storage/community-pool-storage';
 
 // ═══════════════════════════════════════════════════════════════
 // NETWORK CONFIGURATION (Mainnet-Safe)

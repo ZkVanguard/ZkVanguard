@@ -27,8 +27,8 @@ import {
   savePoolStateToDb,
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
-import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
-import { getHederaDexService, type PoolAsset } from '@/lib/services/HederaDexService';
+import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
+import { getHederaDexService, type PoolAsset } from '@/lib/services/hedera/HederaDexService';
 import { HEDERA_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 
 export const runtime = 'nodejs';

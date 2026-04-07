@@ -27,7 +27,7 @@ import {
   type NetworkType,
   type RebalanceSwapPlan,
   type SwapQuoteResult,
-} from '../../lib/services/BluefinAggregatorService';
+} from '../../lib/services/sui/BluefinAggregatorService';
 import { AIMarketIntelligence, type AIMarketContext, type EnhancedPrediction } from '../../lib/services/AIMarketIntelligence';
 
 // ============================================================================
@@ -174,7 +174,7 @@ export class SuiPoolAgent extends BaseAgent {
    * Checks which assets are actually swappable on the current network.
    */
   async analyzeMarket(): Promise<MarketIndicator[]> {
-    const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+    const { getMarketDataService } = await import('../../lib/services/market-data/RealMarketDataService');
     const mds = getMarketDataService();
     const aggregator = getBluefinAggregatorService(this.network);
     const indicators: MarketIndicator[] = [];

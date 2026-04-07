@@ -9,7 +9,7 @@
  * Requires: BLUEFIN_PRIVATE_KEY environment variable
  */
 
-import { BluefinService } from '../lib/services/BluefinService';
+import { BluefinService } from '../lib/services/sui/BluefinService';
 
 const PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY || '';
 

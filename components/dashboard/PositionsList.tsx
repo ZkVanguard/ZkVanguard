@@ -8,7 +8,7 @@ import { DepositModal } from './DepositModal';
 import { WithdrawModal } from './WithdrawModal';
 import PortfolioDetailModal from './PortfolioDetailModal';
 import { AdvancedPortfolioCreator } from './AdvancedPortfolioCreator';
-import { DelphiMarketService, type PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { DelphiMarketService, type PredictionMarket } from '@/lib/services/market-data/DelphiMarketService';
 import { usePositions } from '@/contexts/PositionsContext';
 import { usePortfolioAction, type CustomActionPayload } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
@@ -17,8 +17,6 @@ import type {
   PortfolioAssetDetail, PortfolioTransaction, PortfolioDetail,
   PositionsListProps, AssetBalance, OnChainPortfolio,
 } from './positions-types';
-  txHash?: string | null; // Transaction hash from portfolio creation
-}
 
 // Memoized token icon component for better performance
 const TokenIcon = memo(({ symbol }: { symbol: string }) => {

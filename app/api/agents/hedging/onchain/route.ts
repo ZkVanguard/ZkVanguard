@@ -19,7 +19,7 @@ import { getAllOnChainHedges, getOnChainProtocolStats, batchUpdateHedgePrices, g
 import { getCachedPrices, upsertPrices } from '@/lib/db/prices';
 import { getHedgesByWallet } from '@/lib/hedge-ownership';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { logger } from '@/lib/utils/logger';
 
 // Live price sync v2

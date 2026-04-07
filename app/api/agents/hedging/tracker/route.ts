@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { hedgePnLTracker } from '@/lib/services/HedgePnLTracker';
+import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';

@@ -137,7 +137,7 @@ async function testExplorerService() {
   console.log('\n═══ TEST 2: OasisExplorerService ═══');
 
   try {
-    const mod = await import('../lib/services/OasisExplorerService');
+    const mod = await import('../lib/services/oasis/OasisExplorerService');
 
     // Test singleton factories
     try {
@@ -226,7 +226,7 @@ async function testPortfolioManager() {
   console.log('\n═══ TEST 3: OasisPortfolioManager ═══');
 
   try {
-    const mod = await import('../lib/services/OasisPortfolioManager');
+    const mod = await import('../lib/services/oasis/OasisPortfolioManager');
 
     // Singleton creation
     try {
@@ -305,7 +305,7 @@ async function testHedgeService() {
   console.log('\n═══ TEST 4: OasisOnChainHedgeService ═══');
 
   try {
-    const mod = await import('../lib/services/OasisOnChainHedgeService');
+    const mod = await import('../lib/services/oasis/OasisOnChainHedgeService');
 
     // Singleton
     try {
@@ -385,7 +385,7 @@ async function testCommunityPoolService() {
   console.log('\n═══ TEST 5: OasisCommunityPoolService ═══');
 
   try {
-    const mod = await import('../lib/services/OasisCommunityPoolService');
+    const mod = await import('../lib/services/oasis/OasisCommunityPoolService');
 
     // Get pool addresses
     try {
@@ -439,7 +439,7 @@ async function testPrivateHedgeService() {
   console.log('\n═══ TEST 6: OasisPrivateHedgeService ═══');
 
   try {
-    const mod = await import('../lib/services/OasisPrivateHedgeService');
+    const mod = await import('../lib/services/oasis/OasisPrivateHedgeService');
 
     // Singleton
     try {
@@ -586,7 +586,7 @@ async function testAutoHedgingAdapter() {
   console.log('\n═══ TEST 7: OasisAutoHedgingAdapter ═══');
 
   try {
-    const mod = await import('../lib/services/OasisAutoHedgingAdapter');
+    const mod = await import('../lib/services/oasis/OasisAutoHedgingAdapter');
 
     // Singleton
     try {

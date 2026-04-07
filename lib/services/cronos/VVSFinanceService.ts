@@ -5,7 +5,7 @@
  * Docs: https://vvs.finance/
  */
 
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 // VVS Finance Router addresses (properly checksummed)
 // Note: VVS Finance is mainnet only. For testnet demo, swaps will simulate.
