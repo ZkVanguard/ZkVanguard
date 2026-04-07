@@ -31,7 +31,7 @@ const CHAINS = {
     name: 'Hedera Testnet',
     chainId: 296,
     rpc: 'https://testnet.hashio.io/api',
-    pool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6',
+    pool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B',
     usdc: '0x0000000000000000000000000000000000000000',
     status: 'testing',
     explorer: 'https://hashscan.io/testnet'

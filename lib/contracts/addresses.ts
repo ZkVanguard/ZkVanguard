@@ -175,7 +175,7 @@ export const SEPOLIA_CONTRACT_ADDRESSES = {
 export const HEDERA_CONTRACT_ADDRESSES = {
   testnet: {
     // Hedera Testnet (Chain ID: 296)
-    communityPool: '0xCF434F24eBA5ECeD1ffd0e69F1b1F4cDed1AB2a6' as `0x${string}`,
+    communityPool: '0xfd6B402b860aD57f1393E2b60E1D676b57e0E63B' as `0x${string}`,
     usdtToken: '0x0000000000000000000000000000000000000000' as `0x${string}`, // USDT on Hedera testnet - TODO
     pythOracle: '0xA2aa501b19aff244D90cc15a4Cf739D2725B5729' as `0x${string}`,
     zkVerifier: '0x0000000000000000000000000000000000000000' as `0x${string}`,
