@@ -43,130 +43,13 @@ import {
   COMMUNITY_POOL_ABI,
 } from '@/lib/contracts/community-pool-config';
 import { getChainKeyFromId, getNetworkFromChainId, getValidChainIds } from './utils';
-import type { 
-  CommunityPoolState, 
-  TransactionState, 
-  PoolSummary, 
-  UserPosition, 
-  AIRecommendation,
-  LeaderboardEntry,
-  ChainKey,
-  TxStatus
-} from './types';
-
-// ============================================================================
-// STATE TYPES
-// ============================================================================
-
-type PoolAction =
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_POOL_DATA'; payload: PoolSummary | null }
-  | { type: 'SET_USER_POSITION'; payload: UserPosition | null }
-  | { type: 'SET_AI_RECOMMENDATION'; payload: AIRecommendation | null }
-  | { type: 'SET_LEADERBOARD'; payload: LeaderboardEntry[] }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_SUCCESS'; payload: string | null }
-  | { type: 'SET_CHAIN'; payload: ChainKey }
-  | { type: 'SET_SUI_POOL_STATE_ID'; payload: string | null }
-  | { type: 'RESET_FOR_CHAIN_CHANGE' };
-
-type TxAction =
-  | { type: 'SET_TX_STATUS'; payload: TxStatus }
-  | { type: 'SET_ACTION_LOADING'; payload: boolean }
-  | { type: 'SET_SHOW_DEPOSIT'; payload: boolean }
-  | { type: 'SET_SHOW_WITHDRAW'; payload: boolean }
-  | { type: 'SET_DEPOSIT_AMOUNT'; payload: string }
-  | { type: 'SET_WITHDRAW_SHARES'; payload: string }
-  | { type: 'SET_SUI_DEPOSIT_AMOUNT'; payload: string }
-  | { type: 'SET_SUI_WITHDRAW_SHARES'; payload: string }
-  | { type: 'SET_LAST_TX_HASH'; payload: string | null }
-  | { type: 'RESET_TX_STATE' };
-
-// ============================================================================
-// REDUCERS
-// ============================================================================
-
-const initialPoolState: CommunityPoolState = {
-  poolData: null,
-  userPosition: null,
-  aiRecommendation: null,
-  leaderboard: [],
-  loading: true,
-  error: null,
-  successMessage: null,
-  selectedChain: 'sepolia',  // Sepolia with WDK USDT for Tether Hackathon
-  suiPoolStateId: null,
-};
-
-const initialTxState: TransactionState = {
-  txStatus: 'idle',
-  actionLoading: false,
-  showDeposit: false,
-  showWithdraw: false,
-  depositAmount: '',
-  withdrawShares: '',
-  suiDepositAmount: '',
-  suiWithdrawShares: '',
-  lastTxHash: null,
-};
-
-function poolReducer(state: CommunityPoolState, action: PoolAction): CommunityPoolState {
-  switch (action.type) {
-    case 'SET_LOADING':
-      return { ...state, loading: action.payload };
-    case 'SET_POOL_DATA':
-      return { ...state, poolData: action.payload };
-    case 'SET_USER_POSITION':
-      return { ...state, userPosition: action.payload };
-    case 'SET_AI_RECOMMENDATION':
-      return { ...state, aiRecommendation: action.payload };
-    case 'SET_LEADERBOARD':
-      return { ...state, leaderboard: action.payload };
-    case 'SET_ERROR':
-      return { ...state, error: action.payload };
-    case 'SET_SUCCESS':
-      return { ...state, successMessage: action.payload };
-    case 'SET_CHAIN':
-      return { ...state, selectedChain: action.payload };
-    case 'SET_SUI_POOL_STATE_ID':
-      return { ...state, suiPoolStateId: action.payload };
-    case 'RESET_FOR_CHAIN_CHANGE':
-      return {
-        ...initialPoolState,
-        selectedChain: state.selectedChain,
-        loading: true,
-      };
-    default:
-      return state;
-  }
-}
-
-function txReducer(state: TransactionState, action: TxAction): TransactionState {
-  switch (action.type) {
-    case 'SET_TX_STATUS':
-      return { ...state, txStatus: action.payload };
-    case 'SET_ACTION_LOADING':
-      return { ...state, actionLoading: action.payload };
-    case 'SET_SHOW_DEPOSIT':
-      return { ...state, showDeposit: action.payload, showWithdraw: action.payload ? false : state.showWithdraw };
-    case 'SET_SHOW_WITHDRAW':
-      return { ...state, showWithdraw: action.payload, showDeposit: action.payload ? false : state.showDeposit };
-    case 'SET_DEPOSIT_AMOUNT':
-      return { ...state, depositAmount: action.payload };
-    case 'SET_WITHDRAW_SHARES':
-      return { ...state, withdrawShares: action.payload };
-    case 'SET_SUI_DEPOSIT_AMOUNT':
-      return { ...state, suiDepositAmount: action.payload };
-    case 'SET_SUI_WITHDRAW_SHARES':
-      return { ...state, suiWithdrawShares: action.payload };
-    case 'SET_LAST_TX_HASH':
-      return { ...state, lastTxHash: action.payload };
-    case 'RESET_TX_STATE':
-      return initialTxState;
-    default:
-      return state;
-  }
-}
+import type { ChainKey, TxStatus } from './types';
+import {
+  type PoolAction, type TxAction,
+  initialPoolState, initialTxState,
+  poolReducer, txReducer,
+} from './pool-reducers';
+import { EVM_CHAIN_PARAMS, switchChainNative } from './chain-params';
 
 // ============================================================================
 // HOOK
@@ -780,38 +663,6 @@ export function useCommunityPool(propAddress?: string) {
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
-      // Chain parameters for adding to wallet
-      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
-        11155111: { // Sepolia
-          chainId: '0xaa36a7',
-          chainName: 'Sepolia',
-          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
-          blockExplorerUrls: ['https://sepolia.etherscan.io'],
-          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-        },
-        25: { // Cronos Mainnet
-          chainId: '0x19',
-          chainName: 'Cronos',
-          rpcUrls: ['https://evm.cronos.org', 'https://cronos-evm-rpc.publicnode.com'],
-          blockExplorerUrls: ['https://explorer.cronos.org'],
-          nativeCurrency: { name: 'Cronos', symbol: 'CRO', decimals: 18 },
-        },
-        338: { // Cronos Testnet
-          chainId: '0x152',
-          chainName: 'Cronos Testnet',
-          rpcUrls: ['https://evm-t3.cronos.org'],
-          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
-          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
-        },
-        296: { // Hedera Testnet
-          chainId: '0x128',
-          chainName: 'Hedera Testnet',
-          rpcUrls: ['https://testnet.hashio.io/api'],
-          blockExplorerUrls: ['https://hashscan.io/testnet'],
-          nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
-        },
-      };
-      
       // Use WDK switchChainAsync - this properly syncs state
       logger.info('[CommunityPool] Switching chain (WDK)', { targetChainId });
       
@@ -840,28 +691,9 @@ export function useCommunityPool(propAddress?: string) {
         })
         .catch(async (switchError: any) => {
           logger.warn('[CommunityPool] WDK switch failed, trying native', { error: switchError?.message });
-          // Fallback to native API if WDK fails (e.g., chain not in config)
-          const ethereum = (window as any).ethereum;
-          if (!ethereum) {
-            clearTimeout(timeoutId);
-            dispatchPool({ type: 'SET_ERROR', payload: 'No wallet detected.' });
-            return;
-          }
-          
-          const params = chainParams[targetChainId];
-          if (!params) {
-            clearTimeout(timeoutId);
-            dispatchPool({ type: 'SET_ERROR', payload: `Chain ${targetChainId} not supported` });
-            return;
-          }
           
           try {
-            logger.info('[CommunityPool] Falling back to native API');
-            await ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: params.chainId }],
-            });
-            
+            await switchChainNative(targetChainId);
             logger.info('[CommunityPool] Native switch success');
             clearTimeout(timeoutId);
             skipChainCheckRef.current = true;
@@ -875,32 +707,12 @@ export function useCommunityPool(propAddress?: string) {
             }, 1000);
           } catch (nativeError: any) {
             logger.error('[CommunityPool] Native switch failed', { code: nativeError?.code, message: nativeError?.message });
-            if (nativeError?.code === 4902) {
-              // Chain not added - try to add it
-              try {
-                await ethereum.request({
-                  method: 'wallet_addEthereumChain',
-                  params: [params],
-                });
-                logger.info('[CommunityPool] Chain added');
-                clearTimeout(timeoutId);
-                skipChainCheckRef.current = true;
-                pendingChainSwitchRef.current = null;
-                dispatchPool({ type: 'SET_ERROR', payload: null });
-                setTimeout(() => handleDeposit(), 1000);
-              } catch (addError: any) {
-                clearTimeout(timeoutId);
-                pendingChainSwitchRef.current = null;
-                dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet manually.` });
-              }
-            } else if (nativeError?.code === 4001) {
-              clearTimeout(timeoutId);
-              pendingChainSwitchRef.current = null;
+            clearTimeout(timeoutId);
+            pendingChainSwitchRef.current = null;
+            if (nativeError?.code === 4001 || nativeError?.message?.includes('rejected')) {
               dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
             } else {
-              clearTimeout(timeoutId);
-              pendingChainSwitchRef.current = null;
-              dispatchPool({ type: 'SET_ERROR', payload: nativeError?.message || 'Chain switch failed' });
+              dispatchPool({ type: 'SET_ERROR', payload: nativeError?.message || `Please add ${chainConfig?.name} to your wallet manually.` });
             }
           }
         });
@@ -1318,74 +1130,6 @@ export function useCommunityPool(propAddress?: string) {
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
       
-      // Chain parameters for adding to wallet (same as deposit)
-      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
-        11155111: { // Sepolia
-          chainId: '0xaa36a7',
-          chainName: 'Sepolia',
-          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
-          blockExplorerUrls: ['https://sepolia.etherscan.io'],
-          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-        },
-        25: { // Cronos Mainnet
-          chainId: '0x19',
-          chainName: 'Cronos',
-          rpcUrls: ['https://evm.cronos.org', 'https://cronos-evm-rpc.publicnode.com'],
-          blockExplorerUrls: ['https://explorer.cronos.org'],
-          nativeCurrency: { name: 'Cronos', symbol: 'CRO', decimals: 18 },
-        },
-        338: { // Cronos Testnet
-          chainId: '0x152',
-          chainName: 'Cronos Testnet',
-          rpcUrls: ['https://evm-t3.cronos.org'],
-          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
-          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
-        },
-        296: { // Hedera Testnet
-          chainId: '0x128',
-          chainName: 'Hedera Testnet',
-          rpcUrls: ['https://testnet.hashio.io/api'],
-          blockExplorerUrls: ['https://hashscan.io/testnet'],
-          nativeCurrency: { name: 'HBAR', symbol: 'HBAR', decimals: 18 },
-        },
-      };
-      
-      // Try to add and switch chain using native wallet API
-      const addAndSwitchChain = async () => {
-        const ethereum = (window as any).ethereum;
-        if (!ethereum) {
-          throw new Error('No wallet detected');
-        }
-        
-        const params = chainParams[targetChainId];
-        if (!params) {
-          throw new Error(`Chain ${targetChainId} not configured`);
-        }
-        
-        try {
-          // First try to just switch (chain might already be added)
-          await ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: params.chainId }],
-          });
-        } catch (switchError: any) {
-          // 4902 = Chain not added, try to add it
-          if (switchError.code === 4902) {
-            await ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [params],
-            });
-            // After adding, switch to it
-            await ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: params.chainId }],
-            });
-          } else {
-            throw switchError;
-          }
-        }
-      };
-      
       // Set a timeout to show manual switch message if wallet doesn't respond
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'withdraw') {
@@ -1395,8 +1139,8 @@ export function useCommunityPool(propAddress?: string) {
         }
       }, 15000);
       
-      console.log('[CommunityPool] Adding and switching chain for withdraw...');
-      addAndSwitchChain()
+      console.log('[CommunityPool] Switching chain for withdraw...');
+      switchChainNative(targetChainId)
         .then(() => {
           console.log('[CommunityPool] Chain switch successful for withdraw!');
           clearTimeout(timeoutId);
