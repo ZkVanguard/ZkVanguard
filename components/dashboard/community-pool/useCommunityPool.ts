@@ -82,7 +82,7 @@ export function useCommunityPool(propAddress?: string) {
   // Debug: Track transaction state changes (only log when values actually matter)
   useEffect(() => {
     if (txHash || isPending || isConfirming || txState.txStatus !== 'idle') {
-      console.log('[TX STATE]', {
+      logger.debug('[TX STATE]', {
         txHash: txHash ? `${txHash.slice(0, 10)}...` : null,
         isPending,
         isConfirming,
@@ -182,7 +182,7 @@ export function useCommunityPool(propAddress?: string) {
         supported: !!nonce && !!domainSeparator 
       };
     } catch (e) {
-      console.warn('Failed to fetch permit details', e);
+      logger.warn('Failed to fetch permit details', e);
       return { supported: false };
     }
   }, [selectedChain, network]);
@@ -198,7 +198,7 @@ export function useCommunityPool(propAddress?: string) {
       const allowance = await erc20.allowance(owner, spender);
       return BigInt(allowance);
     } catch (e) { 
-      console.warn('Failed to fetch allowance', e);
+      logger.warn('Failed to fetch allowance', e);
       return BigInt(0); 
     }
   }, [selectedChain, network]);
@@ -669,7 +669,7 @@ export function useCommunityPool(propAddress?: string) {
       // Set timeout for user feedback
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'deposit') {
-          console.log('[CommunityPool] Switch timeout');
+          logger.debug('[CommunityPool] Switch timeout');
           dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet, then click Deposit again.` });
           pendingChainSwitchRef.current = null;
         }
@@ -726,7 +726,7 @@ export function useCommunityPool(propAddress?: string) {
     
     // Get the target chain ID for this deposit (use selected chain, not WDK's stale value)
     const targetChainId = validChainIds[0];
-    console.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
+    logger.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
       amount, 
       targetChainId, 
       wdkChainId: chainId, 
@@ -1088,7 +1088,7 @@ export function useCommunityPool(propAddress?: string) {
       fetchPoolData(true);
       
     } catch (err: any) {
-      console.error('[CommunityPool] Deposit failed:', err);
+      logger.error('[CommunityPool] Deposit failed:', err);
       pendingDepositAmountRef.current = '';
       const code = err?.code || err?.info?.error?.code;
       const msg = err?.shortMessage || err?.message || '';
@@ -1126,27 +1126,27 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
-      console.log(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
+      logger.debug(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
       
       // Set a timeout to show manual switch message if wallet doesn't respond
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'withdraw') {
-          console.log('[CommunityPool] Switch timeout - showing manual message');
+          logger.debug('[CommunityPool] Switch timeout - showing manual message');
           dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Withdraw again.` });
           pendingChainSwitchRef.current = null;
         }
       }, 15000);
       
-      console.log('[CommunityPool] Switching chain for withdraw...');
+      logger.debug('[CommunityPool] Switching chain for withdraw...');
       switchChainNative(targetChainId)
         .then(() => {
-          console.log('[CommunityPool] Chain switch successful for withdraw!');
+          logger.debug('[CommunityPool] Chain switch successful for withdraw!');
           clearTimeout(timeoutId);
         })
         .catch((err: any) => {
-          console.error('[CommunityPool] Chain switch failed:', err);
+          logger.error('[CommunityPool] Chain switch failed:', err);
           clearTimeout(timeoutId);
           pendingChainSwitchRef.current = null;
           if (err?.code === 4001 || err?.message?.includes('rejected')) {

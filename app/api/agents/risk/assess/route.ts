@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { getCronosProvider } from '@/lib/throttled-provider';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { heavyLimiter } from '@/lib/security/rate-limiter';
+import { heavyLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
@@ -201,6 +201,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = readLimiter.check(request);
+  if (limited) return limited;
   return NextResponse.json({ status: 'Risk Agent API operational' });
 }

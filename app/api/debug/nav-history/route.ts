@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as crypto from 'crypto';
 import { query } from '@/lib/db/postgres';
 import { logger } from '@/lib/utils/logger';
 
@@ -13,9 +14,12 @@ export const dynamic = 'force-dynamic';
  * SECURITY: Requires admin key or dev environment only
  */
 export async function GET(request: Request) {
-  // Only allow with admin key (header-based only for security)
+  // Only allow with admin key (header-based only for security, timing-safe)
   const adminKey = new Headers(request.headers).get('x-admin-key');
-  const isAdmin = adminKey === process.env.INTERNAL_API_SECRET;
+  const expectedSecret = process.env.INTERNAL_API_SECRET;
+  const isAdmin = adminKey !== null && expectedSecret !== undefined &&
+    adminKey.length === expectedSecret.length &&
+    crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(expectedSecret));
 
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

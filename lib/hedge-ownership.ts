@@ -11,6 +11,7 @@
  */
 
 import { query, queryOne } from './db/postgres';
+import { logger } from '@/lib/utils/logger';
 
 export interface HedgeOwnershipEntry {
   walletAddress: string;
@@ -72,9 +73,9 @@ export async function registerHedgeOwnership(
         ]
       );
     }
-    console.log(`🔑 Registered hedge ownership: ${commitmentHash.slice(0, 18)}... → ${entry.walletAddress}`);
+    logger.debug(`🔑 Registered hedge ownership: ${commitmentHash.slice(0, 18)}... → ${entry.walletAddress}`);
   } catch (error) {
-    console.error('Failed to register hedge ownership:', error);
+    logger.error('Failed to register hedge ownership:', error);
     // Don't throw - ownership registration is non-critical
   }
 }
@@ -160,7 +161,7 @@ export async function getHedgeOwner(hedgeIdOrCommitment: string): Promise<HedgeO
 
     return null;
   } catch (error) {
-    console.error('Failed to get hedge owner:', error);
+    logger.error('Failed to get hedge owner:', error);
     return null;
   }
 }
@@ -177,7 +178,7 @@ export async function removeHedgeOwnership(hedgeIdOrCommitment: string): Promise
       [lookupValue]
     );
   } catch (error) {
-    console.error('Failed to remove hedge ownership:', error);
+    logger.error('Failed to remove hedge ownership:', error);
   }
 }
 
@@ -257,7 +258,7 @@ export async function getHedgesByWallet(walletAddress: string): Promise<Record<s
       }
     }
   } catch (error) {
-    console.error('Failed to get hedges by wallet:', error);
+    logger.error('Failed to get hedges by wallet:', error);
   }
 
   return result;

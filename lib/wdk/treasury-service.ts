@@ -15,6 +15,7 @@
 import 'server-only';
 
 import { ethers } from 'ethers';
+import { logger } from '@/lib/utils/logger';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 
 // ERC20 ABI for USDT operations
@@ -65,7 +66,7 @@ export class TreasuryService {
     try {
       // Validate private key format
       if (!this.config.privateKey || this.config.privateKey.length < 64) {
-        console.error('[Treasury] Invalid private key');
+        logger.error('[Treasury] Invalid private key');
         return false;
       }
       
@@ -93,10 +94,10 @@ export class TreasuryService {
       }
       
       this.initialized = true;
-      console.log('[Treasury] Initialized with', this.wallets.size, 'chains');
+      logger.debug('[Treasury] Initialized with', this.wallets.size, 'chains');
       return true;
     } catch (err) {
-      console.error('[Treasury] Initialization error:', err);
+      logger.error('[Treasury] Initialization error:', err);
       return false;
     }
   }
@@ -136,7 +137,7 @@ export class TreasuryService {
       // USDT has 6 decimals
       return ethers.formatUnits(balance, 6);
     } catch (err) {
-      console.error('[Treasury] Balance error:', err);
+      logger.error('[Treasury] Balance error:', err);
       return '0';
     }
   }
@@ -173,10 +174,10 @@ export class TreasuryService {
       const tx = await token.transfer(to, amountWei);
       const receipt = await tx.wait();
       
-      console.log('[Treasury] Transfer successful:', receipt.hash);
+      logger.debug('[Treasury] Transfer successful:', receipt.hash);
       return { success: true, txHash: receipt.hash };
     } catch (err: any) {
-      console.error('[Treasury] Transfer error:', err);
+      logger.error('[Treasury] Transfer error:', err);
       return { success: false, error: err.message };
     }
   }
@@ -196,7 +197,7 @@ export class TreasuryService {
       const signature = await wallet.signMessage(message);
       return { signature, signerAddress: wallet.address };
     } catch (err) {
-      console.error('[Treasury] Sign error:', err);
+      logger.error('[Treasury] Sign error:', err);
       return null;
     }
   }
@@ -266,7 +267,7 @@ export function getTreasuryService(): TreasuryService | null {
   // Support both naming conventions
   const privateKey = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY;
   if (!privateKey) {
-    console.warn('[Treasury] No private key configured - treasury operations disabled');
+    logger.warn('[Treasury] No private key configured - treasury operations disabled');
     return null;
   }
   

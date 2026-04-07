@@ -33,6 +33,7 @@ import {
   auditLog 
 } from '@/lib/security/production-guard';
 import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
+import { calculateDrawdown, calculateVolatility, calculateConcentrationRisk } from './hedge-risk-math';
 // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
@@ -574,14 +575,14 @@ export class CentralizedHedgeManager {
         ? ((poolStats.peakSharePrice - poolStats.sharePrice) / poolStats.peakSharePrice) * 100
         : 0;
     } else {
-      drawdownPercent = this.calculateDrawdown(positions, totalValue);
+      drawdownPercent = calculateDrawdown(positions, totalValue);
     }
 
     // Clamp computed values to sane ranges
     drawdownPercent = isFinite(drawdownPercent) ? Math.max(0, Math.min(drawdownPercent, 100)) : 0;
 
-    const volatility = this.calculateVolatility(positions);
-    const concentrationRisk = this.calculateConcentrationRisk(positions, totalValue);
+    const volatility = calculateVolatility(positions);
+    const concentrationRisk = calculateConcentrationRisk(positions, totalValue);
 
     // Risk score calculation — community pool uses tighter thresholds
     let riskScore = 1;
@@ -1079,25 +1080,6 @@ export class CentralizedHedgeManager {
   }
 
   // ─── UTILITY ───────────────────────────────────────────────────────────────
-
-  private calculateDrawdown(positions: Position[], totalValue: number): number {
-    if (!positions.length || totalValue === 0) return 0;
-    return positions.reduce((acc, pos) => {
-      return acc + (pos.change24h < 0 ? Math.abs(pos.change24h) * (pos.value / totalValue) : 0);
-    }, 0);
-  }
-
-  private calculateVolatility(positions: Position[]): number {
-    if (!positions.length) return 0;
-    return Math.sqrt(
-      positions.reduce((acc, pos) => acc + Math.pow(pos.change24h / 100, 2), 0) / positions.length
-    ) * 100;
-  }
-
-  private calculateConcentrationRisk(positions: Position[], totalValue: number): number {
-    if (!positions.length || totalValue === 0) return 0;
-    return (Math.max(...positions.map(p => p.value)) / totalValue) * 100;
-  }
 
   /** Get last cycle result */
   getLastCycleResult(): CycleResult | null {

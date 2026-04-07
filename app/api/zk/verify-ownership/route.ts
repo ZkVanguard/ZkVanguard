@@ -107,6 +107,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<VerifyOwn
       }, { status: 400 });
     }
 
+    // Validate wallet address format
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      return NextResponse.json({
+        success: false,
+        verified: false,
+        walletAddress: '',
+        verificationTimestamp: new Date().toISOString(),
+        error: 'Invalid wallet address format',
+      }, { status: 400 });
+    }
+
     const normalizedAddress = walletAddress.toLowerCase();
 
     // If hedgeId is provided, verify specific hedge ownership

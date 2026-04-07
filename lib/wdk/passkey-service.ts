@@ -9,6 +9,8 @@
  * primarily for local authentication (biometric gating).
  */
 
+import { logger } from '@/lib/utils/logger';
+
 export interface PasskeyCredential {
   id: string;
   rawId: string;
@@ -29,25 +31,25 @@ export const PasskeyService = {
    * Windows Hello, phone-based auth, security keys, and its built-in passkey manager.
    */
   isSupported: async (): Promise<boolean> => {
-    console.log('[PasskeyService] 🔍 Checking WebAuthn support...');
-    console.log('[PasskeyService]   window defined:', typeof window !== 'undefined');
-    console.log('[PasskeyService]   navigator.credentials:', typeof navigator !== 'undefined' && !!navigator.credentials);
-    console.log('[PasskeyService]   PublicKeyCredential:', typeof window !== 'undefined' && !!window.PublicKeyCredential);
+    logger.debug('[PasskeyService] 🔍 Checking WebAuthn support...');
+    logger.debug('[PasskeyService]   window defined:', typeof window !== 'undefined');
+    logger.debug('[PasskeyService]   navigator.credentials:', typeof navigator !== 'undefined' && !!navigator.credentials);
+    logger.debug('[PasskeyService]   PublicKeyCredential:', typeof window !== 'undefined' && !!window.PublicKeyCredential);
     if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-      console.warn('[PasskeyService] ❌ WebAuthn NOT supported (no PublicKeyCredential)');
+      logger.warn('[PasskeyService] ❌ WebAuthn NOT supported (no PublicKeyCredential)');
       return false;
     }
     // Check platform authenticator availability (informational only — not required)
     try {
       const platformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      console.log('[PasskeyService]   Platform authenticator (biometric/Windows Hello):', platformAvailable);
+      logger.debug('[PasskeyService]   Platform authenticator (biometric/Windows Hello):', platformAvailable);
       // Even if platform authenticator is NOT available, Chrome/Edge still support
       // passkeys via cross-platform authenticators (phone, security key, etc.)
       // So we return true as long as the WebAuthn API exists.
     } catch (e) {
-      console.log('[PasskeyService]   Platform check failed (non-fatal):', e);
+      logger.debug('[PasskeyService]   Platform check failed (non-fatal):', e);
     }
-    console.log('[PasskeyService] ✅ WebAuthn API is available');
+    logger.debug('[PasskeyService] ✅ WebAuthn API is available');
     return true;
   },
 
@@ -55,12 +57,12 @@ export const PasskeyService = {
    * Register a new Passkey
    */
   register: async (username: string): Promise<PasskeyCredential | null> => {
-    console.log('[PasskeyService] 📝 Register passkey for user:', username);
+    logger.debug('[PasskeyService] 📝 Register passkey for user:', username);
     try {
       const challenge = getChallenge();
       const userId = crypto.getRandomValues(new Uint8Array(16));
-      console.log('[PasskeyService]   Challenge generated:', challenge.length, 'bytes');
-      console.log('[PasskeyService]   User ID generated:', userId.length, 'bytes');
+      logger.debug('[PasskeyService]   Challenge generated:', challenge.length, 'bytes');
+      logger.debug('[PasskeyService]   User ID generated:', userId.length, 'bytes');
 
       const publicKey: PublicKeyCredentialCreationOptions = {
         challenge: challenge as unknown as BufferSource,
@@ -86,25 +88,25 @@ export const PasskeyService = {
         attestation: 'none',
       };
 
-      console.log('[PasskeyService]   📡 Calling navigator.credentials.create()...');
-      console.log('[PasskeyService]   RP:', publicKey.rp);
-      console.log('[PasskeyService]   User:', publicKey.user?.name);
-      console.log('[PasskeyService]   PubKeyParams:', publicKey.pubKeyCredParams);
-      console.log('[PasskeyService]   AuthenticatorSelection:', publicKey.authenticatorSelection);
-      console.log('[PasskeyService]   Timeout:', publicKey.timeout);
+      logger.debug('[PasskeyService]   📡 Calling navigator.credentials.create()...');
+      logger.debug('[PasskeyService]   RP:', publicKey.rp);
+      logger.debug('[PasskeyService]   User:', publicKey.user?.name);
+      logger.debug('[PasskeyService]   PubKeyParams:', publicKey.pubKeyCredParams);
+      logger.debug('[PasskeyService]   AuthenticatorSelection:', publicKey.authenticatorSelection);
+      logger.debug('[PasskeyService]   Timeout:', publicKey.timeout);
       
       const credential = await navigator.credentials.create({ publicKey }) as any;
       
       if (!credential) {
-        console.warn('[PasskeyService] ⚠️ navigator.credentials.create() returned null');
+        logger.warn('[PasskeyService] ⚠️ navigator.credentials.create() returned null');
         return null;
       }
 
       const rawIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-      console.log('[PasskeyService] ✅ Passkey registered successfully!');
-      console.log('[PasskeyService]   Credential ID:', credential.id?.slice(0, 20) + '...');
-      console.log('[PasskeyService]   Raw ID (base64):', rawIdBase64.slice(0, 20) + '...');
-      console.log('[PasskeyService]   Type:', credential.type);
+      logger.debug('[PasskeyService] ✅ Passkey registered successfully!');
+      logger.debug('[PasskeyService]   Credential ID:', credential.id?.slice(0, 20) + '...');
+      logger.debug('[PasskeyService]   Raw ID (base64):', rawIdBase64.slice(0, 20) + '...');
+      logger.debug('[PasskeyService]   Type:', credential.type);
 
       return {
         id: credential.id,
@@ -113,9 +115,9 @@ export const PasskeyService = {
         type: credential.type,
       };
     } catch (err: any) {
-      console.error('[PasskeyService] ❌ Passkey registration failed:', err);
-      console.error('[PasskeyService]   Error name:', err?.name);
-      console.error('[PasskeyService]   Error message:', err?.message);
+      logger.error('[PasskeyService] ❌ Passkey registration failed:', err);
+      logger.error('[PasskeyService]   Error name:', err?.name);
+      logger.error('[PasskeyService]   Error message:', err?.message);
       throw err;
     }
   },
@@ -124,39 +126,39 @@ export const PasskeyService = {
    * Authenticate with an existing Passkey
    */
   authenticate: async (credentialIds?: string[]): Promise<boolean> => {
-    console.log('[PasskeyService] 🔐 === AUTHENTICATE START ===' );
-    console.log('[PasskeyService]   credentialIds provided:', credentialIds?.length ?? 0);
+    logger.debug('[PasskeyService] 🔐 === AUTHENTICATE START ===' );
+    logger.debug('[PasskeyService]   credentialIds provided:', credentialIds?.length ?? 0);
     if (credentialIds) {
       credentialIds.forEach((id, i) => {
-        console.log(`[PasskeyService]   credentialIds[${i}]:`, id?.slice(0, 30) + '...', 'length:', id?.length);
+        logger.debug(`[PasskeyService]   credentialIds[${i}]:`, id?.slice(0, 30) + '...', 'length:', id?.length);
       });
     }
     
     // Pre-flight checks
-    console.log('[PasskeyService]   navigator.credentials exists:', typeof navigator !== 'undefined' && !!navigator.credentials);
-    console.log('[PasskeyService]   navigator.credentials.get exists:', typeof navigator !== 'undefined' && !!navigator.credentials?.get);
+    logger.debug('[PasskeyService]   navigator.credentials exists:', typeof navigator !== 'undefined' && !!navigator.credentials);
+    logger.debug('[PasskeyService]   navigator.credentials.get exists:', typeof navigator !== 'undefined' && !!navigator.credentials?.get);
     
     try {
       const challenge = getChallenge();
-      console.log('[PasskeyService]   Challenge generated:', challenge.length, 'bytes');
+      logger.debug('[PasskeyService]   Challenge generated:', challenge.length, 'bytes');
       
-      console.log('[PasskeyService]   Decoding credential IDs...');
+      logger.debug('[PasskeyService]   Decoding credential IDs...');
       const allowCredentials = credentialIds?.map((id, i) => {
         try {
           // Normalize Base64URL to Base64 for atob
           const base64 = id.replace(/-/g, '+').replace(/_/g, '/');
           const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
-          console.log(`[PasskeyService]     [${i}] Original:`, id?.slice(0, 20) + '...');
-          console.log(`[PasskeyService]     [${i}] Normalized:`, padded?.slice(0, 20) + '...');
+          logger.debug(`[PasskeyService]     [${i}] Original:`, id?.slice(0, 20) + '...');
+          logger.debug(`[PasskeyService]     [${i}] Normalized:`, padded?.slice(0, 20) + '...');
           const decoded = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
-          console.log(`[PasskeyService]     [${i}] Decoded to ${decoded.length} bytes ✅`);
+          logger.debug(`[PasskeyService]     [${i}] Decoded to ${decoded.length} bytes ✅`);
           return {
             id: decoded as unknown as BufferSource,
             type: 'public-key' as const,
           };
         } catch (e: any) {
-          console.error(`[PasskeyService]     [${i}] ❌ Failed to decode credential ID:`, e?.message);
-          console.error(`[PasskeyService]     [${i}] Raw ID value:`, id);
+          logger.error(`[PasskeyService]     [${i}] ❌ Failed to decode credential ID:`, e?.message);
+          logger.error(`[PasskeyService]     [${i}] Raw ID value:`, id);
           return null;
         }
       }).filter(c => c !== null) as PublicKeyCredentialDescriptor[];
@@ -164,8 +166,8 @@ export const PasskeyService = {
       // If credential IDs were provided but all failed to decode, do NOT fail early.
       // Instead, proceed with empty allowCredentials to trigger "Discoverable Credentials" flow.
       const useDiscoverable = !allowCredentials || allowCredentials.length === 0;
-      console.log('[PasskeyService]   Decoded credentials count:', allowCredentials?.length ?? 0);
-      console.log('[PasskeyService]   Using discoverable mode:', useDiscoverable);
+      logger.debug('[PasskeyService]   Decoded credentials count:', allowCredentials?.length ?? 0);
+      logger.debug('[PasskeyService]   Using discoverable mode:', useDiscoverable);
 
       const publicKey: PublicKeyCredentialRequestOptions = {
         challenge: challenge as unknown as BufferSource,
@@ -175,8 +177,8 @@ export const PasskeyService = {
         timeout: 60000,
       };
 
-      console.log('[PasskeyService]   📡 Calling navigator.credentials.get()...');
-      console.log('[PasskeyService]   Options:', JSON.stringify({
+      logger.debug('[PasskeyService]   📡 Calling navigator.credentials.get()...');
+      logger.debug('[PasskeyService]   Options:', JSON.stringify({
         hasChallenge: !!publicKey.challenge,
         allowCredentialsCount: publicKey.allowCredentials?.length ?? 'undefined (discoverable)',
         userVerification: publicKey.userVerification,
@@ -185,19 +187,19 @@ export const PasskeyService = {
 
       try {
         const assertion = await navigator.credentials.get({ publicKey });
-        console.log('[PasskeyService]   ✅ Assertion received:', !!assertion);
+        logger.debug('[PasskeyService]   ✅ Assertion received:', !!assertion);
         if (assertion) {
-          console.log('[PasskeyService]   Assertion type:', (assertion as any).type);
-          console.log('[PasskeyService]   Assertion ID:', (assertion as any).id?.slice(0, 20) + '...');
+          logger.debug('[PasskeyService]   Assertion type:', (assertion as any).type);
+          logger.debug('[PasskeyService]   Assertion ID:', (assertion as any).id?.slice(0, 20) + '...');
         }
-        console.log('[PasskeyService] 🔐 === AUTHENTICATE END (success:', !!assertion, ') ===');
+        logger.debug('[PasskeyService] 🔐 === AUTHENTICATE END (success:', !!assertion, ') ===');
         return !!assertion;
       } catch (innerErr: any) {
-        console.warn('[PasskeyService]   ⚠️ credentials.get() threw:', innerErr?.name, innerErr?.message);
+        logger.warn('[PasskeyService]   ⚠️ credentials.get() threw:', innerErr?.name, innerErr?.message);
         // If specific credential failed (e.g. NotFoundError because ID is from different domain/device/stale),
         // try again with Discoverable Credentials (empty allowCredentials) if we haven't already.
         if (!useDiscoverable && (innerErr.name === 'NotFoundError' || innerErr.name === 'NotAllowedError')) {
-          console.warn('[PasskeyService]   🔄 Retrying with Discoverable Credentials (no allowCredentials)...');
+          logger.warn('[PasskeyService]   🔄 Retrying with Discoverable Credentials (no allowCredentials)...');
           
           const fallbackKey: PublicKeyCredentialRequestOptions = {
             ...publicKey,
@@ -206,11 +208,11 @@ export const PasskeyService = {
           
           try {
             const fallbackAssertion = await navigator.credentials.get({ publicKey: fallbackKey });
-            console.log('[PasskeyService]   ✅ Fallback assertion received:', !!fallbackAssertion);
-            console.log('[PasskeyService] 🔐 === AUTHENTICATE END (fallback success:', !!fallbackAssertion, ') ===');
+            logger.debug('[PasskeyService]   ✅ Fallback assertion received:', !!fallbackAssertion);
+            logger.debug('[PasskeyService] 🔐 === AUTHENTICATE END (fallback success:', !!fallbackAssertion, ') ===');
             return !!fallbackAssertion;
           } catch (fallbackErr: any) {
-            console.error('[PasskeyService]   ❌ Fallback also failed:', fallbackErr?.name, fallbackErr?.message);
+            logger.error('[PasskeyService]   ❌ Fallback also failed:', fallbackErr?.name, fallbackErr?.message);
             throw fallbackErr;
           }
         }
@@ -219,12 +221,12 @@ export const PasskeyService = {
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
         // User cancelled or timed out -> safe to ignore
-        console.log('[PasskeyService] ⏹️ Authentication cancelled by user (NotAllowedError)');
+        logger.debug('[PasskeyService] ⏹️ Authentication cancelled by user (NotAllowedError)');
       } else {
-        console.error('[PasskeyService] ❌ Authentication error:', err?.name, err?.message);
-        console.error('[PasskeyService]   Full error:', err);
+        logger.error('[PasskeyService] ❌ Authentication error:', err?.name, err?.message);
+        logger.error('[PasskeyService]   Full error:', err);
       }
-      console.log('[PasskeyService] 🔐 === AUTHENTICATE END (failed) ===');
+      logger.debug('[PasskeyService] 🔐 === AUTHENTICATE END (failed) ===');
       return false;
     }
   }

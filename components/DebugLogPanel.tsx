@@ -41,7 +41,7 @@ class LogStore {
 
   addLog(level: LogEntry['level'], source: string, message: string, data?: Record<string, unknown>) {
     const entry: LogEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: crypto.randomUUID(),
       timestamp: new Date(),
       level,
       source,
