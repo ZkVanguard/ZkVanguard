@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
 import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
 
 // ============================================
 // CONFIGURATION

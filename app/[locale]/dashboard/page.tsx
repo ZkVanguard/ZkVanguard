@@ -14,7 +14,7 @@ import { usePositions } from '@/contexts/PositionsContext';
 import { usePortfolioAction, type CustomActionPayload } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 import { useSui } from '@/app/sui-providers';
-import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
+import type { PredictionMarket } from '@/lib/services/market-data/DelphiMarketService';
 
 // Dynamic imports for code splitting
 const AgentActivity = nextDynamic(() => import('@/components/dashboard/AgentActivity').then(mod => ({ default: mod.AgentActivity })), {

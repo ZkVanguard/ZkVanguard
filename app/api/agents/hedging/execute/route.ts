@@ -19,15 +19,15 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
-import { privateHedgeService } from '@/lib/services/PrivateHedgeService';
+import { privateHedgeService } from '@/lib/services/cronos/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
 import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
 import type { NetworkType } from '@/integrations/moonlander/contracts';
 import { HedgeExecutorClient, type OnChainHedgeResult } from '@/integrations/hedge-executor/HedgeExecutorClient';
 import { generateRebalanceProof, generateWalletOwnershipProof } from '@/lib/api/zk';
 import { deriveProxyPDA, type ProxyPDA } from '@/lib/crypto/ProxyPDA';
-import { getOnChainHedgeService } from '@/lib/services/OnChainHedgeService';
-import { getHedgeExecutionPrice, type HedgePriceContext } from '@/lib/services/unified-price-provider';
+import { getOnChainHedgeService } from '@/lib/services/cronos/OnChainHedgeService';
+import { getHedgeExecutionPrice, type HedgePriceContext } from '@/lib/services/market-data/unified-price-provider';
 import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -579,7 +579,7 @@ export async function POST(request: NextRequest) {
     let priceSource: string;
     
     try {
-      const { getStrictHedgePrice } = await import('@/lib/services/unified-price-provider');
+      const { getStrictHedgePrice } = await import('@/lib/services/market-data/unified-price-provider');
       const priceContext = await getStrictHedgePrice(asset, side, {
         maxStalenessMs: 15000, // 15s max for executions
         maxSpreadPercent: 3.0,

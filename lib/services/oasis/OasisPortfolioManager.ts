@@ -18,7 +18,7 @@
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import * as fs from 'fs';
 import * as path from 'path';

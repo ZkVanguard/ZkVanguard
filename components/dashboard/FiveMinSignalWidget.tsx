@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Clock, Zap, Activity,
   AlertTriangle, ChevronDown, ChevronUp, Shield
 } from 'lucide-react';
-import type { FiveMinBTCSignal, FiveMinSignalHistory } from '@/lib/services/Polymarket5MinService';
+import type { FiveMinBTCSignal, FiveMinSignalHistory } from '@/lib/services/market-data/Polymarket5MinService';
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -15,10 +15,10 @@ const CONFIDENCE_BARS = [1, 2, 3, 4, 5] as const;
 
 // ─── Cached module reference ─────────────────────────────────────────
 // Avoids re-resolving the dynamic import on every poll cycle.
-let serviceModulePromise: Promise<typeof import('@/lib/services/Polymarket5MinService')> | null = null;
+let serviceModulePromise: Promise<typeof import('@/lib/services/market-data/Polymarket5MinService')> | null = null;
 function getService() {
   if (!serviceModulePromise) {
-    serviceModulePromise = import('@/lib/services/Polymarket5MinService');
+    serviceModulePromise = import('@/lib/services/market-data/Polymarket5MinService');
   }
   return serviceModulePromise;
 }

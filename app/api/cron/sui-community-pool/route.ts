@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { getSuiCommunityPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/SuiCommunityPoolService';
+import { getSuiCommunityPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/sui/SuiCommunityPoolService';
 import {
   initCommunityPoolTables,
   recordNavSnapshot,
@@ -27,12 +27,12 @@ import {
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
-import { getMultiSourceValidatedPrice } from '@/lib/services/unified-price-provider';
-import { getBluefinAggregatorService } from '@/lib/services/BluefinAggregatorService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
+import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
+import { getBluefinAggregatorService } from '@/lib/services/sui/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
-import { BluefinService } from '@/lib/services/BluefinService';
+import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 
 export const runtime = 'nodejs';

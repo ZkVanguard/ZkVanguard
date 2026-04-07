@@ -245,7 +245,7 @@ export class BluefinAggregatorService {
   ): Promise<{ estimatedOut: string; price: number } | null> {
     try {
       // Dynamic import to avoid circular dependency
-      const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
       const mds = getMarketDataService();
       const data = await mds.getTokenPrice(asset);
       if (!data.price || data.price <= 0) return null;
@@ -1115,7 +1115,7 @@ export class BluefinAggregatorService {
 
       // Fallback: estimate from market price using the actual asset
       try {
-        const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
         const mds = getMarketDataService();
         const data = await mds.getTokenPrice(asset);
         if (data.price > 0) {
@@ -1154,7 +1154,7 @@ export class BluefinAggregatorService {
     if (!fromCoinType || asset === 'CRO') {
       // Get market price for accurate expectedAmountOut
       try {
-        const { getMarketDataService } = await import('@/lib/services/RealMarketDataService');
+        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
         const mds = getMarketDataService();
         const data = await mds.getTokenPrice(asset);
         if (data.price > 0) {

@@ -15,7 +15,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
 
 // ============================================
 // DEPLOYED CONTRACT ADDRESSES

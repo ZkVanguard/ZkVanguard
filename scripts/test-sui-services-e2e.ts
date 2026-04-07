@@ -125,7 +125,7 @@ async function testBluefinAggregatorService() {
   console.log('\n═══ TEST 2: BluefinAggregatorService ═══');
 
   try {
-    const { getBluefinAggregatorService } = await import('../lib/services/BluefinAggregatorService');
+    const { getBluefinAggregatorService } = await import('../lib/services/sui/BluefinAggregatorService');
     const agg = getBluefinAggregatorService('testnet');
 
     // Service init
@@ -202,7 +202,7 @@ async function testBluefinAggregatorService() {
 async function testSuiExplorerService() {
   console.log('\n═══ TEST 3: SuiExplorerService ═══');
 
-  const { SuiExplorerService } = await import('../lib/services/SuiExplorerService');
+  const { SuiExplorerService } = await import('../lib/services/sui/SuiExplorerService');
   const explorer = new SuiExplorerService('testnet');
 
   // Get SUI balance of a known address (the package publisher)
@@ -320,7 +320,7 @@ async function testSuiExplorerService() {
 async function testSuiOnChainHedgeService() {
   console.log('\n═══ TEST 4: SuiOnChainHedgeService ═══');
 
-  const { SuiOnChainHedgeService } = await import('../lib/services/SuiOnChainHedgeService');
+  const { SuiOnChainHedgeService } = await import('../lib/services/sui/SuiOnChainHedgeService');
   const hedgeSvc = new SuiOnChainHedgeService('testnet');
 
   // Read contract state via RPC
@@ -432,7 +432,7 @@ async function testSuiOnChainHedgeService() {
 async function testSuiCommunityPoolService() {
   console.log('\n═══ TEST 5: SuiCommunityPoolService ═══');
 
-  const { SuiCommunityPoolService } = await import('../lib/services/SuiCommunityPoolService');
+  const { SuiCommunityPoolService } = await import('../lib/services/sui/SuiCommunityPoolService');
   const poolSvc = new SuiCommunityPoolService('testnet');
 
   // Pool stats (read from on-chain state)
@@ -527,7 +527,7 @@ async function testSuiCommunityPoolService() {
 async function testSuiPrivateHedgeService() {
   console.log('\n═══ TEST 6: SuiPrivateHedgeService ═══');
 
-  const { SuiPrivateHedgeService } = await import('../lib/services/SuiPrivateHedgeService');
+  const { SuiPrivateHedgeService } = await import('../lib/services/sui/SuiPrivateHedgeService');
   const zkSvc = new SuiPrivateHedgeService('testnet');
 
   // Commitment generation
@@ -685,7 +685,7 @@ async function testSuiPrivateHedgeService() {
 async function testSuiAutoHedgingAdapter() {
   console.log('\n═══ TEST 7: SuiAutoHedgingAdapter ═══');
 
-  const { SuiAutoHedgingAdapter } = await import('../lib/services/SuiAutoHedgingAdapter');
+  const { SuiAutoHedgingAdapter } = await import('../lib/services/sui/SuiAutoHedgingAdapter');
   const adapter = new SuiAutoHedgingAdapter();
 
   // Status before starting
@@ -749,7 +749,7 @@ async function testSuiAutoHedgingAdapter() {
 
   // Config check
   try {
-    const { SUI_HEDGE_CONFIG } = await import('../lib/services/SuiAutoHedgingAdapter');
+    const { SUI_HEDGE_CONFIG } = await import('../lib/services/sui/SuiAutoHedgingAdapter');
     if (SUI_HEDGE_CONFIG.PNL_UPDATE_INTERVAL_MS > 0 && SUI_HEDGE_CONFIG.MAX_DRAWDOWN_PERCENT > 0) {
       ok('SUI_HEDGE_CONFIG', `drawdown: ${SUI_HEDGE_CONFIG.MAX_DRAWDOWN_PERCENT}%, leverage: ${SUI_HEDGE_CONFIG.DEFAULT_LEVERAGE}x`);
     }
@@ -762,7 +762,7 @@ async function testSuiAutoHedgingAdapter() {
 async function testSuiPortfolioManager() {
   console.log('\n═══ TEST 8: SuiPortfolioManager ═══');
 
-  const { SuiPortfolioManager } = await import('../lib/services/SuiPortfolioManager');
+  const { SuiPortfolioManager } = await import('../lib/services/sui/SuiPortfolioManager');
   const mgr = new SuiPortfolioManager('testnet');
 
   // Fetch the rwaManager owner first (a real SUI address)

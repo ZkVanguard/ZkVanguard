@@ -162,7 +162,7 @@ describe('LIVE: Full Polymarket5MinService (no mocks)', () => {
 
   beforeAll(async () => {
     // Import the real service (no jest.mock in this file)
-    const mod = await import('../../lib/services/Polymarket5MinService');
+    const mod = await import('../../lib/services/market-data/Polymarket5MinService');
     Polymarket5MinService = mod.Polymarket5MinService;
   });
 

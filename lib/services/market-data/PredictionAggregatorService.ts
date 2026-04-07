@@ -15,7 +15,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { cache } from '../utils/cache';
+import { cache } from '../../utils/cache';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import type { PredictionMarket } from './DelphiMarketService';
 

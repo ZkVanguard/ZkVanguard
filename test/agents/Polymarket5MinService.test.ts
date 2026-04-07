@@ -20,7 +20,7 @@ import {
   Polymarket5MinService,
   FiveMinBTCSignal,
   FiveMinSignalHistory,
-} from '../../lib/services/Polymarket5MinService';
+} from '../../lib/services/market-data/Polymarket5MinService';
 
 // ─── Shared State ───────────────────────────────────────────────────
 

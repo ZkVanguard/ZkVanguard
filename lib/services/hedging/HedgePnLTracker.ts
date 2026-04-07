@@ -5,7 +5,7 @@
  */
 
 import { getActiveHedges, updateHedgePnL, getOwnedHedges, verifyZKOwnership, type Hedge } from '@/lib/db/hedges';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { logger } from '@/lib/utils/logger';
 
 export interface HedgePnLUpdate {

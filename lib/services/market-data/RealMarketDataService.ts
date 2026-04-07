@@ -7,7 +7,7 @@
 import axios from 'axios';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
-import { cryptocomExchangeService } from './CryptocomExchangeService';
+import { cryptocomExchangeService } from '../CryptocomExchangeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
 
 export interface MarketPrice {

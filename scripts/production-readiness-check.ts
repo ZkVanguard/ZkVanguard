@@ -127,7 +127,7 @@ function checkEnvVars() {
 console.log('\n═══ BLUEFIN HEDGING READINESS ═══\n');
 
 async function checkBluefin() {
-  const { BluefinService } = await import('../lib/services/BluefinService');
+  const { BluefinService } = await import('../lib/services/sui/BluefinService');
   const service = BluefinService.getInstance();
   
   const privateKey = process.env.BLUEFIN_PRIVATE_KEY;

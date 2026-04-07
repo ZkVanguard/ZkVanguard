@@ -15,11 +15,11 @@ import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/ty
 import { MoonlanderClient, OrderResult, PerpetualPosition, LiquidationRisk } from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
 import { HedgeExecutorClient, HedgeExecutorConfig, OnChainHedgeResult } from '@integrations/hedge-executor/HedgeExecutorClient';
-import { DelphiMarketService } from '../../lib/services/DelphiMarketService';
+import { DelphiMarketService } from '../../lib/services/market-data/DelphiMarketService';
 import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
-import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/Polymarket5MinService';
+import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
 
 /** Extended client interface for duck-typing compatibility with varying implementations */
 interface MoonlanderClientExt {
@@ -128,7 +128,7 @@ export class HedgingAgent extends BaseAgent {
 
       // Subscribe to the proactive 5-min signal ticker — never late
       try {
-        const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+        const { Polymarket5MinService } = await import('../../lib/services/market-data/Polymarket5MinService');
         this.fiveMinUnsubscribers.push(
           Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
             this.cachedFiveMinSignal = evt.signal;
@@ -950,7 +950,7 @@ export class HedgingAgent extends BaseAgent {
     // For Cronos: use default Moonlander/HedgeExecutor path
     if (chain === 'sui') {
       try {
-        const { getSuiAutoHedgingAdapter } = await import('../../lib/services/SuiAutoHedgingAdapter');
+        const { getSuiAutoHedgingAdapter } = await import('../../lib/services/sui/SuiAutoHedgingAdapter');
         const suiAdapter = getSuiAutoHedgingAdapter();
         const riskResult = await suiAdapter.assessRisk(params.portfolioId as string || 'community-pool');
         logger.info('SUI hedge strategy created via SuiAutoHedgingAdapter', {
@@ -974,7 +974,7 @@ export class HedgingAgent extends BaseAgent {
       }
     } else if (chain === 'oasis-sapphire' || chain === 'oasis') {
       try {
-        const { getOasisAutoHedgingAdapter } = await import('../../lib/services/OasisAutoHedgingAdapter');
+        const { getOasisAutoHedgingAdapter } = await import('../../lib/services/oasis/OasisAutoHedgingAdapter');
         const oasisAdapter = getOasisAutoHedgingAdapter();
         const riskResult = await oasisAdapter.assessRisk(params.portfolioId as string || 'community-pool');
         logger.info('Oasis hedge strategy created via OasisAutoHedgingAdapter', {
@@ -1420,7 +1420,7 @@ export class HedgingAgent extends BaseAgent {
       // Factor in Delphi prediction insights
       let delphiPenalty = 0;
       try {
-        const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+        const { DelphiMarketService } = await import('../../lib/services/market-data/DelphiMarketService');
         const btcInsights = await DelphiMarketService.getAssetInsights('BTC');
         const highRiskHedge = btcInsights.predictions.filter(
           p => p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'

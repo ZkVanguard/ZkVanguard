@@ -11,7 +11,7 @@ import {
   parseActionIntent,
   formatActionResult
 } from '../services/portfolio-actions';
-import { generatePrivateHedges, type PrivateHedge } from '../services/zk-hedge-service';
+import { generatePrivateHedges, type PrivateHedge } from '../services/hedging/zk-hedge-service';
 
 // Re-export public types for consumers
 export type { ChatMessage, LLMResponse, StreamChunk } from './llm-types';
@@ -360,7 +360,7 @@ class LLMProvider {
       let predictionContext = '';
       try {
         // Dynamic import to avoid circular dependencies
-        const { DelphiMarketService } = await import('../services/DelphiMarketService');
+        const { DelphiMarketService } = await import('../services/market-data/DelphiMarketService');
         
         // Get relevant predictions for portfolio assets (or default to major crypto)
         const assets = portfolioAssets.length > 0 ? portfolioAssets : ['BTC', 'ETH', 'CRO'];

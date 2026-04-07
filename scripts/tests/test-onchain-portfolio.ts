@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { ethers } from 'ethers';
-import { getMarketDataService } from '../lib/services/RealMarketDataService';
+import { getMarketDataService } from '../lib/services/market-data/RealMarketDataService';
 
 async function testOnChainPortfolio() {
   console.log('🔗 Testing On-Chain Portfolio Data\n');

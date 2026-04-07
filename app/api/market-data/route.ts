@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readLimiter } from '@/lib/security/rate-limiter';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
 

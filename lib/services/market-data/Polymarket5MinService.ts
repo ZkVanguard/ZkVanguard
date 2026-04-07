@@ -25,7 +25,7 @@
 
 import { EventEmitter } from 'events';
 import { logger } from '@/lib/utils/logger';
-import { cache } from '../utils/cache';
+import { cache } from '../../utils/cache';
 
 // ─── Types ───────────────────────────────────────────────────────────
 

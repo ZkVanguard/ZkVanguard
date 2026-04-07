@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOasisPoolStats, getOasisMemberPosition } from '@/lib/services/OasisCommunityPoolService';
+import { getOasisPoolStats, getOasisMemberPosition } from '@/lib/services/oasis/OasisCommunityPoolService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 

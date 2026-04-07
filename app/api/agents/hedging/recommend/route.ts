@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import type { PortfolioData } from '@/shared/types/portfolio';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { heavyLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCached, setCached } from '@/lib/db/ui-cache';

@@ -28,7 +28,7 @@ import {
   auditLog,
   ENFORCE_PRODUCTION_SAFETY
 } from '@/lib/security/production-guard';
-import { getMarketDataService } from '@/lib/services/RealMarketDataService';
+import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 describe('MAINNET READINESS - Critical Safety Tests', () => {
   
@@ -523,7 +523,7 @@ describe('MAINNET READINESS - Integration Tests', () => {
   describe('12. Hedge Manager Validation', () => {
     
     it('should validate hedge parameters before execution', async () => {
-      const { CentralizedHedgeManager } = await import('@/lib/services/CentralizedHedgeManager');
+      const { CentralizedHedgeManager } = await import('@/lib/services/hedging/CentralizedHedgeManager');
       const manager = CentralizedHedgeManager.getInstance();
       
       // Should not crash and should validate inputs

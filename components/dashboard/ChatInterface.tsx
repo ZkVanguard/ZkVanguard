@@ -361,7 +361,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
         case 'delphi_query': {
           setActiveAgent('Lead Agent → Delphi Integration');
-          const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+          const { DelphiMarketService } = await import('../../lib/services/market-data/DelphiMarketService');
           
           // Get relevant predictions
           const predictions = await DelphiMarketService.getTopMarkets(5);

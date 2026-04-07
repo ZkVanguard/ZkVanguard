@@ -59,11 +59,11 @@ async function init() {
   COMMUNITY_POOL_PORTFOLIO_ID = constMod.COMMUNITY_POOL_PORTFOLIO_ID;
   isCommunityPoolPortfolio = constMod.isCommunityPoolPortfolio;
 
-  const centralMod = await import('../../lib/services/CentralizedHedgeManager');
+  const centralMod = await import('../../lib/services/hedging/CentralizedHedgeManager');
   CentralizedHedgeManager = centralMod.CentralizedHedgeManager;
   getCentralizedHedgeManager = centralMod.getCentralizedHedgeManager;
 
-  const svcMod = await import('../../lib/services/AutoHedgingService');
+  const svcMod = await import('../../lib/services/hedging/AutoHedgingService');
   autoHedgingService = svcMod.autoHedgingService;
 }
 

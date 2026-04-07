@@ -35,10 +35,10 @@ async function init() {
   const orchMod = await import('../../lib/services/agent-orchestrator');
   getAgentOrchestrator = orchMod.getAgentOrchestrator;
 
-  const centralMod = await import('../../lib/services/CentralizedHedgeManager');
+  const centralMod = await import('../../lib/services/hedging/CentralizedHedgeManager');
   getCentralizedHedgeManager = centralMod.getCentralizedHedgeManager;
 
-  const svcMod = await import('../../lib/services/AutoHedgingService');
+  const svcMod = await import('../../lib/services/hedging/AutoHedgingService');
   autoHedgingService = svcMod.autoHedgingService;
 
   const constMod = await import('../../lib/constants');

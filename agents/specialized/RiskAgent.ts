@@ -13,7 +13,7 @@ import { BaseAgent } from '../core/BaseAgent';
 import { logger } from '@shared/utils/logger';
 import { AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types/agent';
 import { ethers } from 'ethers';
-import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
+import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
 import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
 
 /**
@@ -48,7 +48,7 @@ export class RiskAgent extends BaseAgent {
 
     // Subscribe to the proactive 5-min signal ticker — never late
     try {
-      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+      const { Polymarket5MinService } = await import('../../lib/services/market-data/Polymarket5MinService');
       this.fiveMinUnsubscribers.push(
         Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
           this.cachedFiveMinSignal = evt.signal;
@@ -491,7 +491,7 @@ REC3: [third recommendation]`;
   private async calculateVolatilityInternal(portfolioId: number): Promise<number> {
     try {
       // Import RealMarketDataService for extended price data with high/low
-      const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+      const { getMarketDataService } = await import('../../lib/services/market-data/RealMarketDataService');
       const realMarketDataService = getMarketDataService();
       
       // Get portfolio exposures to determine which assets to analyze
@@ -572,7 +572,7 @@ REC3: [third recommendation]`;
       if (chain === 'sui') {
         // ── SUI: fetch from SUI community pool service ──
         try {
-          const { getSuiCommunityPoolService } = await import('../../lib/services/SuiCommunityPoolService');
+          const { getSuiCommunityPoolService } = await import('../../lib/services/sui/SuiCommunityPoolService');
           const suiPool = getSuiCommunityPoolService();
           const stats = await suiPool.getPoolStats();
           const totalValue = stats.totalNAVUsd || 0;
@@ -597,7 +597,7 @@ REC3: [third recommendation]`;
       } else if (chain === 'oasis-sapphire' || chain === 'oasis') {
         // ── Oasis Sapphire: fetch from Oasis community pool service ──
         try {
-          const { getOasisPoolStats } = await import('../../lib/services/OasisCommunityPoolService');
+          const { getOasisPoolStats } = await import('../../lib/services/oasis/OasisCommunityPoolService');
           const stats = await getOasisPoolStats();
           const totalValue = parseFloat(stats.totalNAV) || 0;
           // Oasis pool returns allocation percentages per asset
@@ -702,7 +702,7 @@ REC3: [third recommendation]`;
   private async assessMarketSentimentInternal(): Promise<'bullish' | 'bearish' | 'neutral'> {
     try {
       // Import and use DelphiMarketService for real prediction data
-      const { DelphiMarketService } = await import('../../lib/services/DelphiMarketService');
+      const { DelphiMarketService } = await import('../../lib/services/market-data/DelphiMarketService');
       
       // Get predictions for major assets
       const btcInsights = await DelphiMarketService.getAssetInsights('BTC');

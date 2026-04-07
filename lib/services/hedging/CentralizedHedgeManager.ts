@@ -16,13 +16,13 @@
 import { logger } from '@/lib/utils/logger';
 import { getActiveHedges, createHedge, fixHedgeEntryPrice, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
-import { getAgentOrchestrator } from './agent-orchestrator';
+import { getAgentOrchestrator } from '../agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
-import { getMarketDataService, type ExtendedMarketData } from './RealMarketDataService';
-import { getUnifiedPriceProvider } from './unified-price-provider';
+import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
+import { getUnifiedPriceProvider } from '../market-data/unified-price-provider';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { 
@@ -32,7 +32,7 @@ import {
   validateLeverage,
   auditLog 
 } from '@/lib/security/production-guard';
-import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
+import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
 import { calculateDrawdown, calculateVolatility, calculateConcentrationRisk } from './hedge-risk-math';
 // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';

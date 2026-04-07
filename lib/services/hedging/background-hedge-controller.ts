@@ -14,7 +14,7 @@
 import { logger } from '@/lib/utils/logger';
 import crypto from 'crypto';
 import { EventEmitter } from 'events';
-import { getUnifiedPriceProvider, getHedgeExecutionPrice, type HedgePriceContext } from './unified-price-provider';
+import { getUnifiedPriceProvider, getHedgeExecutionPrice, type HedgePriceContext } from '../market-data/unified-price-provider';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES

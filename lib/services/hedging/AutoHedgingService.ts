@@ -12,20 +12,20 @@
 import { logger } from '@/lib/utils/logger';
 import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
-import { getAgentOrchestrator } from './agent-orchestrator';
+import { getAgentOrchestrator } from '../agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
-import { getMarketDataService } from './RealMarketDataService';
-import { getUnifiedPriceProvider, getHedgeExecutionPrice } from './unified-price-provider';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
+import { getUnifiedPriceProvider, getHedgeExecutionPrice } from '../market-data/unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPortfolio } from '@/lib/constants';
-import { calculatePoolNAV } from './CommunityPoolService';
-import { getPoolStats as getUnifiedPoolStats } from './CommunityPoolStatsService';
+import { calculatePoolNAV } from '../cronos/CommunityPoolService';
+import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
-import type { FiveMinBTCSignal } from './Polymarket5MinService';
-import { PredictionAggregatorService, type AggregatedPrediction } from './PredictionAggregatorService';
+import type { FiveMinBTCSignal } from '../market-data/Polymarket5MinService';
+import { PredictionAggregatorService, type AggregatedPrediction } from '../market-data/PredictionAggregatorService';
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 import {
   HEDGE_CONFIG as CONFIG,

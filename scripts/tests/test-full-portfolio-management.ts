@@ -73,7 +73,7 @@ async function init() {
   COMMUNITY_POOL_PORTFOLIO_ID = constMod.COMMUNITY_POOL_PORTFOLIO_ID;
   isCommunityPoolPortfolio = constMod.isCommunityPoolPortfolio;
 
-  const svcMod = await import('../../lib/services/AutoHedgingService');
+  const svcMod = await import('../../lib/services/hedging/AutoHedgingService');
   autoHedgingService = svcMod.autoHedgingService;
 }
 

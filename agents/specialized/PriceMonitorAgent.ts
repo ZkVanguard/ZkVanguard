@@ -8,8 +8,8 @@
 import { logger } from '../../lib/utils/logger';
 import { X402FacilitatorService } from '../../lib/services/x402-facilitator';
 import { CronosNetwork } from '@crypto.com/facilitator-client';
-import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/Polymarket5MinService';
-import type { MarketSnapshot } from '../../lib/services/CentralizedHedgeManager';
+import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
+import type { MarketSnapshot } from '../../lib/services/hedging/CentralizedHedgeManager';
 
 // Price thresholds for different alert levels
 export interface PriceAlert {
@@ -89,7 +89,7 @@ export class PriceMonitorAgent {
 
     // Subscribe to the proactive 5-min signal ticker — always fresh, zero fetch delay
     try {
-      const { Polymarket5MinService } = await import('../../lib/services/Polymarket5MinService');
+      const { Polymarket5MinService } = await import('../../lib/services/market-data/Polymarket5MinService');
       this.fiveMinUnsubscribers.push(
         Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
           this.cachedFiveMinSignal = evt.signal;
@@ -329,7 +329,7 @@ export class PriceMonitorAgent {
       
       // Fallback to RealMarketDataService which uses Crypto.com Exchange API
       try {
-        const { getMarketDataService } = await import('../../lib/services/RealMarketDataService');
+        const { getMarketDataService } = await import('../../lib/services/market-data/RealMarketDataService');
         const marketDataService = getMarketDataService();
         const marketData = await marketDataService.getTokenPrice(symbol);
         
@@ -538,7 +538,7 @@ export type MonitorEvent =
   | { type: 'alert_triggered'; alert: PriceAlert; price: PriceData; timestamp: number }
   | { type: 'hedge_initiated'; alert: PriceAlert; price: PriceData; challenge: unknown; timestamp: number }
   | { type: 'rebalance_initiated'; alert: PriceAlert; price: PriceData; timestamp: number }
-  | { type: 'five_min_signal'; signal: import('../../lib/services/Polymarket5MinService').FiveMinBTCSignal; price: PriceData | null; timestamp: number }
+  | { type: 'five_min_signal'; signal: import('../../lib/services/market-data/Polymarket5MinService').FiveMinBTCSignal; price: PriceData | null; timestamp: number }
   | { type: 'error'; error: string; timestamp: number };
 
 export interface AgentStatus {

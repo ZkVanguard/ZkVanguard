@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { heavyLimiter } from '@/lib/security/rate-limiter';
-import type { PredictionMarket } from '@/lib/services/DelphiMarketService';
+import type { PredictionMarket } from '@/lib/services/market-data/DelphiMarketService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import type { RiskAnalysis } from '@shared/types/agent';
 import { safeErrorResponse } from '@/lib/security/safe-error';

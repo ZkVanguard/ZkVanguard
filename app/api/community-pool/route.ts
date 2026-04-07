@@ -21,7 +21,7 @@ import {
   getPoolSummary,
   fetchLivePrices,
   calculatePoolNAV,
-} from '@/lib/services/CommunityPoolService';
+} from '@/lib/services/cronos/CommunityPoolService';
 import { clearCaches as clearStatsCaches } from '@/lib/services/CommunityPoolStatsService';
 import {
   getUserShares,

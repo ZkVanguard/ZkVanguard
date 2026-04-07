@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOasisOnChainHedgeService } from '@/lib/services/OasisOnChainHedgeService';
+import { getOasisOnChainHedgeService } from '@/lib/services/oasis/OasisOnChainHedgeService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 

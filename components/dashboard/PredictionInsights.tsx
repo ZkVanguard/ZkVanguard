@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { DelphiMarketService, PredictionMarket } from '@/lib/services/DelphiMarketService';
+import { DelphiMarketService, PredictionMarket } from '@/lib/services/market-data/DelphiMarketService';
 import { usePolling, useLoading } from '@/lib/hooks';
 import { useMarketInsights } from '@/contexts/AIDecisionsContext';
 import { 

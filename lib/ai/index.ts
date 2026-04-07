@@ -82,7 +82,7 @@ export {
   getInsightPriceContext,
   getActionPriceContext,
   SERVICE_CONFIGS,
-} from '@/lib/services/ai-price-integration';
+} from '@/lib/services/market-data/ai-price-integration';
 
 export type {
   ServiceConfig,
@@ -90,7 +90,7 @@ export type {
   HedgePriceContext,
   InsightPriceContext,
   ActionPriceContext,
-} from '@/lib/services/ai-price-integration';
+} from '@/lib/services/market-data/ai-price-integration';
 
 // ============================================================================
 // Continuous Management - Production-grade AI operations manager
@@ -129,13 +129,13 @@ export {
   getHedgeExecutionPrice,
   validatePriceForHedge,
   UnifiedPriceProvider,
-} from '@/lib/services/unified-price-provider';
+} from '@/lib/services/market-data/unified-price-provider';
 
 export type {
   LivePrice,
   PriceValidation,
   HedgePriceContext as UnifiedHedgePriceContext,
-} from '@/lib/services/unified-price-provider';
+} from '@/lib/services/market-data/unified-price-provider';
 
 // ============================================================================
 // Background Hedge Controller - Intelligent background hedging
@@ -143,11 +143,11 @@ export type {
 export {
   getBackgroundHedgeController,
   BackgroundHedgeController,
-} from '@/lib/services/background-hedge-controller';
+} from '@/lib/services/hedging/background-hedge-controller';
 
 export type {
   HedgeIntent,
   HedgeValidation,
   HedgeExecution,
   ControllerStatus,
-} from '@/lib/services/background-hedge-controller';
+} from '@/lib/services/hedging/background-hedge-controller';

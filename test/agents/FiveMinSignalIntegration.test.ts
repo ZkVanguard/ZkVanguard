@@ -12,8 +12,8 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { Polymarket5MinService } from '../../lib/services/Polymarket5MinService';
-import type { FiveMinBTCSignal, FiveMinSignalHistory } from '../../lib/services/Polymarket5MinService';
+import { Polymarket5MinService } from '../../lib/services/market-data/Polymarket5MinService';
+import type { FiveMinBTCSignal, FiveMinSignalHistory } from '../../lib/services/market-data/Polymarket5MinService';
 
 // ─── Test Fixtures ──────────────────────────────────────
 

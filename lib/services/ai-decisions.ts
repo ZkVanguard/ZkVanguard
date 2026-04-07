@@ -20,7 +20,7 @@ import {
   getInsightPriceContext,
   getActionPriceContext,
   SERVICE_CONFIGS,
-} from './ai-price-integration';
+} from './market-data/ai-price-integration';
 
 // ============================================================================
 // Types - Unified AI Decision Types

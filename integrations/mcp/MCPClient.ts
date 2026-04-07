@@ -9,7 +9,7 @@
 import { EventEmitter } from 'eventemitter3';
 import { logger } from '../../shared/utils/logger';
 import config from '../../shared/utils/config';
-import { RealMarketDataService } from '../../lib/services/RealMarketDataService';
+import { RealMarketDataService } from '../../lib/services/market-data/RealMarketDataService';
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const EventSourceModule = require('eventsource');
 const EventSourceConstructor = (EventSourceModule.default || EventSourceModule) as { new(url: string, options?: Record<string, unknown>): EventSource };

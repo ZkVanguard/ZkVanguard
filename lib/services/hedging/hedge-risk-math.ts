@@ -5,7 +5,7 @@
  */
 
 import type { HedgeRecommendation } from './hedge-types';
-import type { AggregatedPrediction } from './PredictionAggregatorService';
+import type { AggregatedPrediction } from '../market-data/PredictionAggregatorService';
 
 // Configuration constants (shared with AutoHedgingService)
 export const HEDGE_CONFIG = {

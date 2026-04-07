@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getVVSSwapSDKService } from '@/lib/services/VVSSwapSDKService';
+import { getVVSSwapSDKService } from '@/lib/services/cronos/VVSSwapSDKService';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
@@ -224,7 +224,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       logger.warn('[x402/swap] VVS SDK failed, trying RealMarketDataService:', { error: vvsError instanceof Error ? errMsg(vvsError) : String(vvsError) });
       
       try {
-        const { getMarketDataService } = await import('../../../../lib/services/RealMarketDataService');
+        const { getMarketDataService } = await import('../../../../lib/services/market-data/RealMarketDataService');
         const realMarketDataService = getMarketDataService();
         
         // Get real prices from Crypto.com Exchange

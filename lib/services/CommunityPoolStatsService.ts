@@ -19,7 +19,7 @@
 import { ethers, type BrowserProvider, type JsonRpcProvider } from 'ethers';
 import { logger } from '../utils/logger';
 import { isMainnet } from '../utils/network';
-import { getMarketDataService } from './RealMarketDataService';
+import { getMarketDataService } from './market-data/RealMarketDataService';
 import { getPoolStateFromDb, savePoolStateToDb } from '../db/community-pool';
 
 // ═══════════════════════════════════════════════════════════════

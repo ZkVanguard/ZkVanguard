@@ -3,7 +3,7 @@
  */
 
 import { cryptocomExchangeService } from '../../lib/services/CryptocomExchangeService';
-import { getMarketDataService } from '../../lib/services/RealMarketDataService';
+import { getMarketDataService } from '../../lib/services/market-data/RealMarketDataService';
 
 const realMarketData = getMarketDataService();
 
