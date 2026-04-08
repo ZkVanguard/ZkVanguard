@@ -18,8 +18,8 @@
  * 
  * ENDPOINTS:
  * - Auth API: https://auth.api.{env}.bluefin.io/auth/v2/token
- * - Trade API: https://trade.api.{env}.bluefin.io/api/v1/trade/
- * - Exchange API: https://api.{env}.bluefin.io/api/v1/exchange/
+ * - Trade API: https://trade.api.{env}.bluefin.io/api/v1/ (orders, account)
+ * - Exchange API: https://api.{env}.bluefin.io/v1/exchange/ (market data, orderbook)
  * 
  * Order Fields (e9 scaling - 1e9 = 1.0):
  * - price_e9: Price in e9 format
@@ -983,18 +983,24 @@ export class BluefinService {
     await this.ensureInitializedAsync();
 
     try {
-      const orderbook = await this.apiRequest<{ bids: [string, string][]; asks: [string, string][] }>(
+      // BlueFin Pro uses /v1/exchange/depth with E9-format prices
+      const orderbook = await this.apiRequest<{ bidsE9?: [string, string][]; asksE9?: [string, string][]; bids?: [string, string][]; asks?: [string, string][] }>(
         'GET',
-        `/api/v1/orderbook?symbol=${encodeURIComponent(symbol)}&limit=${depth}`
+        `/v1/exchange/depth?symbol=${encodeURIComponent(symbol)}&limit=${depth}`,
+        undefined,
+        'exchange'
       );
+      // Parse E9 format (priceE9 / 1e9, quantityE9 / 1e9) or legacy format
+      const parseBids = orderbook?.bidsE9 || orderbook?.bids || [];
+      const parseAsks = orderbook?.asksE9 || orderbook?.asks || [];
       return {
-        bids: (orderbook?.bids || []).map((b: [string, string]) => ({
-          price: parseFloat(b[0]),
-          size: parseFloat(b[1]),
+        bids: parseBids.map((b: [string, string]) => ({
+          price: orderbook?.bidsE9 ? parseFloat(b[0]) / 1e9 : parseFloat(b[0]),
+          size: orderbook?.bidsE9 ? parseFloat(b[1]) / 1e9 : parseFloat(b[1]),
         })),
-        asks: (orderbook?.asks || []).map((a: [string, string]) => ({
-          price: parseFloat(a[0]),
-          size: parseFloat(a[1]),
+        asks: parseAsks.map((a: [string, string]) => ({
+          price: orderbook?.asksE9 ? parseFloat(a[0]) / 1e9 : parseFloat(a[0]),
+          size: orderbook?.asksE9 ? parseFloat(a[1]) / 1e9 : parseFloat(a[1]),
         })),
       };
     } catch (error) {
@@ -1010,13 +1016,16 @@ export class BluefinService {
     await this.ensureInitializedAsync();
 
     try {
-      const fundingHistory = await this.apiRequest<Array<{ time: number; fundingRate: string }>>(
+      // BlueFin Pro uses /v1/exchange/fundingRateHistory with E9 format
+      const fundingHistory = await this.apiRequest<Array<{ fundingTimeAtMillis?: number; time?: number; fundingRateE9?: string; fundingRate?: string }>>(
         'GET',
-        `/api/v1/fundingRates?symbol=${encodeURIComponent(symbol)}`
+        `/v1/exchange/fundingRateHistory?symbol=${encodeURIComponent(symbol)}`,
+        undefined,
+        'exchange'
       );
-      return (fundingHistory || []).map((f: { time: number; fundingRate: string }) => ({
-        time: f.time,
-        rate: parseFloat(f.fundingRate),
+      return (fundingHistory || []).map((f) => ({
+        time: f.fundingTimeAtMillis || f.time || 0,
+        rate: f.fundingRateE9 ? parseFloat(f.fundingRateE9) / 1e9 : parseFloat(f.fundingRate || '0'),
       }));
     } catch (error) {
       logger.error('Failed to get funding rates', error instanceof Error ? error : undefined);

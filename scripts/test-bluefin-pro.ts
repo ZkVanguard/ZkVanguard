@@ -81,13 +81,13 @@ async function testPublicEndpoints(network: 'testnet' | 'mainnet') {
   console.log('='.repeat(50));
   console.log(`   Base URL: ${baseUrl}`);
   
-  // Exchange API endpoints for public market data
+  // Exchange API endpoints for public market data (v1/exchange/ paths)
   const endpoints = [
-    { name: 'Meta', path: '/meta' },
-    { name: 'Markets', path: '/marketData' },
-    { name: 'Ticker (ETH-PERP)', path: '/ticker?symbol=ETH-PERP' },
-    { name: 'Ticker (SUI-PERP)', path: '/ticker?symbol=SUI-PERP' },
-    { name: 'Orderbook (ETH-PERP)', path: '/orderbook?symbol=ETH-PERP' },
+    { name: 'Exchange Info', path: '/v1/exchange/info' },
+    { name: 'Tickers', path: '/v1/exchange/tickers' },
+    { name: 'Ticker (ETH-PERP)', path: '/v1/exchange/ticker?symbol=ETH-PERP' },
+    { name: 'Ticker (SUI-PERP)', path: '/v1/exchange/ticker?symbol=SUI-PERP' },
+    { name: 'Orderbook (ETH-PERP)', path: '/v1/exchange/depth?symbol=ETH-PERP&limit=5' },
   ];
   
   for (const endpoint of endpoints) {
@@ -257,14 +257,14 @@ async function testAccountData(network: 'testnet' | 'mainnet', authToken: string
     headers['Authorization'] = `Bearer ${authToken}`;
   }
   
-  // Account info is on Exchange API (api.sui-staging)
+  // Account info on Exchange API (v1/exchange paths)
   const exchangeEndpoints = [
     { name: 'Account Info (Exchange)', url: `${exchangeUrl}/api/v1/account` },
   ];
   
-  // Open orders is on Trade API (trade.api.sui-staging)
+  // Open orders on Trade API
   const tradeEndpoints = [
-    { name: 'Open Orders (Trade)', url: `${tradeUrl}/api/v1/trade/openOrders` },
+    { name: 'Open Orders (Trade)', url: `${tradeUrl}/api/v1/openOrders` },
   ];
   
   // Test exchange API endpoints
@@ -326,7 +326,7 @@ async function main() {
   console.log(`   Address: ${address}`);
   console.log(`   Key Format: ${PRIVATE_KEY.startsWith('suiprivkey') ? 'Bech32' : 'Hex'}`);
   
-  const network: 'testnet' | 'mainnet' = 'testnet';
+  const network: 'testnet' | 'mainnet' = (process.env.BLUEFIN_NETWORK || 'mainnet') as any;
   
   // Test 1: Public endpoints (Data API - no auth needed)
   await testPublicEndpoints(network);
