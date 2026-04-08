@@ -5,6 +5,7 @@ import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 /**

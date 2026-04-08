@@ -3,7 +3,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
-
+export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
 const ZK_API_URL = process.env.ZK_API_URL;
 

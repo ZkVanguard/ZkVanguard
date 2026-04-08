@@ -4,6 +4,7 @@ import { ProductionGuard } from '@/lib/security/production-guard';
 import { heavyLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const ZK_API_URL = process.env.ZK_API_URL || 'https://zk-api.starknova.xyz';

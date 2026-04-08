@@ -4,6 +4,7 @@ import { heavyLimiter } from '@/lib/security/rate-limiter';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const ZK_API_URL = process.env.ZK_API_URL || 'https://zk-api.starknova.xyz';

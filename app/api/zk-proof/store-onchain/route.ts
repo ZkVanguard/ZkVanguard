@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
+export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
 
 export async function POST(request: NextRequest) {
