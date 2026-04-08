@@ -215,7 +215,7 @@ async function testGasPrices() {
 async function testNetworkConfig() {
   console.log('\n📋 ENVIRONMENT CONFIGURATION:');
   console.log(`   NEXT_PUBLIC_CHAIN_ID: ${process.env.NEXT_PUBLIC_CHAIN_ID || '338 (default testnet)'}`);
-  console.log(`   BLUEFIN_NETWORK: ${process.env.BLUEFIN_NETWORK || 'testnet (default)'}`);
+  console.log(`   BLUEFIN_NETWORK: ${process.env.BLUEFIN_NETWORK || 'mainnet (default)'}`);
   console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
   
   const chainId = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '338', 10);

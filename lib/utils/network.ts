@@ -126,11 +126,11 @@ export function getSuiExplorerTxUrl(txDigest: string, network: 'mainnet' | 'test
  * Get SUI network from environment
  */
 export function getSuiNetwork(): 'mainnet' | 'testnet' | 'devnet' {
-  const network = process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'testnet';
+  const network = process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet';
   if (network === 'mainnet' || network === 'testnet' || network === 'devnet') {
     return network;
   }
-  return 'testnet';
+  return 'mainnet';
 }
 
 // ============================================

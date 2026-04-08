@@ -24,8 +24,8 @@ export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
 
 const BLUEFIN_PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY?.trim() || null;
-// Network from env - defaults to testnet, set BLUEFIN_NETWORK=mainnet for production
-const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+// Network from env - defaults to mainnet (trade.bluefin.io)
+const BLUEFIN_NETWORK = (process.env.BLUEFIN_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
 
 /**
  * GET - Get BlueFin account info and positions

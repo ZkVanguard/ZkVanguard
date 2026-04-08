@@ -87,7 +87,7 @@ async function checkSuiMainnetReadiness() {
   // ============================================
   console.log('\n3️⃣  BLUEFIN DEX CONFIGURATION (For SUI Hedging)\n');
 
-  const bluefinNetwork = process.env.BLUEFIN_NETWORK || 'testnet';
+  const bluefinNetwork = process.env.BLUEFIN_NETWORK || 'mainnet';
   const bluefinPrivateKey = process.env.BLUEFIN_PRIVATE_KEY || '';
   const suiNetwork = process.env.SUI_NETWORK || 'testnet';
 

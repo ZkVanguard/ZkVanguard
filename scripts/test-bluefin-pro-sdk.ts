@@ -145,7 +145,7 @@ async function main() {
     
     console.log('\n📝 Possible issues:');
     console.log('   1. Testnet environment may be down for maintenance');
-    console.log('   2. Account needs to be registered at https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet)');
+    console.log('   2. Account needs to be registered at https://trade.bluefin.io');
     console.log('   3. Try mainnet instead if testnet is unavailable');
     
     process.exit(1);
