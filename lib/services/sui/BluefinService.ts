@@ -649,12 +649,12 @@ export class BluefinService {
       try {
         const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
         if (!acctResp) {
-          throw new Error(`BlueFin account ${this.walletAddress} not found. Please onboard at https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet) first.`);
+          throw new Error(`BlueFin account ${this.walletAddress} not found. Please onboard at https://trade.bluefin.io first.`);
         }
       } catch (acctError) {
         const msg = acctError instanceof Error ? acctError.message : String(acctError);
         if (msg.includes('404') || msg.includes('not found')) {
-          throw new Error(`BlueFin account ${this.walletAddress} not onboarded. Visit https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet) to register.`);
+          throw new Error(`BlueFin account ${this.walletAddress} not onboarded. Visit https://trade.bluefin.io to register.`);
         }
       }
 
@@ -788,7 +788,7 @@ export class BluefinService {
         freeCollateral = acctResp?.freeCollateral || '0';
         steps.push({ step: 'account', passed: true, detail: `Onboarded, freeCollateral=${freeCollateral}` });
       } catch {
-        steps.push({ step: 'account', passed: false, detail: `Account ${this.walletAddress} NOT onboarded — register at https://trade.bluefin.io/pro (mainnet) or https://testnet.bluefin.io/perps (testnet)` });
+        steps.push({ step: 'account', passed: false, detail: `Account ${this.walletAddress} NOT onboarded — register at https://trade.bluefin.io` });
       }
 
       // Step 3: Validate pair
