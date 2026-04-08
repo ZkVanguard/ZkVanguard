@@ -33,12 +33,12 @@ const RPC_URLS: Record<number, string> = {
   338: 'https://evm-t3.cronos.org/',
 };
 
-// Price IDs to update (BTC, ETH, SUI, CRO)
+// Price IDs to update (BTC, ETH, CRO, SUI)
 const PRICE_IDS = [
   'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', // BTC
   'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', // ETH
-  '23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe', // SUI
-  '23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744', // CRO
+  '23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe', // CRO
+  '23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744', // SUI
 ];
 
 const PYTH_ABI = [
