@@ -21,7 +21,6 @@ import {
   recordNavSnapshot,
   savePoolStateToDb,
   addPoolTransactionToDb,
-  getLatestPoolState,
 } from '@/lib/db/community-pool';
 import { getWdkBridgeService } from '@/lib/services/WdkBridgeService';
 import { getRpcUrl } from '@/lib/rpc-urls';

@@ -21,7 +21,7 @@ import { generateKey, exportKey, importKey, encryptData, decryptData } from './e
 
 // Dev-only debug logging — tree-shaken in production builds
 const wdkLog = process.env.NODE_ENV === 'development'
-  ? (...args: unknown[]) => logger.debug(...args)
+  ? (...args: unknown[]) => logger.debug(String(args[0] ?? ''), ...args.slice(1))
   : (..._args: unknown[]) => {};
 
 // ============================================
