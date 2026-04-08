@@ -12,43 +12,19 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useWdk, useWdkAccount, useWdkChain } from './wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { ethers } from 'ethers';
-
-// Cached providers per chain to avoid creating new instances on every call.
-// Uses staticNetwork to skip ethers.js automatic network detection which
-// retries every 1s forever when the RPC is unreachable — causing ERR_INSUFFICIENT_RESOURCES.
-const _providerCache = new Map<string, ethers.JsonRpcProvider>();
-
-function getCachedProvider(chainKey: string): ethers.JsonRpcProvider | null {
-  const existing = _providerCache.get(chainKey);
-  if (existing) return existing;
-  const config = WDK_CHAINS[chainKey];
-  if (!config) return null;
-  const network = new ethers.Network(config.name, config.chainId);
-  const provider = new ethers.JsonRpcProvider(config.rpcUrl, network, { staticNetwork: network });
-  _providerCache.set(chainKey, provider);
-  return provider;
-}
+import { getCachedProvider } from './provider-cache';
 
 // ============================================
-// CHAIN MAPPING
+// CHAIN MAPPING (derived from WDK_CHAINS config)
 // ============================================
 
-// Map chain IDs to WDK chain keys
-const CHAIN_ID_TO_KEY: Record<number, string> = {
-  11155111: 'sepolia',
-  25: 'cronos-mainnet',
-  338: 'cronos-testnet',
-  295: 'hedera-mainnet',
-  296: 'hedera-testnet',
-};
+const CHAIN_ID_TO_KEY: Record<number, string> = Object.fromEntries(
+  Object.entries(WDK_CHAINS).map(([key, cfg]) => [cfg.chainId, key]),
+);
 
-const CHAIN_KEY_TO_ID: Record<string, number> = {
-  'sepolia': 11155111,
-  'cronos-mainnet': 25,
-  'cronos-testnet': 338,
-  'hedera-mainnet': 295,
-  'hedera-testnet': 296,
-};
+const CHAIN_KEY_TO_ID: Record<string, number> = Object.fromEntries(
+  Object.entries(WDK_CHAINS).map(([key, cfg]) => [key, cfg.chainId]),
+);
 
 // ============================================
 // ACCOUNT HOOK
