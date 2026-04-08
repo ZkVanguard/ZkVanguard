@@ -309,10 +309,6 @@ export class SuiAutoHedgingAdapter {
       let riskScore = 1;
       if (topAssetPercent > 40) riskScore += 2;
       if (topAssetPercent > 60) riskScore += 1;
-      // Drawdown would require historical price comparison; approximate
-      const drawdown = 0; // Placeholder
-      if (drawdown > 3) riskScore += 2;
-      if (drawdown > 7) riskScore += 2;
       riskScore = Math.min(riskScore, 10);
 
       // Generate recommendations
@@ -344,7 +340,7 @@ export class SuiAutoHedgingAdapter {
 
       return {
         totalValueUsd: totalValue,
-        drawdownPercent: drawdown,
+        drawdownPercent: 0, // TODO: implement historical price-based drawdown tracking
         volatility: 0,
         concentrationRisk: topAssetPercent,
         riskScore,
@@ -489,6 +485,15 @@ export class SuiAutoHedgingAdapter {
   // SUI RPC HELPERS
   // ============================================
 
+  /** Fetch live SUI/USD price from BlueFin, fallback to a default */
+  private async getSuiUsdPrice(): Promise<number> {
+    try {
+      const md = await this.bluefin.getMarketData('SUI-PERP');
+      if (md?.price && md.price > 0) return md.price;
+    } catch { /* fall through */ }
+    return 2.5; // conservative fallback
+  }
+
   /**
    * Fetch portfolio objects owned by an address from SUI RPC
    */
@@ -497,6 +502,7 @@ export class SuiAutoHedgingAdapter {
     totalValue: number;
     assetValues: Record<string, number>;
   }>> {
+    const suiPrice = await this.getSuiUsdPrice();
     try {
       const response = await fetch(SUI_CONTRACTS.rpcUrl, {
         method: 'POST',
@@ -515,6 +521,7 @@ export class SuiAutoHedgingAdapter {
             },
           ],
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       const data = await response.json();
@@ -523,7 +530,7 @@ export class SuiAutoHedgingAdapter {
       return objects.map((obj: Record<string, unknown>) => {
         const objData = obj as { data?: { objectId?: string; content?: { fields?: Record<string, unknown> } } };
         const fields = objData.data?.content?.fields || {};
-        const totalValue = Number(fields.total_value || '0') / 1e9 * 2.5; // MIST → USD approx
+        const totalValue = Number(fields.total_value || '0') / 1e9 * suiPrice; // MIST → USD via live price
 
         // Parse asset allocations if available
         const assetValues: Record<string, number> = {};
@@ -532,7 +539,7 @@ export class SuiAutoHedgingAdapter {
           for (const alloc of allocations) {
             const a = alloc as Record<string, unknown>;
             const assetType = String(a.asset_type || 'SUI');
-            const amount = Number(a.amount || '0') / 1e9 * 2.5;
+            const amount = Number(a.amount || '0') / 1e9 * suiPrice;
             assetValues[assetType] = amount;
           }
         } else {
