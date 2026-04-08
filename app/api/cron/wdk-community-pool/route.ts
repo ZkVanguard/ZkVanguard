@@ -67,6 +67,7 @@ const POOL_ABI = [
   'function hasRole(bytes32 role, address account) view returns (bool)',
   'function REBALANCER_ROLE() view returns (bytes32)',
   'function MIN_RESERVE_RATIO_BPS() view returns (uint256)',
+  'function pythOracle() view returns (address)',
 ];
 
 const ERC20_ABI = [
@@ -77,6 +78,19 @@ const ERC20_ABI = [
 
 const DEX_ABI = [
   'function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[])',
+];
+
+const PYTH_ABI = [
+  'function updatePriceFeeds(bytes[] calldata updateData) external payable',
+  'function getUpdateFee(bytes[] calldata updateData) external view returns (uint256)',
+];
+
+// Pyth Hermes price IDs for the 4 pool assets (BTC, ETH, CRO, SUI)
+const PYTH_PRICE_IDS = [
+  'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', // BTC/USD
+  'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', // ETH/USD
+  '23199c2bcb1303f667e733b9934db9eca5991e765b45f5ed18bc4b231415f2fe', // CRO/USD
+  '23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744', // SUI/USD
 ];
 
 // ============================================
@@ -131,6 +145,51 @@ interface WdkCronResult {
   };
   duration: number;
   error?: string;
+}
+
+// ============================================
+// HELPER: Update Pyth oracle prices (required on testnet)
+// ============================================
+
+async function updatePythPrices(
+  wallet: ethers.Wallet,
+  pythOracleAddress: string,
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  try {
+    // Fetch latest price data from Pyth Hermes API
+    const idsQuery = PYTH_PRICE_IDS.map(id => `ids[]=${id}`).join('&');
+    const url = `https://hermes.pyth.network/v2/updates/price/latest?${idsQuery}`;
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Hermes API ${response.status}` };
+    }
+
+    const data = await response.json();
+    if (!data.binary?.data?.[0]) {
+      return { success: false, error: 'No binary data from Hermes' };
+    }
+
+    const updateData = ['0x' + data.binary.data[0]];
+    const pyth = new ethers.Contract(pythOracleAddress, PYTH_ABI, wallet);
+
+    // Get update fee and push prices on-chain
+    const fee = await pyth.getUpdateFee(updateData);
+    const balance = await wallet.provider!.getBalance(wallet.address);
+    if (balance < fee + ethers.parseEther('0.001')) {
+      return { success: false, error: `Low gas: ${ethers.formatEther(balance)} ETH` };
+    }
+
+    const tx = await pyth.updatePriceFeeds(updateData, { value: fee });
+    const receipt = await tx.wait();
+    logger.info('[WDK Cron] Pyth prices updated', { txHash: receipt.hash, fee: ethers.formatEther(fee) });
+    return { success: true, txHash: receipt.hash };
+  } catch (err) {
+    return { success: false, error: errMsg(err) };
+  }
 }
 
 // ============================================
@@ -191,6 +250,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
     const wallet = new ethers.Wallet(privateKey, provider);
     const poolContract = new ethers.Contract(SEPOLIA_POOL_ADDRESS, POOL_ABI, provider);
     const usdtContract = new ethers.Contract(SEPOLIA_USDT_ADDRESS, ERC20_ABI, provider);
+
+    // ═══════════════════════════════════════════════════════════
+    // Step 0: Update Pyth oracle prices (testnet prices go stale)
+    // ═══════════════════════════════════════════════════════════
+
+    try {
+      const pythOracleAddr = await poolContract.pythOracle();
+      if (pythOracleAddr && pythOracleAddr !== ethers.ZeroAddress) {
+        logger.info('[WDK Cron] Updating Pyth oracle prices...');
+        const pythResult = await updatePythPrices(wallet, pythOracleAddr);
+        if (pythResult.success) {
+          logger.info('[WDK Cron] Pyth prices updated', { txHash: pythResult.txHash });
+        } else {
+          logger.warn('[WDK Cron] Pyth update failed (will try pool read anyway)', { error: pythResult.error });
+        }
+      }
+    } catch (pythErr) {
+      logger.warn('[WDK Cron] Pyth oracle address read failed', { error: errMsg(pythErr) });
+    }
 
     // ═══════════════════════════════════════════════════════════
     // Step 1: Read on-chain pool state

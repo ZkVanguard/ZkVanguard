@@ -6,14 +6,21 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { getBluefinAggregatorService } from '../lib/services/sui/BluefinAggregatorService';
 
 const PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY || '';
 
 function initKeypair(pk: string): { keypair: Ed25519Keypair; address: string } {
-  const hexKey = pk.startsWith('0x') ? pk.slice(2) : pk;
-  const keypair = Ed25519Keypair.fromSecretKey(Buffer.from(hexKey, 'hex'));
+  let keypair: Ed25519Keypair;
+  if (pk.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(pk);
+    keypair = Ed25519Keypair.fromSecretKey(secretKey);
+  } else {
+    const hexKey = pk.startsWith('0x') ? pk.slice(2) : pk;
+    keypair = Ed25519Keypair.fromSecretKey(Buffer.from(hexKey, 'hex'));
+  }
   return { keypair, address: keypair.toSuiAddress() };
 }
 
