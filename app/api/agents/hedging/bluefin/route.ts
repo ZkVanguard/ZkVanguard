@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       symbol,
       side: side.toUpperCase() as 'LONG' | 'SHORT',
       size: parseFloat(size),
-      leverage: parseInt(leverage, 10),
+      leverage: Number(leverage) || 1,
       portfolioId,
       reason,
     });
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
         market: symbol,
         side: side.toUpperCase() as 'LONG' | 'SHORT',
         size: parseFloat(size),
-        leverage: parseInt(leverage, 10),
+        leverage: Number(leverage) || 1,
         notionalValue,
         entryPrice: result.executionPrice,
         simulationMode: false,

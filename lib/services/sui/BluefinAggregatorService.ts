@@ -1238,11 +1238,3 @@ export function getBluefinAggregatorService(
   }
   return testnetInstance;
 }
-
-/** Backward-compatible alias */
-export const getAggregatorService = getBluefinAggregatorService;
-
-/** @deprecated Use getBluefinAggregatorService instead */
-export const getCetusAggregatorService = getBluefinAggregatorService;
-/** @deprecated Use BluefinAggregatorService instead */
-export { BluefinAggregatorService as CetusAggregatorService };

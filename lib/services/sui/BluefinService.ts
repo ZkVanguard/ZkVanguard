@@ -439,8 +439,6 @@ export class BluefinService {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       // Handle rate limiting (429)
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
@@ -679,10 +677,7 @@ export class BluefinService {
       // BlueFin uses e9 scaling (1e9 = 1.0)
       const quantityE9 = Math.floor(params.size * 1e9).toString();
       const leverageE9 = Math.floor(params.leverage * 1e9).toString();
-      // For market orders, use a price with slippage buffer
-      const slippageMultiplier = params.side === 'LONG' ? 1.01 : 0.99; // 1% slippage
-      const limitPriceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
-      // MARKET orders require price=0 in signedFields; LIMIT orders use the limit price
+      // MARKET orders require price=0 in signedFields; LIMIT orders use a limit price
       const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
       const signedAtMillis = Date.now();
@@ -901,8 +896,6 @@ export class BluefinService {
 
       // BlueFin uses e9 scaling
       const quantityE9 = Math.floor(closeSize * 1e9).toString();
-      const slippageMultiplier = closeSide === 'LONG' ? 1.01 : 0.99;
-      const limitPriceE9 = Math.floor(currentPrice * slippageMultiplier * 1e9).toString();
       // MARKET orders require price=0
       const priceE9 = '0';
       const expiresAt = Date.now() + 10 * 60 * 1000;
@@ -1056,22 +1049,13 @@ export class BluefinService {
   private async ensureInitializedAsync(): Promise<void> {
     if (!this.initialized) {
       const privateKey = process.env.BLUEFIN_PRIVATE_KEY;
-      const network = (process.env.SUI_NETWORK || 'testnet') as 'mainnet' | 'testnet';
+      const network = (process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
       
       if (!privateKey) {
         throw new Error('BlueFin client not initialized. Set BLUEFIN_PRIVATE_KEY or call initialize() first.');
       }
       
       await this.initialize(privateKey, network);
-    }
-  }
-
-  /**
-   * Sync version for backward compatibility - throws if not initialized
-   */
-  private ensureInitialized(): void {
-    if (!this.initialized) {
-      throw new Error('BlueFin client not initialized. Call initialize() first or use async methods.');
     }
   }
 }
