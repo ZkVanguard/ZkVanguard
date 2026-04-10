@@ -1,6 +1,6 @@
 /**
- * BlueFin Testnet + Mainnet Combined Test
- * Tests swap quotes (aggregator) and hedge API (Pro) on both networks
+ * BlueFin Mainnet Combined Test
+ * Tests swap quotes (aggregator) and hedge API (Pro) on mainnet
  */
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
@@ -29,8 +29,8 @@ function ok(label: string, detail?: string) { pass++; console.log(`  ✅ ${label
 function err(label: string, detail: string) { fail++; console.log(`  ❌ ${label}: ${detail}`); }
 
 async function testSwaps() {
-  console.log('\n═══ SWAP AGGREGATOR (testnet quotes via mainnet DEX data) ═══');
-  const agg = getBluefinAggregatorService('testnet');
+  console.log('\n═══ SWAP AGGREGATOR (mainnet DEX quotes) ═══');
+  const agg = getBluefinAggregatorService('mainnet');
 
   for (const [asset, usd] of [['SUI', 10], ['BTC', 100], ['ETH', 50], ['CRO', 25]] as const) {
     try {
@@ -50,19 +50,12 @@ async function testSwaps() {
   }
 }
 
-async function testHedgeApi(network: 'testnet' | 'mainnet', keypair: Ed25519Keypair, address: string) {
-  const label = network.toUpperCase();
-  const exchangeBase = network === 'mainnet'
-    ? 'https://api.sui-prod.bluefin.io'
-    : 'https://api.sui-staging.bluefin.io';
-  const authBase = network === 'mainnet'
-    ? 'https://auth.api.sui-prod.bluefin.io'
-    : 'https://auth.api.sui-staging.bluefin.io';
-  const tradeBase = network === 'mainnet'
-    ? 'https://trade.api.sui-prod.bluefin.io'
-    : 'https://trade.api.sui-staging.bluefin.io';
+async function testHedgeApi(keypair: Ed25519Keypair, address: string) {
+  const exchangeBase = 'https://api.sui-prod.bluefin.io';
+  const authBase = 'https://auth.api.sui-prod.bluefin.io';
+  const tradeBase = 'https://trade.api.sui-prod.bluefin.io';
 
-  console.log(`\n═══ HEDGE API — ${label} (${network === 'mainnet' ? 'trade.bluefin.io' : 'staging'}) ═══`);
+  console.log('\n═══ HEDGE API — MAINNET (trade.bluefin.io) ═══');
 
   // 1. Public exchange endpoints
   console.log(`\n  --- Public Market Data (${exchangeBase}) ---`);
@@ -72,12 +65,12 @@ async function testHedgeApi(network: 'testnet' | 'mainnet', keypair: Ed25519Keyp
       if (r.ok) {
         const d = await r.json();
         const preview = JSON.stringify(d).slice(0, 100);
-        ok(`${label} ${ep}`, preview + '...');
+        ok(`MAINNET ${ep}`, preview + '...');
       } else {
-        err(`${label} ${ep}`, `${r.status} ${r.statusText}`);
+        err(`MAINNET ${ep}`, `${r.status} ${r.statusText}`);
       }
     } catch (e: any) {
-      err(`${label} ${ep}`, e.message);
+      err(`MAINNET ${ep}`, e.message);
     }
   }
 
@@ -99,12 +92,12 @@ async function testHedgeApi(network: 'testnet' | 'mainnet', keypair: Ed25519Keyp
     const data = await r.json();
     if (r.ok && data.accessToken) {
       authToken = data.accessToken;
-      ok(`${label} Auth`, `JWT obtained (${authToken!.slice(0, 40)}...)`);
+      ok('MAINNET Auth', `JWT obtained (${authToken!.slice(0, 40)}...)`);
     } else {
-      err(`${label} Auth`, `${r.status} — ${JSON.stringify(data).slice(0, 120)}`);
+      err('MAINNET Auth', `${r.status} — ${JSON.stringify(data).slice(0, 120)}`);
     }
   } catch (e: any) {
-    err(`${label} Auth`, e.message);
+    err('MAINNET Auth', e.message);
   }
 
   // 3. Account & positions (requires auth)
@@ -118,14 +111,14 @@ async function testHedgeApi(network: 'testnet' | 'mainnet', keypair: Ed25519Keyp
       const text = await r.text();
       if (r.ok && text) {
         const d = JSON.parse(text);
-        ok(`${label} Account`, `freeCollateral=${d.freeCollateral || 'N/A'}`);
+        ok('MAINNET Account', `freeCollateral=${d.freeCollateral || 'N/A'}, canTrade=${d.canTrade}`);
       } else if (r.status === 404 || !text) {
-        ok(`${label} Account`, `not onboarded (${r.status}) — visit trade.bluefin.io to register`);
+        ok('MAINNET Account', `not onboarded (${r.status}) — visit trade.bluefin.io to register`);
       } else {
-        err(`${label} Account`, `${r.status} — ${text.slice(0, 100)}`);
+        err('MAINNET Account', `${r.status} — ${text.slice(0, 100)}`);
       }
     } catch (e: any) {
-      err(`${label} Account`, e.message);
+      err('MAINNET Account', e.message);
     }
 
     // Open orders
@@ -134,20 +127,52 @@ async function testHedgeApi(network: 'testnet' | 'mainnet', keypair: Ed25519Keyp
       const text = await r.text();
       if (r.ok && text) {
         const d = JSON.parse(text);
-        ok(`${label} Open Orders`, `${Array.isArray(d) ? d.length : '?'} orders`);
+        ok('MAINNET Open Orders', `${Array.isArray(d) ? d.length : '?'} orders`);
       } else if (r.status === 404 || !text) {
-        ok(`${label} Open Orders`, `no account — expected for unregistered wallet`);
+        ok('MAINNET Open Orders', `no account — expected for unregistered wallet`);
       } else {
-        err(`${label} Open Orders`, `${r.status} — ${text.slice(0, 100)}`);
+        err('MAINNET Open Orders', `${r.status} — ${text.slice(0, 100)}`);
       }
     } catch (e: any) {
-      err(`${label} Open Orders`, e.message);
+      err('MAINNET Open Orders', e.message);
+    }
+
+    // Positions
+    try {
+      const r = await fetch(`${exchangeBase}/api/v1/account?accountAddress=${address}`, { headers, signal: AbortSignal.timeout(10000) });
+      const text = await r.text();
+      if (r.ok && text) {
+        const d = JSON.parse(text);
+        const positions = d.positions || [];
+        ok('MAINNET Positions', `${positions.length} open position(s)`);
+      } else if (r.status === 404 || !text) {
+        ok('MAINNET Positions', 'no positions (account not onboarded or empty)');
+      } else {
+        err('MAINNET Positions', `${r.status} — ${text.slice(0, 100)}`);
+      }
+    } catch (e: any) {
+      err('MAINNET Positions', e.message);
+    }
+
+    // Live SUI-PERP market data
+    try {
+      const r = await fetch(`${exchangeBase}/v1/exchange/ticker?symbol=SUI-PERP`, { signal: AbortSignal.timeout(10000) });
+      if (r.ok) {
+        const d = await r.json();
+        const price = d.lastPriceE9 ? (parseFloat(d.lastPriceE9) / 1e9).toFixed(4) : d.lastPrice || '?';
+        const funding = d.avgFundingRate8hrE9 ? (parseFloat(d.avgFundingRate8hrE9) / 1e9 * 100).toFixed(6) : '?';
+        ok('MAINNET SUI-PERP Live', `price=$${price}, 8hr funding=${funding}%`);
+      } else {
+        err('MAINNET SUI-PERP Live', `${r.status}`);
+      }
+    } catch (e: any) {
+      err('MAINNET SUI-PERP Live', e.message);
     }
   }
 }
 
 async function main() {
-  console.log('🌊 BlueFin Combined Test: Swap + Hedge (Testnet & Mainnet)');
+  console.log('🌊 BlueFin Mainnet Test: Swap + Hedge');
   console.log('═'.repeat(60));
 
   if (!PRIVATE_KEY) {
@@ -157,15 +182,13 @@ async function main() {
 
   const { keypair, address } = initKeypair(PRIVATE_KEY);
   console.log(`Wallet: ${address}`);
+  console.log(`Network: MAINNET (sui-prod.bluefin.io)`);
 
-  // Test swap aggregator (uses mainnet DEX data for testnet quotes)
+  // Test swap aggregator (mainnet DEX data)
   await testSwaps();
 
-  // Test hedge API on testnet
-  await testHedgeApi('testnet', keypair, address);
-
-  // Test hedge API on mainnet (trade.bluefin.io)
-  await testHedgeApi('mainnet', keypair, address);
+  // Test hedge API on mainnet
+  await testHedgeApi(keypair, address);
 
   // Summary
   console.log('\n═══ SUMMARY ═══');

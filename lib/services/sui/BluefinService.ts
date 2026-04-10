@@ -144,7 +144,7 @@ export interface BluefinHedgeResult {
 export class BluefinService {
   private static instance: BluefinService;
   private initialized: boolean = false;
-  private network: 'mainnet' | 'testnet' = 'testnet';
+  private network: 'mainnet' | 'testnet' = 'mainnet';
   private keypair: Ed25519Keypair | null = null;
   private walletAddress: string | null = null;
   private accessToken: string | null = null;
@@ -185,7 +185,7 @@ export class BluefinService {
    * Initialize BlueFin client with SUI wallet private key
    * BlueFin Pro uses wallet signature auth (no API keys needed)
    */
-  async initialize(privateKey: string, network: 'mainnet' | 'testnet' = 'testnet'): Promise<void> {
+  async initialize(privateKey: string, network: 'mainnet' | 'testnet' = 'mainnet'): Promise<void> {
     if (this.initialized && this.network === network) {
       return;
     }

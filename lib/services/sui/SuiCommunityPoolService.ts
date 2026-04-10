@@ -183,7 +183,7 @@ export class SuiCommunityPoolService {
   private config: (typeof SUI_POOL_CONFIG)[SuiNetworkType];
   private cachedPoolStateId: string | null = null;
 
-  constructor(network: SuiNetworkType = 'testnet') {
+  constructor(network: SuiNetworkType = 'mainnet') {
     this.network = network;
     this.config = SUI_POOL_CONFIG[network];
 
@@ -878,7 +878,7 @@ export class SuiUsdcPoolService {
   private fallbackService: SuiCommunityPoolService;
   private cachedUsdcPoolStateId: string | null = null;
 
-  constructor(network: SuiNetworkType = 'testnet') {
+  constructor(network: SuiNetworkType = 'mainnet') {
     this.network = network;
     this.config = SUI_USDC_POOL_CONFIG[network];
     // Fallback to SUI-native pool until USDC pool is deployed
@@ -1258,7 +1258,7 @@ let mainnetServiceInstance: SuiCommunityPoolService | null = null;
 export function getSuiCommunityPoolService(
   network?: SuiNetworkType
 ): SuiCommunityPoolService {
-  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'testnet';
+  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'mainnet';
   if (net === 'mainnet') {
     if (!mainnetServiceInstance) {
       mainnetServiceInstance = new SuiCommunityPoolService('mainnet');
@@ -1279,7 +1279,7 @@ let mainnetUsdcInstance: SuiUsdcPoolService | null = null;
 export function getSuiUsdcPoolService(
   network?: SuiNetworkType
 ): SuiUsdcPoolService {
-  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'testnet';
+  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'mainnet';
   if (net === 'mainnet') {
     if (!mainnetUsdcInstance) {
       mainnetUsdcInstance = new SuiUsdcPoolService('mainnet');

@@ -96,7 +96,7 @@ export class SuiPrivateHedgeService {
   private config: (typeof SUI_ZK_DEPLOYMENTS)[keyof typeof SUI_ZK_DEPLOYMENTS];
   private encryptionKeyHex: string;
 
-  constructor(network: keyof typeof SUI_ZK_DEPLOYMENTS = 'testnet') {
+  constructor(network: keyof typeof SUI_ZK_DEPLOYMENTS = 'mainnet') {
     this.network = network;
     this.config = SUI_ZK_DEPLOYMENTS[network];
     // In production, derive from user's SUI private key
@@ -508,7 +508,7 @@ export class SuiPrivateHedgeService {
 let suiZKHedgeInstance: SuiPrivateHedgeService | null = null;
 
 export function getSuiPrivateHedgeService(
-  network: keyof typeof SUI_ZK_DEPLOYMENTS = 'testnet'
+  network: keyof typeof SUI_ZK_DEPLOYMENTS = 'mainnet'
 ): SuiPrivateHedgeService {
   if (!suiZKHedgeInstance || suiZKHedgeInstance['network'] !== network) {
     suiZKHedgeInstance = new SuiPrivateHedgeService(network);

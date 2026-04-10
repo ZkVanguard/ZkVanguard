@@ -59,8 +59,8 @@ const SUI_DEPLOYMENTS = {
 } as const;
 
 // Active network based on env
-const SUI_NETWORK = (process.env.SUI_NETWORK || 'testnet') as keyof typeof SUI_DEPLOYMENTS;
-const SUI_CONTRACTS = SUI_DEPLOYMENTS[SUI_NETWORK] || SUI_DEPLOYMENTS.testnet;
+const SUI_NETWORK = (process.env.SUI_NETWORK || 'mainnet') as keyof typeof SUI_DEPLOYMENTS;
+const SUI_CONTRACTS = SUI_DEPLOYMENTS[SUI_NETWORK] || SUI_DEPLOYMENTS.mainnet;
 
 // ============================================
 // TYPES

@@ -185,7 +185,7 @@ export class SuiExplorerService {
   private network: keyof typeof SUI_EXPLORER_CONFIG;
   private config: (typeof SUI_EXPLORER_CONFIG)[keyof typeof SUI_EXPLORER_CONFIG];
 
-  constructor(network: keyof typeof SUI_EXPLORER_CONFIG = 'testnet') {
+  constructor(network: keyof typeof SUI_EXPLORER_CONFIG = 'mainnet') {
     this.network = network;
     this.config = SUI_EXPLORER_CONFIG[network];
     logger.info('[SuiExplorer] Initialized', { network });
@@ -551,7 +551,7 @@ export class SuiExplorerService {
 let suiExplorerInstance: SuiExplorerService | null = null;
 
 export function getSuiExplorerService(
-  network: keyof typeof SUI_EXPLORER_CONFIG = 'testnet'
+  network: keyof typeof SUI_EXPLORER_CONFIG = 'mainnet'
 ): SuiExplorerService {
   if (!suiExplorerInstance || suiExplorerInstance['network'] !== network) {
     suiExplorerInstance = new SuiExplorerService(network);
