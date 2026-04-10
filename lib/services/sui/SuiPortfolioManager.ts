@@ -146,6 +146,7 @@ export class SuiPortfolioManager {
   private positions: Map<string, SuiPosition> = new Map();
   private ownerAddress: string = '';
   private initialized = false;
+  private initFailed = false;
   private bluefin: BluefinService;
 
   constructor(
@@ -180,10 +181,19 @@ export class SuiPortfolioManager {
       await this.createVirtualPositions();
     }
 
+    // If we still have no positions after both attempts, mark init as degraded
+    if (this.positions.size === 0) {
+      this.initFailed = true;
+      logger.error('[SuiPortfolio] Init degraded — no positions loaded from chain or virtual');
+    } else {
+      this.initFailed = false;
+    }
+
     this.initialized = true;
     logger.info('[SuiPortfolio] Initialized', {
       positions: this.positions.size,
       totalUsd: this.getTotalValueUsd().toFixed(2),
+      degraded: this.initFailed,
     });
   }
 
@@ -263,9 +273,12 @@ export class SuiPortfolioManager {
    */
   private async createVirtualPositions(): Promise<void> {
     try {
-      // Fetch SUI balance
+      // Fetch SUI balance (with timeout)
+      const balController = new AbortController();
+      const balTimer = setTimeout(() => balController.abort(), 10000);
       const balResp = await fetch(this.config.rpcUrl, {
         method: 'POST',
+        signal: balController.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
@@ -274,6 +287,7 @@ export class SuiPortfolioManager {
           params: [this.ownerAddress, '0x2::sui::SUI'],
         }),
       });
+      clearTimeout(balTimer);
 
       const balData = await balResp.json();
       const suiBalance = Number(BigInt(String(balData.result?.totalBalance || '0'))) / 1e9;
@@ -424,8 +438,7 @@ export class SuiPortfolioManager {
         const pair = BluefinService.assetToPair(symbol);
         if (pair) {
           const md = await this.bluefin.getMarketData(pair);
-          if (md?.price) {
-            const oldPrice = pos.currentPrice;
+          if (md?.price && !isNaN(md.price) && md.price > 0) {
             pos.currentPrice = md.price;
             pos.valueUsd = pos.amount * md.price;
             pos.pnl = (md.price - pos.entryPrice) * pos.amount;
@@ -437,7 +450,7 @@ export class SuiPortfolioManager {
         }
         // Use live price from Crypto.com
         const livePrice = await fetchLivePrice(symbol);
-        if (livePrice > 0) {
+        if (livePrice > 0 && !isNaN(livePrice)) {
           pos.currentPrice = livePrice;
           pos.valueUsd = pos.amount * livePrice;
           pos.pnl = (livePrice - pos.entryPrice) * pos.amount;

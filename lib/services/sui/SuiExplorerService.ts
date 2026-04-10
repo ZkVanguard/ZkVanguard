@@ -482,21 +482,44 @@ export class SuiExplorerService {
   // ============================================
 
   /**
-   * Generic SUI JSON-RPC call
+   * Generic SUI JSON-RPC call with timeout and retry
    */
   private async rpc<T>(method: string, params: unknown[]): Promise<T> {
-    const response = await fetch(this.config.rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    });
+    let lastError: unknown;
+    const maxRetries = 2;
 
-    const data = await response.json() as { result?: T; error?: { message?: string } };
-    if (data.error) {
-      logger.error('[SuiExplorer] RPC error', { method, error: data.error });
-      throw new Error(`SUI RPC: ${data.error.message || JSON.stringify(data.error)}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(this.config.rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+
+        const data = await response.json() as { result?: T; error?: { message?: string } };
+        if (data.error) {
+          logger.error('[SuiExplorer] RPC error', { method, error: data.error });
+          throw new Error(`SUI RPC: ${data.error.message || JSON.stringify(data.error)}`);
+        }
+        return data.result as T;
+      } catch (error) {
+        clearTimeout(timer);
+        lastError = error;
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+          logger.warn(`[SuiExplorer] RPC attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
+            method,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
     }
-    return data.result as T;
+    throw lastError;
   }
 
   /**

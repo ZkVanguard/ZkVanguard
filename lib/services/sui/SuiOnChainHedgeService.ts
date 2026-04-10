@@ -115,7 +115,11 @@ export class SuiOnChainHedgeService {
     this.config = SUI_DEPLOYMENTS[network];
 
     if (!this.config.packageId) {
-      logger.warn('[SuiHedge] No deployment found for network', { network });
+      if (network === 'mainnet') {
+        logger.error('[SuiHedge] MAINNET deployment not configured — hedge operations will fail', { network });
+      } else {
+        logger.warn('[SuiHedge] No deployment found for network', { network });
+      }
     }
 
     logger.info('[SuiHedge] Initialized', {
@@ -319,6 +323,7 @@ export class SuiOnChainHedgeService {
    * Fetch hedge position details from SUI
    */
   async getHedgePosition(hedgeId: string): Promise<SuiHedgePosition | null> {
+    if (!hedgeId.startsWith('0x')) return null;
     try {
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
@@ -329,6 +334,7 @@ export class SuiOnChainHedgeService {
           method: 'sui_getObject',
           params: [hedgeId, { showContent: true, showType: true }],
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       const data = await response.json();
@@ -337,10 +343,16 @@ export class SuiOnChainHedgeService {
       }
 
       const fields = data.result.data.content.fields;
+      let asset: string;
+      try {
+        asset = new TextDecoder().decode(new Uint8Array(fields.asset || []));
+      } catch {
+        asset = String(fields.asset || 'UNKNOWN');
+      }
       return {
         hedgeId,
         owner: fields.owner,
-        asset: new TextDecoder().decode(new Uint8Array(fields.asset || [])),
+        asset,
         side: fields.side === 0 ? 'LONG' : 'SHORT',
         size: Number(fields.notional_value) / 1e6,
         leverage: Number(fields.leverage),
@@ -360,6 +372,7 @@ export class SuiOnChainHedgeService {
    * Fetch proxy vault info
    */
   async getProxyInfo(proxyId: string): Promise<SuiProxyInfo | null> {
+    if (!proxyId.startsWith('0x')) return null;
     try {
       const response = await fetch(this.config.rpcUrl, {
         method: 'POST',
@@ -370,6 +383,7 @@ export class SuiOnChainHedgeService {
           method: 'sui_getObject',
           params: [proxyId, { showContent: true }],
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       const data = await response.json();
@@ -414,6 +428,7 @@ export class SuiOnChainHedgeService {
             },
           ],
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       const data = await response.json();
@@ -421,10 +436,16 @@ export class SuiOnChainHedgeService {
 
       return objects.map((obj: Record<string, unknown>) => {
         const fields = (obj as { data?: { content?: { fields?: Record<string, unknown> } } }).data?.content?.fields || {};
+        let asset: string;
+        try {
+          asset = new TextDecoder().decode(new Uint8Array((fields.asset as number[]) || []));
+        } catch {
+          asset = String(fields.asset || 'UNKNOWN');
+        }
         return {
           hedgeId: (obj as { data?: { objectId?: string } }).data?.objectId || '',
           owner: ownerAddress,
-          asset: new TextDecoder().decode(new Uint8Array((fields.asset as number[]) || [])),
+          asset,
           side: fields.side === 0 ? 'LONG' : 'SHORT',
           size: Number(fields.notional_value || 0) / 1e6,
           leverage: Number(fields.leverage || 1),

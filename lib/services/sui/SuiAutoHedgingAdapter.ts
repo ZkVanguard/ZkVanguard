@@ -123,9 +123,15 @@ export class SuiAutoHedgingAdapter {
   private activeHedges: Map<string, SuiHedgePosition> = new Map(); // key: hedgeId
   private lastRisk: Map<string, SuiPortfolioRisk> = new Map();
   private bluefin: BluefinService;
+  private consecutiveFailures = 0;
+  private static readonly MAX_CONSECUTIVE_FAILURES = 5;
 
   constructor() {
     this.bluefin = BluefinService.getInstance();
+    // Validate RPC URL is configured
+    if (!SUI_CONTRACTS.rpcUrl) {
+      logger.error('[SuiAutoHedge] RPC URL not configured — SUI_NETWORK or defaults missing');
+    }
   }
 
   // ============================================
@@ -141,13 +147,31 @@ export class SuiAutoHedgingAdapter {
     await this.updateAllPnL();
 
     this.pnlInterval = setInterval(async () => {
-      try { await this.updateAllPnL(); }
-      catch (e) { logger.error('[SuiAutoHedge] PnL error', { error: e }); }
+      try {
+        await this.updateAllPnL();
+        this.consecutiveFailures = 0;
+      } catch (e) {
+        this.consecutiveFailures++;
+        logger.error('[SuiAutoHedge] PnL error', { error: e, consecutive: this.consecutiveFailures });
+        if (this.consecutiveFailures >= SuiAutoHedgingAdapter.MAX_CONSECUTIVE_FAILURES) {
+          logger.error('[SuiAutoHedge] Too many consecutive failures — stopping adapter');
+          this.stop();
+        }
+      }
     }, SUI_HEDGE_CONFIG.PNL_UPDATE_INTERVAL_MS);
 
     this.riskInterval = setInterval(async () => {
-      try { await this.checkAllRisks(); }
-      catch (e) { logger.error('[SuiAutoHedge] Risk error', { error: e }); }
+      try {
+        await this.checkAllRisks();
+        this.consecutiveFailures = 0;
+      } catch (e) {
+        this.consecutiveFailures++;
+        logger.error('[SuiAutoHedge] Risk error', { error: e, consecutive: this.consecutiveFailures });
+        if (this.consecutiveFailures >= SuiAutoHedgingAdapter.MAX_CONSECUTIVE_FAILURES) {
+          logger.error('[SuiAutoHedge] Too many consecutive failures — stopping adapter');
+          this.stop();
+        }
+      }
     }, SUI_HEDGE_CONFIG.RISK_CHECK_INTERVAL_MS);
 
     logger.info('[SuiAutoHedge] Adapter started', {
@@ -163,6 +187,7 @@ export class SuiAutoHedgingAdapter {
     this.pnlInterval = null;
     this.riskInterval = null;
     this.isRunning = false;
+    this.consecutiveFailures = 0;
     logger.info('[SuiAutoHedge] Adapter stopped');
   }
 
@@ -393,8 +418,17 @@ export class SuiAutoHedgingAdapter {
     const effectiveLeverage = Math.min(leverage, pairConfig.maxLeverage);
 
     try {
-      // Get current market price for entry
-      const marketData = await this.bluefin.getMarketData(rec.pair);
+      // Get current market price for entry (with 5s timeout)
+      let marketData;
+      try {
+        marketData = await Promise.race([
+          this.bluefin.getMarketData(rec.pair),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Market data timeout')), 5000)),
+        ]);
+      } catch (e) {
+        logger.warn('[SuiAutoHedge] Market data fetch timed out', { pair: rec.pair });
+        return null;
+      }
       const entryPrice = marketData?.price || 0;
 
       if (entryPrice <= 0) {
@@ -465,13 +499,22 @@ export class SuiAutoHedgingAdapter {
       const result = await this.bluefin.closeHedge({ symbol: hedge.pair, size: hedge.size });
 
       if (result.success) {
-        hedge.status = 'closed';
-        this.activeHedges.delete(hedgeId);
-        logger.info('[SuiAutoHedge] Hedge closed', {
-          hedgeId,
-          pair: hedge.pair,
-          pnl: hedge.unrealizedPnl.toFixed(2),
-        });
+        // Verify fill completeness before removing from active tracking
+        const filledSize = result.filledSize || 0;
+        if (filledSize > 0 && filledSize < hedge.size * 0.99) {
+          logger.warn('[SuiAutoHedge] Partial fill on close — keeping hedge in tracking', {
+            hedgeId, requestedSize: hedge.size, filledSize,
+          });
+          // Don't delete — still partially open
+        } else {
+          hedge.status = 'closed';
+          this.activeHedges.delete(hedgeId);
+          logger.info('[SuiAutoHedge] Hedge closed', {
+            hedgeId,
+            pair: hedge.pair,
+            pnl: hedge.unrealizedPnl.toFixed(2),
+          });
+        }
       }
 
       return result;
@@ -485,10 +528,13 @@ export class SuiAutoHedgingAdapter {
   // SUI RPC HELPERS
   // ============================================
 
-  /** Fetch live SUI/USD price from BlueFin, fallback to a default */
+  /** Fetch live SUI/USD price from BlueFin (with 5s timeout), fallback to a default */
   private async getSuiUsdPrice(): Promise<number> {
     try {
-      const md = await this.bluefin.getMarketData('SUI-PERP');
+      const md = await Promise.race([
+        this.bluefin.getMarketData('SUI-PERP'),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+      ]);
       if (md?.price && md.price > 0) return md.price;
     } catch { /* fall through */ }
     return 2.5; // conservative fallback
