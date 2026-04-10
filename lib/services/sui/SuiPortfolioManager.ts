@@ -149,7 +149,7 @@ export class SuiPortfolioManager {
   private bluefin: BluefinService;
 
   constructor(
-    network: keyof typeof SUI_PORTFOLIO_DEPLOYMENTS = 'testnet',
+    network: keyof typeof SUI_PORTFOLIO_DEPLOYMENTS = 'mainnet',
     allocations: SuiAllocationConfig[] = DEFAULT_SUI_ALLOCATIONS,
   ) {
     this.network = network;
@@ -606,7 +606,7 @@ export class SuiPortfolioManager {
 let suiPortfolioInstance: SuiPortfolioManager | null = null;
 
 export function getSuiPortfolioManager(
-  network: keyof typeof SUI_PORTFOLIO_DEPLOYMENTS = 'testnet',
+  network: keyof typeof SUI_PORTFOLIO_DEPLOYMENTS = 'mainnet',
   allocations?: SuiAllocationConfig[],
 ): SuiPortfolioManager {
   if (!suiPortfolioInstance) {

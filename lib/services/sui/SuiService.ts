@@ -35,7 +35,7 @@ export const SUI_NETWORKS = {
 export type SuiNetworkType = keyof typeof SUI_NETWORKS;
 
 // Default network for development
-const DEFAULT_NETWORK: SuiNetworkType = 'testnet';
+const DEFAULT_NETWORK: SuiNetworkType = 'mainnet';
 
 /**
  * SUI Token addresses (Object IDs for common tokens)

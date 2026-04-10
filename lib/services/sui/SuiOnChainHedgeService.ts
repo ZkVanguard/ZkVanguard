@@ -110,7 +110,7 @@ export class SuiOnChainHedgeService {
   private network: keyof typeof SUI_DEPLOYMENTS;
   private config: (typeof SUI_DEPLOYMENTS)[keyof typeof SUI_DEPLOYMENTS];
 
-  constructor(network: keyof typeof SUI_DEPLOYMENTS = 'testnet') {
+  constructor(network: keyof typeof SUI_DEPLOYMENTS = 'mainnet') {
     this.network = network;
     this.config = SUI_DEPLOYMENTS[network];
 
@@ -474,7 +474,7 @@ export class SuiOnChainHedgeService {
 let suiHedgeServiceInstance: SuiOnChainHedgeService | null = null;
 
 export function getSuiOnChainHedgeService(
-  network: keyof typeof SUI_DEPLOYMENTS = 'testnet'
+  network: keyof typeof SUI_DEPLOYMENTS = 'mainnet'
 ): SuiOnChainHedgeService {
   if (!suiHedgeServiceInstance || suiHedgeServiceInstance['network'] !== network) {
     suiHedgeServiceInstance = new SuiOnChainHedgeService(network);
