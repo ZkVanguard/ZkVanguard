@@ -93,9 +93,18 @@ function ensureQuoteCacheCleanup() {
   }
 }
 
+/** Stop the quote cache cleanup timer (for graceful shutdown / serverless termination) */
+export function stopQuoteCacheCleanup(): void {
+  if (quoteCacheCleanupTimer) {
+    clearInterval(quoteCacheCleanupTimer);
+    quoteCacheCleanupTimer = null;
+  }
+  quoteCache.clear();
+}
+
 function getQuoteCacheKey(network: string, asset: string, amount: number, direction: 'forward' | 'reverse'): string {
-  // Round amount to 2 decimals to improve cache hit rate
-  return `${network}:${asset}:${Math.round(amount * 100)}:${direction}`;
+  // Use fixed-point precision (6 decimals) to avoid cache collisions on small amounts
+  return `${network}:${asset}:${amount.toFixed(6)}:${direction}`;
 }
 
 // ============================================
@@ -130,6 +139,16 @@ export class BluefinAggregatorService {
       ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
       : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
     this.suiClient = new SuiClient({ url: rpcUrl });
+
+    // H3: Verify RPC is reachable before using it for swaps
+    try {
+      await this.suiClient.getChainIdentifier();
+      logger.info('[BluefinAggregator] RPC health check passed', { rpcUrl: rpcUrl.replace(/\/\/.*@/, '//***@') });
+    } catch (rpcErr) {
+      this.suiClient = null;
+      throw new Error(`SUI RPC health check failed (${rpcUrl}): ${rpcErr instanceof Error ? rpcErr.message : String(rpcErr)}`);
+    }
+
     BluefinConfig.setSuiClient(this.suiClient);
 
     // Set up Pyth oracle client for oracle-based DEX routing
@@ -734,8 +753,9 @@ export class BluefinAggregatorService {
           finalGasBudget = Math.max(Math.ceil(totalGas * 1.2), gasBudget);
         }
       } catch {
-        // Dry run failed — use static budget
-        logger.debug(`[BluefinAggregator] Gas dry-run failed for ${quote.asset}, using static budget`);
+        // Dry run failed — use static budget with 50% safety buffer
+        finalGasBudget = Math.ceil(gasBudget * 1.5);
+        logger.debug(`[BluefinAggregator] Gas dry-run failed for ${quote.asset}, using buffered static budget: ${finalGasBudget}`);
       }
       tx.setGasBudget(finalGasBudget);
 

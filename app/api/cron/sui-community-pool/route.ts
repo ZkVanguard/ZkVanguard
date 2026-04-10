@@ -397,6 +397,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
   }
 
   try {
+    // M3: Validate admin key format early (fail-fast, not during swap execution)
+    const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+    if (adminKey) {
+      const isValidFormat = adminKey.startsWith('suiprivkey') || /^(0x)?[0-9a-fA-F]{64}$/.test(adminKey);
+      if (!isValidFormat) {
+        logger.error('[SUI Cron] Invalid SUI_POOL_ADMIN_KEY format — must be suiprivkey... or 64-char hex');
+        return NextResponse.json(
+          { success: false, chain: 'sui' as const, error: 'Invalid SUI_POOL_ADMIN_KEY format', duration: Date.now() - startTime },
+          { status: 503 }
+        );
+      }
+    }
+
     // Step 0: Ensure DB tables exist
     await initCommunityPoolTables();
 

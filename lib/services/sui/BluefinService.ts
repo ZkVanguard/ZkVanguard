@@ -190,6 +190,15 @@ export class BluefinService {
       return;
     }
 
+    // H1: If switching networks, reset auth state to prevent cross-network token usage
+    if (this.initialized && this.network !== network) {
+      logger.warn('[BlueFin] Network switch detected', { from: this.network, to: network });
+      this.accessToken = null;
+      this.refreshToken = null;
+      this.tokenExpiresAt = 0;
+      this.initialized = false;
+    }
+
     try {
       const networkConfig = BLUEFIN_NETWORKS[network];
 
@@ -218,6 +227,25 @@ export class BluefinService {
       
       if (!authSuccess) {
         logger.warn('⚠️ BlueFin auth failed — service will retry auth on next API call');
+      }
+
+      // C4: Verify account is onboarded (fail-fast at init, not at first trade)
+      if (authSuccess) {
+        try {
+          const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
+          if (!acctResp) {
+            logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${network}`);
+          } else {
+            logger.info('✅ BlueFin account verified', { freeCollateral: acctResp.freeCollateral });
+          }
+        } catch (acctErr) {
+          const msg = acctErr instanceof Error ? acctErr.message : String(acctErr);
+          if (msg.includes('404') || msg.includes('not found')) {
+            logger.error(`❌ BlueFin account ${this.walletAddress} NOT onboarded on ${network}. Visit https://trade.bluefin.io to register.`);
+          } else {
+            logger.warn('⚠️ Could not verify BlueFin account onboarding', { error: msg });
+          }
+        }
       }
       
       this.initialized = true;
@@ -276,18 +304,21 @@ export class BluefinService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${networkConfig.authApiUrl}/auth/v2/token`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'payloadSignature': payloadSignature,
-        },
-        body: payloadString,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+      let response: Response;
+      try {
+        response = await fetch(`${networkConfig.authApiUrl}/auth/v2/token`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'payloadSignature': payloadSignature,
+          },
+          body: payloadString,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       // Handle rate limiting
       if (response.status === 429) {
@@ -394,7 +425,7 @@ export class BluefinService {
 
   /**
    * Make authenticated API request to BlueFin Trade API
-   * Handles rate limiting with exponential backoff and Retry-After header
+   * Handles rate limiting with exponential backoff, auto-retry on 429 and 5xx errors
    * 
    * Rate limit: 500 RPM on trade.api
    */
@@ -404,58 +435,96 @@ export class BluefinService {
     body?: Record<string, unknown>,
     apiType: 'trade' | 'exchange' = 'trade'
   ): Promise<T> {
-    // Check if we're rate limited
-    if (Date.now() < this.rateLimitRetryAfter) {
-      const waitTime = Math.ceil((this.rateLimitRetryAfter - Date.now()) / 1000);
-      throw new Error(`Rate limited. Retry after ${waitTime} seconds`);
-    }
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      // Wait if rate limited (from previous 429 response)
+      if (Date.now() < this.rateLimitRetryAfter) {
+        const waitMs = this.rateLimitRetryAfter - Date.now();
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, waitMs + Math.random() * 1000));
+        } else {
+          throw new Error(`Rate limited. Retry after ${Math.ceil(waitMs / 1000)} seconds`);
+        }
+      }
     
-    // Ensure we have a valid token
-    await this.ensureValidToken();
+      // Ensure we have a valid token
+      await this.ensureValidToken();
     
-    const networkConfig = BLUEFIN_NETWORKS[this.network];
-    const baseUrl = apiType === 'exchange' ? networkConfig.exchangeApiUrl : networkConfig.tradeApiUrl;
-    const url = `${baseUrl}${path}`;
+      const networkConfig = BLUEFIN_NETWORKS[this.network];
+      const baseUrl = apiType === 'exchange' ? networkConfig.exchangeApiUrl : networkConfig.tradeApiUrl;
+      const url = `${baseUrl}${path}`;
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
 
-    // Add auth token if available
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const requestBody = method !== 'GET' && body ? JSON.stringify(body) : undefined;
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: requestBody,
-        signal: controller.signal,
-      });
-
-      // Handle rate limiting (429)
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-        this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
-        logger.warn('BlueFin API rate limited', { retryAfter, path });
-        throw new Error(`Rate limited. Retry after ${retryAfter} seconds`);
+      // Add auth token if available
+      if (this.accessToken) {
+        headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`BlueFin API error: ${response.status} - ${error}`);
-      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      return response.json();
-    } finally {
-      clearTimeout(timeoutId);
+      try {
+        const requestBody = method !== 'GET' && body ? JSON.stringify(body) : undefined;
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: requestBody,
+          signal: controller.signal,
+        });
+
+        // Handle rate limiting (429) — auto-retry with Retry-After
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+          this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
+          if (attempt < MAX_RETRIES) {
+            logger.debug('BlueFin API rate limited, retrying...', { attempt, retryAfter, path });
+            await new Promise(r => setTimeout(r, retryAfter * 1000 + Math.random() * 1000));
+            continue;
+          }
+          logger.warn('BlueFin API rate limited after max retries', { retryAfter, path });
+          throw new Error(`Rate limited. Retry after ${retryAfter} seconds`);
+        }
+
+        // Server errors (5xx) — auto-retry with exponential backoff
+        if (response.status >= 500 && attempt < MAX_RETRIES) {
+          const backoff = Math.pow(2, attempt - 1) * 1000;
+          logger.debug('BlueFin API server error, retrying...', { attempt, status: response.status, path });
+          await new Promise(r => setTimeout(r, backoff + Math.random() * 1000));
+          continue;
+        }
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`BlueFin API error: ${response.status} - ${error}`);
+        }
+
+        return response.json();
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // Retry on network/timeout errors
+        const isRetryable = lastError.message.includes('aborted') || 
+                           lastError.message.includes('network') ||
+                           lastError.message.includes('ECONNRESET') ||
+                           lastError.message.includes('fetch failed');
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const backoff = Math.pow(2, attempt - 1) * 1000;
+          logger.debug('BlueFin API transient error, retrying...', { attempt, error: lastError.message, path });
+          await new Promise(r => setTimeout(r, backoff + Math.random() * 1000));
+          continue;
+        }
+        throw lastError;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+
+    throw lastError || new Error('BlueFin API: max retries exceeded');
   }
 
   /**
@@ -944,13 +1013,25 @@ export class BluefinService {
         elapsed: `${Date.now() - startTime}ms`,
       });
 
+      // M1: Verify fill completeness — warn on partial fills
+      const filledSize = parseFloat(orderResponse?.filledQty || '0');
+      if (filledSize > 0 && filledSize < closeSize * 0.99) {
+        logger.warn('⚠️ BlueFin partial fill on close order', {
+          hedgeId,
+          requestedSize: closeSize,
+          filledSize,
+          remainingSize: closeSize - filledSize,
+          symbol: params.symbol,
+        });
+      }
+
       return {
         success: true,
         hedgeId,
         orderId: orderResponse?.orderHash,
         txDigest: orderResponse?.txDigest,
         executionPrice: parseFloat(orderResponse?.avgFillPrice || String(currentPrice)),
-        filledSize: parseFloat(orderResponse?.filledQty || String(closeSize)),
+        filledSize: filledSize || closeSize,
         fees: parseFloat(orderResponse?.fee || '0'),
         timestamp: Date.now(),
       };
