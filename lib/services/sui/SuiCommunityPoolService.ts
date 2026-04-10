@@ -109,14 +109,23 @@ const circuitBreaker = {
       logger.info('[SUI-RPC] Circuit breaker half-open — attempting probe request');
       return true;
     }
-    return this.state === 'half-open';
+    if (this.state === 'half-open') {
+      // Allow one probe request in half-open; if it fails, reopen
+      return true;
+    }
+    return false;
   },
 };
 
 /** Fetch with AbortController timeout, retry with backoff, and circuit breaker */
 async function suiFetchWithTimeout(url: string, init: RequestInit, timeoutMs = SUI_RPC_TIMEOUT_MS): Promise<Response> {
   if (!circuitBreaker.canAttempt()) {
-    throw new Error('SUI RPC circuit breaker is OPEN — requests blocked');
+    // Return a synthetic error response instead of throwing (recoverable)
+    logger.warn('[SUI-RPC] Circuit breaker OPEN — returning error response');
+    return new Response(JSON.stringify({ error: { message: 'SUI RPC circuit breaker is OPEN — requests blocked' } }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   let lastError: unknown;

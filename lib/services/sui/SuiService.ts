@@ -220,6 +220,7 @@ export class SuiService {
         body: JSON.stringify({
           FixedAmountRequest: { recipient: address },
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -233,15 +234,19 @@ export class SuiService {
   }
 }
 
-// Singleton instance
+// Singleton instance with race-condition-safe initialization
 let suiServiceInstance: SuiService | null = null;
+let suiServiceInitLock: Promise<SuiService> | null = null;
 
 export function getSuiService(network?: SuiNetworkType): SuiService {
-  if (!suiServiceInstance) {
-    suiServiceInstance = new SuiService(network);
-  } else if (network && network !== suiServiceInstance['network']) {
-    suiServiceInstance.switchNetwork(network);
+  if (suiServiceInstance) {
+    if (network && network !== suiServiceInstance['network']) {
+      suiServiceInstance.switchNetwork(network);
+    }
+    return suiServiceInstance;
   }
+  // Synchronous creation — SuiService constructor is sync
+  suiServiceInstance = new SuiService(network);
   return suiServiceInstance;
 }
 

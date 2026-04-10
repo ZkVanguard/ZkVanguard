@@ -99,6 +99,12 @@ export class SuiPrivateHedgeService {
   constructor(network: keyof typeof SUI_ZK_DEPLOYMENTS = 'mainnet') {
     this.network = network;
     this.config = SUI_ZK_DEPLOYMENTS[network];
+
+    // Validate deployment addresses on mainnet
+    if (network === 'mainnet' && !this.config.packageId) {
+      logger.warn('[SuiZKHedge] Mainnet ZK contracts not yet deployed — operations will fail');
+    }
+
     // In production, derive from user's SUI private key
     this.encryptionKeyHex = process.env.HEDGE_ENCRYPTION_SEED ||
       'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
@@ -224,6 +230,10 @@ export class SuiPrivateHedgeService {
     target: string;
     arguments: unknown[];
   } {
+    // Validate proof structure before building transaction
+    if (!proof.proof?.a?.[0] || !proof.proof?.a?.[1] || !proof.commitmentHash) {
+      throw new Error('Invalid ZK proof structure: missing required fields (a, commitmentHash)');
+    }
     return {
       target: `${this.config.packageId}::zk_proxy_vault::stealth_withdraw`,
       arguments: [
@@ -391,6 +401,7 @@ export class SuiPrivateHedgeService {
           method: 'sui_getObject',
           params: [this.config.zkHedgeCommitmentState, { showContent: true }],
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       const data = await response.json();
@@ -411,42 +422,17 @@ export class SuiPrivateHedgeService {
   // ============================================
 
   /**
-   * SHA-256 hash (browser + Node compatible)
+   * SHA-256 hash using Node.js crypto (secure, deterministic)
    */
   private sha256(input: string): string {
-    // Use Web Crypto API if available, else fallback
-    if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
-      // For synchronous usage, fall back to simple hash
-    }
-    // Simple deterministic hash for both environments
-    let hash = 0;
-    const str = input;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash |= 0;
-    }
-    // Extend to 64-char hex
-    const base = Math.abs(hash).toString(16).padStart(8, '0');
-    const expanded = base.repeat(8);
-    return expanded;
+    return crypto.createHash('sha256').update(input).digest('hex');
   }
 
   /**
-   * Generate random hex string
+   * Generate random hex string using Node.js crypto
    */
   private randomHex(bytes: number): string {
-    const array = new Uint8Array(bytes);
-    if (typeof globalThis !== 'undefined' && globalThis.crypto) {
-      globalThis.crypto.getRandomValues(array);
-    } else {
-      // Node.js fallback using secure crypto
-      const buf = crypto.randomBytes(bytes);
-      for (let i = 0; i < bytes; i++) {
-        array[i] = buf[i];
-      }
-    }
-    return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+    return crypto.randomBytes(bytes).toString('hex');
   }
 
   /**
@@ -462,34 +448,35 @@ export class SuiPrivateHedgeService {
   }
 
   /**
-   * Simple AES-like XOR encryption for local storage
-   * In production, use WebCrypto AES-GCM
+   * AES-256-GCM encryption for local hedge data storage.
+   * Uses unique IV per encryption to prevent pattern leakage.
    */
   private encrypt(plaintext: string): { encrypted: string; iv: string } {
-    const iv = this.randomHex(16);
-    const keyBytes = this.hexToBytes(this.encryptionKeyHex.slice(0, 64));
-    const textBytes = new TextEncoder().encode(plaintext);
-    const encrypted: number[] = [];
-    for (let i = 0; i < textBytes.length; i++) {
-      encrypted.push(textBytes[i] ^ keyBytes[i % keyBytes.length]);
-    }
+    const iv = crypto.randomBytes(12); // 96-bit IV for GCM
+    const key = Buffer.from(this.encryptionKeyHex.slice(0, 64), 'hex');
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encBuf = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    // Store as: ciphertext + authTag (16 bytes)
     return {
-      encrypted: encrypted.map(b => b.toString(16).padStart(2, '0')).join(''),
-      iv,
+      encrypted: Buffer.concat([encBuf, tag]).toString('hex'),
+      iv: iv.toString('hex'),
     };
   }
 
   /**
-   * Decrypt locally stored hedge data
+   * Decrypt locally stored hedge data (AES-256-GCM)
    */
-  decrypt(encryptedHex: string, _iv: string): SuiHedgeCommitment {
-    const keyBytes = this.hexToBytes(this.encryptionKeyHex.slice(0, 64));
-    const encBytes = this.hexToBytes(encryptedHex);
-    const decrypted: number[] = [];
-    for (let i = 0; i < encBytes.length; i++) {
-      decrypted.push(encBytes[i] ^ keyBytes[i % keyBytes.length]);
-    }
-    const text = new TextDecoder().decode(new Uint8Array(decrypted));
+  decrypt(encryptedHex: string, ivHex: string): SuiHedgeCommitment {
+    const key = Buffer.from(this.encryptionKeyHex.slice(0, 64), 'hex');
+    const iv = Buffer.from(ivHex, 'hex');
+    const raw = Buffer.from(encryptedHex, 'hex');
+    // Last 16 bytes are the GCM auth tag
+    const tag = raw.subarray(raw.length - 16);
+    const ciphertext = raw.subarray(0, raw.length - 16);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    const text = decipher.update(ciphertext) + decipher.final('utf8');
     return JSON.parse(text);
   }
 

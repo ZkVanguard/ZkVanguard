@@ -140,9 +140,11 @@ export class BluefinAggregatorService {
       : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
     this.suiClient = new SuiClient({ url: rpcUrl });
 
-    // H3: Verify RPC is reachable before using it for swaps
+    // H3: Verify RPC is reachable before using it for swaps (with timeout)
     try {
-      await this.suiClient.getChainIdentifier();
+      const healthCheck = this.suiClient.getChainIdentifier();
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC health check timed out after 8s')), 8000));
+      await Promise.race([healthCheck, timeout]);
       logger.info('[BluefinAggregator] RPC health check passed', { rpcUrl: rpcUrl.replace(/\/\/.*@/, '//***@') });
     } catch (rpcErr) {
       this.suiClient = null;
@@ -484,7 +486,8 @@ export class BluefinAggregatorService {
   ): Promise<RebalanceSwapPlan> {
     const swaps: SwapQuoteResult[] = [];
 
-    // Get quotes in parallel for each asset allocation
+    // Get quotes in parallel for each asset allocation (with per-quote 15s timeout)
+    const QUOTE_TIMEOUT_MS = 15_000;
     const quotePromises = (Object.keys(allocations) as PoolAsset[]).map(async (asset) => {
       const pct = allocations[asset] || 0;
       if (pct <= 0) return null;
@@ -492,7 +495,11 @@ export class BluefinAggregatorService {
       const usdcForAsset = totalUsdcAvailable * (pct / 100);
       if (usdcForAsset < 0.50) return null; // Skip if less than $0.50 (gas costs would exceed value)
 
-      return this.getSwapQuote(asset, usdcForAsset);
+      const quotePromise = this.getSwapQuote(asset, usdcForAsset);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Quote timeout for ${asset} after ${QUOTE_TIMEOUT_MS}ms`)), QUOTE_TIMEOUT_MS)
+      );
+      return Promise.race([quotePromise, timeoutPromise]);
     });
 
     const results = await Promise.allSettled(quotePromises);
@@ -1233,6 +1240,13 @@ export class BluefinAggregatorService {
   /** Get current network */
   getNetwork(): NetworkType {
     return this.network;
+  }
+
+  /** Cleanup resources (SuiClient, quote cache). Call on graceful shutdown. */
+  destroy(): void {
+    this.suiClient = null;
+    stopQuoteCacheCleanup();
+    logger.info('[BluefinAggregator] Destroyed', { network: this.network });
   }
 }
 

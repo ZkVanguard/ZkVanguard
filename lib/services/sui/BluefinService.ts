@@ -151,9 +151,12 @@ export class BluefinService {
   private refreshToken: string | null = null;
   private tokenExpiresAt: number = 0;
   
-  // Rate limiting state
+  // Rate limiting state — per-endpoint to prevent one 429 from blocking all requests
   private lastRequestTime: Map<string, number> = new Map();
-  private rateLimitRetryAfter: number = 0;
+  private rateLimitRetryAfter: Map<string, number> = new Map();
+
+  // Initialization lock to prevent concurrent init race condition
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {}
 
@@ -189,6 +192,19 @@ export class BluefinService {
     if (this.initialized && this.network === network) {
       return;
     }
+
+    // Prevent concurrent initialization race condition
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this._doInitialize(privateKey, network).finally(() => {
+      this.initPromise = null;
+    });
+    return this.initPromise;
+  }
+
+  private async _doInitialize(privateKey: string, network: 'mainnet' | 'testnet'): Promise<void> {
 
     // H1: If switching networks, reset auth state to prevent cross-network token usage
     if (this.initialized && this.network !== network) {
@@ -323,7 +339,7 @@ export class BluefinService {
       // Handle rate limiting
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-        this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
+        this.rateLimitRetryAfter.set('auth', Date.now() + (Math.min(retryAfter, 60) * 1000));
         logger.warn('BlueFin auth rate limited', { retryAfter });
         return false;
       }
@@ -437,15 +453,17 @@ export class BluefinService {
   ): Promise<T> {
     const MAX_RETRIES = 3;
     let lastError: Error | null = null;
+    const rateLimitKey = `${apiType}:${path.split('?')[0]}`;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      // Wait if rate limited (from previous 429 response)
-      if (Date.now() < this.rateLimitRetryAfter) {
-        const waitMs = this.rateLimitRetryAfter - Date.now();
+      // Wait if rate limited (per-endpoint, capped at 60s max)
+      const retryAfterTs = this.rateLimitRetryAfter.get(rateLimitKey) || 0;
+      if (Date.now() < retryAfterTs) {
+        const waitMs = Math.min(retryAfterTs - Date.now(), 60000);
         if (attempt < MAX_RETRIES) {
           await new Promise(r => setTimeout(r, waitMs + Math.random() * 1000));
         } else {
-          throw new Error(`Rate limited. Retry after ${Math.ceil(waitMs / 1000)} seconds`);
+          throw new Error(`Rate limited on ${rateLimitKey}. Retry after ${Math.ceil(waitMs / 1000)} seconds`);
         }
       }
     
@@ -480,8 +498,8 @@ export class BluefinService {
 
         // Handle rate limiting (429) — auto-retry with Retry-After
         if (response.status === 429) {
-          const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-          this.rateLimitRetryAfter = Date.now() + (retryAfter * 1000);
+          const retryAfter = Math.min(parseInt(response.headers.get('Retry-After') || '60', 10), 60);
+          this.rateLimitRetryAfter.set(rateLimitKey, Date.now() + (retryAfter * 1000));
           if (attempt < MAX_RETRIES) {
             logger.debug('BlueFin API rate limited, retrying...', { attempt, retryAfter, path });
             await new Promise(r => setTimeout(r, retryAfter * 1000 + Math.random() * 1000));
@@ -661,6 +679,10 @@ export class BluefinService {
       } else if (marketData?.lastPrice) {
         price = parseFloat(marketData.lastPrice);
       }
+      if (isNaN(price)) {
+        logger.warn('[BlueFin] NaN price detected', { symbol, raw: marketData });
+        return null;
+      }
       
       let fundingRate = 0;
       if (marketData?.lastFundingRateE9) {
@@ -668,13 +690,15 @@ export class BluefinService {
       } else if (marketData?.fundingRate) {
         fundingRate = parseFloat(marketData.fundingRate);
       }
+      if (isNaN(fundingRate)) fundingRate = 0;
       
       let change24h: number | undefined;
       if (marketData?.priceChangePercent24hrE9) {
-        change24h = parseFloat(marketData.priceChangePercent24hrE9) / 1e9 * 100; // Convert to percentage
+        change24h = parseFloat(marketData.priceChangePercent24hrE9) / 1e9 * 100;
       } else if (marketData?.priceChange24h) {
         change24h = parseFloat(marketData.priceChange24h);
       }
+      if (change24h !== undefined && isNaN(change24h)) change24h = undefined;
       
       return { price, fundingRate, change24h };
     } catch (error) {
