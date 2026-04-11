@@ -124,9 +124,9 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
               {isSui ? 'View on SuiScan' : 'View Contract'}
             </a>
           )}
-          {isSui && chainConfig?.contracts?.testnet?.usdt && (
+          {isSui && chainConfig?.contracts?.[suiNetwork]?.usdt && (
             <a
-              href={`${explorerUrl}/object/${chainConfig.contracts.testnet.usdt}`}
+              href={`${explorerUrl}/object/${chainConfig.contracts[suiNetwork].usdt}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"

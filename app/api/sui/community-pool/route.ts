@@ -64,7 +64,7 @@ function getNetwork(request: NextRequest): NetworkType {
   const network = url.searchParams.get('network');
   if (network === 'mainnet' || network === 'testnet') return network;
   // Default to env var, then testnet as safe fallback
-  return (process.env.SUI_NETWORK as NetworkType) || 'testnet';
+  return (process.env.SUI_NETWORK as NetworkType) || 'mainnet';
 }
 
 /** Reject requests if mainnet config is incomplete */
