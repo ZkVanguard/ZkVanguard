@@ -83,7 +83,7 @@ export function ConnectButton() {
   const suiContext = useSuiSafe();
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiWalletNetwork = suiContext?.walletNetwork ?? null;
-  const suiExpectedNetwork = suiContext?.network ?? 'testnet';
+  const suiExpectedNetwork = suiContext?.network ?? 'mainnet';
   
   const suiAddress = suiAccount?.address ?? null;
   const isSuiConnected = connectionStatus === 'connected' && !!suiAddress;
