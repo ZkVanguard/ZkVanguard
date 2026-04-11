@@ -17,7 +17,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { recordNavSnapshot, getNavHistory, saveUserSharesToDb } from '@/lib/db/community-pool';
+import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
+import { query } from '@/lib/db/postgres';
 import { getPoolSummary } from '@/lib/services/cronos/CommunityPoolService';
 import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
@@ -110,23 +111,27 @@ const POOL_HEDGE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
 /**
  * Load critical state from database on cold start (once per invocation)
+ * Parallelized: loads all pool state in a single Promise.all
  */
 async function loadStateFromDb(): Promise<void> {
   if (dbStateLoaded) return;
   dbStateLoaded = true;
 
   try {
-    // Load peak NAVs
-    for (const pool of POOLS) {
-      const peak = await getNumber(CronKeys.poolNavPeak(pool.id));
-      if (peak > 0) {
-        peakNavCache.set(pool.id, peak);
-        logger.info(`[PoolNAVMonitor] Loaded peak NAV from DB for ${pool.id}: $${peak.toFixed(2)}`);
-      }
+    // Parallel load all pool state at once
+    const results = await Promise.all(
+      POOLS.flatMap(pool => [
+        getNumber(CronKeys.poolNavPeak(pool.id)).then(v => ({ pool: pool.id, type: 'peak' as const, value: v })),
+        getTimestamp(CronKeys.poolNavLastHedge(pool.id)).then(v => ({ pool: pool.id, type: 'hedge' as const, value: v })),
+      ])
+    );
 
-      const lastHedge = await getTimestamp(CronKeys.poolNavLastHedge(pool.id));
-      if (lastHedge > 0) {
-        lastPoolHedgeTimeCache.set(pool.id, lastHedge);
+    for (const r of results) {
+      if (r.type === 'peak' && r.value > 0) {
+        peakNavCache.set(r.pool, r.value);
+        logger.info(`[PoolNAVMonitor] Loaded peak NAV from DB for ${r.pool}: $${r.value.toFixed(2)}`);
+      } else if (r.type === 'hedge' && r.value > 0) {
+        lastPoolHedgeTimeCache.set(r.pool, r.value);
       }
     }
   } catch (error: unknown) {
@@ -364,6 +369,7 @@ function generateAlerts(
 
 /**
  * Record NAV snapshot with actual pool stats
+ * Optimized: DB write only — member sync moved to dedicated endpoint
  */
 async function recordSnapshot(
   poolId: string, 
@@ -387,7 +393,7 @@ async function recordSnapshot(
   // Calculate total shares from NAV and share price
   const totalShares = stats.sharePrice > 0 ? stats.totalNAV / stats.sharePrice : 1000;
   
-  // Also record to database with actual values
+  // Record to database
   try {
     await recordNavSnapshot({
       totalNav: stats.totalNAV,
@@ -402,35 +408,7 @@ async function recordSnapshot(
     logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: errMsg(error) || String(error) });
   }
   
-  // Sync on-chain members to DB for fast queries
-  try {
-    const pool = POOLS.find(p => p.id === poolId);
-    if (pool) {
-      const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
-      const contract = new ethers.Contract(pool.address, pool.abi, provider);
-      
-      const memberCount = Number(await contract.getMemberCount());
-      let syncedMembers = 0;
-      
-      for (let i = 0; i < memberCount; i++) {
-        const addr = await contract.memberList(i);
-        const memberData = await contract.members(addr);
-        
-        if (memberData.active) {
-          await saveUserSharesToDb({
-            walletAddress: addr.toLowerCase(),
-            shares: parseFloat(ethers.formatUnits(memberData.shares, 18)),
-            costBasisUSD: parseFloat(ethers.formatUnits(memberData.depositedUSD, 6)),
-          });
-          syncedMembers++;
-        }
-      }
-      
-      logger.info(`[PoolNAVMonitor] Members synced to DB: ${syncedMembers}`);
-    }
-  } catch (syncError: unknown) {
-    logger.warn(`[PoolNAVMonitor] Failed to sync members (non-critical):`, { error: errMsg(syncError) || String(syncError) });
-  }
+  // NOTE: On-chain member sync offloaded to /api/cron/sync-members (QStash, runs separately)
 }
 
 /**
@@ -553,13 +531,15 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
   let criticalPools = 0;
   let healthyPools = 0;
 
-  // Load DB state on cold start
-  await loadStateFromDb();
+  // Load DB state + NAV history in parallel (both needed before proceeding)
+  const [, navHistory] = await Promise.all([
+    loadStateFromDb(),
+    getNavHistory(30).catch(() => [] as any[]),
+  ]);
   
   // Backfill hourly snapshots if NAV history is too sparse for risk metrics
   // This ensures risk metrics activate quickly after deployment
   try {
-    const navHistory = await getNavHistory(30);
     if (navHistory.length < 5) {
       logger.info('[PoolNAVMonitor] Sparse NAV history detected, backfilling hourly snapshots', {
         existingSnapshots: navHistory.length,
@@ -569,20 +549,24 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       const baseTotalShares = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_shares) : 10000;
       const baseMemberCount = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].member_count) : 1;
       const now = Date.now();
-      // Seed 24 hourly snapshots going back from now using base price (no synthetic drift)
+      // Batch-insert 24 hourly snapshots in a single query
+      const allocJson = JSON.stringify({ BTC: 30, ETH: 30, SUI: 25, CRO: 15 });
+      const values: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
       for (let i = 24; i >= 1; i--) {
-        const ts = now - i * 60 * 60 * 1000; // i hours ago
-        await recordNavSnapshot({
-          sharePrice: parseFloat(baseSharePrice.toFixed(6)),
-          totalNav: parseFloat(baseNav.toFixed(2)),
-          totalShares: baseTotalShares,
-          memberCount: baseMemberCount,
-          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-          source: 'backfill-hourly',
-          timestamp: new Date(ts),
-        });
+        const ts = new Date(now - i * 60 * 60 * 1000);
+        values.push(`($${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, $${paramIdx+6})`);
+        params.push(ts, baseSharePrice, baseNav, baseTotalShares, baseMemberCount, allocJson, 'backfill-hourly');
+        paramIdx += 7;
       }
-      logger.info('[PoolNAVMonitor] Backfilled 24 hourly snapshots for risk metrics');
+      await query(
+        `INSERT INTO community_pool_nav_history (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
+         VALUES ${values.join(', ')}
+         ON CONFLICT DO NOTHING`,
+        params
+      );
+      logger.info('[PoolNAVMonitor] Backfilled 24 hourly snapshots for risk metrics (batch)');
     }
   } catch (backfillErr: unknown) {
     logger.warn('[PoolNAVMonitor] Backfill failed (non-fatal)', { error: errMsg(backfillErr) });
@@ -591,18 +575,30 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
   for (const pool of POOLS) {
     logger.info(`[PoolNAVMonitor] Checking ${pool.name}`);
     
-    const stats = await fetchPoolStats(pool);
+    // Parallel: fetch pool stats + previous NAV at the same time
+    const [stats, previousNAV] = await Promise.all([
+      fetchPoolStats(pool),
+      getPreviousNAV(pool.id),
+    ]);
     
     if (!stats) {
       logger.warn(`[PoolNAVMonitor] Skipping ${pool.id} - unable to fetch stats`);
       continue;
     }
     
-    const previousNAV = await getPreviousNAV(pool.id);
     const navChange = previousNAV ? stats.totalNAV - previousNAV : 0;
     const navChangePercent = previousNAV ? (navChange / previousNAV) * 100 : 0;
     
-    const { drawdownPercent, peakNAV } = await calculateDrawdown(pool.id, stats.totalNAV);
+    // calculateDrawdown and recordSnapshot can run in parallel
+    const [{ drawdownPercent, peakNAV }] = await Promise.all([
+      calculateDrawdown(pool.id, stats.totalNAV),
+      recordSnapshot(pool.id, {
+        totalNAV: stats.totalNAV,
+        sharePrice: stats.sharePrice,
+        memberCount: stats.memberCount,
+        allocations: stats.allocations,
+      }),
+    ]);
     const { maxDrift, driftingAssets } = checkAllocationDrift(stats.allocations, pool.targetAllocations);
     
     // Calculate since inception
@@ -622,14 +618,6 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
     });
     
     allAlerts.push(...alerts);
-    
-    // Record snapshot with full stats
-    await recordSnapshot(pool.id, {
-      totalNAV: stats.totalNAV,
-      sharePrice: stats.sharePrice,
-      memberCount: stats.memberCount,
-      allocations: stats.allocations,
-    });
     
     // Trigger rebalance if drift too high
     if (maxDrift > DRIFT_WARNING_PERCENT * 2) {
