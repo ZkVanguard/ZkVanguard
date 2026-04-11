@@ -202,7 +202,41 @@ module zkvanguard::community_pool {
         executed: bool,
     }
 
-    /// Community Pool State (shared object)
+    /// AI Management sub-state (extracted for 32-field limit)
+    public struct AIManagementState has store {
+        current_ai_decision: AIDecision,
+        ai_decision_count: u64,
+        latest_signal: CrossChainSignal,
+        agent_metrics: vector<AIAgentMetrics>,
+        min_ai_confidence: u8,
+        require_signal_verification: bool,
+    }
+
+    /// Rebalancing sub-state
+    public struct RebalanceState has store {
+        target_allocation_bps: u64,
+        last_rebalance_time: u64,
+        rebalance_cooldown: u64,
+        rebalance_count: u64,
+    }
+
+    /// Auto-hedge sub-state
+    public struct HedgeState has store {
+        auto_hedge_config: AutoHedgeConfig,
+        active_hedges: vector<HedgePosition>,
+        total_hedged_value: u64,
+        daily_hedge_total: u64,
+        current_hedge_day: u64,
+    }
+
+    /// Timelock sub-state
+    public struct TimelockState has store {
+        pending_operations: vector<TimelockOperation>,
+        timelock_delay: u64,
+        emergency_withdraw_enabled: bool,
+    }
+
+    /// Community Pool State (shared object) — 27 fields (SUI mainnet limit: 32)
     public struct CommunityPoolState has key {
         id: UID,
         /// Pool balance
@@ -249,50 +283,11 @@ module zkvanguard::community_pool {
         agent_addresses: vector<address>,
         /// Pool creation timestamp
         created_at: u64,
-        
-        // ═══ AI MANAGEMENT STATE ═══
-        /// Current AI decision
-        current_ai_decision: AIDecision,
-        /// AI decision history (last N decisions)
-        ai_decision_count: u64,
-        /// Latest cross-chain signal
-        latest_signal: CrossChainSignal,
-        /// AI agent metrics by index (simplified from Table)
-        agent_metrics: vector<AIAgentMetrics>,
-        /// Minimum AI confidence required (0-100)
-        min_ai_confidence: u8,
-        /// Whether signal verification is required
-        require_signal_verification: bool,
-        
-        // ═══ REBALANCING STATE ═══
-        /// Target allocation for SUI in BPS (0-10000)
-        target_allocation_bps: u64,
-        /// Last rebalance timestamp
-        last_rebalance_time: u64,
-        /// Rebalance cooldown in ms
-        rebalance_cooldown: u64,
-        /// Rebalance history (last N records)
-        rebalance_count: u64,
-        
-        // ═══ AUTO-HEDGE STATE ═══
-        /// Auto-hedge configuration
-        auto_hedge_config: AutoHedgeConfig,
-        /// Active hedge positions
-        active_hedges: vector<HedgePosition>,
-        /// Total value currently hedged
-        total_hedged_value: u64,
-        /// Daily hedge total
-        daily_hedge_total: u64,
-        /// Current hedge day
-        current_hedge_day: u64,
-        
-        // ═══ TIMELOCK STATE ═══
-        /// Pending timelock operations
-        pending_operations: vector<TimelockOperation>,
-        /// Timelock delay in ms (48h mainnet, 5min testnet)
-        timelock_delay: u64,
-        /// Emergency withdraw enabled (bypasses timelock)
-        emergency_withdraw_enabled: bool,
+        // ═══ SUB-STATES (grouped to stay under 32-field limit) ═══
+        ai_state: AIManagementState,
+        rebalance_state: RebalanceState,
+        hedge_state: HedgeState,
+        timelock_state: TimelockState,
     }
 
     // ============ Events ============
@@ -554,31 +549,33 @@ module zkvanguard::community_pool {
             agent_addresses: vector::empty(),
             created_at: timestamp,
             
-            // AI Management state
-            current_ai_decision: empty_decision,
-            ai_decision_count: 0,
-            latest_signal: empty_signal,
-            agent_metrics: vector::empty(),
-            min_ai_confidence: DEFAULT_MIN_AI_CONFIDENCE,
-            require_signal_verification: false, // Disabled for testnet
-            
-            // Rebalancing state
-            target_allocation_bps: 10000, // 100% SUI
-            last_rebalance_time: 0,
-            rebalance_cooldown: DEFAULT_REBALANCE_COOLDOWN,
-            rebalance_count: 0,
-            
-            // Auto-hedge state
-            auto_hedge_config: hedge_config,
-            active_hedges: vector::empty(),
-            total_hedged_value: 0,
-            daily_hedge_total: 0,
-            current_hedge_day: timestamp / 86400000,
-            
-            // Timelock state
-            pending_operations: vector::empty(),
-            timelock_delay: TESTNET_TIMELOCK_DELAY, // 5 minutes for testnet
-            emergency_withdraw_enabled: false,
+            // Sub-states
+            ai_state: AIManagementState {
+                current_ai_decision: empty_decision,
+                ai_decision_count: 0,
+                latest_signal: empty_signal,
+                agent_metrics: vector::empty(),
+                min_ai_confidence: DEFAULT_MIN_AI_CONFIDENCE,
+                require_signal_verification: false,
+            },
+            rebalance_state: RebalanceState {
+                target_allocation_bps: 10000, // 100% SUI
+                last_rebalance_time: 0,
+                rebalance_cooldown: DEFAULT_REBALANCE_COOLDOWN,
+                rebalance_count: 0,
+            },
+            hedge_state: HedgeState {
+                auto_hedge_config: hedge_config,
+                active_hedges: vector::empty(),
+                total_hedged_value: 0,
+                daily_hedge_total: 0,
+                current_hedge_day: timestamp / 86400000,
+            },
+            timelock_state: TimelockState {
+                pending_operations: vector::empty(),
+                timelock_delay: TESTNET_TIMELOCK_DELAY, // 5 minutes for testnet
+                emergency_withdraw_enabled: false,
+            },
         };
 
         event::emit(PoolCreated {
@@ -1102,7 +1099,7 @@ module zkvanguard::community_pool {
         ctx: &mut TxContext
     ) {
         // Validate confidence meets minimum
-        assert!(confidence >= state.min_ai_confidence, E_AI_CONFIDENCE_TOO_LOW);
+        assert!(confidence >= state.ai_state.min_ai_confidence, E_AI_CONFIDENCE_TOO_LOW);
         
         // Validate allocation is valid
         assert!(target_alloc_bps <= BPS_DENOMINATOR, E_INVALID_ALLOCATION);
@@ -1134,8 +1131,8 @@ module zkvanguard::community_pool {
         };
         
         // Store as current decision
-        state.current_ai_decision = decision;
-        state.ai_decision_count = state.ai_decision_count + 1;
+        state.ai_state.current_ai_decision = decision;
+        state.ai_state.ai_decision_count = state.ai_state.ai_decision_count + 1;
         
         // Update agent metrics
         update_agent_metrics(state, sender, confidence);
@@ -1159,35 +1156,35 @@ module zkvanguard::community_pool {
     ) {
         assert!(!state.paused, E_PAUSED);
         assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
-        assert!(!state.current_ai_decision.executed, E_DECISION_ALREADY_EXECUTED);
+        assert!(!state.ai_state.current_ai_decision.executed, E_DECISION_ALREADY_EXECUTED);
         
         let timestamp = clock::timestamp_ms(clock);
         
         // Check rebalance cooldown
         assert!(
-            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            timestamp >= state.rebalance_state.last_rebalance_time + state.rebalance_state.rebalance_cooldown,
             E_REBALANCE_COOLDOWN
         );
         
         // Update allocation
-        let previous_bps = state.target_allocation_bps;
-        let new_bps = state.current_ai_decision.target_alloc_bps;
+        let previous_bps = state.rebalance_state.target_allocation_bps;
+        let new_bps = state.ai_state.current_ai_decision.target_alloc_bps;
         
-        state.target_allocation_bps = new_bps;
-        state.last_rebalance_time = timestamp;
-        state.rebalance_count = state.rebalance_count + 1;
-        state.current_ai_decision.executed = true;
+        state.rebalance_state.target_allocation_bps = new_bps;
+        state.rebalance_state.last_rebalance_time = timestamp;
+        state.rebalance_state.rebalance_count = state.rebalance_state.rebalance_count + 1;
+        state.ai_state.current_ai_decision.executed = true;
         
         event::emit(Rebalanced {
             executor: ctx.sender(),
             previous_bps,
             new_bps,
-            reason_hash: state.current_ai_decision.reason_hash,
+            reason_hash: state.ai_state.current_ai_decision.reason_hash,
             timestamp,
         });
         
         event::emit(AIDecisionExecuted {
-            decision_id: state.current_ai_decision.decision_id,
+            decision_id: state.ai_state.current_ai_decision.decision_id,
             executor: ctx.sender(),
             successful: true,
             timestamp,
@@ -1218,7 +1215,7 @@ module zkvanguard::community_pool {
             acknowledged: false,
         };
         
-        state.latest_signal = signal;
+        state.ai_state.latest_signal = signal;
         
         event::emit(CrossChainSignalReceived {
             signal_id,
@@ -1233,13 +1230,13 @@ module zkvanguard::community_pool {
         _agent: &AgentCap,
         state: &mut CommunityPoolState,
     ) {
-        state.latest_signal.acknowledged = true;
+        state.ai_state.latest_signal.acknowledged = true;
     }
 
     /// Internal: Update agent metrics
     fun update_agent_metrics(state: &mut CommunityPoolState, _agent: address, confidence: u8) {
         // Add new metrics entry if needed (simplified - stores overall metrics)
-        if (vector::length(&state.agent_metrics) == 0) {
+        if (vector::length(&state.ai_state.agent_metrics) == 0) {
             let metrics = AIAgentMetrics {
                 total_decisions: 1,
                 successful_decisions: 0,
@@ -1248,9 +1245,9 @@ module zkvanguard::community_pool {
                 last_decision_time: 0,
                 last_decision_id: vector::empty(),
             };
-            vector::push_back(&mut state.agent_metrics, metrics);
+            vector::push_back(&mut state.ai_state.agent_metrics, metrics);
         } else {
-            let metrics = vector::borrow_mut(&mut state.agent_metrics, 0);
+            let metrics = vector::borrow_mut(&mut state.ai_state.agent_metrics, 0);
             metrics.total_decisions = metrics.total_decisions + 1;
             // Update average confidence (running average)
             metrics.avg_confidence = ((metrics.avg_confidence * (metrics.total_decisions - 1)) + 
@@ -1276,14 +1273,14 @@ module zkvanguard::community_pool {
         
         // Check cooldown
         assert!(
-            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            timestamp >= state.rebalance_state.last_rebalance_time + state.rebalance_state.rebalance_cooldown,
             E_REBALANCE_COOLDOWN
         );
         
-        let previous_bps = state.target_allocation_bps;
-        state.target_allocation_bps = new_alloc_bps;
-        state.last_rebalance_time = timestamp;
-        state.rebalance_count = state.rebalance_count + 1;
+        let previous_bps = state.rebalance_state.target_allocation_bps;
+        state.rebalance_state.target_allocation_bps = new_alloc_bps;
+        state.rebalance_state.last_rebalance_time = timestamp;
+        state.rebalance_state.rebalance_count = state.rebalance_state.rebalance_count + 1;
         
         let reason_hash = hash::keccak256(&reasoning);
         
@@ -1304,7 +1301,7 @@ module zkvanguard::community_pool {
     ) {
         // Max 7 days cooldown
         assert!(cooldown_ms <= 604800000, E_INVALID_ALLOCATION);
-        state.rebalance_cooldown = cooldown_ms;
+        state.rebalance_state.rebalance_cooldown = cooldown_ms;
     }
 
     /// Set minimum AI confidence
@@ -1314,7 +1311,7 @@ module zkvanguard::community_pool {
         min_confidence: u8,
     ) {
         assert!(min_confidence <= 100, E_INVALID_ALLOCATION);
-        state.min_ai_confidence = min_confidence;
+        state.ai_state.min_ai_confidence = min_confidence;
     }
 
     // ============ Auto-Hedge Functions ============
@@ -1336,13 +1333,13 @@ module zkvanguard::community_pool {
         
         let timestamp = clock::timestamp_ms(clock);
         
-        state.auto_hedge_config = AutoHedgeConfig {
+        state.hedge_state.auto_hedge_config = AutoHedgeConfig {
             enabled,
             risk_threshold_bps,
             max_hedge_ratio_bps,
             default_leverage,
             cooldown_ms,
-            last_hedge_time: state.auto_hedge_config.last_hedge_time,
+            last_hedge_time: state.hedge_state.auto_hedge_config.last_hedge_time,
         };
         
         event::emit(AutoHedgeConfigUpdated {
@@ -1375,7 +1372,7 @@ module zkvanguard::community_pool {
         
         // Check hedge cooldown
         assert!(
-            timestamp >= state.auto_hedge_config.last_hedge_time + state.auto_hedge_config.cooldown_ms,
+            timestamp >= state.hedge_state.auto_hedge_config.last_hedge_time + state.hedge_state.auto_hedge_config.cooldown_ms,
             E_HEDGE_COOLDOWN
         );
         
@@ -1389,19 +1386,19 @@ module zkvanguard::community_pool {
         assert!(pool_balance - collateral_amount >= min_reserve, E_RESERVE_RATIO_BREACHED);
         
         // Check max hedge ratio
-        let max_hedge = (nav * state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
-        assert!(state.total_hedged_value + collateral_amount <= max_hedge, E_MAX_HEDGE_EXCEEDED);
+        let max_hedge = (nav * state.hedge_state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
+        assert!(state.hedge_state.total_hedged_value + collateral_amount <= max_hedge, E_MAX_HEDGE_EXCEEDED);
         
         // Reset daily tracker if new day
         let current_day = timestamp / 86400000;
-        if (current_day > state.current_hedge_day) {
-            state.daily_hedge_total = 0;
-            state.current_hedge_day = current_day;
+        if (current_day > state.hedge_state.current_hedge_day) {
+            state.hedge_state.daily_hedge_total = 0;
+            state.hedge_state.current_hedge_day = current_day;
         };
         
         // Check daily cap
         let daily_cap = (nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
-        assert!(state.daily_hedge_total + collateral_amount <= daily_cap, E_MAX_HEDGE_EXCEEDED);
+        assert!(state.hedge_state.daily_hedge_total + collateral_amount <= daily_cap, E_MAX_HEDGE_EXCEEDED);
         
         // Generate hedge ID
         let mut id_data = bcs::to_bytes(&timestamp);
@@ -1423,10 +1420,10 @@ module zkvanguard::community_pool {
         };
         
         // Update state
-        vector::push_back(&mut state.active_hedges, hedge);
-        state.total_hedged_value = state.total_hedged_value + collateral_amount;
-        state.daily_hedge_total = state.daily_hedge_total + collateral_amount;
-        state.auto_hedge_config.last_hedge_time = timestamp;
+        vector::push_back(&mut state.hedge_state.active_hedges, hedge);
+        state.hedge_state.total_hedged_value = state.hedge_state.total_hedged_value + collateral_amount;
+        state.hedge_state.daily_hedge_total = state.hedge_state.daily_hedge_total + collateral_amount;
+        state.hedge_state.auto_hedge_config.last_hedge_time = timestamp;
         
         // Transfer collateral to treasury for external hedge execution
         let collateral_balance = balance::split(&mut state.balance, collateral_amount);
@@ -1461,11 +1458,11 @@ module zkvanguard::community_pool {
         // Find and remove hedge
         let mut found_idx: u64 = 0;
         let mut found = false;
-        let len = vector::length(&state.active_hedges);
+        let len = vector::length(&state.hedge_state.active_hedges);
         let mut i: u64 = 0;
         
         while (i < len) {
-            let hedge = vector::borrow(&state.active_hedges, i);
+            let hedge = vector::borrow(&state.hedge_state.active_hedges, i);
             if (hedge.hedge_id == hedge_id) {
                 found_idx = i;
                 found = true;
@@ -1476,11 +1473,11 @@ module zkvanguard::community_pool {
         
         assert!(found, E_HEDGE_NOT_FOUND);
         
-        let hedge = vector::remove(&mut state.active_hedges, found_idx);
+        let hedge = vector::remove(&mut state.hedge_state.active_hedges, found_idx);
         
         // Update state
-        state.total_hedged_value = if (state.total_hedged_value > hedge.collateral_amount) {
-            state.total_hedged_value - hedge.collateral_amount
+        state.hedge_state.total_hedged_value = if (state.hedge_state.total_hedged_value > hedge.collateral_amount) {
+            state.hedge_state.total_hedged_value - hedge.collateral_amount
         } else {
             0
         };
@@ -1518,7 +1515,7 @@ module zkvanguard::community_pool {
         _ctx: &mut TxContext
     ) {
         let timestamp = clock::timestamp_ms(clock);
-        let scheduled_time = timestamp + state.timelock_delay;
+        let scheduled_time = timestamp + state.timelock_state.timelock_delay;
         let expiry_time = scheduled_time + TIMELOCK_EXPIRY;
         
         // Generate operation ID
@@ -1537,7 +1534,7 @@ module zkvanguard::community_pool {
             executed: false,
         };
         
-        vector::push_back(&mut state.pending_operations, operation);
+        vector::push_back(&mut state.timelock_state.pending_operations, operation);
         
         event::emit(TimelockOperationScheduled {
             operation_id,
@@ -1560,11 +1557,11 @@ module zkvanguard::community_pool {
         // Find operation
         let mut found_idx: u64 = 0;
         let mut found = false;
-        let len = vector::length(&state.pending_operations);
+        let len = vector::length(&state.timelock_state.pending_operations);
         let mut i: u64 = 0;
         
         while (i < len) {
-            let op = vector::borrow(&state.pending_operations, i);
+            let op = vector::borrow(&state.timelock_state.pending_operations, i);
             if (op.operation_id == operation_id) {
                 found_idx = i;
                 found = true;
@@ -1575,7 +1572,7 @@ module zkvanguard::community_pool {
         
         assert!(found, E_OPERATION_NOT_FOUND);
         
-        let op = vector::borrow(&state.pending_operations, found_idx);
+        let op = vector::borrow(&state.timelock_state.pending_operations, found_idx);
         assert!(!op.executed, E_DECISION_ALREADY_EXECUTED);
         assert!(timestamp >= op.scheduled_time, E_TIMELOCK_NOT_READY);
         assert!(timestamp <= op.expiry_time, E_TIMELOCK_EXPIRED);
@@ -1601,7 +1598,7 @@ module zkvanguard::community_pool {
         };
         
         // Mark as executed
-        let op_mut = vector::borrow_mut(&mut state.pending_operations, found_idx);
+        let op_mut = vector::borrow_mut(&mut state.timelock_state.pending_operations, found_idx);
         op_mut.executed = true;
         
         event::emit(TimelockOperationExecuted {
@@ -1623,11 +1620,11 @@ module zkvanguard::community_pool {
         // Find and remove operation
         let mut found_idx: u64 = 0;
         let mut found = false;
-        let len = vector::length(&state.pending_operations);
+        let len = vector::length(&state.timelock_state.pending_operations);
         let mut i: u64 = 0;
         
         while (i < len) {
-            let op = vector::borrow(&state.pending_operations, i);
+            let op = vector::borrow(&state.timelock_state.pending_operations, i);
             if (op.operation_id == operation_id && !op.executed) {
                 found_idx = i;
                 found = true;
@@ -1638,7 +1635,7 @@ module zkvanguard::community_pool {
         
         assert!(found, E_OPERATION_NOT_FOUND);
         
-        vector::remove(&mut state.pending_operations, found_idx);
+        vector::remove(&mut state.timelock_state.pending_operations, found_idx);
         
         event::emit(TimelockOperationCancelled {
             operation_id,
@@ -1654,7 +1651,7 @@ module zkvanguard::community_pool {
     ) {
         // Min 5 minutes, max 7 days
         assert!(delay_ms >= 300000 && delay_ms <= 604800000, E_INVALID_ALLOCATION);
-        state.timelock_delay = delay_ms;
+        state.timelock_state.timelock_delay = delay_ms;
     }
 
     // ============ Rescue Functions ============
@@ -1668,7 +1665,7 @@ module zkvanguard::community_pool {
         ctx: &mut TxContext
     ) {
         // Only works in emergency mode
-        assert!(state.emergency_withdraw_enabled || state.circuit_breaker_tripped, E_EMERGENCY_MODE_REQUIRED);
+        assert!(state.timelock_state.emergency_withdraw_enabled || state.circuit_breaker_tripped, E_EMERGENCY_MODE_REQUIRED);
         assert!(amount > 0, E_NOTHING_TO_RESCUE);
         
         let available = balance::value(&state.balance);
@@ -1697,7 +1694,7 @@ module zkvanguard::community_pool {
         ctx: &mut TxContext
     ) {
         // Only works in emergency mode
-        assert!(state.emergency_withdraw_enabled, E_EMERGENCY_MODE_REQUIRED);
+        assert!(state.timelock_state.emergency_withdraw_enabled, E_EMERGENCY_MODE_REQUIRED);
         
         let timestamp = clock::timestamp_ms(clock);
         let amount = balance::value(&state.balance);
@@ -1724,7 +1721,7 @@ module zkvanguard::community_pool {
         state: &mut CommunityPoolState,
         enabled: bool,
     ) {
-        state.emergency_withdraw_enabled = enabled;
+        state.timelock_state.emergency_withdraw_enabled = enabled;
     }
 
     // ============ Additional View Functions ============
@@ -1732,48 +1729,48 @@ module zkvanguard::community_pool {
     /// Get AI decision info
     public fun get_ai_decision_info(state: &CommunityPoolState): (vector<u8>, u64, u64, u8, bool) {
         (
-            state.current_ai_decision.decision_id,
-            state.current_ai_decision.timestamp,
-            state.current_ai_decision.target_alloc_bps,
-            state.current_ai_decision.confidence,
-            state.current_ai_decision.executed
+            state.ai_state.current_ai_decision.decision_id,
+            state.ai_state.current_ai_decision.timestamp,
+            state.ai_state.current_ai_decision.target_alloc_bps,
+            state.ai_state.current_ai_decision.confidence,
+            state.ai_state.current_ai_decision.executed
         )
     }
 
     /// Get rebalance info
     public fun get_rebalance_info(state: &CommunityPoolState): (u64, u64, u64) {
         (
-            state.target_allocation_bps,
-            state.last_rebalance_time,
-            state.rebalance_count
+            state.rebalance_state.target_allocation_bps,
+            state.rebalance_state.last_rebalance_time,
+            state.rebalance_state.rebalance_count
         )
     }
 
     /// Get auto-hedge config
     public fun get_auto_hedge_config(state: &CommunityPoolState): (bool, u64, u64, u64, u64) {
         (
-            state.auto_hedge_config.enabled,
-            state.auto_hedge_config.risk_threshold_bps,
-            state.auto_hedge_config.max_hedge_ratio_bps,
-            state.auto_hedge_config.default_leverage,
-            state.auto_hedge_config.cooldown_ms
+            state.hedge_state.auto_hedge_config.enabled,
+            state.hedge_state.auto_hedge_config.risk_threshold_bps,
+            state.hedge_state.auto_hedge_config.max_hedge_ratio_bps,
+            state.hedge_state.auto_hedge_config.default_leverage,
+            state.hedge_state.auto_hedge_config.cooldown_ms
         )
     }
 
     /// Get hedge status
     public fun get_hedge_status(state: &CommunityPoolState): (u64, u64) {
         (
-            vector::length(&state.active_hedges),
-            state.total_hedged_value
+            vector::length(&state.hedge_state.active_hedges),
+            state.hedge_state.total_hedged_value
         )
     }
 
     /// Get timelock info
     public fun get_timelock_info(state: &CommunityPoolState): (u64, u64, bool) {
         (
-            state.timelock_delay,
-            vector::length(&state.pending_operations),
-            state.emergency_withdraw_enabled
+            state.timelock_state.timelock_delay,
+            vector::length(&state.timelock_state.pending_operations),
+            state.timelock_state.emergency_withdraw_enabled
         )
     }
 

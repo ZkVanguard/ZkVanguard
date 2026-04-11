@@ -169,7 +169,28 @@ module zkvanguard::community_pool_usdc {
         last_hedge_time: u64,
     }
 
-    /// USDC Community Pool State (shared object, generic over coin type T)
+    /// AI & Allocation sub-state (extracted for 32-field limit)
+    public struct UsdcAIState has store {
+        current_allocation: AssetAllocation,
+        target_allocation: AssetAllocation,
+        current_ai_decision: AIDecision,
+        ai_decision_count: u64,
+        min_ai_confidence: u8,
+        last_rebalance_time: u64,
+        rebalance_cooldown: u64,
+        rebalance_count: u64,
+    }
+
+    /// Auto-hedge sub-state
+    public struct UsdcHedgeState has store {
+        auto_hedge_config: AutoHedgeConfig,
+        active_hedges: vector<HedgePosition>,
+        total_hedged_value: u64,
+        daily_hedge_total: u64,
+        current_hedge_day: u64,
+    }
+
+    /// USDC Community Pool State (shared object, generic over coin type T) — 24 fields
     public struct UsdcPoolState<phantom T> has key {
         id: UID,
         /// Pool USDC balance
@@ -204,25 +225,9 @@ module zkvanguard::community_pool_usdc {
         member_count: u64,
         /// Pool creation
         created_at: u64,
-
-        // ═══ 4-ASSET AI ALLOCATION ═══
-        current_allocation: AssetAllocation,
-        target_allocation: AssetAllocation,
-        current_ai_decision: AIDecision,
-        ai_decision_count: u64,
-        min_ai_confidence: u8,
-
-        // ═══ REBALANCING ═══
-        last_rebalance_time: u64,
-        rebalance_cooldown: u64,
-        rebalance_count: u64,
-
-        // ═══ AUTO-HEDGE ═══
-        auto_hedge_config: AutoHedgeConfig,
-        active_hedges: vector<HedgePosition>,
-        total_hedged_value: u64,
-        daily_hedge_total: u64,
-        current_hedge_day: u64,
+        // ═══ SUB-STATES (grouped to stay under 32-field limit) ═══
+        ai_state: UsdcAIState,
+        hedge_state: UsdcHedgeState,
     }
 
     // ============ Events ============
@@ -376,21 +381,23 @@ module zkvanguard::community_pool_usdc {
             member_count: 0,
             created_at: timestamp,
 
-            current_allocation: copy initial_alloc,
-            target_allocation: copy initial_alloc,
-            current_ai_decision: empty_decision,
-            ai_decision_count: 0,
-            min_ai_confidence: DEFAULT_MIN_AI_CONFIDENCE,
-
-            last_rebalance_time: 0,
-            rebalance_cooldown: DEFAULT_REBALANCE_COOLDOWN,
-            rebalance_count: 0,
-
-            auto_hedge_config: hedge_config,
-            active_hedges: vector::empty(),
-            total_hedged_value: 0,
-            daily_hedge_total: 0,
-            current_hedge_day: timestamp / 86400000,
+            ai_state: UsdcAIState {
+                current_allocation: copy initial_alloc,
+                target_allocation: copy initial_alloc,
+                current_ai_decision: empty_decision,
+                ai_decision_count: 0,
+                min_ai_confidence: DEFAULT_MIN_AI_CONFIDENCE,
+                last_rebalance_time: 0,
+                rebalance_cooldown: DEFAULT_REBALANCE_COOLDOWN,
+                rebalance_count: 0,
+            },
+            hedge_state: UsdcHedgeState {
+                auto_hedge_config: hedge_config,
+                active_hedges: vector::empty(),
+                total_hedged_value: 0,
+                daily_hedge_total: 0,
+                current_hedge_day: timestamp / 86400000,
+            },
         };
 
         event::emit(UsdcPoolCreated {
@@ -652,10 +659,10 @@ module zkvanguard::community_pool_usdc {
 
     public fun get_allocation<T>(state: &UsdcPoolState<T>): (u64, u64, u64, u64) {
         (
-            state.current_allocation.btc_bps,
-            state.current_allocation.eth_bps,
-            state.current_allocation.sui_bps,
-            state.current_allocation.cro_bps,
+            state.ai_state.current_allocation.btc_bps,
+            state.ai_state.current_allocation.eth_bps,
+            state.ai_state.current_allocation.sui_bps,
+            state.ai_state.current_allocation.cro_bps,
         )
     }
 
@@ -689,7 +696,7 @@ module zkvanguard::community_pool_usdc {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        assert!(confidence >= state.min_ai_confidence, E_AI_CONFIDENCE_TOO_LOW);
+        assert!(confidence >= state.ai_state.min_ai_confidence, E_AI_CONFIDENCE_TOO_LOW);
         assert!(btc_bps + eth_bps + sui_bps + cro_bps == BPS_DENOMINATOR, E_ALLOC_SUM_INVALID);
 
         let timestamp = clock::timestamp_ms(clock);
@@ -715,13 +722,13 @@ module zkvanguard::community_pool_usdc {
             executed: false,
         };
 
-        state.current_ai_decision = decision;
-        state.ai_decision_count = state.ai_decision_count + 1;
-        state.target_allocation = target_alloc;
+        state.ai_state.current_ai_decision = decision;
+        state.ai_state.ai_decision_count = state.ai_state.ai_decision_count + 1;
+        state.ai_state.target_allocation = target_alloc;
 
         event::emit(AllocationUpdated {
-            old_allocation: state.current_allocation,
-            new_allocation: state.target_allocation,
+            old_allocation: state.ai_state.current_allocation,
+            new_allocation: state.ai_state.target_allocation,
             decision_id,
             confidence,
             timestamp,
@@ -737,25 +744,25 @@ module zkvanguard::community_pool_usdc {
     ) {
         assert!(!state.paused, E_PAUSED);
         assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
-        assert!(!state.current_ai_decision.executed, E_DECISION_ALREADY_EXECUTED);
+        assert!(!state.ai_state.current_ai_decision.executed, E_DECISION_ALREADY_EXECUTED);
 
         let timestamp = clock::timestamp_ms(clock);
         assert!(
-            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            timestamp >= state.ai_state.last_rebalance_time + state.ai_state.rebalance_cooldown,
             E_REBALANCE_COOLDOWN
         );
 
-        let old_alloc = state.current_allocation;
-        state.current_allocation = state.target_allocation;
-        state.last_rebalance_time = timestamp;
-        state.rebalance_count = state.rebalance_count + 1;
-        state.current_ai_decision.executed = true;
+        let old_alloc = state.ai_state.current_allocation;
+        state.ai_state.current_allocation = state.ai_state.target_allocation;
+        state.ai_state.last_rebalance_time = timestamp;
+        state.ai_state.rebalance_count = state.ai_state.rebalance_count + 1;
+        state.ai_state.current_ai_decision.executed = true;
 
         event::emit(AllocationUpdated {
             old_allocation: old_alloc,
-            new_allocation: state.current_allocation,
-            decision_id: state.current_ai_decision.decision_id,
-            confidence: state.current_ai_decision.confidence,
+            new_allocation: state.ai_state.current_allocation,
+            decision_id: state.ai_state.current_ai_decision.decision_id,
+            confidence: state.ai_state.current_ai_decision.confidence,
             timestamp,
         });
     }
@@ -777,16 +784,16 @@ module zkvanguard::community_pool_usdc {
 
         let timestamp = clock::timestamp_ms(clock);
         assert!(
-            timestamp >= state.last_rebalance_time + state.rebalance_cooldown,
+            timestamp >= state.ai_state.last_rebalance_time + state.ai_state.rebalance_cooldown,
             E_REBALANCE_COOLDOWN
         );
 
-        let old_alloc = state.current_allocation;
+        let old_alloc = state.ai_state.current_allocation;
         let new_alloc = AssetAllocation { btc_bps, eth_bps, sui_bps, cro_bps };
-        state.current_allocation = new_alloc;
-        state.target_allocation = new_alloc;
-        state.last_rebalance_time = timestamp;
-        state.rebalance_count = state.rebalance_count + 1;
+        state.ai_state.current_allocation = new_alloc;
+        state.ai_state.target_allocation = new_alloc;
+        state.ai_state.last_rebalance_time = timestamp;
+        state.ai_state.rebalance_count = state.ai_state.rebalance_count + 1;
 
         let reason_hash = hash::keccak256(&reasoning);
 
@@ -819,7 +826,7 @@ module zkvanguard::community_pool_usdc {
 
         let timestamp = clock::timestamp_ms(clock);
         assert!(
-            timestamp >= state.auto_hedge_config.last_hedge_time + state.auto_hedge_config.cooldown_ms,
+            timestamp >= state.hedge_state.auto_hedge_config.last_hedge_time + state.hedge_state.auto_hedge_config.cooldown_ms,
             E_HEDGE_COOLDOWN
         );
 
@@ -832,17 +839,17 @@ module zkvanguard::community_pool_usdc {
         assert!(pool_balance - collateral_usdc >= min_reserve, E_RESERVE_RATIO_BREACHED);
 
         // Max hedge ratio check
-        let max_hedge = (nav * state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
-        assert!(state.total_hedged_value + collateral_usdc <= max_hedge, E_MAX_HEDGE_EXCEEDED);
+        let max_hedge = (nav * state.hedge_state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
+        assert!(state.hedge_state.total_hedged_value + collateral_usdc <= max_hedge, E_MAX_HEDGE_EXCEEDED);
 
         // Daily cap check
         let current_day = timestamp / 86400000;
-        if (current_day > state.current_hedge_day) {
-            state.daily_hedge_total = 0;
-            state.current_hedge_day = current_day;
+        if (current_day > state.hedge_state.current_hedge_day) {
+            state.hedge_state.daily_hedge_total = 0;
+            state.hedge_state.current_hedge_day = current_day;
         };
         let daily_cap = (nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
-        assert!(state.daily_hedge_total + collateral_usdc <= daily_cap, E_MAX_HEDGE_EXCEEDED);
+        assert!(state.hedge_state.daily_hedge_total + collateral_usdc <= daily_cap, E_MAX_HEDGE_EXCEEDED);
 
         // Generate hedge ID
         let mut id_data = bcs::to_bytes(&timestamp);
@@ -860,10 +867,10 @@ module zkvanguard::community_pool_usdc {
             reason_hash: hash::keccak256(&reasoning),
         };
 
-        vector::push_back(&mut state.active_hedges, hedge);
-        state.total_hedged_value = state.total_hedged_value + collateral_usdc;
-        state.daily_hedge_total = state.daily_hedge_total + collateral_usdc;
-        state.auto_hedge_config.last_hedge_time = timestamp;
+        vector::push_back(&mut state.hedge_state.active_hedges, hedge);
+        state.hedge_state.total_hedged_value = state.hedge_state.total_hedged_value + collateral_usdc;
+        state.hedge_state.daily_hedge_total = state.hedge_state.daily_hedge_total + collateral_usdc;
+        state.hedge_state.auto_hedge_config.last_hedge_time = timestamp;
 
         // Transfer collateral to treasury for external hedge execution (BlueFin)
         let collateral_balance = balance::split(&mut state.balance, collateral_usdc);
@@ -896,10 +903,10 @@ module zkvanguard::community_pool_usdc {
 
         let mut found_idx: u64 = 0;
         let mut found = false;
-        let len = vector::length(&state.active_hedges);
+        let len = vector::length(&state.hedge_state.active_hedges);
         let mut i: u64 = 0;
         while (i < len) {
-            let h = vector::borrow(&state.active_hedges, i);
+            let h = vector::borrow(&state.hedge_state.active_hedges, i);
             if (h.hedge_id == hedge_id) {
                 found_idx = i;
                 found = true;
@@ -909,9 +916,9 @@ module zkvanguard::community_pool_usdc {
         };
         assert!(found, E_HEDGE_NOT_FOUND);
 
-        let hedge = vector::remove(&mut state.active_hedges, found_idx);
-        state.total_hedged_value = if (state.total_hedged_value > hedge.collateral_usdc) {
-            state.total_hedged_value - hedge.collateral_usdc
+        let hedge = vector::remove(&mut state.hedge_state.active_hedges, found_idx);
+        state.hedge_state.total_hedged_value = if (state.hedge_state.total_hedged_value > hedge.collateral_usdc) {
+            state.hedge_state.total_hedged_value - hedge.collateral_usdc
         } else {
             0
         };
@@ -996,13 +1003,13 @@ module zkvanguard::community_pool_usdc {
         assert!(default_leverage >= 2 && default_leverage <= 10, E_INVALID_ALLOCATION);
         assert!(max_hedge_ratio_bps <= 5000, E_MAX_HEDGE_EXCEEDED);
 
-        state.auto_hedge_config = AutoHedgeConfig {
+        state.hedge_state.auto_hedge_config = AutoHedgeConfig {
             enabled,
             risk_threshold_bps,
             max_hedge_ratio_bps,
             default_leverage,
             cooldown_ms,
-            last_hedge_time: state.auto_hedge_config.last_hedge_time,
+            last_hedge_time: state.hedge_state.auto_hedge_config.last_hedge_time,
         };
 
         let _timestamp = clock::timestamp_ms(clock);
@@ -1014,7 +1021,7 @@ module zkvanguard::community_pool_usdc {
         cooldown_ms: u64,
     ) {
         assert!(cooldown_ms <= 604800000, E_INVALID_ALLOCATION);
-        state.rebalance_cooldown = cooldown_ms;
+        state.ai_state.rebalance_cooldown = cooldown_ms;
     }
 
     public entry fun set_min_ai_confidence<T>(
@@ -1023,7 +1030,7 @@ module zkvanguard::community_pool_usdc {
         min_confidence: u8,
     ) {
         assert!(min_confidence <= 100, E_INVALID_ALLOCATION);
-        state.min_ai_confidence = min_confidence;
+        state.ai_state.min_ai_confidence = min_confidence;
     }
 
     /// Add an agent address and transfer AgentCap
