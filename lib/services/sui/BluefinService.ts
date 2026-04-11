@@ -254,11 +254,13 @@ export class BluefinService {
       // C4: Verify account is onboarded (fail-fast at init, not at first trade)
       if (authSuccess) {
         try {
-          const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
+          const acctResp = await this.apiRequest<{ canTrade?: boolean; freeCollateral?: string } | null>(
+            'GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange'
+          );
           if (!acctResp) {
             logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${cleanNetwork}`);
           } else {
-            logger.info('✅ BlueFin account verified', { freeCollateral: acctResp.freeCollateral });
+            logger.info('✅ BlueFin account verified', { canTrade: acctResp.canTrade, freeCollateral: acctResp.freeCollateral });
           }
         } catch (acctErr) {
           const msg = acctErr instanceof Error ? acctErr.message : String(acctErr);
@@ -742,17 +744,21 @@ export class BluefinService {
         leverage: params.leverage,
       });
 
-      // Check if account is onboarded on BlueFin
+      // Check if account is onboarded on BlueFin (use exchange API, not trade API)
       try {
-        const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
-        if (!acctResp) {
+        const acctResp = await this.apiRequest<{ canTrade?: boolean; freeCollateral?: string } | null>(
+          'GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange'
+        );
+        if (!acctResp || !acctResp.canTrade) {
           throw new Error(`BlueFin account ${this.walletAddress} not found. Please onboard at https://trade.bluefin.io first.`);
         }
       } catch (acctError) {
         const msg = acctError instanceof Error ? acctError.message : String(acctError);
-        if (msg.includes('404') || msg.includes('not found')) {
+        if (msg.includes('404') || msg.includes('not found') || msg.includes('not onboarded')) {
           throw new Error(`BlueFin account ${this.walletAddress} not onboarded. Visit https://trade.bluefin.io to register.`);
         }
+        // Re-throw other errors
+        throw acctError;
       }
 
       // Validate pair
