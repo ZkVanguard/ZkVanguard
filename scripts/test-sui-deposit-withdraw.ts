@@ -13,8 +13,8 @@ import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Bech32-encoded SUI private key (from sui keystore - infallible-topaz / deployer)
-const SUI_PRIVKEY = '***REDACTED_LEAKED_KEY_2***';
+// Private key from env (never hardcode!)
+const SUI_PRIVKEY = process.env.SUI_PRIVATE_KEY || process.env.BLUEFIN_PRIVATE_KEY || '';
 
 // SUI Testnet configuration
 const CONFIG = {
@@ -48,9 +48,16 @@ function getKeypair(): Ed25519Keypair {
     return Ed25519Keypair.fromSecretKey(Buffer.from(privateKey, 'base64'));
   }
   
-  // Use hardcoded bech32 key for testing
-  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
-  return Ed25519Keypair.fromSecretKey(secretKey);
+  // Fallback: use env var key
+  if (!SUI_PRIVKEY) {
+    throw new Error('Set SUI_PRIVATE_KEY or BLUEFIN_PRIVATE_KEY env var');
+  }
+  if (SUI_PRIVKEY.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  const hex = SUI_PRIVKEY.startsWith('0x') ? SUI_PRIVKEY.slice(2) : SUI_PRIVKEY;
+  return Ed25519Keypair.fromSecretKey(Buffer.from(hex, 'hex'));
 }
 
 async function main() {

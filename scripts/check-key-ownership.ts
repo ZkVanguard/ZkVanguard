@@ -31,6 +31,7 @@ async function checkOwnership() {
       const keys = [
         { name: 'SUI_PRIVATE_KEY', key: process.env.SUI_PRIVATE_KEY },
         { name: 'SUI_POOL_ADMIN_KEY', key: process.env.SUI_POOL_ADMIN_KEY },
+        { name: 'BLUEFIN_PRIVATE_KEY', key: process.env.BLUEFIN_PRIVATE_KEY },
       ];
       
       for (const { name, key } of keys) {
