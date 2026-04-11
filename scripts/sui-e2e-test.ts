@@ -17,12 +17,20 @@ const CONFIG = {
   clockId: '0x6',
 };
 
-// Private key (from sui keystore)
-const SUI_PRIVKEY = 'suiprivkey1qpu6rlng3uzygjusfat4vrj6nvkc7uhx6zztnrg4l27z45k4qm8h2eq0qan';
+// Private key from env (never hardcode!)
+const SUI_PRIVKEY = process.env.SUI_PRIVATE_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+if (!SUI_PRIVKEY) {
+  console.error('❌ Set SUI_PRIVATE_KEY or BLUEFIN_PRIVATE_KEY env var');
+  process.exit(1);
+}
 
 function getKeypair(): Ed25519Keypair {
-  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
-  return Ed25519Keypair.fromSecretKey(secretKey);
+  if (SUI_PRIVKEY.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  const hex = SUI_PRIVKEY.startsWith('0x') ? SUI_PRIVKEY.slice(2) : SUI_PRIVKEY;
+  return Ed25519Keypair.fromSecretKey(Buffer.from(hex, 'hex'));
 }
 
 async function getPoolState(client: SuiClient) {

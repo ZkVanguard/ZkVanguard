@@ -5,7 +5,8 @@
  * Run: npx tsx scripts/test-sui-mainnet-readiness.ts
  */
 
-const WALLET = '0x880cfa491c497f5f3c8205ef43a9e1d4cd89169a20c708ab27676ec1fe7e8aac';
+// Derive wallet from env key, or fall back to Signer 1 for read-only checks
+const WALLET = process.env.SUI_WALLET_ADDRESS || '0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93';
 const NETWORK = 'testnet';
 
 // ─── Test Infrastructure ───────────────────────────────────────

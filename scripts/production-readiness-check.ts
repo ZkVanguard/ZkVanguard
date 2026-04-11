@@ -253,10 +253,96 @@ async function checkApis() {
   }
 }
 
+// ============ WALLET VALIDATION ============
+console.log('\n═══ WALLET CONFIGURATION ═══\n');
+
+async function checkWallets() {
+  const EXPECTED = {
+    signer1: '0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93',
+    signer2: '0x4100d058f630027be5be608c520fdc6b3be61aaf74dcb2cd25f9c6bf72d28121',
+    safe:    '0x83b9f1bc3a2d32685e67fc52dce547e4e817afeeed90a996e8c6931e0ba35f2b',
+  };
+
+  // Validate MSafe address
+  const msafe = process.env.SUI_MSAFE_ADDRESS;
+  if (msafe === EXPECTED.safe) {
+    check('MSafe Safe Address', 'READY', 'Correctly set');
+  } else if (!msafe) {
+    check('MSafe Safe Address', 'BLOCKER', 'SUI_MSAFE_ADDRESS not set');
+  } else {
+    check('MSafe Safe Address', 'BLOCKER', `Wrong: ${msafe.slice(0, 16)}... expected ${EXPECTED.safe.slice(0, 16)}...`);
+  }
+
+  // Validate signers
+  const s1 = process.env.SUI_MSAFE_SIGNER_1;
+  const s2 = process.env.SUI_MSAFE_SIGNER_2;
+  if (s1 === EXPECTED.signer1) {
+    check('MSafe Signer 1', 'READY', `${s1.slice(0, 16)}...`);
+  } else {
+    check('MSafe Signer 1', 'WARNING', s1 ? `Unexpected: ${s1.slice(0, 16)}...` : 'Not set');
+  }
+  if (s2 === EXPECTED.signer2) {
+    check('MSafe Signer 2', 'READY', `${s2.slice(0, 16)}...`);
+  } else {
+    check('MSafe Signer 2', 'WARNING', s2 ? `Unexpected: ${s2.slice(0, 16)}...` : 'Not set');
+  }
+
+  // Validate SUI_POOL_ADMIN_KEY is a real key, not an address
+  const adminKey = process.env.SUI_POOL_ADMIN_KEY;
+  if (adminKey) {
+    if (adminKey.startsWith('suiprivkey')) {
+      check('SUI_POOL_ADMIN_KEY', 'READY', 'Bech32 private key format');
+    } else if (/^(0x)?[0-9a-fA-F]{64}$/.test(adminKey)) {
+      // Could be a key OR an address — warn
+      check('SUI_POOL_ADMIN_KEY', 'WARNING', 'Hex format — verify this is a PRIVATE KEY, not an address');
+    } else {
+      check('SUI_POOL_ADMIN_KEY', 'BLOCKER', 'Invalid format');
+    }
+  } else {
+    const fallback = process.env.BLUEFIN_PRIVATE_KEY;
+    if (fallback) {
+      check('SUI_POOL_ADMIN_KEY', 'READY', 'Not set — using BLUEFIN_PRIVATE_KEY fallback');
+    } else {
+      check('SUI_POOL_ADMIN_KEY', 'BLOCKER', 'Neither SUI_POOL_ADMIN_KEY nor BLUEFIN_PRIVATE_KEY set');
+    }
+  }
+
+  // Check on-chain SUI balances for operational wallets
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { decodeSuiPrivateKey } = await import('@mysten/sui/cryptography');
+    const opKey = adminKey || process.env.BLUEFIN_PRIVATE_KEY;
+    if (opKey) {
+      let addr: string;
+      if (opKey.startsWith('suiprivkey')) {
+        const { secretKey } = decodeSuiPrivateKey(opKey);
+        addr = Ed25519Keypair.fromSecretKey(secretKey).toSuiAddress();
+      } else {
+        const hex = opKey.startsWith('0x') ? opKey.slice(2) : opKey;
+        addr = Ed25519Keypair.fromSecretKey(Buffer.from(hex, 'hex')).toSuiAddress();
+      }
+      check('Operator Wallet', 'READY', `Derived: ${addr.slice(0, 16)}...`);
+
+      const bal = await client.getBalance({ owner: addr });
+      const sui = Number(bal.totalBalance) / 1e9;
+      if (sui >= 0.1) {
+        check('Operator Gas Balance', 'READY', `${sui.toFixed(4)} SUI`);
+      } else if (sui > 0) {
+        check('Operator Gas Balance', 'WARNING', `Low: ${sui.toFixed(4)} SUI — top up for gas`);
+      } else {
+        check('Operator Gas Balance', 'BLOCKER', 'Zero SUI — cannot pay gas');
+      }
+    }
+  } catch (e: any) {
+    check('Operator Wallet', 'BLOCKER', `Key derivation failed: ${e.message}`);
+  }
+}
+
 // ============ SUMMARY ============
 async function main() {
   await checkOnChain();
   checkEnvVars();
+  await checkWallets();
   await checkBluefin();
   await checkDatabase();
   await checkApis();

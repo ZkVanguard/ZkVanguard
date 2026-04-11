@@ -59,8 +59,12 @@ const STATE = {
 };
 const CLOCK = '0x6';
 
-// Bech32-encoded SUI private key
-const SUI_PRIVKEY = 'suiprivkey1qr7e3vw9x30y9l6m0tak39ysu4uqluq4dy6qg6klfz2twupsf2892l56fzk';
+// Private key from env (never hardcode!)
+const SUI_PRIVKEY = process.env.SUI_PRIVATE_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+if (!SUI_PRIVKEY) {
+  console.error('❌ Set SUI_PRIVATE_KEY or BLUEFIN_PRIVATE_KEY env var');
+  process.exit(1);
+}
 
 // ===== Helpers =====
 let passed = 0, failed = 0;
@@ -89,8 +93,12 @@ function bigintReplacer(_k: string, v: unknown) {
 const client = new SuiClient({ url: SUI_RPC });
 
 function getKeypair(): Ed25519Keypair {
-  const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
-  return Ed25519Keypair.fromSecretKey(secretKey);
+  if (SUI_PRIVKEY.startsWith('suiprivkey')) {
+    const { secretKey } = decodeSuiPrivateKey(SUI_PRIVKEY);
+    return Ed25519Keypair.fromSecretKey(secretKey);
+  }
+  const hex = SUI_PRIVKEY.startsWith('0x') ? SUI_PRIVKEY.slice(2) : SUI_PRIVKEY;
+  return Ed25519Keypair.fromSecretKey(Buffer.from(hex, 'hex'));
 }
 
 async function signAndExecute(tx: Transaction, description: string): Promise<{
