@@ -105,13 +105,15 @@ async function testHedgeApi(keypair: Ed25519Keypair, address: string) {
     console.log(`\n  --- Account & Positions (${tradeBase}) ---`);
     const headers = { 'Authorization': `Bearer ${authToken}`, 'Accept': 'application/json' };
 
-    // Account info
+    // Account info (use public exchange API which returns account data)
     try {
-      const r = await fetch(`${tradeBase}/api/v1/account`, { headers, signal: AbortSignal.timeout(10000) });
+      const r = await fetch(`${exchangeBase}/api/v1/account?accountAddress=${address}`, { headers, signal: AbortSignal.timeout(10000) });
       const text = await r.text();
       if (r.ok && text) {
         const d = JSON.parse(text);
-        ok('MAINNET Account', `freeCollateral=${d.freeCollateral || 'N/A'}, canTrade=${d.canTrade}`);
+        const usdcAsset = d.assets?.find((a: any) => a.symbol === 'USDC');
+        const balanceStr = usdcAsset ? `$${(Number(usdcAsset.quantityE9) / 1e9).toFixed(2)}` : '$0';
+        ok('MAINNET Account', `canTrade=${d.canTrade}, balance=${balanceStr}`);
       } else if (r.status === 404 || !text) {
         ok('MAINNET Account', `not onboarded (${r.status}) — visit trade.bluefin.io to register`);
       } else {
