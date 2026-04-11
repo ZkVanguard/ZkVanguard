@@ -111,8 +111,11 @@ export function useCommunityPool(propAddress?: string) {
   // Derived values
   const { selectedChain } = poolState;
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-  const detectedNetwork = chainId ? getNetworkFromChainId(chainId) : 'testnet';
-  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : 'testnet';
+  const isSuiChain = selectedChain === 'sui';
+  const detectedNetwork: 'testnet' | 'mainnet' = isSuiChain
+    ? (suiNetwork === 'mainnet' ? 'mainnet' : 'testnet')
+    : (chainId ? getNetworkFromChainId(chainId) : 'testnet');
+  const network: 'testnet' | 'mainnet' = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : (isSuiChain ? (suiNetwork === 'mainnet' ? 'mainnet' : 'testnet') : 'testnet');
   const USDT_ADDRESS = getUsdtAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
@@ -1217,8 +1220,9 @@ export function useCommunityPool(propAddress?: string) {
     // SUI pool state (PoolState) rather than the USDC pool state (UsdcPoolState<T>),
     // which causes a TypeMismatch error in the Move contract call.
     const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
-    const poolStateId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE;
+    const poolStateId = suiNetwork === 'mainnet'
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '')
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '');
     const usdcCoinType = suiNetwork === 'mainnet'
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
@@ -1404,11 +1408,10 @@ export function useCommunityPool(propAddress?: string) {
     const estimatedUsd = shares;
     
     // NOTE: Do NOT use poolState.suiPoolStateId here — see deposit handler comment.
-    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID
-      || '0xcac1e7de082a92ec3db4a4f0766f1a73e9f8c22e50a3dafed6d81dc043bd0ac9';
-    const poolStateId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET
-      || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE
-      || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971';
+    const packageId = process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID;
+    const poolStateId = suiNetwork === 'mainnet'
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '')
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971');
     const usdcCoinType = suiNetwork === 'mainnet'
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
