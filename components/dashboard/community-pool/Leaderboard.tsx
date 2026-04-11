@@ -14,8 +14,8 @@ interface LeaderboardProps {
   chainConfig?: {
     chainType?: string;
     name?: string;
-    contracts?: { testnet?: { communityPool?: string; usdt?: string } };
-    blockExplorer?: { testnet?: string };
+    contracts?: { testnet?: { communityPool?: string; usdt?: string }; mainnet?: { communityPool?: string; usdt?: string } };
+    blockExplorer?: { testnet?: string; mainnet?: string };
     assets?: string[];
   };
 }
@@ -70,13 +70,14 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
   }, [isSui]);
 
   // Get explorer URL based on chain
+  const suiNetwork = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
   const explorerUrl = isSui
-    ? (chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet')
+    ? (chainConfig?.blockExplorer?.[suiNetwork] || `https://suiscan.xyz/${suiNetwork}`)
     : (EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111]);
 
   // Treasury info varies by chain
   const treasury = isSui ? {
-    address: chainConfig?.contracts?.testnet?.communityPool || '',
+    address: chainConfig?.contracts?.[suiNetwork]?.communityPool || '',
     name: 'Pool Contract (USDC)',
   } : treasuryProxy ? {
     address: treasuryProxy,
