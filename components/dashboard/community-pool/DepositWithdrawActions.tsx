@@ -119,7 +119,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC → 4-Asset AI</span>
               </div>
               <a
-                href={`${chainConfig?.blockExplorer?.testnet || 'https://suiscan.xyz/testnet'}/object/${suiPoolStateId || communityPoolAddress}`}
+                href={`${chainConfig?.blockExplorer?.[network] || `https://suiscan.xyz/${network}`}/object/${suiPoolStateId || communityPoolAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline"

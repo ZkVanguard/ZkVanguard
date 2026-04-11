@@ -75,7 +75,7 @@ export async function GET() {
     let suiTreasury = null;
     try {
       const { getSuiCommunityPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
-      const suiService = getSuiCommunityPoolService('testnet');
+      const suiService = getSuiCommunityPoolService((process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet');
       const info = await suiService.getTreasuryInfo();
       suiTreasury = {
         address: info.treasuryAddress,
