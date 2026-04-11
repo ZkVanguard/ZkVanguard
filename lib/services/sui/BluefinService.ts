@@ -73,14 +73,14 @@ export const BLUEFIN_NETWORKS = {
 
 // Supported trading pairs on BlueFin
 export const BLUEFIN_PAIRS = {
-  'BTC-PERP': { index: 0, symbol: 'BTC-PERP', baseAsset: 'BTC', maxLeverage: 50 },
-  'ETH-PERP': { index: 1, symbol: 'ETH-PERP', baseAsset: 'ETH', maxLeverage: 50 },
-  'SUI-PERP': { index: 2, symbol: 'SUI-PERP', baseAsset: 'SUI', maxLeverage: 20 },
-  'SOL-PERP': { index: 3, symbol: 'SOL-PERP', baseAsset: 'SOL', maxLeverage: 20 },
-  'APT-PERP': { index: 4, symbol: 'APT-PERP', baseAsset: 'APT', maxLeverage: 20 },
-  'ARB-PERP': { index: 5, symbol: 'ARB-PERP', baseAsset: 'ARB', maxLeverage: 20 },
-  'DOGE-PERP': { index: 6, symbol: 'DOGE-PERP', baseAsset: 'DOGE', maxLeverage: 10 },
-  'PEPE-PERP': { index: 7, symbol: 'PEPE-PERP', baseAsset: 'PEPE', maxLeverage: 10 },
+  'BTC-PERP':  { index: 0, symbol: 'BTC-PERP',  baseAsset: 'BTC',  maxLeverage: 10, minQuantity: 0.001,  stepSize: 0.001 },
+  'ETH-PERP':  { index: 1, symbol: 'ETH-PERP',  baseAsset: 'ETH',  maxLeverage: 10, minQuantity: 0.01,   stepSize: 0.01  },
+  'SUI-PERP':  { index: 2, symbol: 'SUI-PERP',  baseAsset: 'SUI',  maxLeverage: 20, minQuantity: 1,      stepSize: 1     },
+  'SOL-PERP':  { index: 3, symbol: 'SOL-PERP',  baseAsset: 'SOL',  maxLeverage: 20, minQuantity: 0.1,    stepSize: 0.1   },
+  'GOLD-PERP': { index: 4, symbol: 'GOLD-PERP', baseAsset: 'GOLD', maxLeverage: 2,  minQuantity: 0.01,   stepSize: 0.01  },
+  'HYPE-PERP': { index: 5, symbol: 'HYPE-PERP', baseAsset: 'HYPE', maxLeverage: 10, minQuantity: 0.1,    stepSize: 0.1   },
+  'DEEP-PERP': { index: 6, symbol: 'DEEP-PERP', baseAsset: 'DEEP', maxLeverage: 10, minQuantity: 1,      stepSize: 1     },
+  'WAL-PERP':  { index: 7, symbol: 'WAL-PERP',  baseAsset: 'WAL',  maxLeverage: 10, minQuantity: 1,      stepSize: 1     },
 } as const;
 
 // Order types
@@ -760,6 +760,20 @@ export class BluefinService {
         throw new Error(`Leverage ${params.leverage}x exceeds max ${pair.maxLeverage}x for ${params.symbol}`);
       }
 
+      // Validate minimum order size and snap to step size
+      if (params.size < pair.minQuantity) {
+        throw new Error(`Order size ${params.size} below minimum ${pair.minQuantity} for ${params.symbol}`);
+      }
+      // Round down to nearest step size to avoid rejection
+      const steppedSize = Math.floor(params.size / pair.stepSize) * pair.stepSize;
+      if (steppedSize < pair.minQuantity) {
+        throw new Error(`Order size ${params.size} rounds to ${steppedSize} which is below minimum ${pair.minQuantity} for ${params.symbol}`);
+      }
+      if (steppedSize !== params.size) {
+        logger.info(`[BlueFin] Snapped order size ${params.size} → ${steppedSize} (step=${pair.stepSize}) for ${params.symbol}`);
+        params.size = steppedSize;
+      }
+
       // Get current market price for market orders
       const marketData = await this.getMarketData(params.symbol);
       const currentPrice = marketData?.price || 0;
@@ -885,11 +899,20 @@ export class BluefinService {
         steps.push({ step: 'pair', passed: false, detail: `Invalid pair: ${params.symbol}` });
         return { success: false, steps, error: `Invalid pair: ${params.symbol}` };
       }
-      steps.push({ step: 'pair', passed: true, detail: `${pair.symbol} — maxLeverage=${pair.maxLeverage}x` });
+      steps.push({ step: 'pair', passed: true, detail: `${pair.symbol} — maxLeverage=${pair.maxLeverage}x, minQty=${pair.minQuantity}, step=${pair.stepSize}` });
 
       // Step 4: Leverage
       const leverageOk = params.leverage <= pair.maxLeverage;
       steps.push({ step: 'leverage', passed: leverageOk, detail: `${params.leverage}x (max ${pair.maxLeverage}x)` });
+
+      // Step 4b: Minimum order size + step validation
+      const sizeOk = params.size >= pair.minQuantity;
+      const steppedSize = Math.floor(params.size / pair.stepSize) * pair.stepSize;
+      steps.push({
+        step: 'order-size',
+        passed: sizeOk && steppedSize >= pair.minQuantity,
+        detail: `size=${params.size}, min=${pair.minQuantity}, snapped=${steppedSize}, step=${pair.stepSize}`,
+      });
 
       // Step 5: Market data
       const marketData = await this.getMarketData(params.symbol);
@@ -1140,10 +1163,10 @@ export class BluefinService {
       'ETH': 'ETH-PERP',
       'SUI': 'SUI-PERP',
       'SOL': 'SOL-PERP',
-      'APT': 'APT-PERP',
-      'ARB': 'ARB-PERP',
-      'DOGE': 'DOGE-PERP',
-      'PEPE': 'PEPE-PERP',
+      'GOLD': 'GOLD-PERP',
+      'HYPE': 'HYPE-PERP',
+      'DEEP': 'DEEP-PERP',
+      'WAL': 'WAL-PERP',
     };
     return mapping[asset.toUpperCase()] || null;
   }
