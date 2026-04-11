@@ -417,11 +417,11 @@ interface SuiWalletProvidersProps {
 
 // Get default network from environment variable
 const getDefaultSuiNetwork = (): NetworkType => {
-  const envNetwork = process.env.NEXT_PUBLIC_SUI_NETWORK || process.env.SUI_NETWORK || 'testnet';
+  const envNetwork = process.env.NEXT_PUBLIC_SUI_NETWORK || process.env.SUI_NETWORK || 'mainnet';
   if (envNetwork === 'mainnet' || envNetwork === 'testnet' || envNetwork === 'devnet') {
     return envNetwork as NetworkType;
   }
-  return 'testnet';
+  return 'mainnet';
 };
 
 export function SuiWalletProviders({ 
