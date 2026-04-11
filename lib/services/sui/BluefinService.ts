@@ -205,10 +205,13 @@ export class BluefinService {
   }
 
   private async _doInitialize(privateKey: string, network: 'mainnet' | 'testnet'): Promise<void> {
+    // Sanitize inputs (Vercel env vars on Windows can have trailing \r\n)
+    const cleanNetwork = network.trim() as 'mainnet' | 'testnet';
+    privateKey = privateKey.trim();
 
     // H1: If switching networks, reset auth state to prevent cross-network token usage
-    if (this.initialized && this.network !== network) {
-      logger.warn('[BlueFin] Network switch detected', { from: this.network, to: network });
+    if (this.initialized && this.network !== cleanNetwork) {
+      logger.warn('[BlueFin] Network switch detected', { from: this.network, to: cleanNetwork });
       this.accessToken = null;
       this.refreshToken = null;
       this.tokenExpiresAt = 0;
@@ -216,10 +219,13 @@ export class BluefinService {
     }
 
     try {
-      const networkConfig = BLUEFIN_NETWORKS[network];
+      const networkConfig = BLUEFIN_NETWORKS[cleanNetwork];
+      if (!networkConfig) {
+        throw new Error(`Unknown BlueFin network: '${cleanNetwork}'. Must be 'mainnet' or 'testnet'.`);
+      }
 
       logger.info('🌊 Initializing BlueFin Pro client', { 
-        network, 
+        network: cleanNetwork, 
         authApi: networkConfig.authApiUrl,
         tradeApi: networkConfig.tradeApiUrl 
       });
@@ -236,7 +242,7 @@ export class BluefinService {
       }
 
       this.walletAddress = this.keypair.toSuiAddress();
-      this.network = network;
+      this.network = cleanNetwork;
       
       // Try to authenticate with BlueFin API
       const authSuccess = await this.authenticate();
@@ -250,14 +256,14 @@ export class BluefinService {
         try {
           const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
           if (!acctResp) {
-            logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${network}`);
+            logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${cleanNetwork}`);
           } else {
             logger.info('✅ BlueFin account verified', { freeCollateral: acctResp.freeCollateral });
           }
         } catch (acctErr) {
           const msg = acctErr instanceof Error ? acctErr.message : String(acctErr);
           if (msg.includes('404') || msg.includes('not found')) {
-            logger.error(`❌ BlueFin account ${this.walletAddress} NOT onboarded on ${network}. Visit https://trade.bluefin.io to register.`);
+            logger.error(`❌ BlueFin account ${this.walletAddress} NOT onboarded on ${cleanNetwork}. Visit https://trade.bluefin.io to register.`);
           } else {
             logger.warn('⚠️ Could not verify BlueFin account onboarding', { error: msg });
           }
@@ -266,7 +272,7 @@ export class BluefinService {
       
       this.initialized = true;
       logger.info('✅ BlueFin client initialized', { 
-        network, 
+        network: cleanNetwork, 
         address: this.walletAddress,
         authenticated: authSuccess,
       });
@@ -1176,8 +1182,8 @@ export class BluefinService {
    */
   private async ensureInitializedAsync(): Promise<void> {
     if (!this.initialized) {
-      const privateKey = process.env.BLUEFIN_PRIVATE_KEY;
-      const network = (process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
+      const privateKey = (process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+      const network = (process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet').trim() as 'mainnet' | 'testnet';
       
       if (!privateKey) {
         throw new Error('BlueFin client not initialized. Set BLUEFIN_PRIVATE_KEY or call initialize() first.');

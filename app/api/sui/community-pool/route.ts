@@ -849,8 +849,8 @@ export async function POST(request: NextRequest) {
         } else if (reverseQuote.hedgeVia === 'bluefin' || forwardQuote.hedgeVia === 'bluefin') {
           // Hedged position: close the BlueFin hedge
           const { bluefinService, BluefinService } = await import('@/lib/services/sui/BluefinService');
-          const privateKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
-          const bfNetwork = (process.env.BLUEFIN_NETWORK || network) as 'mainnet' | 'testnet';
+          const privateKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+          const bfNetwork = (process.env.BLUEFIN_NETWORK || network || '').trim() as 'mainnet' | 'testnet';
 
           if (!privateKey) {
             results.push({

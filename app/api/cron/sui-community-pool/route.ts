@@ -233,7 +233,7 @@ async function transferUsdcFromPoolToAdmin(
   network: 'mainnet' | 'testnet',
   amountUsdc: number,
 ): Promise<{ success: boolean; txDigest?: string; error?: string }> {
-  const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
   const agentCapId = process.env.SUI_AGENT_CAP_ID || process.env.SUI_ADMIN_CAP_ID;
   const poolConfig = SUI_USDC_POOL_CONFIG[network];
 
@@ -322,7 +322,7 @@ async function transferUsdcFromPoolToAdmin(
  * Check admin wallet's USDC balance on SUI.
  */
 async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promise<number> {
-  const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
   if (!adminKey) return 0;
 
   try {
@@ -398,7 +398,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
   try {
     // M3: Validate admin key format early (fail-fast, not during swap execution)
-    const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
     if (adminKey) {
       // Reject if someone accidentally set a wallet address (0x + 64 hex) instead of a private key
       // A proper key is either bech32 (suiprivkey...) or will derive a DIFFERENT address than its own hex

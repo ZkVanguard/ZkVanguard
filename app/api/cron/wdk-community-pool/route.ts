@@ -232,7 +232,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
 
   logger.info('[WDK Cron] Starting WDK Sepolia pool management');
 
-  const privateKey = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
+  const privateKey = (process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY || '').trim();
   if (!privateKey) {
     return NextResponse.json({
       success: false,
