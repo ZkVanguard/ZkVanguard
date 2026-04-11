@@ -154,7 +154,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-500 mb-2">
                 SUI wallets require manual network switching. Please open your wallet extension 
-                and switch to <strong>Testnet</strong> in Settings → Network.
+                and switch to <strong>{network === 'mainnet' ? 'Mainnet' : 'Testnet'}</strong> in Settings → Network.
               </p>
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Supported wallets: Sui Wallet, Suiet, Ethos</span>
