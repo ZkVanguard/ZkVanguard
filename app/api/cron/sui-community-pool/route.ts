@@ -820,20 +820,38 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               const bluefin = BluefinService.getInstance();
               const leverage = Math.min(suiPoolConfig.maxLeverage || 3, 5);
 
+              // BlueFin minimum order sizes and step sizes
+              const PERP_SPECS: Record<string, { minQty: number; stepSize: number }> = {
+                BTC: { minQty: 0.001, stepSize: 0.001 },
+                ETH: { minQty: 0.01, stepSize: 0.01 },
+                SUI: { minQty: 1, stepSize: 1 },
+              };
+
               // Calculate hedge sizes based on pool NAV and allocations
-              // Open SHORT hedges on overweight assets to protect against downside
+              // Open SHORT hedges on any asset with >5% allocation to protect against downside
               for (const asset of ['BTC', 'ETH', 'SUI'] as const) {
                 const allocation = aiResult.allocations[asset] || 0;
-                if (allocation >= 25) { // Only hedge significant positions (>25%)
+                if (allocation >= 5) { // Hedge any meaningful allocation (>5%)
                   const hedgeValueUSD = navUsd * (allocation / 100) * 0.5; // Hedge 50% of position
-                  const hedgeSizeBase = hedgeValueUSD / (pricesUSD[asset] || 1);
+                  // Use leverage to amplify small hedges into viable sizes
+                  const effectiveValue = hedgeValueUSD * leverage;
+                  const hedgeSizeBase = effectiveValue / (pricesUSD[asset] || 1);
 
-                  if (hedgeSizeBase > 0.001) {
+                  // Snap to step size and check against actual BlueFin minimum
+                  const spec = PERP_SPECS[asset] || { minQty: 0.001, stepSize: 0.001 };
+                  const snappedSize = Math.floor(hedgeSizeBase / spec.stepSize) * spec.stepSize;
+
+                  if (snappedSize >= spec.minQty) {
                     try {
+                      logger.info(`[SUI Cron] Attempting ${asset}-PERP hedge`, {
+                        allocation, hedgeValueUSD, effectiveValue, hedgeSizeBase, snappedSize, leverage,
+                        minQty: spec.minQty,
+                      });
+
                       const result = await bluefin.openHedge({
                         symbol: `${asset}-PERP`,
                         side: 'SHORT', // Protective short to hedge long spot exposure
-                        size: hedgeSizeBase,
+                        size: snappedSize, // Use snapped size that meets BlueFin minimums
                         leverage,
                         portfolioId: -2, // SUI pool special ID
                         reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
@@ -842,7 +860,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                       hedges.push({
                         symbol: `${asset}-PERP`,
                         side: 'SHORT',
-                        size: hedgeSizeBase,
+                        size: snappedSize,
                         status: result.success ? 'OPENED' : 'FAILED',
                         orderId: result.orderId,
                         error: result.error,
@@ -858,7 +876,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                             asset,
                             market: `${asset}-PERP`,
                             side: 'SHORT',
-                            size: hedgeSizeBase,
+                            size: snappedSize,
                             notionalValue: hedgeValueUSD,
                             leverage,
                             entryPrice: pricesUSD[asset] || 0,
@@ -874,7 +892,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                       logger.info(`[SUI Cron] Opened ${asset} hedge`, {
                         symbol: `${asset}-PERP`,
                         side: 'SHORT',
-                        size: hedgeSizeBase,
+                        size: snappedSize,
                         leverage,
                         success: result.success,
                         orderId: result.orderId,
@@ -883,12 +901,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                       hedges.push({
                         symbol: `${asset}-PERP`,
                         side: 'SHORT',
-                        size: hedgeSizeBase,
+                        size: snappedSize,
                         status: 'ERROR',
                         error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
                       });
                       logger.error(`[SUI Cron] Failed to hedge ${asset}`, { error: hedgeErr });
                     }
+                  } else {
+                    logger.info(`[SUI Cron] Skipping ${asset}-PERP hedge: snappedSize ${snappedSize} < minQty ${spec.minQty} (raw=${hedgeSizeBase}, leverage=${leverage})`);
                   }
                 }
               }
