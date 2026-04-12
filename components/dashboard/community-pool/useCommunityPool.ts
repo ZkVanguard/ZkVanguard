@@ -1185,9 +1185,8 @@ export function useCommunityPool(propAddress?: string) {
     }
   }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
   
-  // SUI handlers - On-chain deposit via wallet signing
-  // Mainnet: SUI-native pool (community_pool::deposit with Coin<SUI>, 9 decimals)
-  // Testnet: USDC pool (community_pool_usdc::deposit with Coin<USDC>, 6 decimals)
+  // SUI handlers - On-chain USDC deposit via wallet signing
+  // Both mainnet and testnet use community_pool_usdc::deposit with Coin<USDC>, 6 decimals
   const handleSuiDeposit = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
     
@@ -1207,29 +1206,23 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
 
-    const isMainnet = suiNetwork === 'mainnet';
-    
-    // Mainnet: native SUI deposit (min 0.1 SUI), Testnet: USDC deposit (min $10)
-    if (isMainnet) {
-      if (depositAmount < 0.1) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is 0.1 SUI' });
-        return;
-      }
-    } else {
-      if (depositAmount < 10) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10 USDC' });
-        return;
-      }
+    if (depositAmount < 10) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10 USDC' });
+      return;
     }
 
-    // Contract config
+    const isMainnet = suiNetwork === 'mainnet';
+
+    // USDC contract config — both networks use community_pool_usdc module
     const packageId = isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
       : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '');
     const poolStateId = isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE || process.env.NEXT_PUBLIC_SUI_COMMUNITY_POOL_STATE || '')
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
       : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '');
-    const usdcCoinType = '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC'; // testnet only
+    const usdcCoinType = isMainnet
+      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
     
     if (!packageId || !poolStateId) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
@@ -1244,7 +1237,7 @@ export function useCommunityPool(propAddress?: string) {
         ? 'https://fullnode.mainnet.sui.io:443'
         : 'https://fullnode.testnet.sui.io:443';
       
-      // 0. Check SUI gas balance
+      // Check SUI gas balance
       const gasBalRes = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1257,160 +1250,102 @@ export function useCommunityPool(propAddress?: string) {
       const gasBalJson = await gasBalRes.json();
       const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
       
-      if (isMainnet) {
-        // Mainnet: need deposit amount + gas (in MIST, 9 decimals)
-        const amountMist = BigInt(Math.round(depositAmount * 1_000_000_000));
-        const minRequired = amountMist + BigInt(50_000_000); // deposit + 0.05 SUI gas buffer
-        if (suiGasBalance < minRequired) {
-          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI. You have ${(Number(suiGasBalance) / 1e9).toFixed(4)} SUI but need ${depositAmount} SUI + gas.` });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-
-        // Build native SUI deposit transaction
-        const { Transaction } = await import('@mysten/sui/transactions');
-        const tx = new Transaction();
-        
-        // Split deposit amount from gas coin (idiomatic SUI pattern)
-        const [depositCoin] = tx.splitCoins(tx.gas, [amountMist]);
-        
-        tx.moveCall({
-          target: `${packageId}::community_pool::deposit`,
-          arguments: [
-            tx.object(poolStateId),  // &mut CommunityPoolState
-            depositCoin,             // Coin<SUI>
-            tx.object('0x6'),        // &Clock
-          ],
-        });
-        
-        const result = await suiExecuteTransaction(tx);
-        
-        if (!result.success) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-        
-        // Record deposit in backend
-        const recordRes = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: suiAddress,
-            amountSui: depositAmount,
-            allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-            txDigest: result.digest,
-          }),
-        });
-        const recordJson = await recordRes.json();
-        
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
-        const sharesMsg = recordJson.success && recordJson.data
-          ? `${recordJson.data.sharesMinted} shares minted`
-          : 'shares minted on-chain';
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited ${depositAmount} SUI! ${sharesMsg}. TX: ${result.digest.slice(0, 12)}...` });
-      } else {
-        // ---- TESTNET: USDC deposit (existing logic) ----
-        const amountMicroUsdc = Math.round(depositAmount * 1_000_000);
-        
-        if (suiGasBalance < BigInt(10_000_000)) {
-          if (suiRequestFaucet) {
-            dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
-            const faucetRes = await suiRequestFaucet();
-            if (!faucetRes.success) {
-              dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
-              dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-              dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-              return;
-            }
-            dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
-            await new Promise(r => setTimeout(r, 3000));
-            dispatchPool({ type: 'SET_ERROR', payload: null });
-          } else {
-            dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
+      if (suiGasBalance < BigInt(10_000_000)) {
+        if (!isMainnet && suiRequestFaucet) {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
+          const faucetRes = await suiRequestFaucet();
+          if (!faucetRes.success) {
+            dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
             dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
             dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
             return;
           }
-        }
-        
-        // Fetch USDC coins
-        const coinsRes = await fetch(rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0', id: 2,
-            method: 'suix_getCoins',
-            params: [suiAddress, usdcCoinType, null, 50],
-          }),
-        });
-        const coinsJson = await coinsRes.json();
-        const coins: Array<{ coinObjectId: string; balance: string }> = coinsJson.result?.data || [];
-        
-        if (coins.length === 0) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'No USDC found in your wallet. Get testnet USDC first.' });
+          dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
+          await new Promise(r => setTimeout(r, 3000));
+          dispatchPool({ type: 'SET_ERROR', payload: null });
+        } else {
+          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           return;
         }
-        
-        const totalBalance = coins.reduce((sum, c) => sum + BigInt(c.balance), BigInt(0));
-        if (totalBalance < BigInt(amountMicroUsdc)) {
-          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDC. You have ${(Number(totalBalance) / 1e6).toFixed(2)} USDC.` });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-        
-        const { Transaction } = await import('@mysten/sui/transactions');
-        const tx = new Transaction();
-        const primaryCoinRef = tx.object(coins[0].coinObjectId);
-        if (coins.length > 1) {
-          tx.mergeCoins(primaryCoinRef, coins.slice(1).map(c => tx.object(c.coinObjectId)));
-        }
-        const [depositCoin] = tx.splitCoins(primaryCoinRef, [amountMicroUsdc]);
-        
-        tx.moveCall({
-          target: `${packageId}::community_pool_usdc::deposit`,
-          typeArguments: [usdcCoinType],
-          arguments: [
-            tx.object(poolStateId),
-            depositCoin,
-            tx.object('0x6'),
-          ],
-        });
-        
-        const result = await suiExecuteTransaction(tx);
-        
-        if (!result.success) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-        
-        const recordRes = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: suiAddress,
-            amountUsdc: depositAmount,
-            allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-            txDigest: result.digest,
-          }),
-        });
-        const recordJson = await recordRes.json();
-        
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
-        const sharesMsg = recordJson.success && recordJson.data
-          ? `${recordJson.data.sharesMinted} shares minted`
-          : 'shares minted on-chain';
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${depositAmount.toFixed(2)} USDC! ${sharesMsg}. TX: ${result.digest.slice(0, 12)}...` });
       }
+      
+      const amountMicroUsdc = Math.round(depositAmount * 1_000_000);
+      
+      // Fetch USDC coins
+      const coinsRes = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 2,
+          method: 'suix_getCoins',
+          params: [suiAddress, usdcCoinType, null, 50],
+        }),
+      });
+      const coinsJson = await coinsRes.json();
+      const coins: Array<{ coinObjectId: string; balance: string }> = coinsJson.result?.data || [];
+      
+      if (coins.length === 0) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'No USDC found in your wallet. You need USDC on SUI to deposit.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      const totalBalance = coins.reduce((sum, c) => sum + BigInt(c.balance), BigInt(0));
+      if (totalBalance < BigInt(amountMicroUsdc)) {
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDC. You have ${(Number(totalBalance) / 1e6).toFixed(2)} USDC.` });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      const { Transaction } = await import('@mysten/sui/transactions');
+      const tx = new Transaction();
+      const primaryCoinRef = tx.object(coins[0].coinObjectId);
+      if (coins.length > 1) {
+        tx.mergeCoins(primaryCoinRef, coins.slice(1).map(c => tx.object(c.coinObjectId)));
+      }
+      const [depositCoin] = tx.splitCoins(primaryCoinRef, [amountMicroUsdc]);
+      
+      tx.moveCall({
+        target: `${packageId}::community_pool_usdc::deposit`,
+        typeArguments: [usdcCoinType],
+        arguments: [
+          tx.object(poolStateId),
+          depositCoin,
+          tx.object('0x6'),
+        ],
+      });
+      
+      const result = await suiExecuteTransaction(tx);
+      
+      if (!result.success) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+      
+      const recordRes = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: suiAddress,
+          amountUsdc: depositAmount,
+          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
+          txDigest: result.digest,
+        }),
+      });
+      const recordJson = await recordRes.json();
+      
+      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
+      const sharesMsg = recordJson.success && recordJson.data
+        ? `${recordJson.data.sharesMinted} shares minted`
+        : 'shares minted on-chain';
+      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${depositAmount.toFixed(2)} USDC! ${sharesMsg}. TX: ${result.digest.slice(0, 12)}...` });
 
       dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
       dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
@@ -1455,19 +1390,18 @@ export function useCommunityPool(propAddress?: string) {
 
     const isMainnet = suiNetwork === 'mainnet';
 
-    // Mainnet native pool: shares use 9 decimals (like SUI MIST)
-    // Testnet USDC pool: shares use 6 decimals (like USDC)
-    const sharesOnChain = isMainnet
-      ? BigInt(Math.round(shares * 1_000_000_000))
-      : Math.round(shares * 1_000_000);
+    // Both networks use USDC pool — shares use 6 decimals (matching USDC)
+    const sharesOnChain = Math.round(shares * 1_000_000);
     
     const packageId = isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
       : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '');
     const poolStateId = isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE || process.env.NEXT_PUBLIC_SUI_COMMUNITY_POOL_STATE || '')
+      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
       : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971');
-    const usdcCoinType = '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC'; // testnet only
+    const usdcCoinType = isMainnet
+      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
     
     if (!packageId || !poolStateId) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
@@ -1519,28 +1453,16 @@ export function useCommunityPool(propAddress?: string) {
       const { Transaction } = await import('@mysten/sui/transactions');
       const tx = new Transaction();
       
-      if (isMainnet) {
-        // Native SUI pool: community_pool::withdraw (no type args)
-        tx.moveCall({
-          target: `${packageId}::community_pool::withdraw`,
-          arguments: [
-            tx.object(poolStateId),             // &mut CommunityPoolState
-            tx.pure.u64(sharesOnChain as bigint), // shares_to_burn: u64
-            tx.object('0x6'),                   // &Clock
-          ],
-        });
-      } else {
-        // Testnet USDC pool: community_pool_usdc::withdraw
-        tx.moveCall({
-          target: `${packageId}::community_pool_usdc::withdraw`,
-          typeArguments: [usdcCoinType],
-          arguments: [
-            tx.object(poolStateId),
-            tx.pure.u64(sharesOnChain as number),
-            tx.object('0x6'),
-          ],
-        });
-      }
+      // Both networks use community_pool_usdc::withdraw
+      tx.moveCall({
+        target: `${packageId}::community_pool_usdc::withdraw`,
+        typeArguments: [usdcCoinType],
+        arguments: [
+          tx.object(poolStateId),
+          tx.pure.u64(sharesOnChain as number),
+          tx.object('0x6'),
+        ],
+      });
       
       const result = await suiExecuteTransaction(tx);
       
@@ -1571,7 +1493,7 @@ export function useCommunityPool(propAddress?: string) {
       
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
       dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
-      const withdrawLabel = isMainnet ? `${shares} shares (SUI)` : `~$${shares.toFixed(2)} USDC`;
+      const withdrawLabel = `~$${shares.toFixed(2)} USDC`;
       dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ${withdrawLabel}! TX: ${result.digest.slice(0, 12)}...` });
       dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
       dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
