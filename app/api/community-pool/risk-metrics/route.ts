@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Calculate fresh metrics (historical from NAV)
-    const metrics = await calculateRiskMetrics();
+    // Calculate fresh metrics (historical from NAV, chain-filtered)
+    const metrics = await calculateRiskMetrics(chain !== 'all' ? chain : undefined);
     const riskRating = getRiskRating(metrics);
     
     // Calculate real-time volatility from market data (chain-specific)

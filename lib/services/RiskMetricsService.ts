@@ -302,10 +302,10 @@ function calculateTradingMetrics(returns: number[]): { winRate: number; profitFa
  * 
  * Returns empty array if no real performance data is available.
  */
-async function getHistoricalNAV(): Promise<NAVSnapshot[]> {
+async function getHistoricalNAV(chain?: string): Promise<NAVSnapshot[]> {
   // First try database NAV history (preferred source)
   try {
-    const navHistory = await getNavHistory(365);
+    const navHistory = await getNavHistory(365, chain);
     
     // If we have NAV history, trust it as the source of truth
     // Don't fall back to potentially corrupt transaction history
@@ -579,7 +579,7 @@ async function fetchBTCBenchmarkReturns(navSeries: NAVSnapshot[]): Promise<numbe
 /**
  * Calculate comprehensive risk metrics
  */
-export async function calculateRiskMetrics(): Promise<RiskMetrics> {
+export async function calculateRiskMetrics(chain?: string): Promise<RiskMetrics> {
   const emptyMetrics: RiskMetrics = {
     sharpeRatio: 0,
     sortinoRatio: 0,
@@ -616,7 +616,7 @@ export async function calculateRiskMetrics(): Promise<RiskMetrics> {
   };
 
   try {
-    const navSeries = await getHistoricalNAV();
+    const navSeries = await getHistoricalNAV(chain);
     
     // Minimum data points for meaningful risk metrics
     // 7 points = 1 week of daily data, minimum for statistical significance

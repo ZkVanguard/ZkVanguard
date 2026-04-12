@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
-import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS } from '@/lib/constants';
+import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, SUI_COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 import { getAutoHedgeConfig, saveAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
 import { getActiveHedges } from '@/lib/db/hedges';
 import { query, ensureAllTables } from '@/lib/db/postgres';
@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
 
 export const maxDuration = 15;
 // In-memory cache for auto-hedge status (expensive risk assessment)
-let autoHedgeCache: { data: unknown; expiresAt: number } | null = null;
+const autoHedgeCacheByChain = new Map<string, { data: unknown; expiresAt: number }>();
 const AUTO_HEDGE_CACHE_TTL = 300_000; // 5 min — reduce DB load
 
 interface AutoHedgeStatus {
@@ -87,7 +87,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const limited = readLimiter.check(request);
   if (limited) return limited;
 
+  const chain = request.nextUrl.searchParams.get('chain') || 'cronos';
+  const isSui = chain === 'sui';
+  const portfolioId = isSui ? SUI_COMMUNITY_POOL_PORTFOLIO_ID : COMMUNITY_POOL_PORTFOLIO_ID;
+
   // Return cached if fresh (prevents expensive re-assessment)
+  const autoHedgeCache = autoHedgeCacheByChain.get(chain);
   if (autoHedgeCache && Date.now() < autoHedgeCache.expiresAt) {
     return NextResponse.json(autoHedgeCache.data, {
       headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
@@ -102,13 +107,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let config: Awaited<ReturnType<typeof getAutoHedgeConfig>> = null;
     if (dbAvailable) {
       try {
-        config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
+        config = await getAutoHedgeConfig(portfolioId);
         
         // MAINNET: Auto-seed default config if none exists
         // This ensures auto-hedge is always configured for the community pool
         if (!config) {
           const defaultConfig = {
-            portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+            portfolioId: portfolioId,
             walletAddress: COMMUNITY_POOL_ADDRESS,
             enabled: true,
             riskThreshold: 4,
@@ -135,7 +140,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let hedges: Awaited<ReturnType<typeof getActiveHedges>> = [];
     if (dbAvailable) {
       try {
-        hedges = await getActiveHedges(COMMUNITY_POOL_PORTFOLIO_ID);
+        hedges = await getActiveHedges(portfolioId);
       } catch (e: unknown) {
         logger.warn('[AutoHedge API] Could not fetch hedges', { error: errMsg(e) });
       }
@@ -151,9 +156,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           SELECT transaction_id as id, details, created_at 
           FROM community_pool_transactions 
           WHERE type = 'AI_DECISION'
+            AND (details->>'chain' = $1 OR ($1 = 'cronos' AND details->>'chain' IS NULL))
           ORDER BY created_at DESC 
           LIMIT 10
-        `) as Array<{ id: string; details: Record<string, unknown>; created_at: Date }>;
+        `, [chain]) as Array<{ id: string; details: Record<string, unknown>; created_at: Date }>;
         
         recentDecisions = decisions.map((d) => ({
           id: String(d.id || ''),
@@ -170,7 +176,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const todayCount = await query(`
           SELECT COUNT(*) as count FROM community_pool_transactions 
           WHERE type = 'AI_DECISION' AND created_at >= $1
-        `, [todayStart]);
+            AND (details->>'chain' = $2 OR ($2 = 'cronos' AND details->>'chain' IS NULL))
+        `, [todayStart, chain]);
         decisionsToday = Number(todayCount[0]?.count || 0);
       } catch (e) {
         logger.warn('[AutoHedge API] Could not fetch AI decisions', { error: e });
@@ -184,7 +191,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const RISK_TIMEOUT_MS = 8_000;
       const assessment = await Promise.race([
         autoHedgingService.triggerRiskAssessment(
-          COMMUNITY_POOL_PORTFOLIO_ID, 
+          portfolioId, 
           COMMUNITY_POOL_ADDRESS
         ),
         new Promise<never>((_, reject) =>
@@ -250,7 +257,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     };
 
     // Cache the response
-    autoHedgeCache = { data: responseData, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL };
+    autoHedgeCacheByChain.set(chain, { data: responseData, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL });
 
     return NextResponse.json(responseData, {
       headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
