@@ -541,7 +541,7 @@ export class BluefinAggregatorService {
         quoteResponse: quote.routerData,
         accountAddress: senderAddress,
         slippage,
-        commission: { partner: '', commissionBps: 0 },
+        commission: { partner: senderAddress, commissionBps: 0 },
       });
 
       logger.info(`[BluefinAggregator] Built swap tx: USDC → ${quote.asset}`, {
@@ -583,7 +583,7 @@ export class BluefinAggregatorService {
           quoteResponse: quote.routerData!,
           accountAddress: senderAddress,
           slippage,
-          commission: { partner: '', commissionBps: 0 },
+          commission: { partner: senderAddress, commissionBps: 0 },
           extendTx: { tx },
         });
       }
@@ -742,7 +742,7 @@ export class BluefinAggregatorService {
         quoteResponse: quote.routerData,
         accountAddress: senderAddress,
         slippage: safeSlippage,
-        commission: { partner: '', commissionBps: 0 },
+        commission: { partner: senderAddress, commissionBps: 0 },
       });
 
       if (!isSuiTransaction(tx)) {
