@@ -333,10 +333,10 @@ function SuiContextProvider({
       const { Transaction } = await import('@mysten/sui/transactions');
       const txObj = tx as InstanceType<typeof Transaction>;
 
-      // Set sender before building (required by Transaction.build)
-      txObj.setSender(address);
-      const txBytes = await txObj.build({ client: suiClient as never });
-      const txBase64 = Buffer.from(txBytes).toString('base64');
+      // Serialize the unbuilt transaction (no gas resolution needed on client)
+      // Server will set gasOwner and build with admin's gas coins
+      const serialized = txObj.serialize();
+      const txBase64 = Buffer.from(serialized).toString('base64');
 
       // Ask admin to sponsor gas
       const sponsorRes = await fetch('/api/sui/sponsor-gas', {
