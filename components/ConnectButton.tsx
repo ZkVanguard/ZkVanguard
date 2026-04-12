@@ -57,8 +57,12 @@ export function ConnectButton() {
   const [copied, setCopied] = useState(false);
   const [showNetworkHelp, setShowNetworkHelp] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    setIsMobile(/Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+  }, []);
   
   // WDK modal context — modal renders outside Navbar's DOM tree
   const { openWdkModal } = useWdkModal();
@@ -104,13 +108,18 @@ export function ConnectButton() {
   const handleConnectSui = useCallback(() => {
     if (suiWallets.length > 0) {
       connectSui({ wallet: suiWallets[0] });
+    } else if (isMobile) {
+      // Mobile: Slush app uses in-app browser for wallet-standard injection.
+      // Deep-link to open the current dApp URL inside Slush's browser.
+      const dappUrl = encodeURIComponent(window.location.href);
+      window.location.href = `https://slush.app/dapp/${dappUrl}`;
     } else {
       if (window.confirm('No SUI wallet detected.\n\nWould you like to install Slush wallet?')) {
         window.open('https://slush.app/', '_blank');
       }
     }
     setShowSelector(false);
-  }, [suiWallets, connectSui]);
+  }, [suiWallets, connectSui, isMobile]);
 
   // Wait for client mount to avoid hydration mismatch
   const showWdk = mounted && wdkIsConnected && wdkAddress;
@@ -164,7 +173,7 @@ export function ConnectButton() {
                       <div className="text-[11px] text-[#86868B]">
                         {suiWallets.length > 0 
                           ? suiWallets.map(w => w.name).join(', ')
-                          : 'Slush, Sui Wallet'}
+                          : isMobile ? 'Open in Slush app' : 'Slush, Sui Wallet'}
                       </div>
                     </div>
                   </button>
