@@ -1264,7 +1264,8 @@ export function useCommunityPool(propAddress?: string) {
           await new Promise(r => setTimeout(r, 3000));
           dispatchPool({ type: 'SET_ERROR', payload: null });
         } else {
-          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
+          const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
+          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           return;
@@ -1274,7 +1275,7 @@ export function useCommunityPool(propAddress?: string) {
       const amountMicroUsdc = Math.round(depositAmount * 1_000_000);
       
       // Fetch USDC coins
-      const coinsRes = await fetch(rpcUrl, {
+      const usdcCoinsRes = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1283,7 +1284,7 @@ export function useCommunityPool(propAddress?: string) {
           params: [suiAddress, usdcCoinType, null, 50],
         }),
       });
-      const coinsJson = await coinsRes.json();
+      const coinsJson = await usdcCoinsRes.json();
       const coins: Array<{ coinObjectId: string; balance: string }> = coinsJson.result?.data || [];
       
       if (coins.length === 0) {
@@ -1443,7 +1444,8 @@ export function useCommunityPool(propAddress?: string) {
           await new Promise(r => setTimeout(r, 3000));
           dispatchPool({ type: 'SET_ERROR', payload: null });
         } else {
-          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. You need SUI tokens to pay transaction costs.' });
+          const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
+          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           return;
