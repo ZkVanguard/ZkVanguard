@@ -34,6 +34,7 @@ import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/S
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
+import { createHedge } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -846,6 +847,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                         orderId: result.orderId,
                         error: result.error,
                       });
+
+                      // Persist successful hedges to DB for UI display
+                      if (result.success && result.orderId) {
+                        try {
+                          await createHedge({
+                            orderId: result.orderId,
+                            portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+                            walletAddress: (process.env.SUI_ADMIN_ADDRESS || '').trim(),
+                            asset,
+                            market: `${asset}-PERP`,
+                            side: 'SHORT',
+                            size: hedgeSizeBase,
+                            notionalValue: hedgeValueUSD,
+                            leverage,
+                            entryPrice: pricesUSD[asset] || 0,
+                            simulationMode: false,
+                            reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
+                          });
+                          logger.info(`[SUI Cron] Hedge saved to DB`, { asset, orderId: result.orderId });
+                        } catch (dbErr) {
+                          logger.warn(`[SUI Cron] Failed to save hedge to DB (non-critical)`, { asset, error: dbErr });
+                        }
+                      }
 
                       logger.info(`[SUI Cron] Opened ${asset} hedge`, {
                         symbol: `${asset}-PERP`,

@@ -980,7 +980,14 @@ export class SuiUsdcPoolService {
         const balanceValue = typeof fields.balance === 'string'
           ? fields.balance
           : (fields.balance?.fields?.value || fields.balance?.value || '0');
-        const totalNAVUsdc = Number(balanceValue) / Math.pow(10, USDC_DECIMALS);
+        const balanceUsdc = Number(balanceValue) / Math.pow(10, USDC_DECIMALS);
+
+        // Include USDC transferred out for hedging/swapping in total NAV
+        // On-chain hedge_state.total_hedged_value tracks collateral sent to admin
+        const hedgedRaw = fields.hedge_state?.fields?.total_hedged_value || '0';
+        const hedgedUsdc = Number(hedgedRaw) / Math.pow(10, USDC_DECIMALS);
+        const totalNAVUsdc = balanceUsdc + hedgedUsdc;
+
         const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
         const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;
 
