@@ -81,7 +81,14 @@ export async function POST(request: NextRequest) {
     tx.setGasOwner(sponsorAddress);
 
     // Build the transaction (resolves gas coins, etc.)
-    const builtBytes = await tx.build({ client });
+    let builtBytes: Uint8Array;
+    try {
+      builtBytes = await tx.build({ client });
+    } catch (buildErr: unknown) {
+      const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr);
+      logger.error('[SponsorGas] Transaction build failed', { error: buildMsg, sender, sponsor: sponsorAddress });
+      return NextResponse.json({ error: 'Gas sponsoring build failed: ' + buildMsg }, { status: 500 });
+    }
 
     // Admin signs as gas sponsor
     const sponsorSig = await keypair.signTransaction(builtBytes);
