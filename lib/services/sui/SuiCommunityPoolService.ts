@@ -1248,16 +1248,15 @@ export class SuiUsdcPoolService {
  */
 export function validateSuiMainnetConfig(): string[] {
   const missing: string[] = [];
-  const check = (envVar: string) => {
-    const val = process.env[envVar]?.trim();
-    if (!val) missing.push(envVar);
+  const check = (envVar: string, ...fallbacks: string[]) => {
+    const hasValue = [envVar, ...fallbacks].some(v => process.env[v]?.trim());
+    if (!hasValue) missing.push(envVar);
   };
-  check('NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID');
-  check('NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE');
-  check('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID');
-  check('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE');
-  check('NEXT_PUBLIC_SUI_MAINNET_ADMIN_CAP');
-  check('NEXT_PUBLIC_SUI_MAINNET_FEE_MANAGER_CAP');
+  // SUI-native pool — required for basic operation
+  check('NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID', 'NEXT_PUBLIC_SUI_PACKAGE_ID');
+  check('NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE', 'NEXT_PUBLIC_SUI_COMMUNITY_POOL_STATE');
+  // USDC pool — optional (not deployed yet, falls back to SUI-native)
+  // Admin/fee caps — optional for read-only operations
   return missing;
 }
 
