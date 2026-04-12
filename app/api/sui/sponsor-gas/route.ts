@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
     const adminBalance = await client.getBalance({ owner: sponsorAddress, coinType: '0x2::sui::SUI' });
     const adminSui = BigInt(adminBalance.totalBalance);
     if (adminSui < BigInt(50_000_000)) { // need at least 0.05 SUI
-      logger.error('[SponsorGas] Admin wallet low on gas', { balance: adminSui.toString() });
-      return NextResponse.json({ error: 'Gas sponsor wallet is empty. Please try again later.' }, { status: 503 });
+      logger.error('[SponsorGas] Admin wallet low on gas', { balance: adminSui.toString(), sponsor: sponsorAddress, network });
+      return NextResponse.json({ error: `Gas sponsor wallet is low. Sponsor: ${sponsorAddress.slice(0, 10)}..., network: ${network}, balance: ${(Number(adminSui) / 1e9).toFixed(4)} SUI` }, { status: 503 });
     }
 
     // Deserialize the user's transaction
