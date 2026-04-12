@@ -661,13 +661,22 @@ export class BluefinAggregatorService {
       try {
         const oracleEstimate = await this.estimateOutputFromPrice(quote.asset, swapUsdcAmount);
         if (oracleEstimate && oracleEstimate.estimatedOut !== '0') {
-          const oracleOut = Number(oracleEstimate.estimatedOut);
+          const oracleOutRaw = Number(oracleEstimate.estimatedOut);
           const dexOut = Number(quote.expectedAmountOut);
+          // Oracle returns raw units (e.g., 24135 for BTC with 8 decimals)
+          // DEX may return either raw or decimal — normalize by checking magnitude
+          const coinKey = ASSET_TO_COIN_KEY[quote.asset];
+          const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[quote.asset] || 8;
+          const oracleOutDecimal = oracleOutRaw / Math.pow(10, decimals);
+          // Use whichever oracle form is closest in magnitude to dexOut
+          const oracleOut = Math.abs(dexOut - oracleOutDecimal) < Math.abs(dexOut - oracleOutRaw) 
+            ? oracleOutDecimal 
+            : oracleOutRaw;
           if (oracleOut > 0 && dexOut > 0) {
             const deviation = Math.abs(dexOut - oracleOut) / oracleOut;
             if (deviation > MAX_ORACLE_DEVIATION) {
               logger.error(`[BluefinAggregator] Oracle deviation too high for ${quote.asset}`, {
-                dexOut, oracleOut, deviation: (deviation * 100).toFixed(2) + '%',
+                dexOut, oracleOut, oracleOutRaw, oracleOutDecimal, deviation: (deviation * 100).toFixed(2) + '%',
               });
               return {
                 asset: quote.asset,
