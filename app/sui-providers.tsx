@@ -333,7 +333,8 @@ function SuiContextProvider({
       const { Transaction } = await import('@mysten/sui/transactions');
       const txObj = tx as InstanceType<typeof Transaction>;
 
-      // Serialize the transaction (unbuilt — sponsor endpoint will build it)
+      // Set sender before building (required by Transaction.build)
+      txObj.setSender(address);
       const txBytes = await txObj.build({ client: suiClient as never });
       const txBase64 = Buffer.from(txBytes).toString('base64');
 
