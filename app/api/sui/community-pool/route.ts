@@ -114,6 +114,11 @@ export async function GET(request: NextRequest) {
     logger.info('[SUI-API] Request', { action, user, network });
     
     const service = getSuiUsdcPoolService(network);
+
+    // Cache-bust: clear in-memory caches when client requests fresh data (after deposit/withdraw)
+    if (url.searchParams.get('nocache') === '1') {
+      service.clearCaches();
+    }
     
     // Get BlueFin aggregator swap quote
     if (action === 'swap-quote') {
