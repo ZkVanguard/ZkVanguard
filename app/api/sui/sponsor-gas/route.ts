@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Gas sponsor wallet is empty. Please try again later.' }, { status: 503 });
     }
 
-    // Deserialize the user's transaction
-    const txBytesRaw = Buffer.from(txBytes, 'base64');
-    const tx = Transaction.from(txBytesRaw);
+    // Deserialize the user's unbuilt transaction (JSON string, base64-encoded)
+    const txSerialized = Buffer.from(txBytes, 'base64').toString('utf-8');
+    const tx = Transaction.from(txSerialized);
 
     // Set the gas owner to admin (sponsor)
     tx.setSender(sender);
