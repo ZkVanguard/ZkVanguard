@@ -712,9 +712,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             }
           }
 
-          // Step 7c: Execute on-chain swaps
+          // Step 7c: Re-plan swaps with actual available admin USDC budget
+          const actualAdminUsdc = await getAdminUsdcBalance(network);
+          let swapPlan = plan;
+          if (actualAdminUsdc < totalUsdcNeeded * 0.95 && actualAdminUsdc > 0.50) {
+            // Budget is limited — re-plan with available USDC
+            logger.info('[SUI Cron] Re-planning swaps with available budget', {
+              available: actualAdminUsdc.toFixed(2),
+              originalNeeded: totalUsdcNeeded.toFixed(2),
+            });
+            try {
+              swapPlan = await aggregator.planRebalanceSwaps(
+                actualAdminUsdc,
+                aiResult.allocations as Record<PoolAsset, number>,
+              );
+            } catch (replanErr) {
+              logger.warn('[SUI Cron] Re-plan failed, using original plan', { error: replanErr });
+            }
+          }
+
+          // Execute on-chain swaps
           try {
-            const execResult = await aggregator.executeRebalance(plan, 0.015);
+            const execResult = await aggregator.executeRebalance(swapPlan, 0.015);
             
             rebalanceSwaps.executed = execResult.totalExecuted;
             rebalanceSwaps.failed = execResult.totalFailed;
