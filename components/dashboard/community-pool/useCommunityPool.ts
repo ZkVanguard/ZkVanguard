@@ -299,12 +299,14 @@ export function useCommunityPool(propAddress?: string) {
     
     if (selectedChain === 'sui') {
       const userAddress = suiAddress;  // Only use SUI address for SUI chain
+      // When force=true (after deposit/withdraw), bust both CDN and server caches
+      const cacheBust = force ? `&nocache=1&_t=${Date.now()}` : '';
       try {
         // Fetch pool summary + allocation + user position (USDC-based from DB)
         const [poolRes, allocRes, userRes] = await Promise.all([
-          fetch(`/api/sui/community-pool?network=${suiNetwork}`),
-          fetch(`/api/sui/community-pool?action=allocation&network=${suiNetwork}`),
-          userAddress ? fetch(`/api/sui/community-pool?action=user-position&wallet=${userAddress}&network=${suiNetwork}`) : null,
+          fetch(`/api/sui/community-pool?network=${suiNetwork}${cacheBust}`),
+          fetch(`/api/sui/community-pool?action=allocation&network=${suiNetwork}${cacheBust}`),
+          userAddress ? fetch(`/api/sui/community-pool?action=user-position&wallet=${userAddress}&network=${suiNetwork}${cacheBust}`) : null,
         ]);
         
         const [poolJson, allocJson, userJson] = await Promise.all([
@@ -1359,10 +1361,12 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
       dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
       
+      // Force-refresh pool data after deposit (with cache-bust)
+      fetchPoolData(true);
       setTimeout(() => {
         fetchPoolData(true);
         dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 3000);
+      }, 5000);
     } catch (err: any) {
       logger.error('SUI deposit error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Deposit failed' });
@@ -1514,10 +1518,12 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
       dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
       
+      // Force-refresh pool data after withdrawal (with cache-bust)
+      fetchPoolData(true);
       setTimeout(() => {
         fetchPoolData(true);
         dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 3000);
+      }, 5000);
     } catch (err: any) {
       logger.error('SUI withdraw error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Withdrawal failed' });
