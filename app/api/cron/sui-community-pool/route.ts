@@ -678,9 +678,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             // Cap transfer at on-chain contract limits:
             // - max_hedge_ratio: 50% of NAV can be hedged/transferred total
             // - reserve_ratio: 20% of balance must stay in pool
+            // - daily_hedge_cap: 15% of NAV max per day
             const maxByHedgeRatio = navUsd * 0.5; // 5000 BPS max hedge ratio
             const maxByReserve = navUsd * 0.8;     // 2000 BPS (20%) reserve requirement
-            const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve);
+            const maxByDailyCap = navUsd * 0.15;   // 1500 BPS daily hedge cap
+            const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap);
             const cappedDeficit = Math.min(deficit, maxTransferable * 0.95); // 5% safety margin
 
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
