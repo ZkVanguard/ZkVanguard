@@ -136,8 +136,8 @@ export class BluefinAggregatorService {
 
     const { SuiClient, getFullnodeUrl } = await getSuiSdk();
     const rpcUrl = this.network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
+      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
     this.suiClient = new SuiClient({ url: rpcUrl });
 
     // H3: Verify RPC is reachable before using it for swaps (with timeout)
@@ -628,7 +628,7 @@ export class BluefinAggregatorService {
       };
     }
 
-    const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
     if (!adminKey) {
       return {
         asset: quote.asset,
@@ -868,7 +868,7 @@ export class BluefinAggregatorService {
     const dryRunDetails: Array<{ asset: string; steps: Array<{ step: string; passed: boolean; detail: string }>; order?: Record<string, unknown> }> = [];
     if (hedgeable.length > 0) {
       const { bluefinService, BluefinService } = await import('./BluefinService');
-      const privateKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+      const privateKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
       const network = this.network;
 
       if (!privateKey) {
@@ -1184,7 +1184,7 @@ export class BluefinAggregatorService {
     suiBalance?: string;
     hasGas: boolean;
   }> {
-    const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
     if (!adminKey) {
       return { configured: false, hasGas: false };
     }
