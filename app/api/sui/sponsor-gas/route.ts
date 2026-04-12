@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Gas sponsoring unavailable' }, { status: 503 });
     }
 
-    const network = process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet';
+    const network = (process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet').trim();
 
     // Dynamic imports to avoid module-level conflicts
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const adminSui = BigInt(adminBalance.totalBalance);
     if (adminSui < BigInt(50_000_000)) { // need at least 0.05 SUI
       logger.error('[SponsorGas] Admin wallet low on gas', { balance: adminSui.toString(), sponsor: sponsorAddress, network });
-      return NextResponse.json({ error: `Gas sponsor wallet is low. Sponsor: ${sponsorAddress.slice(0, 10)}..., network: ${network}, balance: ${(Number(adminSui) / 1e9).toFixed(4)} SUI` }, { status: 503 });
+      return NextResponse.json({ error: 'Gas sponsor wallet is empty. Please try again later.' }, { status: 503 });
     }
 
     // Deserialize the user's transaction
