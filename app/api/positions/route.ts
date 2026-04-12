@@ -53,11 +53,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    // Accept EVM (40 hex) and SUI (64 hex) addresses
+    if (!/^0x[a-fA-F0-9]{40,64}$/.test(address)) {
       return NextResponse.json(
-        { error: 'Invalid Ethereum address' },
+        { error: 'Invalid address format' },
         { status: 400 }
       );
+    }
+
+    // SUI addresses (>40 hex chars) have no EVM positions — return empty
+    if (address.length > 42) {
+      return NextResponse.json({
+        address,
+        totalValue: 0,
+        positions: [],
+        lastUpdated: Date.now(),
+      });
     }
 
     // Check cache first (two-tier: memory → DB)
