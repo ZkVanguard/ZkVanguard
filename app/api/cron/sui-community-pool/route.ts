@@ -340,8 +340,8 @@ async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promise<numb
 
     const address = keypair.getPublicKey().toSuiAddress();
     const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
+      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
     const suiClient = new SuiClient({ url: rpcUrl });
 
     const usdcType = SUI_USDC_COIN_TYPE[network];
@@ -740,11 +740,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             rebalanceSwaps.txDigests = execResult.results
               .filter((r): r is typeof r & { txDigest: string } => !!r.txDigest)
               .map(r => ({ asset: r.asset, digest: r.txDigest }));
+            // Include per-swap error details for diagnostics
+            (rebalanceSwaps as any).swapResults = execResult.results.map(r => ({
+              asset: r.asset,
+              success: r.success,
+              amountIn: r.amountIn,
+              amountOut: r.amountOut,
+              txDigest: r.txDigest,
+              error: r.error,
+            }));
+            (rebalanceSwaps as any).swapBudget = actualAdminUsdc.toFixed(2);
 
             logger.info('[SUI Cron] On-chain swaps executed', {
               executed: execResult.totalExecuted,
               failed: execResult.totalFailed,
+              budget: actualAdminUsdc.toFixed(2),
               digests: execResult.results.filter(r => r.txDigest).map(r => r.txDigest),
+              errors: execResult.results.filter(r => !r.success).map(r => `${r.asset}: ${r.error}`),
             });
           } catch (execErr) {
             logger.error('[SUI Cron] On-chain swap execution failed', { error: execErr });
