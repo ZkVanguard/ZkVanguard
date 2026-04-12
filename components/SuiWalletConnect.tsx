@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut, AlertTriangle } from 'lucide-react';
+import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut, AlertTriangle, Smartphone } from 'lucide-react';
 import { 
   useWallets, 
   useCurrentAccount, 
@@ -30,6 +30,11 @@ export function SuiWalletConnect({
 }: SuiWalletConnectProps) {
   const [copied, setCopied] = useState(false);
   const [showNetworkHelp, setShowNetworkHelp] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+  }, []);
   
   // Sui wallet hooks
   const wallets = useWallets() || [];
@@ -198,16 +203,37 @@ export function SuiWalletConnect({
                     <span className="text-sm text-white">{wallet.name}</span>
                   </button>
                 ))
+              ) : isMobile ? (
+                <div className="p-4 text-center">
+                  <Smartphone className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-300 mb-3">
+                    Tap below to open this page in the Slush wallet app where you can connect.
+                  </p>
+                  <a
+                    href={`https://slush.app/dapp/${encodeURIComponent(window.location.href)}`}
+                    className="inline-block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors mb-2"
+                  >
+                    Open in Slush
+                  </a>
+                  <a 
+                    href="https://slush.app/download" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline text-xs"
+                  >
+                    Don&apos;t have Slush? Download it →
+                  </a>
+                </div>
               ) : (
                 <div className="p-4 text-center text-gray-400 text-sm">
                   <p>No SUI wallets detected.</p>
                   <a 
-                    href="https://suiwallet.com" 
+                    href="https://slush.app/" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:underline block mt-2"
                   >
-                    Get Sui Wallet →
+                    Get Slush Wallet →
                   </a>
                 </div>
               )}
