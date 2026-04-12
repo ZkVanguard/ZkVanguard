@@ -99,6 +99,7 @@ export function useCommunityPool(propAddress?: string) {
   const suiIsConnected = suiContext?.isConnected ?? false;
   const suiBalance = suiContext?.balance ?? '0';
   const suiExecuteTransaction = suiContext?.executeTransaction;
+  const suiSponsoredExecute = suiContext?.sponsoredExecute;
   const suiRequestFaucet = suiContext?.requestFaucetTokens;
   const suiNetwork = suiContext?.network ?? 'testnet';
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
@@ -1250,7 +1251,8 @@ export function useCommunityPool(propAddress?: string) {
       const gasBalJson = await gasBalRes.json();
       const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
       
-      if (suiGasBalance < BigInt(10_000_000)) {
+      const needsSponsoring = suiGasBalance < BigInt(10_000_000);
+      if (needsSponsoring) {
         if (!isMainnet && suiRequestFaucet) {
           dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
           const faucetRes = await suiRequestFaucet();
@@ -1263,13 +1265,14 @@ export function useCommunityPool(propAddress?: string) {
           dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
           await new Promise(r => setTimeout(r, 3000));
           dispatchPool({ type: 'SET_ERROR', payload: null });
-        } else {
+        } else if (!isMainnet || !suiSponsoredExecute) {
           const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
           dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           return;
         }
+        // On mainnet with sponsoring available — continue, will use sponsored execute below
       }
       
       const amountMicroUsdc = Math.round(depositAmount * 1_000_000);
@@ -1320,7 +1323,11 @@ export function useCommunityPool(propAddress?: string) {
         ],
       });
       
-      const result = await suiExecuteTransaction(tx);
+      // Use sponsored execute (admin pays gas) when user has insufficient SUI on mainnet
+      const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
+        ? suiSponsoredExecute
+        : suiExecuteTransaction;
+      const result = await executeFn(tx);
       
       if (!result.success) {
         dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
@@ -1362,7 +1369,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, suiSponsoredExecute, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1430,7 +1437,8 @@ export function useCommunityPool(propAddress?: string) {
       const gasBalJson = await gasBalRes.json();
       const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
       
-      if (suiGasBalance < BigInt(10_000_000)) {
+      const needsSponsoring = suiGasBalance < BigInt(10_000_000);
+      if (needsSponsoring) {
         if (!isMainnet && suiRequestFaucet) {
           dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
           const faucetRes = await suiRequestFaucet();
@@ -1443,7 +1451,7 @@ export function useCommunityPool(propAddress?: string) {
           dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
           await new Promise(r => setTimeout(r, 3000));
           dispatchPool({ type: 'SET_ERROR', payload: null });
-        } else {
+        } else if (!isMainnet || !suiSponsoredExecute) {
           const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
           dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
@@ -1466,7 +1474,11 @@ export function useCommunityPool(propAddress?: string) {
         ],
       });
       
-      const result = await suiExecuteTransaction(tx);
+      // Use sponsored execute (admin pays gas) when user has insufficient SUI on mainnet
+      const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
+        ? suiSponsoredExecute
+        : suiExecuteTransaction;
+      const result = await executeFn(tx);
       
       if (!result.success) {
         dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
@@ -1511,7 +1523,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, suiSponsoredExecute, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH
