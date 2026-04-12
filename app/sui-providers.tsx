@@ -8,6 +8,7 @@ import {
   WalletProvider,
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSignTransaction,
   useSuiClient,
   useCurrentWallet,
   useConnectWallet,
@@ -70,6 +71,8 @@ interface SuiContextType {
   
   // Transactions
   executeTransaction: (tx: unknown) => Promise<{ digest: string; success: boolean }>;
+  signTransaction: (txBytes: Uint8Array) => Promise<{ signature: string }>;
+  sponsoredExecute: (tx: unknown) => Promise<{ digest: string; success: boolean }>;
   
   // Utilities
   getExplorerUrl: (type: 'tx' | 'address' | 'object', value: string) => string;
@@ -136,6 +139,7 @@ function SuiContextProvider({
   const wallets = useWallets();
   const suiClient = useSuiClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: walletSignTx } = useSignTransaction();
 
   // Until mounted, present the same "disconnected" state the server rendered
   const account = mounted ? rawAccount : null;
@@ -309,6 +313,66 @@ function SuiContextProvider({
     }
   }, [isConnected, isWrongNetwork, walletNetwork, network, signAndExecute]);
 
+  // Sign-only: user signs pre-built transaction bytes (for sponsored txs)
+  const signTransaction = useCallback(async (txBytes: Uint8Array): Promise<{ signature: string }> => {
+    if (!isConnected) throw new Error('Wallet not connected');
+    if (isWrongNetwork) throw new Error(`Wrong network: wallet is on ${walletNetwork || 'unknown'}, app expects ${network}`);
+
+    const result = await walletSignTx({ transaction: txBytes });
+    return { signature: result.signature };
+  }, [isConnected, isWrongNetwork, walletNetwork, network, walletSignTx]);
+
+  // Sponsored execute: builds tx → sends to admin sponsor → user signs → submit with both sigs
+  const sponsoredExecute = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean }> => {
+    if (!isConnected || !address) throw new Error('Wallet not connected');
+    if (isWrongNetwork) throw new Error(`Wrong network: wallet is on ${walletNetwork || 'unknown'}, app expects ${network}`);
+
+    try {
+      const { Transaction } = await import('@mysten/sui/transactions');
+      const txObj = tx as InstanceType<typeof Transaction>;
+
+      // Serialize the transaction (unbuilt — sponsor endpoint will build it)
+      const txBytes = await txObj.build({ client: suiClient });
+      const txBase64 = Buffer.from(txBytes).toString('base64');
+
+      // Ask admin to sponsor gas
+      const sponsorRes = await fetch('/api/sui/sponsor-gas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txBytes: txBase64, sender: address }),
+      });
+      const sponsorData = await sponsorRes.json();
+      if (!sponsorRes.ok || !sponsorData.success) {
+        throw new Error(sponsorData.error || 'Gas sponsoring failed');
+      }
+
+      // Decode the sponsored tx bytes
+      const sponsoredTxBytes = new Uint8Array(Buffer.from(sponsorData.txBytes, 'base64'));
+
+      // User signs the sponsored transaction
+      const userSig = await walletSignTx({ transaction: sponsoredTxBytes });
+
+      // Execute with both signatures (user + sponsor)
+      const result = await suiClient.executeTransactionBlock({
+        transactionBlock: sponsoredTxBytes,
+        signature: [userSig.signature, sponsorData.sponsorSignature],
+        options: { showEffects: true },
+      });
+
+      const success = result.effects?.status?.status === 'success';
+      return { digest: result.digest, success };
+    } catch (error: unknown) {
+      logger.error('Sponsored transaction failed', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
+      const message = error instanceof Error ? error.message : String(error);
+      const isUserRejection = message.includes('Rejected') || message.includes('User rejected') || message.includes('cancelled');
+      return {
+        digest: '',
+        success: false,
+        ...(isUserRejection ? {} : { error: message }),
+      } as { digest: string; success: boolean };
+    }
+  }, [isConnected, isWrongNetwork, walletNetwork, network, address, suiClient, walletSignTx]);
+
   const getExplorerUrl = useCallback((type: 'tx' | 'address' | 'object', value: string): string => {
     const baseUrl = network === 'mainnet' 
       ? 'https://suiexplorer.com'
@@ -377,6 +441,8 @@ function SuiContextProvider({
     connectWallet,
     disconnectWallet,
     executeTransaction,
+    signTransaction,
+    sponsoredExecute,
     getExplorerUrl,
     requestFaucetTokens,
   }), [
@@ -393,6 +459,8 @@ function SuiContextProvider({
     connectWallet,
     disconnectWallet,
     executeTransaction,
+    signTransaction,
+    sponsoredExecute,
     getExplorerUrl,
     requestFaucetTokens,
   ]);
