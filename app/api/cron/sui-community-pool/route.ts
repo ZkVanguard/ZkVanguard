@@ -674,15 +674,32 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // If admin wallet doesn't have enough USDC, transfer from pool via open_hedge
           if (adminUsdcBalance < totalUsdcNeeded * 0.95) { // 5% tolerance
             const deficit = totalUsdcNeeded - adminUsdcBalance;
+
+            // Cap transfer at on-chain contract limits:
+            // - max_hedge_ratio: 50% of NAV can be hedged/transferred total
+            // - reserve_ratio: 20% of balance must stay in pool
+            const maxByHedgeRatio = navUsd * 0.5; // 5000 BPS max hedge ratio
+            const maxByReserve = navUsd * 0.8;     // 2000 BPS (20%) reserve requirement
+            const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve);
+            const cappedDeficit = Math.min(deficit, maxTransferable * 0.95); // 5% safety margin
+
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
               deficit: deficit.toFixed(2),
+              maxTransferable: maxTransferable.toFixed(2),
+              cappedDeficit: cappedDeficit.toFixed(2),
             });
 
-            const transferResult = await transferUsdcFromPoolToAdmin(network, deficit);
+            const transferResult = await transferUsdcFromPoolToAdmin(network, cappedDeficit);
+            (rebalanceSwaps as any).poolTransfer = {
+              requested: cappedDeficit.toFixed(2),
+              success: transferResult.success,
+              txDigest: transferResult.txDigest,
+              error: transferResult.error,
+            };
             if (transferResult.success) {
               logger.info('[SUI Cron] Pool → admin USDC transfer successful', {
                 txDigest: transferResult.txDigest,
-                amount: deficit.toFixed(2),
+                amount: cappedDeficit.toFixed(2),
               });
               // Small delay for state propagation
               await new Promise(r => setTimeout(r, 2000));
