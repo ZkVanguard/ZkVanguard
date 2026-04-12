@@ -1,11 +1,12 @@
 /**
- * SUI Gas Sponsor API — Admin pays gas for user transactions
+ * SUI Gas Sponsor API — Step 1: Prepare a sponsored transaction
  *
  * POST /api/sui/sponsor-gas
- * Body: { txBytes: string (base64) , sender: string }
- * Returns: { sponsorSignature: string, txBytes: string (base64) }
+ * Body: { txBytes: string (base64 JSON of unbuilt tx), sender: string }
+ * Returns: { txBytes: string (base64 JSON of modified unbuilt tx with gas fields) }
  *
- * The admin wallet pays gas so users don't need SUI for transaction fees.
+ * Sets gasOwner, gasBudget, and gasPayment on the transaction.
+ * The wallet will build + sign, then /api/sui/sponsor-execute handles admin co-signing + execution.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { Transaction } = await import('@mysten/sui/transactions');
     const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
 
-    // Derive admin keypair
+    // Derive admin keypair (to get sponsor address)
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
       keypair = adminKey.startsWith('suiprivkey')
@@ -76,11 +77,9 @@ export async function POST(request: NextRequest) {
     const txSerialized = Buffer.from(txBytes, 'base64').toString('utf-8');
     const tx = Transaction.from(txSerialized);
 
-    // Set the gas owner to admin (sponsor)
+    // Set gas sponsoring fields (wallet will build the final BCS bytes)
     tx.setSender(sender);
     tx.setGasOwner(sponsorAddress);
-
-    // Set explicit gas budget (avoids dry-run which fails with split gas owner)
     tx.setGasBudget(50_000_000); // 0.05 SUI — generous for typical deposit/withdraw
 
     // Select gas coins from the sponsor's wallet
@@ -94,29 +93,17 @@ export async function POST(request: NextRequest) {
       digest: c.digest,
     })));
 
-    // Build the transaction (skip dry-run since budget is pre-set)
-    let builtBytes: Uint8Array;
-    try {
-      builtBytes = await tx.build({ client });
-    } catch (buildErr: unknown) {
-      const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr);
-      logger.error('[SponsorGas] Transaction build failed', { error: buildMsg, sender, sponsor: sponsorAddress });
-      return NextResponse.json({ error: 'Gas sponsoring build failed: ' + buildMsg }, { status: 500 });
-    }
+    // Return the modified but UNBUILT tx — wallet will build + sign
+    const modifiedTx = tx.serialize();
 
-    // Admin signs as gas sponsor
-    const sponsorSig = await keypair.signTransaction(builtBytes);
-
-    logger.info('[SponsorGas] Sponsored transaction', {
+    logger.info('[SponsorGas] Prepared sponsored tx', {
       sender: sender.slice(0, 10),
       sponsor: sponsorAddress.slice(0, 10),
-      gasUsed: 'pending',
     });
 
     return NextResponse.json({
       success: true,
-      txBytes: Buffer.from(builtBytes).toString('base64'),
-      sponsorSignature: sponsorSig.signature,
+      txBytes: Buffer.from(modifiedTx).toString('base64'),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

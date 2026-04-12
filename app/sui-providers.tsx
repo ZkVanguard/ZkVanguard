@@ -324,7 +324,9 @@ function SuiContextProvider({
     return { signature: result.signature };
   }, [isConnected, isWrongNetwork, walletNetwork, network, walletSignTx]);
 
-  // Sponsored execute: builds tx → sends to admin sponsor → user signs → submit with both sigs
+  // Sponsored execute: 2-step flow
+  // Step 1: Server sets gas fields on unbuilt tx → returns modified tx
+  // Step 2: Wallet builds + signs → server admin co-signs the same bytes + executes
   const sponsoredExecute = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean }> => {
     if (!isConnected || !address) throw new Error('Wallet not connected');
     if (isWrongNetwork) throw new Error(`Wrong network: wallet is on ${walletNetwork || 'unknown'}, app expects ${network}`);
@@ -333,12 +335,10 @@ function SuiContextProvider({
       const { Transaction } = await import('@mysten/sui/transactions');
       const txObj = tx as InstanceType<typeof Transaction>;
 
-      // Serialize the unbuilt transaction (no gas resolution needed on client)
-      // Server will set gasOwner and build with admin's gas coins
+      // Step 1: Send unbuilt tx to server — server sets gasOwner, gasBudget, gasPayment
       const serialized = txObj.serialize();
       const txBase64 = Buffer.from(serialized).toString('base64');
 
-      // Ask admin to sponsor gas
       const sponsorRes = await fetch('/api/sui/sponsor-gas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -349,22 +349,30 @@ function SuiContextProvider({
         throw new Error(sponsorData.error || 'Gas sponsoring failed');
       }
 
-      // User signs the sponsored transaction (pass as base64 string)
-      const userSig = await walletSignTx({ transaction: sponsorData.txBytes });
+      // Decode the modified unbuilt tx (with gas fields set by server)
+      const modifiedTxJson = Buffer.from(sponsorData.txBytes, 'base64').toString('utf-8');
 
-      // Use the bytes the wallet actually signed (wallets may re-serialize)
-      // userSig.bytes is base64 of what was signed, userSig.signature is the sig
-      const signedTxBytes = userSig.bytes || sponsorData.txBytes;
+      // Wallet builds and signs — pass as string so dapp-kit forwards it to the wallet
+      // The wallet calls Transaction.from(json) → build() → sign()
+      const userSig = await walletSignTx({ transaction: modifiedTxJson });
 
-      // Execute with both signatures (user + sponsor)
-      const result = await suiClient.executeTransactionBlock({
-        transactionBlock: signedTxBytes,
-        signature: [userSig.signature, sponsorData.sponsorSignature],
-        options: { showEffects: true },
+      // Step 2: Server admin co-signs the wallet's bytes and executes
+      const executeRes = await fetch('/api/sui/sponsor-execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          txBytes: userSig.bytes,       // base64 BCS bytes the wallet built and signed
+          userSignature: userSig.signature,
+          sender: address,
+        }),
       });
+      const execData = await executeRes.json();
 
-      const success = result.effects?.status?.status === 'success';
-      return { digest: result.digest, success };
+      if (!executeRes.ok || !execData.success) {
+        throw new Error(execData.error || 'Sponsored execution failed');
+      }
+
+      return { digest: execData.digest || '', success: true };
     } catch (error: unknown) {
       logger.error('Sponsored transaction failed', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
       const message = error instanceof Error ? error.message : String(error);
@@ -375,7 +383,7 @@ function SuiContextProvider({
         ...(isUserRejection ? {} : { error: message }),
       } as { digest: string; success: boolean };
     }
-  }, [isConnected, isWrongNetwork, walletNetwork, network, address, suiClient, walletSignTx]);
+  }, [isConnected, isWrongNetwork, walletNetwork, network, address, walletSignTx]);
 
   const getExplorerUrl = useCallback((type: 'tx' | 'address' | 'object', value: string): string => {
     const baseUrl = network === 'mainnet' 
