@@ -1266,7 +1266,7 @@ let mainnetServiceInstance: SuiCommunityPoolService | null = null;
 export function getSuiCommunityPoolService(
   network?: SuiNetworkType
 ): SuiCommunityPoolService {
-  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'mainnet';
+  const net = ((network || process.env.SUI_NETWORK || 'mainnet').trim()) as SuiNetworkType;
   if (net === 'mainnet') {
     if (!mainnetServiceInstance) {
       mainnetServiceInstance = new SuiCommunityPoolService('mainnet');
@@ -1287,7 +1287,7 @@ let mainnetUsdcInstance: SuiUsdcPoolService | null = null;
 export function getSuiUsdcPoolService(
   network?: SuiNetworkType
 ): SuiUsdcPoolService {
-  const net = network || (process.env.SUI_NETWORK as SuiNetworkType) || 'mainnet';
+  const net = ((network || process.env.SUI_NETWORK || 'mainnet').trim()) as SuiNetworkType;
   if (net === 'mainnet') {
     if (!mainnetUsdcInstance) {
       mainnetUsdcInstance = new SuiUsdcPoolService('mainnet');

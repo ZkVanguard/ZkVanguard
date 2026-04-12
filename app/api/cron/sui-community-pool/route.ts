@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { getSuiCommunityPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/sui/SuiCommunityPoolService';
+import { getSuiUsdcPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/sui/SuiCommunityPoolService';
 import {
   initCommunityPoolTables,
   recordNavSnapshot,
@@ -368,7 +368,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     );
   }
 
-  const network = (process.env.SUI_NETWORK as 'mainnet' | 'testnet') || 'testnet';
+  const network = ((process.env.SUI_NETWORK || 'testnet').trim()) as 'mainnet' | 'testnet';
   logger.info('[SUI Cron] Starting SUI community pool AI management', { network });
 
   // MAINNET SAFETY: Reject if contract addresses not configured
@@ -437,7 +437,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     await initCommunityPoolTables();
 
     // Step 1: Fetch on-chain SUI pool stats
-    const suiService = getSuiCommunityPoolService(network);
+    const suiService = getSuiUsdcPoolService(network);
     const poolStats = await suiService.getPoolStats();
 
     logger.info('[SUI Cron] Pool stats fetched', {
