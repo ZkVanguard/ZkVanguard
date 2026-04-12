@@ -349,15 +349,16 @@ function SuiContextProvider({
         throw new Error(sponsorData.error || 'Gas sponsoring failed');
       }
 
-      // Decode the sponsored tx bytes and create Transaction for wallet signing
-      const sponsoredTxBytes = new Uint8Array(Buffer.from(sponsorData.txBytes, 'base64'));
-
       // User signs the sponsored transaction (pass as base64 string)
       const userSig = await walletSignTx({ transaction: sponsorData.txBytes });
 
+      // Use the bytes the wallet actually signed (wallets may re-serialize)
+      // userSig.bytes is base64 of what was signed, userSig.signature is the sig
+      const signedTxBytes = userSig.bytes || sponsorData.txBytes;
+
       // Execute with both signatures (user + sponsor)
       const result = await suiClient.executeTransactionBlock({
-        transactionBlock: sponsoredTxBytes,
+        transactionBlock: signedTxBytes,
         signature: [userSig.signature, sponsorData.sponsorSignature],
         options: { showEffects: true },
       });

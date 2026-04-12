@@ -1327,10 +1327,11 @@ export function useCommunityPool(propAddress?: string) {
       const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
         ? suiSponsoredExecute
         : suiExecuteTransaction;
-      const result = await executeFn(tx);
+      const result = await executeFn(tx) as { digest: string; success: boolean; error?: string };
       
       if (!result.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
+        const errDetail = result.error || 'Transaction rejected or failed';
+        dispatchPool({ type: 'SET_ERROR', payload: `${errDetail}. Please try again.` });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
@@ -1478,10 +1479,11 @@ export function useCommunityPool(propAddress?: string) {
       const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
         ? suiSponsoredExecute
         : suiExecuteTransaction;
-      const result = await executeFn(tx);
+      const result = await executeFn(tx) as { digest: string; success: boolean; error?: string };
       
       if (!result.success) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction rejected or failed. Please try again.' });
+        const errDetail = result.error || 'Transaction rejected or failed';
+        dispatchPool({ type: 'SET_ERROR', payload: `${errDetail}. Please try again.` });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
