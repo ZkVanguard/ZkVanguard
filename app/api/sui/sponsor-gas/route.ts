@@ -80,7 +80,21 @@ export async function POST(request: NextRequest) {
     tx.setSender(sender);
     tx.setGasOwner(sponsorAddress);
 
-    // Build the transaction (resolves gas coins, etc.)
+    // Set explicit gas budget (avoids dry-run which fails with split gas owner)
+    tx.setGasBudget(50_000_000); // 0.05 SUI — generous for typical deposit/withdraw
+
+    // Select gas coins from the sponsor's wallet
+    const sponsorCoins = await client.getCoins({ owner: sponsorAddress, coinType: '0x2::sui::SUI' });
+    if (!sponsorCoins.data.length) {
+      return NextResponse.json({ error: 'Gas sponsor wallet has no SUI coins' }, { status: 503 });
+    }
+    tx.setGasPayment(sponsorCoins.data.map(c => ({
+      objectId: c.coinObjectId,
+      version: c.version,
+      digest: c.digest,
+    })));
+
+    // Build the transaction (skip dry-run since budget is pre-set)
     let builtBytes: Uint8Array;
     try {
       builtBytes = await tx.build({ client });
