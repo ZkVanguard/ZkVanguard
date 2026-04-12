@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid sender address' }, { status: 400 });
     }
 
-    const adminKey = process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY;
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
     if (!adminKey) {
       logger.error('[SponsorGas] No admin key configured');
       return NextResponse.json({ error: 'Gas sponsoring unavailable' }, { status: 503 });
@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
         : Ed25519Keypair.fromSecretKey(
             Buffer.from(adminKey.replace(/^0x/, ''), 'hex')
           );
-    } catch {
-      logger.error('[SponsorGas] Invalid admin key format');
-      return NextResponse.json({ error: 'Gas sponsoring unavailable' }, { status: 503 });
+    } catch (keyErr: unknown) {
+      logger.error('[SponsorGas] Invalid admin key format', { error: keyErr instanceof Error ? keyErr.message : String(keyErr), keyPrefix: adminKey.substring(0, 8) });
+      return NextResponse.json({ error: 'Gas sponsoring unavailable — key parse error' }, { status: 503 });
     }
 
     const sponsorAddress = keypair.getPublicKey().toSuiAddress();
