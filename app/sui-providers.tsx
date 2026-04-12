@@ -318,7 +318,9 @@ function SuiContextProvider({
     if (!isConnected) throw new Error('Wallet not connected');
     if (isWrongNetwork) throw new Error(`Wrong network: wallet is on ${walletNetwork || 'unknown'}, app expects ${network}`);
 
-    const result = await walletSignTx({ transaction: txBytes });
+    // Pass as base64 string — dapp-kit accepts Transaction | string
+    const b64 = Buffer.from(txBytes).toString('base64');
+    const result = await walletSignTx({ transaction: b64 });
     return { signature: result.signature };
   }, [isConnected, isWrongNetwork, walletNetwork, network, walletSignTx]);
 
@@ -332,7 +334,7 @@ function SuiContextProvider({
       const txObj = tx as InstanceType<typeof Transaction>;
 
       // Serialize the transaction (unbuilt — sponsor endpoint will build it)
-      const txBytes = await txObj.build({ client: suiClient });
+      const txBytes = await txObj.build({ client: suiClient as never });
       const txBase64 = Buffer.from(txBytes).toString('base64');
 
       // Ask admin to sponsor gas
@@ -346,11 +348,11 @@ function SuiContextProvider({
         throw new Error(sponsorData.error || 'Gas sponsoring failed');
       }
 
-      // Decode the sponsored tx bytes
+      // Decode the sponsored tx bytes and create Transaction for wallet signing
       const sponsoredTxBytes = new Uint8Array(Buffer.from(sponsorData.txBytes, 'base64'));
 
-      // User signs the sponsored transaction
-      const userSig = await walletSignTx({ transaction: sponsoredTxBytes });
+      // User signs the sponsored transaction (pass as base64 string)
+      const userSig = await walletSignTx({ transaction: sponsorData.txBytes });
 
       // Execute with both signatures (user + sponsor)
       const result = await suiClient.executeTransactionBlock({
