@@ -178,12 +178,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
     
     // Get latest risk assessment from service (LIVE — no mock data)
+    // Use timeout to prevent Vercel 504 — risk assessment involves multiple external APIs
     let riskAssessment: AutoHedgeStatus['riskAssessment'] = null;
     try {
-      const assessment = await autoHedgingService.triggerRiskAssessment(
-        COMMUNITY_POOL_PORTFOLIO_ID, 
-        COMMUNITY_POOL_ADDRESS
-      );
+      const RISK_TIMEOUT_MS = 8_000;
+      const assessment = await Promise.race([
+        autoHedgingService.triggerRiskAssessment(
+          COMMUNITY_POOL_PORTFOLIO_ID, 
+          COMMUNITY_POOL_ADDRESS
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Risk assessment timed out')), RISK_TIMEOUT_MS)
+        ),
+      ]);
       riskAssessment = {
         riskScore: Math.round(assessment.riskScore * 100) / 100,
         drawdownPercent: Math.round(assessment.drawdownPercent * 100) / 100,
