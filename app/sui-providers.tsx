@@ -349,12 +349,13 @@ function SuiContextProvider({
         throw new Error(sponsorData.error || 'Gas sponsoring failed');
       }
 
-      // Decode the modified unbuilt tx (with gas fields set by server)
+      // Reconstruct Transaction object from the server's modified JSON
       const modifiedTxJson = Buffer.from(sponsorData.txBytes, 'base64').toString('utf-8');
+      const modifiedTx = Transaction.from(modifiedTxJson);
 
-      // Wallet builds and signs — pass as string so dapp-kit forwards it to the wallet
-      // The wallet calls Transaction.from(json) → build() → sign()
-      const userSig = await walletSignTx({ transaction: modifiedTxJson });
+      // Wallet builds (resolves objects via RPC) and signs the BCS bytes
+      // Cast needed: dynamic import Transaction vs dapp-kit's Transaction type are structurally same
+      const userSig = await walletSignTx({ transaction: modifiedTx as unknown as string });
 
       // Step 2: Server admin co-signs the wallet's bytes and executes
       const executeRes = await fetch('/api/sui/sponsor-execute', {
