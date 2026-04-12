@@ -1215,12 +1215,12 @@ export function useCommunityPool(propAddress?: string) {
     const isMainnet = suiNetwork === 'mainnet';
 
     // USDC contract config — both networks use community_pool_usdc module
-    const packageId = isMainnet
+    const packageId = (isMainnet
       ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '');
-    const poolStateId = isMainnet
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '')).trim();
+    const poolStateId = (isMainnet
       ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '');
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '')).trim();
     const usdcCoinType = isMainnet
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
@@ -1401,12 +1401,12 @@ export function useCommunityPool(propAddress?: string) {
     // Both networks use USDC pool — shares use 6 decimals (matching USDC)
     const sharesOnChain = Math.round(shares * 1_000_000);
     
-    const packageId = isMainnet
+    const packageId = (isMainnet
       ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '');
-    const poolStateId = isMainnet
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '')).trim();
+    const poolStateId = (isMainnet
       ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971');
+      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971')).trim();
     const usdcCoinType = isMainnet
       ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
       : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
