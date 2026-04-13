@@ -867,9 +867,9 @@ export class BluefinAggregatorService {
       const result = await this.executeSwap(quote, slippage);
       results.push(result);
 
-      // Small delay between swaps for state propagation
-      if (result.success) {
-        await new Promise(r => setTimeout(r, 1500));
+      // Delay between ALL swaps (not just successful) to let object versions propagate
+      if (swappable.indexOf(quote) < swappable.length - 1) {
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
 
