@@ -109,10 +109,10 @@ export function ConnectButton() {
     if (suiWallets.length > 0) {
       connectSui({ wallet: suiWallets[0] });
     } else if (isMobile) {
-      // Mobile: Slush app uses in-app browser for wallet-standard injection.
-      // Deep-link to open the current dApp URL inside Slush's browser.
-      const dappUrl = encodeURIComponent(window.location.href);
-      window.location.href = `https://slush.app/dapp/${dappUrl}`;
+      // Mobile: Slush universal link opens the dApp inside Slush's in-app browser
+      // where wallet-standard auto-injects. Domain: my.slush.app, path: /browse/*
+      const dappUrl = encodeURIComponent(window.location.origin);
+      window.location.href = `https://my.slush.app/browse/${dappUrl}`;
     } else {
       if (window.confirm('No SUI wallet detected.\n\nWould you like to install Slush wallet?')) {
         window.open('https://slush.app/', '_blank');
