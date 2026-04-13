@@ -210,7 +210,7 @@ export function SuiWalletConnect({
                     Tap below to open this page in the Slush wallet app where you can connect.
                   </p>
                   <a
-                    href={`https://slush.app/dapp/${encodeURIComponent(window.location.href)}`}
+                    href={`https://my.slush.app/browse/${encodeURIComponent(window.location.origin)}`}
                     className="inline-block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors mb-2"
                   >
                     Open in Slush
