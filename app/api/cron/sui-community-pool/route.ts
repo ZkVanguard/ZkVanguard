@@ -676,15 +676,46 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           if (adminUsdcBalance < totalUsdcNeeded * 0.95) { // 5% tolerance
             const deficit = totalUsdcNeeded - adminUsdcBalance;
 
-            // Cap transfer at on-chain contract limits:
-            // - max_hedge_ratio: 50% of NAV can be hedged/transferred total
-            // - reserve_ratio: 20% of balance must stay in pool
-            // - daily_hedge_cap: 15% of NAV max per day
-            const maxByHedgeRatio = navUsd * 0.5; // 5000 BPS max hedge ratio
-            const maxByReserve = navUsd * 0.8;     // 2000 BPS (20%) reserve requirement
-            const maxByDailyCap = navUsd * 0.15;   // 1500 BPS daily hedge cap
+            // CRITICAL: The on-chain contract's get_total_nav() only uses pool balance,
+            // NOT balance + total_hedged_value. We must compute limits using the contract's
+            // definition of NAV to avoid E_MAX_HEDGE_EXCEEDED (error 20).
+            // Read on-chain state to get exact contract-side values.
+            let contractBalance = navUsd; // fallback: use full NAV
+            let existingHedgedValue = 0;
+            try {
+              const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+              const rpcUrl = network === 'mainnet'
+                ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+                : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+              const tmpClient = new SuiClient({ url: rpcUrl });
+              const poolConfig = SUI_USDC_POOL_CONFIG[network];
+              if (poolConfig.poolStateId) {
+                const obj = await tmpClient.getObject({ id: poolConfig.poolStateId, options: { showContent: true } });
+                const fields = (obj.data?.content as any)?.fields;
+                if (fields) {
+                  const rawBal = typeof fields.balance === 'string'
+                    ? fields.balance
+                    : (fields.balance?.fields?.value || '0');
+                  contractBalance = Number(rawBal) / 1e6;
+                  existingHedgedValue = Number(fields.hedge_state?.fields?.total_hedged_value || '0') / 1e6;
+                  logger.info('[SUI Cron] On-chain contract state for limit calc', {
+                    contractBalance: contractBalance.toFixed(2),
+                    existingHedgedValue: existingHedgedValue.toFixed(2),
+                    maxHedgeRatioBps: fields.hedge_state?.fields?.auto_hedge_config?.fields?.max_hedge_ratio_bps,
+                  });
+                }
+              }
+            } catch (stateErr) {
+              logger.warn('[SUI Cron] Failed to read on-chain state for limit calc, using fallback', { error: stateErr });
+            }
+
+            // Cap transfer at on-chain contract limits (using contract's NAV = balance only):
+            const maxHedgeTotal = contractBalance * 0.5; // max_hedge_ratio_bps=5000
+            const maxByHedgeRatio = Math.max(0, maxHedgeTotal - existingHedgedValue); // subtract what's already transferred
+            const maxByReserve = contractBalance * 0.8;     // 20% reserve must stay in pool
+            const maxByDailyCap = contractBalance * 0.15;   // 15% daily cap (resets each day)
             const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap);
-            const cappedDeficit = Math.min(deficit, maxTransferable * 0.95); // 5% safety margin
+            const cappedDeficit = Math.min(deficit, maxTransferable * 0.90); // 10% safety margin
 
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
               deficit: deficit.toFixed(2),
@@ -707,14 +738,26 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               // Small delay for state propagation
               await new Promise(r => setTimeout(r, 2000));
             } else {
-              logger.warn('[SUI Cron] Pool → admin USDC transfer failed (proceeding with available balance)', {
+              logger.warn('[SUI Cron] Pool → admin USDC transfer failed', {
                 error: transferResult.error,
               });
             }
           }
 
-          // Step 7c: Re-plan swaps with actual available admin USDC budget
+          // Step 7c: Check actual admin USDC balance before proceeding
           const actualAdminUsdc = await getAdminUsdcBalance(network);
+
+          // BAIL OUT if admin has no meaningful USDC (transfer failed or wasn't needed)
+          if (actualAdminUsdc < 0.50) {
+            logger.warn('[SUI Cron] Admin USDC too low to execute swaps — skipping', {
+              actualAdminUsdc: actualAdminUsdc.toFixed(4),
+            });
+            (rebalanceSwaps as any).swapBudget = actualAdminUsdc.toFixed(2);
+            (rebalanceSwaps as any).executed = 0;
+            (rebalanceSwaps as any).failed = 0;
+            (rebalanceSwaps as any).swapResults = [];
+          } else {
+          // Re-plan swaps with actual available admin USDC budget
           let swapPlan = plan;
           if (actualAdminUsdc < totalUsdcNeeded * 0.95 && actualAdminUsdc > 0.50) {
             // Budget is limited — re-plan with available USDC
@@ -763,6 +806,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             logger.error('[SUI Cron] On-chain swap execution failed', { error: execErr });
             (rebalanceSwaps as any).executionError = execErr instanceof Error ? execErr.message : String(execErr);
           }
+          } // end else (admin has enough USDC)
         } else if (!process.env.SUI_POOL_ADMIN_KEY) {
           logger.info('[SUI Cron] Swap execution skipped — SUI_POOL_ADMIN_KEY not set (quotes only)');
         }
