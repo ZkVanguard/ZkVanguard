@@ -98,7 +98,7 @@
   "crons": [
     {
       "path": "/api/cron/master",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
