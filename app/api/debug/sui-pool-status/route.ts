@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { query } from '@/lib/db/postgres';
 import { getSuiUsdcPoolService, SUI_USDC_POOL_CONFIG } from '@/lib/services/sui/SuiCommunityPoolService';
+import { BluefinService } from '@/lib/services/sui/BluefinService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,11 +155,38 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               finalMaxTransferable: Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap).toFixed(2),
             },
           };
+          
+          // Read active hedges from on-chain
+          const activeHedges = hedgeState.active_hedges || [];
+          result.activeHedges = activeHedges.map((h: any) => ({
+            hedgeId: Buffer.from(h.fields?.hedge_id || h.hedge_id || [], 'base64').toString('hex'),
+            pairIndex: h.fields?.pair_index ?? h.pair_index,
+            collateralUsdc: (Number(h.fields?.collateral_usdc || h.collateral_usdc || 0) / 1e6).toFixed(2),
+            leverage: h.fields?.leverage ?? h.leverage,
+            isLong: h.fields?.is_long ?? h.is_long,
+            openedAt: h.fields?.opened_at ?? h.opened_at,
+          }));
         }
       }
     }
   } catch (err) {
     result.adminWallet = { error: err instanceof Error ? err.message : String(err) };
+  }
+  
+  // Check BlueFin positions
+  try {
+    const bluefin = new BluefinService(network);
+    const positions = await bluefin.getPositions();
+    result.bluefinPositions = positions.map(p => ({
+      symbol: p.symbol,
+      side: p.side,
+      size: p.size,
+      entryPrice: p.entryPrice,
+      unrealizedPnl: p.unrealizedPnl,
+      margin: p.margin,
+    }));
+  } catch (err) {
+    result.bluefinPositions = { error: err instanceof Error ? err.message : String(err) };
   }
 
   return NextResponse.json(result);
