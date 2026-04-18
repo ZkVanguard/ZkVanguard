@@ -20,7 +20,7 @@ import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from '../market-data/unified-price-provider';
 import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
-import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, isCommunityPoolPortfolio } from '@/lib/constants';
+import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, SUI_COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from '../cronos/CommunityPoolService';
 import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
@@ -481,9 +481,13 @@ class AutoHedgingService {
    * Assess risk for a portfolio using comprehensive data
    * Fetches positions, allocations, risk metrics, and active hedges
    */
-  async assessPortfolioRisk(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
-    // Special handling for CommunityPool (portfolioId = COMMUNITY_POOL_PORTFOLIO_ID)
+  async assessPortfolioRisk(portfolioId: number, walletAddress: string, chain?: string): Promise<RiskAssessment> {
+    // Special handling for CommunityPool (portfolioId = COMMUNITY_POOL_PORTFOLIO_ID or SUI_COMMUNITY_POOL_PORTFOLIO_ID)
     if (isCommunityPoolPortfolio(portfolioId)) {
+      // SUI pool uses dedicated SUI risk assessment path
+      if (chain === 'sui' || portfolioId === SUI_COMMUNITY_POOL_PORTFOLIO_ID) {
+        return this.assessSuiCommunityPoolRisk();
+      }
       return this.assessCommunityPoolRisk();
     }
 
@@ -632,7 +636,7 @@ class AutoHedgingService {
       let peakSharePrice = INCEPTION_SHARE_PRICE;
       try {
         const { getNavHistory } = await import('@/lib/db/community-pool');
-        const navHistory = await getNavHistory(30); // Last 30 days
+        const navHistory = await getNavHistory(30, 'cronos'); // Cronos pool only
         if (navHistory && navHistory.length > 0) {
           const historicalPeak = Math.max(...navHistory.map(h => h.share_price || 0));
           peakSharePrice = Math.max(peakSharePrice, historicalPeak, marketSharePrice);
@@ -910,6 +914,148 @@ class AutoHedgingService {
   }
 
   /**
+   * Assess risk specifically for SUI USDC Community Pool
+   * Uses SUI pool service for on-chain stats and NAV history
+   */
+  private async assessSuiCommunityPoolRisk(): Promise<RiskAssessment> {
+    try {
+      const { getSuiUsdcPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
+      const { getNavHistory } = await import('@/lib/db/community-pool');
+
+      const network = ((process.env.SUI_NETWORK || 'mainnet').trim().replace(/[\r\n]+/g, '')) as 'mainnet' | 'testnet';
+      const suiService = getSuiUsdcPoolService(network);
+      const poolStats = await suiService.getPoolStats();
+
+      // Use USDC NAV values directly (SUI pool is USDC-denominated)
+      const marketNAV = poolStats.totalNAVUsd || poolStats.totalNAV;
+      const marketSharePrice = poolStats.sharePriceUsd || poolStats.sharePrice;
+
+      // Calculate drawdown from rolling peak
+      const INCEPTION_SHARE_PRICE = 1.0;
+      let peakSharePrice = INCEPTION_SHARE_PRICE;
+      try {
+        const navHistory = await getNavHistory(30, 'sui');
+        if (navHistory && navHistory.length > 0) {
+          const historicalPeak = Math.max(...navHistory.map(h => h.share_price || 0));
+          peakSharePrice = Math.max(peakSharePrice, historicalPeak, marketSharePrice);
+        } else {
+          peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
+        }
+      } catch {
+        peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
+      }
+      const drawdownPercent = marketSharePrice < peakSharePrice
+        ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
+        : 0;
+
+      // Build positions from pool allocations
+      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number; volatility?: number }> = [];
+      const marketDataService = getMarketDataService();
+      const suiAssets = ['BTC', 'ETH', 'SUI', 'CRO'];
+      const extendedPrices = await marketDataService.getExtendedPrices(suiAssets);
+
+      for (const asset of suiAssets) {
+        const priceData = extendedPrices.get(asset);
+        if (priceData && priceData.price > 0) {
+          const allocation = (poolStats as any).allocations?.[asset] || 25;
+          const valueUSD = marketNAV * (allocation / 100);
+          let volatility = 0.30;
+          if (priceData.high24h > 0 && priceData.low24h > 0) {
+            const range = priceData.high24h - priceData.low24h;
+            const intradayVol = range / priceData.price;
+            volatility = Math.max(0.01, Math.min(2.0, intradayVol * Math.sqrt(365)));
+          }
+          positions.push({
+            symbol: asset,
+            value: valueUSD,
+            change24h: priceData.change24h || 0,
+            balance: valueUSD / priceData.price,
+            volatility,
+          });
+        }
+      }
+
+      const volatility = calculateVolatility(positions);
+      const concentrationRisk = calculateConcentrationRisk(positions, marketNAV);
+
+      // Calculate risk score
+      let riskScore = 1;
+      const isBelowPar = marketSharePrice < INCEPTION_SHARE_PRICE;
+      if (isBelowPar) {
+        const loss = ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100;
+        if (loss >= 5) riskScore += 4;
+        else if (loss >= 2) riskScore += 3;
+        else if (loss >= 1) riskScore += 2;
+        else riskScore += 1;
+      }
+      if (drawdownPercent > 0.5) riskScore += 1;
+      if (drawdownPercent > 4) riskScore += 1;
+      if (volatility > 1.5) riskScore += 1;
+      if (concentrationRisk > 30) riskScore += 1;
+      const anyNegative = positions.some(p => p.change24h < -1);
+      if (anyNegative) riskScore += 1;
+      riskScore = Math.min(riskScore, 10);
+
+      // Active hedges for SUI pool
+      let activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }> = [];
+      try {
+        const hedgesResult = await query(
+          `SELECT asset, side, size, notional_value FROM hedges WHERE portfolio_id = $1 AND status = 'active' AND chain = 'sui'`,
+          [SUI_COMMUNITY_POOL_PORTFOLIO_ID]
+        );
+        activeHedges = hedgesResult.map(h => ({
+          asset: String(h.asset || ''),
+          side: String(h.side || ''),
+          size: parseFloat(String(h.size)) || 0,
+          notionalValue: parseFloat(String(h.notional_value)) || 0,
+        }));
+      } catch (dbError) {
+        logger.warn('[AutoHedging] Could not fetch SUI pool active hedges', { error: dbError });
+      }
+
+      const allocationPercentages: Record<string, number> = {};
+      for (const p of positions) {
+        allocationPercentages[p.symbol] = marketNAV > 0 ? (p.value / marketNAV) * 100 : 25;
+      }
+
+      const recommendations = generateHedgeRecommendations(
+        positions, marketNAV, allocationPercentages, activeHedges, drawdownPercent, concentrationRisk
+      );
+
+      logger.info('[AutoHedging] SUI CommunityPool risk assessment', {
+        marketNAV: `$${marketNAV.toFixed(2)}`,
+        sharePrice: marketSharePrice.toFixed(6),
+        drawdownPercent: drawdownPercent.toFixed(2),
+        volatility: volatility.toFixed(2),
+        riskScore,
+        activeHedges: activeHedges.length,
+        recommendations: recommendations.length,
+      });
+
+      return {
+        portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+        totalValue: marketNAV,
+        drawdownPercent,
+        volatility,
+        riskScore,
+        recommendations,
+        timestamp: Date.now(),
+      };
+    } catch (error) {
+      logger.error('[AutoHedging] SUI CommunityPool risk assessment failed', { error });
+      return {
+        portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+        totalValue: 0,
+        drawdownPercent: 0,
+        volatility: 0,
+        riskScore: 5,
+        recommendations: [],
+        timestamp: Date.now(),
+      };
+    }
+  }
+
+  /**
    * Fetch comprehensive portfolio data from on-chain sources (blockchain)
    * Uses RWAManager contract for trustless data retrieval
    */
@@ -1172,8 +1318,8 @@ class AutoHedgingService {
    * Manual trigger for risk assessment
    * When triggered (e.g., after rebalancing), also executes hedges if needed
    */
-  async triggerRiskAssessment(portfolioId: number, walletAddress: string): Promise<RiskAssessment> {
-    const assessment = await this.assessPortfolioRisk(portfolioId, walletAddress);
+  async triggerRiskAssessment(portfolioId: number, walletAddress: string, chain?: string): Promise<RiskAssessment> {
+    const assessment = await this.assessPortfolioRisk(portfolioId, walletAddress, chain);
     this.lastRiskAssessments.set(portfolioId, assessment);
     
     // Get portfolio config

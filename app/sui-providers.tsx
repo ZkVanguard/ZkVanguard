@@ -164,6 +164,9 @@ function SuiContextProvider({
         const accountChains = account.chains || [];
         let detectedNetwork: string | null = null;
 
+        console.log('🔍 SUI account chains:', accountChains);
+        console.log('🔍 SUI app expected network:', network);
+
         for (const chain of accountChains) {
           if (chain.includes('mainnet')) {
             detectedNetwork = 'mainnet';
@@ -181,6 +184,7 @@ function SuiContextProvider({
         if (!detectedNetwork && address) {
           try {
             const chainId = await suiClient.getChainIdentifier();
+            console.log('🔍 SUI chainId from RPC:', chainId);
             // Chain identifiers: mainnet = specific hash, testnet & devnet have their own
             // Use a simple heuristic based on common patterns
             if (chainId) {
@@ -203,20 +207,25 @@ function SuiContextProvider({
           }
         }
 
+        console.log('🔍 SUI detected wallet network:', detectedNetwork);
         setWalletNetwork(detectedNetwork);
         
         // Check if wallet network matches app's expected network
+        // If we can't detect wallet network, assume it's correct (don't block user)
         if (detectedNetwork && detectedNetwork !== network) {
+          console.log('⚠️ SUI network mismatch:', { wallet: detectedNetwork, app: network });
           logger.warn('SUI wallet network mismatch', { 
             component: 'SuiProvider', 
             data: { walletNetwork: detectedNetwork, appNetwork: network } 
           });
           setIsWrongNetwork(true);
         } else {
+          console.log('✅ SUI network OK or unknown (allowing)');
           setIsWrongNetwork(false);
         }
       } catch (error) {
         logger.error('Failed to detect wallet network', error instanceof Error ? error : undefined, { component: 'SuiProvider' });
+        // On error, don't block - assume correct network
         setIsWrongNetwork(false);
       }
     }

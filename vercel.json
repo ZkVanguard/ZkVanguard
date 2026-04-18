@@ -97,7 +97,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/sui-community-pool",
+      "path": "/api/cron/master",
       "schedule": "0 12 * * *"
     }
   ]

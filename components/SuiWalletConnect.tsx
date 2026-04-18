@@ -132,22 +132,23 @@ export function SuiWalletConnect({
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
-                      <p className="text-yellow-400 font-medium">Wrong Network</p>
+                      <p className="text-yellow-400 font-medium">⚠️ Network Mismatch</p>
                       <p className="text-gray-400 text-xs mt-1">
-                        Wallet: {suiWalletNetwork || 'unknown'}<br />
-                        Expected: {suiExpectedNetwork}
+                        Your wallet: <span className="text-red-400 font-medium">{suiWalletNetwork || 'unknown'}</span><br />
+                        App requires: <span className="text-green-400 font-medium">{suiExpectedNetwork}</span>
                       </p>
-                      <button 
-                        onClick={() => setShowNetworkHelp(prev => !prev)}
-                        className="text-yellow-400 hover:text-yellow-300 text-xs mt-2 underline"
-                      >
-                        How to switch networks?
-                      </button>
-                      {showNetworkHelp && (
-                        <p className="text-gray-500 text-xs mt-2">
-                          Open your Sui wallet extension and switch to {suiExpectedNetwork} network in settings.
-                        </p>
-                      )}
+                      <div className="mt-3 p-2 bg-gray-800/50 rounded text-xs text-gray-300">
+                        <p className="font-medium text-yellow-400 mb-1">How to fix:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-gray-400">
+                          <li>Open your SUI wallet extension</li>
+                          <li>Go to Settings → Network</li>
+                          <li>Switch to <span className="text-green-400">{suiExpectedNetwork}</span></li>
+                          <li>Reconnect to this app</li>
+                        </ol>
+                      </div>
+                      <p className="text-gray-500 text-xs mt-2 italic">
+                        Note: SUI wallets don&apos;t support automatic network switching
+                      </p>
                     </div>
                   </div>
                 </div>

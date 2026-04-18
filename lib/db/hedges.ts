@@ -43,9 +43,23 @@ export async function ensureHedgesTable(): Promise<void> {
       )
     `);
     // Migration columns (idempotent ADD COLUMN IF NOT EXISTS)
+    // NOTE: Production DB was created with different column names (direction/amount instead of side/size)
+    // and is missing several columns the code expects. These migrations ensure all required columns exist.
     await query(`
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS portfolio_id INTEGER;
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS side VARCHAR(10);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS size DECIMAL(18, 8);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS notional_value DECIMAL(18, 2);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS market VARCHAR(50);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS simulation_mode BOOLEAN DEFAULT false;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS reason TEXT;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS prediction_market TEXT;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS current_pnl DECIMAL(18, 2) DEFAULT 0;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS realized_pnl DECIMAL(18, 2) DEFAULT 0;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS funding_paid DECIMAL(18, 2) DEFAULT 0;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS stop_loss DECIMAL(18, 2);
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS take_profit DECIMAL(18, 2);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS zk_proof_hash VARCHAR(128);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS wallet_binding_hash VARCHAR(128);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS owner_commitment VARCHAR(128);
@@ -152,6 +166,9 @@ export interface CreateHedgeParams {
   reason?: string;
   predictionMarket?: string;
   txHash?: string;
+  // Chain identification
+  chain?: string; // e.g. 'sui', 'cronos-testnet'
+  chainId?: number;
   // ZK proof fields for privacy
   zkProofHash?: string;
   walletBindingHash?: string;
@@ -217,8 +234,9 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
         order_id, portfolio_id, wallet_address, asset, market, side, 
         size, notional_value, leverage, entry_price, liquidation_price,
         stop_loss, take_profit, simulation_mode, reason, prediction_market, tx_hash,
-        zk_proof_hash, wallet_binding_hash, owner_commitment, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        zk_proof_hash, wallet_binding_hash, owner_commitment, metadata,
+        chain, chain_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       RETURNING *
     `;
 
@@ -244,6 +262,8 @@ export async function createHedge(params: CreateHedgeParams): Promise<Hedge> {
       walletBindingHash,
       ownerCommitment,
       JSON.stringify(metadata),
+      params.chain || 'cronos-testnet',
+      params.chainId ?? null,
     ]);
 
     if (!result) {
@@ -315,8 +335,12 @@ export async function getHedgeByZkProofHash(proofHash: string): Promise<Hedge | 
   return queryOne<Hedge>(sql, [proofHash]);
 }
 
-export async function getActiveHedges(portfolioId?: number): Promise<Hedge[]> {
+export async function getActiveHedges(portfolioId?: number, chain?: string): Promise<Hedge[]> {
   await ensureHedgesTable();
+  if (portfolioId !== undefined && chain) {
+    const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 AND status = $2 AND chain = $3 ORDER BY created_at DESC';
+    return query<Hedge>(sql, [portfolioId, 'active', chain]);
+  }
   if (portfolioId !== undefined) {
     const sql = 'SELECT * FROM hedges WHERE portfolio_id = $1 AND status = $2 ORDER BY created_at DESC';
     return query<Hedge>(sql, [portfolioId, 'active']);
