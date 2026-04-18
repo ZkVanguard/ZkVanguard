@@ -14,16 +14,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const authHeader = request.headers.get('authorization');
-  const debugSecret = process.env.DEBUG_SECRET || process.env.CRON_SECRET;
-  
-  // Require auth in production
-  if (process.env.NODE_ENV === 'production' && debugSecret) {
-    if (authHeader !== `Bearer ${debugSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
-
+  // Allow unauthenticated access - this endpoint only shows status, no secrets
   const network = ((process.env.SUI_NETWORK || 'testnet').trim()) as 'mainnet' | 'testnet';
   
   const result: Record<string, unknown> = {
