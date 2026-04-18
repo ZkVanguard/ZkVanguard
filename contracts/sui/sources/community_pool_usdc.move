@@ -1050,6 +1050,31 @@ module zkvanguard::community_pool_usdc {
         state.ai_state.min_ai_confidence = min_confidence;
     }
 
+    /// Emergency reset of hedge tracking state
+    /// Use when hedge positions were liquidated/closed outside the contract
+    /// and the on-chain tracking is out of sync with actual positions.
+    /// CAUTION: This resets all hedge tracking - only use after verifying
+    /// external positions are actually closed.
+    public entry fun admin_reset_hedge_state<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        clock: &Clock,
+    ) {
+        // Clear all active hedges
+        state.hedge_state.active_hedges = vector::empty();
+        // Reset counters
+        state.hedge_state.total_hedged_value = 0;
+        state.hedge_state.hedged_today = 0;
+        state.hedge_state.last_hedge_reset_day = clock::timestamp_ms(clock) / 86400000;
+        
+        event::emit(UsdcPoolRebalanced {
+            pool_id: object::id(state),
+            timestamp: clock::timestamp_ms(clock),
+            allocations: state.asset_allocations,
+            nav_after: balance::value(&state.balance),
+        });
+    }
+
     /// Add an agent address and transfer AgentCap
     public entry fun add_agent<T>(
         _admin: &AdminCap,
