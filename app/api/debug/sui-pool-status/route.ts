@@ -175,16 +175,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   
   // Check BlueFin positions
   try {
-    const bluefin = new BluefinService(network);
-    const positions = await bluefin.getPositions();
-    result.bluefinPositions = positions.map(p => ({
-      symbol: p.symbol,
-      side: p.side,
-      size: p.size,
-      entryPrice: p.entryPrice,
-      unrealizedPnl: p.unrealizedPnl,
-      margin: p.margin,
-    }));
+    const bluefin = BluefinService.getInstance();
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+    if (adminKey) {
+      await bluefin.initialize(adminKey, network);
+      const positions = await bluefin.getPositions();
+      result.bluefinPositions = positions.map(p => ({
+        symbol: p.symbol,
+        side: p.side,
+        size: p.size,
+        entryPrice: p.entryPrice,
+        unrealizedPnl: p.unrealizedPnl,
+        margin: p.margin,
+      }));
+    } else {
+      result.bluefinPositions = { error: 'No admin key configured' };
+    }
   } catch (err) {
     result.bluefinPositions = { error: err instanceof Error ? err.message : String(err) };
   }
