@@ -486,8 +486,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     }
 
     // Step 3: Get AI allocation decision via SuiPoolAgent
+    // Uses enhanced pipeline: prediction markets + risk cascade + sentiment + correlation
     const suiAgent = getSuiPoolAgent(network);
-    const indicators = await suiAgent.analyzeMarket();
 
     // Fetch current allocations from last AI decision in DB (no hardcoded defaults)
     let currentAllocations: Record<PoolAsset, number> = {
@@ -517,7 +517,60 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       logger.warn('[SUI Cron] Could not load previous allocations from DB', { error: allocErr });
     }
 
-    const aiResult = suiAgent.generateAllocation(indicators, currentAllocations);
+    // Try enhanced allocation (prediction markets + AI intelligence) first,
+    // fall back to basic allocation if external APIs are unavailable
+    let aiResult: AllocationDecision;
+    let enhancedContext: {
+      marketSentiment?: string;
+      recommendations?: string[];
+      riskAlerts?: string[];
+      correlationInsight?: string;
+      predictionSignals?: Array<{ market: string; signal: string; probability: number }>;
+      urgency?: string;
+    } = {};
+
+    try {
+      const enhanced = await suiAgent.getEnhancedAllocationContext();
+      aiResult = {
+        allocations: enhanced.allocations,
+        confidence: enhanced.confidence,
+        reasoning: enhanced.reasoning,
+        shouldRebalance: true, // Enhanced context triggers rebalance when urgency is medium+
+        swappableAssets: ['BTC', 'ETH', 'SUI'] as PoolAsset[],
+        hedgedAssets: ['CRO'] as PoolAsset[],
+        riskScore: enhanced.urgency === 'CRITICAL' ? 9 : enhanced.urgency === 'HIGH' ? 7 : enhanced.urgency === 'MEDIUM' ? 5 : 3,
+      };
+      // Check drift to decide if rebalance is actually needed
+      const maxDrift = Math.max(
+        ...POOL_ASSETS.map(a => Math.abs((enhanced.allocations[a] || 25) - (currentAllocations[a] || 25)))
+      );
+      aiResult.shouldRebalance = maxDrift > 5 || enhanced.urgency === 'HIGH' || enhanced.urgency === 'CRITICAL';
+
+      enhancedContext = {
+        marketSentiment: enhanced.marketSentiment,
+        recommendations: enhanced.recommendations,
+        riskAlerts: enhanced.riskAlerts,
+        correlationInsight: enhanced.correlationInsight,
+        predictionSignals: enhanced.predictionSignals,
+        urgency: enhanced.urgency,
+      };
+
+      logger.info('[SUI Cron] Enhanced AI allocation (prediction markets + intelligence)', {
+        allocations: aiResult.allocations,
+        confidence: aiResult.confidence,
+        sentiment: enhanced.marketSentiment,
+        urgency: enhanced.urgency,
+        predictionSignals: enhanced.predictionSignals?.length || 0,
+        riskAlerts: enhanced.riskAlerts?.length || 0,
+        recommendations: enhanced.recommendations?.length || 0,
+      });
+    } catch (enhancedErr) {
+      logger.warn('[SUI Cron] Enhanced allocation failed, falling back to basic', {
+        error: enhancedErr instanceof Error ? enhancedErr.message : String(enhancedErr),
+      });
+      const indicators = await suiAgent.analyzeMarket();
+      aiResult = suiAgent.generateAllocation(indicators, currentAllocations);
+    }
 
     logger.info('[SUI Cron] AI Agent decision', {
       allocations: aiResult.allocations,
@@ -526,6 +579,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       swappableAssets: aiResult.swappableAssets,
       hedgedAssets: aiResult.hedgedAssets,
       riskScore: aiResult.riskScore,
+      enhanced: Object.keys(enhancedContext).length > 0,
     });
 
     // Step 4: Record NAV snapshot
@@ -925,6 +979,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                             leverage,
                             entryPrice: pricesUSD[asset] || 0,
                             simulationMode: false,
+                            chain: 'sui',
                             reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
                           });
                           logger.info(`[SUI Cron] Hedge saved to DB`, { asset, orderId: result.orderId });
@@ -987,6 +1042,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         details: {
           chain: 'sui',
           agent: 'SuiPoolAgent',
+          enhanced: Object.keys(enhancedContext).length > 0,
           action: aiResult.shouldRebalance ? 'REBALANCE' : 'HOLD',
           allocations: aiResult.allocations,
           confidence: aiResult.confidence,
@@ -999,6 +1055,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           poolNAV_USDC: navUsd,
           poolSharePrice: sharePriceUsd,
           memberCount: poolStats.memberCount,
+          ...(enhancedContext.marketSentiment && { marketSentiment: enhancedContext.marketSentiment }),
+          ...(enhancedContext.urgency && { urgency: enhancedContext.urgency }),
+          ...(enhancedContext.predictionSignals && { predictionSignals: enhancedContext.predictionSignals }),
+          ...(enhancedContext.riskAlerts?.length && { riskAlerts: enhancedContext.riskAlerts }),
+          ...(enhancedContext.correlationInsight && { correlationInsight: enhancedContext.correlationInsight }),
         },
       });
     } catch (txErr) {
@@ -1024,6 +1085,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         swappableAssets: aiResult.swappableAssets,
         hedgedAssets: aiResult.hedgedAssets,
         riskScore: aiResult.riskScore,
+        ...(enhancedContext.marketSentiment && { marketSentiment: enhancedContext.marketSentiment }),
+        ...(enhancedContext.urgency && { urgency: enhancedContext.urgency }),
+        ...(enhancedContext.predictionSignals && { predictionSignals: enhancedContext.predictionSignals }),
+        ...(enhancedContext.riskAlerts?.length && { riskAlerts: enhancedContext.riskAlerts }),
+        ...(enhancedContext.correlationInsight && { correlationInsight: enhancedContext.correlationInsight }),
+        ...(enhancedContext.recommendations?.length && { recommendations: enhancedContext.recommendations }),
       },
       pricesUSD,
       autoHedge: autoHedgeResult.triggered ? autoHedgeResult : undefined,

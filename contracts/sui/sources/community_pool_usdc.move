@@ -990,6 +990,23 @@ module zkvanguard::community_pool_usdc {
         state.performance_fee_bps = performance_fee_bps;
     }
 
+    /// Admin function to update withdrawal limits (circuit breaker settings)
+    public entry fun set_withdrawal_limits<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        max_single_withdrawal_bps: u64,
+        daily_withdrawal_cap_bps: u64,
+    ) {
+        // Max single withdrawal can be up to 100% (10000 bps)
+        assert!(max_single_withdrawal_bps <= BPS_DENOMINATOR, E_INVALID_ALLOCATION);
+        assert!(max_single_withdrawal_bps > 0, E_ZERO_AMOUNT);
+        // Daily cap can be up to 100%
+        assert!(daily_withdrawal_cap_bps <= BPS_DENOMINATOR, E_INVALID_ALLOCATION);
+        assert!(daily_withdrawal_cap_bps > 0, E_ZERO_AMOUNT);
+        state.max_single_withdrawal_bps = max_single_withdrawal_bps;
+        state.daily_withdrawal_cap_bps = daily_withdrawal_cap_bps;
+    }
+
     public entry fun set_auto_hedge_config<T>(
         _agent: &AgentCap,
         state: &mut UsdcPoolState<T>,

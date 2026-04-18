@@ -21,7 +21,7 @@ export const COMMUNITY_POOL_PORTFOLIO_ID = -1;
  * Use this helper instead of direct comparison to keep the logic centralized.
  */
 export function isCommunityPoolPortfolio(portfolioId: number | null | undefined): boolean {
-  return portfolioId === COMMUNITY_POOL_PORTFOLIO_ID;
+  return portfolioId === COMMUNITY_POOL_PORTFOLIO_ID || portfolioId === SUI_COMMUNITY_POOL_PORTFOLIO_ID;
 }
 
 /**

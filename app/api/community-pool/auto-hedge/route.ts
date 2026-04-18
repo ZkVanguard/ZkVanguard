@@ -140,7 +140,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let hedges: Awaited<ReturnType<typeof getActiveHedges>> = [];
     if (dbAvailable) {
       try {
-        hedges = await getActiveHedges(portfolioId);
+        hedges = await getActiveHedges(portfolioId, isSui ? 'sui' : undefined);
       } catch (e: unknown) {
         logger.warn('[AutoHedge API] Could not fetch hedges', { error: errMsg(e) });
       }
@@ -192,7 +192,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const assessment = await Promise.race([
         autoHedgingService.triggerRiskAssessment(
           portfolioId, 
-          COMMUNITY_POOL_ADDRESS
+          COMMUNITY_POOL_ADDRESS,
+          isSui ? 'sui' : undefined
         ),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Risk assessment timed out')), RISK_TIMEOUT_MS)
