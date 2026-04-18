@@ -73,13 +73,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Fetch recent pool transactions (swaps, hedges, etc.)
   try {
     const txns = await query(
-      `SELECT created_at, type, amount, details FROM community_pool_transactions 
-       WHERE details->>'chain' = 'sui' AND type != 'AI_DECISION'
+      `SELECT created_at, type, details FROM community_pool_transactions 
+       WHERE details->>'chain' = 'sui'
        ORDER BY created_at DESC LIMIT 10`
-    ) as Array<{ created_at: Date; type: string; amount: number; details: Record<string, unknown> }>;
+    ) as Array<{ created_at: Date; type: string; details: Record<string, unknown> }>;
     result.recentTransactions = txns;
   } catch (err) {
     result.recentTransactions = { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  // Check admin wallet USDC balance
+  try {
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    
+    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+    if (adminKey) {
+      let keypair: InstanceType<typeof Ed25519Keypair>;
+      if (adminKey.startsWith('suiprivkey')) {
+        keypair = Ed25519Keypair.fromSecretKey(adminKey);
+      } else {
+        keypair = Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace('0x', ''), 'hex'));
+      }
+      const adminAddress = keypair.getPublicKey().toSuiAddress();
+      
+      const rpcUrl = network === 'mainnet'
+        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+      const client = new SuiClient({ url: rpcUrl });
+      
+      // Get USDC balance
+      const usdcType = SUI_USDC_POOL_CONFIG[network].usdcCoinType;
+      const coins = await client.getCoins({ owner: adminAddress, coinType: usdcType });
+      const usdcBalance = coins.data.reduce((sum, c) => sum + BigInt(c.balance), 0n);
+      
+      // Get SUI balance for gas
+      const suiBalance = await client.getBalance({ owner: adminAddress });
+      
+      result.adminWallet = {
+        address: adminAddress,
+        usdcBalance: (Number(usdcBalance) / 1e6).toFixed(2),
+        suiBalance: (Number(suiBalance.totalBalance) / 1e9).toFixed(4),
+      };
+    }
+  } catch (err) {
+    result.adminWallet = { error: err instanceof Error ? err.message : String(err) };
   }
 
   return NextResponse.json(result);
