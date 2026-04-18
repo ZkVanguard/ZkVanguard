@@ -115,6 +115,47 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         usdcBalance: (Number(usdcBalance) / 1e6).toFixed(2),
         suiBalance: (Number(suiBalance.totalBalance) / 1e9).toFixed(4),
       };
+      
+      // Get on-chain pool hedge state
+      const poolConfig = SUI_USDC_POOL_CONFIG[network];
+      if (poolConfig.poolStateId) {
+        const obj = await client.getObject({ id: poolConfig.poolStateId, options: { showContent: true } });
+        const fields = (obj.data?.content as any)?.fields;
+        if (fields) {
+          const rawBal = typeof fields.balance === 'string'
+            ? fields.balance
+            : (fields.balance?.fields?.value || '0');
+          const contractBalance = Number(rawBal) / 1e6;
+          
+          const hedgeState = fields.hedge_state?.fields || {};
+          const totalHedgedValue = Number(hedgeState.total_hedged_value || '0') / 1e6;
+          const hedgedToday = Number(hedgeState.hedged_today || '0') / 1e6;
+          const autoHedgeConfig = hedgeState.auto_hedge_config?.fields || {};
+          
+          // Calculate limits
+          const maxHedgeRatioBps = Number(autoHedgeConfig.max_hedge_ratio_bps || 5000);
+          const maxHedgeTotal = contractBalance * (maxHedgeRatioBps / 10000);
+          const maxByHedgeRatio = Math.max(0, maxHedgeTotal - totalHedgedValue);
+          const maxByReserve = contractBalance * 0.8;
+          const dailyCapBps = Number(autoHedgeConfig.daily_hedge_cap_bps || 1500);
+          const maxByDailyCap = contractBalance * (dailyCapBps / 10000) - hedgedToday;
+          
+          result.onChainHedgeState = {
+            contractBalance: contractBalance.toFixed(2),
+            totalHedgedValue: totalHedgedValue.toFixed(2),
+            hedgedToday: hedgedToday.toFixed(2),
+            maxHedgeRatioBps,
+            dailyCapBps,
+            calculatedLimits: {
+              maxHedgeTotal: maxHedgeTotal.toFixed(2),
+              maxByHedgeRatio: maxByHedgeRatio.toFixed(2),
+              maxByReserve: maxByReserve.toFixed(2),
+              maxByDailyCap: maxByDailyCap.toFixed(2),
+              finalMaxTransferable: Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap).toFixed(2),
+            },
+          };
+        }
+      }
     }
   } catch (err) {
     result.adminWallet = { error: err instanceof Error ? err.message : String(err) };
