@@ -511,6 +511,17 @@ async function replenishAdminUsdc(
     const allBalances = await suiClient.getAllBalances({ owner: address });
     const candidates: Array<{ asset: BluefinPoolAsset; amount: number; valueUsd: number }> = [];
 
+    // Normalize SUI coin type strings for comparison (RPC may return different
+    // address case/padding than our static config).
+    const normalizeCoinType = (t: string): string => {
+      const parts = t.split('::');
+      if (parts.length !== 3) return t.toLowerCase();
+      const addr = parts[0].toLowerCase().replace(/^0x/, '').replace(/^0+/, '') || '0';
+      return `0x${addr}::${parts[1]}::${parts[2]}`;
+    };
+
+    const balanceDebug: Array<{ coinType: string; raw: string; matched?: string }> = [];
+
     for (const bal of allBalances) {
       const coinType = bal.coinType;
       const raw = Number(bal.totalBalance);
@@ -520,14 +531,17 @@ async function replenishAdminUsdc(
       let asset: BluefinPoolAsset | null = null;
       let decimals = 8;
 
+      const normBal = normalizeCoinType(coinType);
       for (const a of POOL_ASSETS) {
         const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
-        if (assetType && coinType === assetType) {
+        if (assetType && normalizeCoinType(assetType) === normBal) {
           asset = a as BluefinPoolAsset;
           decimals = a === 'SUI' ? 9 : 8;
           break;
         }
       }
+
+      balanceDebug.push({ coinType, raw: bal.totalBalance, matched: asset || undefined });
 
       if (!asset) continue;
 
@@ -552,6 +566,7 @@ async function replenishAdminUsdc(
     logger.info('[SUI Cron] Replenish candidates', {
       shortfall: usdcShortfall.toFixed(6),
       candidates: candidates.map(c => `${c.asset}: ${c.amount.toFixed(6)} (~$${c.valueUsd.toFixed(2)})`),
+      allBalances: balanceDebug,
     });
 
     // Swap from each asset until shortfall is covered
