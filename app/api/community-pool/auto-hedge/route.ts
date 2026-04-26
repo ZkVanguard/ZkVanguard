@@ -168,7 +168,7 @@ interface AutoHedgeStatus {
     allowedAssets: string[];
   } | null;
   activeHedges: Array<{
-    id: number;
+    id: number | string;
     asset: string;
     side: 'LONG' | 'SHORT';
     size: number;

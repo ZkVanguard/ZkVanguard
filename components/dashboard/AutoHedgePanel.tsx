@@ -20,7 +20,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ActiveHedge {
-  id: number;
+  id: number | string;
   asset: string;
   side: 'LONG' | 'SHORT';
   size: number;
