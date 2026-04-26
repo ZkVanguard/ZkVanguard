@@ -11,8 +11,8 @@ import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 
-const PACKAGE_ID = '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab';
-const USDC_ADMIN_CAP = '0xb329669a572b1ae94bab33bbc9f2b8f5808658c2d3b5d713c49d7afbcd94176b';
+const PACKAGE_ID = '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88';
+const USDC_ADMIN_CAP = '0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78';
 const USDC_COIN_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 
 // Allocation: BTC 30%, ETH 30%, SUI 25%, CRO 15% = 10000 BPS

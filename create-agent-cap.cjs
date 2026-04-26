@@ -22,9 +22,9 @@ async function main() {
   
   const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
   
-  const PACKAGE_ID = '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab';
-  const POOL_STATE_ID = '0xf7127c7d55131847b702481deb2ebee0c81150f9738d5f679cd7b1a998e620d8';
-  const ADMIN_CAP_ID = '0xb329669a572b1ae94bab33bbc9f2b8f5808658c2d3b5d713c49d7afbcd94176b'; // community_pool_usdc::AdminCap
+  const PACKAGE_ID = '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88';
+  const POOL_STATE_ID = '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a';
+  const ADMIN_CAP_ID = '0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78'; // community_pool_usdc::AdminCap
   const USDC_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
   
   const tx = new Transaction();

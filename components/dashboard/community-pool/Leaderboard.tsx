@@ -159,8 +159,8 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
             </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Deposits are recorded in the pool database. AI manages a 4-asset allocation
-            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI, CRO'}. 1 share = 1 USDC.
+            Deposits are recorded in the pool database. AI manages a 3-asset allocation
+            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI'}. 1 share = 1 USDC.
           </p>
         </div>
       )}

@@ -19,6 +19,59 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
+    // Special action: 5min-signal — return crowd-sourced BTC direction signal
+    // used by agents (>90% historical resolution accuracy via Chainlink).
+    const action = searchParams.get('action');
+    if (action === '5min-signal') {
+      const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
+      const signal = await Polymarket5MinService.getLatest5MinSignal();
+      const history = Polymarket5MinService.getSignalHistory();
+      if (!signal) {
+        return NextResponse.json(
+          {
+            success: false,
+            direction: null,
+            message: 'No active 5-min market window found',
+            history: {
+              count: history.signals.length,
+              accuracy: history.accuracy,
+              avgConfidence: history.avgConfidence,
+            },
+          },
+          { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' } },
+        );
+      }
+      return NextResponse.json(
+        {
+          success: true,
+          direction: signal.direction,
+          signal: signal.direction,
+          probability: signal.probability,
+          upProbability: signal.upProbability,
+          downProbability: signal.downProbability,
+          confidence: signal.confidence,
+          signalStrength: signal.signalStrength,
+          recommendation: signal.recommendation,
+          windowLabel: signal.windowLabel,
+          timeRemainingSeconds: signal.timeRemainingSeconds,
+          currentPrice: signal.currentPrice,
+          priceToBeat: signal.priceToBeat,
+          volume: signal.volume,
+          liquidity: signal.liquidity,
+          question: signal.question,
+          sourceUrl: signal.sourceUrl,
+          fetchedAt: signal.fetchedAt,
+          history: {
+            count: history.signals.length,
+            accuracy: history.accuracy,
+            streak: history.streak,
+            avgConfidence: history.avgConfidence,
+          },
+        },
+        { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' } },
+      );
+    }
+
     // Build upstream URL — forward every query parameter the caller sent
     const upstream = new URL('https://gamma-api.polymarket.com/markets');
     searchParams.forEach((value, key) => {

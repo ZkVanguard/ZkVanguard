@@ -451,3 +451,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<Liquidatio
     return safeErrorResponse(error, 'Liquidation guard') as NextResponse<LiquidationGuardResult>;
   }
 }
+
+// QStash sends POST by default — support both methods
+export const POST = GET;

@@ -347,7 +347,10 @@ export class BluefinAggregatorService {
         ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
         : 'direct';
 
-      const priceImpact = Math.abs(quoteResponse.priceImpact || 0);
+      // BlueFin SDK returns priceImpact as "price ratio remaining" (0.9999 = <0.01% slippage).
+      // Convert to actual impact fraction: if value > 0.5, it's the ratio remaining, not the impact.
+      const rawImpact = Math.abs(quoteResponse.priceImpact || 0);
+      const priceImpact = rawImpact > 0.5 ? (1 - rawImpact) : rawImpact;
 
       // If aggregator returned 0 output, fall back to BlueFin hedging
       if (expectedOut === '0' || expectedOut === '') {
@@ -493,7 +496,7 @@ export class BluefinAggregatorService {
       if (pct <= 0) return null;
 
       const usdcForAsset = totalUsdcAvailable * (pct / 100);
-      if (usdcForAsset < 0.50) return null; // Skip if less than $0.50 (gas costs would exceed value)
+      if (usdcForAsset < 0.10) return null; // Skip if less than $0.10
 
       const quotePromise = this.getSwapQuote(asset, usdcForAsset);
       const timeoutPromise = new Promise<never>((_, reject) =>
@@ -655,35 +658,67 @@ export class BluefinAggregatorService {
     }
 
     // Safety: oracle price deviation check (mainnet only)
-    // Reject if DEX effective price deviates >3% from oracle price
+    // Reject if DEX effective price deviates >3% from oracle price.
+    // Must handle BOTH directions:
+    //   Forward (USDC → asset): quote.amountIn is USDC, expectedAmountOut is asset
+    //   Reverse (asset → USDC): quote.amountIn is asset, expectedAmountOut is USDC
     if (this.network === 'mainnet' && quote.expectedAmountOut && quote.expectedAmountOut !== '0') {
       const MAX_ORACLE_DEVIATION = 0.03; // 3%
       try {
-        const oracleEstimate = await this.estimateOutputFromPrice(quote.asset, swapUsdcAmount);
-        if (oracleEstimate && oracleEstimate.estimatedOut !== '0') {
-          const oracleOutRaw = Number(oracleEstimate.estimatedOut);
-          const dexOut = Number(quote.expectedAmountOut);
-          // Oracle returns raw units (e.g., 24135 for BTC with 8 decimals)
-          // DEX may return either raw or decimal — normalize by checking magnitude
-          const coinKey = ASSET_TO_COIN_KEY[quote.asset];
-          const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[quote.asset] || 8;
-          const oracleOutDecimal = oracleOutRaw / Math.pow(10, decimals);
-          // Use whichever oracle form is closest in magnitude to dexOut
-          const oracleOut = Math.abs(dexOut - oracleOutDecimal) < Math.abs(dexOut - oracleOutRaw) 
-            ? oracleOutDecimal 
-            : oracleOutRaw;
-          if (oracleOut > 0 && dexOut > 0) {
-            const deviation = Math.abs(dexOut - oracleOut) / oracleOut;
-            if (deviation > MAX_ORACLE_DEVIATION) {
-              logger.error(`[BluefinAggregator] Oracle deviation too high for ${quote.asset}`, {
-                dexOut, oracleOut, oracleOutRaw, oracleOutDecimal, deviation: (deviation * 100).toFixed(2) + '%',
-              });
-              return {
-                asset: quote.asset,
-                success: false,
-                amountIn: quote.amountIn,
-                error: `DEX price deviates ${(deviation * 100).toFixed(1)}% from oracle — swap blocked for safety`,
-              };
+        const usdcType = this.coinTypes.USDC || MAINNET_COIN_TYPES.USDC;
+        const isReverseSwap = quote.toCoinType === usdcType;
+        const coinKey = ASSET_TO_COIN_KEY[quote.asset];
+        const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[quote.asset] || 8;
+
+        if (isReverseSwap) {
+          // Reverse swap: asset → USDC
+          // quote.amountIn = asset raw amount, quote.expectedAmountOut = USDC amount (decimal string from Bluefin SDK)
+          const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+          const mds = getMarketDataService();
+          const priceData = await mds.getTokenPrice(quote.asset);
+          if (priceData.price > 0) {
+            const assetAmount = Number(quote.amountIn) / Math.pow(10, decimals);
+            const oracleUsdcOut = assetAmount * priceData.price;  // expected USDC in decimal
+            const dexUsdcOut = Number(quote.expectedAmountOut);   // Bluefin returns decimal
+            if (oracleUsdcOut > 0 && dexUsdcOut > 0) {
+              const deviation = Math.abs(dexUsdcOut - oracleUsdcOut) / oracleUsdcOut;
+              if (deviation > MAX_ORACLE_DEVIATION) {
+                logger.error(`[BluefinAggregator] Oracle deviation too high for reverse ${quote.asset} → USDC`, {
+                  dexUsdcOut, oracleUsdcOut, assetAmount, price: priceData.price, deviation: (deviation * 100).toFixed(2) + '%',
+                });
+                return {
+                  asset: quote.asset,
+                  success: false,
+                  amountIn: quote.amountIn,
+                  error: `DEX price deviates ${(deviation * 100).toFixed(1)}% from oracle — swap blocked for safety`,
+                };
+              }
+            }
+          }
+        } else {
+          // Forward swap: USDC → asset
+          const oracleEstimate = await this.estimateOutputFromPrice(quote.asset, swapUsdcAmount);
+          if (oracleEstimate && oracleEstimate.estimatedOut !== '0') {
+            const oracleOutRaw = Number(oracleEstimate.estimatedOut);
+            const dexOut = Number(quote.expectedAmountOut);
+            const oracleOutDecimal = oracleOutRaw / Math.pow(10, decimals);
+            // Use whichever oracle form is closest in magnitude to dexOut
+            const oracleOut = Math.abs(dexOut - oracleOutDecimal) < Math.abs(dexOut - oracleOutRaw) 
+              ? oracleOutDecimal 
+              : oracleOutRaw;
+            if (oracleOut > 0 && dexOut > 0) {
+              const deviation = Math.abs(dexOut - oracleOut) / oracleOut;
+              if (deviation > MAX_ORACLE_DEVIATION) {
+                logger.error(`[BluefinAggregator] Oracle deviation too high for ${quote.asset}`, {
+                  dexOut, oracleOut, oracleOutRaw, oracleOutDecimal, deviation: (deviation * 100).toFixed(2) + '%',
+                });
+                return {
+                  asset: quote.asset,
+                  success: false,
+                  amountIn: quote.amountIn,
+                  error: `DEX price deviates ${(deviation * 100).toFixed(1)}% from oracle — swap blocked for safety`,
+                };
+              }
             }
           }
         }
@@ -1049,7 +1084,7 @@ export class BluefinAggregatorService {
               toCoinType: toCoinType || mainnetTo,
               amountIn: amountInStr,
               expectedAmountOut: quoteResponse.returnAmount,
-              priceImpact: Math.abs(quoteResponse.priceImpact || 0),
+              priceImpact: (() => { const r = Math.abs(quoteResponse.priceImpact || 0); return r > 0.5 ? (1 - r) : r; })(),
               route: `${asset} → USDC via BlueFin DEX (${routeDesc}) → close BlueFin hedge`,
               routerData: null, // Don't pass mainnet routerData for testnet execution
               canSwapOnChain: false,

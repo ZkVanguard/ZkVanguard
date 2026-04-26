@@ -458,3 +458,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<HedgeMonit
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
+
+// QStash sends POST by default — support both methods
+export const POST = GET;

@@ -43,13 +43,130 @@ import {
   COMMUNITY_POOL_ABI,
 } from '@/lib/contracts/community-pool-config';
 import { getChainKeyFromId, getNetworkFromChainId, getValidChainIds } from './utils';
-import type { ChainKey, TxStatus } from './types';
-import {
-  type PoolAction, type TxAction,
-  initialPoolState, initialTxState,
-  poolReducer, txReducer,
-} from './pool-reducers';
-import { EVM_CHAIN_PARAMS, switchChainNative } from './chain-params';
+import type { 
+  CommunityPoolState, 
+  TransactionState, 
+  PoolSummary, 
+  UserPosition, 
+  AIRecommendation,
+  LeaderboardEntry,
+  ChainKey,
+  TxStatus
+} from './types';
+
+// ============================================================================
+// STATE TYPES
+// ============================================================================
+
+type PoolAction =
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_POOL_DATA'; payload: PoolSummary | null }
+  | { type: 'SET_USER_POSITION'; payload: UserPosition | null }
+  | { type: 'SET_AI_RECOMMENDATION'; payload: AIRecommendation | null }
+  | { type: 'SET_LEADERBOARD'; payload: LeaderboardEntry[] }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_SUCCESS'; payload: string | null }
+  | { type: 'SET_CHAIN'; payload: ChainKey }
+  | { type: 'SET_SUI_POOL_STATE_ID'; payload: string | null }
+  | { type: 'RESET_FOR_CHAIN_CHANGE' };
+
+type TxAction =
+  | { type: 'SET_TX_STATUS'; payload: TxStatus }
+  | { type: 'SET_ACTION_LOADING'; payload: boolean }
+  | { type: 'SET_SHOW_DEPOSIT'; payload: boolean }
+  | { type: 'SET_SHOW_WITHDRAW'; payload: boolean }
+  | { type: 'SET_DEPOSIT_AMOUNT'; payload: string }
+  | { type: 'SET_WITHDRAW_SHARES'; payload: string }
+  | { type: 'SET_SUI_DEPOSIT_AMOUNT'; payload: string }
+  | { type: 'SET_SUI_WITHDRAW_SHARES'; payload: string }
+  | { type: 'SET_LAST_TX_HASH'; payload: string | null }
+  | { type: 'RESET_TX_STATE' };
+
+// ============================================================================
+// REDUCERS
+// ============================================================================
+
+const initialPoolState: CommunityPoolState = {
+  poolData: null,
+  userPosition: null,
+  aiRecommendation: null,
+  leaderboard: [],
+  loading: true,
+  error: null,
+  successMessage: null,
+  selectedChain: 'sepolia',  // Sepolia with WDK USDT for Tether Hackathon
+  suiPoolStateId: null,
+};
+
+const initialTxState: TransactionState = {
+  txStatus: 'idle',
+  actionLoading: false,
+  showDeposit: false,
+  showWithdraw: false,
+  depositAmount: '',
+  withdrawShares: '',
+  suiDepositAmount: '',
+  suiWithdrawShares: '',
+  lastTxHash: null,
+};
+
+function poolReducer(state: CommunityPoolState, action: PoolAction): CommunityPoolState {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_POOL_DATA':
+      return { ...state, poolData: action.payload };
+    case 'SET_USER_POSITION':
+      return { ...state, userPosition: action.payload };
+    case 'SET_AI_RECOMMENDATION':
+      return { ...state, aiRecommendation: action.payload };
+    case 'SET_LEADERBOARD':
+      return { ...state, leaderboard: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
+    case 'SET_SUCCESS':
+      return { ...state, successMessage: action.payload };
+    case 'SET_CHAIN':
+      return { ...state, selectedChain: action.payload };
+    case 'SET_SUI_POOL_STATE_ID':
+      return { ...state, suiPoolStateId: action.payload };
+    case 'RESET_FOR_CHAIN_CHANGE':
+      return {
+        ...initialPoolState,
+        selectedChain: state.selectedChain,
+        loading: true,
+      };
+    default:
+      return state;
+  }
+}
+
+function txReducer(state: TransactionState, action: TxAction): TransactionState {
+  switch (action.type) {
+    case 'SET_TX_STATUS':
+      return { ...state, txStatus: action.payload };
+    case 'SET_ACTION_LOADING':
+      return { ...state, actionLoading: action.payload };
+    case 'SET_SHOW_DEPOSIT':
+      return { ...state, showDeposit: action.payload, showWithdraw: action.payload ? false : state.showWithdraw };
+    case 'SET_SHOW_WITHDRAW':
+      return { ...state, showWithdraw: action.payload, showDeposit: action.payload ? false : state.showDeposit };
+    case 'SET_DEPOSIT_AMOUNT':
+      return { ...state, depositAmount: action.payload };
+    case 'SET_WITHDRAW_SHARES':
+      return { ...state, withdrawShares: action.payload };
+    case 'SET_SUI_DEPOSIT_AMOUNT':
+      return { ...state, suiDepositAmount: action.payload };
+    case 'SET_SUI_WITHDRAW_SHARES':
+      return { ...state, suiWithdrawShares: action.payload };
+    case 'SET_LAST_TX_HASH':
+      return { ...state, lastTxHash: action.payload };
+    case 'RESET_TX_STATE':
+      return initialTxState;
+    default:
+      return state;
+  }
+}
 
 // ============================================================================
 // HOOK
@@ -82,7 +199,7 @@ export function useCommunityPool(propAddress?: string) {
   // Debug: Track transaction state changes (only log when values actually matter)
   useEffect(() => {
     if (txHash || isPending || isConfirming || txState.txStatus !== 'idle') {
-      logger.debug('[TX STATE]', {
+      console.log('[TX STATE]', {
         txHash: txHash ? `${txHash.slice(0, 10)}...` : null,
         isPending,
         isConfirming,
@@ -99,8 +216,6 @@ export function useCommunityPool(propAddress?: string) {
   const suiIsConnected = suiContext?.isConnected ?? false;
   const suiBalance = suiContext?.balance ?? '0';
   const suiExecuteTransaction = suiContext?.executeTransaction;
-  const suiSponsoredExecute = suiContext?.sponsoredExecute;
-  const suiRequestFaucet = suiContext?.requestFaucetTokens;
   const suiNetwork = suiContext?.network ?? 'testnet';
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiSetNetwork = suiContext?.setNetwork;
@@ -112,11 +227,8 @@ export function useCommunityPool(propAddress?: string) {
   // Derived values
   const { selectedChain } = poolState;
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-  const isSuiChain = selectedChain === 'sui';
-  const detectedNetwork: 'testnet' | 'mainnet' = isSuiChain
-    ? (suiNetwork === 'mainnet' ? 'mainnet' : 'testnet')
-    : (chainId ? getNetworkFromChainId(chainId) : 'testnet');
-  const network: 'testnet' | 'mainnet' = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : (isSuiChain ? (suiNetwork === 'mainnet' ? 'mainnet' : 'testnet') : 'testnet');
+  const detectedNetwork = chainId ? getNetworkFromChainId(chainId) : 'testnet';
+  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : 'testnet';
   const USDT_ADDRESS = getUsdtAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
@@ -150,8 +262,8 @@ export function useCommunityPool(propAddress?: string) {
   // Typed data signing hook for EIP-2612 permit
   const { signTypedDataAsync } = useSignTypedData();
   
-  // Account Abstraction (Gasless) support - kept for future use
-  // const { depositWithGasless } = useSmartAccount();
+  // Account Abstraction (Gasless) support
+  const { depositWithGasless } = useSmartAccount();
   
   // Pool total shares (to detect first deposit) - DEPRECATED HOOK, assume non-empty or check lazily
   // const { data: poolTotalShares } = useReadContract({...});
@@ -163,9 +275,10 @@ export function useCommunityPool(propAddress?: string) {
   // Helper to lazily fetch permit details only when needed
   const getPermitDetails = useCallback(async (tokenAddress: string, walletAddress: string, chainId: number) => {
     try {
+      const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
-      const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
       
       const erc20 = new ethers.Contract(tokenAddress, [
         'function nonces(address) view returns (uint256)',
@@ -186,7 +299,7 @@ export function useCommunityPool(propAddress?: string) {
         supported: !!nonce && !!domainSeparator 
       };
     } catch (e) {
-      logger.warn('Failed to fetch permit details', e);
+      console.warn('Failed to fetch permit details', e);
       return { supported: false };
     }
   }, [selectedChain, network]);
@@ -194,15 +307,15 @@ export function useCommunityPool(propAddress?: string) {
   // Helper to lazily fetch allowance
   const getAllowance = useCallback(async (tokenAddress: string, owner: string, spender: string) => {
     try {
+      const { ethers } = await import('ethers');
       const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://sepolia.drpc.org';
-      const targetChainId = getValidChainIds(selectedChain)[0];
-      const provider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
+      const rpcUrl = chainConfig?.rpcUrls[network] || 'https://rpc.sepolia.org';
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
       const erc20 = new ethers.Contract(tokenAddress, ['function allowance(address,address) view returns (uint256)'], provider);
       const allowance = await erc20.allowance(owner, spender);
       return BigInt(allowance);
     } catch (e) { 
-      logger.warn('Failed to fetch allowance', e);
+      console.warn('Failed to fetch allowance', e);
       return BigInt(0); 
     }
   }, [selectedChain, network]);
@@ -299,84 +412,55 @@ export function useCommunityPool(propAddress?: string) {
     
     if (selectedChain === 'sui') {
       const userAddress = suiAddress;  // Only use SUI address for SUI chain
-      // When force=true (after deposit/withdraw), bust both CDN and server caches
-      const cacheBust = force ? `&nocache=1&_t=${Date.now()}` : '';
       try {
-        // Fetch pool summary + allocation + user position (USDC-based from DB)
-        const [poolRes, allocRes, userRes] = await Promise.all([
-          fetch(`/api/sui/community-pool?network=${suiNetwork}${cacheBust}`),
-          fetch(`/api/sui/community-pool?action=allocation&network=${suiNetwork}${cacheBust}`),
-          userAddress ? fetch(`/api/sui/community-pool?action=user-position&wallet=${userAddress}&network=${suiNetwork}${cacheBust}`) : null,
+        const [poolRes, userRes] = await Promise.all([
+          fetch(`/api/sui/community-pool?network=${suiNetwork}`),
+          userAddress ? fetch(`/api/sui/community-pool?user=${userAddress}&network=${suiNetwork}`) : null,
         ]);
         
-        const [poolJson, allocJson, userJson] = await Promise.all([
+        const [poolJson, userJson] = await Promise.all([
           poolRes.json(),
-          allocRes.json(),
           userRes ? userRes.json() : null,
         ]);
         
         if (!mountedRef.current) return;
-        
-        // Parse share price from pool data (available to both pool and user position blocks)
-        const poolSharePrice = (poolJson.success && poolJson.data)
-          ? (parseFloat(poolJson.data.sharePriceUsd) || (
-              (parseFloat(poolJson.data.totalShares) || 0) > 0
-                ? (parseFloat(poolJson.data.totalNAVUsd) || 0) / parseFloat(poolJson.data.totalShares)
-                : 1.0
-            ))
-          : 1.0;
         
         if (poolJson.success) {
           if (poolJson.data.poolStateId) {
             dispatchPool({ type: 'SET_SUI_POOL_STATE_ID', payload: poolJson.data.poolStateId });
           }
           
-          // Use USDC-denominated values (server provides share price)
-          const totalShares = parseFloat(poolJson.data.totalShares) || 0;
-          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || totalShares;
-          
-          // Get allocation from the allocation endpoint
-          const alloc = allocJson?.success ? allocJson.data.allocation : { BTC: 30, ETH: 30, SUI: 25, CRO: 15 };
+          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || 0;
+          const totalNAV = parseFloat(poolJson.data.totalNAV) || 0;
           
           dispatchPool({
             type: 'SET_POOL_DATA',
             payload: {
-              totalShares,
-              totalNAV: totalShares, // In USDC pool, NAV = total shares in USDC
+              totalShares: parseFloat(poolJson.data.totalShares) || 0,
+              totalNAV,
               totalValueUSD,
-              sharePrice: poolSharePrice,
-              sharePriceUSD: poolSharePrice,
+              sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
+              sharePriceUSD: parseFloat(poolJson.data.sharePriceUsd) || 1.0,
               memberCount: poolJson.data.memberCount || 0,
-              allocations: alloc,
+              allocations: { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0 },
               aiLastUpdate: null,
               aiReasoning: null,
             },
           });
         }
         
-        // User position from DB (USDC-denominated, synced with on-chain)
-        if (userJson?.success && userJson.data) {
-          const userData = userJson.data;
-          const shares = Number(userData.shares) || 0;
-          const totalShares = parseFloat(poolJson?.data?.totalShares) || 0;
-          // Prefer server-computed percentage (validated against on-chain), fallback to local calc
-          const percentage = userData.percentage != null
-            ? Number(userData.percentage)
-            : (totalShares > 0 && shares > 0 ? (shares / totalShares) * 100 : 0);
-          
+        if (userJson?.success) {
           dispatchPool({
             type: 'SET_USER_POSITION',
             payload: {
               walletAddress: userAddress || '',
-              shares,
-              valueUSD: Number(userData.valueUsdc) || (shares * poolSharePrice), // server value or compute from share price
-              valueSUI: 0,
-              percentage,
-              isMember: userData.isMember || false,
-              totalDeposited: Number(userData.costBasisUsd) || 0,
-              totalWithdrawn: 0,
-              depositCount: userData.depositCount || 0,
-              withdrawalCount: userData.withdrawalCount || 0,
+              shares: parseFloat(userJson.data.shares) || 0,
+              valueUSD: parseFloat(userJson.data.valueUsd) || 0,
+              valueSUI: parseFloat(userJson.data.valueSui) || 0,
+              percentage: parseFloat(userJson.data.percentage) || 0,
+              isMember: userJson.data.isMember || false,
+              totalDeposited: parseFloat(userJson.data.depositedSui) || 0,
+              totalWithdrawn: parseFloat(userJson.data.withdrawnSui) || 0,
             },
           });
         }
@@ -396,24 +480,11 @@ export function useCommunityPool(propAddress?: string) {
     // EVM chains
     const chainParam = `&chain=${selectedChain}&network=${network}`;
     
-    const fetchWithTimeout = async (url: string, ms = 8000) => {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), ms);
-      try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
-        return response;
-      } catch (error) {
-        clearTimeout(id);
-        throw error;
-      }
-    };
-
     try {
       // Fetch pool and user data first (critical for UI)
       const [poolRes, userRes] = await Promise.all([
-        fetchWithTimeout(`/api/community-pool?${chainParam.substring(1)}`),
-        address ? fetchWithTimeout(`/api/community-pool?user=${address}${chainParam}`) : null,
+        fetch(`/api/community-pool?${chainParam.substring(1)}`),
+        address ? fetch(`/api/community-pool?user=${address}${chainParam}`) : null,
       ]);
       
       const [poolJson, userJson] = await Promise.all([
@@ -669,13 +740,38 @@ export function useCommunityPool(propAddress?: string) {
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'deposit', targetChainId };
       
+      // Chain parameters for adding to wallet
+      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
+        11155111: { // Sepolia
+          chainId: '0xaa36a7',
+          chainName: 'Sepolia',
+          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+          blockExplorerUrls: ['https://sepolia.etherscan.io'],
+          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        },
+        338: { // Cronos Testnet
+          chainId: '0x152',
+          chainName: 'Cronos Testnet',
+          rpcUrls: ['https://evm-t3.cronos.org'],
+          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
+          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
+        },
+        421614: { // Arbitrum Sepolia
+          chainId: '0x66eee',
+          chainName: 'Arbitrum Sepolia',
+          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        },
+      };
+      
       // Use WDK switchChainAsync - this properly syncs state
       logger.info('[CommunityPool] Switching chain (WDK)', { targetChainId });
       
       // Set timeout for user feedback
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'deposit') {
-          logger.debug('[CommunityPool] Switch timeout');
+          console.log('[CommunityPool] Switch timeout');
           dispatchPool({ type: 'SET_ERROR', payload: `Please switch to ${chainConfig?.name} in your wallet, then click Deposit again.` });
           pendingChainSwitchRef.current = null;
         }
@@ -697,9 +793,28 @@ export function useCommunityPool(propAddress?: string) {
         })
         .catch(async (switchError: any) => {
           logger.warn('[CommunityPool] WDK switch failed, trying native', { error: switchError?.message });
+          // Fallback to native API if WDK fails (e.g., chain not in config)
+          const ethereum = (window as any).ethereum;
+          if (!ethereum) {
+            clearTimeout(timeoutId);
+            dispatchPool({ type: 'SET_ERROR', payload: 'No wallet detected.' });
+            return;
+          }
+          
+          const params = chainParams[targetChainId];
+          if (!params) {
+            clearTimeout(timeoutId);
+            dispatchPool({ type: 'SET_ERROR', payload: `Chain ${targetChainId} not supported` });
+            return;
+          }
           
           try {
-            await switchChainNative(targetChainId);
+            logger.info('[CommunityPool] Falling back to native API');
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: params.chainId }],
+            });
+            
             logger.info('[CommunityPool] Native switch success');
             clearTimeout(timeoutId);
             skipChainCheckRef.current = true;
@@ -713,12 +828,32 @@ export function useCommunityPool(propAddress?: string) {
             }, 1000);
           } catch (nativeError: any) {
             logger.error('[CommunityPool] Native switch failed', { code: nativeError?.code, message: nativeError?.message });
-            clearTimeout(timeoutId);
-            pendingChainSwitchRef.current = null;
-            if (nativeError?.code === 4001 || nativeError?.message?.includes('rejected')) {
+            if (nativeError?.code === 4902) {
+              // Chain not added - try to add it
+              try {
+                await ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [params],
+                });
+                logger.info('[CommunityPool] Chain added');
+                clearTimeout(timeoutId);
+                skipChainCheckRef.current = true;
+                pendingChainSwitchRef.current = null;
+                dispatchPool({ type: 'SET_ERROR', payload: null });
+                setTimeout(() => handleDeposit(), 1000);
+              } catch (addError: any) {
+                clearTimeout(timeoutId);
+                pendingChainSwitchRef.current = null;
+                dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet manually.` });
+              }
+            } else if (nativeError?.code === 4001) {
+              clearTimeout(timeoutId);
+              pendingChainSwitchRef.current = null;
               dispatchPool({ type: 'SET_ERROR', payload: 'Chain switch rejected. Please switch manually.' });
             } else {
-              dispatchPool({ type: 'SET_ERROR', payload: nativeError?.message || `Please add ${chainConfig?.name} to your wallet manually.` });
+              clearTimeout(timeoutId);
+              pendingChainSwitchRef.current = null;
+              dispatchPool({ type: 'SET_ERROR', payload: nativeError?.message || 'Chain switch failed' });
             }
           }
         });
@@ -732,7 +867,7 @@ export function useCommunityPool(propAddress?: string) {
     
     // Get the target chain ID for this deposit (use selected chain, not WDK's stale value)
     const targetChainId = validChainIds[0];
-    logger.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
+    console.error('🔴🔴🔴 DEPOSIT - Proceeding with deposit', { 
       amount, 
       targetChainId, 
       wdkChainId: chainId, 
@@ -743,83 +878,67 @@ export function useCommunityPool(propAddress?: string) {
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     
-    const amountInUnits = parseUnits(amount.toString(), 6);
+    // =========================================
+    // TRY GASLESS (AA) FLOW
+    // =========================================
+    // Sepolia supports AA/Gasless. Try this first if available to save gas (USDT paid).
+    if (validChainIds.includes(11155111)) {
+        console.log('Attempting Gasless (Account Abstraction) flow...');
+        try {
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // Reusing status for signing
+            const tx = await depositWithGasless(amount.toString());
+            
+            console.log('Gasless Deposit Success:', tx);
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' }); // Show depositing spinner
+            
+            // Wait a bit for indexing/propagation (simplified for now)
+            await new Promise(r => setTimeout(r, 5000));
+            
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+            dispatchPool({ type: 'SET_SUCCESS', payload: `Gasless Deposit Submitted! Tx: ${tx.slice(0,10)}...` });
+            dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
+            dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+            
+            // Refresh
+            setTimeout(() => {
+                fetchPoolData(true);
+                dispatchPool({ type: 'SET_SUCCESS', payload: null });
+                dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+            }, 3000);
+            return;
+            
+        } catch (err: any) {
+            console.warn('Gasless flow failed/skipped:', err.message);
+            // Only fall back if it wasn't a user rejection or if it's explicitly "Not a smart account"
+            if (err.message?.includes('User rejected')) {
+                 dispatchPool({ type: 'SET_ERROR', payload: 'Transaction cancelled' });
+                 dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+                 dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+                 return;
+            }
+            
+            // If failed because not a smart account, fall back to EOA flow
+            // Otherwise, show error?
+            // For now, let's assume we fall back to EOA flow for robustness.
+            console.log('Falling back to standard EOA deposit...');
+            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' }); // Reset for standard flow
+        }
+    }
     
-    // Single shared provider — staticNetwork skips eth_chainId auto-detection on every call
-    const rpcUrl = chainConfig.rpcUrls[network] || 'https://sepolia.drpc.org';
-    const txProvider = new ethers.JsonRpcProvider(rpcUrl, targetChainId, { staticNetwork: true });
-
     // =========================================
-    // RECOVERY CHECK: Recover any orphaned USDT from interrupted deposits
+    // CHECK & FUND GAS FOR WDK EOA WALLETS
     // =========================================
+    // WDK wallets may have USDT but no ETH for gas. Request server-side gas funding if needed.
     try {
-      const recoverResp = await fetch('/api/community-pool/deposit-usdt?action=recover-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, chainId: targetChainId }),
-      });
-      const recoverResult = await recoverResp.json();
-      if (recoverResult.recovered) {
-        logger.info('[CommunityPool] Recovered orphaned USDT from previous failed deposit', {
-          amount: recoverResult.orphanedAmount,
-          txHash: recoverResult.refundTxHash,
-        });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Recovered ${recoverResult.orphanedAmount} USDT from a previous interrupted deposit. You can now retry.` });
-      }
-    } catch {
-      // Non-fatal — recovery is best-effort
-    }
-
-    // =========================================
-    // PARALLEL STEP: Balance + Oracle + Gas + Permit details (all independent)
-    // =========================================
-    // Fire all checks simultaneously instead of sequentially
-    const usdt = new ethers.Contract(USDT_ADDRESS, ['function balanceOf(address) view returns (uint256)'], txProvider);
-    
-    const [balanceResult, gasResult, oracleResult, permitResult] = await Promise.allSettled([
-      // Balance check
-      usdt.balanceOf(address),
-      // Gas balance check
-      txProvider.getBalance(address as string),
-      // Oracle price update (fire early, non-blocking for deposit)
-      fetch('/api/community-pool/deposit-usdt?action=update-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chainId: targetChainId }),
-      }).then(r => r.json()).catch(() => ({ success: false })),
-      // Permit details
-      getPermitDetails(USDT_ADDRESS, address, targetChainId),
-    ]);
-    
-    // Check USDT balance (fail fast)
-    if (balanceResult.status === 'fulfilled') {
-      const usdtBalance = balanceResult.value;
-      logger.info('[CommunityPool] USDT balance check', { balance: usdtBalance.toString(), needed: amountInUnits.toString() });
-      if (BigInt(usdtBalance) < BigInt(amountInUnits)) {
-        const balFormatted = (Number(usdtBalance) / 1e6).toFixed(2);
-        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDT balance. You have ${balFormatted} USDT but need ${amount} USDT.` });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        return;
-      }
-    }
-    
-    // Log oracle result (non-fatal)
-    if (oracleResult.status === 'fulfilled' && oracleResult.value?.success) {
-      logger.info('[CommunityPool] Oracle prices updated', { txHash: oracleResult.value.txHash });
-    } else {
-      logger.info('[CommunityPool] Oracle update skipped or failed (non-fatal)');
-    }
-    
-    // =========================================
-    // GAS FUNDING (only if needed)
-    // =========================================
-    try {
-      const ethBalance = gasResult.status === 'fulfilled' ? gasResult.value : await txProvider.getBalance(address as string);
+      const rpcUrl = chainConfig.rpcUrls[network];
+      const gasCheckProvider = new ethers.JsonRpcProvider(rpcUrl);
+      const ethBalance = await gasCheckProvider.getBalance(address as string);
       const minGas = ethers.parseEther('0.001');
       
       if (ethBalance < minGas) {
-        logger.info('[CommunityPool] Insufficient ETH for gas, requesting funding...', { balance: ethers.formatEther(ethBalance) });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // "Preparing..."
+        logger.info('[CommunityPool] Insufficient ETH, requesting gas funding...');
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' }); // reuse status for "preparing"
         
         const fundResp = await fetch('/api/community-pool/deposit-usdt?action=fund-gas', {
           method: 'POST',
@@ -841,56 +960,41 @@ export function useCommunityPool(propAddress?: string) {
         }
         
         if (fundResult.funded && fundResult.txHash) {
-          logger.info('[CommunityPool] Gas funded, waiting for confirmation...', { txHash: fundResult.txHash });
-          // Wait until the ETH actually appears in the wallet (poll up to 5s)
-          for (let i = 0; i < 10; i++) {
-            await new Promise(r => setTimeout(r, 500));
-            const newBalance = await txProvider.getBalance(address as string);
-            if (newBalance >= minGas) {
-              logger.info('[CommunityPool] Gas funding confirmed in wallet', { balance: ethers.formatEther(newBalance) });
-              break;
-            }
-          }
+          logger.info('[CommunityPool] Gas funded', { txHash: fundResult.txHash });
+          // Brief wait for balance to propagate
+          await new Promise(r => setTimeout(r, 2000));
         } else {
-          logger.info('[CommunityPool] Gas already sufficient', { message: fundResult.message });
+          logger.info('[CommunityPool] Gas already funded', { message: fundResult.message });
         }
       }
     } catch (fundErr: any) {
-      logger.warn('[CommunityPool] Gas funding check failed, proceeding anyway', { error: fundErr.message });
+      console.warn('Gas funding check failed, proceeding anyway:', fundErr.message);
     }
     
     // =========================================
-    // STEP 2: TRY PROXY DEPOSIT VIA PERMIT (Privacy-preserving!)
+    // TRY EIP-2612 PERMIT FLOW (Single TX!)
     // =========================================
-    // User signs a permit granting the server wallet USDT allowance.
-    // Server relays deposit through a proxy wallet address so the
-    // user's real address never appears on-chain as a pool member.
-    // Falls back to direct deposit if proxy flow fails.
-    let permitAttempted = false;
-    
-    // Server relayer wallet address (deposits on behalf of proxy)
-    // NOTE: This is ALWAYS the same testnet server wallet until mainnet launch
-    // After mainnet, this should be read from env: process.env.NEXT_PUBLIC_SERVER_WALLET_ADDRESS
-    const SERVER_WALLET = (process.env.NEXT_PUBLIC_SERVER_WALLET_ADDRESS || '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c') as `0x${string}`;
-    
-    // Use permit details from parallel fetch above
-    const permitDetails = permitResult.status === 'fulfilled' ? permitResult.value : { supported: false };
-    logger.info('[CommunityPool] Permit details', { supported: permitDetails.supported, hasNonce: !!permitDetails.nonce, hasName: !!permitDetails.name });
+    // Fetch permit details ON CLICK - no eager loading!
+    let permitDetails: { supported: boolean; nonce?: bigint; name?: string; domainSeparator?: string } = { supported: false, nonce: BigInt(0), name: '', domainSeparator: '' };
+    try {
+      permitDetails = await getPermitDetails(USDT_ADDRESS, address, targetChainId);
+    } catch (e) {
+      console.warn('Failed to fetch permit details', e);
+    }
 
     const { supported: permitSupported, nonce: permitNonce, name: tokenName, domainSeparator: domainSep } = permitDetails;
 
     if (permitSupported && permitNonce !== undefined && tokenName && signTypedDataAsync && domainSep) {
-      logger.info('[CommunityPool] Using proxy deposit via permit (privacy mode)');
-      permitAttempted = true;
+      logger.info('[CommunityPool] Using EIP-2612 Permit flow');
       
       try {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'signing_permit' });
         
-        const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
+        const amountInUnits = parseUnits(amount.toString(), 6);
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
         const nonce = BigInt(permitNonce.toString());
         
-        // EIP-712 Permit typed data — spender is SERVER WALLET (not pool!)
-        // Server will transfer USDT from user, then depositFor(proxy, amount)
+        // EIP-712 Permit typed data
         const domain = {
           name: tokenName as string,
           version: '1',
@@ -910,13 +1014,13 @@ export function useCommunityPool(propAddress?: string) {
         
         const message = {
           owner: address as `0x${string}`,
-          spender: SERVER_WALLET,
+          spender: COMMUNITY_POOL_ADDRESS as `0x${string}`,
           value: amountInUnits,
           nonce: nonce,
           deadline: deadline,
         };
         
-        logger.info('[CommunityPool] Requesting permit signature for proxy deposit...');
+        logger.debug('[CommunityPool] Signing permit', { domain, message });
         
         // Sign the permit (gasless - just a signature!)
         const signature = await signTypedDataAsync({
@@ -928,103 +1032,90 @@ export function useCommunityPool(propAddress?: string) {
 
         if (!signature) throw new Error('Failed to obtain signature');
 
-        logger.info('[CommunityPool] Permit signature obtained, sending to proxy deposit API...');
+        logger.debug('[CommunityPool] Signature obtained');
         
         // Parse signature into v, r, s
         const r = signature.slice(0, 66) as `0x${string}`;
         const s = ('0x' + signature.slice(66, 130)) as `0x${string}`;
         const v = parseInt(signature.slice(130, 132), 16);
         
+        logger.info('[CommunityPool] Executing depositWithPermit');
+        
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
         
-        // Call proxy deposit API — server handles everything
-        const proxyResp = await fetch('/api/community-pool/deposit-usdt?action=deposit-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: address,
-            chainId: targetChainId,
-            amount: amount,
-            permit: {
-              deadline: deadline.toString(),
-              v,
-              r,
-              s,
-            },
-          }),
+        // Call depositWithPermit - single transaction using async/await!
+        const permitDepositTxHash = await writeContractAsync({
+          chainId: targetChainId,
+          address: COMMUNITY_POOL_ADDRESS,
+          abi: [{
+            name: 'depositWithPermit',
+            type: 'function',
+            inputs: [
+              { name: 'amount', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+              { name: 'v', type: 'uint8' },
+              { name: 'r', type: 'bytes32' },
+              { name: 's', type: 'bytes32' },
+            ],
+            outputs: [{ type: 'uint256' }],
+            stateMutability: 'nonpayable',
+          }],
+          functionName: 'depositWithPermit',
+          args: [amountInUnits, deadline, v, r, s],
         });
         
-        const proxyResult = await proxyResp.json();
-        
-        if (!proxyResp.ok || !proxyResult.success) {
-          throw new Error(proxyResult.error || 'Proxy deposit failed');
+        logger.info('[CommunityPool] Permit tx submitted', { txHash: permitDepositTxHash });
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(permitDepositTxHash, 1, 60000);
         }
-        
-        logger.info('[CommunityPool] Proxy deposit confirmed!', { 
-          txHash: proxyResult.txHash, 
-          proxyAddress: proxyResult.proxyAddress,
-        });
+        logger.info('[CommunityPool] Permit deposit confirmed');
         
         // SUCCESS!
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: proxyResult.txHash });
-        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful via treasury proxy! Your real address is protected. Tx: ${proxyResult.txHash.slice(0, 10)}...` });
+        dispatchTx({ type: 'SET_LAST_TX_HASH', payload: permitDepositTxHash });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposit successful (gasless)! Tx: ${permitDepositTxHash.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         
         // Refresh pool data
         fetchPoolData(true);
-        return; // Done!
+        return; // Done with permit flow
         
       } catch (permitError: any) {
+        // If it's an insufficient funds error, don't bother falling back — the wallet has no gas
         const code = permitError?.code || permitError?.info?.error?.code;
         const msg = permitError?.shortMessage || permitError?.message || '';
-        
-        // User rejected — stop entirely
-        if (code === 4001 || msg.includes('User rejected') || msg.includes('user rejected') || msg.includes('denied')) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'Transaction cancelled by user.' });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          return;
-        }
-        
-        // Insufficient ETH — stop with helpful message
         if (code === 'INSUFFICIENT_FUNDS' || msg.includes('insufficient funds')) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet.' });
+          dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet (e.g. Google Cloud faucet or Alchemy faucet).' });
           dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
           dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
           return;
         }
-        
-        logger.warn('[CommunityPool] Permit flow failed, falling back to approve+deposit', { error: msg });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' }); // Reset for fallback
+        logger.warn('[CommunityPool] Permit flow failed, falling back', { error: msg });
+        // Fall through to regular approve+deposit flow
       }
-    } else {
-      logger.info('[CommunityPool] Permit not available, using approve+deposit', {
-        supported: permitSupported,
-        hasNonce: permitNonce !== undefined,
-        hasName: !!tokenName,
-        hasSigner: !!signTypedDataAsync,
-        hasDomainSep: !!domainSep,
-      });
     }
     
     // =========================================
-    // STEP 3: FALLBACK - Approve + Deposit (2 TXs)
+    // FALLBACK: Regular Approve + Deposit (2 TXs)
+    // Using async/await for reliable sequencing
     // =========================================
     logger.info('[CommunityPool] Using standard Approve+Deposit flow');
     
     try {
-      // Refetch current allowance
+      // Refetch current allowance interactively (lazy)
       const currentAllowance = await getAllowance(USDT_ADDRESS, address, COMMUNITY_POOL_ADDRESS);
       const allowance = BigInt(currentAllowance.toString());
-      logger.info('[CommunityPool] Current allowance', { allowance: allowance.toString(), needed: amountInUnits.toString() });
+      const amountInUnits = parseUnits(amount.toString(), 6);
+      logger.info(`[Deposit] Allowance: ${allowance.toString()}, needed: ${amountInUnits.toString()}`);
       
-      // STEP 3a: Reset allowance if needed (USDT non-standard requirement)
-      if (allowance > BigInt(0) && allowance < BigInt(amountInUnits)) {
-        logger.info('[CommunityPool] Resetting USDT allowance to 0 first');
+      // STEP 1: Reset allowance if needed (USDT non-standard requirement)
+      if (allowance > BigInt(0) && allowance < amountInUnits) {
+        logger.info('[CommunityPool] USDT: Resetting allowance to 0 first', { currentAllowance: allowance.toString() });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'resetting_approval' });
+        logger.info('[CommunityPool] Step 1: Resetting allowance');
         
         const resetTxHash = await writeContractAsync({
           chainId: targetChainId,
@@ -1035,14 +1126,17 @@ export function useCommunityPool(propAddress?: string) {
         });
         
         logger.info('[CommunityPool] Reset tx submitted', { txHash: resetTxHash });
-        await txProvider.waitForTransaction(resetTxHash, 1, 90000);
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(resetTxHash, 1, 60000);
+        }
         logger.info('[CommunityPool] Reset confirmed');
       }
       
-      // STEP 3b: Approve the deposit amount
-      if (allowance < BigInt(amountInUnits)) {
+      // STEP 2: Approve the deposit amount (only if needed)
+      if (allowance < amountInUnits) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'approving' });
-        logger.info('[CommunityPool] Approving USDT spend', { amount: amountInUnits.toString() });
+        logger.info('[CommunityPool] Step 2: Approving tokens', { amount: amountInUnits.toString() });
         
         const approveTxHash = await writeContractAsync({
           chainId: targetChainId,
@@ -1054,22 +1148,18 @@ export function useCommunityPool(propAddress?: string) {
         
         logger.info('[CommunityPool] Approve tx submitted', { txHash: approveTxHash });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'approved' });
-        await txProvider.waitForTransaction(approveTxHash, 1, 90000);
-        logger.info('[CommunityPool] Approve confirmed');
-        
-        // Verify allowance was actually set (belt and suspenders)
-        const verifiedAllowance = await getAllowance(USDT_ADDRESS, address, COMMUNITY_POOL_ADDRESS);
-        logger.info('[CommunityPool] Verified allowance after approve', { allowance: verifiedAllowance.toString() });
-        if (BigInt(verifiedAllowance.toString()) < BigInt(amountInUnits)) {
-          throw new Error(`Approval succeeded but allowance is still insufficient (${verifiedAllowance.toString()}). Please try again.`);
+        {
+          const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+          await provider.waitForTransaction(approveTxHash, 1, 60000);
         }
+        logger.info('[CommunityPool] Approve confirmed');
       } else {
-         logger.info('[CommunityPool] Allowance already sufficient, skipping approve');
+         logger.info('[CommunityPool] Step 2 Skipped: Allowance sufficient', { allowance: allowance.toString() });
       }
       
-      // STEP 3c: Deposit to pool
+      // STEP 3: Deposit to pool
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
-      logger.info('[CommunityPool] Depositing tokens', { amount: amountInUnits.toString() });
+      logger.info('[CommunityPool] Step 3: Depositing tokens');
       
       const depositTxHash = await writeContractAsync({
         chainId: targetChainId,
@@ -1080,8 +1170,11 @@ export function useCommunityPool(propAddress?: string) {
       });
       
       logger.info('[CommunityPool] Deposit tx submitted', { txHash: depositTxHash });
-      await txProvider.waitForTransaction(depositTxHash, 1, 90000);
-      logger.info('[CommunityPool] Deposit confirmed!');
+      {
+        const provider = new ethers.JsonRpcProvider(chainConfig.rpcUrls[network]);
+        await provider.waitForTransaction(depositTxHash, 1, 60000);
+      }
+      logger.info('[CommunityPool] Deposit confirmed');
       
       // SUCCESS!
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
@@ -1094,19 +1187,15 @@ export function useCommunityPool(propAddress?: string) {
       fetchPoolData(true);
       
     } catch (err: any) {
-      logger.error('[CommunityPool] Deposit failed:', err);
-      pendingDepositAmountRef.current = '';
+      console.error('🔴🔴🔴 DEPOSIT - Error:', err);
+      pendingDepositAmountRef.current = ''; // Clear on error
+      // Detect insufficient ETH for gas and show helpful message
       const code = err?.code || err?.info?.error?.code;
       const msg = err?.shortMessage || err?.message || '';
-      
-      if (code === 4001 || msg.includes('User rejected') || msg.includes('user rejected') || msg.includes('denied')) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction cancelled by user.' });
-      } else if (code === 'INSUFFICIENT_FUNDS' || msg.includes('insufficient funds')) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet.' });
-      } else if (msg.includes('execution reverted')) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction reverted on-chain. The contract rejected the deposit. Please check your USDT balance and try again.' });
+      if (code === 'INSUFFICIENT_FUNDS' || msg.includes('insufficient funds')) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Insufficient ETH for gas. Please get Sepolia ETH from a faucet (e.g. Google Cloud faucet or Alchemy faucet).' });
       } else {
-        dispatchPool({ type: 'SET_ERROR', payload: msg || 'Deposit failed. Please try again.' });
+        dispatchPool({ type: 'SET_ERROR', payload: msg });
       }
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     } finally {
@@ -1132,27 +1221,88 @@ export function useCommunityPool(propAddress?: string) {
     const validChainIds = getValidChainIds(selectedChain);
     if (!validChainIds.includes(chainId as number)) {
       const targetChainId = validChainIds[0];
-      logger.debug(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
+      console.log(`[CommunityPool] Withdraw chain mismatch - wallet chainId: ${chainId}, target: ${targetChainId}`);
       dispatchPool({ type: 'SET_ERROR', payload: `Switching to ${chainConfig?.name}...` });
       pendingChainSwitchRef.current = { action: 'withdraw', targetChainId };
+      
+      // Chain parameters for adding to wallet (same as deposit)
+      const chainParams: Record<number, { chainId: string; chainName: string; rpcUrls: string[]; blockExplorerUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number } }> = {
+        11155111: { // Sepolia
+          chainId: '0xaa36a7',
+          chainName: 'Sepolia',
+          rpcUrls: ['https://sepolia.drpc.org', 'https://rpc.sepolia.org'],
+          blockExplorerUrls: ['https://sepolia.etherscan.io'],
+          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        },
+        338: { // Cronos Testnet
+          chainId: '0x152',
+          chainName: 'Cronos Testnet',
+          rpcUrls: ['https://evm-t3.cronos.org'],
+          blockExplorerUrls: ['https://explorer.cronos.org/testnet'],
+          nativeCurrency: { name: 'Test Cronos', symbol: 'tCRO', decimals: 18 },
+        },
+        421614: { // Arbitrum Sepolia
+          chainId: '0x66eee',
+          chainName: 'Arbitrum Sepolia',
+          rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+          blockExplorerUrls: ['https://sepolia.arbiscan.io'],
+          nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        },
+      };
+      
+      // Try to add and switch chain using native wallet API
+      const addAndSwitchChain = async () => {
+        const ethereum = (window as any).ethereum;
+        if (!ethereum) {
+          throw new Error('No wallet detected');
+        }
+        
+        const params = chainParams[targetChainId];
+        if (!params) {
+          throw new Error(`Chain ${targetChainId} not configured`);
+        }
+        
+        try {
+          // First try to just switch (chain might already be added)
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: params.chainId }],
+          });
+        } catch (switchError: any) {
+          // 4902 = Chain not added, try to add it
+          if (switchError.code === 4902) {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [params],
+            });
+            // After adding, switch to it
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: params.chainId }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      };
       
       // Set a timeout to show manual switch message if wallet doesn't respond
       const timeoutId = setTimeout(() => {
         if (pendingChainSwitchRef.current?.action === 'withdraw') {
-          logger.debug('[CommunityPool] Switch timeout - showing manual message');
+          console.log('[CommunityPool] Switch timeout - showing manual message');
           dispatchPool({ type: 'SET_ERROR', payload: `Please add ${chainConfig?.name} to your wallet and switch to it, then click Withdraw again.` });
           pendingChainSwitchRef.current = null;
         }
       }, 15000);
       
-      logger.debug('[CommunityPool] Switching chain for withdraw...');
-      switchChainNative(targetChainId)
+      console.log('[CommunityPool] Adding and switching chain for withdraw...');
+      addAndSwitchChain()
         .then(() => {
-          logger.debug('[CommunityPool] Chain switch successful for withdraw!');
+          console.log('[CommunityPool] Chain switch successful for withdraw!');
           clearTimeout(timeoutId);
         })
         .catch((err: any) => {
-          logger.error('[CommunityPool] Chain switch failed:', err);
+          console.error('[CommunityPool] Chain switch failed:', err);
           clearTimeout(timeoutId);
           pendingChainSwitchRef.current = null;
           if (err?.code === 4001 || err?.message?.includes('rejected')) {
@@ -1188,8 +1338,7 @@ export function useCommunityPool(propAddress?: string) {
     }
   }, [isConnected, address, txState.withdrawShares, selectedChain, chainId, chainConfig, network, poolDeployed, writeContract, COMMUNITY_POOL_ADDRESS]);
   
-  // SUI handlers - On-chain USDC deposit via wallet signing
-  // Both mainnet and testnet use community_pool_usdc::deposit with Coin<USDC>, 6 decimals
+  // SUI handlers - Accept USDC (USD) and convert to SUI for deposit
   const handleSuiDeposit = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
     
@@ -1203,32 +1352,15 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    const depositAmount = parseFloat(txState.suiDepositAmount);
-    if (isNaN(depositAmount) || depositAmount <= 0) {
+    const usdAmount = parseFloat(txState.suiDepositAmount);
+    if (isNaN(usdAmount) || usdAmount <= 0) {
       dispatchPool({ type: 'SET_ERROR', payload: 'Invalid deposit amount' });
       return;
     }
-
-    if (depositAmount < 10) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10 USDC' });
-      return;
-    }
-
-    const isMainnet = suiNetwork === 'mainnet';
-
-    // USDC contract config — both networks use community_pool_usdc module
-    const packageId = (isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '')).trim();
-    const poolStateId = (isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '')).trim();
-    const usdcCoinType = isMainnet
-      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
-      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
     
-    if (!packageId || !poolStateId) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
+    // Minimum deposit: $10 USDC
+    if (usdAmount < 10) {
+      dispatchPool({ type: 'SET_ERROR', payload: 'Minimum deposit is $10 USDC' });
       return;
     }
     
@@ -1236,137 +1368,81 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      const rpcUrl = isMainnet
-        ? 'https://fullnode.mainnet.sui.io:443'
-        : 'https://fullnode.testnet.sui.io:443';
+      // Step 1: Get current SUI price (fresh from Crypto.com) and calculate SUI amount
+      const priceRes = await fetch('/api/prices?symbols=SUI&source=exchange');
+      const priceData = await priceRes.json();
+      // API returns { success, data: [{ symbol, price, ... }] }
+      const suiPriceEntry = priceData?.data?.find((p: { symbol: string }) => p.symbol === 'SUI');
+      const suiPrice = suiPriceEntry?.price || 3.50; // fallback price
+      const suiAmount = usdAmount / suiPrice;
       
-      // Check SUI gas balance
-      const gasBalRes = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1,
-          method: 'suix_getBalance',
-          params: [suiAddress, '0x2::sui::SUI'],
-        }),
-      });
-      const gasBalJson = await gasBalRes.json();
-      const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
+      logger.info(`[SUI Deposit] Fresh price: $${suiPrice}, converting $${usdAmount} → ${suiAmount.toFixed(6)} SUI`);
       
-      const needsSponsoring = suiGasBalance < BigInt(10_000_000);
-      if (needsSponsoring) {
-        if (!isMainnet && suiRequestFaucet) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
-          const faucetRes = await suiRequestFaucet();
-          if (!faucetRes.success) {
-            dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
-            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-            return;
-          }
-          dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
-          await new Promise(r => setTimeout(r, 3000));
-          dispatchPool({ type: 'SET_ERROR', payload: null });
-        } else if (!isMainnet || !suiSponsoredExecute) {
-          const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
-          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-        // On mainnet with sponsoring available — continue, will use sponsored execute below
-      }
-      
-      const amountMicroUsdc = Math.round(depositAmount * 1_000_000);
-      
-      // Fetch USDC coins
-      const usdcCoinsRes = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 2,
-          method: 'suix_getCoins',
-          params: [suiAddress, usdcCoinType, null, 50],
-        }),
-      });
-      const coinsJson = await usdcCoinsRes.json();
-      const coins: Array<{ coinObjectId: string; balance: string }> = coinsJson.result?.data || [];
-      
-      if (coins.length === 0) {
-        dispatchPool({ type: 'SET_ERROR', payload: 'No USDC found in your wallet. You need USDC on SUI to deposit.' });
+      // Check if user has enough SUI (including 0.1 reserve for gas)
+      const userSuiBalance = parseFloat(suiBalance);
+      if (userSuiBalance < suiAmount + 0.1) {
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI. Need ${(suiAmount + 0.1).toFixed(4)} SUI (${suiAmount.toFixed(4)} + gas). You have ${suiBalance} SUI.` });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
-      const totalBalance = coins.reduce((sum, c) => sum + BigInt(c.balance), BigInt(0));
-      if (totalBalance < BigInt(amountMicroUsdc)) {
-        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDC. You have ${(Number(totalBalance) / 1e6).toFixed(2)} USDC.` });
+      // Step 2: Get transaction params from API
+      const res = await fetch(`/api/sui/community-pool?action=deposit&network=${suiNetwork}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: BigInt(Math.floor(suiAmount * 1e9)).toString() }),
+      });
+      
+      const json = await res.json();
+      if (!json.success) {
+        dispatchPool({ type: 'SET_ERROR', payload: json.error });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
+      const { target, poolStateId, amountMist, clockId } = json.data;
+      
+      if (!poolStateId) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
+        return;
+      }
+      
+      // Step 2: Build transaction using @mysten/sui/transactions
       const { Transaction } = await import('@mysten/sui/transactions');
       const tx = new Transaction();
-      const primaryCoinRef = tx.object(coins[0].coinObjectId);
-      if (coins.length > 1) {
-        tx.mergeCoins(primaryCoinRef, coins.slice(1).map(c => tx.object(c.coinObjectId)));
-      }
-      const [depositCoin] = tx.splitCoins(primaryCoinRef, [amountMicroUsdc]);
       
+      // Split SUI for the deposit amount
+      const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
+      
+      // Call the deposit function: deposit(state, payment, clock)
       tx.moveCall({
-        target: `${packageId}::community_pool_usdc::deposit`,
-        typeArguments: [usdcCoinType],
+        target,
         arguments: [
           tx.object(poolStateId),
           depositCoin,
-          tx.object('0x6'),
+          tx.object(clockId),
         ],
       });
       
-      // Use sponsored execute (admin pays gas) when user has insufficient SUI on mainnet
-      const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
-        ? suiSponsoredExecute
-        : suiExecuteTransaction;
-      const result = await executeFn(tx) as { digest: string; success: boolean; error?: string };
+      // Step 3: Execute transaction
+      const result = await suiExecuteTransaction(tx);
       
-      if (!result.success) {
-        const errDetail = result.error || 'Transaction rejected or failed';
-        dispatchPool({ type: 'SET_ERROR', payload: `${errDetail}. Please try again.` });
-        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-        return;
+      if (result.success) {
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! Tx: ${result.digest.slice(0, 10)}...` });
+        dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
+        dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+        
+        // Refresh pool data after a short delay
+        setTimeout(() => {
+          fetchPoolData(true);
+          dispatchPool({ type: 'SET_SUCCESS', payload: null });
+        }, 3000);
+      } else {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
       }
-      
-      const recordRes = await fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: suiAddress,
-          amountUsdc: depositAmount,
-          allocations: { BTC: 30, ETH: 30, SUI: 25, CRO: 15 },
-          txDigest: result.digest,
-        }),
-      });
-      const recordJson = await recordRes.json();
-      
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
-      const sharesMsg = recordJson.success && recordJson.data
-        ? `${recordJson.data.sharesMinted} shares minted`
-        : 'shares minted on-chain';
-      dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${depositAmount.toFixed(2)} USDC! ${sharesMsg}. TX: ${result.digest.slice(0, 12)}...` });
-
-      dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
-      dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
-      
-      // Force-refresh pool data after deposit (with cache-bust)
-      fetchPoolData(true);
-      setTimeout(() => {
-        fetchPoolData(true);
-        dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 5000);
     } catch (err: any) {
       logger.error('SUI deposit error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Deposit failed' });
@@ -1374,7 +1450,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, suiSponsoredExecute, txState.suiDepositAmount, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiDepositAmount, suiNetwork, suiBalance, fetchPoolData]);
   
   const handleSuiWithdraw = useCallback(async () => {
     dispatchPool({ type: 'SET_ERROR', payload: null });
@@ -1395,135 +1471,69 @@ export function useCommunityPool(propAddress?: string) {
       return;
     }
     
-    const userAvailableShares = poolState.userPosition?.shares || 0;
-    if (shares > userAvailableShares) {
-      dispatchPool({ type: 'SET_ERROR', payload: `Insufficient shares. You have ${userAvailableShares.toFixed(2)} shares.` });
-      return;
-    }
-
-    const isMainnet = suiNetwork === 'mainnet';
-
-    // Both networks use USDC pool — shares use 6 decimals (matching USDC)
-    const sharesOnChain = Math.round(shares * 1_000_000);
-    
-    const packageId = (isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_PACKAGE_ID || '')).trim();
-    const poolStateId = (isMainnet
-      ? (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE || '')
-      : (process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE_TESTNET || process.env.NEXT_PUBLIC_SUI_USDC_POOL_STATE || '0x9f77819f91d75833f86259025068da493bb1c7215ed84f39d5ad0f5bc1b40971')).trim();
-    const usdcCoinType = isMainnet
-      ? '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
-      : '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC';
-    
-    if (!packageId || !poolStateId) {
-      dispatchPool({ type: 'SET_ERROR', payload: 'Pool contract not configured. Please try again later.' });
-      return;
-    }
+    // Calculate estimated USD value
+    const sharePrice = Number(poolState.poolData?.sharePriceUSD || poolState.poolData?.sharePrice) || 1;
+    const estimatedUsd = shares * sharePrice;
     
     dispatchTx({ type: 'SET_ACTION_LOADING', payload: true });
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
-      const rpcUrl = isMainnet
-        ? 'https://fullnode.mainnet.sui.io:443'
-        : 'https://fullnode.testnet.sui.io:443';
-      
-      // Check SUI gas balance
-      const gasBalRes = await fetch(rpcUrl, {
+      // Step 1: Get transaction params from API
+      const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1,
-          method: 'suix_getBalance',
-          params: [suiAddress, '0x2::sui::SUI'],
-        }),
-      });
-      const gasBalJson = await gasBalRes.json();
-      const suiGasBalance = BigInt(gasBalJson.result?.totalBalance || '0');
-      
-      const needsSponsoring = suiGasBalance < BigInt(10_000_000);
-      if (needsSponsoring) {
-        if (!isMainnet && suiRequestFaucet) {
-          dispatchPool({ type: 'SET_ERROR', payload: 'No SUI for gas fees. Requesting testnet SUI from faucet...' });
-          const faucetRes = await suiRequestFaucet();
-          if (!faucetRes.success) {
-            dispatchPool({ type: 'SET_ERROR', payload: `No SUI for gas fees. Faucet failed: ${faucetRes.message}. Visit https://faucet.testnet.sui.io` });
-            dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-            dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-            return;
-          }
-          dispatchPool({ type: 'SET_ERROR', payload: 'Faucet SUI requested! Waiting for it to arrive...' });
-          await new Promise(r => setTimeout(r, 3000));
-          dispatchPool({ type: 'SET_ERROR', payload: null });
-        } else if (!isMainnet || !suiSponsoredExecute) {
-          const currentSui = (Number(suiGasBalance) / 1e9).toFixed(4);
-          dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas (have ${currentSui} SUI, need ~0.01). Send a small amount of SUI to this wallet for transaction fees.` });
-          dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
-          dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
-          return;
-        }
-      }
-      
-      const { Transaction } = await import('@mysten/sui/transactions');
-      const tx = new Transaction();
-      
-      // Both networks use community_pool_usdc::withdraw
-      tx.moveCall({
-        target: `${packageId}::community_pool_usdc::withdraw`,
-        typeArguments: [usdcCoinType],
-        arguments: [
-          tx.object(poolStateId),
-          tx.pure.u64(sharesOnChain as number),
-          tx.object('0x6'),
-        ],
+        body: JSON.stringify({ shares: BigInt(Math.floor(shares * 1e9)).toString() }),
       });
       
-      // Use sponsored execute (admin pays gas) when user has insufficient SUI on mainnet
-      const executeFn = (needsSponsoring && isMainnet && suiSponsoredExecute)
-        ? suiSponsoredExecute
-        : suiExecuteTransaction;
-      const result = await executeFn(tx) as { digest: string; success: boolean; error?: string };
-      
-      if (!result.success) {
-        const errDetail = result.error || 'Transaction rejected or failed';
-        dispatchPool({ type: 'SET_ERROR', payload: `${errDetail}. Please try again.` });
+      const json = await res.json();
+      if (!json.success) {
+        dispatchPool({ type: 'SET_ERROR', payload: json.error });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
       
-      // Record withdrawal in backend DB
-      try {
-        const recordRes = await fetch(`/api/sui/community-pool?action=record-withdraw&network=${suiNetwork}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: suiAddress,
-            sharesToBurn: shares,
-            txDigest: result.digest,
-          }),
-        });
-        if (!recordRes.ok) {
-          logger.warn('Failed to record withdrawal in DB', { status: recordRes.status });
-        }
-      } catch (recordErr) {
-        logger.warn('Withdrawal DB record failed (on-chain tx succeeded)', { error: recordErr });
+      const { target, poolStateId, sharesScaled, clockId } = json.data;
+      
+      if (!poolStateId) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
       }
       
-      dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
-      dispatchTx({ type: 'SET_LAST_TX_HASH', payload: result.digest });
-      const withdrawLabel = `~$${shares.toFixed(2)} USDC`;
-      dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ${withdrawLabel}! TX: ${result.digest.slice(0, 12)}...` });
-      dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
-      dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
+      // Step 2: Build transaction using @mysten/sui/transactions
+      const { Transaction } = await import('@mysten/sui/transactions');
+      const tx = new Transaction();
       
-      // Force-refresh pool data after withdrawal (with cache-bust)
-      fetchPoolData(true);
-      setTimeout(() => {
-        fetchPoolData(true);
-        dispatchPool({ type: 'SET_SUCCESS', payload: null });
-      }, 5000);
+      // Call the withdraw function: withdraw(state, shares_to_burn, clock)
+      tx.moveCall({
+        target,
+        arguments: [
+          tx.object(poolStateId),
+          tx.pure.u64(sharesScaled),
+          tx.object(clockId),
+        ],
+      });
+      
+      // Step 3: Execute transaction
+      const result = await suiExecuteTransaction(tx);
+      
+      if (result.success) {
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
+        dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USD! Tx: ${result.digest.slice(0, 10)}...` });
+        dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
+        dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
+        
+        // Refresh pool data after a short delay
+        setTimeout(() => {
+          fetchPoolData(true);
+          dispatchPool({ type: 'SET_SUCCESS', payload: null });
+        }, 3000);
+      } else {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
+      }
     } catch (err: any) {
       logger.error('SUI withdraw error', err);
       dispatchPool({ type: 'SET_ERROR', payload: err.message || 'Withdrawal failed' });
@@ -1531,7 +1541,7 @@ export function useCommunityPool(propAddress?: string) {
       dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
       dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
     }
-  }, [suiIsConnected, suiAddress, suiExecuteTransaction, suiSponsoredExecute, txState.suiWithdrawShares, suiNetwork, fetchPoolData]);
+  }, [suiIsConnected, suiAddress, suiExecuteTransaction, txState.suiWithdrawShares, suiNetwork, poolState.poolData, fetchPoolData]);
   
   // ============================================================================
   // AUTO-EXECUTE AFTER CHAIN SWITCH
@@ -1673,7 +1683,6 @@ export function useCommunityPool(propAddress?: string) {
     
     // Transaction state (memoized)
     ...txValues,
-    txHash,
     isPending,
     isConfirming,
     isConfirmed,
@@ -1711,7 +1720,6 @@ export function useCommunityPool(propAddress?: string) {
   }), [
     poolValues,
     txValues,
-    txHash,
     isPending,
     isConfirming,
     isConfirmed,

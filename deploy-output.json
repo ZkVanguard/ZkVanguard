@@ -1,0 +1,720 @@
+﻿sui : [NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem 
+are automatically added, but this feature is disabled for your package because 
+you have explicitly included dependencies on Sui. Consider removing these 
+dependencies from `Move.toml`.
+At line:1 char:72
++ ... racts\sui"; sui client publish --gas-budget 500000000 --json 2>&1 | O ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([NOTE] Dependen...om `Move.toml`. 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING zkvanguard
+{
+  "digest": "36AfAeurX1HMBdA4AkojgADRcREYSW3CJfBrdQjRhVLR",
+  "transaction": {
+    "data": {
+      "messageVersion": "v1",
+      "transaction": {
+        "kind": "ProgrammableTransaction",
+        "inputs": [
+          {
+            "type": "pure",
+            "valueType": "address",
+            "value": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+          }
+        ],
+        "transactions": [
+          {
+            "Publish": [
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "0x0000000000000000000000000000000000000000000000000000000000000002"
+            ]
+          },
+          {
+            "TransferObjects": [
+              [
+                {
+                  "Result": 0
+                }
+              ],
+              {
+                "Input": 0
+              }
+            ]
+          }
+        ]
+      },
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "gasData": {
+        "payment": [
+          {
+            "objectId": "0x24ed2fb79ef7bd542ed62553bc5cec2d0e9dd1f0c09666f2a9d68f8c1d184e2a",
+            "version": 849288629,
+            "digest": "FHNG4q5DVH6UoXddq22BnJys9Mq1bZs769aZNiDRDHFB"
+          }
+        ],
+        "owner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+        "price": "556",
+        "budget": "500000000"
+      }
+    },
+    "txSignatures": [
+      "AD9kcnNZ7de8l8X7FS26jGXA2oXzIQT6SZ9r6QYWHxcXA7XU42iKY52h99xUmS9+NCEc6qR2vIwNbbiehc6u/wy79oDu5p08hetkr8fM094g8nV7WrckxzoQmam0asyp8w=="
+    ]
+  },
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "1102",
+    "gasUsed": {
+      "computationCost": "2246240",
+      "storageCost": "496272400",
+      "storageRebate": "978120",
+      "nonRefundableStorageFee": "9880"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0x24ed2fb79ef7bd542ed62553bc5cec2d0e9dd1f0c09666f2a9d68f8c1d184e2a",
+        "sequenceNumber": "849288629"
+      }
+    ],
+    "transactionDigest": "36AfAeurX1HMBdA4AkojgADRcREYSW3CJfBrdQjRhVLR",
+    "created": [
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0x0069eb191cb71ed05cebcd41ddfa8ca0075b09d0ab7d6393db82e4b87db59ff6",
+          "version": 849288630,
+          "digest": "5Y3CdEadryTGuKFNzdMds6usaJ66qL2PRBmVFXE7BZsk"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x02e3d65942d79ecf656226fdc43c2c5a3f6d5741cd1224108aa31788ccc17a49",
+          "version": 849288630,
+          "digest": "7o7gGJAfxipQP6rVnpUWzpfh4MFpu1yvenjgLjN8yXiJ"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x03aa81ae087977475241f2ec9315a74f46d2c450a8728fabeb9d7475a5e690d1",
+          "version": 849288630,
+          "digest": "C5PFaXVeEnKrCzbVGUWXLgeJBR1TxcE7RZzNFZVPBdbx"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x07f9ed25c7608f4622275b198ed6aee8c3c50831e53a7f59f1b039ede1da363d",
+          "version": 849288630,
+          "digest": "A5Chq7DAgxEMbjTb1iXxuao1NZSXYHdqauVHAhdWANgG"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0x0f7f5fcc91329613e1beb2e5ddd19130ecca9e5e1f62bb6b9a697a6c38492317",
+          "version": 849288630,
+          "digest": "7R8MNJaXmKdxnf6unmw9qoiGaaaitUzvJ5KGto7VwrTa"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x198756a5590b4b7dc5eb98c83f697b7fc1e1a86d457bcb423f14f80c5f507514",
+          "version": 849288630,
+          "digest": "3j7wDx97BvxDpZxRwTvPNjCRyRh9DAB4XRwM9bn1arnk"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x37fb56cd7bc35c2024fa8dfd0abea5c31117c5a27db8905070a9105d3a82f394",
+          "version": 849288630,
+          "digest": "CfuJaA3FXrYFDNE2nTwJz6KMWvvWuH1849yg2YDS9vJ7"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x3c94b93496b6b19f4271db1a8a82e46efb001e7bd9b01188bd9004488d23558a",
+          "version": 849288630,
+          "digest": "D7Vq1nHzyrhpjH4CTitTHEAEY5VFh7RKyqHic4m13K43"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x47507aa9a0b0c235828d4a92a0ad2e776ecaef69e9022bf07faf82c3cc195e48",
+          "version": 849288630,
+          "digest": "4YrL8mU5g9BD8FmQdCo4hFQFXqgtJKKJp8eVygMrmMrP"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0x4f24fb8cd262d26287f255b2e6bc2e5f5d3896bf3e2dcc600dbb8bf2f0b2a2e2",
+          "version": 849288630,
+          "digest": "CeYeTNwhQHQWm5P9jsXdMeFwYdLrp6et36TXn4dMGMMY"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x5662e49deff249dd483a42557806bd4d1038f22d8d6d7f157e423b3e1c93db8d",
+          "version": 849288630,
+          "digest": "EjxjRBrtRPARGqme1MbFTZrrHmgQSF52KMKNzyFSGUDD"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0x61bca875e638bc4fee3fa6fe22a7a75ff24151ea134e393b6733f067d1ca549e",
+          "version": 849288630,
+          "digest": "GpwhtxoP8b1ns8Vhcwx8WKv2JMeRREcFzBPxEZCRZFi1"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x69ebe73e2006e01d78e205f9682dd79fe75e59cd9523957c941bc678bf2f4840",
+          "version": 849288630,
+          "digest": "CQorrK73cDq47kCsSecQ1qSx3hktbEkd3ZkcJCb9p4iJ"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x73655fc5cce0a1dae871f374459be1af33494fa5b316aea7a11254d835b79bc2",
+          "version": 849288630,
+          "digest": "2BtZiXDsdaMr1sswhH9YHboMWW7TvzhCaYpgWMuSzZaR"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0x7d9ec576d41fe1389a4ff2c4d53b79c61958c7a585e34f61ea7ea5f78c54be45",
+          "version": 849288630,
+          "digest": "5LprZDStVTHWBVnfVM9Q9FvgPXxRXPuf4nCDp6oYZjGe"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x80e302851e57df73ca17dfe965a58a14d432c0b7394c6fa4d78039fbcda52542",
+          "version": 849288630,
+          "digest": "E4bJp6X3HHcnMcGaHk9YM5MhhTLCeKz4avMcSsN8m3HF"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78",
+          "version": 849288630,
+          "digest": "FhhYwx5sEG74A1XK419wMh7HsNf5BsXdLJeF7jikJ9VX"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2",
+          "version": 1,
+          "digest": "EmjjFXjn3RAAM9DCwZKX1eVuzKxkekBWibkjM4k9q9Eq"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xa44d8b3c42a462de7abaf2f7db13d8d384f2a2c331f9d40ae5621f62877e722b",
+          "version": 849288630,
+          "digest": "Abi71xLonFvSLGWUGPuRi1zdhPgVFWDVi8aK5ABTcNLz"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0xae616029368ebfd976c5c0fe27073fe52a9880bba28dcc95f9f88ac05e92623d",
+          "version": 849288630,
+          "digest": "5b1VDv37fUNXm2cUMKTSZcKyFFo853AaouAnvHe3zVRY"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xb2736fe7ab2940f648397439bbc8773cf50b35db32b143c0dfaef2b6772d51e2",
+          "version": 849288630,
+          "digest": "3vdnjdjss4gqSLSxKPKHEPpyJnM7aoKPN86TXLXjQ3Nc"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 849288630
+          }
+        },
+        "reference": {
+          "objectId": "0xcd689d195362a566d85c94de27c025665c3ebb59a4bb5058f519de3c2faad71e",
+          "version": 849288630,
+          "digest": "b9whwLRQ8yvGsu2ttuc8GsiUqxM24JHcYBgsZy2Px7G"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xed370be05eda97b379d5fc3e6f6f5b67b87d01a6f624179eb00b0e12f32916f4",
+          "version": 849288630,
+          "digest": "4YXSD7TmBaGoW7pWvP4Ez5A52hY1njXVPhuNpLG8DihF"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xf1b0425073f68527495f8e530b8e55899518d9b040e3b6be377a25e1291a63a2",
+          "version": 849288630,
+          "digest": "mwep6EU7xW5ASozPLLjpfybsyUT2X7DkA5Q1KNa95Xv"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xf9314add0f1279b940b82854b08ce9f3b5cc7c72b99c3e3d0483d3ed4890f76a",
+          "version": 849288630,
+          "digest": "E4g1rbo5HWfnVKP5dLF5n68ePm1nsHTVcx1FhaHbXjm8"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0xff6aef3c3de665e3d7d69a2a4e61a3182000cb3ac799ba36ca1f20aaf3368c8d",
+          "version": 849288630,
+          "digest": "CQyvGXzK5omyH4kWLMMiAdEGzF4vEEVK21S4uqE6WoMr"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+        },
+        "reference": {
+          "objectId": "0x24ed2fb79ef7bd542ed62553bc5cec2d0e9dd1f0c09666f2a9d68f8c1d184e2a",
+          "version": 849288630,
+          "digest": "3cgWHDsXHxiFHbfqY5TYDGCMY6zWFRJwSsanUg4rB95g"
+        }
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "reference": {
+        "objectId": "0x24ed2fb79ef7bd542ed62553bc5cec2d0e9dd1f0c09666f2a9d68f8c1d184e2a",
+        "version": 849288630,
+        "digest": "3cgWHDsXHxiFHbfqY5TYDGCMY6zWFRJwSsanUg4rB95g"
+      }
+    },
+    "dependencies": [
+      "5ByVi4LGfRVZTbB7MtZCD2HhK8396psY8yadgkvDdKMW",
+      "CjHc5qn61FW2K2tZQcKYQsHYLyWnWxgNwqrUrjodWv5i"
+    ]
+  },
+  "objectChanges": [
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::bluefin_bridge::BluefinBridgeState",
+      "objectId": "0x0069eb191cb71ed05cebcd41ddfa8ca0075b09d0ab7d6393db82e4b87db59ff6",
+      "version": "849288630",
+      "digest": "5Y3CdEadryTGuKFNzdMds6usaJ66qL2PRBmVFXE7BZsk"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_hedge_commitment::RelayerCap",
+      "objectId": "0x02e3d65942d79ecf656226fdc43c2c5a3f6d5741cd1224108aa31788ccc17a49",
+      "version": "849288630",
+      "digest": "7o7gGJAfxipQP6rVnpUWzpfh4MFpu1yvenjgLjN8yXiJ"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool_usdc::FeeManagerCap",
+      "objectId": "0x03aa81ae087977475241f2ec9315a74f46d2c450a8728fabeb9d7475a5e690d1",
+      "version": "849288630",
+      "digest": "C5PFaXVeEnKrCzbVGUWXLgeJBR1TxcE7RZzNFZVPBdbx"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_proxy_vault::UpgraderCap",
+      "objectId": "0x07f9ed25c7608f4622275b198ed6aee8c3c50831e53a7f59f1b039ede1da363d",
+      "version": "849288630",
+      "digest": "A5Chq7DAgxEMbjTb1iXxuao1NZSXYHdqauVHAhdWANgG"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_verifier::ZKVerifierState",
+      "objectId": "0x0f7f5fcc91329613e1beb2e5ddd19130ecca9e5e1f62bb6b9a697a6c38492317",
+      "version": "849288630",
+      "digest": "7R8MNJaXmKdxnf6unmw9qoiGaaaitUzvJ5KGto7VwrTa"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::rwa_manager::AdminCap",
+      "objectId": "0x198756a5590b4b7dc5eb98c83f697b7fc1e1a86d457bcb423f14f80c5f507514",
+      "version": "849288630",
+      "digest": "3j7wDx97BvxDpZxRwTvPNjCRyRh9DAB4XRwM9bn1arnk"
+    },
+    {
+      "type": "mutated",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0x24ed2fb79ef7bd542ed62553bc5cec2d0e9dd1f0c09666f2a9d68f8c1d184e2a",
+      "version": "849288630",
+      "previousVersion": "849288629",
+      "digest": "3cgWHDsXHxiFHbfqY5TYDGCMY6zWFRJwSsanUg4rB95g"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::hedge_executor::AdminCap",
+      "objectId": "0x37fb56cd7bc35c2024fa8dfd0abea5c31117c5a27db8905070a9105d3a82f394",
+      "version": "849288630",
+      "digest": "CfuJaA3FXrYFDNE2nTwJz6KMWvvWuH1849yg2YDS9vJ7"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_proxy_vault::AdminCap",
+      "objectId": "0x3c94b93496b6b19f4271db1a8a82e46efb001e7bd9b01188bd9004488d23558a",
+      "version": "849288630",
+      "digest": "D7Vq1nHzyrhpjH4CTitTHEAEY5VFh7RKyqHic4m13K43"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_hedge_commitment::AdminCap",
+      "objectId": "0x47507aa9a0b0c235828d4a92a0ad2e776ecaef69e9022bf07faf82c3cc195e48",
+      "version": "849288630",
+      "digest": "4YrL8mU5g9BD8FmQdCo4hFQFXqgtJKKJp8eVygMrmMrP"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::payment_router::PaymentRouterState",
+      "objectId": "0x4f24fb8cd262d26287f255b2e6bc2e5f5d3896bf3e2dcc600dbb8bf2f0b2a2e2",
+      "version": "849288630",
+      "digest": "CeYeTNwhQHQWm5P9jsXdMeFwYdLrp6et36TXn4dMGMMY"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::bluefin_bridge::AdminCap",
+      "objectId": "0x5662e49deff249dd483a42557806bd4d1038f22d8d6d7f157e423b3e1c93db8d",
+      "version": "849288630",
+      "digest": "EjxjRBrtRPARGqme1MbFTZrrHmgQSF52KMKNzyFSGUDD"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_hedge_commitment::ZKHedgeCommitmentState",
+      "objectId": "0x61bca875e638bc4fee3fa6fe22a7a75ff24151ea134e393b6733f067d1ca549e",
+      "version": "849288630",
+      "digest": "GpwhtxoP8b1ns8Vhcwx8WKv2JMeRREcFzBPxEZCRZFi1"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_proxy_vault::GuardianCap",
+      "objectId": "0x69ebe73e2006e01d78e205f9682dd79fe75e59cd9523957c941bc678bf2f4840",
+      "version": "849288630",
+      "digest": "CQorrK73cDq47kCsSecQ1qSx3hktbEkd3ZkcJCb9p4iJ"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool_timelock::TimelockAdminCap",
+      "objectId": "0x73655fc5cce0a1dae871f374459be1af33494fa5b316aea7a11254d835b79bc2",
+      "version": "849288630",
+      "digest": "2BtZiXDsdaMr1sswhH9YHboMWW7TvzhCaYpgWMuSzZaR"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::hedge_executor::HedgeExecutorState",
+      "objectId": "0x7d9ec576d41fe1389a4ff2c4d53b79c61958c7a585e34f61ea7ea5f78c54be45",
+      "version": "849288630",
+      "digest": "5LprZDStVTHWBVnfVM9Q9FvgPXxRXPuf4nCDp6oYZjGe"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_verifier::AdminCap",
+      "objectId": "0x80e302851e57df73ca17dfe965a58a14d432c0b7394c6fa4d78039fbcda52542",
+      "version": "849288630",
+      "digest": "E4bJp6X3HHcnMcGaHk9YM5MhhTLCeKz4avMcSsN8m3HF"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool_usdc::AdminCap",
+      "objectId": "0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78",
+      "version": "849288630",
+      "digest": "FhhYwx5sEG74A1XK419wMh7HsNf5BsXdLJeF7jikJ9VX"
+    },
+    {
+      "type": "published",
+      "packageId": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2",
+      "version": "1",
+      "digest": "EmjjFXjn3RAAM9DCwZKX1eVuzKxkekBWibkjM4k9q9Eq",
+      "modules": [
+        "bluefin_bridge",
+        "community_pool",
+        "community_pool_timelock",
+        "community_pool_usdc",
+        "hedge_executor",
+        "payment_router",
+        "rwa_manager",
+        "zk_hedge_commitment",
+        "zk_proxy_vault",
+        "zk_verifier"
+      ]
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool_usdc::RebalancerCap",
+      "objectId": "0xa44d8b3c42a462de7abaf2f7db13d8d384f2a2c331f9d40ae5621f62877e722b",
+      "version": "849288630",
+      "digest": "Abi71xLonFvSLGWUGPuRi1zdhPgVFWDVi8aK5ABTcNLz"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::rwa_manager::RWAManagerState",
+      "objectId": "0xae616029368ebfd976c5c0fe27073fe52a9880bba28dcc95f9f88ac05e92623d",
+      "version": "849288630",
+      "digest": "5b1VDv37fUNXm2cUMKTSZcKyFFo853AaouAnvHe3zVRY"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool::FeeManagerCap",
+      "objectId": "0xb2736fe7ab2940f648397439bbc8773cf50b35db32b143c0dfaef2b6772d51e2",
+      "version": "849288630",
+      "digest": "3vdnjdjss4gqSLSxKPKHEPpyJnM7aoKPN86TXLXjQ3Nc"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 849288630
+        }
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::zk_proxy_vault::ZKProxyVaultState",
+      "objectId": "0xcd689d195362a566d85c94de27c025665c3ebb59a4bb5058f519de3c2faad71e",
+      "version": "849288630",
+      "digest": "b9whwLRQ8yvGsu2ttuc8GsiUqxM24JHcYBgsZy2Px7G"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool::AdminCap",
+      "objectId": "0xed370be05eda97b379d5fc3e6f6f5b67b87d01a6f624179eb00b0e12f32916f4",
+      "version": "849288630",
+      "digest": "4YXSD7TmBaGoW7pWvP4Ez5A52hY1njXVPhuNpLG8DihF"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x2::package::UpgradeCap",
+      "objectId": "0xf1b0425073f68527495f8e530b8e55899518d9b040e3b6be377a25e1291a63a2",
+      "version": "849288630",
+      "digest": "mwep6EU7xW5ASozPLLjpfybsyUT2X7DkA5Q1KNa95Xv"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::payment_router::AdminCap",
+      "objectId": "0xf9314add0f1279b940b82854b08ce9f3b5cc7c72b99c3e3d0483d3ed4890f76a",
+      "version": "849288630",
+      "digest": "E4g1rbo5HWfnVKP5dLF5n68ePm1nsHTVcx1FhaHbXjm8"
+    },
+    {
+      "type": "created",
+      "sender": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93",
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "objectType": "0x8f2534a77f1f0baf8c2bc44cf1cc5ada72ffd6be515f54f8f073dc434e1a3ca2::community_pool::RebalancerCap",
+      "objectId": "0xff6aef3c3de665e3d7d69a2a4e61a3182000cb3ac799ba36ca1f20aaf3368c8d",
+      "version": "849288630",
+      "digest": "CQyvGXzK5omyH4kWLMMiAdEGzF4vEEVK21S4uqE6WoMr"
+    }
+  ],
+  "balanceChanges": [
+    {
+      "owner": {
+        "AddressOwner": "0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93"
+      },
+      "coinType": "0x2::sui::SUI",
+      "amount": "-497540520"
+    }
+  ],
+  "timestampMs": "1776600702600",
+  "checkpoint": "266735853"
+}

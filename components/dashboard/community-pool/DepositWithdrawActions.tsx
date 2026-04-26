@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { PoolSummary, UserPosition, ChainKey, TxStatus } from './types';
 import { getDepositTokenInfo } from '@/lib/contracts/community-pool-config';
 import { WdkWalletConnect } from '@/components/WdkWalletConnect';
+import { OldPoolWithdraw } from './OldPoolWithdraw';
 
 interface DepositWithdrawActionsProps {
   selectedChain: ChainKey;
@@ -116,7 +117,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               <div className="flex items-center gap-2">
                 <span className="text-2xl">💵</span>
                 <h4 className="font-semibold text-gray-900 dark:text-white">SUI USDC Pool</h4>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC → 4-Asset AI</span>
+                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC → 3-Asset AI</span>
               </div>
               <a
                 href={`${chainConfig?.blockExplorer?.[network] || `https://suiscan.xyz/${network}`}/object/${suiPoolStateId || communityPoolAddress}`}
@@ -138,7 +139,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </div>
             ) : (
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                Connect a SUI wallet to deposit USDC and earn from AI-managed 4-asset allocation.
+                Connect a SUI wallet to deposit USDC and earn from AI-managed 3-asset allocation.
               </p>
             )}
           </div>
@@ -261,6 +262,9 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Old Pool Recovery */}
+          <OldPoolWithdraw />
         </div>
       </div>
     );

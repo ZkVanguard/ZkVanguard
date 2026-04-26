@@ -2,42 +2,11 @@
   "framework": "nextjs",
   "regions": ["sin1"],
   "installCommand": "npm install --legacy-peer-deps",
+
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",
       "NODE_OPTIONS": "--no-deprecation"
-    }
-  },
-  "functions": {
-    "app/api/prices/route.ts": {
-      "maxDuration": 10
-    },
-    "app/api/chat/route.ts": {
-      "maxDuration": 30
-    },
-    "app/api/agents/**/route.ts": {
-      "maxDuration": 30
-    },
-    "app/api/portfolio/**/route.ts": {
-      "maxDuration": 15
-    },
-    "app/api/zk-proof/**/route.ts": {
-      "maxDuration": 60
-    },
-    "app/api/zk/**/route.ts": {
-      "maxDuration": 30
-    },
-    "app/api/rpc/**/route.ts": {
-      "maxDuration": 15
-    },
-    "app/api/cron/**/route.ts": {
-      "maxDuration": 60
-    },
-    "app/api/community-pool/**/route.ts": {
-      "maxDuration": 30
-    },
-    "app/api/health/route.ts": {
-      "maxDuration": 10
     }
   },
   "headers": [
@@ -57,48 +26,6 @@
           "value": "Content-Type, Authorization, X-Wallet-Address, X-Wallet-Signature, X-Wallet-Message"
         }
       ]
-    },
-    {
-      "source": "/api/prices(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, s-maxage=5, stale-while-revalidate=10"
-        }
-      ]
-    },
-    {
-      "source": "/api/market-data(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, s-maxage=10, stale-while-revalidate=30"
-        }
-      ]
-    },
-    {
-      "source": "/api/agents/status(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, s-maxage=15, stale-while-revalidate=30"
-        }
-      ]
-    },
-    {
-      "source": "/_next/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/master",
-      "schedule": "0 12 * * *"
     }
   ]
 }

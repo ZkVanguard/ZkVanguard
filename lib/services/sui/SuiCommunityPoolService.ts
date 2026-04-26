@@ -982,11 +982,88 @@ export class SuiUsdcPoolService {
           : (fields.balance?.fields?.value || fields.balance?.value || '0');
         const balanceUsdc = Number(balanceValue) / Math.pow(10, USDC_DECIMALS);
 
-        // Include USDC transferred out for hedging/swapping in total NAV
-        // On-chain hedge_state.total_hedged_value tracks collateral sent to admin
+        // Include USDC transferred out for hedging/swapping in total NAV.
+        // On-chain hedge_state.total_hedged_value tracks collateral sent to admin (at cost basis).
+        // Additionally, estimate the current market value of non-USDC assets held by admin wallet.
+        // This ensures NAV reflects true economic value, not just the recorded collateral.
         const hedgedRaw = fields.hedge_state?.fields?.total_hedged_value || '0';
         const hedgedUsdc = Number(hedgedRaw) / Math.pow(10, USDC_DECIMALS);
-        const totalNAVUsdc = balanceUsdc + hedgedUsdc;
+
+        // Fetch admin wallet asset balances and price them at market rates.
+        // The admin wallet holds pool capital that has been hedged/swapped out
+        // (cost basis tracked in `hedged_value`, but actual market value can differ).
+        //
+        // NAV formula: balance_in_pool + admin_usdc + admin_non_usdc_market_value
+        // We do NOT add `hedged_value` because that is the *cost basis* of funds
+        // already represented by admin's actual on-wallet holdings — adding both
+        // would double-count. `hedged_value` is a record-keeping field only.
+        let adminAssetValueUsdc = 0;
+        let adminUsdcInWallet = 0;
+        let usedAdminBalances = false;
+        try {
+          const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+          if (adminKey) {
+            const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+            const { SuiClient } = await import('@mysten/sui/client');
+            const { MAINNET_COIN_TYPES, ASSET_TO_COIN_KEY, ASSET_DECIMALS } = await import('@/lib/types/bluefin-types');
+            const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+
+            const kp = adminKey.startsWith('suiprivkey')
+              ? Ed25519Keypair.fromSecretKey(adminKey)
+              : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+            const addr = kp.getPublicKey().toSuiAddress();
+            const rpcUrl = this.config.rpcUrl;
+            const tmpClient = new SuiClient({ url: rpcUrl });
+            const allBal = await tmpClient.getAllBalances({ owner: addr });
+            const mds = getMarketDataService();
+
+            for (const bal of allBal) {
+              const raw = Number(bal.totalBalance);
+              if (raw <= 0) continue;
+
+              // Admin USDC is pool capital (received from open_hedge, awaiting swap or close_hedge)
+              if (bal.coinType === MAINNET_COIN_TYPES.USDC) {
+                adminUsdcInWallet += raw / Math.pow(10, USDC_DECIMALS);
+                continue;
+              }
+
+              // SUI is treated as gas reserve only (not pool capital) — but if the AI
+              // allocation includes SUI as an asset, count it. Reserve 1 SUI for gas.
+              if (bal.coinType === '0x2::sui::SUI') {
+                const suiAmt = raw / 1e9;
+                const swappable = Math.max(0, suiAmt - 1.0);
+                if (swappable > 0) {
+                  const sp = await mds.getTokenPrice('SUI').catch(() => ({ price: 0 }));
+                  if (sp.price > 0) adminAssetValueUsdc += swappable * sp.price;
+                }
+                continue;
+              }
+
+              const assetEntry = Object.entries(ASSET_TO_COIN_KEY).find(([, key]) => MAINNET_COIN_TYPES[key] === bal.coinType);
+              if (!assetEntry) continue;
+              const asset = assetEntry[0];
+              const decimals = ASSET_DECIMALS[ASSET_TO_COIN_KEY[asset]] || 8;
+              const amount = raw / Math.pow(10, decimals);
+              const priceData = await mds.getTokenPrice(asset).catch(() => ({ price: 0 }));
+              if (priceData.price > 0) adminAssetValueUsdc += amount * priceData.price;
+            }
+            usedAdminBalances = true;
+            logger.info('[SuiUsdcPool] Admin wallet pool-capital included in NAV', {
+              adminUsdcInWallet: adminUsdcInWallet.toFixed(4),
+              adminAssetValueUsdc: adminAssetValueUsdc.toFixed(4),
+              hedgedRecordedUsdc: hedgedUsdc.toFixed(4),
+            });
+          }
+        } catch (adminErr) {
+          logger.warn('[SuiUsdcPool] Could not read admin wallet for NAV — falling back to recorded hedged value', { error: adminErr });
+        }
+
+        // If we successfully read admin wallet, use real market value (admin USDC + admin assets).
+        // Otherwise fall back to recorded `hedged_value` (cost basis only).
+        const offChainPoolCapital = usedAdminBalances
+          ? (adminUsdcInWallet + adminAssetValueUsdc)
+          : hedgedUsdc;
+        const totalNAVUsdc = balanceUsdc + offChainPoolCapital;
 
         const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
         const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;

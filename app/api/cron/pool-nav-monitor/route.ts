@@ -26,6 +26,7 @@ import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 import { errMsg, errName } from '@/lib/utils/error-handler';
 
+
 export const runtime = 'nodejs';
 
 // Types
@@ -84,19 +85,20 @@ const AUTO_HEDGE_THRESHOLD_PERCENT = 1.5; // Trigger hedge at 1.5%+ loss (lowere
 
 // Pool contract addresses - V3 upgraded 2026-03-12
 const COMMUNITY_POOL_ADDRESS = process.env.NEXT_PUBLIC_COMMUNITY_POOL_PROXY_ADDRESS || '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
-const POOLS = [
+const SUI_POOL_STATE_ID = (process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a').trim();
+const POOLS: Array<{
+  id: string;
+  name: string;
+  address: string;
+  abi: string[];
+  targetAllocations: Record<string, number>;
+}> = [
   {
     id: 'community-pool',
-    name: 'Community Pool',
-    address: COMMUNITY_POOL_ADDRESS, // V3 Proxy from env
-    abi: [
-      'function getPoolStats() view returns (uint256 _totalShares, uint256 _totalNAV, uint256 _memberCount, uint256 _sharePrice, uint256[4] _allocations)',
-      'function poolCreationTime() view returns (uint256)',
-      'function getMemberCount() view returns (uint256)',
-      'function memberList(uint256 index) view returns (address)',
-      'function members(address) view returns (uint256 shares, uint128 depositedUSD, uint64 investedAt, bool active)',
-    ],
-    targetAllocations: { BTC: 35, ETH: 30, SUI: 20, CRO: 15 },
+    name: 'Community Pool (SUI Mainnet)',
+    address: SUI_POOL_STATE_ID,
+    abi: [],
+    targetAllocations: { BTC: 35, ETH: 30, SUI: 35 },
   },
 ];
 
@@ -140,6 +142,62 @@ async function loadStateFromDb(): Promise<void> {
 }
 
 /**
+ * Fetch SUI pool stats directly from SUI mainnet on-chain state
+ */
+async function fetchSuiPoolStats(poolStateId: string): Promise<{
+  totalNAV: number;
+  memberCount: number;
+  sharePrice: number;
+  allocations: Record<string, number>;
+  creationTime: number;
+} | null> {
+  try {
+    // Direct SUI JSON-RPC call (no SDK dependency)
+    const rpcUrl = process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443';
+    const rpcResp = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'sui_getObject',
+        params: [poolStateId.trim(), { showContent: true }],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!rpcResp.ok) throw new Error(`SUI RPC HTTP ${rpcResp.status}`);
+    const rpcJson = await rpcResp.json();
+    if (rpcJson.error) throw new Error(`SUI RPC error: ${JSON.stringify(rpcJson.error)}`);
+    const fields = rpcJson?.result?.data?.content?.fields;
+    if (!fields) throw new Error(`No fields in pool object. Result: ${JSON.stringify(rpcJson?.result).slice(0, 200)}`);
+    const balance = Number(fields.balance ?? 0) / 1e6;
+    const hs = fields.hedge_state?.fields ?? {};
+    const totalHedged = Number(hs.total_hedged_value ?? 0) / 1e6;
+    const totalNAV = balance + totalHedged;
+    const totalShares = Number(fields.total_shares ?? 0);
+    const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
+    const memberCount = Number(fields.member_count ?? 0);
+    return {
+      totalNAV,
+      memberCount,
+      sharePrice,
+      allocations: { BTC: 35, ETH: 30, SUI: 35 },
+      creationTime: Math.floor(Date.now() / 1000) - 86400 * 30,
+    };
+  } catch (error: unknown) {
+    const msg = errMsg(error) || String(error);
+    logger.error('[PoolNAVMonitor] Failed to fetch SUI pool stats:', { error: msg });
+    // Return degraded data so the pool still appears in results
+    return {
+      totalNAV: 0,
+      memberCount: 0,
+      sharePrice: 1,
+      allocations: { BTC: 35, ETH: 30, SUI: 35 },
+      creationTime: Math.floor(Date.now() / 1000) - 86400 * 30,
+      _error: msg,
+    } as any;
+  }
+}
+
+/**
  * Fetch pool stats - uses REAL-TIME calculated NAV from market prices
  * Falls back to on-chain values if real-time calculation fails
  */
@@ -151,66 +209,9 @@ async function fetchPoolStats(pool: typeof POOLS[0]): Promise<{
   creationTime: number;
 } | null> {
   try {
-    // First try to get REAL-TIME NAV from CommunityPoolService (uses live market prices)
-    if (pool.id === 'community-pool') {
-      try {
-        const summary = await getPoolSummary();
-        logger.info(`[PoolNAVMonitor] Got real-time NAV: $${summary.totalValueUSD.toFixed(2)}`);
-        
-        // Convert allocations to percentages
-        const allocations: Record<string, number> = {};
-        for (const [asset, data] of Object.entries(summary.allocations)) {
-          allocations[asset] = data.percentage || 0;
-        }
-        
-        // Estimate creation time from NAV history
-        let creationTime = Math.floor(Date.now() / 1000) - 86400 * 30;
-        try {
-          const history = await getNavHistory(365);
-          if (history && history.length > 0) {
-            creationTime = Math.floor(new Date(history[0].timestamp).getTime() / 1000);
-          }
-        } catch (e) { /* use default */ }
-        
-        return {
-          totalNAV: summary.totalValueUSD,
-          memberCount: summary.totalMembers,
-          sharePrice: summary.sharePrice,
-          allocations,
-          creationTime,
-        };
-      } catch (error) {
-        logger.warn('[PoolNAVMonitor] Real-time NAV failed, falling back to on-chain', { error });
-      }
-    }
-    
-    // Fallback to on-chain values
-    const provider = new ethers.JsonRpcProvider(getCronosRpcUrl());
-    const contract = new ethers.Contract(pool.address, pool.abi, provider);
-    
-    const stats = await contract.getPoolStats();
-    let creationTime: number;
-    
-    try {
-      creationTime = Number(await contract.poolCreationTime());
-    } catch {
-      creationTime = Math.floor(Date.now() / 1000) - 86400 * 30; // Default to 30 days ago
-    }
-    
-    const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
-    const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
-    const memberCount = Number(stats._memberCount);
-    
-    // Parse allocations (BTC, ETH, SUI, CRO in basis points)
-    const allocBps = stats._allocations.map((a: bigint) => Number(a));
-    const allocations: Record<string, number> = {
-      BTC: allocBps[0] / 100,
-      ETH: allocBps[1] / 100,
-      SUI: allocBps[2] / 100,
-      CRO: allocBps[3] / 100,
-    };
-    
-    return { totalNAV, memberCount, sharePrice, allocations, creationTime };
+    // SUI mainnet pool — read from on-chain state directly
+    // All community pool funds are on SUI mainnet — read directly from chain
+    return await fetchSuiPoolStats(pool.address);
   } catch (error: unknown) {
     logger.error(`[PoolNAVMonitor] Failed to fetch pool stats for ${pool.id}:`, { error: errMsg(error) || String(error) });
     return null;
@@ -263,7 +264,17 @@ async function calculateDrawdown(poolId: string, currentNAV: number): Promise<{ 
   if (!peak) {
     peak = currentNAV;
   }
-  
+
+  // Sanity check: if peak is clearly corrupt (> 1000x current NAV, or pool is empty but peak is huge),
+  // reset it to current NAV to avoid permanent 100% drawdown display
+  if (peak > Math.max(currentNAV * 1000, 100000) || (currentNAV === 0 && peak > 100)) {
+    logger.warn(`[PoolNAVMonitor] Corrupt peakNAV detected for ${poolId}: $${peak.toFixed(2)} vs current $${currentNAV.toFixed(2)} — resetting`);
+    peak = currentNAV;
+    peakNavCache.set(poolId, peak);
+    await setNumber(CronKeys.poolNavPeak(poolId), peak);
+    return { drawdownPercent: 0, peakNAV: peak };
+  }
+
   // Update peak if new high — persist to DB
   if (currentNAV > peak) {
     peakNavCache.set(poolId, currentNAV);
@@ -585,6 +596,10 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
       logger.warn(`[PoolNAVMonitor] Skipping ${pool.id} - unable to fetch stats`);
       continue;
     }
+    const fetchError: string | undefined = (stats as any)._error;
+    if (fetchError) {
+      logger.warn(`[PoolNAVMonitor] ${pool.id} stats degraded: ${fetchError}`);
+    }
     
     const navChange = previousNAV ? stats.totalNAV - previousNAV : 0;
     const navChangePercent = previousNAV ? (navChange / previousNAV) * 100 : 0;
@@ -710,7 +725,8 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
         days: Math.floor(daysActive),
       },
       alerts,
-    };
+      ...(fetchError ? { fetchError } : {}),
+    } as any;
     
     poolMetrics.push(metrics);
     
@@ -780,3 +796,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<PoolMonito
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+// QStash sends POST by default — support both methods
+export const POST = GET;

@@ -58,8 +58,8 @@ module zkvanguard::community_pool_usdc {
     const USDC_UNIT: u64 = 1_000_000; // 1 USDC = 1e6
 
     // Minimums in USDC (6 decimals)
-    const MIN_DEPOSIT: u64 = 10_000_000;         // $10 USDC
-    const MIN_FIRST_DEPOSIT: u64 = 50_000_000;   // $50 USDC
+    const MIN_DEPOSIT: u64 = 500_000;             // $0.50 USDC
+    const MIN_FIRST_DEPOSIT: u64 = 500_000;       // $0.50 USDC
     const MIN_SHARES_FOR_WITHDRAWAL: u64 = 1_000; // 0.001 shares (6 decimals)
 
     // Virtual offset for inflation protection (1 share = 1 USDC)
@@ -72,7 +72,7 @@ module zkvanguard::community_pool_usdc {
     // Reserve and safety limits
     const MIN_RESERVE_RATIO_BPS: u64 = 2000; // 20% must stay liquid
     const MAX_SINGLE_HEDGE_BPS: u64 = 500;   // Max 5% per hedge
-    const DAILY_HEDGE_CAP_BPS: u64 = 1500;   // Max 15% daily hedging
+    const DAILY_HEDGE_CAP_BPS: u64 = 5000;   // Max 50% daily hedging (increased for small pools)
 
     // Circuit breaker defaults
     const DEFAULT_MAX_SINGLE_DEPOSIT: u64 = 1_000_000_000_000; // $1M USDC
@@ -632,8 +632,9 @@ module zkvanguard::community_pool_usdc {
         ((total_assets as u128) * (WAD as u128) / (total_shares as u128)) as u64
     }
 
+    /// Get total NAV = pool balance + hedged value (USDC transferred to admin for external hedges)
     public fun get_total_nav<T>(state: &UsdcPoolState<T>): u64 {
-        balance::value(&state.balance)
+        balance::value(&state.balance) + state.hedge_state.total_hedged_value
     }
 
     public fun calculate_shares_for_deposit<T>(state: &UsdcPoolState<T>, amount: u64): u64 {
@@ -1064,14 +1065,31 @@ module zkvanguard::community_pool_usdc {
         state.hedge_state.active_hedges = vector::empty();
         // Reset counters
         state.hedge_state.total_hedged_value = 0;
-        state.hedge_state.hedged_today = 0;
-        state.hedge_state.last_hedge_reset_day = clock::timestamp_ms(clock) / 86400000;
+        state.hedge_state.daily_hedge_total = 0;
+        state.hedge_state.current_hedge_day = clock::timestamp_ms(clock) / 86400000;
         
-        event::emit(UsdcPoolRebalanced {
+        // Emit pause event to signal state change
+        event::emit(UsdcPoolPaused {
             pool_id: object::id(state),
+            paused: false,
             timestamp: clock::timestamp_ms(clock),
-            allocations: state.asset_allocations,
-            nav_after: balance::value(&state.balance),
+        });
+    }
+
+    /// Reset daily hedge counter without clearing active hedges.
+    /// Useful when daily cap is too restrictive and needs a fresh start.
+    public entry fun admin_reset_daily_hedge<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        clock: &Clock,
+    ) {
+        state.hedge_state.daily_hedge_total = 0;
+        state.hedge_state.current_hedge_day = clock::timestamp_ms(clock) / 86400000;
+        
+        event::emit(UsdcPoolPaused {
+            pool_id: object::id(state),
+            paused: false,
+            timestamp: clock::timestamp_ms(clock),
         });
     }
 

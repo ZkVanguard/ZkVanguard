@@ -14,8 +14,8 @@
  * - Risk cascade detection
  * - Market sentiment integration
  * 
- * On testnet: SUI is swappable, BTC/ETH/CRO are virtual (price-tracked)
- * On mainnet: SUI/BTC/ETH are swappable via BlueFin, CRO hedged via BlueFin perps
+ * On testnet: SUI is swappable, BTC/ETH are virtual (price-tracked)
+ * On mainnet: BTC/ETH/SUI are all swappable via BlueFin DEX aggregator
  */
 
 import { BaseAgent } from '../core/BaseAgent';
@@ -34,7 +34,7 @@ import { AIMarketIntelligence, type AIMarketContext, type EnhancedPrediction } f
 // Types
 // ============================================================================
 
-const POOL_ASSETS: PoolAsset[] = ['BTC', 'ETH', 'SUI', 'CRO'];
+const POOL_ASSETS: PoolAsset[] = ['BTC', 'ETH', 'SUI'];
 
 export interface MarketIndicator {
   asset: PoolAsset;
@@ -181,10 +181,10 @@ export class SuiPoolAgent extends BaseAgent {
 
     // Determine swappability deterministically (avoids 4x unnecessary $10 test quotes)
     // On testnet: nothing is on-chain swappable (all hedged via BlueFin)
-    // On mainnet: BTC/ETH/SUI are swappable, CRO is hedged
-    const swappabilityMap: Record<PoolAsset, boolean> = this.network === 'mainnet'
-      ? { BTC: true, ETH: true, SUI: true, CRO: false }
-      : { BTC: false, ETH: false, SUI: false, CRO: false };
+    // On mainnet: BTC/ETH/SUI are all swappable via BlueFin
+    const swappabilityMap: Partial<Record<PoolAsset, boolean>> = this.network === 'mainnet'
+      ? { BTC: true, ETH: true, SUI: true }
+      : { BTC: false, ETH: false, SUI: false };
 
     // Fetch all market data in parallel
     const marketDataPromises = POOL_ASSETS.map(async (asset) => {
@@ -216,7 +216,7 @@ export class SuiPoolAgent extends BaseAgent {
       if (volume24h * price > 100_000_000) score += 5;
       score = Math.max(0, Math.min(100, score));
 
-      const isSwappable = swappabilityMap[asset] && aggregator.canSwapOnChain(asset);
+      const isSwappable = !!(swappabilityMap[asset] && aggregator.canSwapOnChain(asset));
 
       indicators.push({
         asset, price, change24h, volume24h, volatility, trend, score, isSwappable,
@@ -239,7 +239,7 @@ export class SuiPoolAgent extends BaseAgent {
   /**
    * Generate allocation considering which assets are swappable vs hedged.
    * On testnet: boosts SUI allocation (only swappable), reduces others.
-   * On mainnet: full allocation across BTC/ETH/SUI, CRO hedged.
+   * On mainnet: full allocation across BTC/ETH/SUI — all swappable.
    */
   generateAllocation(
     indicators: MarketIndicator[],
@@ -315,9 +315,9 @@ export class SuiPoolAgent extends BaseAgent {
       const maxDrift = Math.max(
         ...POOL_ASSETS.map(a => Math.abs((allocations[a] || 25) - (currentAllocations[a] || 25)))
       );
-      shouldRebalance = maxDrift > 5;
+      shouldRebalance = maxDrift > 3;
     } else {
-      shouldRebalance = confidence >= 70;
+      shouldRebalance = confidence >= 60;
     }
 
     this.lastDecision = {
@@ -393,25 +393,85 @@ export class SuiPoolAgent extends BaseAgent {
       }
     }
     
-    // 3. Analyze prediction market signals (probability in PredictionMarket is 0-100, not 0-1)
+    // 3. Analyze prediction market signals AND use them to adjust allocations
     const predictionSignals: Array<{ market: string; signal: string; probability: number }> = [];
-    for (const pred of context.predictions.slice(0, 5)) {
+    let bullishSignals = 0;
+    let bearishSignals = 0;
+    let totalSignalWeight = 0;
+    
+    for (const pred of context.predictions.slice(0, 10)) {
       let signal = 'NEUTRAL';
-      if (pred.probability > 70) signal = 'BULLISH';
-      else if (pred.probability < 30) signal = 'BEARISH';
+      if (pred.probability > 65) signal = 'BULLISH';
+      else if (pred.probability < 35) signal = 'BEARISH';
       
       predictionSignals.push({
         market: pred.question.substring(0, 60),
         signal,
         probability: pred.probability,
       });
+      
+      // Weight signals by how far from 50% they are (stronger conviction = more weight)
+      const conviction = Math.abs(pred.probability - 50);
+      if (signal === 'BULLISH') { bullishSignals++; totalSignalWeight += conviction; }
+      if (signal === 'BEARISH') { bearishSignals++; totalSignalWeight += conviction; }
+      
+      // Map prediction signals to asset allocation adjustments
+      const q = pred.question.toLowerCase();
+      const relatedAssets = pred.relatedAssets || [];
+      const assetMatches: PoolAsset[] = [];
+      if (relatedAssets.includes('BTC') || q.includes('bitcoin') || q.includes('btc')) assetMatches.push('BTC');
+      if (relatedAssets.includes('ETH') || q.includes('ethereum') || q.includes('eth')) assetMatches.push('ETH');
+      if (relatedAssets.includes('SUI') || q.includes('sui')) assetMatches.push('SUI');
+      // CRO not in SUI pool — skip CRO signals
+      // General crypto market signals affect BTC and ETH
+      if (assetMatches.length === 0 && (q.includes('crypto') || q.includes('market cap'))) {
+        assetMatches.push('BTC', 'ETH');
+      }
+      
+      // Adjust allocations based on signal strength (±2-5% per strong signal)
+      for (const asset of assetMatches) {
+        const adjustPct = Math.round(conviction / 10); // 0-5% adjustment
+        if (signal === 'BULLISH') {
+          adjustedAllocations[asset] = Math.min(45, (adjustedAllocations[asset] || 25) + adjustPct);
+        } else if (signal === 'BEARISH') {
+          adjustedAllocations[asset] = Math.max(5, (adjustedAllocations[asset] || 25) - adjustPct);
+        }
+      }
+    }
+    
+    // 3b. Use 5-min BTC signal for immediate allocation adjustment
+    if (context.fiveMinSignal) {
+      const sig = context.fiveMinSignal;
+      const direction = (sig as any).direction || (sig as any).signal;
+      const sigConfidence = (sig as any).confidence || 50;
+      if (direction === 'UP' && sigConfidence > 60) {
+        const boost = Math.min(5, Math.round((sigConfidence - 50) / 10));
+        adjustedAllocations['BTC'] = Math.min(45, (adjustedAllocations['BTC'] || 25) + boost);
+        recommendations.push(`5-min BTC signal UP (${sigConfidence}% confidence) - boosting BTC`);
+      } else if (direction === 'DOWN' && sigConfidence > 60) {
+        const reduce = Math.min(5, Math.round((sigConfidence - 50) / 10));
+        adjustedAllocations['BTC'] = Math.max(10, (adjustedAllocations['BTC'] || 25) - reduce);
+        recommendations.push(`5-min BTC signal DOWN (${sigConfidence}% confidence) - reducing BTC`);
+      }
     }
     
     // 4. Calculate overall sentiment from marketSentiment.score (-100 to +100)
+    // Also factor in prediction signal consensus
     let marketSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
     const sentimentScore = context.marketSentiment.score; // -100 to +100
-    if (sentimentScore > 30) marketSentiment = 'BULLISH';
-    else if (sentimentScore < -30) marketSentiment = 'BEARISH';
+    const predictionBias = bullishSignals - bearishSignals; // positive = bullish consensus
+    const combinedScore = sentimentScore + predictionBias * 10;
+    if (combinedScore > 20) marketSentiment = 'BULLISH';
+    else if (combinedScore < -20) marketSentiment = 'BEARISH';
+    
+    // 4b. Sentiment-driven allocation shift
+    if (marketSentiment === 'BULLISH') {
+      adjustedAllocations['BTC'] = Math.min(45, (adjustedAllocations['BTC'] || 25) + 3);
+      adjustedAllocations['ETH'] = Math.min(40, (adjustedAllocations['ETH'] || 25) + 2);
+    } else if (marketSentiment === 'BEARISH') {
+      adjustedAllocations['BTC'] = Math.max(10, (adjustedAllocations['BTC'] || 25) - 3);
+      adjustedAllocations['ETH'] = Math.max(10, (adjustedAllocations['ETH'] || 25) - 2);
+    }
     
     // 5. Determine urgency based on streak and risk
     let urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
@@ -445,12 +505,30 @@ export class SuiPoolAgent extends BaseAgent {
       `Sentiment=${marketSentiment} (${context.marketSentiment.label}). ` +
       `${streakActive ? `Active ${context.streaks.streak5Min.direction} streak (${context.streaks.streak5Min.count} periods).` : 'No active streak.'} ` +
       `${context.riskCascade.detected ? `Risk cascade: ${context.riskCascade.severity}/100.` : ''} ` +
-      `Allocations: BTC=${adjustedAllocations['BTC']}%, ETH=${adjustedAllocations['ETH']}%, SUI=${adjustedAllocations['SUI']}%, CRO=${adjustedAllocations['CRO']}%. ` +
+      `Allocations: BTC=${adjustedAllocations['BTC']}%, ETH=${adjustedAllocations['ETH']}%, SUI=${adjustedAllocations['SUI']}%. ` +
       `Urgency: ${urgency}. ${recommendations.length} recommendations, ${riskAlerts.length} alerts.`;
     
+    // Calculate enhanced confidence that factors in prediction signals
+    // Base confidence (60) + prediction signal conviction + sentiment strength + streak activity
+    let enhancedConfidence = baseDecision.confidence;
+    // Prediction signals add confidence when there's consensus
+    const signalConsensus = Math.abs(bullishSignals - bearishSignals);
+    enhancedConfidence += signalConsensus * 5; // +5 per net consensus signal
+    // Strong conviction signals add confidence
+    if (totalSignalWeight > 0) {
+      enhancedConfidence += Math.min(10, Math.round(totalSignalWeight / 5));
+    }
+    // Market sentiment adds confidence
+    if (Math.abs(sentimentScore) > 20) enhancedConfidence += 5;
+    // Active streaks add confidence
+    if (streakActive) enhancedConfidence += 8;
+    // Risk cascade increases urgency (confidence to act)
+    if (context.riskCascade.detected) enhancedConfidence += 10;
+    enhancedConfidence = Math.max(50, Math.min(95, enhancedConfidence));
+
     return {
       allocations: adjustedAllocations as Record<PoolAsset, number>,
-      confidence: baseDecision.confidence,
+      confidence: enhancedConfidence,
       marketSentiment,
       recommendations,
       riskAlerts,

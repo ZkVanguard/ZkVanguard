@@ -13,6 +13,9 @@ import { BluefinService } from '@/lib/services/sui/BluefinService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const BUILD_TIMESTAMP = new Date().toISOString();
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Allow unauthenticated access - this endpoint only shows status, no secrets
@@ -20,6 +23,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   
   const result: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
+    buildTimestamp: BUILD_TIMESTAMP,
     network,
     envVars: {
       SUI_NETWORK: process.env.SUI_NETWORK ? `${network} (raw: ${process.env.SUI_NETWORK.length} chars)` : 'NOT SET',
@@ -195,5 +199,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     result.bluefinPositions = { error: err instanceof Error ? err.message : String(err) };
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
 }

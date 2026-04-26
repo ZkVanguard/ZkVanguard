@@ -17,9 +17,9 @@ async function main() {
   
   const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
   
-  const PACKAGE_ID = '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab';
-  const POOL_STATE_ID = '0xf7127c7d55131847b702481deb2ebee0c81150f9738d5f679cd7b1a998e620d8';
-  const AGENT_CAP_ID = '0x729b5ba201e12b4abea907b6fe40e13235850230d68c39f34fc7384ea82cb10f';
+  const PACKAGE_ID = '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88';
+  const POOL_STATE_ID = '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a';
+  const AGENT_CAP_ID = '0xdeecf4483ba7729f91c1a4349a5c6b9a5b776981726b1c0136e5cf788889d46d';
   const USDC_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
   
   const tx = new Transaction();
@@ -31,7 +31,7 @@ async function main() {
       tx.object(POOL_STATE_ID),
       tx.pure.bool(true),          // enabled
       tx.pure.u64(500),            // risk_threshold_bps (5%)
-      tx.pure.u64(8000),           // max_hedge_ratio_bps (80%) — allows transferring up to 80% of NAV for swaps
+      tx.pure.u64(5000),           // max_hedge_ratio_bps (50%) — contract max
       tx.pure.u64(2),              // default_leverage (2x min required by contract)
       tx.pure.u64(300000),         // cooldown_ms (5 minutes)
       tx.object('0x6'),            // Clock

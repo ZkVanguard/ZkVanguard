@@ -249,12 +249,12 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         usdt: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29',
       },
       mainnet: {
-        communityPool: '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab',
+        communityPool: '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88',
         usdt: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7',
       },
     },
-    // SUI USDC pool - deposits in USDC, AI-managed 4-asset allocation
-    assets: ['BTC', 'ETH', 'SUI', 'CRO'],
+    // SUI USDC pool - deposits in USDC, AI-managed 3-asset allocation
+    assets: ['BTC', 'ETH', 'SUI'],
     status: 'live',
   },
 };

@@ -36,9 +36,9 @@ const OBJECTS = {
     rebalancerCap: '0x64be330a752e8716af1703c222f8b368c9291c54c6b9a98814de4e6f853e88ed',
   },
   communityPoolUsdc: {
-    adminCap: '0xb329669a572b1ae94bab33bbc9f2b8f5808658c2d3b5d713c49d7afbcd94176b',
-    feeManagerCap: '0xdb8cefdd753131225c018d024ec7ed5fc3553ba13c332ea2d647deff8d34743f',
-    rebalancerCap: '0x183422a2aa99d84cd3e7a2c157130e112519e1b4be6d02799316b0352172a268',
+    adminCap: '0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78',
+    feeManagerCap: '0x03aa81ae087977475241f2ec9315a74f46d2c450a8728fabeb9d7475a5e690d1',
+    rebalancerCap: '0xa44d8b3c42a462de7abaf2f7db13d8d384f2a2c331f9d40ae5621f62877e722b',
   },
   zkProxyVault: {
     state: '0x0c25949383bb4314e2edf5c0e59edfb0652b88cd1363c2ef846275741bc71df2',

@@ -36,9 +36,9 @@ const NETWORKS: NetworkInfo[] = [
     status: 'live',
     network: SUI_NETWORK,
     color: '#4DA2FF',
-    packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab',
+    packageId: process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88',
     explorerUrl: SUI_NETWORK === 'mainnet'
-      ? `https://suiscan.xyz/mainnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0x900bca6461ad24c86b83c974788b457cb76c3f6f4fd7b061c5b58cb40d974bab'}`
+      ? `https://suiscan.xyz/mainnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88'}`
       : `https://suiscan.xyz/testnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9'}`,
     description: 'Move • Sponsored Tx',
   },
