@@ -26,6 +26,140 @@ export const maxDuration = 15;
 const autoHedgeCacheByChain = new Map<string, { data: unknown; expiresAt: number }>();
 const AUTO_HEDGE_CACHE_TTL = 300_000; // 5 min — reduce DB load
 
+// SUI on-chain hedge mapping
+const SUI_PAIR_INDEX_TO_ASSET: Record<number, string> = { 0: 'BTC', 1: 'ETH', 2: 'SUI', 3: 'CRO' };
+
+interface OnChainSuiHedge {
+  id: string;
+  asset: string;
+  side: 'LONG' | 'SHORT';
+  size: number;
+  notionalValue: number;
+  entryPrice: number;
+  currentPrice: number;
+  pnl: number;
+  pnlPercent: number;
+  createdAt: string;
+}
+
+interface OnChainSuiState {
+  hedges: OnChainSuiHedge[];
+  enabled: boolean;
+  config: { riskThreshold: number; maxLeverage: number; allowedAssets: string[] } | null;
+}
+
+/**
+ * Read on-chain SUI pool state and convert active hedges into UI shape.
+ * The DB `hedges` table only stores BlueFin perp hedges; the SUI pool's
+ * Move-contract HedgePosition objects (from open_hedge calls) live in
+ * pool.hedge_state.active_hedges and were never surfaced to the UI.
+ */
+async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
+  const empty: OnChainSuiState = { hedges: [], enabled: false, config: null };
+  const poolStateId = (process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '').trim();
+  if (!poolStateId) return empty;
+
+  try {
+    const rpcUrl = (process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.mainnet.sui.io:443').trim();
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'sui_getObject',
+        params: [poolStateId, { showContent: true, showType: true }],
+      }),
+      // Hard timeout — pool stats already covered upstream; this is a best-effort enrichment
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return empty;
+    const json = await res.json() as { result?: { data?: { content?: { fields?: any } } } };
+    const fields = json?.result?.data?.content?.fields;
+    if (!fields) return empty;
+
+    const hedgeState = fields.hedge_state?.fields || {};
+    const autoCfg = hedgeState.auto_hedge_config?.fields || {};
+    const activeHedges: any[] = Array.isArray(hedgeState.active_hedges) ? hedgeState.active_hedges : [];
+
+    // Fetch live prices for each unique asset present
+    let priceMap: Record<string, number> = {};
+    if (activeHedges.length > 0) {
+      try {
+        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+        const mds = getMarketDataService();
+        const assets = Array.from(new Set(
+          activeHedges
+            .map(h => SUI_PAIR_INDEX_TO_ASSET[Number(h?.fields?.pair_index ?? -1)])
+            .filter((a): a is string => !!a)
+        ));
+        await Promise.all(assets.map(async (a) => {
+          try {
+            const p = await mds.getTokenPrice(a);
+            if (p?.price) priceMap[a] = p.price;
+          } catch { /* missing price is non-fatal */ }
+        }));
+      } catch (err) {
+        logger.warn('[AutoHedge API] Could not load market prices for on-chain hedges', { error: errMsg(err) });
+      }
+    }
+
+    const hedges: OnChainSuiHedge[] = activeHedges.map((h, idx) => {
+      const f = h?.fields || {};
+      const pairIndex = Number(f.pair_index ?? 0);
+      const asset = SUI_PAIR_INDEX_TO_ASSET[pairIndex] || `PAIR_${pairIndex}`;
+      const isLong = Boolean(f.is_long);
+      const collateralUsdc = Number(f.collateral_usdc || 0) / 1e6;  // USDC has 6 decimals
+      const leverage = Math.max(1, Number(f.leverage || 1));
+      const notional = collateralUsdc * leverage;
+      const currentPrice = priceMap[asset] || 0;
+      // Entry price is not stored on-chain — best-effort: use current as fallback so PnL is 0
+      // until we wire a separate entry-price index.
+      const entryPrice = currentPrice;
+      const sizeBase = currentPrice > 0 ? notional / currentPrice : 0;
+      const openTimeMs = Number(f.open_time || 0);
+      // Hedge id: bytes -> hex
+      let idHex: string;
+      const hedgeIdBytes = Array.isArray(f.hedge_id) ? f.hedge_id : [];
+      if (hedgeIdBytes.length > 0) {
+        idHex = '0x' + hedgeIdBytes.map((b: number) => Number(b).toString(16).padStart(2, '0')).join('');
+      } else {
+        idHex = `sui-onchain-${idx}`;
+      }
+
+      return {
+        id: idHex,
+        asset,
+        side: isLong ? 'LONG' : 'SHORT',
+        size: Math.round(sizeBase * 1e8) / 1e8,
+        notionalValue: Math.round(notional * 100) / 100,
+        entryPrice: Math.round(entryPrice * 100) / 100,
+        currentPrice: Math.round(currentPrice * 100) / 100,
+        pnl: 0,
+        pnlPercent: 0,
+        createdAt: openTimeMs > 0 ? new Date(openTimeMs).toISOString() : new Date().toISOString(),
+      };
+    });
+
+    const enabled = Boolean(autoCfg.enabled);
+    const riskThresholdBps = Number(autoCfg.risk_threshold_bps || 0);
+    const maxHedgeRatioBps = Number(autoCfg.max_hedge_ratio_bps || 0);
+    const defaultLeverage = Number(autoCfg.default_leverage || 1);
+
+    return {
+      hedges,
+      enabled,
+      config: {
+        // Convert bps (0-10000) to 0-10 scale used by the UI
+        riskThreshold: Math.round((riskThresholdBps / 1000) * 10) / 10,
+        maxLeverage: defaultLeverage,
+        allowedAssets: ['BTC', 'ETH', 'SUI'],
+      },
+    };
+  } catch (err) {
+    logger.warn('[AutoHedge API] Failed to read on-chain SUI hedges (non-critical)', { error: errMsg(err) });
+    return empty;
+  }
+}
+
 interface AutoHedgeStatus {
   enabled: boolean;
   config: {
@@ -145,6 +279,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         logger.warn('[AutoHedge API] Could not fetch hedges', { error: errMsg(e) });
       }
     }
+
+    // For SUI: also read on-chain HedgePosition objects from the Move pool state.
+    // The DB `hedges` table only stores BlueFin perp hedges. SUI's actual pool
+    // hedges are Move-contract objects in pool.hedge_state.active_hedges and
+    // were never surfaced to the UI before this branch.
+    let onChainSui: OnChainSuiState = { hedges: [], enabled: false, config: null };
+    if (isSui) {
+      onChainSui = await readOnChainSuiHedges();
+    }
     
     // Get recent AI decisions from database
     let recentDecisions: AutoHedgeStatus['recentDecisions'] = [];
@@ -220,34 +363,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Calculate stats
     const totalHedgeValue = hedges.reduce((sum, h) => sum + Number(h.notional_value || 0), 0);
     const totalPnL = hedges.reduce((sum, h) => sum + Number(h.current_pnl || 0), 0);
-    
+
+    // Merge DB-recorded BlueFin hedges with on-chain SUI Move hedges (if any).
+    const dbActiveHedges = hedges.map(h => ({
+      id: String(h.id),
+      asset: h.asset,
+      side: h.side as 'LONG' | 'SHORT',
+      size: Number(h.size),
+      notionalValue: Number(h.notional_value),
+      entryPrice: Number(h.entry_price),
+      currentPrice: Number(h.current_price),
+      pnl: Number(h.current_pnl),
+      pnlPercent: Number(h.entry_price) > 0
+        ? ((Number(h.current_price) - Number(h.entry_price)) / Number(h.entry_price)) * 100
+        : 0,
+      createdAt: h.created_at?.toISOString?.() || new Date().toISOString(),
+    }));
+    const mergedActiveHedges = [...dbActiveHedges, ...onChainSui.hedges];
+    const onChainHedgeValue = onChainSui.hedges.reduce((sum, h) => sum + h.notionalValue, 0);
+
+    // For SUI, the on-chain auto_hedge_config is the source of truth for `enabled`.
+    // Fall back to the DB config only if on-chain read failed (no hedges and no config).
+    const effectiveEnabled = isSui
+      ? (onChainSui.config !== null ? onChainSui.enabled : (config?.enabled ?? false))
+      : (config?.enabled ?? false);
+    const effectiveConfig = isSui && onChainSui.config !== null
+      ? onChainSui.config
+      : (config ? { riskThreshold: config.riskThreshold, maxLeverage: config.maxLeverage, allowedAssets: config.allowedAssets } : null);
+
     const status: AutoHedgeStatus = {
-      enabled: config?.enabled ?? false,
-      config: config ? {
-        riskThreshold: config.riskThreshold,
-        maxLeverage: config.maxLeverage,
-        allowedAssets: config.allowedAssets,
-      } : null,
-      activeHedges: hedges.map(h => ({
-        id: h.id,
-        asset: h.asset,
-        side: h.side as 'LONG' | 'SHORT',
-        size: Number(h.size),
-        notionalValue: Number(h.notional_value),
-        entryPrice: Number(h.entry_price),
-        currentPrice: Number(h.current_price),
-        pnl: Number(h.current_pnl),
-        pnlPercent: Number(h.entry_price) > 0 
-          ? ((Number(h.current_price) - Number(h.entry_price)) / Number(h.entry_price)) * 100 
-          : 0,
-        createdAt: h.created_at?.toISOString?.() || new Date().toISOString(),
-      })),
+      enabled: effectiveEnabled,
+      config: effectiveConfig,
+      activeHedges: mergedActiveHedges,
       recentDecisions,
       riskAssessment,
       stats: {
-        totalHedgeValue: Math.round(totalHedgeValue * 100) / 100,
+        totalHedgeValue: Math.round((totalHedgeValue + onChainHedgeValue) * 100) / 100,
         totalPnL: Math.round(totalPnL * 100) / 100,
-        hedgeCount: hedges.length,
+        hedgeCount: hedges.length + onChainSui.hedges.length,
         decisionsToday,
       },
     };
