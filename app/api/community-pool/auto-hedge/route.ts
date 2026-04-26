@@ -25,6 +25,7 @@ export const maxDuration = 15;
 // In-memory cache for auto-hedge status (expensive risk assessment)
 const autoHedgeCacheByChain = new Map<string, { data: unknown; expiresAt: number }>();
 const AUTO_HEDGE_CACHE_TTL = 300_000; // 5 min — reduce DB load
+const AUTO_HEDGE_SUI_CACHE_TTL = 60_000;  // 1 min for SUI — on-chain hedge state changes faster
 
 // SUI on-chain hedge mapping
 const SUI_PAIR_INDEX_TO_ASSET: Record<number, string> = { 0: 'BTC', 1: 'ETH', 2: 'SUI', 3: 'CRO' };
@@ -56,11 +57,16 @@ interface OnChainSuiState {
  */
 async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
   const empty: OnChainSuiState = { hedges: [], enabled: false, config: null };
-  const poolStateId = (process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '').trim();
+  // Prefer the USDC pool state ID; fall back to legacy single-pool var.
+  // Trim aggressively to drop any \r\n that snuck into env values.
+  const trim = (v: string | undefined) => (v || '').replace(/[\s\r\n"']+/g, '').trim();
+  const poolStateId =
+    trim(process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE) ||
+    trim(process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID);
   if (!poolStateId) return empty;
 
   try {
-    const rpcUrl = (process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.mainnet.sui.io:443').trim();
+    const rpcUrl = trim(process.env.NEXT_PUBLIC_SUI_RPC_URL) || 'https://fullnode.mainnet.sui.io:443';
     const res = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -411,7 +417,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     };
 
     // Cache the response
-    autoHedgeCacheByChain.set(chain, { data: responseData, expiresAt: Date.now() + AUTO_HEDGE_CACHE_TTL });
+    autoHedgeCacheByChain.set(chain, { data: responseData, expiresAt: Date.now() + (isSui ? AUTO_HEDGE_SUI_CACHE_TTL : AUTO_HEDGE_CACHE_TTL) });
 
     return NextResponse.json(responseData, {
       headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
