@@ -33,8 +33,13 @@ import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from 
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
+import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 import { createHedge } from '@/lib/db/hedges';
+import {
+  safeLeverage,
+  buildDecisionToken,
+} from '@/lib/services/hedging/calibration';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,6 +48,16 @@ export const maxDuration = 60;
 // Rate limiting: prevent duplicate cron runs within 5 minutes
 let lastSuccessfulRunTimestamp = 0;
 const MIN_CRON_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+// ── Hedge decision idempotency (5-min sliding window per {asset, side, risk-bucket}) ──
+// Prevents duplicate Bluefin orders if cron clock skews and fires twice in
+// the same risk window. Cleared on process restart (Vercel cold start).
+const recentHedgeTokens: Map<string, number> = new Map();
+const HEDGE_TOKEN_TTL_MS = 5 * 60 * 1000;
+
+// Slippage tolerance for market orders. Anything beyond this between
+// the price we sized against and Bluefin's last trade abort the order.
+const HEDGE_MAX_SLIPPAGE_PCT = 0.5; // 0.5%
 
 // 3 pool assets (SUI community pool — BTC, ETH, SUI only)
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
@@ -593,7 +608,13 @@ async function replenishAdminUsdc(
 
       // Try with progressively higher slippage tolerance — small/illiquid positions
       // (e.g. residual wBTC dust) often need wider slippage to clear.
-      const slippageLadder = [0.02, 0.05, 0.10]; // 2% → 5% → 10%
+      // Tightened from [2%, 5%, 10%] → [0.5%, 1%, 2%] for near-zero loss on swap legs.
+      // If even 2% won't clear, hold the asset (better than realising 10% loss).
+      // Override via HEDGE_REVERSE_SWAP_LADDER="0.005,0.01,0.02".
+      const slippageLadder = (process.env.HEDGE_REVERSE_SWAP_LADDER || '0.005,0.01,0.02')
+        .split(',')
+        .map(s => Number(s.trim()))
+        .filter(n => Number.isFinite(n) && n > 0 && n <= 0.10);
       let cleared = false;
 
       for (const slippage of slippageLadder) {
@@ -983,6 +1004,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         if (sig) {
           fiveMinSignal = { direction: sig.direction, confidence: sig.confidence, signalStrength: sig.signalStrength };
           logger.info('[SUI Cron] Polymarket 5-min signal', fiveMinSignal);
+
+          // ═══ Track signal + resolve any expired prior signals ═══
+          // Records ground truth so we can compute true win-rate over time.
+          // Disable with HEDGE_TRACK_SIGNAL_OUTCOMES=false.
+          if ((process.env.HEDGE_TRACK_SIGNAL_OUTCOMES || 'true').toLowerCase() !== 'false') {
+            try {
+              const { trackSignalAndResolve } = await import('@/lib/db/signal-outcomes');
+              const probabilityFraction = sig.direction === 'UP'
+                ? (sig.upProbability ?? sig.probability) / 100
+                : (sig.downProbability ?? sig.probability) / 100;
+              await trackSignalAndResolve({
+                source: 'polymarket-5min',
+                marketId: (sig as unknown as { marketId?: string }).marketId,
+                windowEndTime: sig.windowEndTime,
+                direction: sig.direction,
+                probability: probabilityFraction,
+                confidence: sig.confidence,
+                signalStrength: sig.signalStrength,
+                volume: (sig as unknown as { volume?: number }).volume,
+                liquidity: (sig as unknown as { liquidity?: number }).liquidity,
+                entryPrice: pricesUSD['BTC'] || 0,
+              });
+            } catch (trackErr) {
+              logger.warn('[SUI Cron] signal-outcome tracking failed (non-critical)', {
+                error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+              });
+            }
+          }
         }
       } catch (sigErr) {
         logger.warn('[SUI Cron] 5-min signal fetch failed (non-critical)', { error: sigErr });
@@ -1024,13 +1073,109 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       }
 
       const confidenceThreshold = isBearish ? 85 : 70; // stricter gate in downtrends
+      // Standardised drift threshold (env-driven, single source of truth).
+      // Default 5% — tighter values cause excessive friction on small pools.
+      const driftThresholdPct = Number(process.env.HEDGE_REBALANCE_DRIFT_PCT || 5);
       aiResult.shouldRebalance = !isBearish && (
-        maxDrift > 5 ||
+        maxDrift > driftThresholdPct ||
         enhanced.confidence >= confidenceThreshold ||
         enhanced.urgency === 'HIGH' ||
         enhanced.urgency === 'CRITICAL' ||
         strongSignalOverride
       );
+
+      // ═══════════════════════════════════════════════════════════════════
+      // COST-BENEFIT GATE — refuse to rebalance when expected swap cost
+      // exceeds expected alpha. Each rebalance touches ~25% of NAV across
+      // 2 swap legs; conservative cost = 2 × (slippage 0.1% + gas 0.05%) ≈ 0.30%
+      // of swapped notional. Only proceed if drift is large enough that
+      // realigning is worth that cost (heuristic: drift × confidence ≥ cost%).
+      // ═══════════════════════════════════════════════════════════════════
+      if (aiResult.shouldRebalance) {
+        const expectedSwapCostPct = Number(process.env.HEDGE_REBALANCE_COST_PCT || 0.3);
+        const expectedAlphaPct = (maxDrift / 100) * (enhanced.confidence / 100) * 100;
+        if (expectedAlphaPct < expectedSwapCostPct &&
+            enhanced.urgency !== 'CRITICAL' &&
+            !strongSignalOverride) {
+          logger.warn('[SUI Cron] Cost-benefit gate — rebalance suppressed', {
+            maxDrift: maxDrift.toFixed(2),
+            confidence: enhanced.confidence,
+            expectedAlphaPct: expectedAlphaPct.toFixed(3),
+            expectedSwapCostPct,
+          });
+          aiResult.shouldRebalance = false;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // DRAWDOWN BRAKE — if share price has fallen below par by more than
+      // HEDGE_MAX_DRAWDOWN_PCT (default 1%), halt all NEW rebalance swaps
+      // and let the hedge logic protect remaining capital. Existing positions
+      // still close on next cycle. This enforces "near 0 loss" by refusing
+      // to chase prices on declining markets.
+      // ═══════════════════════════════════════════════════════════════════
+      const _sharePriceUsdEarly = poolStats.sharePriceUsd || (poolStats.sharePrice * (pricesUSD['SUI'] || 0));
+      const drawdownPct = _sharePriceUsdEarly > 0 ? Math.max(0, (1 - _sharePriceUsdEarly) * 100) : 0;
+      const maxDrawdownPct = Number(process.env.HEDGE_MAX_DRAWDOWN_PCT || 1);
+      if (drawdownPct >= maxDrawdownPct) {
+        if (aiResult.shouldRebalance) {
+          logger.warn('[SUI Cron] Drawdown brake engaged — disabling rebalance swaps', {
+            sharePriceUsd: _sharePriceUsdEarly.toFixed(4),
+            drawdownPct: drawdownPct.toFixed(2),
+            maxDrawdownPct,
+          });
+        }
+        aiResult.shouldRebalance = false;
+      }
+
+      // Also short-circuit if KILL_SWITCH is set — no new buys, period.
+      const killActive = (process.env.KILL_SWITCH || process.env.TRADING_KILL_SWITCH || '').toLowerCase().trim();
+      if (['true','1','on','yes','disable','halt'].includes(killActive)) {
+        if (aiResult.shouldRebalance) {
+          logger.warn('[SUI Cron] KILL_SWITCH active — disabling rebalance swaps');
+        }
+        aiResult.shouldRebalance = false;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // DAILY-LOSS CIRCUIT BREAKER — auto-halt new swaps + new hedges if
+      // realized losses + funding paid in the last 24h exceed the cap
+      // (env HEDGE_DAILY_LOSS_CAP_USD, default $5). Existing positions
+      // continue to settle normally; only new entries are blocked.
+      // ═══════════════════════════════════════════════════════════════════
+      let dailyLossHalted = false;
+      try {
+        const { getRealizedPnlSince } = await import('@/lib/db/hedges');
+        const last24h = await getRealizedPnlSince(Date.now() - 24 * 60 * 60 * 1000);
+        const dailyLossCap = Number(process.env.HEDGE_DAILY_LOSS_CAP_USD || 5);
+        if (last24h.netPnl < -Math.abs(dailyLossCap)) {
+          dailyLossHalted = true;
+          logger.error('[SUI Cron] Daily-loss circuit breaker TRIPPED', {
+            netPnl24h: last24h.netPnl.toFixed(2),
+            realized: last24h.realized.toFixed(2),
+            fundingPaid: last24h.fundingPaid.toFixed(2),
+            closedHedges: last24h.count,
+            cap: dailyLossCap,
+          });
+          if (aiResult.shouldRebalance) {
+            aiResult.shouldRebalance = false;
+          }
+        } else if (last24h.count >= 5) {
+          logger.info('[SUI Cron] Daily PnL window', {
+            netPnl24h: last24h.netPnl.toFixed(2),
+            realized: last24h.realized.toFixed(2),
+            fundingPaid: last24h.fundingPaid.toFixed(2),
+            closedHedges: last24h.count,
+            cap: dailyLossCap,
+          });
+        }
+      } catch (lossErr) {
+        logger.warn('[SUI Cron] daily-loss check failed (non-critical)', {
+          error: lossErr instanceof Error ? lossErr.message : String(lossErr),
+        });
+      }
+      // Stash for hedge-block to consult.
+      (globalThis as Record<string, unknown>).__suiDailyLossHalted = dailyLossHalted;
 
       enhancedContext = {
         marketSentiment: enhanced.marketSentiment,
@@ -1149,12 +1294,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         const activeHedges = await getActiveHedges(network);
         logger.info('[SUI Cron] Step 6.5 getActiveHedges result', { count: activeHedges.length, hedges: activeHedges });
 
-        // ALWAYS reverse-swap non-USDC assets in admin wallet → USDC.
-        // This is critical: if the admin holds orphaned assets (e.g. wBTC from a prior swap
-        // whose hedge was already closed or never recorded), they'd be permanently stuck
-        // without this unconditional replenishment step.
-        const replenishment = await replenishAdminUsdc(network, 1_000_000, pricesUSD);
-        logger.info('[SUI Cron] Step 6.5 replenishment result', { swapped: replenishment.swapped, details: replenishment.details });
+        // ═══════════════════════════════════════════════════════════════
+        // BOUNDED REPLENISH — convert only what's actually needed.
+        //  • If active hedges exist, target = totalCollateralNeeded × 1.10
+        //  • If none, only clear dust (per-asset value ≤ HEDGE_REPLENISH_DUST_USD,
+        //    default $10) so larger holdings can wait for price recovery
+        //    rather than be force-converted at a loss.
+        // Override the cap entirely with HEDGE_REPLENISH_FORCE_FULL=true.
+        // ═══════════════════════════════════════════════════════════════
+        const totalCollateralNeededPre = activeHedges.reduce((sum, h) => sum + h.collateralUsdc, 0);
+        const forceFull = (process.env.HEDGE_REPLENISH_FORCE_FULL || 'false').toLowerCase() === 'true';
+        const replenishTarget = forceFull
+          ? 1_000_000
+          : (activeHedges.length > 0
+              ? totalCollateralNeededPre * 1.10
+              : Number(process.env.HEDGE_REPLENISH_DUST_USD || 10));
+        const replenishment = await replenishAdminUsdc(network, replenishTarget, pricesUSD);
+        logger.info('[SUI Cron] Step 6.5 replenishment result', {
+          swapped: replenishment.swapped,
+          target: replenishTarget,
+          activeHedges: activeHedges.length,
+          forceFull,
+          details: replenishment.details,
+        });
         if (replenishment.swapped > 0) {
           await new Promise(r => setTimeout(r, 2000));
           logger.info('[SUI Cron] Admin assets → USDC replenishment', {
@@ -1264,6 +1426,68 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { envMissing: { adminKey: !process.env.SUI_POOL_ADMIN_KEY, agentCap: !process.env.SUI_AGENT_CAP_ID } } };
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // POSITION-AGE TIMEOUT — force-close any active BlueFin perp hedge
+    // older than HEDGE_MAX_AGE_HOURS (default 8). This prevents naked
+    // shorts from accumulating funding cost across cycles when the
+    // signal that opened them is no longer fresh.
+    // ═══════════════════════════════════════════════════════════════════
+    let stalePositionCloses = 0;
+    try {
+      const maxAgeHours = Number(process.env.HEDGE_MAX_AGE_HOURS || 8);
+      if (maxAgeHours > 0) {
+        const { getStaleActiveHedges } = await import('@/lib/db/hedges');
+        const stale = await getStaleActiveHedges(maxAgeHours * 60 * 60 * 1000);
+        if (stale.length > 0) {
+          logger.warn('[SUI Cron] Stale active perps detected — force-closing', {
+            count: stale.length,
+            maxAgeHours,
+            positions: stale.map(s => ({
+              market: s.market,
+              side: s.side,
+              ageH: (s.ageMs / 3600000).toFixed(1),
+            })),
+          });
+          const { BluefinService } = await import('@/lib/services/sui/BluefinService');
+          const bf = BluefinService.getInstance();
+          // Deduplicate by market — closeHedge closes the entire position for that symbol.
+          const seen = new Set<string>();
+          for (const s of stale) {
+            if (seen.has(s.market)) continue;
+            seen.add(s.market);
+            try {
+              const closed = await bf.closeHedge({
+                symbol: s.market,
+              });
+              if (closed?.success) {
+                stalePositionCloses++;
+                logger.info('[SUI Cron] Stale perp force-closed', {
+                  market: s.market,
+                  side: s.side,
+                  ageH: (s.ageMs / 3600000).toFixed(1),
+                });
+              } else {
+                logger.warn('[SUI Cron] Stale perp close failed', {
+                  market: s.market,
+                  side: s.side,
+                  error: closed?.error,
+                });
+              }
+            } catch (closeErr) {
+              logger.warn('[SUI Cron] Stale perp close threw (non-critical)', {
+                market: s.market,
+                error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+              });
+            }
+          }
+        }
+      }
+    } catch (staleErr) {
+      logger.warn('[SUI Cron] position-age timeout failed (non-critical)', {
+        error: staleErr instanceof Error ? staleErr.message : String(staleErr),
+      });
+    }
+
     // Step 7: Plan + Execute rebalance via SuiPoolAgent
     // Trigger swaps when:
     //  a) AI detects allocation drift and recommends rebalancing, OR
@@ -1352,6 +1576,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             let contractBalance = navUsd; // fallback: use full NAV
             let existingHedgedValue = 0;
             let dailyHedgedToday = 0;
+            // Read max_hedge_ratio_bps from on-chain auto_hedge_config (DO NOT hardcode — admin may change it).
+            // Default to 2500 bps (25%) which matches contract initialization.
+            let maxHedgeRatioBps = 2500;
+            // DAILY_HEDGE_CAP_BPS is a hardcoded constant in the Move contract.
+            const DAILY_HEDGE_CAP_BPS_CONST = 5000; // 50% — must match Move const DAILY_HEDGE_CAP_BPS
             try {
               const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
               const rpcUrl = network === 'mainnet'
@@ -1369,13 +1598,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   contractBalance = Number(rawBal) / 1e6;
                   existingHedgedValue = Number(fields.hedge_state?.fields?.total_hedged_value || '0') / 1e6;
 
-                  // Read daily hedge counter
+                  // Read daily hedge counter & on-chain max_hedge_ratio_bps
                   const hedgeState = fields.hedge_state?.fields;
                   if (hedgeState) {
                     const currentDay = Math.floor(Date.now() / 86400000);
                     const onChainDay = Number(hedgeState.current_hedge_day || 0);
                     if (onChainDay === currentDay) {
                       dailyHedgedToday = Number(hedgeState.daily_hedge_total || 0) / 1e6;
+                    }
+                    const cfgBps = Number(
+                      hedgeState.auto_hedge_config?.fields?.max_hedge_ratio_bps ?? 0,
+                    );
+                    if (cfgBps > 0 && cfgBps <= 5000) {
+                      maxHedgeRatioBps = cfgBps;
                     }
                   }
 
@@ -1393,18 +1628,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
             // Contract's get_total_nav() returns balance + total_hedged_value (fixed in v5 redeploy).
             const contractNav = contractBalance + existingHedgedValue;
-            const maxHedgeTotal = contractNav * 0.5; // max_hedge_ratio_bps=5000
+            // Use on-chain max_hedge_ratio_bps (default 2500 = 25%). Admin may tune this.
+            const maxHedgeTotal = contractNav * (maxHedgeRatioBps / 10000);
             const maxByHedgeRatio = Math.max(0, maxHedgeTotal - existingHedgedValue);
             const maxByReserve = contractBalance * 0.8;     // 20% reserve must stay in pool
 
-            // Daily cap: 50% of NAV minus what's already been hedged today
+            // Daily cap: DAILY_HEDGE_CAP_BPS (50%) of NAV minus what's already been hedged today
             // NOTE: contract resets daily_hedge_total at day boundary when open_hedge is called.
-            // If dailyHedgedToday contains prior hedge but we're same calendar day, the contract
-            // will reset it atomically. So we check maxByDailyCap but allow the call to fail gracefully.
-            const maxByDailyCap = Math.max(0, contractNav * 0.50 - dailyHedgedToday);
+            const maxByDailyCap = Math.max(
+              0,
+              contractNav * (DAILY_HEDGE_CAP_BPS_CONST / 10000) - dailyHedgedToday,
+            );
 
             const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap);
-            const cappedDeficit = Math.min(deficit, maxTransferable * 0.90); // 10% safety margin
+            // Use a tighter 5% safety margin and floor at 6 decimal precision.
+            const cappedDeficit = Math.min(deficit, maxTransferable * 0.95);
 
             if (maxByHedgeRatio <= 0) {
               logger.warn('[SUI Cron] Already at max hedge ratio — skipping pool transfer', {
@@ -1418,31 +1656,49 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               };
             } else if (maxTransferable <= 0 || cappedDeficit <= 0.000001) {
               // Daily cap might be exhausted locally, but contract resets counter on day boundary.
-              // Still attempt the call and let contract enforce the true limit.
-              logger.info('[SUI Cron] Daily cap appears exhausted locally, but attempting hedge anyway (contract will reset at day boundary)', {
+              // Still attempt a SAFE transfer using on-chain max ratio (NOT a 50%-of-deficit guess).
+              const safeAttempt = Math.min(
+                deficit,
+                Math.max(maxByHedgeRatio, 0) * 0.95,
+                Math.max(maxByReserve, 0) * 0.95,
+              );
+              logger.info('[SUI Cron] Daily cap appears exhausted locally, attempting safe hedge (capped to on-chain max_hedge_ratio_bps)', {
                 deficit: deficit.toFixed(2),
                 maxTransferable: maxTransferable.toFixed(2),
                 maxByDailyCap: maxByDailyCap.toFixed(2),
-                cappedDeficit: cappedDeficit.toFixed(2),
+                maxHedgeRatioBps,
+                safeAttempt: safeAttempt.toFixed(6),
               });
-              
-              const transferResult = await transferUsdcFromPoolToAdmin(network, Math.max(deficit * 0.5, 0.01));
-              (rebalanceSwaps as any).poolTransfer = {
-                requested: Math.max(deficit * 0.5, 0.01).toFixed(2),
-                success: transferResult.success,
-                txDigest: transferResult.txDigest,
-                error: transferResult.error,
-              };
-              if (transferResult.success) {
-                logger.info('[SUI Cron] Pool → admin USDC transfer successful despite daily cap concern', {
-                  txDigest: transferResult.txDigest,
-                  amount: Math.max(deficit * 0.5, 0.01).toFixed(2),
+
+              if (safeAttempt < 0.000001) {
+                logger.warn('[SUI Cron] Skipping pool transfer — no safe hedge amount available', {
+                  maxByHedgeRatio: maxByHedgeRatio.toFixed(6),
+                  maxByReserve: maxByReserve.toFixed(6),
                 });
-                await new Promise(r => setTimeout(r, 2000));
+                (rebalanceSwaps as any).poolTransfer = {
+                  requested: '0.00',
+                  success: false,
+                  error: 'No safe hedge amount available within on-chain limits',
+                };
               } else {
-                logger.warn('[SUI Cron] Pool → admin USDC transfer failed despite daily cap concern', {
+                const transferResult = await transferUsdcFromPoolToAdmin(network, safeAttempt);
+                (rebalanceSwaps as any).poolTransfer = {
+                  requested: safeAttempt.toFixed(6),
+                  success: transferResult.success,
+                  txDigest: transferResult.txDigest,
                   error: transferResult.error,
-                });
+                };
+                if (transferResult.success) {
+                  logger.info('[SUI Cron] Pool → admin USDC transfer successful (safe-attempt path)', {
+                    txDigest: transferResult.txDigest,
+                    amount: safeAttempt.toFixed(6),
+                  });
+                  await new Promise(r => setTimeout(r, 2000));
+                } else {
+                  logger.warn('[SUI Cron] Pool → admin USDC transfer failed (safe-attempt path)', {
+                    error: transferResult.error,
+                  });
+                }
               }
             } else {
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
@@ -1584,7 +1840,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     //  - Perp hedges were spamming 241+ DB records with no real risk reduction
     // To re-enable: set risk_threshold >= 8 in auto_hedge_configs DB table
     let autoHedgeResult: { triggered: boolean; hedges?: Array<{ symbol: string; side: string; size: number; status: string; orderId?: string; error?: string }> } = { triggered: false };
-    if (navUsd >= 1000) {
+
+    // ═══════════════════════════════════════════════════════════════════
+    // KILL SWITCH — set KILL_SWITCH=true (or =1, =on) to halt all new
+    // directional exposure. Existing positions still close on next cycle.
+    // Also enforced inside swap planning via isTradingHalted().
+    // ═══════════════════════════════════════════════════════════════════
+    const { isTradingHalted } = await import('@/lib/services/hedging/calibration');
+    if (isTradingHalted()) {
+      logger.warn('[SUI Cron] KILL_SWITCH active — skipping all new perp hedges this cycle');
+      autoHedgeResult = {
+        triggered: false,
+        hedges: [{ symbol: 'KILL_SWITCH', side: 'N/A', size: 0, status: 'HALTED',
+          error: 'KILL_SWITCH env var is set — no new positions opened.' }],
+      };
+    } else if ((globalThis as Record<string, unknown>).__suiDailyLossHalted === true) {
+      // Daily-loss circuit breaker tripped earlier in this cycle.
+      logger.error('[SUI Cron] Daily-loss circuit breaker tripped — skipping new perp hedges');
+      autoHedgeResult = {
+        triggered: false,
+        hedges: [{ symbol: 'DAILY_LOSS_HALT', side: 'N/A', size: 0, status: 'HALTED',
+          error: 'Realized 24h loss exceeds HEDGE_DAILY_LOSS_CAP_USD — no new positions opened.' }],
+      };
+    } else if (navUsd >= 1000) {
       // Only attempt perp hedging when pool has meaningful NAV ($1000+)
       try {
         const allConfigs = await getAutoHedgeConfigs();
@@ -1614,7 +1892,146 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           if (process.env.BLUEFIN_PRIVATE_KEY) {
             try {
               const bluefin = BluefinService.getInstance();
-              const leverage = Math.min(suiPoolConfig.maxLeverage || 3, 5);
+              const leverage = safeLeverage(suiPoolConfig.maxLeverage || 3, 5);
+
+              // ═══ PREFLIGHT — verify Bluefin account is funded & reachable ═══
+              // Skip the entire hedge block (not just one asset) if the account
+              // can't trade or has no margin. Avoids 3 sequential 404s per cron tick.
+              let freeCollateral = 0;
+              try {
+                freeCollateral = await bluefin.getBalance();
+              } catch (balErr) {
+                logger.error('[SUI Cron] Bluefin getBalance failed — aborting hedge cycle', {
+                  error: balErr instanceof Error ? balErr.message : String(balErr),
+                  walletAddress: bluefin.getAddress(),
+                });
+                autoHedgeResult = {
+                  triggered: false,
+                  hedges: [{ symbol: 'PREFLIGHT', side: 'N/A', size: 0, status: 'BLOCKED',
+                    error: `Bluefin account check failed: ${balErr instanceof Error ? balErr.message : String(balErr)}` }],
+                };
+                throw new Error('preflight-failed');
+              }
+
+              // ═══ AUTO TOP-UP — keep margin >= MIN by depositing from spot wallet ═══
+              // Pulls from the operator's spot USDC into Bluefin Margin Bank when
+              // freeCollateral falls below BLUEFIN_MIN_MARGIN_USD (default $20).
+              // Top-up is opt-out: set BLUEFIN_AUTO_TOPUP=false to disable.
+              const autoTopUpEnabled = (process.env.BLUEFIN_AUTO_TOPUP || 'true').toLowerCase() !== 'false';
+              const minMargin = Number(process.env.BLUEFIN_MIN_MARGIN_USD || 20);
+              const targetMargin = Number(process.env.BLUEFIN_TARGET_MARGIN_USD || 50);
+              const spotReserve = Number(process.env.BLUEFIN_SPOT_RESERVE_USD || 1);
+              const swapFromSui = (process.env.BLUEFIN_TOPUP_SWAP_FROM_SUI || 'true').toLowerCase() !== 'false';
+              const suiReserve = Number(process.env.BLUEFIN_SUI_RESERVE || 0.5);
+              const maxSwapSui = Number(process.env.BLUEFIN_MAX_SWAP_SUI || 25);
+              if (autoTopUpEnabled && freeCollateral < minMargin) {
+                try {
+                  const topUp = await bluefinTreasury.autoTopUp({
+                    minMargin, targetMargin, spotReserve,
+                    swapFromSui, suiReserve, maxSwapSui,
+                  });
+                  if ('skipped' in topUp) {
+                    logger.warn('[SUI Cron] Auto top-up skipped', topUp);
+                  } else {
+                    logger.info('[SUI Cron] Auto top-up executed', topUp);
+                    if (topUp.ok) {
+                      // Refresh free collateral after on-chain settlement
+                      try { freeCollateral = await bluefin.getBalance(); } catch { /* keep stale */ }
+                    }
+                  }
+                } catch (topUpErr) {
+                  logger.error('[SUI Cron] Auto top-up failed (non-fatal)', {
+                    error: topUpErr instanceof Error ? topUpErr.message : String(topUpErr),
+                  });
+                }
+              }
+
+              if (freeCollateral <= 0) {
+                logger.warn('[SUI Cron] Bluefin freeCollateral=0 — aborting hedge cycle', {
+                  walletAddress: bluefin.getAddress(),
+                });
+                autoHedgeResult = {
+                  triggered: false,
+                  hedges: [{ symbol: 'PREFLIGHT', side: 'N/A', size: 0, status: 'BLOCKED',
+                    error: `Bluefin wallet ${bluefin.getAddress()} has 0 free collateral after top-up attempt. Fund operator wallet with USDC.` }],
+                };
+                throw new Error('preflight-no-margin');
+              }
+              logger.info('[SUI Cron] Bluefin preflight OK', {
+                walletAddress: bluefin.getAddress(),
+                freeCollateral,
+              });
+
+              // ═══════════════════════════════════════════════════════════════════
+              // PREDICTION-SIGNAL GATE (defensive) — only open NEW SHORT hedges
+              // when the Polymarket BTC 5-min market is qualified DOWN.
+              //
+              // Rationale: SHORT hedges *cost* funding + slippage. If we open one
+              // and the market actually goes UP, the hedge loses money while spot
+              // appreciates (wash) — but we still pay funding + execution fees.
+              // To enforce "near 0 loss", we ONLY open a hedge when an external,
+              // calibrated, sufficiently-confident signal agrees with the
+              // protective direction (DOWN ⇒ short profitable).
+              //
+              // BTC signal is used as the macro proxy for ETH and SUI as well
+              // (correlation > 0.7 historically). Override per-asset signals can
+              // be added later, but for now BTC = market regime.
+              //
+              // Disable this gate (NOT RECOMMENDED) by setting
+              //   HEDGE_REQUIRE_PREDICTION_SIGNAL=false
+              // Tighten further with HEDGE_MIN_POLY_CONFIDENCE (default 70).
+              // ═══════════════════════════════════════════════════════════════════
+              const requireSignal = (process.env.HEDGE_REQUIRE_PREDICTION_SIGNAL || 'true').toLowerCase() !== 'false';
+              let qualifiedHedgeSignal: { direction: 'UP' | 'DOWN'; confidence: number; probability: number; weight: number } | null = null;
+              if (requireSignal) {
+                try {
+                  const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
+                  const { qualifyPolymarketSignal, SIZING_LIMITS } = await import('@/lib/services/hedging/calibration');
+                  const rawSig = await Polymarket5MinService.getLatest5MinSignal();
+                  const qualified = qualifyPolymarketSignal(rawSig ?? undefined);
+                  if (qualified && rawSig) {
+                    qualifiedHedgeSignal = {
+                      direction: qualified.direction,
+                      confidence: rawSig.confidence,
+                      probability: qualified.probability,
+                      weight: qualified.weight,
+                    };
+                    logger.info('[SUI Cron] Qualified Polymarket signal for hedge gate', {
+                      ...qualifiedHedgeSignal,
+                      minConfidence: SIZING_LIMITS.MIN_POLY_CONFIDENCE,
+                      minEdge: SIZING_LIMITS.MIN_EDGE,
+                    });
+                  } else {
+                    logger.warn('[SUI Cron] No qualified Polymarket signal — skipping all NEW hedges (defensive)', {
+                      rawSignalPresent: !!rawSig,
+                      rawDirection: rawSig?.direction,
+                      rawConfidence: rawSig?.confidence,
+                      rawStrength: rawSig?.signalStrength,
+                    });
+                  }
+                } catch (sigErr) {
+                  logger.warn('[SUI Cron] Polymarket signal fetch failed — skipping all NEW hedges (defensive)', {
+                    error: sigErr instanceof Error ? sigErr.message : String(sigErr),
+                  });
+                }
+
+                // Hard gate: no qualified signal → no new exposure. Period.
+                if (!qualifiedHedgeSignal || qualifiedHedgeSignal.direction !== 'DOWN') {
+                  autoHedgeResult = {
+                    triggered: false,
+                    hedges: [{
+                      symbol: 'SIGNAL_GATE',
+                      side: 'N/A',
+                      size: 0,
+                      status: 'BLOCKED',
+                      error: qualifiedHedgeSignal
+                        ? `Polymarket signal direction is ${qualifiedHedgeSignal.direction} (need DOWN for protective SHORT). No hedge opened.`
+                        : 'No qualified Polymarket DOWN signal — no hedge opened. (HEDGE_REQUIRE_PREDICTION_SIGNAL=true)',
+                    }],
+                  };
+                  throw new Error('signal-gate-blocked');
+                }
+              }
 
               // BlueFin minimum order sizes and step sizes
               const PERP_SPECS: Record<string, { minQty: number; stepSize: number }> = {
@@ -1623,100 +2040,185 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 SUI: { minQty: 1, stepSize: 1 },
               };
 
+              // Sweep expired idempotency tokens at start of cycle
+              const nowMs = Date.now();
+              for (const [k, exp] of recentHedgeTokens) if (exp <= nowMs) recentHedgeTokens.delete(k);
+
+              // Track collateral budget consumed across this cycle so we don't
+              // over-commit if multiple assets cross the threshold simultaneously.
+              let collateralBudgetUsed = 0;
+              const collateralBudget = freeCollateral * 0.9; // keep 10% margin headroom
+
               // Calculate hedge sizes based on pool NAV and allocations
-              // Open SHORT hedges on any asset with >5% allocation to protect against downside
+              // Open SHORT hedges on any asset with >5% allocation to protect against downside.
+              // Sizing is scaled by Polymarket signal weight × edge so weakly-confident
+              // signals produce smaller hedges (further reduces near-zero loss risk).
+              const signalScale = qualifiedHedgeSignal
+                ? Math.max(0.25, Math.min(1.0, qualifiedHedgeSignal.weight * (qualifiedHedgeSignal.probability * 2 - 1)))
+                : 0.5;
               for (const asset of ['BTC', 'ETH', 'SUI'] as const) {
                 const allocation = aiResult.allocations[asset] || 0;
-                if (allocation >= 5) { // Hedge any meaningful allocation (>5%)
-                  const hedgeValueUSD = navUsd * (allocation / 100) * 0.5; // Hedge 50% of position
-                  // Use leverage to amplify small hedges into viable sizes
-                  const effectiveValue = hedgeValueUSD * leverage;
-                  const hedgeSizeBase = effectiveValue / (pricesUSD[asset] || 1);
+                if (allocation < 5) continue; // Hedge any meaningful allocation (>5%)
 
-                  // Snap to step size and check against actual BlueFin minimum
-                  const spec = PERP_SPECS[asset] || { minQty: 0.001, stepSize: 0.001 };
-                  const snappedSize = Math.floor(hedgeSizeBase / spec.stepSize) * spec.stepSize;
+                const hedgeValueUSD = navUsd * (allocation / 100) * 0.5 * signalScale; // scaled by signal strength
+                // Use leverage to amplify small hedges into viable sizes
+                const effectiveValue = hedgeValueUSD * leverage;
+                const sizingPrice = pricesUSD[asset] || 0;
+                if (sizingPrice <= 0) {
+                  logger.warn(`[SUI Cron] Skip ${asset}-PERP: no reference price`);
+                  continue;
+                }
+                const hedgeSizeBase = effectiveValue / sizingPrice;
 
-                  if (snappedSize >= spec.minQty) {
+                // Snap to step size and check against actual BlueFin minimum
+                const spec = PERP_SPECS[asset] || { minQty: 0.001, stepSize: 0.001 };
+                const snappedSize = Math.floor(hedgeSizeBase / spec.stepSize) * spec.stepSize;
+
+                if (snappedSize < spec.minQty) {
+                  logger.info(`[SUI Cron] Skip ${asset}-PERP: snappedSize ${snappedSize} < minQty ${spec.minQty} (raw=${hedgeSizeBase}, leverage=${leverage})`);
+                  continue;
+                }
+
+                // ═══ IDEMPOTENCY GATE — drop duplicate decisions in same window ═══
+                const decisionToken = buildDecisionToken({
+                  portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+                  asset,
+                  side: 'SHORT',
+                  riskScore,
+                  now: nowMs,
+                });
+                if (recentHedgeTokens.has(decisionToken)) {
+                  logger.info(`[SUI Cron] Skip ${asset}-PERP: duplicate decision token`, { token: decisionToken });
+                  continue;
+                }
+
+                // ═══ COLLATERAL BUDGET — don't exceed wallet's free collateral ═══
+                // Required margin ≈ notional / leverage (plus a small buffer for fees/funding)
+                const requiredMargin = (snappedSize * sizingPrice / leverage) * 1.02;
+                if (collateralBudgetUsed + requiredMargin > collateralBudget) {
+                  logger.warn(`[SUI Cron] Skip ${asset}-PERP: required margin ${requiredMargin.toFixed(2)} would exceed budget`, {
+                    used: collateralBudgetUsed.toFixed(2),
+                    budget: collateralBudget.toFixed(2),
+                    requiredMargin: requiredMargin.toFixed(2),
+                  });
+                  continue;
+                }
+
+                // ═══ SLIPPAGE GATE — abort if Bluefin's mark diverges from our sizing price ═══
+                let bluefinPrice = sizingPrice;
+                try {
+                  const md = await bluefin.getMarketData(`${asset}-PERP`);
+                  if (md && Number.isFinite(md.price) && md.price > 0) bluefinPrice = md.price;
+                } catch (mdErr) {
+                  logger.warn(`[SUI Cron] Could not fetch Bluefin mark for ${asset}-PERP, using sizingPrice`, {
+                    error: mdErr instanceof Error ? mdErr.message : String(mdErr),
+                  });
+                }
+                const slippagePct = Math.abs(bluefinPrice - sizingPrice) / sizingPrice * 100;
+                if (slippagePct > HEDGE_MAX_SLIPPAGE_PCT) {
+                  logger.error(`[SUI Cron] Skip ${asset}-PERP: slippage ${slippagePct.toFixed(3)}% > ${HEDGE_MAX_SLIPPAGE_PCT}%`, {
+                    sizingPrice,
+                    bluefinPrice,
+                  });
+                  continue;
+                }
+
+                try {
+                  logger.info(`[SUI Cron] Attempting ${asset}-PERP hedge`, {
+                    allocation, hedgeValueUSD, effectiveValue, hedgeSizeBase, snappedSize, leverage,
+                    minQty: spec.minQty,
+                    sizingPrice,
+                    bluefinPrice,
+                    slippagePct: slippagePct.toFixed(3),
+                    requiredMargin: requiredMargin.toFixed(2),
+                    decisionToken,
+                  });
+
+                  // Reserve token BEFORE calling Bluefin so a concurrent run can't double-fire
+                  recentHedgeTokens.set(decisionToken, nowMs + HEDGE_TOKEN_TTL_MS);
+
+                  const result = await bluefin.openHedge({
+                    symbol: `${asset}-PERP`,
+                    side: 'SHORT', // Protective short to hedge long spot exposure
+                    size: snappedSize, // Use snapped size that meets BlueFin minimums
+                    leverage,
+                    portfolioId: -2, // SUI pool special ID
+                    reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10 (token=${decisionToken})`,
+                  });
+
+                  if (!result.success) {
+                    // Failed — release the token so the next cycle can retry
+                    recentHedgeTokens.delete(decisionToken);
+                  } else {
+                    collateralBudgetUsed += requiredMargin;
+                  }
+
+                  hedges.push({
+                    symbol: `${asset}-PERP`,
+                    side: 'SHORT',
+                    size: snappedSize,
+                    status: result.success ? 'OPENED' : 'FAILED',
+                    orderId: result.orderId,
+                    error: result.error,
+                  });
+
+                  // Persist successful hedges to DB for UI display
+                  if (result.success && result.orderId) {
                     try {
-                      logger.info(`[SUI Cron] Attempting ${asset}-PERP hedge`, {
-                        allocation, hedgeValueUSD, effectiveValue, hedgeSizeBase, snappedSize, leverage,
-                        minQty: spec.minQty,
-                      });
-
-                      const result = await bluefin.openHedge({
-                        symbol: `${asset}-PERP`,
-                        side: 'SHORT', // Protective short to hedge long spot exposure
-                        size: snappedSize, // Use snapped size that meets BlueFin minimums
+                      await createHedge({
+                        orderId: result.orderId,
+                        portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+                        walletAddress: (process.env.SUI_ADMIN_ADDRESS || '').trim(),
+                        asset,
+                        market: `${asset}-PERP`,
+                        side: 'SHORT',
+                        size: snappedSize,
+                        notionalValue: hedgeValueUSD,
                         leverage,
-                        portfolioId: -2, // SUI pool special ID
+                        entryPrice: bluefinPrice || sizingPrice,
+                        simulationMode: false,
+                        chain: 'sui',
                         reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
                       });
-
-                      hedges.push({
-                        symbol: `${asset}-PERP`,
-                        side: 'SHORT',
-                        size: snappedSize,
-                        status: result.success ? 'OPENED' : 'FAILED',
-                        orderId: result.orderId,
-                        error: result.error,
-                      });
-
-                      // Persist successful hedges to DB for UI display
-                      if (result.success && result.orderId) {
-                        try {
-                          await createHedge({
-                            orderId: result.orderId,
-                            portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
-                            walletAddress: (process.env.SUI_ADMIN_ADDRESS || '').trim(),
-                            asset,
-                            market: `${asset}-PERP`,
-                            side: 'SHORT',
-                            size: snappedSize,
-                            notionalValue: hedgeValueUSD,
-                            leverage,
-                            entryPrice: pricesUSD[asset] || 0,
-                            simulationMode: false,
-                            chain: 'sui',
-                            reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10`,
-                          });
-                          logger.info(`[SUI Cron] Hedge saved to DB`, { asset, orderId: result.orderId });
-                        } catch (dbErr) {
-                          logger.warn(`[SUI Cron] Failed to save hedge to DB (non-critical)`, { asset, error: dbErr });
-                        }
-                      }
-
-                      logger.info(`[SUI Cron] Opened ${asset} hedge`, {
-                        symbol: `${asset}-PERP`,
-                        side: 'SHORT',
-                        size: snappedSize,
-                        leverage,
-                        success: result.success,
-                        orderId: result.orderId,
-                      });
-                    } catch (hedgeErr) {
-                      hedges.push({
-                        symbol: `${asset}-PERP`,
-                        side: 'SHORT',
-                        size: snappedSize,
-                        status: 'ERROR',
-                        error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
-                      });
-                      logger.error(`[SUI Cron] Failed to hedge ${asset}`, { error: hedgeErr });
+                      logger.info(`[SUI Cron] Hedge saved to DB`, { asset, orderId: result.orderId });
+                    } catch (dbErr) {
+                      logger.warn(`[SUI Cron] Failed to save hedge to DB (non-critical)`, { asset, error: dbErr });
                     }
-                  } else {
-                    logger.info(`[SUI Cron] Skipping ${asset}-PERP hedge: snappedSize ${snappedSize} < minQty ${spec.minQty} (raw=${hedgeSizeBase}, leverage=${leverage})`);
                   }
+
+                  logger.info(`[SUI Cron] Opened ${asset} hedge`, {
+                    symbol: `${asset}-PERP`,
+                    side: 'SHORT',
+                    size: snappedSize,
+                    leverage,
+                    success: result.success,
+                    orderId: result.orderId,
+                  });
+                } catch (hedgeErr) {
+                  // Always release token on exception
+                  recentHedgeTokens.delete(decisionToken);
+                  hedges.push({
+                    symbol: `${asset}-PERP`,
+                    side: 'SHORT',
+                    size: snappedSize,
+                    status: 'ERROR',
+                    error: hedgeErr instanceof Error ? hedgeErr.message : String(hedgeErr),
+                  });
+                  logger.error(`[SUI Cron] Failed to hedge ${asset}`, { error: hedgeErr });
                 }
               }
 
               autoHedgeResult = { triggered: true, hedges };
             } catch (bfErr) {
-              logger.error('[SUI Cron] BlueFin hedging failed', { error: bfErr });
-              autoHedgeResult = { 
-                triggered: true, 
-                hedges: [{ symbol: 'ALL', side: 'N/A', size: 0, status: 'ERROR', error: String(bfErr) }] 
-              };
+              const msg = bfErr instanceof Error ? bfErr.message : String(bfErr);
+              // preflight-failed / preflight-no-margin / signal-gate-blocked already populated autoHedgeResult above
+              if (msg !== 'preflight-failed' && msg !== 'preflight-no-margin' && msg !== 'signal-gate-blocked') {
+                logger.error('[SUI Cron] BlueFin hedging failed', { error: bfErr });
+                autoHedgeResult = {
+                  triggered: true,
+                  hedges: [{ symbol: 'ALL', side: 'N/A', size: 0, status: 'ERROR', error: msg }]
+                };
+              }
             }
           } else {
             logger.info('[SUI Cron] Risk threshold exceeded but BLUEFIN_PRIVATE_KEY not set (hedge skipped)');
@@ -1765,6 +2267,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       });
     } catch (txErr) {
       logger.warn('[SUI Cron] Transaction log failed (non-critical)', { error: txErr });
+    }
+
+    // Reconcile on-chain hedge state into the DB. The Move pool's
+    // `hedge_state.active_hedges` is the source of truth — this mirrors any
+    // new on-chain HedgePosition objects (real hedges + operational rebalance
+    // transfers) into the `hedges` table and closes DB rows whose on-chain
+    // counterpart is gone. Idempotent and non-fatal.
+    let reconcile: { inserted: number; closed: number; errors: number } | undefined;
+    try {
+      const { reconcileSuiHedges } = await import('@/lib/services/sui/SuiHedgeReconciler');
+      const r = await reconcileSuiHedges();
+      reconcile = { inserted: r.inserted, closed: r.closed, errors: r.errors.length };
+      if (r.inserted > 0 || r.closed > 0) {
+        logger.info('[SUI Cron] Hedge reconciliation', reconcile);
+      }
+    } catch (recErr) {
+      logger.warn('[SUI Cron] Hedge reconciliation failed (non-critical)', { error: recErr });
     }
 
     // Build response
