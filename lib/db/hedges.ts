@@ -486,6 +486,162 @@ export async function closeHedge(
   await query(sql, [status, realizedPnl, orderId]);
 }
 
+/**
+ * Persist funding paid (or earned, if negative) on an existing hedge.
+ * Called when a perp position accrues funding between cron cycles.
+ */
+export async function updateHedgeFundingPaid(
+  orderId: string,
+  fundingPaidUsd: number
+): Promise<void> {
+  const sql = `
+    UPDATE hedges
+    SET funding_paid = COALESCE(funding_paid, 0) + $1, updated_at = CURRENT_TIMESTAMP
+    WHERE order_id = $2 OR hedge_id_onchain = $2
+  `;
+  await query(sql, [fundingPaidUsd, orderId]);
+}
+
+/**
+ * Mark a perp position closed using the order ID returned by the close call.
+ * Looks up the original hedge by symbol+side and writes realized PnL + fees.
+ * This is the canonical path for Bluefin perp closes initiated by the cron.
+ */
+export async function closePerpHedgeBySymbolSide(args: {
+  symbol: string;            // e.g. "BTC-PERP"
+  side: 'LONG' | 'SHORT';    // direction of the ORIGINAL position being closed
+  realizedPnl: number;       // USD, can be negative
+  feesPaid?: number;         // USD
+  closeOrderId?: string;     // Bluefin order hash for the close
+  closeTxDigest?: string;
+}): Promise<{ updated: number }> {
+  const sql = `
+    UPDATE hedges SET
+      status = 'closed',
+      realized_pnl = COALESCE(realized_pnl, 0) + $3,
+      funding_paid = COALESCE(funding_paid, 0) + COALESCE($4, 0),
+      closed_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP,
+      tx_hash = COALESCE($6, tx_hash),
+      reason = COALESCE(reason, '') || ' | closed via ' || COALESCE($5, 'cron')
+    WHERE id = (
+      SELECT id FROM hedges
+      WHERE market = $1 AND side = $2 AND status = 'active' AND simulation_mode = false
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
+    RETURNING id
+  `;
+  try {
+    const rows = await query<{ id: number }>(sql, [
+      args.symbol,
+      args.side,
+      args.realizedPnl,
+      args.feesPaid ?? null,
+      args.closeOrderId ?? null,
+      args.closeTxDigest ?? null,
+    ]);
+    return { updated: rows.length };
+  } catch (err) {
+    logger.warn('[DB] closePerpHedgeBySymbolSide failed', { error: err instanceof Error ? err.message : err });
+    return { updated: 0 };
+  }
+}
+
+/**
+ * Sum of realized_pnl for hedges closed since a given epoch-ms.
+ * Used by the daily-loss circuit breaker.
+ *
+ * Returns: { realized: number, fundingPaid: number, count: number }
+ *   realized:    sum of realized_pnl (can be negative)
+ *   fundingPaid: sum of funding_paid (always positive — cost)
+ *   netPnl:      realized - fundingPaid
+ */
+export async function getRealizedPnlSince(sinceMs: number): Promise<{
+  realized: number;
+  fundingPaid: number;
+  netPnl: number;
+  count: number;
+}> {
+  await ensureHedgesTable();
+  try {
+    const sinceIso = new Date(sinceMs).toISOString();
+    const row = await queryOne<{
+      realized: string | null;
+      funding: string | null;
+      cnt: string | null;
+    }>(
+      `SELECT
+         COALESCE(SUM(realized_pnl), 0)::TEXT AS realized,
+         COALESCE(SUM(funding_paid), 0)::TEXT AS funding,
+         COUNT(*)::TEXT AS cnt
+       FROM hedges
+       WHERE simulation_mode = false
+         AND status = 'closed'
+         AND closed_at >= $1`,
+      [sinceIso],
+    );
+    const realized = Number(row?.realized ?? 0);
+    const fundingPaid = Number(row?.funding ?? 0);
+    return {
+      realized,
+      fundingPaid,
+      netPnl: realized - fundingPaid,
+      count: Number(row?.cnt ?? 0),
+    };
+  } catch (err) {
+    logger.warn('[DB] getRealizedPnlSince failed', { error: err instanceof Error ? err.message : err });
+    return { realized: 0, fundingPaid: 0, netPnl: 0, count: 0 };
+  }
+}
+
+/**
+ * Active non-simulation hedges older than maxAgeMs.
+ * Used by the position-age timeout to force-close stale perps that would otherwise
+ * keep paying funding indefinitely.
+ */
+export async function getStaleActiveHedges(maxAgeMs: number): Promise<Array<{
+  orderId: string;
+  market: string;
+  side: 'LONG' | 'SHORT';
+  asset: string;
+  ageMs: number;
+  createdAt: string;
+}>> {
+  await ensureHedgesTable();
+  try {
+    const cutoffIso = new Date(Date.now() - maxAgeMs).toISOString();
+    const rows = await query<{
+      order_id: string;
+      market: string;
+      side: 'LONG' | 'SHORT';
+      asset: string;
+      created_at: string;
+    }>(
+      `SELECT order_id, market, side, asset, created_at
+       FROM hedges
+       WHERE simulation_mode = false
+         AND status = 'active'
+         AND created_at < $1
+       ORDER BY created_at ASC
+       LIMIT 32`,
+      [cutoffIso],
+    );
+    const now = Date.now();
+    return rows.map(r => ({
+      orderId: r.order_id,
+      market: r.market,
+      side: r.side,
+      asset: r.asset,
+      ageMs: now - new Date(r.created_at).getTime(),
+      createdAt: r.created_at,
+    }));
+  } catch (err) {
+    logger.warn('[DB] getStaleActiveHedges failed', { error: err instanceof Error ? err.message : err });
+    return [];
+  }
+}
+
 export async function getHedgeStats() {
   const sql = `
     SELECT 

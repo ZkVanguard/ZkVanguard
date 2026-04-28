@@ -371,6 +371,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const totalPnL = hedges.reduce((sum, h) => sum + Number(h.current_pnl || 0), 0);
 
     // Merge DB-recorded BlueFin hedges with on-chain SUI Move hedges (if any).
+    // The reconciler keeps `hedges.hedge_id_onchain` populated for SUI rows
+    // mirrored from the Move pool, so we dedupe by that key — the DB row wins
+    // because it has richer fields (entry price, PnL, ZK binding, etc.).
     const dbActiveHedges = hedges.map(h => ({
       id: String(h.id),
       asset: h.asset,
@@ -385,8 +388,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         : 0,
       createdAt: h.created_at?.toISOString?.() || new Date().toISOString(),
     }));
-    const mergedActiveHedges = [...dbActiveHedges, ...onChainSui.hedges];
-    const onChainHedgeValue = onChainSui.hedges.reduce((sum, h) => sum + h.notionalValue, 0);
+    const dbOnChainIds = new Set(
+      hedges
+        .map(h => (h.hedge_id_onchain || '').toLowerCase())
+        .filter(Boolean)
+    );
+    const onChainOnly = onChainSui.hedges.filter(
+      h => !dbOnChainIds.has(String(h.id).toLowerCase())
+    );
+    const mergedActiveHedges = [...dbActiveHedges, ...onChainOnly];
+    const onChainHedgeValue = onChainOnly.reduce((sum, h) => sum + h.notionalValue, 0);
 
     // For SUI, the on-chain auto_hedge_config is the source of truth for `enabled`.
     // Fall back to the DB config only if on-chain read failed (no hedges and no config).
@@ -406,7 +417,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       stats: {
         totalHedgeValue: Math.round((totalHedgeValue + onChainHedgeValue) * 100) / 100,
         totalPnL: Math.round(totalPnL * 100) / 100,
-        hedgeCount: hedges.length + onChainSui.hedges.length,
+        hedgeCount: mergedActiveHedges.length,
         decisionsToday,
       },
     };

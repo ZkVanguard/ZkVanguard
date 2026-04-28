@@ -6,6 +6,11 @@
 
 import type { HedgeRecommendation } from './hedge-types';
 import type { AggregatedPrediction } from '../market-data/PredictionAggregatorService';
+import {
+  qualifyAggregatedPrediction,
+  computeSafeCollateralUsd,
+  SIZING_LIMITS,
+} from './calibration';
 
 // Configuration constants (shared with AutoHedgingService)
 export const HEDGE_CONFIG = {
@@ -133,43 +138,53 @@ export function generateHedgeRecommendations(
     }
   }
 
-  // Prediction-driven hedges
-  if (prediction && prediction.consensus >= 60 && prediction.confidence >= 60) {
-    const isHedgeSignal = prediction.recommendation !== 'WAIT';
-    const direction: 'LONG' | 'SHORT' = prediction.direction === 'DOWN' ? 'SHORT' : 'LONG';
+  // Prediction-driven hedges (Polymarket-calibrated probability + Kelly sizing)
+  // We trust the *probability* output of the aggregator (which weights
+  // Polymarket's order-book-implied probability heaviest) and convert it
+  // through quarter-Kelly with TVL caps. No more heuristic confidence.
+  const qualified = qualifyAggregatedPrediction(prediction);
+  if (qualified) {
+    const direction: 'LONG' | 'SHORT' = qualified.direction === 'DOWN' ? 'SHORT' : 'LONG';
+    const primaryAsset = positions.length > 0
+      ? positions.reduce((a, b) => b.value > a.value ? b : a).symbol
+      : 'BTC';
 
-    const predConfidence = prediction.recommendation.startsWith('STRONG_') ? 0.90 :
-                           prediction.recommendation.startsWith('LIGHT_') ? 0.72 : 0.82;
+    const alreadyHedgedSameDirection = activeHedges.some(
+      h => h.asset === primaryAsset && h.side === direction
+    );
 
-    if (isHedgeSignal && totalValue > 0) {
-      const primaryAsset = positions.length > 0
-        ? positions.reduce((a, b) => b.value > a.value ? b : a).symbol
-        : 'BTC';
+    if (!alreadyHedgedSameDirection) {
+      // Sum currently hedged USD so we respect the on-chain max-hedge-ratio.
+      const currentHedgedUsd = activeHedges.reduce((sum, h) => {
+        // Hedge type may carry notionalValue; fall back to 0 if unavailable.
+        const n = (h as unknown as { notionalValue?: number }).notionalValue;
+        return sum + (Number.isFinite(n) ? Number(n) : 0);
+      }, 0);
 
-      const alreadyHedgedSameDirection = activeHedges.some(
-        h => h.asset === primaryAsset && h.side === direction
-      );
+      const collateralUsd = computeSafeCollateralUsd({
+        signal: qualified,
+        poolTvlUsd: totalValue,
+        currentHedgedUsd,
+      });
 
-      if (!alreadyHedgedSameDirection) {
-        const baseHedgeRatio = 0.15;
-        const hedgeSize = Math.max(
-          HEDGE_CONFIG.MIN_HEDGE_SIZE_USD,
-          totalValue * baseHedgeRatio * prediction.sizeMultiplier
-        );
-
-        const leverage = direction === 'LONG'
-          ? Math.min(HEDGE_CONFIG.DEFAULT_LEVERAGE, 3)
-          : HEDGE_CONFIG.DEFAULT_LEVERAGE;
-
+      // computeSafeCollateralUsd returns 0 when caps are hit — only push
+      // a recommendation when it actually wants to size something.
+      if (collateralUsd >= SIZING_LIMITS.MIN_HEDGE_USD) {
+        const recName = prediction!.recommendation.replace(/_/g, ' ');
         recommendations.push({
           asset: primaryAsset,
           side: direction,
-          reason: `[PREDICTION] ${prediction.recommendation.replace(/_/g, ' ')} — ` +
-                  `${prediction.sources.length} sources, ${prediction.consensus.toFixed(0)}% consensus, ` +
-                  `${prediction.confidence.toFixed(0)}% confidence (${prediction.reasoning})`,
-          suggestedSize: hedgeSize,
-          leverage,
-          confidence: predConfidence,
+          reason: `[CALIBRATED] ${recName} — p=${(qualified.probability * 100).toFixed(1)}%, ` +
+                  `edge=${(qualified.edge * 100).toFixed(1)}%, kelly¼-bounded, ` +
+                  `${prediction!.sources.length} sources (${prediction!.consensus.toFixed(0)}% consensus)`,
+          suggestedSize: collateralUsd,
+          // Use leverage 1 for calibrated bets so payoff odds match Kelly assumption.
+          // Higher leverage is reserved for drawdown/loss hedges where we're
+          // protecting an existing position rather than betting on probability.
+          leverage: 1,
+          // Pass the *calibrated* probability through as confidence so downstream
+          // gates compare apples-to-apples with Polymarket calibration.
+          confidence: qualified.probability,
         });
       }
     }

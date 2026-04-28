@@ -34,6 +34,12 @@ import {
   calculateConcentrationRisk,
   generateHedgeRecommendations,
 } from './hedge-risk-math';
+import {
+  SIZING_LIMITS,
+  isPriceFreshEnough,
+  safeLeverage,
+  buildDecisionToken,
+} from './calibration';
 
 // Re-export shared types for existing consumers
 export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
@@ -50,6 +56,11 @@ class AutoHedgingService {
   // overlapping executions could cause duplicate hedges, inconsistent state, or DB races.
   private pnlUpdateInProgress = false;
   private riskCheckInProgress = false;
+
+  // ── Decision idempotency: prevent duplicate hedges from clock-skewed cron ticks ──
+  // Maps decision-token → expiry timestamp; we refuse to re-execute a token while live.
+  private recentDecisionTokens: Map<string, number> = new Map();
+  private static readonly DECISION_TOKEN_TTL_MS = 5 * 60 * 1000;
 
   // ── Memory cap for assessments map ──
   private static readonly MAX_RISK_ASSESSMENTS = 500;
@@ -1221,16 +1232,61 @@ class AutoHedgingService {
       return false;
     }
 
-    // Validate leverage
-    const leverage = Math.min(recommendation.leverage, config.maxLeverage);
+    // Validate suggested size — fail closed on bad input
+    if (!Number.isFinite(recommendation.suggestedSize) || recommendation.suggestedSize <= 0) {
+      logger.warn('[AutoHedging] Invalid suggestedSize, skipping hedge', {
+        asset: recommendation.asset,
+        size: recommendation.suggestedSize,
+      });
+      return false;
+    }
+
+    // ═══ IDEMPOTENCY GATE — refuse duplicate decisions in same 5-min window ═══
+    // Two cron ticks within 5 minutes for the same {portfolio, asset, side, risk-bucket}
+    // resolve to the same token; we drop the second.
+    const lastRisk = this.lastRiskAssessments.get(portfolioId);
+    const decisionToken = buildDecisionToken({
+      portfolioId,
+      asset: recommendation.asset,
+      side: recommendation.side as 'LONG' | 'SHORT',
+      riskScore: lastRisk?.riskScore ?? 0,
+    });
+    const now = Date.now();
+    // Sweep expired tokens (cheap; map stays small in practice)
+    for (const [k, exp] of this.recentDecisionTokens) {
+      if (exp <= now) this.recentDecisionTokens.delete(k);
+    }
+    if (this.recentDecisionTokens.has(decisionToken)) {
+      logger.info('[AutoHedging] Duplicate decision token, skipping hedge', {
+        token: decisionToken,
+        asset: recommendation.asset,
+      });
+      return false;
+    }
+    // Reserve the token *before* execution so concurrent calls see it
+    this.recentDecisionTokens.set(decisionToken, now + AutoHedgingService.DECISION_TOKEN_TTL_MS);
+
+    // Hard leverage cap (mirrors on-chain Move guard intent)
+    const leverage = safeLeverage(recommendation.leverage, config.maxLeverage);
 
     // ═══ VALIDATE REAL-TIME PRICE BEFORE EXECUTION ═══
     const priceContext = await getHedgeExecutionPrice(recommendation.asset, recommendation.side);
-    
+
     if (!priceContext.validation.isValid) {
       logger.warn('[AutoHedging] Invalid price, skipping hedge', {
         asset: recommendation.asset,
         warnings: priceContext.validation.warnings,
+      });
+      return false;
+    }
+
+    // ═══ STALENESS GATE — refuse to hedge on stale prices ═══
+    // A 60s-stale price during a fast move can mean executing 5–10% off market.
+    if (!isPriceFreshEnough(priceContext.validation.staleness)) {
+      logger.error('[AutoHedging] Price too stale, aborting hedge', {
+        asset: recommendation.asset,
+        staleness: `${priceContext.validation.staleness}ms`,
+        maxAllowed: `${SIZING_LIMITS.MAX_PRICE_STALENESS_MS}ms`,
       });
       return false;
     }
@@ -1243,6 +1299,7 @@ class AutoHedgingService {
       slippage: `${priceContext.slippageEstimate.toFixed(3)}%`,
       source: priceContext.validation.priceSource,
       staleness: `${priceContext.validation.staleness}ms`,
+      leverage,
     });
 
     // Convert asset to market format (e.g., BTC -> BTC-USD-PERP)
@@ -1294,7 +1351,9 @@ class AutoHedgingService {
         });
         return true;
       } else {
-        // Orchestrator failed — do NOT silently simulate
+        // Orchestrator failed — do NOT silently simulate, and release the
+        // idempotency reservation so the next genuine attempt can proceed.
+        this.recentDecisionTokens.delete(decisionToken);
         logger.error('[AutoHedging] Orchestrator execution failed', {
           error: result.error,
           asset: recommendation.asset,
@@ -1302,6 +1361,7 @@ class AutoHedgingService {
         return false;
       }
     } catch (error) {
+      this.recentDecisionTokens.delete(decisionToken);
       logger.error('[AutoHedging] Live execution failed', { error, asset: recommendation.asset });
       return false;
     }
