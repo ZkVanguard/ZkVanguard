@@ -1,7 +1,36 @@
 const createNextIntlPlugin = require('next-intl/plugin');
- 
+
 const withNextIntl = createNextIntlPlugin();
- 
+
+// --- Build-time env sanitization ---------------------------------------------
+// Strip trailing CRLF, stray whitespace, and matched surrounding quotes from
+// every env var. This protects build-time-inlined `NEXT_PUBLIC_*` constants
+// from upstream upload corruption (e.g. PowerShell pipe CRLF). The
+// `instrumentation.ts` hook handles runtime; this handles build.
+{
+  let sanitized = 0;
+  for (const k of Object.keys(process.env)) {
+    const raw = process.env[k];
+    if (raw === undefined) continue;
+    let v = raw.replace(/[\r\n\t\u00A0]+/g, '');
+    if (v.length >= 2) {
+      const f = v.charCodeAt(0);
+      const l = v.charCodeAt(v.length - 1);
+      if ((f === 34 || f === 39) && f === l) v = v.slice(1, -1);
+    }
+    v = v.replace(/^[\x20]+|[\x20]+$/g, '');
+    if (v !== raw) {
+      process.env[k] = v;
+      sanitized++;
+    }
+  }
+  if (sanitized > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`[next.config] Sanitized ${sanitized} env var(s) at build start`);
+  }
+}
+// -----------------------------------------------------------------------------
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -12,6 +41,8 @@ const nextConfig = {
   
   // Performance optimizations
   experimental: {
+    // Enable Next 14 instrumentation hook (auto-enabled in v15+)
+    instrumentationHook: true,
     optimizePackageImports: [
       'viem', 'lucide-react', '@heroicons/react', 'framer-motion',
       'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui',
