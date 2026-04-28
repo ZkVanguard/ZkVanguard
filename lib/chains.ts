@@ -442,26 +442,11 @@ export interface MultiChainConfig {
   };
 }
 
-// Supported chains for the platform
+// Supported chains for the platform.
+// NOTE: Chronos-Vanguard is currently SUI-focused — other chains
+// (Cronos / Hedera / Oasis ParaTimes) are intentionally disabled in the UI
+// while their backend service code is preserved for future re-enablement.
 export const SUPPORTED_CHAINS: MultiChainConfig[] = [
-  {
-    type: 'evm',
-    name: 'Cronos',
-    logo: '/chains/cronos.svg',
-    chains: {
-      mainnet: CronosMainnet,
-      testnet: CronosTestnet,
-    },
-  },
-  {
-    type: 'hedera',
-    name: 'Hedera',
-    logo: '/chains/hedera.svg',
-    chains: {
-      mainnet: HederaMainnet,
-      testnet: HederaTestnet,
-    },
-  },
   {
     type: 'sui',
     name: 'SUI',
@@ -469,42 +454,6 @@ export const SUPPORTED_CHAINS: MultiChainConfig[] = [
     chains: {
       mainnet: SuiMainnet,
       testnet: SuiTestnet,
-    },
-  },
-  {
-    type: 'oasis-consensus',
-    name: 'Oasis Consensus',
-    logo: '/chains/oasis-consensus.svg',
-    chains: {
-      mainnet: OasisConsensusMainnet,
-      testnet: OasisConsensusTestnet,
-    },
-  },
-  {
-    type: 'oasis-emerald',
-    name: 'Oasis Emerald',
-    logo: '/chains/oasis-emerald.svg',
-    chains: {
-      mainnet: OasisEmeraldMainnet,
-      testnet: OasisEmeraldTestnet,
-    },
-  },
-  {
-    type: 'oasis-sapphire',
-    name: 'Oasis Sapphire',
-    logo: '/chains/oasis-sapphire.svg',
-    chains: {
-      mainnet: OasisSapphireMainnet,
-      testnet: OasisSapphireTestnet,
-    },
-  },
-  {
-    type: 'oasis-cipher',
-    name: 'Oasis Cipher',
-    logo: '/chains/oasis-cipher.svg',
-    chains: {
-      mainnet: OasisCipherMainnet,
-      testnet: OasisCipherTestnet,
     },
   },
 ];

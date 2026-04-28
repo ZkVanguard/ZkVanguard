@@ -145,19 +145,9 @@ export function ConnectButton() {
               <div className="fixed inset-0 z-40" onClick={() => setShowSelector(false)} />
               <div className="absolute top-full mt-2 right-0 w-64 bg-white dark:bg-[#1c1c1e] border border-[#E5E5EA] dark:border-[#38383a] rounded-xl shadow-lg overflow-hidden z-50">
                 <div className="p-2">
-                  <button
-                    onClick={() => { openWdkModal(); setShowSelector(false); }}
-                    className="w-full p-2.5 rounded-lg hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] transition-colors text-left flex items-center gap-3"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-[#26A17B] flex items-center justify-center">
-                      <span className="text-white font-bold text-[8px]">USDT</span>
-                    </div>
-                    <div>
-                      <div className="font-medium text-[#1D1D1F] dark:text-white text-[14px]">Tether WDK</div>
-                      <div className="text-[11px] text-[#86868B]">Self-custodial multi-chain</div>
-                    </div>
-                  </button>
-
+                  {/* SUI-only mode: Tether WDK (EVM/Cronos/Hedera) wallet option
+                      is intentionally disabled. Restore the WDK button below
+                      when re-enabling other chains. */}
                   <button
                     onClick={handleConnectSui}
                     disabled={isConnectingSui}

@@ -9,7 +9,8 @@ interface ChainSelectorProps {
 }
 
 export function ChainSelector({ onChainChange, className = '' }: ChainSelectorProps) {
-  const [selectedChain, setSelectedChain] = useState<ChainType>('evm');
+  // SUI is the only enabled chain in the UI — keep the dropdown trivially small.
+  const [selectedChain, setSelectedChain] = useState<ChainType>('sui');
   const [isOpen, setIsOpen] = useState(false);
 
   const currentChain = SUPPORTED_CHAINS.find(c => c.type === selectedChain);

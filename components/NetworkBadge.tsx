@@ -13,23 +13,12 @@ interface NetworkInfo {
   description?: string;
 }
 
-// Detect network from environment variable or default to testnet
-const OASIS_NETWORK = (process.env.NEXT_PUBLIC_OASIS_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
+// Detect network from environment variable or default to mainnet
 const SUI_NETWORK = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
-const CRONOS_NETWORK = (process.env.NEXT_PUBLIC_CRONOS_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
 
+// SUI-only mode: Cronos / Hedera / Oasis ParaTime entries are intentionally
+// removed from this list while non-SUI chains are disabled in the UI.
 const NETWORKS: NetworkInfo[] = [
-  {
-    name: 'Cronos',
-    type: 'evm',
-    status: 'live',
-    network: CRONOS_NETWORK,
-    color: '#002D74',
-    explorerUrl: CRONOS_NETWORK === 'mainnet' 
-      ? 'https://explorer.cronos.org'
-      : 'https://explorer.cronos.org/testnet',
-    description: 'EVM • x402 Gasless',
-  },
   {
     name: 'SUI',
     type: 'sui',
@@ -41,50 +30,6 @@ const NETWORKS: NetworkInfo[] = [
       ? `https://suiscan.xyz/mainnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88'}`
       : `https://suiscan.xyz/testnet/object/${process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || '0xd76a2da684743b47e64382b61004314bca46fb2dc94a286c4f1882caa0dfc1d9'}`,
     description: 'Move • Sponsored Tx',
-  },
-  {
-    name: 'Oasis Sapphire',
-    type: 'oasis',
-    status: 'ready',
-    network: OASIS_NETWORK,
-    color: '#0092F6',
-    explorerUrl: OASIS_NETWORK === 'mainnet'
-      ? 'https://explorer.oasis.io/mainnet/sapphire'
-      : 'https://explorer.oasis.io/testnet/sapphire',
-    description: 'Confidential EVM • Privacy',
-  },
-  {
-    name: 'Oasis Emerald',
-    type: 'oasis',
-    status: 'ready',
-    network: OASIS_NETWORK,
-    color: '#00C853',
-    explorerUrl: OASIS_NETWORK === 'mainnet'
-      ? 'https://explorer.oasis.io/mainnet/emerald'
-      : 'https://explorer.oasis.io/testnet/emerald',
-    description: 'Public EVM ParaTime',
-  },
-  {
-    name: 'Oasis Consensus',
-    type: 'oasis',
-    status: 'ready',
-    network: OASIS_NETWORK,
-    color: '#FF6D00',
-    explorerUrl: OASIS_NETWORK === 'mainnet'
-      ? 'https://explorer.oasis.io/mainnet/consensus'
-      : 'https://explorer.oasis.io/testnet/consensus',
-    description: 'Base Layer • Staking',
-  },
-  {
-    name: 'Oasis Cipher',
-    type: 'oasis',
-    status: 'ready',
-    network: OASIS_NETWORK,
-    color: '#7C4DFF',
-    explorerUrl: OASIS_NETWORK === 'mainnet'
-      ? 'https://explorer.oasis.io/mainnet/cipher'
-      : 'https://explorer.oasis.io/testnet/cipher',
-    description: 'Confidential WASM ParaTime',
   },
 ];
 
@@ -132,9 +77,9 @@ export function NetworkBadge({ compact = false, showDropdown = false }: NetworkB
             />
           ))}
         </div>
-        <span className="text-sm font-medium text-[#1D1D1F]">Multi-Chain</span>
+        <span className="text-sm font-medium text-[#1D1D1F]">SUI Network</span>
         <span className="text-xs px-1.5 py-0.5 bg-[#34C759]/10 text-[#34C759] rounded-full font-medium">
-          {NETWORKS.filter(n => n.status === 'live').length} Live
+          Live
         </span>
       </button>
 

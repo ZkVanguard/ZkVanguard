@@ -86,35 +86,15 @@ function MultiChainContextProvider({ children }: { children: ReactNode }) {
   const sui = useSui();
   
   // ============================================
-  // AUTO-DETECT CHAIN BASED ON CONNECTED WALLET
+  // SUI-ONLY MODE
   // ============================================
-  // Priority: Connected wallet > SUI default
-  // Once user manually selects, don't auto-switch
+  // Other chains (Cronos / Hedera / Oasis) are disabled in the UI for now.
+  // Force activeChain to 'sui' if anything else has been set.
   useEffect(() => {
-    if (userSelectedChainRef.current) return;
-    
-    const suiWalletConnected = sui.isConnected && sui.address;
-    const evmWalletConnected = evmConnected && evmAddress;
-    
-    if (suiWalletConnected && !evmWalletConnected) {
-      // Only SUI wallet connected → use SUI
-      if (activeChain !== 'sui') {
-        setActiveChain('sui');
-      }
-    } else if (evmWalletConnected && !suiWalletConnected) {
-      // Only EVM wallet connected → detect which EVM chain
-      const detectedChain = getChainTypeFromEvmId(evmChainId);
-      if (detectedChain && detectedChain !== activeChain) {
-        setActiveChain(detectedChain);
-      }
-    } else if (suiWalletConnected && evmWalletConnected) {
-      // Both wallets connected → prefer SUI (default/optimized)
-      if (activeChain !== 'sui') {
-        setActiveChain('sui');
-      }
+    if (activeChain !== 'sui') {
+      setActiveChain('sui');
     }
-    // If no wallet connected, keep current selection (defaults to 'sui')
-  }, [evmChainId, evmConnected, evmAddress, sui.isConnected, sui.address, activeChain]);
+  }, [activeChain]);
   
   // Wrap setActiveChain to track manual selections
   const handleSetActiveChain = useCallback((chain: ChainType) => {
@@ -274,14 +254,10 @@ interface ChainSelectorProps {
   className?: string;
 }
 
+// Only SUI is enabled in the UI today. Other chains remain in the codebase
+// (and in the ChainType union) but are intentionally hidden from users.
 const CHAIN_OPTIONS: { chain: ChainType; label: string; activeColor: string }[] = [
   { chain: 'sui', label: 'SUI', activeColor: 'bg-blue-500' },
-  { chain: 'evm', label: 'Cronos', activeColor: 'bg-blue-500' },
-  { chain: 'hedera', label: 'Hedera', activeColor: 'bg-purple-500' },
-  { chain: 'oasis-emerald', label: 'Emerald', activeColor: 'bg-green-500' },
-  { chain: 'oasis-sapphire', label: 'Sapphire', activeColor: 'bg-indigo-500' },
-  { chain: 'oasis-cipher', label: 'Cipher', activeColor: 'bg-purple-500' },
-  { chain: 'oasis-consensus', label: 'Consensus', activeColor: 'bg-rose-500' },
 ];
 
 export function ChainSelector({ className = '' }: ChainSelectorProps) {

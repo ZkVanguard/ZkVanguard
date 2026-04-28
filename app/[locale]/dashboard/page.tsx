@@ -4,9 +4,9 @@ import { useState, useEffect, Suspense } from 'react';
 import nextDynamic from 'next/dynamic';
 import { useAccount, useBalance } from '@/lib/wdk/wdk-hooks';
 import { 
-  Bot, Shield, Briefcase, TrendingUp, History, 
-  BarChart3, Zap, MessageSquare, ChevronRight, 
-  Menu, X, Settings, ArrowLeftRight, Users
+  Bot, Shield, Briefcase, TrendingUp,
+  BarChart3, MessageSquare, ChevronRight, 
+  Menu, X, Settings, Users
 } from 'lucide-react';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
@@ -32,38 +32,15 @@ const PositionsList = nextDynamic(() => import('@/components/dashboard/Positions
   ssr: false
 });
 
-const SettlementsPanel = nextDynamic(() => import('@/components/dashboard/SettlementsPanel').then(mod => ({ default: mod.SettlementsPanel })), {
-  loading: () => <LoadingSkeleton />,
-  ssr: false
-});
-
 const ActiveHedges = nextDynamic(() => import('@/components/dashboard/ActiveHedges').then(mod => ({ default: mod.ActiveHedges })), {
   loading: () => <LoadingSkeleton />,
   ssr: false
 });
 
-const ZKProofDemo = nextDynamic(() => import('@/components/dashboard/ZKProofDemo').then(mod => ({ default: mod.ZKProofDemo })), {
-  loading: () => <LoadingSkeleton />,
-  ssr: false
-});
-
-const AdvancedPortfolioCreator = nextDynamic(() => import('@/components/dashboard/AdvancedPortfolioCreator').then(mod => ({ default: mod.AdvancedPortfolioCreator })), {
-  loading: () => null,
-  ssr: false
-});
-
-const SwapModal = nextDynamic(() => import('@/components/dashboard/SwapModal').then(mod => ({ default: mod.SwapModal })), {
-  ssr: false
-});
-
-const ManualHedgeModal = nextDynamic(() => import('@/components/dashboard/ManualHedgeModal').then(mod => ({ default: mod.ManualHedgeModal })), {
-  ssr: false
-});
-
-const RecentTransactions = nextDynamic(() => import('@/components/dashboard/RecentTransactions').then(mod => ({ default: mod.RecentTransactions })), {
-  loading: () => <LoadingSkeleton />,
-  ssr: false
-});
+// SUI-only mode: Cronos/EVM-bound widgets (SwapModal, ManualHedgeModal,
+// RecentTransactions, SettlementsPanel, ZKProofDemo, AdvancedPortfolioCreator)
+// are intentionally not imported. They can be restored when those chains
+// are re-enabled in the UI.
 
 const PredictionInsights = nextDynamic(() => import('@/components/dashboard/PredictionInsights').then(mod => ({ default: mod.PredictionInsights })), {
   loading: () => <LoadingSkeleton />,
@@ -108,16 +85,15 @@ interface NavItem {
   badge?: string;
 }
 
+// SUI-only mode: Cronos/EVM-bound nav items (Swap, History, ZK Proofs)
+// are intentionally hidden until those chains are re-enabled.
 const navItems: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'positions', label: 'Positions', icon: Briefcase },
   { id: 'hedges', label: 'Hedges', icon: Shield },
   { id: 'community', label: 'Community Pool', icon: Users, badge: 'New' },
-  { id: 'swap', label: 'Swap', icon: ArrowLeftRight },
   { id: 'agents', label: 'AI Agents', icon: Bot, badge: 'Live' },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
-  { id: 'history', label: 'History', icon: History },
-  { id: 'zk-proofs', label: 'ZK Proofs', icon: Zap },
 ];
 
 type NavId = NavItem['id'];
@@ -168,7 +144,8 @@ export default function DashboardPage() {
   } | undefined>(undefined);
   
   const displayAddress = address || '';
-  const portfolioAssets = suiConnected ? ['SUI', 'USDC'] : ['CRO', 'USDC', 'WBTC', 'ETH'];
+  // SUI-only mode: portfolio asset universe is fixed to SUI/USDC.
+  const portfolioAssets = ['SUI', 'USDC'];
   
   // Debug notification state changes
   useEffect(() => {
@@ -566,12 +543,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Create Portfolio CTA - always show for connected users */}
-      {isConnected && (
-        <div className="fixed bottom-6 lg:bottom-6 left-4 lg:left-[280px] z-40 text-[#86868B]">
-          <AdvancedPortfolioCreator />
-        </div>
-      )}
+      {/* Create Portfolio CTA disabled in SUI-only mode (EVM/Cronos required). */}
 
       {/* Chat Panel */}
       {showChat && (
@@ -640,24 +612,9 @@ export default function DashboardPage() {
         </button>
       )}
 
-      {/* Swap Modal */}
-      <SwapModal
-        isOpen={swapModalOpen}
-        onClose={() => setSwapModalOpen(false)}
-        onSuccess={() => setTimeout(() => window.location.reload(), 2000)}
-      />
-
-      {/* Manual Hedge Modal */}
-      <ManualHedgeModal
-        isOpen={hedgeModalOpen}
-        onClose={() => {
-          setHedgeModalOpen(false);
-          setHedgeInitialValues(undefined); // Clear pre-filled values
-        }}
-        availableAssets={portfolioAssets}
-        walletAddress={address}
-        initialValues={hedgeInitialValues}
-      />
+      {/* Swap Modal and Manual Hedge Modal are Cronos/EVM-bound and disabled
+          in SUI-only mode. Hedging is driven by the SUI Community Pool +
+          Bluefin auto-hedge cron instead. */}
 
       {/* Settings Modal */}
       {settingsOpen && (
@@ -766,24 +723,10 @@ export default function DashboardPage() {
         );
         
       case 'swap':
-        return (
-          <Card>
-            <CardHeader 
-              title="Token Swap" 
-              subtitle="Swap tokens on VVS Finance"
-            />
-            <div className="p-6">
-              <SwapModal
-                isOpen={true}
-                onClose={() => setActiveNav('overview')}
-                onSuccess={() => {
-                  setNotification('Swap successful!');
-                  setTimeout(() => window.location.reload(), 2000);
-                }}
-              />
-            </div>
-          </Card>
-        );
+      case 'history':
+      case 'zk-proofs':
+        // SUI-only mode: these tabs are hidden from nav and unreachable here.
+        return null;
         
       case 'agents':
         return (
@@ -824,15 +767,8 @@ export default function DashboardPage() {
         );
         
       case 'history':
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            <RecentTransactions address={displayAddress} />
-            <SettlementsPanel address={displayAddress} />
-          </div>
-        );
-        
       case 'zk-proofs':
-        return <ZKProofDemo />;
+        return null;
         
       case 'community':
         return (
