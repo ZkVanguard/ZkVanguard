@@ -229,13 +229,13 @@ export function useCommunityPool(propAddress?: string) {
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
   // For SUI, network comes from SuiContext (defaults to mainnet via env). For EVM,
   // derive from wallet chainId; fall back to mainnet for SUI-only deployments.
-  const detectedNetwork =
+  const detectedNetwork: 'mainnet' | 'testnet' =
     selectedChain === 'sui'
-      ? suiNetwork
+      ? (suiNetwork === 'mainnet' ? 'mainnet' : 'testnet')
       : chainId
         ? getNetworkFromChainId(chainId)
         : 'mainnet';
-  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : detectedNetwork;
+  const network: 'mainnet' | 'testnet' = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : detectedNetwork;
   const USDT_ADDRESS = getUsdtAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);
