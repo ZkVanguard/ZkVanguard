@@ -2,63 +2,46 @@
 
 ## 1. What did you work on this week?
 
-### SUI Mainnet Pool Debugging & Monitoring Infrastructure
+### Bluefin V2 Margin Bank Auto-Top-Up (Sui-native PTB)
 
-Built comprehensive debugging and monitoring endpoints for the live SUI mainnet pool. Created a `/api/sui-pool-status` endpoint that returns real-time pool state from on-chain data — total USDC balance, share supply, member count, NAV, admin wallet balance, and network detection. Added on-chain hedge state detail reporting showing active hedge positions, BlueFin perpetual positions (open/closed), and hedge-to-NAV ratios. Made the status endpoint publicly accessible for monitoring without authentication. Added admin wallet balance checks to catch low-gas conditions before cron failures.
+Built `BluefinTreasuryService` to automate USDC top-ups from the operator's Sui spot wallet into the Bluefin V2 Margin Bank so the auto-hedge cron can place real perp orders without any manual UI step. The official `@bluefin-exchange/bluefin-v2-client` SDK is V1-architecture-only and depends on a decommissioned gateway (`dapi.api.sui-prod.bluefin.io` returning 503 "no healthy upstream"), so I bypassed it entirely and built the deposit transaction directly with `@mysten/sui` against Bluefin's V2 mainnet contract — calling `exchange::deposit_to_asset_bank<USDC>(eds, "USDC", account, amount, &mut Coin<USDC>, ctx)` with the verified shared `ExternalDataStore` (`0x740d97...`, initial shared version 510828396) and package `0xe74481...`. Discovered the V2 `&mut Coin<T>` semantics — passing a `splitCoins` result fails with `UnusedValueWithoutDrop`; the entry mutates an existing coin object in place. Added a 1 USDC minimum-deposit guard after decoding abort code 1030 from the Move source.
 
-### SUI Hedge State Management & Reset
+### SUI → USDC Auto-Swap with DEX Source Fallback
 
-Added an admin endpoint and corresponding Move contract function for resetting hedge state on-chain. This allows recovery from stuck hedge positions where the on-chain state diverges from BlueFin's actual position state (e.g., if a hedge was closed on BlueFin but the contract still shows it as active). The reset function clears the hedge record in the Move contract and syncs the database, enabling the next cron cycle to re-evaluate and open fresh hedges based on current market conditions.
+When the operator's spot USDC is below the top-up target, the service now auto-swaps SUI → USDC via the Bluefin 7k aggregator SDK before depositing. To route around paused pools (default route hit `assert_not_pause` at package `0xcf60a4...`), I implemented a fallback chain that re-quotes with progressively-restricted `sources` arrays — `[default → cetus+bluefin+deepbook_v3 → bluefin → cetus → deepbook_v3]` — and only retries pause-style aborts. Verified live: tx `Frk3xPMzDf11fFCT95UatJ1N5TNwpJwVfK83HniravvK` succeeded after the default route was paused. Added env-driven safety knobs: `BLUEFIN_SUI_RESERVE` (gas reserve), `BLUEFIN_MAX_SWAP_SUI` (per-run cap), `BLUEFIN_MIN_MARGIN_USD`, `BLUEFIN_TARGET_MARGIN_USD`.
 
-### BlueFin Service Reliability
+### Auto-Hedge Cron Hardening — Preflight + On-Chain Reconciler
 
-Fixed `BluefinService` singleton pattern — the service was creating multiple instances across different import paths, causing duplicate WebSocket connections and inconsistent position tracking. Consolidated to a single shared instance with proper initialization guards and connection reuse. Added detailed logging for active hedges vs BlueFin positions to diagnose discrepancies between local hedge state and exchange-reported positions.
+Hardened the SUI community-pool cron with three new safety layers: (1) a **preflight endpoint** (`/api/admin/bluefin-preflight`) that verifies free collateral, contract config, and Bluefin connectivity before a tick is allowed to place orders; (2) an **on-chain hedge reconciler** (`SuiHedgeReconciler` + `/api/admin/reconcile-sui-hedges`) that cross-references DB hedge rows against on-chain pool state, inserting missing entries and closing stale ones so the AutoHedgePanel UI reflects ground truth; (3) the **auto-top-up hook** wired into the cron path so margin shortfalls are resolved automatically before the `freeCollateral <= 0` abort. Also added `lib/services/hedging/calibration.ts` (deterministic position-sizing math + tests) and a slippage-ladder retry on reverse-swaps so closing hedge legs doesn't fail on a single 1% slippage breach.
 
-### SUI Network Detection & UX Improvements
+### Polymarket Prediction-Signal Gate + On-Chain Hedge Surfacing
 
-Added debug logging across 22 files for SUI network detection to trace why some requests were falling back to testnet despite mainnet configuration. Fixed environment variable propagation so `SUI_NETWORK=mainnet` is correctly read in all server-side contexts (API routes, cron jobs, wallet providers). Improved user-facing error messages with actionable instructions when operations fail.
+Wired the existing Polymarket 5-min prediction signal into the rebalance gate so the cron only opens new directional exposure when the prediction confidence agrees with allocation drift. Surfaced on-chain pool hedges in the AutoHedgePanel by reading directly from the SUI pool object instead of relying solely on DB rows — fixed a stale-cache issue by switching to a 60s on-chain read cache and allowing string IDs in the panel typing. Normalised coin types in the cron's replenish-candidate matcher so USDC variants from different swap routes resolve to the same canonical type.
 
-### Cron Frequency Optimization
+### NAV Inclusion of Admin Assets + Env Sanitisation
 
-Adjusted SUI pool cron scheduling — initially increased from daily to 30-minute intervals for more frequent NAV snapshots and rebalance cycles, then reverted to daily due to Vercel Hobby plan invocation limits. Added debug endpoints to manually trigger cron operations for testing and diagnostics between scheduled runs.
+Included admin-held assets in pool NAV calculation so total value reported by the dashboard matches on-chain reality. Added `lib/utils/sanitize-env.ts` and `scripts/clean-vercel-env.ps1` to strip CRLF/whitespace from Vercel-pulled env vars (root cause of recurring `SUI_NETWORK` testnet-fallback bugs); new `instrumentation.ts` runs sanitisation on cold start.
 
 ---
 
 ## 2. Code links from this week
 
-- **Add admin reset hedge state endpoint + contract function:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/7333637
+- **Include admin assets in NAV, retry reverse-swap with slippage ladder, Polymarket prediction-signal gate:**
+  https://github.com/ZkVanguard/ZkVanguard/commit/0be6d8e
 
-- **Debug: add active hedges and BlueFin positions monitoring:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/37e29bd
-
-- **Debug: add on-chain hedge state details:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/e24f455
-
-- **Debug: add SUI pool status endpoint:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/887f251
-
-- **Fix: BluefinService singleton usage:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/94146f8
-
-- **Fix(sui): add debug logging for network detection + improve UX (22 files):**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/8790e66
-
-- **Debug: add admin wallet balance check:**  
-  https://github.com/ZkVanguard/ZkVanguard/commit/a1e0f37
+- **Surface on-chain pool hedges in AutoHedgePanel + on-chain config for SUI cron:**
+  https://github.com/ZkVanguard/ZkVanguard/commit/0bbee58
 
 ---
 
 ## 3. Blockers or notes
 
-The SUI mainnet pool is live and accepting deposits. Primary focus this week was observability — building the monitoring and debugging infrastructure needed to operate a production pool. Identified and fixed BlueFin singleton issues causing duplicate connections. Vercel Hobby plan limits constrain cron to daily frequency; evaluating Pro plan upgrade for production-grade 30-minute intervals. The hedge state reset capability unblocks recovery from any stuck positions without redeploying contracts.
+The Bluefin V2 mainnet deposit PTB is structurally correct and reaches `bank::deposit_to_asset_bank` cleanly (last dry-run abort was the 1030 minimum-deposit check, not a structural failure), but the operator wallet was drained to ~0.14 SUI / 0.76 USDC by gas during paused-pool retries — a fresh top-up of the operator wallet is needed to confirm the first end-to-end automated deposit on-chain. Bluefin's `dapi.api.sui-prod.bluefin.io` gateway is fully decommissioned, so the official `@bluefin-exchange/bluefin-v2-client@6.5.1` SDK can no longer build deposit PTBs on V2 mainnet — anyone integrating Bluefin V2 should plan to hand-roll the `exchange::deposit_to_asset_bank` PTB the same way. Long-term enhancement: shift top-up funding from the operator's spot wallet to the CommunityPool admin treasury via a privileged `AdminCap` call so the system pulls directly from user deposits instead of operator-held SUI.
 
 ---
 
 ## 4. Sui Stack Components Used
 
-- **Move smart contracts (mainnet)** — Added `reset_hedge_state` function to `community_pool_usdc.move` for admin-controlled hedge recovery on the live mainnet contract
-- **SUI RPC (mainnet)** — On-chain pool state reads for monitoring dashboard, hedge state queries, admin wallet balance checks via `suiClient.getBalance()`
-- **BlueFin Pro** — Position reconciliation between on-chain hedge state and BlueFin exchange positions; singleton service pattern for connection reuse
-- **@mysten/sui SDK** — Network detection debugging across 22 files, environment-driven mainnet/testnet switching
-- **Vercel cron / QStash** — Frequency tuning and manual trigger endpoints for production pool operations
+- **Move smart contracts (mainnet)** — Direct PTB integration with Bluefin V2 mainnet (`exchange::deposit_to_asset_bank<USDC>`) and the ZkVanguard `community_pool_usdc` package; on-chain hedge state read via shared-object inspection.
+- **DeepBook + Cetus + Bluefin liquidity** — Multi-source SUI → USDC swap routing via the Bluefin 7k aggregator SDK with explicit `sources` fallback to route around paused pools.
+- **Sui transactions / Ed25519 signing** — `@mysten/sui` `Transaction` builder + `Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(...))` for signing the V2 deposit and reverse-swap legs server-side.
