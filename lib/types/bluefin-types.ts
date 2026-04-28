@@ -99,7 +99,11 @@ export const MAX_SWAP_SIZE_USD: Record<NetworkType, number> = {
 };
 
 export const MAX_SLIPPAGE: Record<NetworkType, number> = {
-  mainnet: 0.02,
+  // Tightened from 2% → 0.5% (mainnet) to enforce near-zero loss on swap legs.
+  // Override at runtime via BLUEFIN_MAX_SLIPPAGE_PCT (decimal, e.g. 0.005 = 0.5%).
+  mainnet: Number(process.env.BLUEFIN_MAX_SLIPPAGE_PCT) > 0
+    ? Number(process.env.BLUEFIN_MAX_SLIPPAGE_PCT)
+    : 0.005,
   testnet: 0.05,
 };
 

@@ -663,7 +663,10 @@ export class BluefinAggregatorService {
     //   Forward (USDC → asset): quote.amountIn is USDC, expectedAmountOut is asset
     //   Reverse (asset → USDC): quote.amountIn is asset, expectedAmountOut is USDC
     if (this.network === 'mainnet' && quote.expectedAmountOut && quote.expectedAmountOut !== '0') {
-      const MAX_ORACLE_DEVIATION = 0.03; // 3%
+      // Tightened from 3% → 1.5%. Override via BLUEFIN_MAX_ORACLE_DEVIATION (decimal).
+      const MAX_ORACLE_DEVIATION = Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION) > 0
+        ? Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION)
+        : 0.015;
       try {
         const usdcType = this.coinTypes.USDC || MAINNET_COIN_TYPES.USDC;
         const isReverseSwap = quote.toCoinType === usdcType;

@@ -730,6 +730,8 @@ export class BluefinService {
     leverage: number;
     portfolioId?: number;
     reason?: string;
+    /** Bypass the funding-rate guard (use sparingly — only on extremely high-confidence signals) */
+    bypassFundingGuard?: boolean;
   }): Promise<BluefinHedgeResult> {
     await this.ensureInitializedAsync();
 
@@ -791,6 +793,47 @@ export class BluefinService {
       const currentPrice = marketData?.price || 0;
       if (currentPrice <= 0) {
         throw new Error(`Could not get market price for ${params.symbol}`);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // FUNDING-RATE GUARD (defensive — prevents systematic funding bleed)
+      //
+      // Bluefin perp funding is paid every 8h. A SHORT pays funding when
+      // funding rate is POSITIVE (longs are short → shorts pay longs).
+      // A LONG pays funding when funding rate is NEGATIVE.
+      //
+      // Threshold (default 0.0001 / 8h ≈ 11% APR) is the breakeven point
+      // beyond which a directional hedge is structurally unprofitable
+      // unless the price moves enough to overcome the funding bleed in
+      // the time the position is held.
+      //
+      // Override:
+      //   BLUEFIN_FUNDING_RATE_GUARD=false  → disable entirely (NOT RECOMMENDED)
+      //   BLUEFIN_MAX_FUNDING_RATE=0.0002    → adjust threshold (decimal per 8h)
+      //   params.bypassFundingGuard=true     → per-call bypass for proven edge
+      // ═══════════════════════════════════════════════════════════════════
+      const fundingGuardEnabled = (process.env.BLUEFIN_FUNDING_RATE_GUARD || 'true').toLowerCase() !== 'false';
+      if (fundingGuardEnabled && !params.bypassFundingGuard) {
+        const fundingRate = marketData?.fundingRate ?? 0;
+        const maxFunding = Math.abs(Number(process.env.BLUEFIN_MAX_FUNDING_RATE) || 0.0001);
+        // SHORT pays when funding > 0; LONG pays when funding < 0.
+        const wouldPay = (params.side === 'SHORT' && fundingRate > maxFunding)
+                     || (params.side === 'LONG'  && fundingRate < -maxFunding);
+        if (wouldPay) {
+          logger.warn('[BlueFin] Funding-rate guard rejected hedge — would pay too much funding', {
+            symbol: params.symbol,
+            side: params.side,
+            fundingRate,
+            maxFunding,
+            estimatedAPR: `${(Math.abs(fundingRate) * 3 * 365 * 100).toFixed(2)}%`,
+          });
+          return {
+            success: false,
+            hedgeId,
+            error: `Funding rate ${fundingRate.toFixed(6)} (≈${(Math.abs(fundingRate) * 3 * 365 * 100).toFixed(1)}% APR) exceeds guard ${maxFunding} for ${params.side} ${params.symbol}. Skipping to avoid systematic bleed.`,
+            timestamp: Date.now(),
+          };
+        }
       }
 
       // BlueFin uses e9 scaling (1e9 = 1.0)
@@ -1081,6 +1124,37 @@ export class BluefinService {
           filledSize,
           remainingSize: closeSize - filledSize,
           symbol: params.symbol,
+        });
+      }
+
+      // ═══ PERSIST REALIZED PnL & FEES TO DB ═══
+      // Without this, hedges.realized_pnl stays 0 forever and we cannot
+      // measure win-rate, validate signals, or detect strategy drift.
+      // Best-effort — never blocks the close call.
+      try {
+        const { closePerpHedgeBySymbolSide } = await import('@/lib/db/hedges');
+        const realizedPnl = parseFloat(orderResponse?.realizedPnl || '0');
+        const feesPaid = parseFloat(orderResponse?.fee || '0');
+        // The original position side is the OPPOSITE of the close side.
+        const originalSide: 'LONG' | 'SHORT' = closeSide === 'LONG' ? 'SHORT' : 'LONG';
+        const updateResult = await closePerpHedgeBySymbolSide({
+          symbol: params.symbol,
+          side: originalSide,
+          realizedPnl,
+          feesPaid,
+          closeOrderId: orderResponse?.orderHash,
+          closeTxDigest: orderResponse?.txDigest,
+        });
+        if (updateResult.updated === 0) {
+          logger.warn('[BlueFin] Close persisted to exchange but no DB row matched (possible orphan)', {
+            symbol: params.symbol,
+            originalSide,
+            realizedPnl,
+          });
+        }
+      } catch (dbErr) {
+        logger.warn('[BlueFin] Failed to persist close PnL to DB (non-fatal)', {
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
         });
       }
 
