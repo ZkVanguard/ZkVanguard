@@ -94,7 +94,7 @@ const initialPoolState: CommunityPoolState = {
   loading: true,
   error: null,
   successMessage: null,
-  selectedChain: 'sepolia',  // Sepolia with WDK USDT for Tether Hackathon
+  selectedChain: 'sui',  // SUI-only mode: USDC pool on SUI mainnet
   suiPoolStateId: null,
 };
 
@@ -227,8 +227,15 @@ export function useCommunityPool(propAddress?: string) {
   // Derived values
   const { selectedChain } = poolState;
   const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];
-  const detectedNetwork = chainId ? getNetworkFromChainId(chainId) : 'testnet';
-  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : 'testnet';
+  // For SUI, network comes from SuiContext (defaults to mainnet via env). For EVM,
+  // derive from wallet chainId; fall back to mainnet for SUI-only deployments.
+  const detectedNetwork =
+    selectedChain === 'sui'
+      ? suiNetwork
+      : chainId
+        ? getNetworkFromChainId(chainId)
+        : 'mainnet';
+  const network = isPoolDeployed(selectedChain, detectedNetwork) ? detectedNetwork : detectedNetwork;
   const USDT_ADDRESS = getUsdtAddress(selectedChain, network);
   const COMMUNITY_POOL_ADDRESS = getCommunityPoolAddress(selectedChain, network);
   const poolDeployed = isPoolDeployed(selectedChain, network);

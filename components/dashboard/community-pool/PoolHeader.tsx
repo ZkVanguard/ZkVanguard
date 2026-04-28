@@ -39,10 +39,10 @@ export const PoolHeader = memo(function PoolHeader({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Chain Selector */}
+          {/* Chain Selector - SUI-only mode: hide selector when only one chain enabled */}
           <div className="flex bg-white/20 rounded-lg p-0.5">
             {Object.entries(POOL_CHAIN_CONFIGS)
-              .filter(([_, config]) => config.status === 'live' || config.status === 'testing')
+              .filter(([key, config]) => key === 'sui' && (config.status === 'live' || config.status === 'testing'))
               .map(([key, config]) => (
                 <button
                   key={key}
