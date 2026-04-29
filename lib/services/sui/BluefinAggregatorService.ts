@@ -1224,12 +1224,19 @@ export class BluefinAggregatorService {
 
   /**
    * Check if the admin wallet is configured and has sufficient SUI for gas.
+   *
+   * `hasGas` is conservative: a full rebalance cycle needs gas for
+   * `open_hedge` + 1–3 swaps + `close_hedge`, each costing ~0.01–0.03 SUI.
+   * We default to 0.1 SUI as the floor so we don't start cycles that will
+   * fail mid-way. Override with `SUI_GAS_FLOOR_SUI` env if needed.
    */
   async checkAdminWallet(): Promise<{
     configured: boolean;
     address?: string;
     suiBalance?: string;
     hasGas: boolean;
+    /** Floor used for the hasGas decision (in SUI) */
+    gasFloorSui?: number;
   }> {
     const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
     if (!adminKey) {
@@ -1253,9 +1260,14 @@ export class BluefinAggregatorService {
 
       const balance = await suiClient.getBalance({ owner: address });
       const suiBalance = (Number(balance.totalBalance) / 1e9).toFixed(4);
-      const hasGas = Number(balance.totalBalance) > 10_000_000; // > 0.01 SUI
 
-      return { configured: true, address, suiBalance, hasGas };
+      // Configurable gas floor — default 0.1 SUI is enough for one full
+      // open_hedge → swap → close_hedge round-trip with safety margin.
+      const gasFloorSui = Number(process.env.SUI_GAS_FLOOR_SUI || '0.1');
+      const gasFloorMist = Math.floor(gasFloorSui * 1e9);
+      const hasGas = Number(balance.totalBalance) >= gasFloorMist;
+
+      return { configured: true, address, suiBalance, hasGas, gasFloorSui };
     } catch (err) {
       logger.error('[BluefinAggregator] Admin wallet check failed', { error: err });
       return { configured: true, hasGas: false };

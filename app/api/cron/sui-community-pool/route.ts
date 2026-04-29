@@ -112,6 +112,13 @@ interface SuiCronResult {
     failed?: number;
     txDigests?: Array<{ asset: string; digest: string }>;
   };
+  /** Operator wallet gas state — surfaced so the UI can warn users when low */
+  operatorGas?: {
+    address?: string;
+    suiBalance: string;
+    gasFloorSui: number;
+    sufficient: boolean;
+  };
   duration: number;
   error?: string;
 }
@@ -1288,11 +1295,78 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // This runs BEFORE new swaps so the pool gets its money back first.
     // Flow: reverse-swap ALL admin-held assets → USDC, then close_hedge for each.
     // Profits/losses from asset price changes are captured proportionally.
-    let hedgeSettlement: { settled: number; failed: number; details: any[]; replenishment?: any; debug?: any } | undefined;
+    let hedgeSettlement: { settled: number; failed: number; details: any[]; replenishment?: any; debug?: any; skipped?: string } | undefined;
+
+    // Gas pre-check — abort the whole settle/swap path if operator gas is low.
+    // Each cycle needs ~0.1 SUI for open_hedge + swaps + close_hedge. If we
+    // start a cycle and run out mid-way, we leave orphaned admin-side coins
+    // that can't be returned. Better to skip the cycle and emit a clear log.
+    let gasCheckPassed = true;
+    let gasStatus: { suiBalance: string; gasFloorSui: number; address?: string } | null = null;
     if (process.env.SUI_POOL_ADMIN_KEY && process.env.SUI_AGENT_CAP_ID) {
+      try {
+        const aggregator = getBluefinAggregatorService(network);
+        const wallet = await aggregator.checkAdminWallet();
+        gasStatus = {
+          suiBalance: wallet.suiBalance || '0',
+          gasFloorSui: wallet.gasFloorSui || 0.1,
+          address: wallet.address,
+        };
+        if (!wallet.hasGas) {
+          gasCheckPassed = false;
+          logger.warn('[SUI Cron] Gas pre-check FAILED — operator wallet has insufficient SUI for a full cycle', {
+            suiBalance: wallet.suiBalance,
+            floor: wallet.gasFloorSui,
+            address: wallet.address,
+            action: 'Skipping settle + swap steps. Top up the operator wallet with SUI to resume trading.',
+          });
+          hedgeSettlement = {
+            settled: 0,
+            failed: 0,
+            details: [],
+            skipped: `Operator wallet has ${wallet.suiBalance} SUI, below ${wallet.gasFloorSui} SUI floor. Top up to resume.`,
+          };
+        }
+      } catch (gasErr) {
+        logger.warn('[SUI Cron] Gas pre-check threw — proceeding cautiously', { error: gasErr });
+      }
+    }
+
+    if (gasCheckPassed && process.env.SUI_POOL_ADMIN_KEY && process.env.SUI_AGENT_CAP_ID) {
       try {
         const activeHedges = await getActiveHedges(network);
         logger.info('[SUI Cron] Step 6.5 getActiveHedges result', { count: activeHedges.length, hedges: activeHedges });
+
+        // Step 6.4: Close orphaned dust hedges (collateral < $0.01 USDC).
+        // These are leftover from interrupted prior cycles or from cron
+        // attempts when gas ran out mid-way. They serve no risk-management
+        // purpose, are filtered out of the user-facing UI, and clog the
+        // on-chain active_hedges vector. Close them aggressively.
+        const ORPHAN_DUST_FLOOR_USDC = 0.01;
+        const dustHedges = activeHedges.filter(h => h.collateralUsdc > 0 && h.collateralUsdc < ORPHAN_DUST_FLOOR_USDC);
+        if (dustHedges.length > 0) {
+          logger.info('[SUI Cron] Closing orphaned dust hedges', {
+            count: dustHedges.length,
+            totalValue: dustHedges.reduce((s, h) => s + h.collateralUsdc, 0).toFixed(8),
+          });
+          for (const dust of dustHedges) {
+            try {
+              // returnUsdcToPool calls close_hedge for one hedge id with the
+              // exact collateral amount (no PnL — these are sub-cent).
+              const r = await returnUsdcToPool(network, dust.hedgeId, dust.collateralUsdc, 0, false);
+              logger.info('[SUI Cron] Dust hedge close', {
+                amount: dust.collateralUsdc,
+                ok: r.success,
+                tx: r.txDigest,
+                err: r.error,
+              });
+            } catch (dustErr) {
+              logger.warn('[SUI Cron] Dust hedge close threw (non-fatal)', { error: dustErr });
+            }
+            // Tiny pause between closures to avoid RPC rate limits
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // BOUNDED REPLENISH — convert only what's actually needed.
@@ -1508,12 +1582,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     const MIN_SWAP_NAV_USD = 30;
     // Per-asset minimum: skip any single swap below $8 to avoid high-fee micro-routes.
     const MIN_PER_ASSET_SWAP_USD = 8;
-    const shouldExecuteSwaps = navUsd >= MIN_SWAP_NAV_USD;
+    const shouldExecuteSwaps = navUsd >= MIN_SWAP_NAV_USD && gasCheckPassed;
     if (hasUnallocatedUsdc) {
       logger.info('[SUI Cron] Unallocated USDC detected — triggering initial asset allocation', { navUsd });
     }
     if (navUsd > 0.50 && navUsd < MIN_SWAP_NAV_USD) {
       logger.info('[SUI Cron] Pool NAV $' + navUsd.toFixed(2) + ' below $' + MIN_SWAP_NAV_USD + ' swap minimum — skipping swaps to avoid slippage losses');
+    }
+    if (!gasCheckPassed) {
+      logger.warn('[SUI Cron] Skipping swap execution — gas pre-check failed earlier', gasStatus || {});
     }
     if (shouldExecuteSwaps) {
       try {
@@ -2316,6 +2393,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       autoHedge: autoHedgeResult.triggered ? autoHedgeResult : undefined,
       rebalanceSwaps,
       ...(hedgeSettlement && { hedgeSettlement }),
+      ...(gasStatus && { operatorGas: { ...gasStatus, sufficient: gasCheckPassed } }),
       duration: Date.now() - startTime,
     };
 

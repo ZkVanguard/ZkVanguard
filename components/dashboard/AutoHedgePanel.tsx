@@ -109,6 +109,13 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [gasStatus, setGasStatus] = useState<{
+    configured: boolean;
+    address?: string;
+    suiBalance?: string;
+    hasGas: boolean;
+    gasFloorSui?: number;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -138,6 +145,27 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
     if (!document.hidden) start();
     return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchData]);
+
+  // Poll operator gas status (SUI only) so the UI can warn when the cron
+  // has paused trading due to a low operator balance.
+  useEffect(() => {
+    if (chain !== 'sui') return;
+    let cancelled = false;
+    const fetchGas = async () => {
+      try {
+        const res = await fetch('/api/sui/community-pool?action=admin-wallet');
+        const json = await res.json();
+        if (!cancelled && json?.success && json?.data) {
+          setGasStatus(json.data);
+        }
+      } catch {
+        // ignore — gas status is informational
+      }
+    };
+    fetchGas();
+    const id = setInterval(fetchGas, 60000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [chain]);
 
   const toggleAutoHedge = async () => {
     if (!data) return;
@@ -226,6 +254,32 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
           )}
         </div>
       </div>
+
+      {/* Operator gas-low banner (SUI only) — surfaces the cron's paused state */}
+      {chain === 'sui' && gasStatus && gasStatus.configured && !gasStatus.hasGas && (
+        <div className="px-4 pb-3">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-100">
+              <div className="font-semibold text-amber-300">
+                Rebalancing paused — operator wallet low on SUI gas
+              </div>
+              <div className="mt-1 text-amber-100/80">
+                Operator has <span className="font-mono">{gasStatus.suiBalance ?? '0'} SUI</span>
+                {gasStatus.gasFloorSui != null && (
+                  <> (floor: <span className="font-mono">{gasStatus.gasFloorSui} SUI</span>)</>
+                )}.
+                The cron will skip swaps and hedge open/close until the wallet is topped up.
+              </div>
+              {gasStatus.address && (
+                <div className="mt-1 font-mono text-xs text-amber-100/60 break-all">
+                  Top up: {gasStatus.address}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {expanded && (
@@ -481,9 +535,14 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
                   <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2 mb-3">
                     <Brain className="w-4 h-4" />
                     Pool AI Decisions
+                    {data.recentDecisions.length > 5 && (
+                      <span className="text-xs text-slate-500 font-normal">
+                        (showing latest {Math.min(data.recentDecisions.length, 25)} of {data.stats.decisionsToday} today)
+                      </span>
+                    )}
                   </h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {data.recentDecisions.slice(0, 5).map((decision) => (
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {data.recentDecisions.slice(0, 25).map((decision) => (
                       <div 
                         key={decision.id}
                         className="flex items-start gap-3 bg-slate-800/50 rounded-lg p-3"

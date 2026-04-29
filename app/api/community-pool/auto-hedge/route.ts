@@ -84,7 +84,18 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
 
     const hedgeState = fields.hedge_state?.fields || {};
     const autoCfg = hedgeState.auto_hedge_config?.fields || {};
-    const activeHedges: any[] = Array.isArray(hedgeState.active_hedges) ? hedgeState.active_hedges : [];
+    const allActiveHedges: any[] = Array.isArray(hedgeState.active_hedges) ? hedgeState.active_hedges : [];
+
+    // Filter out "internal mechanism" positions: the cron transfers USDC from
+    // pool → admin wallet by calling open_hedge with tiny collateral
+    // (typically 0.01 USDC, pair_index=0/BTC, is_long=true). These are not
+    // real risk hedges and should never surface in the user-facing panel.
+    // Real auto-hedges use MIN_HEDGE_SIZE_USD=$25 (see SuiAutoHedgingAdapter).
+    const MIN_DISPLAYABLE_COLLATERAL_USDC = 1_000_000; // 1 USDC, raw 6-dec
+    const activeHedges = allActiveHedges.filter(h => {
+      const c = Number(h?.fields?.collateral_usdc || 0);
+      return c >= MIN_DISPLAYABLE_COLLATERAL_USDC;
+    });
 
     // Fetch live prices for each unique asset present
     let priceMap: Record<string, number> = {};
