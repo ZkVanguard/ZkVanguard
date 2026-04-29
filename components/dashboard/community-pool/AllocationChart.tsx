@@ -26,12 +26,15 @@ export const AllocationChart = memo(function AllocationChart({ allocations, asse
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <PieChart className="w-4 h-4" />
-          Current Allocation
+          Current Holdings
         </h3>
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {assets?.join(' • ') || 'Multi-Asset'}
         </span>
       </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-3">
+        Live on-chain composition. AI target allocation may differ — see AI Insights.
+      </p>
 
       {activeAllocations.length > 0 ? (
         <>

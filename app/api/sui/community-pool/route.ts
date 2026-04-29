@@ -174,6 +174,7 @@ export async function GET(request: NextRequest) {
           address: wallet.address,
           suiBalance: wallet.suiBalance,
           hasGas: wallet.hasGas,
+          gasFloorSui: wallet.gasFloorSui,
           swapsEnabled: wallet.configured && wallet.hasGas,
         },
         chain: 'sui',
