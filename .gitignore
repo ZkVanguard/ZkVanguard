@@ -130,9 +130,11 @@ scripts/test-cetus-fix.ts
 git-status.txt
 deploy-out.txt
 deploy-v2-output.txt
+deploy-final.txt
 test-deposit-output.txt
 test-mainnet-output.txt
 tsc-output.txt
+tsc-bluefin-err.txt
 body.json
 cetus-coins.txt
 cetus-count.txt
@@ -140,6 +142,20 @@ cetus-pools.txt
 cetus-pools2.txt
 tmp-verify-hedera.js
 set-cron-secret.js
+trace-out.txt
+cron-run-output.json
+bf-test-out*.txt
+bluefin-test-results.txt
+server-probe.txt
+sui-swap-test.txt
+temp_env.txt
+mainnet-deploy.json
+
+# -------------------------------------------
+# External vendored sources (built locally, not committed)
+# -------------------------------------------
+external/wdk-wallet-evm
+external/wdk-wallet-evm/
 
 # -------------------------------------------
 # Testing
