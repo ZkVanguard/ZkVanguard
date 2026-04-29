@@ -14,7 +14,8 @@ async function main() {
   const { Transaction } = await import('@mysten/sui/transactions');
   const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
 
-  const ADMIN_KEY = '***REDACTED_LEAKED_KEY_1***';
+  const ADMIN_KEY = process.env.SUI_POOL_ADMIN_KEY || process.env.SUI_PRIVATE_KEY;
+  if (!ADMIN_KEY) { console.error('Set SUI_POOL_ADMIN_KEY env var'); process.exit(1); }
   const DEPOSITOR = '0x880cfa491c497f5f3c8205ef43a9e1d4cd89169a20c708ab27676ec1fe7e8aac';
   const PACKAGE_ID = '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88';
   const POOL_STATE_ID = '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a';

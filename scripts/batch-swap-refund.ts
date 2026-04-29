@@ -13,7 +13,8 @@ import {
   isSuiTransaction,
 } from '@bluefin-exchange/bluefin7k-aggregator-sdk';
 
-const ADMIN_KEY = '***REDACTED_LEAKED_KEY_1***';
+const ADMIN_KEY = process.env.SUI_POOL_ADMIN_KEY || process.env.SUI_PRIVATE_KEY;
+if (!ADMIN_KEY) { console.error('Set SUI_POOL_ADMIN_KEY env var'); process.exit(1); }
 const DEPOSITOR = '0x880cfa491c497f5f3c8205ef43a9e1d4cd89169a20c708ab27676ec1fe7e8aac';
 const USDC_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 const WETH_TYPE = '0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN';

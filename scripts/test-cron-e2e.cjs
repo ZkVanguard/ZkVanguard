@@ -19,7 +19,8 @@ async function main() {
   const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
   const { Transaction } = require('@mysten/sui/transactions');
 
-  const ADMIN_KEY = '***REDACTED_LEAKED_KEY_1***';
+  const ADMIN_KEY = process.env.SUI_POOL_ADMIN_KEY || process.env.SUI_PRIVATE_KEY;
+  if (!ADMIN_KEY) { console.error('Set SUI_POOL_ADMIN_KEY env var'); process.exit(1); }
   const POOL_STATE_ID = '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a';
   const PACKAGE_ID = '0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88';
   const AGENT_CAP_ID = '0xdeecf4483ba7729f91c1a4349a5c6b9a5b776981726b1c0136e5cf788889d46d';
