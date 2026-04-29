@@ -1375,30 +1375,24 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'depositing' });
     
     try {
-      // Step 1: Get current SUI price (fresh from Crypto.com) and calculate SUI amount
-      const priceRes = await fetch('/api/prices?symbols=SUI&source=exchange');
-      const priceData = await priceRes.json();
-      // API returns { success, data: [{ symbol, price, ... }] }
-      const suiPriceEntry = priceData?.data?.find((p: { symbol: string }) => p.symbol === 'SUI');
-      const suiPrice = suiPriceEntry?.price || 3.50; // fallback price
-      const suiAmount = usdAmount / suiPrice;
-      
-      logger.info(`[SUI Deposit] Fresh price: $${suiPrice}, converting $${usdAmount} → ${suiAmount.toFixed(6)} SUI`);
-      
-      // Check if user has enough SUI (including 0.1 reserve for gas)
+      // USDC has 6 decimals on SUI mainnet
+      const amountRaw = BigInt(Math.floor(usdAmount * 1_000_000));
+
+      // Sanity-check the connected wallet has enough SUI for gas (not for the deposit itself!)
+      const GAS_RESERVE_SUI = 0.05;
       const userSuiBalance = parseFloat(suiBalance);
-      if (userSuiBalance < suiAmount + 0.1) {
-        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI. Need ${(suiAmount + 0.1).toFixed(4)} SUI (${suiAmount.toFixed(4)} + gas). You have ${suiBalance} SUI.` });
+      if (userSuiBalance < GAS_RESERVE_SUI) {
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient SUI for gas. Need ~${GAS_RESERVE_SUI} SUI. You have ${suiBalance} SUI.` });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
         return;
       }
-      
-      // Step 2: Get transaction params from API
+
+      // Step 1: Get transaction params from API (USDC pool — amount in atomic units, 6 decimals)
       const res = await fetch(`/api/sui/community-pool?action=deposit&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: BigInt(Math.floor(suiAmount * 1e9)).toString() }),
+        body: JSON.stringify({ amount: amountRaw.toString() }),
       });
       
       const json = await res.json();
@@ -1409,23 +1403,49 @@ export function useCommunityPool(propAddress?: string) {
         return;
       }
       
-      const { target, poolStateId, amountMist, clockId } = json.data;
+      const { target, poolStateId, clockId, usdcCoinType, typeArg } = json.data;
       
       if (!poolStateId) {
         dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
         return;
       }
-      
-      // Step 2: Build transaction using @mysten/sui/transactions
+
+      const usdcType: string = typeArg || usdcCoinType;
+      if (!usdcType) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'USDC coin type missing from API response.' });
+        return;
+      }
+
+      // Step 2: Fetch the user's USDC coin objects on-chain
+      const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
       const { Transaction } = await import('@mysten/sui/transactions');
+      const rpcUrl = (suiNetwork === 'mainnet' || suiNetwork === 'testnet')
+        ? getFullnodeUrl(suiNetwork)
+        : getFullnodeUrl('mainnet');
+      const client = new SuiClient({ url: rpcUrl });
+
+      const usdcCoins = await client.getCoins({ owner: suiAddress, coinType: usdcType });
+      const totalUsdcRaw = usdcCoins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
+      if (totalUsdcRaw < amountRaw) {
+        const have = (Number(totalUsdcRaw) / 1_000_000).toFixed(2);
+        dispatchPool({ type: 'SET_ERROR', payload: `Insufficient USDC. Need $${usdAmount.toFixed(2)} USDC. You have $${have} USDC.` });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+
+      // Step 3: Build transaction — merge USDC coins, split exact deposit amount, call deposit<USDC>
       const tx = new Transaction();
+      const primary = tx.object(usdcCoins.data[0].coinObjectId);
+      if (usdcCoins.data.length > 1) {
+        tx.mergeCoins(primary, usdcCoins.data.slice(1).map(c => tx.object(c.coinObjectId)));
+      }
+      const [depositCoin] = tx.splitCoins(primary, [tx.pure.u64(amountRaw)]);
       
-      // Split SUI for the deposit amount
-      const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
-      
-      // Call the deposit function: deposit(state, payment, clock)
+      // Call the deposit function: deposit<T>(state, payment: Coin<T>, clock)
       tx.moveCall({
         target,
+        typeArguments: [usdcType],
         arguments: [
           tx.object(poolStateId),
           depositCoin,
@@ -1441,6 +1461,19 @@ export function useCommunityPool(propAddress?: string) {
         dispatchPool({ type: 'SET_SUCCESS', payload: `Deposited $${usdAmount.toFixed(2)} USDC! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_DEPOSIT_AMOUNT', payload: '' });
         dispatchTx({ type: 'SET_SHOW_DEPOSIT', payload: false });
+
+        // Step 4: Record the deposit server-side (idempotent by txDigest) so the
+        // dashboard history + per-wallet share cache stays in sync. Fire-and-forget;
+        // failure here doesn't affect the on-chain deposit which has already settled.
+        fetch(`/api/sui/community-pool?action=record-deposit&network=${suiNetwork}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: suiAddress,
+            amountUsdc: usdAmount,
+            txDigest: result.digest,
+          }),
+        }).catch(err => logger.warn('record-deposit failed (non-fatal)', err));
         
         // Refresh pool data after a short delay
         setTimeout(() => {
@@ -1486,11 +1519,14 @@ export function useCommunityPool(propAddress?: string) {
     dispatchTx({ type: 'SET_TX_STATUS', payload: 'withdrawing' });
     
     try {
+      // USDC pool shares use 6 decimals (matching USDC). API divides input by 1e6.
+      const sharesRaw = BigInt(Math.floor(shares * 1_000_000));
+
       // Step 1: Get transaction params from API
       const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shares: BigInt(Math.floor(shares * 1e9)).toString() }),
+        body: JSON.stringify({ shares: sharesRaw.toString() }),
       });
       
       const json = await res.json();
@@ -1501,7 +1537,7 @@ export function useCommunityPool(propAddress?: string) {
         return;
       }
       
-      const { target, poolStateId, sharesScaled, clockId } = json.data;
+      const { target, poolStateId, sharesScaled, clockId, typeArg } = json.data;
       
       if (!poolStateId) {
         dispatchPool({ type: 'SET_ERROR', payload: 'Pool state not found. Try refreshing.' });
@@ -1514,9 +1550,10 @@ export function useCommunityPool(propAddress?: string) {
       const { Transaction } = await import('@mysten/sui/transactions');
       const tx = new Transaction();
       
-      // Call the withdraw function: withdraw(state, shares_to_burn, clock)
+      // Call the withdraw function: withdraw<T>(state, shares_to_burn, clock)
       tx.moveCall({
         target,
+        typeArguments: typeArg ? [typeArg] : undefined,
         arguments: [
           tx.object(poolStateId),
           tx.pure.u64(sharesScaled),
