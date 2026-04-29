@@ -111,13 +111,13 @@ describe('calibration / kellyFraction', () => {
   it('returns 0 below coin flip', () => {
     expect(kellyFraction(0.4)).toBe(0);
   });
-  it('quarter-Kellys positive edge', () => {
-    // p=0.7, b=1: full Kelly = 0.4, /4 = 0.1
-    expect(kellyFraction(0.7)).toBeCloseTo(0.1, 5);
+  it('eighth-Kellys positive edge', () => {
+    // p=0.7, b=1: full Kelly = 0.4, /8 = 0.05 (default KELLY_DIVISOR=8)
+    expect(kellyFraction(0.7)).toBeCloseTo(0.05, 5);
   });
-  it('caps at full Kelly /4 = 0.25', () => {
-    // p=1: full Kelly = 1, /4 = 0.25
-    expect(kellyFraction(1)).toBe(0.25);
+  it('caps at full Kelly /8 = 0.125', () => {
+    // p=1: full Kelly = 1, /8 = 0.125 (default KELLY_DIVISOR=8)
+    expect(kellyFraction(1)).toBe(0.125);
   });
 });
 

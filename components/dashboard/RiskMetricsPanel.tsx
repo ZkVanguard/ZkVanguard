@@ -40,10 +40,10 @@ interface RiskMetrics {
   profitFactor: number;
   avgWin: number;
   avgLoss: number;
-  returns7d: number;
-  returns30d: number;
-  returns90d: number;
-  returnsYTD: number;
+  returns7d: number | null;
+  returns30d: number | null;
+  returns90d: number | null;
+  returnsYTD: number | null;
   returnsSinceInception: number;
   dataPoints: number;
   lastCalculated: string;
@@ -51,6 +51,7 @@ interface RiskMetrics {
   periodEnd: string | null;
   insufficientData?: boolean;
   insufficientDataReason?: string;
+  preliminaryMetrics?: boolean;
 }
 
 interface RiskRating {
@@ -80,6 +81,18 @@ const getMetricColor = (value: number, thresholds: { good: number; warning: numb
 const formatPct = (value: number, showSign = true) => {
   const sign = showSign && value > 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;
+};
+
+// Render a period return cell that gracefully handles "insufficient history"
+const renderPeriodReturn = (value: number | null) => {
+  if (value === null || value === undefined) {
+    return <span className="font-bold text-gray-400 dark:text-gray-500" title="Insufficient history for this period">—</span>;
+  }
+  return (
+    <span className={`font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+      {formatPct(value)}
+    </span>
+  );
 };
 
 // Metric card component
@@ -279,6 +292,17 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
           </div>
         </div>
       </div>
+
+      {/* Preliminary metrics banner — annualized values from < 30 days of history */}
+      {metrics.preliminaryMetrics && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700 px-4 py-2 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-amber-800 dark:text-amber-200">
+            <span className="font-semibold">Preliminary metrics:</span>{' '}
+            annualized values (volatility, alpha, Sharpe) are extrapolated from less than 30 days of NAV history and may be highly unstable. Treat with caution until more history accumulates.
+          </p>
+        </div>
+      )}
       
       <AnimatePresence>
         {expanded && (
@@ -329,27 +353,19 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
               <div className="grid grid-cols-5 gap-2">
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">7D</p>
-                  <p className={`font-bold ${metrics.returns7d >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPct(metrics.returns7d)}
-                  </p>
+                  <p>{renderPeriodReturn(metrics.returns7d)}</p>
                 </div>
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">30D</p>
-                  <p className={`font-bold ${metrics.returns30d >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPct(metrics.returns30d)}
-                  </p>
+                  <p>{renderPeriodReturn(metrics.returns30d)}</p>
                 </div>
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">90D</p>
-                  <p className={`font-bold ${metrics.returns90d >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPct(metrics.returns90d)}
-                  </p>
+                  <p>{renderPeriodReturn(metrics.returns90d)}</p>
                 </div>
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">YTD</p>
-                  <p className={`font-bold ${metrics.returnsYTD >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPct(metrics.returnsYTD)}
-                  </p>
+                  <p>{renderPeriodReturn(metrics.returnsYTD)}</p>
                 </div>
                 <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">

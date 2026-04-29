@@ -60,11 +60,11 @@ export interface RiskMetrics {
   avgWin: number;
   avgLoss: number;
   
-  // Time Series
-  returns7d: number;
-  returns30d: number;
-  returns90d: number;
-  returnsYTD: number;
+  // Time Series — null when pool history is shorter than the requested period
+  returns7d: number | null;
+  returns30d: number | null;
+  returns90d: number | null;
+  returnsYTD: number | null;
   returnsSinceInception: number;
   
   // Meta
@@ -76,6 +76,8 @@ export interface RiskMetrics {
   // Data availability
   insufficientData: boolean;
   insufficientDataReason?: string;
+  /** True when annualized metrics are based on < 30 days of NAV history. */
+  preliminaryMetrics?: boolean;
   hasBenchmarkData: boolean;    // True if real BTC benchmark data was used
 }
 
@@ -187,14 +189,33 @@ function calculateCurrentDrawdown(navSeries: NAVSnapshot[]): number {
 }
 
 /**
- * Calculate Value at Risk using historical simulation
+ * Calculate Value at Risk.
+ *
+ * Hybrid: prefer historical simulation when the empirical 5th-percentile is
+ * meaningfully non-zero. Fall back to a parametric estimate (mean - z·σ) when
+ * the percentile snaps to zero because of many flat-NAV intervals — this
+ * avoids the misleading "VaR = -0.0%" while CVaR is non-zero artifact.
  */
 function calculateVaR(returns: number[], confidence: number = 0.95): number {
   if (returns.length < 10) return 0;
-  
+
   const sorted = [...returns].sort((a, b) => a - b);
   const index = Math.floor((1 - confidence) * sorted.length);
-  return Math.abs(sorted[index] || 0);
+  const historical = Math.abs(sorted[index] || 0);
+
+  // If historical VaR collapsed to (near) zero due to flat returns, fall back
+  // to a parametric Gaussian estimate using the *non-zero* return distribution.
+  if (historical < 1e-6) {
+    const m = mean(returns);
+    const s = stdDev(returns, m);
+    if (s > 0) {
+      // 95% one-tailed z-score ≈ 1.6449
+      const z = confidence >= 0.99 ? 2.3263 : confidence >= 0.95 ? 1.6449 : 1.2816;
+      const parametric = z * s - m;
+      return Math.abs(parametric);
+    }
+  }
+  return historical;
 }
 
 /**
@@ -238,36 +259,46 @@ function calculateBeta(portfolioReturns: number[], benchmarkReturns: number[]): 
 /**
  * Calculate period return
  */
-function calculatePeriodReturn(navSeries: NAVSnapshot[], daysBack: number): number {
-  if (navSeries.length < 2) return 0;
-  
+function calculatePeriodReturn(navSeries: NAVSnapshot[], daysBack: number): number | null {
+  if (navSeries.length < 2) return null;
+
   const now = Date.now();
   const cutoff = now - (daysBack * 24 * 60 * 60 * 1000);
-  
+
+  // If the pool's earliest snapshot is more recent than the cutoff, we don't
+  // have a full `daysBack` window of history — return null instead of
+  // silently anchoring to inception (which would just echo the total return).
+  const earliestTs = navSeries[0].timestamp;
+  if (earliestTs > cutoff) return null;
+
   const recentSeries = navSeries.filter(s => s.timestamp >= cutoff);
-  if (recentSeries.length < 2) return 0;
-  
+  if (recentSeries.length < 2) return null;
+
   const startNav = recentSeries[0].nav;
   const endNav = recentSeries[recentSeries.length - 1].nav;
-  
+
   return startNav > 0 ? (endNav - startNav) / startNav : 0;
 }
 
 /**
  * Calculate YTD return
  */
-function calculateYTDReturn(navSeries: NAVSnapshot[]): number {
-  if (navSeries.length < 2) return 0;
-  
+function calculateYTDReturn(navSeries: NAVSnapshot[]): number | null {
+  if (navSeries.length < 2) return null;
+
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
-  
+
+  // If the pool started after Jan 1 of the current year, YTD is meaningless
+  // (it would just equal returnsSinceInception). Surface that explicitly.
+  if (navSeries[0].timestamp > yearStart) return null;
+
   const ytdSeries = navSeries.filter(s => s.timestamp >= yearStart);
-  if (ytdSeries.length < 2) return 0;
-  
+  if (ytdSeries.length < 2) return null;
+
   const startNav = ytdSeries[0].nav;
   const endNav = ytdSeries[ytdSeries.length - 1].nav;
-  
+
   return startNav > 0 ? (endNav - startNav) / startNav : 0;
 }
 
@@ -275,14 +306,20 @@ function calculateYTDReturn(navSeries: NAVSnapshot[]): number {
  * Calculate win rate and profit factor
  */
 function calculateTradingMetrics(returns: number[]): { winRate: number; profitFactor: number; avgWin: number; avgLoss: number } {
-  const wins = returns.filter(r => r > 0);
-  const losses = returns.filter(r => r < 0);
+  // Exclude flat intervals (r ≈ 0) — counting unchanged hours as "non-wins"
+  // produces a misleading low win rate for early-stage pools whose NAV often
+  // doesn't move between snapshots. Use a small epsilon to ignore floating
+  // point dust.
+  const EPS = 1e-9;
+  const movingReturns = returns.filter(r => Math.abs(r) > EPS);
+  const wins = movingReturns.filter(r => r > 0);
+  const losses = movingReturns.filter(r => r < 0);
   
   const totalWins = wins.reduce((sum, r) => sum + r, 0);
   const totalLosses = Math.abs(losses.reduce((sum, r) => sum + r, 0));
   
   return {
-    winRate: returns.length > 0 ? (wins.length / returns.length) * 100 : 0,
+    winRate: movingReturns.length > 0 ? (wins.length / movingReturns.length) * 100 : 0,
     profitFactor: totalLosses > 0 ? totalWins / totalLosses : totalWins > 0 ? Infinity : 0,
     avgWin: wins.length > 0 ? mean(wins) * 100 : 0,
     avgLoss: losses.length > 0 ? Math.abs(mean(losses)) * 100 : 0,
@@ -601,10 +638,10 @@ export async function calculateRiskMetrics(chain?: string): Promise<RiskMetrics>
     profitFactor: 0,
     avgWin: 0,
     avgLoss: 0,
-    returns7d: 0,
-    returns30d: 0,
-    returns90d: 0,
-    returnsYTD: 0,
+    returns7d: null,
+    returns30d: null,
+    returns90d: null,
+    returnsYTD: null,
     returnsSinceInception: 0,
     dataPoints: 0,
     lastCalculated: new Date().toISOString(),
@@ -821,11 +858,11 @@ export async function calculateRiskMetrics(chain?: string): Promise<RiskMetrics>
       avgWin: parseFloat(clamp(tradingMetrics.avgWin, 0, 100).toFixed(2)),
       avgLoss: parseFloat(clamp(tradingMetrics.avgLoss, 0, 100).toFixed(2)),
       
-      // Time Series - clamp extreme returns
-      returns7d: parseFloat(clamp(returns7d * 100, -99, 1000).toFixed(2)),
-      returns30d: parseFloat(clamp(returns30d * 100, -99, 1000).toFixed(2)),
-      returns90d: parseFloat(clamp(returns90d * 100, -99, 5000).toFixed(2)),
-      returnsYTD: parseFloat(clamp(returnsYTD * 100, -99, 10000).toFixed(2)),
+      // Time Series - clamp extreme returns; preserve null when window > pool age
+      returns7d: returns7d === null ? null : parseFloat(clamp(returns7d * 100, -99, 1000).toFixed(2)),
+      returns30d: returns30d === null ? null : parseFloat(clamp(returns30d * 100, -99, 1000).toFixed(2)),
+      returns90d: returns90d === null ? null : parseFloat(clamp(returns90d * 100, -99, 5000).toFixed(2)),
+      returnsYTD: returnsYTD === null ? null : parseFloat(clamp(returnsYTD * 100, -99, 10000).toFixed(2)),
       returnsSinceInception: parseFloat(clamp(returnsSinceInception * 100, -99, 10000).toFixed(2)),
       
       // Meta
@@ -836,6 +873,7 @@ export async function calculateRiskMetrics(chain?: string): Promise<RiskMetrics>
       
       // Data is sufficient
       insufficientData: false,
+      preliminaryMetrics: totalPeriodDays < 30,
       hasBenchmarkData,
     };
     
@@ -880,10 +918,10 @@ function getDefaultMetrics(): RiskMetrics {
     profitFactor: 0,
     avgWin: 0,
     avgLoss: 0,
-    returns7d: 0,
-    returns30d: 0,
-    returns90d: 0,
-    returnsYTD: 0,
+    returns7d: null,
+    returns30d: null,
+    returns90d: null,
+    returnsYTD: null,
     returnsSinceInception: 0,
     dataPoints: 0,
     lastCalculated: new Date().toISOString(),
