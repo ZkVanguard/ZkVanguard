@@ -791,11 +791,30 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // CRITICAL: Validate positive amount to prevent negative value attacks
-      const amountRaw = BigInt(amount);
+      // CRITICAL: Validate positive amount to prevent negative value attacks.
+      // BigInt() throws on invalid input (strings with letters, decimals,
+      // SQL injection payloads, etc.) — catch and return 400 instead of 500.
+      let amountRaw: bigint;
+      try {
+        amountRaw = BigInt(amount);
+      } catch {
+        return NextResponse.json(
+          { success: false, error: 'Amount must be an integer (USDC base units)' },
+          { status: 400 }
+        );
+      }
       if (amountRaw <= 0n) {
         return NextResponse.json(
           { success: false, error: 'Amount must be positive' },
+          { status: 400 }
+        );
+      }
+      // Upper bound: 1B USDC (1e15 base units). Anything beyond this is
+      // either a typo or an attempt to abuse the API.
+      const MAX_DEPOSIT_RAW = 1_000_000_000_000_000n; // 1B USDC * 10^6
+      if (amountRaw > MAX_DEPOSIT_RAW) {
+        return NextResponse.json(
+          { success: false, error: 'Amount exceeds maximum deposit (1B USDC)' },
           { status: 400 }
         );
       }

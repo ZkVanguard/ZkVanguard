@@ -175,7 +175,22 @@ export async function getAutoHedgeConfigs(): Promise<AutoHedgeConfig[]> {
 
 /**
  * Get config for a specific portfolio
+ *
+ * SECURITY: clamps risk_threshold and max_leverage into the safe range
+ * 1..10 on read, so any stored config that was poisoned by a previous
+ * unauthenticated POST is sanitized before being passed to the runtime.
  */
+function clampConfig(config: AutoHedgeConfig | null): AutoHedgeConfig | null {
+  if (!config) return null;
+  if (!Number.isFinite(config.riskThreshold) || config.riskThreshold < 1 || config.riskThreshold > 10) {
+    config.riskThreshold = 4;
+  }
+  if (!Number.isFinite(config.maxLeverage) || config.maxLeverage < 1 || config.maxLeverage > 10) {
+    config.maxLeverage = 3;
+  }
+  return config;
+}
+
 export async function getAutoHedgeConfig(portfolioId: number): Promise<AutoHedgeConfig | null> {
   if (shouldUseDatabase()) {
     try {
@@ -188,14 +203,14 @@ export async function getAutoHedgeConfig(portfolioId: number): Promise<AutoHedge
       
       if (!row) return null;
       
-      return mapRowToConfig(row);
+      return clampConfig(mapRowToConfig(row));
     } catch (error) {
       logger.error('[AutoHedgeStorage] Error fetching config', { portfolioId, error });
       return null;
     }
   } else {
     const configs = await getConfigsFromFile();
-    return configs.find(c => c.portfolioId === portfolioId) || null;
+    return clampConfig(configs.find(c => c.portfolioId === portfolioId) || null);
   }
 }
 

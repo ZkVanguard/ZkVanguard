@@ -465,13 +465,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // SECURITY: Require admin/internal authentication. This endpoint mutates
+  // hedging strategy configuration and triggers autoHedgingService.start().
+  // Without this gate, anyone could disable hedging or set unsafe leverage.
+  const { requireAuth } = await import('@/lib/security/auth-middleware');
+  const bodyForAuth = await request.clone().json().catch(() => ({}));
+  const authResult = await requireAuth(request, bodyForAuth as Record<string, unknown>);
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { enabled, riskThreshold, maxLeverage } = body;
-    
+
+    // ── Input validation: clamp/reject out-of-range values ─────────
+    // riskThreshold: 1-10 (anything else is nonsense or hostile)
+    // maxLeverage:   1-10 (on-chain pool caps real leverage anyway, but
+    //                       reject obvious abuse before we persist)
+    if (riskThreshold !== undefined) {
+      const rt = Number(riskThreshold);
+      if (!Number.isFinite(rt) || rt < 1 || rt > 10) {
+        return NextResponse.json(
+          { success: false, error: 'riskThreshold must be a number 1-10' },
+          { status: 400 }
+        );
+      }
+    }
+    if (maxLeverage !== undefined) {
+      const ml = Number(maxLeverage);
+      if (!Number.isFinite(ml) || ml < 1 || ml > 10) {
+        return NextResponse.json(
+          { success: false, error: 'maxLeverage must be a number 1-10' },
+          { status: 400 }
+        );
+      }
+    }
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return NextResponse.json(
+        { success: false, error: 'enabled must be a boolean' },
+        { status: 400 }
+      );
+    }
+
     // Get current config or create new one
     let config = await getAutoHedgeConfig(COMMUNITY_POOL_PORTFOLIO_ID);
-    
+
     if (!config) {
       // Create new config
       config = {
@@ -489,19 +526,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (enabled !== undefined) config.enabled = enabled;
       if (riskThreshold !== undefined) config.riskThreshold = riskThreshold;
       if (maxLeverage !== undefined) config.maxLeverage = maxLeverage;
+      // Defensive clamp on existing stored values that may have been
+      // written by a previous unauthenticated POST (pre-auth-fix).
+      if (!Number.isFinite(config.riskThreshold) || config.riskThreshold < 1 || config.riskThreshold > 10) config.riskThreshold = 4;
+      if (!Number.isFinite(config.maxLeverage)   || config.maxLeverage   < 1 || config.maxLeverage   > 10) config.maxLeverage   = 3;
       config.updatedAt = Date.now();
     }
-    
+
     await saveAutoHedgeConfig(config);
-    
+
     // Trigger service reload
     await autoHedgingService.start();
-    
-    logger.info('[AutoHedge API] Config updated', { 
+
+    logger.info('[AutoHedge API] Config updated', {
       portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
       enabled: config.enabled,
+      authMethod: authResult.method,
     });
-    
+
     return NextResponse.json({
       success: true,
       config: {
