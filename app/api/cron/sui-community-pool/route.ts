@@ -244,6 +244,17 @@ function generateAllocation(
 // ============================================================================
 
 /**
+ * Minimum USDC value for a meaningful on-chain hedge.
+ * Below this, every close emits a deceptive sub-cent "profit" event due to
+ * rounding / DEX dust, which clogs the Sui explorer and inflates win-rate stats.
+ * Override with HEDGE_MIN_OPEN_USDC env var (decimal USD).
+ */
+const HEDGE_MIN_OPEN_USDC = Math.max(
+  0.10,
+  Number(process.env.HEDGE_MIN_OPEN_USDC) || 0.10,
+);
+
+/**
  * Return USDC from admin wallet back to the pool via close_hedge.
  * This settles active hedges by returning collateral (+ optional PnL) to the pool.
  *
@@ -717,6 +728,15 @@ async function transferUsdcFromPoolToAdmin(
   }
   if (!poolConfig.packageId || !poolConfig.poolStateId) {
     return { success: false, error: 'Pool package or state ID not configured' };
+  }
+
+  // Refuse to open dust hedges. They produce noise on the explorer and
+  // distort the apparent win-rate without ever moving meaningful capital.
+  if (amountUsdc < HEDGE_MIN_OPEN_USDC) {
+    return {
+      success: false,
+      error: `amount $${amountUsdc.toFixed(6)} below HEDGE_MIN_OPEN_USDC=$${HEDGE_MIN_OPEN_USDC.toFixed(2)} — refusing dust open_hedge`,
+    };
   }
 
   try {
@@ -1342,7 +1362,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         // attempts when gas ran out mid-way. They serve no risk-management
         // purpose, are filtered out of the user-facing UI, and clog the
         // on-chain active_hedges vector. Close them aggressively.
-        const ORPHAN_DUST_FLOOR_USDC = 0.01;
+        // Match HEDGE_MIN_OPEN_USDC so any hedge below that floor is treated
+        // as orphan dust and force-closed (no PnL emitted).
+        const ORPHAN_DUST_FLOOR_USDC = HEDGE_MIN_OPEN_USDC;
         const dustHedges = activeHedges.filter(h => h.collateralUsdc > 0 && h.collateralUsdc < ORPHAN_DUST_FLOOR_USDC);
         if (dustHedges.length > 0) {
           logger.info('[SUI Cron] Closing orphaned dust hedges', {
@@ -1455,7 +1477,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               replenished: replenishment.swapped.toFixed(6),
             });
             try {
-              const MICRO_HEDGE = 0.01; // $0.01 opens the hedge record
+              const MICRO_HEDGE = HEDGE_MIN_OPEN_USDC; // honour dust floor
               const openResult = await transferUsdcFromPoolToAdmin(network, MICRO_HEDGE);
               if (openResult.success) {
                 await new Promise(r => setTimeout(r, 3000));
@@ -1731,7 +1753,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 success: false,
                 error: 'Max hedge ratio reached',
               };
-            } else if (maxTransferable <= 0 || cappedDeficit <= 0.000001) {
+            } else if (maxTransferable <= 0 || cappedDeficit < HEDGE_MIN_OPEN_USDC) {
               // Daily cap might be exhausted locally, but contract resets counter on day boundary.
               // Still attempt a SAFE transfer using on-chain max ratio (NOT a 50%-of-deficit guess).
               const safeAttempt = Math.min(
@@ -1747,10 +1769,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 safeAttempt: safeAttempt.toFixed(6),
               });
 
-              if (safeAttempt < 0.000001) {
-                logger.warn('[SUI Cron] Skipping pool transfer — no safe hedge amount available', {
+              if (safeAttempt < HEDGE_MIN_OPEN_USDC) {
+                logger.warn('[SUI Cron] Skipping pool transfer — safe amount below dust floor', {
                   maxByHedgeRatio: maxByHedgeRatio.toFixed(6),
                   maxByReserve: maxByReserve.toFixed(6),
+                  safeAttempt: safeAttempt.toFixed(6),
+                  floor: HEDGE_MIN_OPEN_USDC,
                 });
                 (rebalanceSwaps as any).poolTransfer = {
                   requested: '0.00',
