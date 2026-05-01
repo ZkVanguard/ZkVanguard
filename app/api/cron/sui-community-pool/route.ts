@@ -1326,7 +1326,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       // realigning is worth that cost (heuristic: drift × confidence ≥ cost%).
       // ═══════════════════════════════════════════════════════════════════
       if (aiResult.shouldRebalance) {
-        const expectedSwapCostPct = Number(process.env.HEDGE_REBALANCE_COST_PCT || 0.3);
+        const baseCostPct = Number(process.env.HEDGE_REBALANCE_COST_PCT || 0.3);
+        // Scale cost threshold by NAV: small pools have smaller orders → less slippage.
+        // 0.5x at NAV ≤ $500, scaling up to 1.0x at NAV ≥ $1000. Keeps the bar tight
+        // for large pools while letting small pools rebalance on smaller drifts.
+        const _navUsdForGate = poolStats.totalNAVUsd || (poolStats.totalNAV * (pricesUSD['SUI'] || 0));
+        const navScale = Math.max(0.5, Math.min(1.0, _navUsdForGate / 1000));
+        const expectedSwapCostPct = baseCostPct * navScale;
         const expectedAlphaPct = (maxDrift / 100) * (enhanced.confidence / 100) * 100;
         if (expectedAlphaPct < expectedSwapCostPct &&
             enhanced.urgency !== 'CRITICAL' &&
@@ -1335,7 +1341,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             maxDrift: maxDrift.toFixed(2),
             confidence: enhanced.confidence,
             expectedAlphaPct: expectedAlphaPct.toFixed(3),
-            expectedSwapCostPct,
+            expectedSwapCostPct: expectedSwapCostPct.toFixed(3),
+            navScale: navScale.toFixed(2),
           });
           aiResult.shouldRebalance = false;
         }
@@ -1677,8 +1684,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // No open hedges on-chain, but admin may hold orphaned USDC from a prior replenishment.
           // Use a mini hedge roundtrip to officially return these funds to the pool:
           //   open_hedge($0.01 from pool) → get hedge_id → close_hedge(full admin balance) → pool gets it all
+          // Threshold raised so we don't burn gas on dust amounts that produce 0-PnL cycles.
           const adminUsdcAfter = await getAdminUsdcBalance(network);
-          if (adminUsdcAfter > 1.0) {
+          const ORPHAN_RECOVERY_MIN_USD = Number(process.env.HEDGE_ORPHAN_RECOVERY_MIN_USD || 5.0);
+          if (adminUsdcAfter > ORPHAN_RECOVERY_MIN_USD) {
             logger.info('[SUI Cron] Orphaned USDC in admin wallet — recovering to pool via mini-hedge', {
               adminUsdc: adminUsdcAfter.toFixed(6),
               replenished: replenishment.swapped.toFixed(6),
@@ -1756,9 +1765,32 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // Deduplicate by market — closeHedge closes the entire position for that symbol.
           const seen = new Set<string>();
           const { closeHedge: dbCloseHedge } = await import('@/lib/db/hedges');
+          // Profit-protection: don't force-close stale positions that are still
+          // making money. Override with HEDGE_FORCE_CLOSE_PROFITABLE=true.
+          const forceCloseProfitable = (process.env.HEDGE_FORCE_CLOSE_PROFITABLE || 'false').toLowerCase() === 'true';
+          let livePositions: Array<{ symbol: string; unrealizedPnl?: number }> = [];
+          if (!forceCloseProfitable) {
+            try {
+              livePositions = (await bf.getPositions()) as Array<{ symbol: string; unrealizedPnl?: number }>;
+            } catch { /* ignore — fall through to close */ }
+          }
           for (const s of stale) {
             if (seen.has(s.market)) continue;
             seen.add(s.market);
+            // Skip force-close if position is currently profitable. The next cycle
+            // will re-evaluate and close on a normal trigger (signal flip / risk drop).
+            if (!forceCloseProfitable) {
+              const live = livePositions.find(p => p.symbol === s.market);
+              const upnl = Number(live?.unrealizedPnl ?? 0);
+              if (live && upnl > 0) {
+                logger.info('[SUI Cron] Stale perp is profitable — preserving', {
+                  market: s.market,
+                  ageH: (s.ageMs / 3600000).toFixed(1),
+                  unrealizedPnl: upnl.toFixed(4),
+                });
+                continue;
+              }
+            }
             try {
               const closed = await bf.closeHedge({
                 symbol: s.market,
@@ -2183,8 +2215,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         hedges: [{ symbol: 'DAILY_LOSS_HALT', side: 'N/A', size: 0, status: 'HALTED',
           error: 'Realized 24h loss exceeds HEDGE_DAILY_LOSS_CAP_USD — no new positions opened.' }],
       };
-    } else if (navUsd >= 1000) {
-      // Only attempt perp hedging when pool has meaningful NAV ($1000+)
+    } else if (navUsd >= Number(process.env.HEDGE_AUTO_MIN_NAV_USD || 30)) {
+      // Auto-hedge enabled when pool NAV exceeds the configured floor (default $30,
+      // matching MIN_SWAP_NAV_USD). Position sizing scales with NAV downstream so
+      // small pools get proportionally smaller hedges that still respect Bluefin
+      // minQty/stepSize. Set HEDGE_AUTO_MIN_NAV_USD=1000 to restore prior behavior.
       try {
         const allConfigs = await getAutoHedgeConfigs();
         const suiPoolConfig = allConfigs.find(c => 
@@ -2195,7 +2230,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
         if (suiPoolConfig?.enabled) {
           const riskScore = aiResult.riskScore ?? 0;
-          const threshold = suiPoolConfig.riskThreshold ?? 8; // Default to HIGH threshold
+          // Default threshold is moderate (5) so risk scores in the typical 4-7 range
+          // can trigger protective hedges. Override per-pool via riskThreshold or
+          // globally via HEDGE_RISK_THRESHOLD_DEFAULT.
+          const threshold = suiPoolConfig.riskThreshold ?? Number(process.env.HEDGE_RISK_THRESHOLD_DEFAULT || 5);
 
           logger.info('[SUI Cron] Auto-hedge check', {
             enabled: true,
