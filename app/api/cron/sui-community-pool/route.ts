@@ -119,6 +119,12 @@ interface SuiCronResult {
     gasFloorSui: number;
     sufficient: boolean;
   };
+  /** Three-layer reconciliation result — DB ↔ on-chain ↔ Bluefin */
+  reconciliation?: {
+    onchainOrphans: number;
+    dbOrphans: number;
+    healed: number;
+  };
   duration: number;
   error?: string;
 }
@@ -353,18 +359,51 @@ async function returnUsdcToPool(
     const result = await suiClient.signAndExecuteTransaction({
       transaction: tx,
       signer: keypair,
-      options: { showEffects: true },
+      options: { showEffects: true, showEvents: true },
     });
 
     const success = result.effects?.status?.status === 'success';
-    logger.info('[SUI Cron] close_hedge result', {
-      success,
-      txDigest: result.digest,
-      amountUsdc,
-      pnlUsdc,
-      isProfit,
-      error: success ? undefined : result.effects?.status?.error,
-    });
+    if (success) {
+      logger.info('[SUI Cron] close_hedge result', {
+        success,
+        txDigest: result.digest,
+        amountUsdc,
+        pnlUsdc,
+        isProfit,
+      });
+
+      // DB sync: mark the corresponding row closed by hedge_id_onchain.
+      // This keeps the DB authoritative even when the close came from a
+      // background settlement, not the hedge-monitor cron.
+      try {
+        const hedgeIdHex = Buffer.from(hedgeId).toString('hex');
+        const { closeHedgeByOnchainId } = await import('@/lib/db/hedges');
+        const realized = isProfit ? pnlUsdc : -pnlUsdc;
+        const dbRes = await closeHedgeByOnchainId({
+          hedgeIdOnchain: hedgeIdHex,
+          realizedPnl: realized,
+          status: 'closed',
+          closeTxDigest: result.digest,
+        });
+        if (dbRes.updated === 0) {
+          logger.debug('[SUI Cron] close_hedge: no matching DB row (orphan or already closed)', {
+            hedgeIdHex: hedgeIdHex.slice(0, 16),
+          });
+        }
+      } catch (dbErr) {
+        logger.warn('[SUI Cron] close_hedge DB sync failed (non-fatal)', {
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+        });
+      }
+    } else {
+      logger.warn('[SUI Cron] close_hedge tx failed', {
+        txDigest: result.digest,
+        error: result.effects?.status?.error,
+        amountUsdc,
+        pnlUsdc,
+        isProfit,
+      });
+    }
 
     return { success, txDigest: result.digest, error: success ? undefined : result.effects?.status?.error };
   } catch (err) {
@@ -786,7 +825,7 @@ async function transferUsdcFromPoolToAdmin(
     const result = await suiClient.signAndExecuteTransaction({
       transaction: tx,
       signer: keypair,
-      options: { showEffects: true },
+      options: { showEffects: true, showEvents: true },
     });
 
     const success = result.effects?.status?.status === 'success';
@@ -795,6 +834,33 @@ async function transferUsdcFromPoolToAdmin(
         txDigest: result.digest,
         amountUsdc,
       });
+
+      // DB sync: persist a synthetic row so this on-chain hedge is visible
+      // to the hedge-monitor and reconciliation. Pulls the hedge_id from the
+      // emitted UsdcHedgeOpened event so we can match it on close.
+      try {
+        const evs = (result.events || []) as Array<{ type: string; parsedJson?: Record<string, unknown> }>;
+        const opened = evs.find(e => e.type.endsWith('::UsdcHedgeOpened'));
+        const idArr = opened?.parsedJson?.hedge_id;
+        if (Array.isArray(idArr) && idArr.length === 32) {
+          const hex = Buffer.from(idArr as number[]).toString('hex');
+          const { recordSuiOnchainHedge } = await import('@/lib/db/hedges');
+          await recordSuiOnchainHedge({
+            hedgeIdOnchain: hex,
+            collateralUsdc: amountUsdc,
+            pairIndex: 0, // cron always opens with pair_index=0 (rebalance)
+            isLong: true,
+            leverage: 1,
+            txDigest: result.digest,
+            walletAddress: keypair.getPublicKey().toSuiAddress(),
+            reason: 'Cron rebalance: pool → admin USDC transfer',
+          });
+        }
+      } catch (dbErr) {
+        logger.warn('[SUI Cron] open_hedge DB sync failed (non-fatal)', {
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+        });
+      }
     } else {
       logger.error('[SUI Cron] Pool → admin USDC transfer failed', {
         txDigest: result.digest,
@@ -927,6 +993,75 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
     // Step 0: Ensure DB tables exist
     await initCommunityPoolTables();
+
+    // Step 0.5: Three-layer reconciliation — heal sync gaps between
+    //   (a) on-chain Move active_hedges
+    //   (b) DB hedges table (chain='sui', on_chain=true)
+    //   (c) Bluefin perp positions (handled by stale-close path later)
+    //
+    // For each on-chain hedge with no DB row, insert a synthetic row.
+    // For each DB row whose hedge_id_onchain is no longer in active_hedges,
+    // mark it closed with realized_pnl=0 (best effort; the originating
+    // close_hedge tx may have happened in a prior cycle and been logged then).
+    let reconciliation: { onchainOrphans: number; dbOrphans: number; healed: number } | undefined;
+    try {
+      const onchain = await getActiveHedges(network);
+      const { listActiveSuiOnchainHedges, recordSuiOnchainHedge, closeHedgeByOnchainId } =
+        await import('@/lib/db/hedges');
+      const dbActive = await listActiveSuiOnchainHedges();
+      const onchainIds = new Set(
+        onchain.map(h => Buffer.from(h.hedgeId).toString('hex')),
+      );
+      const dbIds = new Set(
+        dbActive
+          .map(d => (d.hedgeIdOnchain || '').replace(/^0x/, '').toLowerCase())
+          .filter(Boolean),
+      );
+
+      let healed = 0;
+      // (a) on-chain orphans → insert DB row so monitor sees them
+      for (const h of onchain) {
+        const hex = Buffer.from(h.hedgeId).toString('hex');
+        if (!dbIds.has(hex.toLowerCase())) {
+          const r = await recordSuiOnchainHedge({
+            hedgeIdOnchain: hex,
+            collateralUsdc: h.collateralUsdc,
+            pairIndex: h.pairIndex,
+            isLong: true,
+            leverage: 1,
+            txDigest: 'reconcile-on-chain',
+            reason: 'Reconciler: on-chain hedge present without DB row',
+          });
+          if (r.inserted) healed++;
+        }
+      }
+      // (b) DB orphans → mark closed (on-chain has already settled them)
+      for (const d of dbActive) {
+        const id = (d.hedgeIdOnchain || '').replace(/^0x/, '').toLowerCase();
+        if (id && !onchainIds.has(id)) {
+          const r = await closeHedgeByOnchainId({
+            hedgeIdOnchain: id,
+            realizedPnl: 0,
+            status: 'closed',
+          });
+          if (r.updated > 0) healed++;
+        }
+      }
+
+      const onchainOrphans = onchain.filter(h => !dbIds.has(Buffer.from(h.hedgeId).toString('hex').toLowerCase())).length;
+      const dbOrphans = dbActive.filter(d => {
+        const id = (d.hedgeIdOnchain || '').replace(/^0x/, '').toLowerCase();
+        return id && !onchainIds.has(id);
+      }).length;
+      reconciliation = { onchainOrphans, dbOrphans, healed };
+      if (onchainOrphans + dbOrphans > 0 || healed > 0) {
+        logger.info('[SUI Cron] Step 0.5 reconciliation', reconciliation);
+      }
+    } catch (recErr) {
+      logger.warn('[SUI Cron] Reconciliation step failed (non-fatal)', {
+        error: recErr instanceof Error ? recErr.message : String(recErr),
+      });
+    }
 
     // Step 1: Fetch on-chain SUI pool stats
     const suiService = getSuiUsdcPoolService(network);
@@ -1548,6 +1683,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           const bf = BluefinService.getInstance();
           // Deduplicate by market — closeHedge closes the entire position for that symbol.
           const seen = new Set<string>();
+          const { closeHedge: dbCloseHedge } = await import('@/lib/db/hedges');
           for (const s of stale) {
             if (seen.has(s.market)) continue;
             seen.add(s.market);
@@ -1557,6 +1693,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               });
               if (closed?.success) {
                 stalePositionCloses++;
+                // DB sync: mark the originating row closed with realized PnL
+                // returned by Bluefin. Without this the row stays 'active'
+                // forever and the next cycle keeps re-trying close_hedge.
+                try {
+                  const realized = Number((closed as { realizedPnl?: number }).realizedPnl ?? 0);
+                  await dbCloseHedge(s.orderId, realized, 'closed');
+                } catch (dbErr) {
+                  logger.warn('[SUI Cron] Stale perp DB close failed (non-fatal)', {
+                    orderId: s.orderId,
+                    error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+                  });
+                }
                 logger.info('[SUI Cron] Stale perp force-closed', {
                   market: s.market,
                   side: s.side,
@@ -2141,9 +2289,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 SUI: { minQty: 1, stepSize: 1 },
               };
 
-              // Sweep expired idempotency tokens at start of cycle
+              // Sweep expired in-memory tokens (still kept as a same-tick guard)
               const nowMs = Date.now();
               for (const [k, exp] of recentHedgeTokens) if (exp <= nowMs) recentHedgeTokens.delete(k);
+              const HEDGE_DECISION_LOCK_TTL_S = Math.floor(HEDGE_TOKEN_TTL_MS / 1000);
+              const { tryAcquireHedgeDecisionLock, releaseHedgeDecisionLock } = await import('@/lib/db/hedges');
 
               // Track collateral budget consumed across this cycle so we don't
               // over-commit if multiple assets cross the threshold simultaneously.
@@ -2189,7 +2339,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   now: nowMs,
                 });
                 if (recentHedgeTokens.has(decisionToken)) {
-                  logger.info(`[SUI Cron] Skip ${asset}-PERP: duplicate decision token`, { token: decisionToken });
+                  logger.info(`[SUI Cron] Skip ${asset}-PERP: duplicate decision token (in-memory)`, { token: decisionToken });
+                  continue;
+                }
+                // Persistent guard — survives Vercel cold starts. Fails closed on DB error.
+                const lockAcquired = await tryAcquireHedgeDecisionLock(decisionToken, HEDGE_DECISION_LOCK_TTL_S);
+                if (!lockAcquired) {
+                  logger.info(`[SUI Cron] Skip ${asset}-PERP: decision lock already held (Postgres)`, { token: decisionToken });
                   continue;
                 }
 
@@ -2248,8 +2404,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   });
 
                   if (!result.success) {
-                    // Failed — release the token so the next cycle can retry
+                    // Failed — release both locks so the next cycle can retry
                     recentHedgeTokens.delete(decisionToken);
+                    await releaseHedgeDecisionLock(decisionToken);
                   } else {
                     collateralBudgetUsed += requiredMargin;
                   }
@@ -2296,8 +2453,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     orderId: result.orderId,
                   });
                 } catch (hedgeErr) {
-                  // Always release token on exception
+                  // Always release locks on exception
                   recentHedgeTokens.delete(decisionToken);
+                  await releaseHedgeDecisionLock(decisionToken);
                   hedges.push({
                     symbol: `${asset}-PERP`,
                     side: 'SHORT',
@@ -2418,6 +2576,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       rebalanceSwaps,
       ...(hedgeSettlement && { hedgeSettlement }),
       ...(gasStatus && { operatorGas: { ...gasStatus, sufficient: gasCheckPassed } }),
+      ...(reconciliation && { reconciliation }),
       duration: Date.now() - startTime,
     };
 
