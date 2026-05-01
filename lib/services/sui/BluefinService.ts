@@ -254,13 +254,17 @@ export class BluefinService {
       // C4: Verify account is onboarded (fail-fast at init, not at first trade)
       if (authSuccess) {
         try {
-          const acctResp = await this.apiRequest<{ canTrade?: boolean; freeCollateral?: string } | null>(
+          const acctResp = await this.apiRequest<Record<string, unknown> | null>(
             'GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange'
           );
           if (!acctResp) {
             logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${cleanNetwork}`);
           } else {
-            logger.info('✅ BlueFin account verified', { canTrade: acctResp.canTrade, freeCollateral: acctResp.freeCollateral });
+            const e9 = acctResp.marginAvailableE9;
+            const free = e9 !== undefined && e9 !== null
+              ? (parseFloat(String(e9)) / 1e9).toFixed(6)
+              : String(acctResp.freeCollateral ?? '0');
+            logger.info('✅ BlueFin account verified', { canTrade: acctResp.canTrade, freeCollateral: free });
           }
         } catch (acctErr) {
           const msg = acctErr instanceof Error ? acctErr.message : String(acctErr);
@@ -568,14 +572,26 @@ export class BluefinService {
   }
 
   /**
-   * Get account balance (USDC)
+   * Get account balance (free collateral, USDC).
+   * Bluefin Pro returns `marginAvailableE9` in E9 format on the exchange API.
    */
   async getBalance(): Promise<number> {
     await this.ensureInitializedAsync();
 
     try {
-      const data = await this.apiRequest<{ freeCollateral: string }>('GET', '/api/v1/account');
-      return parseFloat(data?.freeCollateral || '0');
+      const data = await this.apiRequest<Record<string, unknown>>(
+        'GET',
+        `/api/v1/account?accountAddress=${this.walletAddress}`,
+        undefined,
+        'exchange',
+      );
+      const e9 = data?.marginAvailableE9;
+      if (e9 !== undefined && e9 !== null) {
+        const n = parseFloat(String(e9));
+        return Number.isFinite(n) ? n / 1e9 : 0;
+      }
+      // Fallback for older / staging response shape
+      return parseFloat(String(data?.freeCollateral ?? '0')) || 0;
     } catch (error) {
       logger.error('Failed to get BlueFin balance', error instanceof Error ? error : undefined);
       return 0;
@@ -583,36 +599,59 @@ export class BluefinService {
   }
 
   /**
-   * Get all open positions from account data
-   * Uses Exchange API: /api/v1/account (same host as market data)
-   * Falls back to empty array if API is unavailable
+   * Get all open positions from account data.
+   *
+   * Bluefin Pro returns numeric fields in E9 format (multiplied by 1e9, as
+   * decimal strings) and does NOT return position size directly. We derive
+   * size from initial margin × leverage / entry price.
+   *
+   * Uses Exchange API: /api/v1/account
    */
   async getPositions(): Promise<BluefinPosition[]> {
     await this.ensureInitializedAsync();
 
     try {
-      // Account data is on the exchange API host (api.sui-staging), not trade API
       const account = await this.apiRequest<{
         positions?: Array<Record<string, unknown>>;
-      }>('GET', '/api/v1/account', undefined, 'exchange');
-      
+      }>('GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange');
+
       const positions = account?.positions || [];
-      return positions.map((p: Record<string, unknown>) => ({
-        symbol: p.symbol as string,
-        side: parseFloat(p.quantity as string) > 0 ? 'LONG' : 'SHORT',
-        size: Math.abs(parseFloat(p.quantity as string)),
-        leverage: parseFloat(p.leverage as string) || 1,
-        entryPrice: parseFloat(p.avgEntryPrice as string),
-        markPrice: parseFloat(p.markPrice as string),
-        liquidationPrice: parseFloat(p.liquidationPrice as string),
-        unrealizedPnl: parseFloat(p.unrealizedProfit as string),
-        margin: parseFloat(p.margin as string),
-        marginRatio: parseFloat(p.marginRatio as string) || 0,
-      })) as BluefinPosition[];
+      const e9 = (v: unknown): number => {
+        const n = parseFloat(String(v ?? '0'));
+        return Number.isFinite(n) ? n / 1e9 : 0;
+      };
+
+      return positions.map((p: Record<string, unknown>) => {
+        const symbol = String(p.symbol ?? '');
+        const side = (String(p.side ?? '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT';
+        const entryPrice = e9(p.avgEntryPriceE9);
+        const markPrice = e9(p.markPriceE9);
+        const leverage = e9(p.leverageE9) || 1;
+        const initialMargin = e9(p.initialMarginE9);
+        const unrealizedPnl = e9(p.unrealizedPnlE9);
+        // Bluefin Pro doesn't expose quantity; derive: notional = margin*lev, size = notional/entry
+        const size = entryPrice > 0 ? (initialMargin * leverage) / entryPrice : 0;
+        const liqRaw = p.liquidationPriceE9 ?? p.estimatedLiquidationPriceE9;
+        const liquidationPrice = e9(liqRaw);
+        const maintMargin = e9(p.maintenanceMarginE9);
+        const marginRatio = initialMargin > 0 ? maintMargin / initialMargin : 0;
+
+        return {
+          symbol,
+          side,
+          size,
+          leverage,
+          entryPrice,
+          markPrice,
+          liquidationPrice,
+          unrealizedPnl,
+          margin: initialMargin,
+          marginRatio,
+        };
+      }) as BluefinPosition[];
     } catch (error) {
-      // Log at debug level - exchange API may be temporarily unavailable on testnet
-      logger.debug('Failed to get BlueFin positions', { 
-        error: error instanceof Error ? error.message : String(error) 
+      logger.debug('Failed to get BlueFin positions', {
+        error: error instanceof Error ? error.message : String(error),
       });
       return [];
     }
@@ -940,9 +979,20 @@ export class BluefinService {
       let accountOnboarded = false;
       let freeCollateral = '0';
       try {
-        const acctResp = await this.apiRequest<{ freeCollateral?: string } | null>('GET', '/api/v1/account');
+        const acctResp = await this.apiRequest<Record<string, unknown> | null>(
+          'GET',
+          `/api/v1/account?accountAddress=${this.walletAddress}`,
+          undefined,
+          'exchange',
+        );
         accountOnboarded = !!acctResp;
-        freeCollateral = acctResp?.freeCollateral || '0';
+        const e9 = acctResp?.marginAvailableE9;
+        if (e9 !== undefined && e9 !== null) {
+          const n = parseFloat(String(e9));
+          freeCollateral = Number.isFinite(n) ? (n / 1e9).toFixed(6) : '0';
+        } else {
+          freeCollateral = String(acctResp?.freeCollateral ?? '0');
+        }
         steps.push({ step: 'account', passed: true, detail: `Onboarded, freeCollateral=${freeCollateral}` });
       } catch {
         steps.push({ step: 'account', passed: false, detail: `Account ${this.walletAddress} NOT onboarded — register at https://trade.bluefin.io` });

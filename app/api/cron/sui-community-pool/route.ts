@@ -1057,6 +1057,78 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       if (onchainOrphans + dbOrphans > 0 || healed > 0) {
         logger.info('[SUI Cron] Step 0.5 reconciliation', reconciliation);
       }
+
+      // (c) Bluefin perp positions ↔ DB perp rows.
+      // Surface drift but do NOT auto-close — a live position with PnL is
+      // valuable; we want a DB row to monitor it, not premature liquidation.
+      try {
+        const bluefinKey = (process.env.BLUEFIN_PRIVATE_KEY || process.env.SUI_POOL_ADMIN_KEY || '').trim();
+        if (bluefinKey) {
+          const bf = BluefinService.getInstance();
+          if (!bf.isInitialized()) await bf.initialize(bluefinKey, network);
+          const livePerps = await bf.getPositions();
+
+          if (livePerps.length > 0) {
+            const { query } = await import('@/lib/db/postgres');
+            const dbPerpRes = await query(
+              `SELECT order_id, market, side FROM hedges
+                WHERE chain='sui' AND (on_chain=false OR on_chain IS NULL)
+                  AND status='active'`,
+              [],
+            );
+            const dbPerpKeys = new Set(
+              ((dbPerpRes as { rows?: Array<{ market: string; side: string }> }).rows || []).map(
+                r => `${r.market}|${r.side}`,
+              ),
+            );
+            const perpOrphans = livePerps.filter(p => !dbPerpKeys.has(`${p.symbol}|${p.side}`));
+            if (perpOrphans.length > 0) {
+              logger.warn('[SUI Cron] Bluefin perp orphans (live position, no DB row)', {
+                count: perpOrphans.length,
+                positions: perpOrphans.map(p => ({
+                  symbol: p.symbol,
+                  side: p.side,
+                  size: p.size,
+                  entry: p.entryPrice,
+                  pnl: p.unrealizedPnl,
+                })),
+              });
+              // Insert tracking rows so hedge-monitor can watch them.
+              const { createHedge } = await import('@/lib/db/hedges');
+              for (const p of perpOrphans) {
+                try {
+                  const orderId = `BF_RECONCILE_${p.symbol}_${p.side}_${Date.now()}`;
+                  await createHedge({
+                    orderId,
+                    portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+                    walletAddress: bf.getAddress() || '',
+                    asset: p.symbol.replace('-PERP', '') as PoolAsset,
+                    market: p.symbol,
+                    side: p.side as 'LONG' | 'SHORT',
+                    size: p.size,
+                    notionalValue: p.size * p.entryPrice,
+                    leverage: p.leverage,
+                    entryPrice: p.entryPrice,
+                    simulationMode: false,
+                    chain: 'sui',
+                    reason: 'Reconciler: Bluefin orphan perp adopted into DB',
+                  });
+                  reconciliation.healed++;
+                } catch (insErr) {
+                  logger.warn('[SUI Cron] Failed to adopt Bluefin orphan', {
+                    symbol: p.symbol,
+                    error: insErr instanceof Error ? insErr.message : String(insErr),
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (bfRecErr) {
+        logger.warn('[SUI Cron] Bluefin reconciliation skipped', {
+          error: bfRecErr instanceof Error ? bfRecErr.message : String(bfRecErr),
+        });
+      }
     } catch (recErr) {
       logger.warn('[SUI Cron] Reconciliation step failed (non-fatal)', {
         error: recErr instanceof Error ? recErr.message : String(recErr),
