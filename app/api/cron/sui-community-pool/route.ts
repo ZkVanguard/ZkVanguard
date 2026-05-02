@@ -27,7 +27,6 @@ import {
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
-import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
@@ -37,17 +36,46 @@ import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 import { createHedge } from '@/lib/db/hedges';
 import {
+  tryClaimCronRun,
+  setCronHalt,
+  getCronHalt,
+  endOfUtcDayMs,
+} from '@/lib/db/cron-state';
+import {
   safeLeverage,
   buildDecisionToken,
+  isPriceFreshEnough,
+  computeSafeCollateralUsd,
+  type QualifiedSignal,
 } from '@/lib/services/hedging/calibration';
+import { microUsdcToUsdNumber } from '@/lib/services/sui/safe-bigint';
+import {
+  POOL_ASSETS,
+  type PoolAsset,
+} from '@/lib/services/sui/cron/allocation';
+import {
+  HEDGE_MIN_OPEN_USDC,
+  returnUsdcToPool,
+  getActiveHedges,
+  settleActiveHedges,
+  replenishAdminUsdc,
+  transferUsdcFromPoolToAdmin,
+  getAdminUsdcBalance,
+} from '@/lib/services/sui/cron/hedge-treasury';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Rate limiting: prevent duplicate cron runs within 5 minutes
+// Rate limiting: prevent duplicate cron runs within 5 minutes.
+// `lastSuccessfulRunTimestamp` is per-instance and survives only within a
+// single Vercel container. The authoritative cluster-wide rate-limit lives
+// in Postgres via `tryClaimCronRun(...)`. The in-memory copy is a cheap
+// short-circuit for the common case where the same instance handles the
+// next QStash delivery.
 let lastSuccessfulRunTimestamp = 0;
 const MIN_CRON_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const CRON_SINGLETON_ID = 'sui-community-pool';
 
 // ── Hedge decision idempotency (5-min sliding window per {asset, side, risk-bucket}) ──
 // Prevents duplicate Bluefin orders if cron clock skews and fires twice in
@@ -59,9 +87,8 @@ const HEDGE_TOKEN_TTL_MS = 5 * 60 * 1000;
 // the price we sized against and Bluefin's last trade abort the order.
 const HEDGE_MAX_SLIPPAGE_PCT = 0.5; // 0.5%
 
-// 3 pool assets (SUI community pool — BTC, ETH, SUI only)
-const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
-type PoolAsset = (typeof POOL_ASSETS)[number];
+// 3 pool assets (BTC, ETH, SUI) — defined in `lib/services/sui/cron/allocation.ts`
+// and re-exported via the imports above.
 
 interface SuiCronResult {
   success: boolean;
@@ -130,785 +157,16 @@ interface SuiCronResult {
 }
 
 // ============================================================================
-// AI Allocation Engine (same algorithm as EVM, adapted for SUI USDC pool)
+// AI Allocation Engine � extracted to `lib/services/sui/cron/allocation.ts`
+// (`fetchMarketIndicators`, `generateAllocation`, `AssetIndicator`, `POOL_ASSETS`)
 // ============================================================================
 
-interface AssetIndicator {
-  asset: PoolAsset;
-  price: number;
-  change24h: number;
-  volume24h: number;
-  high24h: number;
-  low24h: number;
-  volatility: 'low' | 'medium' | 'high';
-  trend: 'bullish' | 'bearish' | 'neutral';
-  score: number;
-}
-
-async function fetchMarketIndicators(): Promise<AssetIndicator[]> {
-  const mds = getMarketDataService();
-  const indicators: AssetIndicator[] = [];
-
-  for (const asset of POOL_ASSETS) {
-    try {
-      const data = await mds.getTokenPrice(asset);
-      const price = data.price;
-      const change24h = data.change24h ?? 0;
-      const volume24h = data.volume24h ?? 0;
-      // Estimate high/low from price and 24h change (MarketPrice doesn't have these)
-      const high24h = price * (1 + Math.abs(change24h) / 100 * 0.6);
-      const low24h = price * (1 - Math.abs(change24h) / 100 * 0.6);
-
-      // Volatility from 24h range
-      const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
-      const volatility: 'low' | 'medium' | 'high' =
-        rangePercent < 3 ? 'low' : rangePercent < 7 ? 'medium' : 'high';
-
-      // Trend from 24h change
-      const trend: 'bullish' | 'bearish' | 'neutral' =
-        change24h > 2 ? 'bullish' : change24h < -2 ? 'bearish' : 'neutral';
-
-      // Score 0-100
-      let score = 50 + change24h * 2;
-      if (volatility === 'low') score += 10;
-      else if (volatility === 'high') score -= 5;
-      if (trend === 'bullish') score += 10;
-      else if (trend === 'bearish') score -= 10;
-      if (volume24h * price > 100_000_000) score += 5;
-      score = Math.max(0, Math.min(100, score));
-
-      indicators.push({ asset, price, change24h, volume24h, high24h, low24h, volatility, trend, score });
-    } catch (err) {
-      logger.warn(`[SUI Cron] Failed to fetch ${asset} price — skipping asset (no zero-data fallback)`, { error: err });
-      // Do NOT push zero-data indicators — AI should not make decisions on missing data
-    }
-  }
-
-  return indicators;
-}
-
-function generateAllocation(
-  indicators: AssetIndicator[],
-  currentAllocations?: Record<PoolAsset, number>
-): {
-  allocations: Record<PoolAsset, number>;
-  confidence: number;
-  reasoning: string;
-  shouldRebalance: boolean;
-} {
-  const totalScore = indicators.reduce((s, i) => s + i.score, 0) || 1;
-  const sorted = [...indicators].sort((a, b) => b.score - a.score);
-
-  const allocations: Record<string, number> = {};
-  let remaining = 100;
-
-  for (let i = 0; i < sorted.length; i++) {
-    if (i === sorted.length - 1) {
-      allocations[sorted[i].asset] = remaining;
-    } else {
-      let pct = Math.round((sorted[i].score / totalScore) * 100);
-      pct = Math.max(10, Math.min(40, pct));
-      allocations[sorted[i].asset] = pct;
-      remaining -= pct;
-    }
-  }
-
-  // Confidence
-  const clearTrends = indicators.filter(i => i.trend !== 'neutral').length;
-  const highVol = indicators.filter(i => i.volatility === 'high').length;
-  const confidence = Math.max(50, Math.min(95, 60 + clearTrends * 8 - highVol * 5));
-
-  // Reasoning
-  const top = sorted[0];
-  const bottom = sorted[sorted.length - 1];
-  const reasoning = `SUI USDC Pool AI (${new Date().toISOString().split('T')[0]}): ` +
-    `Overweight ${top.asset} (${allocations[top.asset]}%) — ${top.trend}, score ${top.score.toFixed(0)}. ` +
-    `Underweight ${bottom.asset} (${allocations[bottom.asset]}%) — ${bottom.trend}, score ${bottom.score.toFixed(0)}. ` +
-    `Prices: ${indicators.map(i => `${i.asset}=$${i.price.toLocaleString()}`).join(', ')}.`;
-
-  // Check drift to decide if rebalance needed
-  let shouldRebalance = false;
-  if (currentAllocations) {
-    const maxDrift = Math.max(
-      ...POOL_ASSETS.map(a => Math.abs((allocations[a] || 25) - (currentAllocations[a] || 25)))
-    );
-    shouldRebalance = maxDrift > 3;
-  } else {
-    shouldRebalance = confidence >= 65;
-  }
-
-  return {
-    allocations: allocations as Record<PoolAsset, number>,
-    confidence,
-    reasoning,
-    shouldRebalance,
-  };
-}
-
 // ============================================================================
-// Pool ↔ Admin USDC Transfers (open_hedge / close_hedge)
+// Pool ? Admin USDC Transfers � extracted to `lib/services/sui/cron/hedge-treasury.ts`
+// (`returnUsdcToPool`, `getActiveHedges`, `settleActiveHedges`,
+//  `replenishAdminUsdc`, `transferUsdcFromPoolToAdmin`,
+//  `getAdminUsdcBalance`, `HEDGE_MIN_OPEN_USDC`)
 // ============================================================================
-
-/**
- * Minimum USDC value for a meaningful on-chain hedge.
- * Below this, every close emits a deceptive sub-cent "profit" event due to
- * rounding / DEX dust, which clogs the Sui explorer and inflates win-rate stats.
- * Override with HEDGE_MIN_OPEN_USDC env var (decimal USD).
- */
-const HEDGE_MIN_OPEN_USDC = Math.max(
-  0.10,
-  Number(process.env.HEDGE_MIN_OPEN_USDC) || 0.10,
-);
-
-/**
- * Return USDC from admin wallet back to the pool via close_hedge.
- * This settles active hedges by returning collateral (+ optional PnL) to the pool.
- *
- * The Move contract's close_hedge:
- *  1. Finds the hedge by ID in active_hedges
- *  2. Removes it and decrements total_hedged_value
- *  3. Joins the passed-in Coin<T> into the pool balance
- *
- * This MUST be called after DEX swaps to return any unused USDC to the pool.
- */
-async function returnUsdcToPool(
-  network: 'mainnet' | 'testnet',
-  hedgeId: number[],
-  amountUsdc: number,
-  pnlUsdc: number,
-  isProfit: boolean,
-): Promise<{ success: boolean; txDigest?: string; error?: string }> {
-  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  const agentCapId = (process.env.SUI_AGENT_CAP_ID || process.env.SUI_ADMIN_CAP_ID || '').trim();
-  const poolConfig = SUI_USDC_POOL_CONFIG[network];
-
-  if (!adminKey || !agentCapId || !poolConfig.packageId || !poolConfig.poolStateId) {
-    return { success: false, error: 'Missing admin key, agent cap, or pool config' };
-  }
-
-  try {
-    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-
-    let keypair: InstanceType<typeof Ed25519Keypair>;
-    try {
-      keypair = adminKey.startsWith('suiprivkey')
-        ? Ed25519Keypair.fromSecretKey(adminKey)
-        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    } catch {
-      return { success: false, error: 'Invalid admin key format' };
-    }
-
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
-
-    const usdcType = SUI_USDC_COIN_TYPE[network];
-    const amountRaw = Math.floor(amountUsdc * 1e6);
-    const pnlRaw = Math.floor(pnlUsdc * 1e6);
-
-    // Get admin's USDC coins and merge them into a single coin for the return
-    const address = keypair.getPublicKey().toSuiAddress();
-    const coins = await suiClient.getCoins({ owner: address, coinType: usdcType });
-    
-    if (!coins.data || coins.data.length === 0) {
-      return { success: false, error: 'Admin has no USDC coins to return' };
-    }
-
-    const totalAvailable = coins.data.reduce((sum, c) => sum + Number(c.balance), 0);
-    if (totalAvailable < amountRaw) {
-      return { success: false, error: `Admin only has ${(totalAvailable / 1e6).toFixed(6)} USDC, need ${amountUsdc}` };
-    }
-
-    const tx = new Transaction();
-
-    // Merge all USDC coins into one, then split the exact amount needed
-    let primaryCoin: ReturnType<typeof tx.object>;
-    if (coins.data.length === 1) {
-      primaryCoin = tx.object(coins.data[0].coinObjectId);
-    } else {
-      // Merge all coins into the first one
-      primaryCoin = tx.object(coins.data[0].coinObjectId);
-      const mergeCoins = coins.data.slice(1).map(c => tx.object(c.coinObjectId));
-      if (mergeCoins.length > 0) {
-        tx.mergeCoins(primaryCoin, mergeCoins);
-      }
-    }
-
-    // Split exact amount to return to pool
-    const [returnCoin] = tx.splitCoins(primaryCoin, [amountRaw]);
-
-    tx.moveCall({
-      target: `${poolConfig.packageId}::${poolConfig.moduleName}::close_hedge`,
-      typeArguments: [usdcType],
-      arguments: [
-        tx.object(agentCapId),              // AgentCap
-        tx.object(poolConfig.poolStateId!), // UsdcPoolState
-        tx.pure.vector('u8', hedgeId),      // hedge_id bytes
-        tx.pure.u64(pnlRaw),               // pnl_usdc
-        tx.pure.bool(isProfit),             // is_profit
-        returnCoin,                          // Coin<USDC> to return to pool
-        tx.object('0x6'),                   // Clock
-      ],
-    });
-
-    tx.setGasBudget(50_000_000);
-
-    const result = await suiClient.signAndExecuteTransaction({
-      transaction: tx,
-      signer: keypair,
-      options: { showEffects: true, showEvents: true },
-    });
-
-    const success = result.effects?.status?.status === 'success';
-    if (success) {
-      logger.info('[SUI Cron] close_hedge result', {
-        success,
-        txDigest: result.digest,
-        amountUsdc,
-        pnlUsdc,
-        isProfit,
-      });
-
-      // DB sync: mark the corresponding row closed by hedge_id_onchain.
-      // This keeps the DB authoritative even when the close came from a
-      // background settlement, not the hedge-monitor cron.
-      try {
-        const hedgeIdHex = Buffer.from(hedgeId).toString('hex');
-        const { closeHedgeByOnchainId } = await import('@/lib/db/hedges');
-        const realized = isProfit ? pnlUsdc : -pnlUsdc;
-        const dbRes = await closeHedgeByOnchainId({
-          hedgeIdOnchain: hedgeIdHex,
-          realizedPnl: realized,
-          status: 'closed',
-          closeTxDigest: result.digest,
-        });
-        if (dbRes.updated === 0) {
-          logger.debug('[SUI Cron] close_hedge: no matching DB row (orphan or already closed)', {
-            hedgeIdHex: hedgeIdHex.slice(0, 16),
-          });
-        }
-      } catch (dbErr) {
-        logger.warn('[SUI Cron] close_hedge DB sync failed (non-fatal)', {
-          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-        });
-      }
-    } else {
-      logger.warn('[SUI Cron] close_hedge tx failed', {
-        txDigest: result.digest,
-        error: result.effects?.status?.error,
-        amountUsdc,
-        pnlUsdc,
-        isProfit,
-      });
-    }
-
-    return { success, txDigest: result.digest, error: success ? undefined : result.effects?.status?.error };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[SUI Cron] returnUsdcToPool failed', { error: msg });
-    return { success: false, error: msg };
-  }
-}
-
-/**
- * Read active hedges from on-chain pool state.
- * Returns hedge IDs and collateral amounts for settlement.
- */
-async function getActiveHedges(network: 'mainnet' | 'testnet'): Promise<Array<{
-  hedgeId: number[];
-  collateralUsdc: number;
-  pairIndex: number;
-  openTime: number;
-}>> {
-  const poolConfig = SUI_USDC_POOL_CONFIG[network];
-  if (!poolConfig.poolStateId) return [];
-
-  try {
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
-
-    const obj = await suiClient.getObject({
-      id: poolConfig.poolStateId,
-      options: { showContent: true },
-    });
-    const fields = (obj.data?.content as any)?.fields;
-    const hedges = fields?.hedge_state?.fields?.active_hedges || [];
-
-    return hedges.map((h: any) => {
-      const hf = h.fields || h;
-      return {
-        hedgeId: Array.isArray(hf.hedge_id) ? hf.hedge_id : [],
-        collateralUsdc: Number(hf.collateral_usdc || 0) / 1e6,
-        pairIndex: Number(hf.pair_index || 0),
-        openTime: Number(hf.open_time || 0),
-      };
-    });
-  } catch (err) {
-    logger.warn('[SUI Cron] Failed to read active hedges', { error: err });
-    return [];
-  }
-}
-
-/**
- * Settle all active hedges by returning USDC from admin wallet to pool.
- * Called after DEX swap execution to ensure pool balance is restored.
- *
- * The amount returned for each hedge = original collateral (no PnL tracking
- * since the pool is USDC-denominated and token positions are held externally).
- */
-async function settleActiveHedges(
-  network: 'mainnet' | 'testnet',
-): Promise<{ settled: number; failed: number; details: Array<{ hedgeId: string; amount: number; success: boolean; error?: string }> }> {
-  const hedges = await getActiveHedges(network);
-  if (hedges.length === 0) {
-    logger.info('[SUI Cron] No active hedges to settle');
-    return { settled: 0, failed: 0, details: [] };
-  }
-
-  // Check admin USDC balance
-  const adminUsdc = await getAdminUsdcBalance(network);
-  const totalNeeded = hedges.reduce((sum, h) => sum + h.collateralUsdc, 0);
-
-  logger.info('[SUI Cron] Settling active hedges', {
-    hedgeCount: hedges.length,
-    totalCollateral: totalNeeded.toFixed(6),
-    adminUsdc: adminUsdc.toFixed(6),
-  });
-
-  const details: Array<{ hedgeId: string; amount: number; success: boolean; pnl?: number; error?: string }> = [];
-  let settled = 0;
-  let failed = 0;
-  let remainingUsdc = adminUsdc;
-
-  // Distribute ALL admin USDC proportionally across hedges.
-  // If assets appreciated → pool gets back MORE than collateral (profit).
-  // If assets depreciated → pool gets back LESS than collateral (loss).
-  for (const hedge of hedges) {
-    const proportion = totalNeeded > 0 ? hedge.collateralUsdc / totalNeeded : 1 / hedges.length;
-    const returnAmount = Math.min(adminUsdc * proportion, remainingUsdc);
-    if (returnAmount < 0.000001) {
-      logger.warn('[SUI Cron] Insufficient admin USDC to settle hedge', {
-        needed: hedge.collateralUsdc,
-        available: remainingUsdc,
-      });
-      details.push({
-        hedgeId: Buffer.from(hedge.hedgeId).toString('hex').slice(0, 16),
-        amount: hedge.collateralUsdc,
-        success: false,
-        error: 'Insufficient admin USDC',
-      });
-      failed++;
-      continue;
-    }
-
-    const pnlAmount = Math.abs(returnAmount - hedge.collateralUsdc);
-    const isProfit = returnAmount >= hedge.collateralUsdc;
-
-    const result = await returnUsdcToPool(
-      network,
-      hedge.hedgeId,
-      returnAmount,
-      pnlAmount,
-      isProfit,
-    );
-
-    details.push({
-      hedgeId: Buffer.from(hedge.hedgeId).toString('hex').slice(0, 16),
-      amount: returnAmount,
-      success: result.success,
-      pnl: isProfit ? pnlAmount : -pnlAmount,
-      error: result.error,
-    });
-
-    if (result.success) {
-      settled++;
-      remainingUsdc -= returnAmount;
-      // Small delay between transactions to avoid nonce issues
-      await new Promise(r => setTimeout(r, 1500));
-    } else {
-      failed++;
-    }
-  }
-
-  logger.info('[SUI Cron] Hedge settlement complete', { settled, failed, totalHedges: hedges.length });
-  return { settled, failed, details };
-}
-
-/**
- * Replenish admin USDC by reverse-swapping non-USDC assets via Bluefin.
- * 
- * When the cron needs USDC (e.g., to settle hedges or refund depositors) but
- * admin wallet is short, this swaps wBTC/ETH/SUI back to USDC automatically
- * using the Bluefin 7k aggregator.
- * 
- * Strategy: swap from the largest-value non-USDC asset first to minimize fees.
- */
-async function replenishAdminUsdc(
-  network: 'mainnet' | 'testnet',
-  usdcShortfall: number,
-  pricesUSD: Record<string, number>,
-): Promise<{ swapped: number; details: Array<{ asset: string; amountSwapped: number; txDigest?: string; error?: string }> }> {
-  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  if (!adminKey || usdcShortfall <= 0) {
-    return { swapped: 0, details: [] };
-  }
-
-  const details: Array<{ asset: string; amountSwapped: number; txDigest?: string; error?: string }> = [];
-  let totalSwapped = 0;
-  let remainingShortfall = usdcShortfall;
-
-  try {
-    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-
-    const keypair = adminKey.startsWith('suiprivkey')
-      ? Ed25519Keypair.fromSecretKey(adminKey)
-      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    const address = keypair.getPublicKey().toSuiAddress();
-
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
-
-    const aggregator = getBluefinAggregatorService(network);
-
-    // Get admin's non-USDC balances, ranked by USD value (largest first)
-    const allBalances = await suiClient.getAllBalances({ owner: address });
-    const candidates: Array<{ asset: BluefinPoolAsset; amount: number; valueUsd: number }> = [];
-
-    // Normalize SUI coin type strings for comparison (RPC may return different
-    // address case/padding than our static config).
-    const normalizeCoinType = (t: string): string => {
-      const parts = t.split('::');
-      if (parts.length !== 3) return t.toLowerCase();
-      const addr = parts[0].toLowerCase().replace(/^0x/, '').replace(/^0+/, '') || '0';
-      return `0x${addr}::${parts[1]}::${parts[2]}`;
-    };
-
-    const balanceDebug: Array<{ coinType: string; raw: string; matched?: string }> = [];
-
-    for (const bal of allBalances) {
-      const coinType = bal.coinType;
-      const raw = Number(bal.totalBalance);
-      if (raw <= 0) continue;
-
-      // Match coin type to known assets (skip USDC and SUI gas reserve)
-      let asset: BluefinPoolAsset | null = null;
-      let decimals = 8;
-
-      const normBal = normalizeCoinType(coinType);
-      for (const a of POOL_ASSETS) {
-        const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
-        if (assetType && normalizeCoinType(assetType) === normBal) {
-          asset = a as BluefinPoolAsset;
-          decimals = a === 'SUI' ? 9 : 8;
-          break;
-        }
-      }
-
-      balanceDebug.push({ coinType, raw: bal.totalBalance, matched: asset || undefined });
-
-      if (!asset) continue;
-
-      const amount = raw / Math.pow(10, decimals);
-      const price = pricesUSD[asset] || 0;
-      const valueUsd = amount * price;
-
-      // Reserve a minimum SUI balance for gas (keep 1 SUI untouchable)
-      if (asset === 'SUI') {
-        const reserveSui = 1.0;
-        const swappable = Math.max(0, amount - reserveSui);
-        if (swappable <= 0) continue;
-        candidates.push({ asset, amount: swappable, valueUsd: swappable * price });
-      } else {
-        candidates.push({ asset, amount, valueUsd });
-      }
-    }
-
-    // Sort by USD value descending — swap largest holdings first
-    candidates.sort((a, b) => b.valueUsd - a.valueUsd);
-
-    logger.info('[SUI Cron] Replenish candidates', {
-      shortfall: usdcShortfall.toFixed(6),
-      candidates: candidates.map(c => `${c.asset}: ${c.amount.toFixed(6)} (~$${c.valueUsd.toFixed(2)})`),
-      allBalances: balanceDebug,
-    });
-
-    // Swap from each asset until shortfall is covered
-    for (const c of candidates) {
-      if (remainingShortfall <= 0.01) break; // Done
-
-      // Calculate how much of this asset to swap (with 5% buffer for slippage)
-      const usdcTarget = Math.min(remainingShortfall * 1.05, c.valueUsd);
-      // Lower floor to $0.05 so tiny orphaned dust can still be cleared.
-      // Anything smaller than that can't beat gas anyway.
-      if (usdcTarget < 0.05) continue;
-
-      const price = pricesUSD[c.asset] || 0;
-      if (price <= 0) continue;
-
-      const assetAmountToSwap = Math.min(c.amount, usdcTarget / price);
-      if (assetAmountToSwap <= 0) continue;
-
-      logger.info(`[SUI Cron] Reverse swap ${c.asset} → USDC`, {
-        assetAmount: assetAmountToSwap.toFixed(8),
-        targetUsdc: usdcTarget.toFixed(4),
-        remainingShortfall: remainingShortfall.toFixed(4),
-      });
-
-      // Try with progressively higher slippage tolerance — small/illiquid positions
-      // (e.g. residual wBTC dust) often need wider slippage to clear.
-      // Tightened from [2%, 5%, 10%] → [0.5%, 1%, 2%] for near-zero loss on swap legs.
-      // If even 2% won't clear, hold the asset (better than realising 10% loss).
-      // Override via HEDGE_REVERSE_SWAP_LADDER="0.005,0.01,0.02".
-      const slippageLadder = (process.env.HEDGE_REVERSE_SWAP_LADDER || '0.005,0.01,0.02')
-        .split(',')
-        .map(s => Number(s.trim()))
-        .filter(n => Number.isFinite(n) && n > 0 && n <= 0.10);
-      let cleared = false;
-
-      for (const slippage of slippageLadder) {
-        try {
-          const reverseQuote = await aggregator.getReverseSwapQuote(c.asset, assetAmountToSwap);
-
-          if (!reverseQuote.canSwapOnChain || !reverseQuote.routerData) {
-            logger.warn(`[SUI Cron] ${c.asset} → USDC not swappable on-chain, skipping`);
-            details.push({ asset: c.asset, amountSwapped: 0, error: 'No on-chain route' });
-            cleared = true; // Don't retry — no route exists
-            break;
-          }
-
-          const swapResult = await aggregator.executeSwap(reverseQuote, slippage);
-          const usdcReceived = Number(swapResult.amountOut || '0') / 1e6;
-
-          if (swapResult.success) {
-            totalSwapped += usdcReceived;
-            remainingShortfall -= usdcReceived;
-            details.push({
-              asset: c.asset,
-              amountSwapped: usdcReceived,
-              txDigest: swapResult.txDigest,
-            });
-            logger.info(`[SUI Cron] ${c.asset} → USDC swap success`, {
-              txDigest: swapResult.txDigest,
-              usdcReceived: usdcReceived.toFixed(6),
-              slippageUsed: slippage,
-            });
-            await new Promise(r => setTimeout(r, 2500));
-            cleared = true;
-            break;
-          }
-
-          // Failed at this slippage — retry with wider slippage if more tolerance left
-          const errMsg = swapResult.error || 'unknown';
-          const isSlippageError = /slippage|deviation|amount.?out/i.test(errMsg);
-          if (!isSlippageError) {
-            // Non-slippage error (e.g. gas, RPC) — don't retry
-            details.push({ asset: c.asset, amountSwapped: 0, error: errMsg });
-            logger.warn(`[SUI Cron] ${c.asset} → USDC swap failed (non-slippage)`, { error: errMsg });
-            cleared = true;
-            break;
-          }
-          logger.warn(`[SUI Cron] ${c.asset} → USDC slippage at ${(slippage * 100).toFixed(0)}% — retrying`, { error: errMsg });
-        } catch (swapErr) {
-          const msg = swapErr instanceof Error ? swapErr.message : String(swapErr);
-          // If it's a clearly transient error, allow retry; otherwise bail
-          if (!/slippage|deviation|amount.?out/i.test(msg)) {
-            details.push({ asset: c.asset, amountSwapped: 0, error: msg });
-            logger.warn(`[SUI Cron] Reverse swap ${c.asset} threw fatal error`, { error: msg });
-            cleared = true;
-            break;
-          }
-          logger.warn(`[SUI Cron] ${c.asset} threw at slippage ${(slippage * 100).toFixed(0)}% — retrying`, { error: msg });
-        }
-      }
-
-      if (!cleared) {
-        details.push({ asset: c.asset, amountSwapped: 0, error: `Failed after ${slippageLadder.length} slippage retries (up to ${slippageLadder[slippageLadder.length - 1] * 100}%)` });
-        logger.warn(`[SUI Cron] ${c.asset} → USDC exhausted slippage ladder`);
-      }
-    }
-  } catch (err) {
-    logger.error('[SUI Cron] replenishAdminUsdc failed', { error: err });
-  }
-
-  return { swapped: totalSwapped, details };
-}
-
-/**
- * Transfer USDC from SUI pool contract to admin wallet using open_hedge.
- * The Move contract's open_hedge splits USDC from the pool Balance<T> and
- * sends a Coin<T> to state.treasury (the admin/treasury wallet).
- *
- * Requires: SUI_AGENT_CAP_ID env var (the AgentCap object owned by admin).
- *
- * Returns the tx digest on success, or null if transfer is not possible.
- */
-async function transferUsdcFromPoolToAdmin(
-  network: 'mainnet' | 'testnet',
-  amountUsdc: number,
-): Promise<{ success: boolean; txDigest?: string; error?: string }> {
-  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  const agentCapId = (process.env.SUI_AGENT_CAP_ID || process.env.SUI_ADMIN_CAP_ID || '').trim();
-  const poolConfig = SUI_USDC_POOL_CONFIG[network];
-
-  if (!adminKey) {
-    return { success: false, error: 'SUI_POOL_ADMIN_KEY not configured' };
-  }
-  if (!agentCapId) {
-    return { success: false, error: 'SUI_AGENT_CAP_ID / SUI_ADMIN_CAP_ID not configured — cannot call open_hedge' };
-  }
-  if (!poolConfig.packageId || !poolConfig.poolStateId) {
-    return { success: false, error: 'Pool package or state ID not configured' };
-  }
-
-  // Refuse to open dust hedges. They produce noise on the explorer and
-  // distort the apparent win-rate without ever moving meaningful capital.
-  if (amountUsdc < HEDGE_MIN_OPEN_USDC) {
-    return {
-      success: false,
-      error: `amount $${amountUsdc.toFixed(6)} below HEDGE_MIN_OPEN_USDC=$${HEDGE_MIN_OPEN_USDC.toFixed(2)} — refusing dust open_hedge`,
-    };
-  }
-
-  try {
-    const { Ed25519Keypair, Transaction, SuiClient, getFullnodeUrl } = await import('@mysten/sui/keypairs/ed25519')
-      .then(kp => import('@mysten/sui/transactions').then(tx => import('@mysten/sui/client').then(cl => ({
-        Ed25519Keypair: kp.Ed25519Keypair,
-        Transaction: tx.Transaction,
-        SuiClient: cl.SuiClient,
-        getFullnodeUrl: cl.getFullnodeUrl,
-      }))));
-
-    let keypair: InstanceType<typeof Ed25519Keypair>;
-    try {
-      keypair = adminKey.startsWith('suiprivkey')
-        ? Ed25519Keypair.fromSecretKey(adminKey)
-        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    } catch {
-      return { success: false, error: 'Invalid SUI_POOL_ADMIN_KEY format' };
-    }
-
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
-
-    const amountRaw = Math.floor(amountUsdc * 1e6); // USDC has 6 decimals on SUI
-    const usdcType = SUI_USDC_COIN_TYPE[network];
-
-    const tx = new Transaction();
-    tx.moveCall({
-      target: `${poolConfig.packageId}::${poolConfig.moduleName}::open_hedge`,
-      typeArguments: [usdcType],
-      arguments: [
-        tx.object(agentCapId),              // AgentCap
-        tx.object(poolConfig.poolStateId!), // UsdcPoolState
-        tx.pure.u8(0),                       // pair_index (0 = rebalance)
-        tx.pure.u64(amountRaw),             // collateral_usdc
-        tx.pure.u64(1),                     // leverage (1x = spot)
-        tx.pure.bool(true),                 // is_long (buying assets)
-        tx.pure.string('Cron rebalance: transfer USDC from pool to admin for DEX swaps'),
-        tx.object('0x6'),                   // Clock
-      ],
-    });
-
-    tx.setGasBudget(50_000_000);
-
-    const result = await suiClient.signAndExecuteTransaction({
-      transaction: tx,
-      signer: keypair,
-      options: { showEffects: true, showEvents: true },
-    });
-
-    const success = result.effects?.status?.status === 'success';
-    if (success) {
-      logger.info('[SUI Cron] Pool → admin USDC transfer via open_hedge', {
-        txDigest: result.digest,
-        amountUsdc,
-      });
-
-      // DB sync: persist a synthetic row so this on-chain hedge is visible
-      // to the hedge-monitor and reconciliation. Pulls the hedge_id from the
-      // emitted UsdcHedgeOpened event so we can match it on close.
-      try {
-        const evs = (result.events || []) as Array<{ type: string; parsedJson?: Record<string, unknown> }>;
-        const opened = evs.find(e => e.type.endsWith('::UsdcHedgeOpened'));
-        const idArr = opened?.parsedJson?.hedge_id;
-        if (Array.isArray(idArr) && idArr.length === 32) {
-          const hex = Buffer.from(idArr as number[]).toString('hex');
-          const { recordSuiOnchainHedge } = await import('@/lib/db/hedges');
-          await recordSuiOnchainHedge({
-            hedgeIdOnchain: hex,
-            collateralUsdc: amountUsdc,
-            pairIndex: 0, // cron always opens with pair_index=0 (rebalance)
-            isLong: true,
-            leverage: 1,
-            txDigest: result.digest,
-            walletAddress: keypair.getPublicKey().toSuiAddress(),
-            reason: 'Cron rebalance: pool → admin USDC transfer',
-          });
-        }
-      } catch (dbErr) {
-        logger.warn('[SUI Cron] open_hedge DB sync failed (non-fatal)', {
-          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-        });
-      }
-    } else {
-      logger.error('[SUI Cron] Pool → admin USDC transfer failed', {
-        txDigest: result.digest,
-        error: result.effects?.status?.error,
-      });
-    }
-
-    return { success, txDigest: result.digest, error: success ? undefined : result.effects?.status?.error };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[SUI Cron] transferUsdcFromPoolToAdmin failed', { error: msg });
-    return { success: false, error: msg };
-  }
-}
-
-/**
- * Check admin wallet's USDC balance on SUI.
- */
-async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promise<number> {
-  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  if (!adminKey) return 0;
-
-  try {
-    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-
-    let keypair: InstanceType<typeof Ed25519Keypair>;
-    try {
-      keypair = adminKey.startsWith('suiprivkey')
-        ? Ed25519Keypair.fromSecretKey(adminKey)
-        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    } catch {
-      return 0;
-    }
-
-    const address = keypair.getPublicKey().toSuiAddress();
-    const rpcUrl = network === 'mainnet'
-      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
-      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
-    const suiClient = new SuiClient({ url: rpcUrl });
-
-    const usdcType = SUI_USDC_COIN_TYPE[network];
-    const balance = await suiClient.getBalance({ owner: address, coinType: usdcType });
-    return Number(balance.totalBalance) / 1e6; // USDC 6 decimals
-  } catch {
-    return 0;
-  }
-}
 
 // ============================================================================
 // GET Handler — QStash / Vercel Cron
@@ -941,10 +199,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     }
   }
 
-  // Rate limit: reject if last successful run was less than 5 minutes ago
+  // ════════════════════════════════════════════════════════════════════════
+  // STAGE 1 — Per-instance in-memory rate limit (cheap, hot-path short-circuit)
+  // ════════════════════════════════════════════════════════════════════════
   const timeSinceLastRun = startTime - lastSuccessfulRunTimestamp;
   if (lastSuccessfulRunTimestamp > 0 && timeSinceLastRun < MIN_CRON_INTERVAL_MS) {
-    logger.warn('[SUI Cron] Rate limited — too soon since last run', {
+    logger.warn('[SUI Cron] Rate limited (in-memory) — too soon since last run', {
       secondsSinceLast: Math.round(timeSinceLastRun / 1000),
       minIntervalSeconds: MIN_CRON_INTERVAL_MS / 1000,
     });
@@ -952,6 +212,60 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       { success: false, chain: 'sui' as const, error: `Rate limited. Last run ${Math.round(timeSinceLastRun / 1000)}s ago, min interval is ${MIN_CRON_INTERVAL_MS / 1000}s`, duration: Date.now() - startTime },
       { status: 429 }
     );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // STAGE 2 — Cluster-wide CAS via Postgres. The in-memory check above only
+  // protects the SAME Vercel instance; QStash retries can land on a fresh
+  // cold-start which has `lastSuccessfulRunTimestamp = 0`. The Postgres CAS
+  // is the authoritative singleton that survives instance churn.
+  // ════════════════════════════════════════════════════════════════════════
+  try {
+    const claim = await tryClaimCronRun(CRON_SINGLETON_ID, MIN_CRON_INTERVAL_MS, startTime);
+    if (!claim.claimed) {
+      logger.warn('[SUI Cron] Rate limited (cluster CAS) — concurrent or recent run', {
+        reason: claim.reason,
+        lastRunMs: claim.lastRunMs,
+        gapMs: claim.lastRunMs ? startTime - claim.lastRunMs : null,
+      });
+      return NextResponse.json(
+        { success: false, chain: 'sui' as const, error: `Cluster rate-limit: ${claim.reason}`, duration: Date.now() - startTime },
+        { status: 429 }
+      );
+    }
+  } catch (claimErr) {
+    // Fail-closed: if we can't claim the cluster lock, we cannot guarantee
+    // we're the only running instance — refuse to proceed with state-mutating work.
+    logger.error('[SUI Cron] tryClaimCronRun failed — refusing to run (fail-closed)', {
+      error: claimErr instanceof Error ? claimErr.message : String(claimErr),
+    });
+    return NextResponse.json(
+      { success: false, chain: 'sui' as const, error: 'Cluster lock unavailable — fail-closed', duration: Date.now() - startTime },
+      { status: 503 }
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // STAGE 3 — Daily-loss circuit breaker. If a previous run tripped the
+  // daily-loss cap, `setCronHalt` will have written a halt-until timestamp.
+  // We honour that across instances (DB-backed) until UTC end-of-day.
+  // ════════════════════════════════════════════════════════════════════════
+  try {
+    const halt = await getCronHalt(CRON_SINGLETON_ID, startTime);
+    if (halt) {
+      logger.warn('[SUI Cron] Halted by daily-loss circuit breaker', halt);
+      return NextResponse.json(
+        { success: false, chain: 'sui' as const, error: `Halted: ${halt.reason} until ${new Date(halt.untilMs).toISOString()}`, duration: Date.now() - startTime },
+        { status: 503 }
+      );
+    }
+  } catch (haltErr) {
+    // getCronHalt fails-closed internally with a 60s synthetic halt; if it
+    // throws here that's a bug — log and proceed (don't permanently block
+    // the cron on a transient query bug).
+    logger.error('[SUI Cron] getCronHalt threw — proceeding', {
+      error: haltErr instanceof Error ? haltErr.message : String(haltErr),
+    });
   }
 
   try {
@@ -1401,6 +715,20 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           if (aiResult.shouldRebalance) {
             aiResult.shouldRebalance = false;
           }
+          // Persist the halt across instances/restarts — `getCronHalt(...)`
+          // at the top of the next GET will short-circuit until UTC end-of-day.
+          // Without this, a fresh Vercel cold start would happily re-run.
+          try {
+            await setCronHalt(
+              CRON_SINGLETON_ID,
+              endOfUtcDayMs(Date.now()),
+              `daily-loss-cap-tripped: netPnl=${last24h.netPnl.toFixed(2)} cap=${dailyLossCap}`,
+            );
+          } catch (haltSetErr) {
+            logger.error('[SUI Cron] setCronHalt failed — halt is in-memory only', {
+              error: haltSetErr instanceof Error ? haltSetErr.message : String(haltSetErr),
+            });
+          }
         } else if (last24h.count >= 5) {
           logger.info('[SUI Cron] Daily PnL window', {
             netPnl24h: last24h.netPnl.toFixed(2),
@@ -1844,6 +1172,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     //     needs to be swapped/hedged into assets. Also force rebalance when the pool has
     //     never had successful swaps (no DB swap records).
     let rebalanceSwaps: SuiCronResult['rebalanceSwaps'] = undefined;
+
+    // On-chain pool state — populated inside the admin-USDC branch below
+    // (Step 7b's pool-state read), but Step 8 (auto-hedge sizing) ALSO needs
+    // these values for Kelly cap math, balance-drift checks, and exposure
+    // fallback. Declared at the GET-handler scope so they survive past the
+    // swap-planning try block. Defaults are safe ("no existing hedge",
+    // contract default 25% ratio, full NAV as balance).
+    let contractBalance = navUsd;
+    let existingHedgedValue = 0;
+    let maxHedgeRatioBps = 2500;
     const hasUnallocatedUsdc = navUsd > 30 && (
       currentAllocations.BTC === 0 &&
       currentAllocations.ETH === 0 &&
@@ -1906,6 +1244,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
         // Step 7b: Ensure admin wallet has USDC for swaps (transfer from pool if needed)
         const hedgeableCount = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin').length;
+
         if (process.env.SUI_POOL_ADMIN_KEY && (onChainCount > 0 || hedgeableCount > 0)) {
           // Calculate total USDC needed for on-chain swaps + hedges
           const totalUsdcNeeded = plan.swaps
@@ -1924,12 +1263,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             const deficit = totalUsdcNeeded - adminUsdcBalance;
 
             // Read on-chain state to get exact contract-side balance and hedge values.
-            let contractBalance = navUsd; // fallback: use full NAV
-            let existingHedgedValue = 0;
+            // (contractBalance / existingHedgedValue / maxHedgeRatioBps are hoisted
+            //  into the parent scope so Step 8 can use them for Kelly cap math.)
             let dailyHedgedToday = 0;
-            // Read max_hedge_ratio_bps from on-chain auto_hedge_config (DO NOT hardcode — admin may change it).
-            // Default to 2500 bps (25%) which matches contract initialization.
-            let maxHedgeRatioBps = 2500;
             // DAILY_HEDGE_CAP_BPS is a hardcoded constant in the Move contract.
             const DAILY_HEDGE_CAP_BPS_CONST = 5000; // 50% — must match Move const DAILY_HEDGE_CAP_BPS
             try {
@@ -1946,8 +1282,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   const rawBal = typeof fields.balance === 'string'
                     ? fields.balance
                     : (fields.balance?.fields?.value || '0');
-                  contractBalance = Number(rawBal) / 1e6;
-                  existingHedgedValue = Number(fields.hedge_state?.fields?.total_hedged_value || '0') / 1e6;
+                  // microUsdcToUsdNumber rejects non-integer / negative / out-of-range
+                  // values and audit-logs malformed RPC responses, so a poisoned
+                  // u64 cannot silently inflate `contractBalance`.
+                  contractBalance = microUsdcToUsdNumber(rawBal, 'pool.balance');
+                  existingHedgedValue = microUsdcToUsdNumber(
+                    fields.hedge_state?.fields?.total_hedged_value || '0',
+                    'hedge_state.total_hedged_value',
+                  );
 
                   // Read daily hedge counter & on-chain max_hedge_ratio_bps
                   const hedgeState = fields.hedge_state?.fields;
@@ -1955,7 +1297,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     const currentDay = Math.floor(Date.now() / 86400000);
                     const onChainDay = Number(hedgeState.current_hedge_day || 0);
                     if (onChainDay === currentDay) {
-                      dailyHedgedToday = Number(hedgeState.daily_hedge_total || 0) / 1e6;
+                      dailyHedgedToday = microUsdcToUsdNumber(
+                        hedgeState.daily_hedge_total || '0',
+                        'hedge_state.daily_hedge_total',
+                      );
                     }
                     const cfgBps = Number(
                       hedgeState.auto_hedge_config?.fields?.max_hedge_ratio_bps ?? 0,
@@ -2341,32 +1686,61 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               // Tighten further with HEDGE_MIN_POLY_CONFIDENCE (default 70).
               // ═══════════════════════════════════════════════════════════════════
               const requireSignal = (process.env.HEDGE_REQUIRE_PREDICTION_SIGNAL || 'true').toLowerCase() !== 'false';
-              let qualifiedHedgeSignal: { direction: 'UP' | 'DOWN'; confidence: number; probability: number; weight: number } | null = null;
+              // Hold the FULL QualifiedSignal so we can pass it to
+              // `computeSafeCollateralUsd` for Kelly sizing. Previously we
+              // stored only a partial copy and then approximated Kelly with
+              // an ad-hoc `signalScale` — that's now replaced by the
+              // calibrated path.
+              let qualifiedHedgeSignal: QualifiedSignal | null = null;
               if (requireSignal) {
                 try {
                   const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
-                  const { qualifyPolymarketSignal, SIZING_LIMITS } = await import('@/lib/services/hedging/calibration');
+                  const {
+                    qualifyPolymarketSignal,
+                    qualifyAggregatedPrediction,
+                    SIZING_LIMITS,
+                  } = await import('@/lib/services/hedging/calibration');
                   const rawSig = await Polymarket5MinService.getLatest5MinSignal();
                   const qualified = qualifyPolymarketSignal(rawSig ?? undefined);
-                  if (qualified && rawSig) {
-                    qualifiedHedgeSignal = {
-                      direction: qualified.direction,
-                      confidence: rawSig.confidence,
-                      probability: qualified.probability,
-                      weight: qualified.weight,
-                    };
+                  if (qualified) {
+                    qualifiedHedgeSignal = qualified;
                     logger.info('[SUI Cron] Qualified Polymarket signal for hedge gate', {
-                      ...qualifiedHedgeSignal,
+                      direction: qualified.direction,
+                      probability: qualified.probability,
+                      edge: qualified.edge,
+                      weight: qualified.weight,
+                      source: qualified.source,
                       minConfidence: SIZING_LIMITS.MIN_POLY_CONFIDENCE,
                       minEdge: SIZING_LIMITS.MIN_EDGE,
                     });
                   } else {
-                    logger.warn('[SUI Cron] No qualified Polymarket signal — skipping all NEW hedges (defensive)', {
-                      rawSignalPresent: !!rawSig,
-                      rawDirection: rawSig?.direction,
-                      rawConfidence: rawSig?.confidence,
-                      rawStrength: rawSig?.signalStrength,
-                    });
+                    // Fallback — try the cross-source aggregator before giving up.
+                    try {
+                      const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
+                      const agg = await PredictionAggregatorService.getAggregatedPrediction();
+                      const qAgg = qualifyAggregatedPrediction(agg ?? undefined);
+                      if (qAgg) {
+                        qualifiedHedgeSignal = qAgg;
+                        logger.info('[SUI Cron] Qualified aggregator signal (Polymarket fallback)', {
+                          direction: qAgg.direction,
+                          probability: qAgg.probability,
+                          edge: qAgg.edge,
+                          weight: qAgg.weight,
+                          source: qAgg.source,
+                        });
+                      } else {
+                        logger.warn('[SUI Cron] No qualified signal from Polymarket OR aggregator — skipping all NEW hedges (defensive)', {
+                          rawSignalPresent: !!rawSig,
+                          rawDirection: rawSig?.direction,
+                          rawConfidence: rawSig?.confidence,
+                          rawStrength: rawSig?.signalStrength,
+                        });
+                      }
+                    } catch (aggErr) {
+                      logger.warn('[SUI Cron] Aggregator fallback failed — skipping all NEW hedges (defensive)', {
+                        error: aggErr instanceof Error ? aggErr.message : String(aggErr),
+                      });
+                    }
                   }
                 } catch (sigErr) {
                   logger.warn('[SUI Cron] Polymarket signal fetch failed — skipping all NEW hedges (defensive)', {
@@ -2384,13 +1758,118 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                       size: 0,
                       status: 'BLOCKED',
                       error: qualifiedHedgeSignal
-                        ? `Polymarket signal direction is ${qualifiedHedgeSignal.direction} (need DOWN for protective SHORT). No hedge opened.`
-                        : 'No qualified Polymarket DOWN signal — no hedge opened. (HEDGE_REQUIRE_PREDICTION_SIGNAL=true)',
+                        ? `Signal direction is ${qualifiedHedgeSignal.direction} (need DOWN for protective SHORT). No hedge opened.`
+                        : 'No qualified DOWN signal — no hedge opened. (HEDGE_REQUIRE_PREDICTION_SIGNAL=true)',
                     }],
                   };
                   throw new Error('signal-gate-blocked');
                 }
               }
+
+              // ═══════════════════════════════════════════════════════════════════
+              // PRICE-FRESHNESS GATE — `pricesUSD` was fetched at the very top
+              // of the cron run. If we've been running for > MAX_SIGNAL_AGE_MS
+              // (network latency, retries, slow swap legs), Bluefin's mark may
+              // have moved meaningfully. Refuse to size a hedge against a stale
+              // reference price. Caller can either re-fetch or this run aborts.
+              // ═══════════════════════════════════════════════════════════════════
+              const cronAgeMs = Date.now() - startTime;
+              if (!isPriceFreshEnough(cronAgeMs)) {
+                autoHedgeResult = {
+                  triggered: false,
+                  hedges: [{
+                    symbol: 'PRICE_STALE',
+                    side: 'N/A',
+                    size: 0,
+                    status: 'BLOCKED',
+                    error: `Cron run age ${cronAgeMs}ms exceeds price-freshness window. Aborting to avoid sizing on stale mark.`,
+                  }],
+                };
+                throw new Error('price-stale');
+              }
+
+              // ═══════════════════════════════════════════════════════════════════
+              // CURRENT EXPOSURE — fail-closed read of how much we're already
+              // hedged. Tries Bluefin first (authoritative), then on-chain
+              // `existingHedgedValue` (already in scope from the limit-calc
+              // step), then aborts. We CANNOT size correctly without knowing
+              // current exposure — silently treating it as 0 would let us
+              // double-hedge on top of an existing position.
+              // ═══════════════════════════════════════════════════════════════════
+              let currentHedgedUsd: number | null = null;
+              try {
+                const positions = await bluefin.getPositions();
+                if (Array.isArray(positions)) {
+                  currentHedgedUsd = positions.reduce((sum, p) => {
+                    const notional = Math.abs(Number(p?.size || 0) * Number(p?.markPrice || 0));
+                    return sum + (Number.isFinite(notional) ? notional : 0);
+                  }, 0);
+                }
+              } catch (posErr) {
+                logger.warn('[SUI Cron] Bluefin getPositions failed — falling back to on-chain hedge_state', {
+                  error: posErr instanceof Error ? posErr.message : String(posErr),
+                });
+              }
+              if (currentHedgedUsd === null || !Number.isFinite(currentHedgedUsd)) {
+                if (Number.isFinite(existingHedgedValue) && existingHedgedValue >= 0) {
+                  currentHedgedUsd = existingHedgedValue;
+                  logger.info('[SUI Cron] Using on-chain existingHedgedValue as currentHedgedUsd fallback', {
+                    currentHedgedUsd,
+                  });
+                } else {
+                  autoHedgeResult = {
+                    triggered: false,
+                    hedges: [{
+                      symbol: 'EXPOSURE_UNKNOWN',
+                      side: 'N/A',
+                      size: 0,
+                      status: 'BLOCKED',
+                      error: 'Could not determine current hedged exposure (Bluefin + on-chain both unavailable). Refusing to size new hedge.',
+                    }],
+                  };
+                  throw new Error('exposure-unknown');
+                }
+              }
+
+              // ═══════════════════════════════════════════════════════════════════
+              // KELLY-SAFE SIZING — single authoritative source. Replaces the
+              // ad-hoc `navUsd × allocation × 0.5 × signalScale` formula with
+              // calibrated math: quarter-Kelly, TVL-cap (mirrors on-chain
+              // max_hedge_ratio_bps), per-trade cap, $50 floor. Returns 0 if
+              // any guard fails (NaN/Infinity, signal out of bounds, etc.).
+              // ═══════════════════════════════════════════════════════════════════
+              // After the gates above, both are guaranteed non-null. Local
+              // const aliases give TS the narrowing it can't infer through the
+              // throw-then-assign pattern.
+              const signalForKelly: QualifiedSignal = qualifiedHedgeSignal!;
+              const currentHedgedUsdSafe: number = currentHedgedUsd!;
+              const kellySafeCollateralUsd = computeSafeCollateralUsd({
+                signal: signalForKelly,
+                poolTvlUsd: navUsd,
+                currentHedgedUsd: currentHedgedUsdSafe,
+                maxHedgeRatioOfTvl: maxHedgeRatioBps / 10_000,
+              });
+              if (kellySafeCollateralUsd <= 0) {
+                autoHedgeResult = {
+                  triggered: false,
+                  hedges: [{
+                    symbol: 'KELLY_GATE',
+                    side: 'N/A',
+                    size: 0,
+                    status: 'BLOCKED',
+                    error: `Kelly-safe collateral is 0 (TVL=$${navUsd.toFixed(2)}, currentHedged=$${currentHedgedUsdSafe.toFixed(2)}, prob=${signalForKelly.probability.toFixed(3)}, weight=${signalForKelly.weight.toFixed(2)}). No hedge opened.`,
+                  }],
+                };
+                throw new Error('kelly-gate-blocked');
+              }
+              logger.info('[SUI Cron] Kelly-safe sizing computed', {
+                navUsd: navUsd.toFixed(2),
+                currentHedgedUsd: currentHedgedUsdSafe.toFixed(2),
+                maxHedgeRatioBps,
+                probability: signalForKelly.probability,
+                weight: signalForKelly.weight,
+                kellySafeCollateralUsd: kellySafeCollateralUsd.toFixed(2),
+              });
 
               // BlueFin minimum order sizes and step sizes
               const PERP_SPECS: Record<string, { minQty: number; stepSize: number }> = {
@@ -2410,20 +1889,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               let collateralBudgetUsed = 0;
               const collateralBudget = freeCollateral * 0.9; // keep 10% margin headroom
 
-              // Calculate hedge sizes based on pool NAV and allocations
-              // Open SHORT hedges on any asset with >5% allocation to protect against downside.
-              // Sizing is scaled by Polymarket signal weight × edge so weakly-confident
-              // signals produce smaller hedges (further reduces near-zero loss risk).
-              const signalScale = qualifiedHedgeSignal
-                ? Math.max(0.25, Math.min(1.0, qualifiedHedgeSignal.weight * (qualifiedHedgeSignal.probability * 2 - 1)))
-                : 0.5;
+              // Sum of allocations among assets we'll actually hedge — used to
+              // distribute the Kelly-safe pool across assets proportionally.
+              const eligibleAllocSum = (['BTC', 'ETH', 'SUI'] as const)
+                .map(a => aiResult.allocations[a] || 0)
+                .filter(p => p >= 5)
+                .reduce((s, p) => s + p, 0) || 1;
+
               for (const asset of ['BTC', 'ETH', 'SUI'] as const) {
                 const allocation = aiResult.allocations[asset] || 0;
                 if (allocation < 5) continue; // Hedge any meaningful allocation (>5%)
 
-                const hedgeValueUSD = navUsd * (allocation / 100) * 0.5 * signalScale; // scaled by signal strength
-                // Use leverage to amplify small hedges into viable sizes
-                const effectiveValue = hedgeValueUSD * leverage;
+                // Per-asset collateral = Kelly-safe budget × this asset's allocation share
+                const assetCollateralUsd = kellySafeCollateralUsd * (allocation / eligibleAllocSum);
+                // Use leverage to amplify collateral into notional (notional = collateral × L)
+                const effectiveValue = assetCollateralUsd * leverage;
                 const sizingPrice = pricesUSD[asset] || 0;
                 if (sizingPrice <= 0) {
                   logger.warn(`[SUI Cron] Skip ${asset}-PERP: no reference price`);
@@ -2491,8 +1971,57 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 }
 
                 try {
+                  // ═══ POOL-BALANCE DRIFT CHECK — re-read pool.balance just
+                  // before submit. If a deposit/withdraw has shifted TVL
+                  // significantly between sizing and now, the cap math we
+                  // computed at the top of Step 8 is no longer valid.
+                  // Threshold: HEDGE_MAX_BALANCE_DRIFT_PCT (default 5%).
+                  // Best-effort: skip on RPC failure rather than blocking
+                  // (the on-chain `max_hedge_ratio_bps` is the final guard).
+                  // ═══════════════════════════════════════════════════════
+                  try {
+                    const driftPctMax = Number(process.env.HEDGE_MAX_BALANCE_DRIFT_PCT || 5);
+                    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+                    const rpcUrl = network === 'mainnet'
+                      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+                      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+                    const driftClient = new SuiClient({ url: rpcUrl });
+                    const poolConfig = SUI_USDC_POOL_CONFIG[network];
+                    if (poolConfig.poolStateId) {
+                      const obj = await driftClient.getObject({
+                        id: poolConfig.poolStateId,
+                        options: { showContent: true },
+                      });
+                      const fields = (obj.data?.content as { fields?: Record<string, unknown> } | null)?.fields;
+                      if (fields) {
+                        const balRaw = typeof (fields as Record<string, unknown>).balance === 'string'
+                          ? (fields as Record<string, string>).balance
+                          : ((fields as { balance?: { fields?: { value?: string } } }).balance?.fields?.value || '0');
+                        const liveBalance = microUsdcToUsdNumber(balRaw, 'pool.balance(drift-check)');
+                        if (contractBalance > 0) {
+                          const driftPct = Math.abs(liveBalance - contractBalance) / contractBalance * 100;
+                          if (driftPct > driftPctMax) {
+                            logger.error(`[SUI Cron] Skip ${asset}-PERP: pool balance drift ${driftPct.toFixed(2)}% > ${driftPctMax}%`, {
+                              sizingBalance: contractBalance.toFixed(2),
+                              liveBalance: liveBalance.toFixed(2),
+                            });
+                            await releaseHedgeDecisionLock(decisionToken);
+                            continue;
+                          }
+                        }
+                      }
+                    }
+                  } catch (driftErr) {
+                    logger.warn(`[SUI Cron] Pool drift check failed (non-fatal) for ${asset}-PERP`, {
+                      error: driftErr instanceof Error ? driftErr.message : String(driftErr),
+                    });
+                  }
+
                   logger.info(`[SUI Cron] Attempting ${asset}-PERP hedge`, {
-                    allocation, hedgeValueUSD, effectiveValue, hedgeSizeBase, snappedSize, leverage,
+                    allocation,
+                    assetCollateralUsd: assetCollateralUsd.toFixed(2),
+                    effectiveValue: effectiveValue.toFixed(2),
+                    hedgeSizeBase, snappedSize, leverage,
                     minQty: spec.minQty,
                     sizingPrice,
                     bluefinPrice,
@@ -2511,6 +2040,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     leverage,
                     portfolioId: -2, // SUI pool special ID
                     reason: `Auto-hedge: Risk ${riskScore}/10 > threshold ${threshold}/10 (token=${decisionToken})`,
+                    // Wire-level idempotency: same decisionToken on retry → Bluefin
+                    // dedup'd at clientOrderId → cannot create a duplicate position
+                    // even if the previous response dropped between fill and ack.
+                    clientOrderId: decisionToken,
                   });
 
                   if (!result.success) {
@@ -2541,7 +2074,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                         market: `${asset}-PERP`,
                         side: 'SHORT',
                         size: snappedSize,
-                        notionalValue: hedgeValueUSD,
+                        notionalValue: effectiveValue,
                         leverage,
                         entryPrice: bluefinPrice || sizingPrice,
                         simulationMode: false,
