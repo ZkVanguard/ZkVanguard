@@ -228,6 +228,20 @@ export function computeSafeCollateralUsd(args: {
   const { signal, poolTvlUsd, currentHedgedUsd } = args;
   if (!Number.isFinite(poolTvlUsd) || poolTvlUsd <= 0) return 0;
   if (!Number.isFinite(currentHedgedUsd) || currentHedgedUsd < 0) return 0;
+  // Defensive: a corrupted QualifiedSignal (NaN / Infinity / negative) would
+  // otherwise propagate through Kelly math and produce a non-finite size.
+  // We refuse to act on any signal whose numeric fields are not clean reals.
+  if (
+    !signal ||
+    !Number.isFinite(signal.probability) ||
+    !Number.isFinite(signal.weight) ||
+    !Number.isFinite(signal.edge) ||
+    signal.probability <= 0 || signal.probability >= 1 ||
+    signal.weight < 0 || signal.weight > 1 ||
+    signal.edge < 0
+  ) {
+    return 0;
+  }
 
   const maxHedgeRatio = args.maxHedgeRatioOfTvl ?? SIZING_LIMITS.MAX_HEDGE_RATIO_OF_TVL;
 
@@ -243,10 +257,15 @@ export function computeSafeCollateralUsd(args: {
 
   let size = Math.min(kellySize, remainingHedgeBudget, perTradeCap);
 
-  // 3. Floor — if below min, refuse rather than execute a dust trade
+  // 3. Final-defence finite check — if any intermediate produced a NaN/Infinity
+  // that slipped past the input guards (e.g. via a downstream library returning
+  // a non-finite multiplier in the future), refuse rather than execute on it.
+  if (!Number.isFinite(size) || size < 0) return 0;
+
+  // 4. Floor — if below min, refuse rather than execute a dust trade
   if (size < SIZING_LIMITS.MIN_HEDGE_USD) return 0;
 
-  // 4. Round to 2 decimals (USDC has 6 dec on-chain; whole cents are plenty)
+  // 5. Round to 2 decimals (USDC has 6 dec on-chain; whole cents are plenty)
   size = Math.floor(size * 100) / 100;
   return size;
 }
