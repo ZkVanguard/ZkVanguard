@@ -771,10 +771,24 @@ export class BluefinService {
     reason?: string;
     /** Bypass the funding-rate guard (use sparingly — only on extremely high-confidence signals) */
     bypassFundingGuard?: boolean;
+    /**
+     * Caller-supplied idempotency key. Bluefin treats `clientOrderId` as a
+     * uniqueness constraint per account, so re-submitting the same key after
+     * a dropped HTTP response will be rejected by the exchange rather than
+     * filled twice. The cron passes its `decisionToken` here so a retry
+     * within the same risk-bucket cannot create a duplicate position even
+     * if our network/process crashes between fill and ack.
+     */
+    clientOrderId?: string;
   }): Promise<BluefinHedgeResult> {
     await this.ensureInitializedAsync();
 
-    const hedgeId = `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    // Caller-supplied client-order-id wins; otherwise generate a unique fallback.
+    // Sanitize: Bluefin accepts alphanumerics + a few separators; replace anything else.
+    const rawHedgeId = params.clientOrderId
+      ? params.clientOrderId.replace(/[^A-Za-z0-9_\-:]/g, '_').slice(0, 64)
+      : `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const hedgeId = rawHedgeId.length > 0 ? rawHedgeId : `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const startTime = Date.now();
 
     try {
@@ -800,6 +814,64 @@ export class BluefinService {
         }
         // Re-throw other errors
         throw acctError;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // IDEMPOTENCY PRE-FLIGHT — when the caller supplies a clientOrderId
+      // we MUST NOT submit a second order for the same key. Bluefin enforces
+      // uniqueness server-side, but a dropped HTTP ack on the FIRST call
+      // would otherwise have us assume failure and re-submit. Querying for
+      // a pre-existing order with the same clientOrderId converts that
+      // ambiguous failure into a deterministic "already filled — return
+      // existing orderId" response.
+      //
+      // Best-effort: if the GET endpoint is unavailable we proceed with the
+      // submit. Bluefin's server-side uniqueness check is the final backstop.
+      // ═══════════════════════════════════════════════════════════════════
+      if (params.clientOrderId) {
+        try {
+          const existing = await this.apiRequest<Array<{
+            orderHash?: string;
+            orderId?: string;
+            clientOrderId?: string;
+            status?: string;
+            txDigest?: string;
+            avgFillPrice?: string;
+            filledQty?: string;
+          }> | null>(
+            'GET',
+            `/api/v1/trade/orders?clientOrderId=${encodeURIComponent(hedgeId)}`,
+            undefined,
+            'trade',
+          );
+          const match = Array.isArray(existing)
+            ? existing.find(o => o?.clientOrderId === hedgeId)
+            : null;
+          if (match) {
+            logger.warn('🛡️  BlueFin idempotency hit — returning existing order instead of resubmitting', {
+              hedgeId,
+              orderHash: match.orderHash,
+              status: match.status,
+            });
+            return {
+              success: true,
+              hedgeId,
+              orderId: match.orderHash || match.orderId,
+              txDigest: match.txDigest,
+              executionPrice: parseFloat(match.avgFillPrice || '0'),
+              filledSize: parseFloat(match.filledQty || String(params.size)),
+              fees: 0,
+              timestamp: Date.now(),
+            };
+          }
+        } catch (idemErr) {
+          // Don't fail the hedge if the dedup endpoint is flaky; rely on
+          // Bluefin's server-side uniqueness as the backstop.
+          logger.warn('[BlueFin] idempotency pre-flight failed (non-fatal)', {
+            hedgeId,
+            error: idemErr instanceof Error ? idemErr.message : String(idemErr),
+          });
+        }
       }
 
       // Validate pair
