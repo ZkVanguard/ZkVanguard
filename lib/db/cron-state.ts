@@ -157,4 +157,115 @@ export const CronKeys = {
   // Auto-Rebalance
   rebalanceLastHedge: (portfolioId: number) => `rebalance:lastHedge:${portfolioId}`,
   rebalancePeakValue: (portfolioId: number) => `rebalance:peakValue:${portfolioId}`,
+
+  // Cluster-wide cron singleton (replaces per-instance `lastSuccessfulRunTimestamp`)
+  cronLastRun: (cronId: string) => `cron:lastRun:${cronId}`,
+  // Cluster-wide circuit breaker (replaces per-instance `globalThis.__suiDailyLossHalted`)
+  cronHaltUntil: (cronId: string) => `cron:haltUntil:${cronId}`,
+  cronHaltReason: (cronId: string) => `cron:haltReason:${cronId}`,
 } as const;
+
+// ─── CAS-based singleton + halt helpers ─────────────────────────────────────
+// Vercel runs N parallel instances; module-scope or globalThis state is
+// per-instance and provides NO duplicate-fire safety on cold starts. These
+// helpers use Postgres atomic Compare-And-Swap so exactly one instance can
+// claim a run window across the entire fleet. Fail-CLOSED on any DB error
+// — when in doubt we skip rather than risk a duplicate hedge.
+
+/**
+ * Atomically claim the next cron run window. Returns true ONLY if
+ * `now - lastRun >= minIntervalMs` AND the CAS update succeeded.
+ *
+ * Fails CLOSED: any DB error returns claimed=false (skip this run) so we
+ * never fire twice on infrastructure flapping.
+ */
+export async function tryClaimCronRun(
+  cronId: string,
+  minIntervalMs: number,
+  now: number = Date.now(),
+): Promise<{ claimed: boolean; lastRunMs: number; reason?: string }> {
+  const key = CronKeys.cronLastRun(cronId);
+  try {
+    await ensureTable();
+    // Insert a baseline row if missing (idempotent).
+    await query(
+      `INSERT INTO cron_state (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO NOTHING`,
+      [key, JSON.stringify(0)],
+    );
+
+    const rows = await query<{ value: unknown }>(
+      `SELECT value FROM cron_state WHERE key = $1`,
+      [key],
+    );
+    const prev = Number(rows[0]?.value ?? 0);
+    if (prev > 0 && now - prev < minIntervalMs) {
+      return { claimed: false, lastRunMs: prev, reason: 'rate-limit' };
+    }
+
+    // CAS: only update if the row still has the value we read. Postgres JSONB
+    // equality on numbers via `value::text = $3::text` is exact for our use.
+    const updated = await query<{ key: string }>(
+      `UPDATE cron_state
+         SET value = $2, updated_at = NOW()
+       WHERE key = $1 AND value::text = $3::text
+       RETURNING key`,
+      [key, JSON.stringify(now), JSON.stringify(prev)],
+    );
+    if (updated.length !== 1) {
+      return { claimed: false, lastRunMs: prev, reason: 'cas-lost' };
+    }
+    return { claimed: true, lastRunMs: now };
+  } catch (error: any) {
+    logger.warn('[CronState] tryClaimCronRun failed — failing closed', {
+      cronId, error: error?.message,
+    });
+    return { claimed: false, lastRunMs: 0, reason: 'db-error' };
+  }
+}
+
+/**
+ * Persist a cluster-wide halt for `cronId` until `untilMs` (absolute UTC ms).
+ * Subsequent calls extend the halt to MAX(existing, new) and preserve the
+ * earliest reason for audit clarity.
+ */
+export async function setCronHalt(
+  cronId: string,
+  untilMs: number,
+  reason: string,
+): Promise<void> {
+  await Promise.all([
+    setNumber(CronKeys.cronHaltUntil(cronId), untilMs),
+    setCronState(CronKeys.cronHaltReason(cronId), reason),
+  ]);
+}
+
+/**
+ * Returns the active halt for `cronId`, or null if none. Halts older than
+ * `now` are considered expired. Fails CLOSED: DB read failures return a
+ * short synthetic halt so we never blindly trade through a broken DB.
+ */
+export async function getCronHalt(
+  cronId: string,
+  now: number = Date.now(),
+): Promise<{ untilMs: number; reason: string } | null> {
+  try {
+    const [until, reason] = await Promise.all([
+      getNumber(CronKeys.cronHaltUntil(cronId), 0),
+      getCronStateOr<string>(CronKeys.cronHaltReason(cronId), 'unspecified'),
+    ]);
+    if (until <= now) return null;
+    return { untilMs: until, reason };
+  } catch (error: any) {
+    logger.warn('[CronState] getCronHalt failed — returning short synthetic halt', {
+      cronId, error: error?.message,
+    });
+    return { untilMs: now + 60_000, reason: 'db-read-failed' };
+  }
+}
+
+/** UTC end-of-day epoch ms — typical horizon for a daily-loss halt. */
+export function endOfUtcDayMs(now: number = Date.now()): number {
+  const d = new Date(now);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0);
+}
