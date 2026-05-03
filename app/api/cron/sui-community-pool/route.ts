@@ -1785,13 +1785,40 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   reason: `Auto-hedge: ${side} via ${sentiment} signal (risk=${riskScore}/${threshold})`,
                 });
 
+                // Post-open verification: BlueFin returns `success` as soon as
+                // the order is accepted, but the position only materializes
+                // after the matching engine fills it. With tight margin the
+                // fill can be rejected, leaving us with an orphan DB row.
+                // Wait briefly and re-poll positions; only persist if the
+                // (symbol, side) actually shows up.
+                let filled = false;
+                if (result.success && result.orderId) {
+                  await new Promise(r => setTimeout(r, 2_500));
+                  try {
+                    const post = await bluefin.getPositions();
+                    filled = post.some(p =>
+                      p.symbol === symbol &&
+                      (p.side || '').toUpperCase() === side &&
+                      Number((p as { size?: number }).size ?? 0) > 0,
+                    );
+                  } catch {
+                    // If the verification call fails we can't confirm — be
+                    // conservative and skip persisting; the order is on
+                    // BlueFin and the next cycle's reconciler will adopt it
+                    // into the DB if it actually exists.
+                    filled = false;
+                  }
+                }
+
                 hedges.push({
                   symbol, side, size: snappedSize,
-                  status: result.success ? 'OPENED' : 'FAILED',
+                  status: result.success
+                    ? (filled ? 'OPENED' : 'ACCEPTED_NOT_FILLED')
+                    : 'FAILED',
                   orderId: result.orderId, error: result.error,
                 });
 
-                if (result.success && result.orderId) {
+                if (result.success && result.orderId && filled) {
                   try {
                     await createHedge({
                       orderId: result.orderId,
