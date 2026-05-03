@@ -8,8 +8,8 @@
  */
 
 import { AIMarketIntelligence } from './lib/services/AIMarketIntelligence';
-import { DelphiMarketService } from './lib/services/DelphiMarketService';
-import { Polymarket5MinService } from './lib/services/Polymarket5MinService';
+import { DelphiMarketService } from './lib/services/market-data/DelphiMarketService';
+import { Polymarket5MinService } from './lib/services/market-data/Polymarket5MinService';
 import { SuiPoolAgent } from './agents/specialized/SuiPoolAgent';
 import { RiskAgent } from './agents/specialized/RiskAgent';
 import { HedgingAgent } from './agents/specialized/HedgingAgent';
