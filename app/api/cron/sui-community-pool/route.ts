@@ -695,6 +695,24 @@ async function aiDrivenResetDailyHedge(
       : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
     const suiClient = new SuiClient({ url: rpcUrl });
 
+    // Pre-flight: confirm the cron's hot key still owns the AdminCap.
+    // Once the cap is transferred to the MSafe multisig, the cron MUST stop
+    // attempting auto-resets (each tx would fail noisily and burn gas budget).
+    // We treat "not owned" as a clean no-op: daily cap acts as hard-stop until
+    // a human runs collect-fees / reset via the multisig.
+    const capObj = await suiClient.getObject({ id: adminCapId, options: { showOwner: true } });
+    const capOwner = capObj.data?.owner;
+    const cronSigner = keypair.toSuiAddress();
+    if (!capOwner || typeof capOwner !== 'object' || !('AddressOwner' in capOwner)) {
+      return { reset: false, reason: 'AdminCap owner unreadable — skipping auto-reset' };
+    }
+    if (capOwner.AddressOwner.toLowerCase() !== cronSigner.toLowerCase()) {
+      return {
+        reset: false,
+        reason: `AdminCap owned by ${capOwner.AddressOwner} (not cron signer ${cronSigner}) — multisig-gated, daily cap is hard-stop`,
+      };
+    }
+
     const tx = new Transaction();
     const usdcType = SUI_USDC_COIN_TYPE[network];
     tx.moveCall({
