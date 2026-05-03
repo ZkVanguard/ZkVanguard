@@ -10,17 +10,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { reconcileSuiHedges } from '@/lib/services/sui/SuiHedgeReconciler';
-import { env } from '@/lib/utils/env';
+import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') || '';
-  const expected = env('CRON_SECRET');
-  if (!expected) return false;
-  return auth === `Bearer ${expected}`;
+  return verifyAdminBearer(req, ['CRON_SECRET']);
 }
 
 async function handle(req: NextRequest) {

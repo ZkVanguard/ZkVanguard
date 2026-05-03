@@ -15,6 +15,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { logger } from '@/lib/utils/logger';
 import { SUI_USDC_POOL_CONFIG } from '@/lib/services/sui/SuiCommunityPoolService';
+import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,11 +24,8 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
   
-  // Auth check
-  const authHeader = request.headers.get('authorization');
-  const adminSecret = process.env.ADMIN_SECRET || process.env.CRON_SECRET;
-  
-  if (!adminSecret || authHeader !== `Bearer ${adminSecret}`) {
+  // Auth check (timing-safe)
+  if (!verifyAdminBearer(request, ['ADMIN_SECRET', 'CRON_SECRET'])) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

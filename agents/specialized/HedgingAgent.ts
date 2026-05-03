@@ -629,8 +629,17 @@ export class HedgingAgent extends BaseAgent {
         });
       } else {
         const marketInfo = await this.moonlanderClient.getMarketInfo(market);
-        const markPrice = parseFloat(marketInfo.markPrice || '1') || 1;
-        const size = (parseFloat(notionalValue) * (leverage || 1) / markPrice).toFixed(4);
+        const markPrice = parseFloat(marketInfo.markPrice || '0');
+        if (!Number.isFinite(markPrice) || markPrice <= 0) {
+          throw new Error(
+            `[HedgingAgent] Invalid mark price for ${market}: ${marketInfo.markPrice} — refusing to size order (would divide by zero)`,
+          );
+        }
+        const notional = parseFloat(notionalValue);
+        if (!Number.isFinite(notional) || notional <= 0) {
+          throw new Error(`[HedgingAgent] Invalid notional value: ${notionalValue}`);
+        }
+        const size = (notional * (leverage || 1) / markPrice).toFixed(4);
 
         if (typeof extClient.createOrder === 'function') {
           order = await extClient.createOrder({

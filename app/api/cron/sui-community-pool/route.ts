@@ -27,7 +27,7 @@ import {
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
-import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import { getCronStateOr, setCronState, tryClaimCronRun } from '@/lib/db/cron-state';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
@@ -42,9 +42,19 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Rate limiting: prevent duplicate cron runs within 5 minutes
+// Rate limiting: prevent duplicate cron runs within 5 minutes.
+// `lastSuccessfulRunTimestamp` is a per-instance fast-path; the real
+// guard is the DB-backed CAS lock (`tryClaimCronRun`) so QStash retries
+// and Vercel cold-start instances cannot double-execute.
 let lastSuccessfulRunTimestamp = 0;
 const MIN_CRON_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const CRON_LOCK_KEY = 'sui-community-pool';
+// Hard ceiling on pool NAV in USDC. Above this, the on-chain Move
+// fee/withdrawal-cap math (`nav * bps * t`) approaches u64 limits
+// and silently wraps. Mainnet contracts must be redeployed with u128
+// before crossing this threshold. Override only after verifying the
+// new package id has the u128 fixes.
+const NAV_SAFETY_CEILING_USDC = Number(process.env.NAV_SAFETY_CEILING_USDC) || 500_000_000;
 
 // 3 pool assets (SUI community pool — BTC, ETH, SUI only)
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
@@ -881,16 +891,36 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     }
   }
 
-  // Rate limit: reject if last successful run was less than 5 minutes ago
+  // Rate limit + distributed lock. The in-memory check is a fast-path that
+  // catches same-instance reruns; the DB CAS is the authority that defeats
+  // QStash retries and Vercel cold-start duplicates.
   const timeSinceLastRun = startTime - lastSuccessfulRunTimestamp;
   if (lastSuccessfulRunTimestamp > 0 && timeSinceLastRun < MIN_CRON_INTERVAL_MS) {
-    logger.warn('[SUI Cron] Rate limited — too soon since last run', {
+    logger.warn('[SUI Cron] Rate limited (in-memory) — too soon since last run', {
       secondsSinceLast: Math.round(timeSinceLastRun / 1000),
       minIntervalSeconds: MIN_CRON_INTERVAL_MS / 1000,
     });
     return NextResponse.json(
       { success: false, chain: 'sui' as const, error: `Rate limited. Last run ${Math.round(timeSinceLastRun / 1000)}s ago, min interval is ${MIN_CRON_INTERVAL_MS / 1000}s`, duration: Date.now() - startTime },
       { status: 429 }
+    );
+  }
+  // DB-backed CAS lock: fails closed on any error so we never double-fire.
+  const claim = await tryClaimCronRun(CRON_LOCK_KEY, MIN_CRON_INTERVAL_MS, startTime);
+  if (!claim.claimed) {
+    logger.warn('[SUI Cron] Distributed lock denied run', {
+      reason: claim.reason,
+      lastRunMs: claim.lastRunMs,
+      secondsSinceLast: claim.lastRunMs > 0 ? Math.round((startTime - claim.lastRunMs) / 1000) : null,
+    });
+    return NextResponse.json(
+      {
+        success: false,
+        chain: 'sui' as const,
+        error: `Distributed lock denied (${claim.reason || 'unknown'})`,
+        duration: Date.now() - startTime,
+      },
+      { status: 429 },
     );
   }
 
@@ -957,7 +987,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       );
       for (const r of results) {
         if (r.status === 'fulfilled') {
-          pricesUSD[r.value.asset] = r.value.price;
+          // Reject 0/NaN/Infinity prices — these break NAV math and cause
+          // divide-by-zero in size = notional/price. Better to halt the
+          // cycle than to open Infinity-sized hedges.
+          const p = Number(r.value.price);
+          if (Number.isFinite(p) && p > 0) {
+            pricesUSD[r.value.asset] = p;
+          }
         }
       }
       pricesFetched = Object.keys(pricesUSD).length === POOL_ASSETS.length;
@@ -1083,6 +1119,22 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     const navUsd = poolStats.totalNAVUsd || (poolStats.totalNAV * (pricesUSD['SUI'] || 0));
     const sharePriceUsd = poolStats.sharePriceUsd || (poolStats.sharePrice * (pricesUSD['SUI'] || 0));
 
+    // ── Scale safety ceiling ─────────────────────────────────────
+    // Above NAV_SAFETY_CEILING_USDC the on-chain Move contract's
+    // `nav * bps * time_elapsed` math approaches u64.MAX and may wrap
+    // silently, breaking fee accrual and the daily-withdrawal-cap
+    // circuit breaker. Halt write-side actions (rebalance, hedge,
+    // top-up) but still record snapshots so dashboards keep working.
+    let aboveSafetyCeiling = false;
+    if (navUsd > NAV_SAFETY_CEILING_USDC) {
+      aboveSafetyCeiling = true;
+      logger.error('[SUI Cron] NAV exceeds safety ceiling — write actions disabled', {
+        navUsd: navUsd.toFixed(2),
+        ceiling: NAV_SAFETY_CEILING_USDC,
+        message: 'Redeploy Move contracts with u128 fee/cap math before continuing.',
+      });
+    }
+
     try {
       await recordNavSnapshot({
         sharePrice: sharePriceUsd || poolStats.sharePrice,
@@ -1154,7 +1206,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // Flow: reverse-swap ALL admin-held assets → USDC, then close_hedge for each.
     // Profits/losses from asset price changes are captured proportionally.
     let hedgeSettlement: { settled: number; failed: number; details: any[]; replenishment?: any; debug?: any } | undefined;
-    if (process.env.SUI_POOL_ADMIN_KEY && process.env.SUI_AGENT_CAP_ID) {
+    if (aboveSafetyCeiling) {
+      logger.warn('[SUI Cron] Step 6.5 skipped — NAV above safety ceiling', { navUsd: navUsd.toFixed(2) });
+      hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { skippedReason: 'safety-ceiling' } };
+    } else if (process.env.SUI_POOL_ADMIN_KEY && process.env.SUI_AGENT_CAP_ID) {
       try {
         const activeHedges = await getActiveHedges(network);
         logger.info('[SUI Cron] Step 6.5 getActiveHedges result', { count: activeHedges.length, hedges: activeHedges });
@@ -1245,12 +1300,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // catastrophic slippage on micro-amounts. $15 minimum ensures each
     // asset swap is at least ~$3-5 which gets acceptable DEX pricing.
     const MIN_SWAP_NAV_USD = 15;
-    const shouldExecuteSwaps = navUsd >= MIN_SWAP_NAV_USD;
+    const shouldExecuteSwaps = navUsd >= MIN_SWAP_NAV_USD && !aboveSafetyCeiling;
     if (hasUnallocatedUsdc) {
       logger.info('[SUI Cron] Unallocated USDC detected — triggering initial asset allocation', { navUsd });
     }
     if (navUsd > 0.50 && navUsd < MIN_SWAP_NAV_USD) {
       logger.info('[SUI Cron] Pool NAV $' + navUsd.toFixed(2) + ' below $' + MIN_SWAP_NAV_USD + ' swap minimum — skipping swaps to avoid slippage losses');
+    }
+    if (aboveSafetyCeiling) {
+      logger.warn('[SUI Cron] Step 7 skipped — NAV above safety ceiling', { navUsd: navUsd.toFixed(2) });
     }
     if (shouldExecuteSwaps) {
       try {
@@ -1581,6 +1639,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
     if (HEDGE_DISABLED) {
       logger.info('[SUI Cron] Auto-hedge disabled by SUI_AUTO_HEDGE_DISABLE=1');
+    } else if (aboveSafetyCeiling) {
+      logger.warn('[SUI Cron] Auto-hedge skipped — NAV above safety ceiling', {
+        navUsd: navUsd.toFixed(2),
+        ceiling: NAV_SAFETY_CEILING_USDC,
+      });
     } else if (navUsd < MIN_HEDGE_NAV_USD) {
       logger.info(`[SUI Cron] Pool NAV $${navUsd.toFixed(2)} below HEDGE_MIN_NAV_USD=$${MIN_HEDGE_NAV_USD} — skipping Step 8`);
     } else {
@@ -1615,9 +1678,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // At NAV=$50, alloc=30%, that means we need leverage ≥ 6x.
           // We default to 10x at NAV<$1000 (BlueFin max for BTC perp), with
           // suiPoolConfig.maxLeverage as a soft cap that operators can lower.
-          const leverage = navUsd < 1000
-            ? Math.min(suiPoolConfig?.maxLeverage || 10, 10)
-            : Math.min(suiPoolConfig?.maxLeverage || 3, 5);
+          // Above $1k we drop to 5x; above $1M we cap at 3x to limit
+          // single-wallet liquidation risk; above $100M cap at 2x because
+          // a single 50% adverse move would wipe a pool of that size.
+          const navTier =
+            navUsd < 1_000           ? 'tiny'   :
+            navUsd < 1_000_000       ? 'small'  :
+            navUsd < 100_000_000     ? 'medium' : 'large';
+          const tierLeverageCap =
+            navTier === 'tiny'   ? 10 :
+            navTier === 'small'  ?  5 :
+            navTier === 'medium' ?  3 : 2;
+          const leverage = Math.min(
+            suiPoolConfig?.maxLeverage || tierLeverageCap,
+            tierLeverageCap,
+          );
           const hedgeRatio = navUsd < 1000 ? 1.0 : 0.5;
 
           logger.info('[SUI Cron] Auto-hedge plan', {
@@ -1649,12 +1724,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             );
             const minMargin = targetMargin * 0.9;
             try {
+              // Reserves and swap caps scale with NAV so the same code
+              // works for $50 testnet pools and $100M production pools.
+              //   • spotReserve: 0.05% of NAV (min $0.50, max $5k buffer)
+              //   • suiReserve:  0.001% of NAV in SUI equiv (min 0.5 SUI)
+              //   • maxSwapSui:  0.1% of NAV per tick, expressed in SUI
+              const suiPrice = Math.max(0.01, pricesUSD['SUI'] || 1);
+              const scaledSpotReserve = Math.min(5_000, Math.max(0.5, navUsd * 0.0005));
+              const scaledSuiReserve = Math.max(0.5, (navUsd * 0.00001) / suiPrice);
+              const scaledMaxSwapSui = Math.max(5, (navUsd * 0.001) / suiPrice);
               const topUp = await bluefinTreasury.autoTopUp({
                 minMargin, targetMargin,
-                spotReserve: 0.5,    // keep 0.5 USDC dust on admin spot
-                swapFromSui: true,   // reverse-swap SUI→USDC if spot is short
-                suiReserve: 0.5,     // keep 0.5 SUI on admin for gas
-                maxSwapSui: 5,       // safety cap per cron tick
+                spotReserve: scaledSpotReserve,
+                swapFromSui: true,
+                suiReserve: scaledSuiReserve,
+                maxSwapSui: scaledMaxSwapSui,
               });
               logger.info('[SUI Cron] Margin top-up', {
                 minMargin: minMargin.toFixed(4),

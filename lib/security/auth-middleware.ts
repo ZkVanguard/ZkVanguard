@@ -23,6 +23,32 @@ function timingSafeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
+/**
+ * Timing-safe `Authorization: Bearer <secret>` check.
+ *
+ * Reads the `Authorization` header, accepts `Bearer <secret>` only when
+ * `secret` matches one of the provided env-var values via constant-time
+ * comparison. Returns `false` for missing headers and missing env vars.
+ *
+ * Usage:
+ *   if (!verifyAdminBearer(request, ['ADMIN_SECRET', 'CRON_SECRET'])) {
+ *     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+ *   }
+ */
+export function verifyAdminBearer(
+  request: NextRequest,
+  envVarNames: string[],
+): boolean {
+  const auth = request.headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) return false;
+  const token = auth.slice(7);
+  for (const name of envVarNames) {
+    const secret = (process.env[name] || '').trim();
+    if (secret && timingSafeEqual(token, secret)) return true;
+  }
+  return false;
+}
+
 // ─── 1. Internal Service Authentication ─────────────────────────────
 /**
  * Verify that a request comes from an internal service (cron, orchestrator, etc.)

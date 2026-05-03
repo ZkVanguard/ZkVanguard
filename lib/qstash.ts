@@ -90,9 +90,18 @@ export async function verifyCronRequest(
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET?.trim();
 
-  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
-    logger.debug(`[QStash] ✅ CRON_SECRET verified for ${routeName}`);
-    return true;
+  if (cronSecret && authHeader) {
+    // Timing-safe comparison so we never leak secret length / prefix via
+    // response-time analysis. Both buffers must be equal length first.
+    const expected = Buffer.from(`Bearer ${cronSecret}`, 'utf8');
+    const provided = Buffer.from(authHeader, 'utf8');
+    if (expected.length === provided.length) {
+      const { timingSafeEqual } = await import('crypto');
+      if (timingSafeEqual(expected, provided)) {
+        logger.debug(`[QStash] ✅ CRON_SECRET verified for ${routeName}`);
+        return true;
+      }
+    }
   }
 
   // No auth configured — only allow in local development, reject everywhere else

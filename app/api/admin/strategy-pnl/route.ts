@@ -18,15 +18,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db/postgres';
 import { getSignalStats } from '@/lib/db/signal-outcomes';
 import { logger } from '@/lib/utils/logger';
+import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function authorize(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') || '';
-  const expected = (process.env.CRON_SECRET || '').trim();
-  if (!expected) return false;
-  return auth === `Bearer ${expected}`;
+  return verifyAdminBearer(req, ['CRON_SECRET']);
 }
 
 export async function GET(req: NextRequest) {

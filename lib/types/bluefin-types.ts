@@ -94,7 +94,12 @@ export interface SwapExecutionResult {
 // ============================================
 
 export const MAX_SWAP_SIZE_USD: Record<NetworkType, number> = {
-  mainnet: 50_000,
+  // Per-swap ceiling (USD). At billion-dollar NAV the cron breaks large
+  // rebalances into many small swaps; this is the per-leg cap, NOT the
+  // total daily cap. Override via BLUEFIN_MAX_SWAP_SIZE_USD_MAINNET.
+  mainnet: Number(process.env.BLUEFIN_MAX_SWAP_SIZE_USD_MAINNET) > 0
+    ? Number(process.env.BLUEFIN_MAX_SWAP_SIZE_USD_MAINNET)
+    : 50_000,
   testnet: 100_000,
 };
 

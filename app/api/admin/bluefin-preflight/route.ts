@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { logger } from '@/lib/utils/logger';
+import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,10 +41,7 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ ok: true; ms: number; v
 }
 
 async function authorize(req: NextRequest): Promise<boolean> {
-  const auth = req.headers.get('authorization') || '';
-  const expected = (process.env.CRON_SECRET || '').trim();
-  if (!expected) return false;
-  return auth === `Bearer ${expected}`;
+  return verifyAdminBearer(req, ['CRON_SECRET']);
 }
 
 async function runPreflight() {

@@ -8,9 +8,10 @@
  * Body: { amount?: number }    // USDC; if omitted, runs autoTopUp(min, target)
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { logger } from '@/lib/utils/logger';
+import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,14 +21,11 @@ const DEFAULT_MIN_MARGIN = Number(process.env.BLUEFIN_MIN_MARGIN_USD || 20);
 const DEFAULT_TARGET_MARGIN = Number(process.env.BLUEFIN_TARGET_MARGIN_USD || 50);
 const DEFAULT_SPOT_RESERVE = Number(process.env.BLUEFIN_SPOT_RESERVE_USD || 1);
 
-function authorize(req: Request): boolean {
-  const secret = (process.env.CRON_SECRET || '').trim();
-  if (!secret) return false;
-  const header = req.headers.get('authorization') || '';
-  return header === `Bearer ${secret}`;
+function authorize(req: NextRequest): boolean {
+  return verifyAdminBearer(req, ['CRON_SECRET']);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!authorize(req)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
