@@ -33,6 +33,7 @@ import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from 
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
+import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 import { createHedge } from '@/lib/db/hedges';
 
@@ -1495,6 +1496,43 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           const hedges: AutoHedgeRow[] = [];
           try {
             const bluefin = BluefinService.getInstance();
+
+            // ── Margin top-up: pool USDC → admin spot → BlueFin margin bank ─
+            // Money flow each cycle:
+            //   1. Step 6.5 already moved USDC pool → admin (treasury rail
+            //      via open_hedge) and Step 7 swapped portions to spot
+            //      BTC/ETH/SUI per AI allocation.
+            //   2. Now deposit remaining admin USDC into BlueFin margin bank
+            //      so the perp hedges have collateral. Falls back to swapping
+            //      a small amount of admin SUI → USDC if spot USDC is short.
+            //   3. After hedges close (separate flow), BlueFin USDC withdraws
+            //      back to admin, which feeds the next reverse-swap cycle.
+            // Margin requirement: notional / leverage (10x => 10% of NAV).
+            const totalAllocPct = (['BTC','ETH','SUI'] as const)
+              .reduce((s, a) => s + Math.max(0, aiResult.allocations[a] || 0), 0);
+            const targetMargin = Math.max(
+              1.5, // BlueFin min deposit is 1 USDC; add a small buffer
+              (navUsd * (totalAllocPct / 100) * hedgeRatio) / Math.max(1, leverage) + 0.5,
+            );
+            const minMargin = targetMargin * 0.9;
+            try {
+              const topUp = await bluefinTreasury.autoTopUp({
+                minMargin, targetMargin,
+                spotReserve: 0.5,    // keep 0.5 USDC dust on admin spot
+                swapFromSui: true,   // reverse-swap SUI→USDC if spot is short
+                suiReserve: 0.5,     // keep 0.5 SUI on admin for gas
+                maxSwapSui: 5,       // safety cap per cron tick
+              });
+              logger.info('[SUI Cron] Margin top-up', {
+                minMargin: minMargin.toFixed(4),
+                targetMargin: targetMargin.toFixed(4),
+                result: topUp,
+              });
+            } catch (tuErr) {
+              logger.warn('[SUI Cron] Margin top-up failed (proceeding to hedge loop)', {
+                error: tuErr instanceof Error ? tuErr.message : String(tuErr),
+              });
+            }
 
             // ── Dedup gate: skip assets with an active live position ─
             const existing = await bluefin.getPositions().catch(() => []);
