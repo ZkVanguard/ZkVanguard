@@ -384,16 +384,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
           if (livePerps.length > 0) {
             const { query } = await import('@/lib/db/postgres');
-            const dbPerpRes = await query(
+            // NOTE: query() returns rows[] directly (not { rows: [...] }).
+            // Earlier code mis-typed the result and treated dbPerpKeys as
+            // always-empty, causing the reconciler to insert a fresh
+            // BF_RECONCILE_* row every 30-min cron cycle for the SAME live
+            // Bluefin position (118 phantom rows observed for 1 real perp).
+            const dbPerpRows = await query<{ market: string; side: string }>(
               `SELECT order_id, market, side FROM hedges
                 WHERE chain='sui' AND (on_chain=false OR on_chain IS NULL)
                   AND status='active'`,
               [],
             );
             const dbPerpKeys = new Set(
-              ((dbPerpRes as { rows?: Array<{ market: string; side: string }> }).rows || []).map(
-                r => `${r.market}|${r.side}`,
-              ),
+              (dbPerpRows || []).map(r => `${r.market}|${r.side}`),
             );
             const perpOrphans = livePerps.filter(p => !dbPerpKeys.has(`${p.symbol}|${p.side}`));
             if (perpOrphans.length > 0) {
@@ -1351,53 +1354,33 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 error: 'Max hedge ratio reached',
               };
             } else if (maxTransferable <= 0 || cappedDeficit < HEDGE_MIN_OPEN_USDC) {
-              // Daily cap might be exhausted locally, but contract resets counter on day boundary.
-              // Still attempt a SAFE transfer using on-chain max ratio (NOT a 50%-of-deficit guess).
-              const safeAttempt = Math.min(
-                deficit,
-                Math.max(maxByHedgeRatio, 0) * 0.95,
-                Math.max(maxByReserve, 0) * 0.95,
-              );
-              logger.info('[SUI Cron] Daily cap appears exhausted locally, attempting safe hedge (capped to on-chain max_hedge_ratio_bps)', {
+              // ═══════════════════════════════════════════════════════════
+              // DAILY-CAP HARD STOP. Previously we fell back to a
+              // "safe-attempt" that ignored maxByDailyCap and tried with
+              // maxByHedgeRatio only — this caused every single cycle to
+              // hit MoveAbort 20 (E_MAX_HEDGE_EXCEEDED) once the daily
+              // cumulative open_hedge volume reached 50% NAV (the
+              // contract's hardcoded DAILY_HEDGE_CAP_BPS). The Move
+              // contract is the source of truth: if its daily counter is
+              // exhausted, NO `open_hedge` call will succeed until the
+              // UTC day boundary. Trying anyway just burns RPCs.
+              // ═══════════════════════════════════════════════════════════
+              const utcMsToReset = 86400000 - (Date.now() % 86400000);
+              const minsToReset = Math.ceil(utcMsToReset / 60000);
+              logger.warn('[SUI Cron] Skip pool→admin transfer — on-chain limits exhausted (daily cap is the source of truth)', {
                 deficit: deficit.toFixed(2),
-                maxTransferable: maxTransferable.toFixed(2),
-                maxByDailyCap: maxByDailyCap.toFixed(2),
-                maxHedgeRatioBps,
-                safeAttempt: safeAttempt.toFixed(6),
+                maxByHedgeRatio: maxByHedgeRatio.toFixed(6),
+                maxByDailyCap: maxByDailyCap.toFixed(6),
+                maxByReserve: maxByReserve.toFixed(6),
+                cappedDeficit: cappedDeficit.toFixed(6),
+                floor: HEDGE_MIN_OPEN_USDC,
+                minsToUtcReset: minsToReset,
               });
-
-              if (safeAttempt < HEDGE_MIN_OPEN_USDC) {
-                logger.warn('[SUI Cron] Skipping pool transfer — safe amount below dust floor', {
-                  maxByHedgeRatio: maxByHedgeRatio.toFixed(6),
-                  maxByReserve: maxByReserve.toFixed(6),
-                  safeAttempt: safeAttempt.toFixed(6),
-                  floor: HEDGE_MIN_OPEN_USDC,
-                });
-                (rebalanceSwaps as any).poolTransfer = {
-                  requested: '0.00',
-                  success: false,
-                  error: 'No safe hedge amount available within on-chain limits',
-                };
-              } else {
-                const transferResult = await transferUsdcFromPoolToAdmin(network, safeAttempt);
-                (rebalanceSwaps as any).poolTransfer = {
-                  requested: safeAttempt.toFixed(6),
-                  success: transferResult.success,
-                  txDigest: transferResult.txDigest,
-                  error: transferResult.error,
-                };
-                if (transferResult.success) {
-                  logger.info('[SUI Cron] Pool → admin USDC transfer successful (safe-attempt path)', {
-                    txDigest: transferResult.txDigest,
-                    amount: safeAttempt.toFixed(6),
-                  });
-                  await new Promise(r => setTimeout(r, 2000));
-                } else {
-                  logger.warn('[SUI Cron] Pool → admin USDC transfer failed (safe-attempt path)', {
-                    error: transferResult.error,
-                  });
-                }
-              }
+              (rebalanceSwaps as { poolTransfer?: unknown }).poolTransfer = {
+                requested: '0.00',
+                success: false,
+                error: `On-chain limits exhausted (daily=${maxByDailyCap.toFixed(4)} ratio=${maxByHedgeRatio.toFixed(4)}); resets in ${minsToReset}m`,
+              };
             } else {
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
               deficit: deficit.toFixed(2),
