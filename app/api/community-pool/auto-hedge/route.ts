@@ -177,6 +177,51 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
   }
 }
 
+/**
+ * Read live BlueFin Pro mainnet positions for the pool admin wallet and
+ * convert them to the UI hedge shape. This is the source of truth for
+ * perpetual hedges — the DB `hedges` table is a mirror that can lag behind
+ * fills/closures. Surfacing live positions ensures the dashboard always
+ * matches what an operator sees on bluefin.io.
+ */
+async function readLiveBluefinPositions(): Promise<OnChainSuiHedge[]> {
+  const PK = (process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  if (!PK) return [];
+  try {
+    const { BluefinService } = await import('@/lib/services/sui/BluefinService');
+    const bf = BluefinService.getInstance();
+    await bf.initialize(PK, 'mainnet');
+    const positions = await bf.getPositions();
+    return positions.map((p, idx) => {
+      const asset = (p.symbol || '').replace('-PERP', '');
+      const side = ((p.side || 'LONG').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT';
+      const size = Number((p as { size?: number }).size ?? 0);
+      const entry = Number((p as { entryPrice?: number }).entryPrice ?? 0);
+      const mark = Number((p as { markPrice?: number }).markPrice ?? entry);
+      const margin = Number((p as { margin?: number }).margin ?? 0);
+      const lev = Number((p as { leverage?: number }).leverage ?? 1);
+      const notional = margin * Math.max(1, lev);
+      const upnl = Number((p as { unrealizedPnl?: number }).unrealizedPnl ?? 0);
+      const pnlPercent = entry > 0 ? ((mark - entry) / entry) * 100 * (side === 'SHORT' ? -1 : 1) : 0;
+      return {
+        id: `bf-live-${p.symbol}-${side}-${idx}`,
+        asset,
+        side,
+        size,
+        notionalValue: notional,
+        entryPrice: entry,
+        currentPrice: mark,
+        pnl: upnl,
+        pnlPercent,
+        createdAt: new Date().toISOString(),
+      };
+    });
+  } catch (err) {
+    logger.warn('[AutoHedge API] Failed to read live BlueFin positions (non-critical)', { error: errMsg(err) });
+    return [];
+  }
+}
+
 interface AutoHedgeStatus {
   enabled: boolean;
   config: {
@@ -302,8 +347,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // hedges are Move-contract objects in pool.hedge_state.active_hedges and
     // were never surfaced to the UI before this branch.
     let onChainSui: OnChainSuiState = { hedges: [], enabled: false, config: null };
+    let liveBluefinHedges: OnChainSuiHedge[] = [];
     if (isSui) {
-      onChainSui = await readOnChainSuiHedges();
+      [onChainSui, liveBluefinHedges] = await Promise.all([
+        readOnChainSuiHedges(),
+        readLiveBluefinPositions(),
+      ]);
     }
     
     // Get recent AI decisions from database
@@ -381,24 +430,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const totalHedgeValue = hedges.reduce((sum, h) => sum + Number(h.notional_value || 0), 0);
     const totalPnL = hedges.reduce((sum, h) => sum + Number(h.current_pnl || 0), 0);
 
-    // Merge DB-recorded BlueFin hedges with on-chain SUI Move hedges (if any).
-    // The reconciler keeps `hedges.hedge_id_onchain` populated for SUI rows
-    // mirrored from the Move pool, so we dedupe by that key — the DB row wins
-    // because it has richer fields (entry price, PnL, ZK binding, etc.).
-    const dbActiveHedges = hedges.map(h => ({
-      id: String(h.id),
-      asset: h.asset,
-      side: h.side as 'LONG' | 'SHORT',
-      size: Number(h.size),
-      notionalValue: Number(h.notional_value),
-      entryPrice: Number(h.entry_price),
-      currentPrice: Number(h.current_price),
-      pnl: Number(h.current_pnl),
-      pnlPercent: Number(h.entry_price) > 0
-        ? ((Number(h.current_price) - Number(h.entry_price)) / Number(h.entry_price)) * 100
-        : 0,
-      createdAt: h.created_at?.toISOString?.() || new Date().toISOString(),
-    }));
+    // Merge sources of hedge data into one display list. Priority order:
+    //   1. Live BlueFin mainnet positions (source of truth for perp hedges)
+    //   2. On-chain SUI Move hedges (open_hedge calls into the pool state)
+    //   3. DB-recorded BlueFin hedges (rich metadata, may lag fills)
+    //
+    // Dedup keys:
+    //   • (asset, side) → matches a live BlueFin position to a DB row,
+    //     suppressing the DB mirror so PnL/mark are always live.
+    //   • hedge_id_onchain → matches DB row to on-chain SUI hedge.
+    const liveKeySet = new Set(
+      liveBluefinHedges.map(h => `${h.asset}|${h.side}`),
+    );
+    const dbActiveHedges = hedges
+      // Drop DB rows whose live counterpart we already have — the live
+      // version has fresher entry/mark and unrealized PnL.
+      .filter(h => !liveKeySet.has(`${h.asset}|${h.side}`))
+      .map(h => ({
+        id: String(h.id),
+        asset: h.asset,
+        side: h.side as 'LONG' | 'SHORT',
+        size: Number(h.size),
+        notionalValue: Number(h.notional_value),
+        entryPrice: Number(h.entry_price),
+        currentPrice: Number(h.current_price),
+        pnl: Number(h.current_pnl),
+        pnlPercent: Number(h.entry_price) > 0
+          ? ((Number(h.current_price) - Number(h.entry_price)) / Number(h.entry_price)) * 100
+          : 0,
+        createdAt: h.created_at?.toISOString?.() || new Date().toISOString(),
+      }));
     const dbOnChainIds = new Set(
       hedges
         .map(h => (h.hedge_id_onchain || '').toLowerCase())
@@ -407,7 +468,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const onChainOnly = onChainSui.hedges.filter(
       h => !dbOnChainIds.has(String(h.id).toLowerCase())
     );
-    const mergedActiveHedges = [...dbActiveHedges, ...onChainOnly];
+    const mergedActiveHedges = [...liveBluefinHedges, ...dbActiveHedges, ...onChainOnly];
+    const liveHedgeValue = liveBluefinHedges.reduce((sum, h) => sum + h.notionalValue, 0);
+    const liveHedgePnL = liveBluefinHedges.reduce((sum, h) => sum + h.pnl, 0);
+    // Subtract the suppressed DB rows from totals so we don't double-count.
+    const suppressedDbValue = hedges
+      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`))
+      .reduce((sum, h) => sum + Number(h.notional_value || 0), 0);
+    const suppressedDbPnL = hedges
+      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`))
+      .reduce((sum, h) => sum + Number(h.current_pnl || 0), 0);
     const onChainHedgeValue = onChainOnly.reduce((sum, h) => sum + h.notionalValue, 0);
 
     // For SUI, the on-chain auto_hedge_config is the source of truth for `enabled`.
@@ -426,8 +496,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       recentDecisions,
       riskAssessment,
       stats: {
-        totalHedgeValue: Math.round((totalHedgeValue + onChainHedgeValue) * 100) / 100,
-        totalPnL: Math.round(totalPnL * 100) / 100,
+        totalHedgeValue: Math.round(
+          (totalHedgeValue - suppressedDbValue + liveHedgeValue + onChainHedgeValue) * 100,
+        ) / 100,
+        totalPnL: Math.round((totalPnL - suppressedDbPnL + liveHedgePnL) * 100) / 100,
         hedgeCount: mergedActiveHedges.length,
         decisionsToday,
       },
