@@ -1005,6 +1005,10 @@ export class SuiUsdcPoolService {
           if (adminKey) {
             const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
             const { SuiClient } = await import('@mysten/sui/client');
+            const { normalizeStructTag } = await import('@mysten/sui/utils');
+            const canon = (t: string): string => {
+              try { return normalizeStructTag(t); } catch { return t; }
+            };
             const { MAINNET_COIN_TYPES, ASSET_TO_COIN_KEY, ASSET_DECIMALS } = await import('@/lib/types/bluefin-types');
             const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
 
@@ -1020,16 +1024,17 @@ export class SuiUsdcPoolService {
             for (const bal of allBal) {
               const raw = Number(bal.totalBalance);
               if (raw <= 0) continue;
+              const balType = canon(bal.coinType);
 
               // Admin USDC is pool capital (received from open_hedge, awaiting swap or close_hedge)
-              if (bal.coinType === MAINNET_COIN_TYPES.USDC) {
+              if (balType === canon(MAINNET_COIN_TYPES.USDC)) {
                 adminUsdcInWallet += raw / Math.pow(10, USDC_DECIMALS);
                 continue;
               }
 
               // SUI is treated as gas reserve only (not pool capital) — but if the AI
               // allocation includes SUI as an asset, count it. Reserve 1 SUI for gas.
-              if (bal.coinType === '0x2::sui::SUI') {
+              if (balType === canon('0x2::sui::SUI')) {
                 const suiAmt = raw / 1e9;
                 const swappable = Math.max(0, suiAmt - 1.0);
                 if (swappable > 0) {
@@ -1039,7 +1044,7 @@ export class SuiUsdcPoolService {
                 continue;
               }
 
-              const assetEntry = Object.entries(ASSET_TO_COIN_KEY).find(([, key]) => MAINNET_COIN_TYPES[key] === bal.coinType);
+              const assetEntry = Object.entries(ASSET_TO_COIN_KEY).find(([, key]) => canon(MAINNET_COIN_TYPES[key]) === balType);
               if (!assetEntry) continue;
               const asset = assetEntry[0];
               const decimals = ASSET_DECIMALS[ASSET_TO_COIN_KEY[asset]] || 8;
@@ -1058,12 +1063,56 @@ export class SuiUsdcPoolService {
           logger.warn('[SuiUsdcPool] Could not read admin wallet for NAV — falling back to recorded hedged value', { error: adminErr });
         }
 
+        // BlueFin Pro margin bank balance + per-position locked margin + uPnL.
+        // Once the cron deposits pool USDC into BlueFin to back perp legs, the
+        // funds disappear from the operator's spot wallet — they live in the
+        // exchange margin bank instead. Without this read, NAV under-counts
+        // by the entire deployed-to-BlueFin amount.
+        let bluefinValueUsdc = 0;
+        let bluefinIncluded = false;
+        try {
+          const bfKey = (process.env.BLUEFIN_PRIVATE_KEY || process.env.SUI_POOL_ADMIN_KEY || '').trim();
+          if (bfKey) {
+            const { BluefinService } = await import('@/lib/services/sui/BluefinService');
+            const bf = BluefinService.getInstance();
+            await bf.initialize(bfKey, this.network === 'mainnet' ? 'mainnet' : 'testnet');
+            const [free, positions] = await Promise.all([
+              bf.getBalance().catch(() => 0),
+              bf.getPositions().catch(() => [] as Array<Record<string, unknown>>),
+            ]);
+            let lockedMargin = 0;
+            let upnl = 0;
+            for (const p of positions) {
+              lockedMargin += Number((p as Record<string, unknown>).margin || 0) || 0;
+              upnl +=
+                Number(
+                  (p as Record<string, unknown>).unrealizedProfit ||
+                    (p as Record<string, unknown>).uPnL ||
+                    0,
+                ) || 0;
+            }
+            bluefinValueUsdc = (Number(free) || 0) + lockedMargin + upnl;
+            bluefinIncluded = true;
+            logger.info('[SuiUsdcPool] BlueFin component included in NAV', {
+              freeCollateral: Number(free).toFixed(4),
+              lockedMargin: lockedMargin.toFixed(4),
+              uPnL: upnl.toFixed(4),
+              total: bluefinValueUsdc.toFixed(4),
+              positions: positions.length,
+            });
+          }
+        } catch (bfErr) {
+          logger.warn('[SuiUsdcPool] Could not read BlueFin for NAV', {
+            error: bfErr instanceof Error ? bfErr.message : String(bfErr),
+          });
+        }
+
         // If we successfully read admin wallet, use real market value (admin USDC + admin assets).
         // Otherwise fall back to recorded `hedged_value` (cost basis only).
         const offChainPoolCapital = usedAdminBalances
           ? (adminUsdcInWallet + adminAssetValueUsdc)
           : hedgedUsdc;
-        const totalNAVUsdc = balanceUsdc + offChainPoolCapital;
+        const totalNAVUsdc = balanceUsdc + offChainPoolCapital + bluefinValueUsdc;
 
         const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
         const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;

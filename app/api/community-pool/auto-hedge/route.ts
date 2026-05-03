@@ -184,15 +184,15 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
  * fills/closures. Surfacing live positions ensures the dashboard always
  * matches what an operator sees on bluefin.io.
  */
-async function readLiveBluefinPositions(): Promise<OnChainSuiHedge[]> {
+async function readLiveBluefinPositions(): Promise<{ hedges: OnChainSuiHedge[]; authoritative: boolean }> {
   const PK = (process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  if (!PK) return [];
+  if (!PK) return { hedges: [], authoritative: false };
   try {
     const { BluefinService } = await import('@/lib/services/sui/BluefinService');
     const bf = BluefinService.getInstance();
     await bf.initialize(PK, 'mainnet');
     const positions = await bf.getPositions();
-    return positions.map((p, idx) => {
+    const hedges = positions.map((p, idx) => {
       const asset = (p.symbol || '').replace('-PERP', '');
       const side = ((p.side || 'LONG').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT';
       const size = Number((p as { size?: number }).size ?? 0);
@@ -216,9 +216,11 @@ async function readLiveBluefinPositions(): Promise<OnChainSuiHedge[]> {
         createdAt: new Date().toISOString(),
       };
     });
+    // Auth + positions read both succeeded → live data is authoritative.
+    return { hedges, authoritative: true };
   } catch (err) {
     logger.warn('[AutoHedge API] Failed to read live BlueFin positions (non-critical)', { error: errMsg(err) });
-    return [];
+    return { hedges: [], authoritative: false };
   }
 }
 
@@ -348,11 +350,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // were never surfaced to the UI before this branch.
     let onChainSui: OnChainSuiState = { hedges: [], enabled: false, config: null };
     let liveBluefinHedges: OnChainSuiHedge[] = [];
+    let liveBluefinAuthoritative = false;
     if (isSui) {
-      [onChainSui, liveBluefinHedges] = await Promise.all([
+      const [sui, live] = await Promise.all([
         readOnChainSuiHedges(),
         readLiveBluefinPositions(),
       ]);
+      onChainSui = sui;
+      liveBluefinHedges = live.hedges;
+      liveBluefinAuthoritative = live.authoritative;
     }
     
     // Get recent AI decisions from database
@@ -439,13 +445,49 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     //   • (asset, side) → matches a live BlueFin position to a DB row,
     //     suppressing the DB mirror so PnL/mark are always live.
     //   • hedge_id_onchain → matches DB row to on-chain SUI hedge.
+    //
+    // AUTHORITATIVE MODE: when the live BlueFin read succeeded (auth + positions
+    // call both returned), the live snapshot is the truth. ANY DB row whose
+    // (asset, side) is NOT in the live set is stale — the perp was closed
+    // outside the cron path (manual liquidation, off-cron close, or cron close
+    // that failed to update DB). Suppress and schedule background cleanup so
+    // the dashboard never inflates TVL/PnL with phantom positions.
     const liveKeySet = new Set(
       liveBluefinHedges.map(h => `${h.asset}|${h.side}`),
     );
+    const staleDbRows = liveBluefinAuthoritative
+      ? hedges.filter(h => !liveKeySet.has(`${h.asset}|${h.side}`))
+      : [];
+    if (staleDbRows.length > 0) {
+      // Fire-and-forget: do NOT await — keeps the GET response fast.
+      void (async () => {
+        try {
+          const { closeHedge } = await import('@/lib/db/hedges');
+          for (const stale of staleDbRows) {
+            try {
+              await closeHedge(stale.order_id || `stale-${stale.id}`, Number(stale.current_pnl || 0), 'closed');
+            } catch (e) {
+              logger.warn('[AutoHedge API] Failed to close stale hedge row', { id: stale.id, error: errMsg(e) });
+            }
+          }
+          logger.info('[AutoHedge API] Reconciled stale hedge rows against live BlueFin', {
+            count: staleDbRows.length,
+            ids: staleDbRows.map(s => s.id),
+          });
+        } catch (e) {
+          logger.warn('[AutoHedge API] Stale hedge cleanup skipped', { error: errMsg(e) });
+        }
+      })();
+    }
+    const staleIdSet = new Set(staleDbRows.map(s => String(s.id)));
     const dbActiveHedges = hedges
       // Drop DB rows whose live counterpart we already have — the live
       // version has fresher entry/mark and unrealized PnL.
-      .filter(h => !liveKeySet.has(`${h.asset}|${h.side}`))
+      // Drop stale rows (no live counterpart when live read is authoritative).
+      .filter(h =>
+        !liveKeySet.has(`${h.asset}|${h.side}`) &&
+        !staleIdSet.has(String(h.id))
+      )
       .map(h => ({
         id: String(h.id),
         asset: h.asset,
@@ -471,12 +513,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const mergedActiveHedges = [...liveBluefinHedges, ...dbActiveHedges, ...onChainOnly];
     const liveHedgeValue = liveBluefinHedges.reduce((sum, h) => sum + h.notionalValue, 0);
     const liveHedgePnL = liveBluefinHedges.reduce((sum, h) => sum + h.pnl, 0);
-    // Subtract the suppressed DB rows from totals so we don't double-count.
+    // Subtract the suppressed DB rows (live-counterpart matches AND stale rows
+    // with no live counterpart) so we don't double-count or inflate phantoms.
     const suppressedDbValue = hedges
-      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`))
+      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`) || staleIdSet.has(String(h.id)))
       .reduce((sum, h) => sum + Number(h.notional_value || 0), 0);
     const suppressedDbPnL = hedges
-      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`))
+      .filter(h => liveKeySet.has(`${h.asset}|${h.side}`) || staleIdSet.has(String(h.id)))
       .reduce((sum, h) => sum + Number(h.current_pnl || 0), 0);
     const onChainHedgeValue = onChainOnly.reduce((sum, h) => sum + h.notionalValue, 0);
 
