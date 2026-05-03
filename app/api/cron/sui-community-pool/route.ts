@@ -36,7 +36,7 @@ import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
-import { createHedge } from '@/lib/db/hedges';
+import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -1672,6 +1672,62 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             const liveSet = new Set(
               existing.map(p => `${p.symbol}|${(p.side || '').toUpperCase()}`),
             );
+
+            // ── Self-healing reconciler ────────────────────────────
+            // Two failure modes the open-loop hedger can leave behind:
+            //   (a) Orphan rows: DB row exists but BlueFin has no matching
+            //       position (margin call, manual close, failed open we
+            //       optimistically recorded, etc.). Close them so dashboard
+            //       and dedup gate stay accurate.
+            //   (b) Duplicate rows: multiple active rows for one live
+            //       (market, side). Keep the newest, close the rest.
+            // Scope is intentionally narrow: only sui rows that are NOT
+            // mirrored from on-chain pool hedges (hedge_id_onchain IS NULL).
+            try {
+              const dbActive = await query<{
+                id: number; order_id: string; market: string; side: string; created_at: Date;
+              }>(
+                `SELECT id, order_id, market, side, created_at
+                 FROM hedges
+                 WHERE chain = 'sui'
+                   AND status = 'active'
+                   AND (hedge_id_onchain IS NULL OR hedge_id_onchain = '')`,
+              );
+              const groups = new Map<string, typeof dbActive>();
+              for (const row of dbActive) {
+                const key = `${row.market}|${(row.side || '').toUpperCase()}`;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key)!.push(row);
+              }
+              let closedOrphans = 0, closedDups = 0;
+              for (const [key, rows] of groups.entries()) {
+                if (!liveSet.has(key)) {
+                  // (a) orphan: no live counterpart
+                  for (const r of rows) {
+                    await updateHedgeStatus(r.order_id, 'closed').catch(() => {});
+                    closedOrphans++;
+                  }
+                } else if (rows.length > 1) {
+                  // (b) duplicate: keep newest, close rest
+                  const sorted = [...rows].sort(
+                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+                  );
+                  for (let i = 1; i < sorted.length; i++) {
+                    await updateHedgeStatus(sorted[i].order_id, 'closed').catch(() => {});
+                    closedDups++;
+                  }
+                }
+              }
+              if (closedOrphans + closedDups > 0) {
+                logger.info('[SUI Cron] Self-healing reconciler', {
+                  closedOrphans, closedDups, totalActive: dbActive.length,
+                });
+              }
+            } catch (rcErr) {
+              logger.warn('[SUI Cron] Self-healing reconciler failed', {
+                error: rcErr instanceof Error ? rcErr.message : String(rcErr),
+              });
+            }
 
             const PERP_SPECS: Record<string, { minQty: number; stepSize: number }> = {
               BTC: { minQty: 0.001, stepSize: 0.001 },

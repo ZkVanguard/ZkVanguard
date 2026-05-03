@@ -27,13 +27,16 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
   }, [isSui]);
 
   const sharePriceDisplay = useMemo(() => {
-    if (isSui) return '$1.00'; // 1 share = 1 USDC
-    const price = Number(poolData.sharePrice) || 0;
+    // Both EVM and SUI pools: show the live computed share price
+    // (NAV / totalShares). For SUI USDC pools the value starts at $1.00
+    // (1 share = 1 USDC at inception) and appreciates as the AI manages
+    // BTC/ETH/SUI allocations.
+    const price = Number(poolData.sharePrice) || (isSui ? 1 : 0);
     return `$${price.toFixed(4)}`;
   }, [isSui, poolData.sharePrice]);
 
   const sharePriceSubtext = useMemo(() => {
-    if (isSui) return 'Share Price (1 share = 1 USDC)';
+    if (isSui) return 'Current Share Price (USDC at inception)';
     return 'Share Price';
   }, [isSui]);
 
