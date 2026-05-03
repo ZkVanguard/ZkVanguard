@@ -1,31 +1,21 @@
 /**
- * ⚠️  DANGER — DO NOT RUN AGAINST THE CURRENT (v1) USDC POOL CONTRACT.
+ * Revert SUI mainnet USDC pool treasury back to the operator hot wallet.
  *
- *     The on-chain `treasury` field is overloaded: it receives BOTH fees
- *     AND hedge collateral (open_hedge transfers USDC to state.treasury
- *     so the cron can deposit it on BlueFin). Pointing treasury at a
- *     multisig BREAKS autonomous hedging — funds get stuck in the safe
- *     until manually released.
+ * Why: the on-chain `treasury` field is overloaded — it is both the fee
+ * receiver AND the hedge-collateral handoff address. `open_hedge` transfers
+ * pool USDC directly to `state.treasury`, and the cron then deposits that
+ * USDC on BlueFin to open the perp leg. If treasury points at a multisig,
+ * the cron cannot access the funds to deposit, breaking autonomous hedging.
  *
- *     Use scripts/revert-treasury-to-operator.ts to restore.
+ * Splitting fee_treasury and operator into two fields requires a Move
+ * redeploy. Until then, treasury must be the operator wallet.
  *
- *     This script will be safe to use once the Move contract is
- *     redeployed with separate `fee_treasury` and `operator` fields.
- *
- * Set the SUI mainnet USDC pool treasury to the MSafe multisig.
- *
- * Reads:
- *   SUI_MSAFE_ADDRESS                              — target multisig safe
- *   NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID   — pool package
- *   NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE        — pool shared state
- *   SUI_ADMIN_CAP_ID                               — owned AdminCap
- *   SUI_POOL_ADMIN_KEY (or SUI_PRIVATE_KEY)        — current admin signer
- *
- * Idempotent: if treasury is already set to the MSafe address, exits 0
- * without sending a transaction.
+ * Long-term hardening (off-chain): a scheduled task runs collect_fees
+ * (multisig-gated via FeeManagerCap) → fees land in operator wallet → a
+ * second multisig-signed tx sweeps fees from operator to cold safe.
  *
  * Run:
- *   npx tsx --env-file=.env.production scripts/set-mainnet-treasury-msafe.ts
+ *   npx tsx --env-file=.env.production scripts/revert-treasury-to-operator.ts
  */
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
@@ -38,9 +28,7 @@ const NETWORK = 'mainnet' as const;
 
 function need(name: string): string {
   const v = (process.env[name] || '').trim();
-  if (!v) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
+  if (!v) throw new Error(`Missing required env var: ${name}`);
   return v;
 }
 
@@ -62,54 +50,32 @@ async function main() {
   const packageId = need('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID');
   const poolStateId = need('NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE');
   const adminCapId = need('SUI_ADMIN_CAP_ID');
-  const msafeAddress = need('SUI_MSAFE_ADDRESS');
   const usdcType = SUI_USDC_COIN_TYPE[NETWORK];
 
   const client = new SuiClient({ url: getFullnodeUrl(NETWORK) });
   const keypair = getKeypair();
-  const signer = keypair.toSuiAddress();
+  const operator = keypair.toSuiAddress();
 
   console.log('═'.repeat(64));
-  console.log('  SUI MAINNET — set USDC pool treasury → MSafe multisig');
+  console.log('  SUI MAINNET — revert pool treasury → operator hot wallet');
   console.log('═'.repeat(64));
-  console.log('  Package    :', packageId);
-  console.log('  Pool State :', poolStateId);
-  console.log('  AdminCap   :', adminCapId);
-  console.log('  Signer     :', signer);
-  console.log('  Target     :', msafeAddress);
-  console.log('  USDC type  :', usdcType);
+  console.log('  Operator (target) :', operator);
+  console.log('  Pool State        :', poolStateId);
   console.log();
 
-  // Verify AdminCap ownership before signing.
-  const cap = await client.getObject({ id: adminCapId, options: { showOwner: true } });
-  if (!cap.data) throw new Error(`AdminCap ${adminCapId} not found on chain`);
-  const owner = cap.data.owner;
-  if (!owner || typeof owner !== 'object' || !('AddressOwner' in owner)) {
-    throw new Error(`AdminCap has unexpected owner type: ${JSON.stringify(owner)}`);
-  }
-  if (owner.AddressOwner !== signer) {
-    throw new Error(
-      `AdminCap is owned by ${owner.AddressOwner}, but signer is ${signer}. ` +
-      `Use the original deployer key, or transfer the AdminCap first.`,
-    );
-  }
-  console.log('  ✓ AdminCap ownership verified');
-
-  // Read current treasury so we don't waste gas on a no-op.
   const state = await client.getObject({ id: poolStateId, options: { showContent: true } });
   if (state.data?.content?.dataType !== 'moveObject') {
     throw new Error('Pool state object missing or not a Move object');
   }
   const fields = state.data.content.fields as Record<string, unknown>;
   const currentTreasury = String(fields.treasury || '').toLowerCase();
-  console.log('  Current    :', currentTreasury || '(unset)');
+  console.log('  Current treasury  :', currentTreasury);
 
-  if (currentTreasury === msafeAddress.toLowerCase()) {
-    console.log('\n✅ Treasury already points to the MSafe address. Nothing to do.');
+  if (currentTreasury === operator.toLowerCase()) {
+    console.log('\n✅ Treasury already points at operator. Nothing to do.');
     return;
   }
 
-  // Build and submit the set_treasury tx.
   const tx = new Transaction();
   tx.moveCall({
     target: `${packageId}::community_pool_usdc::set_treasury`,
@@ -117,7 +83,7 @@ async function main() {
     arguments: [
       tx.object(adminCapId),
       tx.object(poolStateId),
-      tx.pure.address(msafeAddress),
+      tx.pure.address(operator),
     ],
   });
 
@@ -136,14 +102,13 @@ async function main() {
   console.log('  ✓ TX digest :', result.digest);
   console.log('  ✓ Explorer  : https://suiscan.xyz/mainnet/tx/' + result.digest);
 
-  // Re-read to confirm.
   await new Promise((r) => setTimeout(r, 1500));
   const after = await client.getObject({ id: poolStateId, options: { showContent: true } });
   if (after.data?.content?.dataType === 'moveObject') {
     const f = after.data.content.fields as Record<string, unknown>;
     console.log('  ✓ New treasury :', f.treasury);
   }
-  console.log('\n✅ MSafe multisig is now the on-chain treasury for the SUI mainnet USDC pool.');
+  console.log('\n✅ Autonomous hedging restored.');
 }
 
 main().catch((err) => {

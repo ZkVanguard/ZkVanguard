@@ -1,4 +1,16 @@
 /**
+ * ⚠️  DANGER — DO NOT RUN AGAINST THE CURRENT (v1) USDC POOL CONTRACT.
+ *
+ *     AdminCap is required by the cron's AI-driven daily-cap reset and
+ *     by `set_treasury` (which must be re-pointed to the operator hot
+ *     wallet during normal operation since `treasury` doubles as the
+ *     hedge-collateral handoff address).
+ *
+ *     Transfer to multisig only after the contract is redeployed with
+ *     separate `operator` and `fee_treasury` fields, and the cron is
+ *     migrated to use a dedicated lightweight `OperatorCap` for daily
+ *     resets.
+ *
  * Transfer the SUI mainnet `AdminCap` to the MSafe multisig.
  *
  * AdminCap currently controls:
