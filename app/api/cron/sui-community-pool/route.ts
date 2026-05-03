@@ -1476,9 +1476,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           const sentiment = (enhancedContext.marketSentiment || 'NEUTRAL').toUpperCase();
           const side: 'LONG' | 'SHORT' = sentiment === 'BULLISH' ? 'LONG' : 'SHORT';
 
-          // ── Leverage: bump to 5x for small NAV to clear minQty ────
+          // ── Leverage: bump to 10x for tiny NAV so BTC clears minQty=0.001 ─
+          // BTC at $78k requires effective notional ≥ $78.66 to snap to minQty.
+          // At NAV=$50, alloc=30%, that means we need leverage ≥ 6x.
+          // We default to 10x at NAV<$1000 (BlueFin max for BTC perp), with
+          // suiPoolConfig.maxLeverage as a soft cap that operators can lower.
           const leverage = navUsd < 1000
-            ? 5
+            ? Math.min(suiPoolConfig?.maxLeverage || 10, 10)
             : Math.min(suiPoolConfig?.maxLeverage || 3, 5);
           const hedgeRatio = navUsd < 1000 ? 1.0 : 0.5;
 
