@@ -27,6 +27,7 @@ import {
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
+import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
@@ -620,6 +621,101 @@ async function replenishAdminUsdc(
   }
 
   return { swapped: totalSwapped, details };
+}
+
+/**
+ * AI-driven on-chain daily-cap reset.
+ *
+ * The Move contract caps `daily_hedge_total` at 50% of NAV per UTC day to
+ * prevent runaway hedge spend. That cap is too restrictive when the AI +
+ * prediction-market signal flips strongly mid-day: the pool sits idle until
+ * midnight UTC instead of acting on a high-confidence directional move.
+ *
+ * `admin_reset_daily_hedge(AdminCap, &mut state, &Clock)` zeros the counter
+ * without touching active positions. We invoke it sparingly — only when the
+ * AI says it's worth the additional risk — and we cap usage to a small
+ * number per UTC day so a buggy or compromised signal source can't drain
+ * the pool.
+ *
+ * Reset is allowed when ALL hold:
+ *   • on-chain dailyHedgedToday >= 50% of NAV (cap actually exhausted)
+ *   • AI urgency in {HIGH, CRITICAL} OR confidence >= 75
+ *   • resets-used-today < HEDGE_DAILY_MAX_RESETS (default 4)
+ */
+async function aiDrivenResetDailyHedge(
+  network: 'mainnet' | 'testnet',
+  signal: { urgency?: string; confidence?: number },
+): Promise<{ reset: boolean; reason?: string; txDigest?: string; error?: string; resetsUsed?: number }> {
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  const adminCapId = (process.env.SUI_ADMIN_CAP_ID || '').trim();
+  const poolConfig = SUI_USDC_POOL_CONFIG[network];
+
+  if (!adminKey) return { reset: false, reason: 'no admin key' };
+  if (!adminCapId) return { reset: false, reason: 'SUI_ADMIN_CAP_ID not configured' };
+  if (!poolConfig.packageId || !poolConfig.poolStateId) {
+    return { reset: false, reason: 'pool not configured' };
+  }
+
+  const urgency = (signal.urgency || '').toUpperCase();
+  const confidence = Number(signal.confidence || 0);
+  const minConfidence = Number(process.env.HEDGE_RESET_MIN_CONFIDENCE || 75);
+  const strongSignal = urgency === 'HIGH' || urgency === 'CRITICAL' || confidence >= minConfidence;
+  if (!strongSignal) {
+    return { reset: false, reason: `weak signal (urgency=${urgency || 'NONE'} conf=${confidence})` };
+  }
+
+  // Bound resets per UTC day so the cap still has teeth.
+  const dayKey = `hedgeDailyReset:${Math.floor(Date.now() / 86_400_000)}`;
+  const maxResets = Number(process.env.HEDGE_DAILY_MAX_RESETS || 4);
+  const usedSoFar = await getCronStateOr<number>(dayKey, 0);
+  if (usedSoFar >= maxResets) {
+    return { reset: false, reason: `reset budget exhausted (${usedSoFar}/${maxResets})`, resetsUsed: usedSoFar };
+  }
+
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { Transaction } = await import('@mysten/sui/transactions');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+
+    const tx = new Transaction();
+    const usdcType = SUI_USDC_COIN_TYPE[network];
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_reset_daily_hedge`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(adminCapId),
+        tx.object(poolConfig.poolStateId!),
+        tx.object('0x6'),
+      ],
+    });
+    tx.setGasBudget(20_000_000);
+
+    const result = await suiClient.signAndExecuteTransaction({
+      signer: keypair, transaction: tx, options: { showEffects: true },
+    });
+    const ok = result.effects?.status?.status === 'success';
+    if (ok) {
+      await setCronState(dayKey, usedSoFar + 1);
+      logger.info('[SUI Cron] AI-driven daily-cap reset SUCCESS', {
+        urgency, confidence, resetsUsed: usedSoFar + 1, maxResets, txDigest: result.digest,
+      });
+      return { reset: true, txDigest: result.digest, resetsUsed: usedSoFar + 1 };
+    }
+    logger.warn('[SUI Cron] AI-driven daily-cap reset FAILED', {
+      error: result.effects?.status?.error,
+    });
+    return { reset: false, reason: 'tx failed', error: result.effects?.status?.error };
+  } catch (err) {
+    return { reset: false, reason: 'exception', error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /**
@@ -1282,32 +1378,69 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 error: 'Max hedge ratio reached',
               };
             } else if (maxTransferable <= 0 || cappedDeficit <= 0.000001) {
-              // Daily cap might be exhausted locally, but contract resets counter on day boundary.
-              // Still attempt the call and let contract enforce the true limit.
-              logger.info('[SUI Cron] Daily cap appears exhausted locally, but attempting hedge anyway (contract will reset at day boundary)', {
-                deficit: deficit.toFixed(2),
-                maxTransferable: maxTransferable.toFixed(2),
-                maxByDailyCap: maxByDailyCap.toFixed(2),
-                cappedDeficit: cappedDeficit.toFixed(2),
+              // Daily cap exhausted on-chain. Try an AI-driven reset before
+              // giving up: if the prediction-market signal is strong (urgency
+              // HIGH/CRITICAL or confidence >= 75) and we still have reset
+              // budget left for today, zero the counter and retry.
+              const resetOutcome = await aiDrivenResetDailyHedge(network, {
+                urgency: enhancedContext?.urgency,
+                confidence: aiResult.confidence,
               });
-              
-              const transferResult = await transferUsdcFromPoolToAdmin(network, Math.max(deficit * 0.5, 0.01));
-              (rebalanceSwaps as any).poolTransfer = {
-                requested: Math.max(deficit * 0.5, 0.01).toFixed(2),
-                success: transferResult.success,
-                txDigest: transferResult.txDigest,
-                error: transferResult.error,
-              };
-              if (transferResult.success) {
-                logger.info('[SUI Cron] Pool → admin USDC transfer successful despite daily cap concern', {
-                  txDigest: transferResult.txDigest,
-                  amount: Math.max(deficit * 0.5, 0.01).toFixed(2),
+
+              if (resetOutcome.reset) {
+                logger.info('[SUI Cron] Daily cap was exhausted — AI-driven reset successful, retrying transfer', {
+                  txDigest: resetOutcome.txDigest,
+                  resetsUsedToday: resetOutcome.resetsUsed,
+                  urgency: enhancedContext?.urgency,
+                  confidence: aiResult.confidence,
                 });
-                await new Promise(r => setTimeout(r, 2000));
+                // After reset, the full daily cap is available again — retry
+                // with the original deficit (bounded by hedge ratio + reserve).
+                const newCap = Math.min(maxByHedgeRatio, maxByReserve);
+                const retryAmount = Math.min(deficit, newCap * 0.90);
+                if (retryAmount > 0.01) {
+                  const transferResult = await transferUsdcFromPoolToAdmin(network, retryAmount);
+                  (rebalanceSwaps as any).poolTransfer = {
+                    requested: retryAmount.toFixed(2),
+                    success: transferResult.success,
+                    txDigest: transferResult.txDigest,
+                    resetTxDigest: resetOutcome.txDigest,
+                    error: transferResult.error,
+                  };
+                  if (transferResult.success) {
+                    logger.info('[SUI Cron] Pool → admin USDC transfer succeeded after AI-driven reset', {
+                      txDigest: transferResult.txDigest, amount: retryAmount.toFixed(2),
+                    });
+                    await new Promise(r => setTimeout(r, 2000));
+                  } else {
+                    logger.warn('[SUI Cron] Transfer failed after reset', {
+                      error: transferResult.error,
+                    });
+                  }
+                } else {
+                  (rebalanceSwaps as any).poolTransfer = {
+                    requested: '0.00', success: false,
+                    error: 'After reset, no headroom (hedge ratio or reserve exhausted)',
+                    resetTxDigest: resetOutcome.txDigest,
+                  };
+                }
               } else {
-                logger.warn('[SUI Cron] Pool → admin USDC transfer failed despite daily cap concern', {
-                  error: transferResult.error,
+                // Reset declined — signal too weak or budget exhausted.
+                const minutesToMidnight = Math.ceil(((86_400_000 - (Date.now() % 86_400_000)) / 60_000));
+                logger.info('[SUI Cron] On-chain daily cap exhausted; AI-driven reset NOT applied — skipping transfer', {
+                  deficit: deficit.toFixed(2),
+                  maxByDailyCap: maxByDailyCap.toFixed(2),
+                  resetReason: resetOutcome.reason,
+                  resetError: resetOutcome.error,
+                  urgency: enhancedContext?.urgency,
+                  confidence: aiResult.confidence,
+                  minutesToMidnight,
                 });
+                (rebalanceSwaps as any).poolTransfer = {
+                  requested: '0.00',
+                  success: false,
+                  error: `daily cap exhausted; reset declined (${resetOutcome.reason}); resets in ${minutesToMidnight}m`,
+                };
               }
             } else {
             logger.info('[SUI Cron] Admin USDC insufficient — transferring from pool via open_hedge', {
