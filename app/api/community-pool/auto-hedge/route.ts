@@ -582,7 +582,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // SECURITY: Rate-limit BEFORE auth so attackers can't burn CPU on auth checks.
   const { mutationLimiter } = await import('@/lib/security/rate-limiter');
-  const rlResp = await mutationLimiter.checkAsync(request);
+  const rlResp = await mutationLimiter.checkDistributed(request);
   if (rlResp) return rlResp as NextResponse;
 
   // SECURITY: Require admin/internal authentication. This endpoint mutates
