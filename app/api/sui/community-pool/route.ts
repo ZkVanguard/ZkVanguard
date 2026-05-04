@@ -450,6 +450,7 @@ export async function GET(request: NextRequest) {
         performanceFeeBps: stats.performanceFeeBps,
         paused: stats.paused,
         poolStateId: stats.poolStateId,
+        allocation: stats.allocation,
       },
       chain: 'sui',
       network,

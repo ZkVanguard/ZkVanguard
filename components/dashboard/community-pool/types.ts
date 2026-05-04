@@ -8,6 +8,8 @@ export interface PoolAllocation {
   ETH: number;
   SUI: number;
   CRO: number;
+  /** USDC bucket — pool balance + idle admin USDC + BlueFin collateral. */
+  USDC?: number;
 }
 
 export interface PoolSummary {

@@ -1000,6 +1000,10 @@ export class SuiUsdcPoolService {
         let adminAssetValueUsdc = 0;
         let adminUsdcInWallet = 0;
         let usedAdminBalances = false;
+        // Per-asset live composition (USD value held per asset).
+        // Drives the dashboard "Current Holdings" chart so it shows the
+        // REAL composition, not a hardcoded fallback.
+        const assetUsdValue: Record<string, number> = { BTC: 0, ETH: 0, SUI: 0 };
         try {
           const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
           if (adminKey) {
@@ -1039,7 +1043,11 @@ export class SuiUsdcPoolService {
                 const swappable = Math.max(0, suiAmt - 1.0);
                 if (swappable > 0) {
                   const sp = await mds.getTokenPrice('SUI').catch(() => ({ price: 0 }));
-                  if (sp.price > 0) adminAssetValueUsdc += swappable * sp.price;
+                  if (sp.price > 0) {
+                    const v = swappable * sp.price;
+                    adminAssetValueUsdc += v;
+                    assetUsdValue.SUI += v;
+                  }
                 }
                 continue;
               }
@@ -1050,7 +1058,11 @@ export class SuiUsdcPoolService {
               const decimals = ASSET_DECIMALS[ASSET_TO_COIN_KEY[asset]] || 8;
               const amount = raw / Math.pow(10, decimals);
               const priceData = await mds.getTokenPrice(asset).catch(() => ({ price: 0 }));
-              if (priceData.price > 0) adminAssetValueUsdc += amount * priceData.price;
+              if (priceData.price > 0) {
+                const v = amount * priceData.price;
+                adminAssetValueUsdc += v;
+                if (asset in assetUsdValue) assetUsdValue[asset] += v;
+              }
             }
             usedAdminBalances = true;
             logger.info('[SuiUsdcPool] Admin wallet pool-capital included in NAV', {
@@ -1129,14 +1141,33 @@ export class SuiUsdcPoolService {
           return this.getStatsFromFallback();
         }
 
-        // Parse 4-asset allocation from on-chain
+        // Parse 4-asset allocation from on-chain (AI TARGET, used as fallback only).
         const alloc = fields.current_allocation?.fields || {};
-        const allocation: SuiPoolAllocation = {
+        const targetAllocation: SuiPoolAllocation = {
           BTC: Number(alloc.btc_bps || 3000) / 100,
           ETH: Number(alloc.eth_bps || 3000) / 100,
           SUI: Number(alloc.sui_bps || 2000) / 100,
           CRO: Number(alloc.cro_bps || 2000) / 100,
         };
+
+        // LIVE composition: real economic exposure as % of NAV.
+        //   • USDC bucket = pool balance + idle admin USDC + BlueFin free + locked margin
+        //     (USD-denominated capital not yet rotated into a basket asset)
+        //   • BTC/ETH/SUI = market value of held wrapped coins
+        // Falls back to AI target if NAV ≈ 0 (empty pool / pre-deposit state).
+        const usdcBucket =
+          balanceUsdc + adminUsdcInWallet + bluefinValueUsdc;
+        const navForPct = totalNAVUsdc > 0 ? totalNAVUsdc : 1;
+        const liveAllocation: SuiPoolAllocation = totalNAVUsdc > 0.01
+          ? {
+              BTC: Math.round((assetUsdValue.BTC / navForPct) * 10000) / 100,
+              ETH: Math.round((assetUsdValue.ETH / navForPct) * 10000) / 100,
+              SUI: Math.round((assetUsdValue.SUI / navForPct) * 10000) / 100,
+              CRO: 0,
+              USDC: Math.round((usdcBucket / navForPct) * 10000) / 100,
+            }
+          : targetAllocation;
+        const allocation = liveAllocation;
 
         return {
           totalNAV: totalNAVUsdc,

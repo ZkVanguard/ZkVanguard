@@ -72,6 +72,8 @@ export interface SuiPoolAllocation {
   ETH: number;
   SUI: number;
   CRO: number;
+  /** USDC bucket — pool balance + idle admin USDC + BlueFin collateral. Optional for back-compat. */
+  USDC?: number;
 }
 
 export interface SuiPoolStats {
