@@ -119,8 +119,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
   // Run all sub-crons sequentially (order matters — snapshot before monitor before hedge)
   const subTasks: SubCronResult[] = [];
   
-  const cronJobs = [
+  // Hourly counter (UTC) — used to gate cadence-controlled sub-crons.
+  // Master runs every 5 min, so most sub-crons run every tick. The hedge-state
+  // reconcile + fee-collection paths are daily/hourly; we gate them here so a
+  // QStash retry storm cannot accidentally collect-fees 12× in an hour.
+  const now = new Date();
+  const utcMinute = now.getUTCMinutes();
+  const utcHour = now.getUTCHours();
+  const isTopOfHour = utcMinute < 5;       // first tick each UTC hour
+  const isDailyHeartbeat = utcHour === 3 && utcMinute < 5; // ~03:05 UTC daily
+
+  const cronJobs: Array<{ name: string; path: string }> = [
     { name: 'Pyth Price Update',      path: '/api/cron/pyth-update' },        // Update oracle prices first
+    { name: 'BlueFin Health Monitor',  path: '/api/cron/bluefin-health' },     // Counter-party / venue distress probe (every 5m)
     { name: 'Community Pool Snapshot', path: '/api/cron/community-pool' },
     { name: 'SUI Community Pool',      path: '/api/cron/sui-community-pool' },
     { name: 'Hedera Community Pool',   path: '/api/cron/hedera-community-pool' },
@@ -130,6 +141,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
     { name: 'Hedge Monitor',          path: '/api/cron/hedge-monitor' },
     { name: 'Liquidation Guard',      path: '/api/cron/liquidation-guard' },
   ];
+
+  // Hourly: SUI on-chain hedge state ↔ live BlueFin reconciliation.
+  // Repairs drift caused by external liquidations / manual closes.
+  if (isTopOfHour) {
+    cronJobs.push({ name: 'SUI Hedge Reconcile', path: '/api/cron/sui-hedge-reconcile' });
+  }
+
+  // Daily: Move fee-collection heartbeat — rolls forward last_fee_collection
+  // so the on-chain `nav * bps * seconds` math cannot wrap u64 at scale.
+  if (isDailyHeartbeat) {
+    cronJobs.push({ name: 'SUI Collect Fees', path: '/api/cron/sui-collect-fees' });
+  }
   
   for (const job of cronJobs) {
     const result = await runSubCron(job.name, job.path, cronSecret || '');
