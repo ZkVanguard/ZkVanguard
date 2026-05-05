@@ -140,6 +140,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<MasterCron
     { name: 'Auto Rebalance',         path: '/api/cron/auto-rebalance' },
     { name: 'Hedge Monitor',          path: '/api/cron/hedge-monitor' },
     { name: 'Liquidation Guard',      path: '/api/cron/liquidation-guard' },
+    { name: 'Polymarket Edge Trader', path: '/api/cron/polymarket-edge-trader' }, // 5-min binary signal → BTC perp
   ];
 
   // Hourly: SUI on-chain hedge state ↔ live BlueFin reconciliation.
