@@ -1,30 +1,28 @@
 /**
- * Cron Job: Polymarket Edge Trader (multi-source aggregated → BlueFin perp)
+ * Cron Job: Multi-Market Edge Trader (per-asset aggregated → BlueFin perp)
  *
  * Thesis: prediction-market crowds + funding-rate sentiment + 24h momentum
- * are well-calibrated. We do NOT trade a single market — we trade the
- * AGGREGATED signal from `PredictionAggregatorService`, which weighs:
+ * are well-calibrated. Instead of trading a single global signal, this cron
+ * SCANS every supported asset (BTC, ETH) independently:
  *
- *   • Polymarket 5-min BTC binary           (30%)
- *   • Delphi-tagged macro/event predictions (≤25% combined)
- *   • Crypto.com BTC + ETH 24h momentum     (30%)
- *   • Funding-rate sentiment proxy          (10%)
+ *   For each asset, `PredictionAggregatorService.getPerAssetPredictions`
+ *   builds an asset-specific source bucket from:
+ *     • Polymarket 5-min BTC binary           (BTC bucket only)
+ *     • Delphi/Polymarket markets tagged with that asset
+ *     • Crypto.com 24h ticker for that asset
+ *     • Funding-rate sentiment proxy
+ *   and produces an independent {direction, confidence, consensus,
+ *   recommendation, sizeMultiplier} for that asset.
  *
- * The aggregator returns a `recommendation ∈ {WAIT, LIGHT, HEDGE, STRONG}`
- * × {LONG, SHORT}, plus a `consensus` (% of sources agreeing) and a
- * `sizeMultiplier` (0.5×–2.0× of base stake). We trade only when:
- *   • recommendation is HEDGE_* or STRONG_*
- *   • consensus ≥ 60
- *   • confidence ≥ 60
+ * The cron then asks `scanAndPickBest` for the highest-scoring asset whose
+ * prediction passes ALL gates (confidence ≥ 60, consensus ≥ 60, ≥2
+ * sources, recommendation is HEDGE_* or STRONG_*). Score =
+ * sqrt(confidence × consensus) × source-breadth + STRONG bonus.
  *
- * Asset routing (which BlueFin perp to use):
- *   • The aggregator carries `relatedAssets` per source. We route to
- *     BTC-PERP by default but switch to ETH-PERP when ETH-tagged sources
- *     dominate the consensus and ETH is in the relatedAssets list.
+ * Every tick the full per-asset scan is included in the response under
+ * `scan` so the operator can audit which markets the AI considered.
  *
- * Hold period: at most ONE master tick (~5 min). Each run closes the prior
- * trade and re-evaluates. This is by design — the aggregator's freshness
- * window is ~20s and short-term Polymarket signals expire every 5 min.
+ * Hold period: at most ONE master tick (~5 min); STRONG signals get 10 min.
  *
  * Compounding:
  *   stake = baseStake × sizeMultiplier × (1 + min(cumulativePnL/baseStake, 4))
@@ -37,7 +35,7 @@
  * Idempotency:
  *   • clientOrderId derived from `polyedge_${asset}_${tickEpoch}` so a
  *     retried tick within the same 5-min cron bucket cannot double-open.
- *   • getPositions() pre-flight prevents stacking.
+ *   • getPositions() pre-flight prevents stacking across BTC/ETH-PERP.
  *
  * Security: QStash signature or CRON_SECRET. Master scheduler invokes every 5m.
  */
@@ -145,6 +143,15 @@ interface EdgeResult {
     probability: number;
     sourceNames: string[];
   };
+  /** Per-asset scan summary so the operator can audit why this asset won. */
+  scan?: Record<string, {
+    direction: AggregatedPrediction['direction'];
+    recommendation: AggregatedPrediction['recommendation'];
+    confidence: number;
+    consensus: number;
+    sources: number;
+    score: number;
+  }>;
   stats?: EdgeStats;
   haltedUntil?: number;
   reason?: string;
@@ -171,29 +178,12 @@ function findActivePosition(positions: BluefinPosition[], symbol: string): Bluef
 }
 
 /**
- * Decide which asset to trade based on the source mix.
- * Counts how many sources tag BTC vs ETH; ties go to BTC (more liquid + Polymarket present).
+ * Map an aggregator recommendation to a hedge side. WAIT → null.
  */
-function selectAsset(prediction: AggregatedPrediction): SupportedAsset {
-  let btcVotes = 0;
-  let ethVotes = 0;
-  for (const s of prediction.sources) {
-    const raw = s.rawData as { relatedAssets?: string[] } | null | undefined;
-    const tags = (raw?.relatedAssets || []).map((a) => a.toUpperCase());
-    if (tags.includes('BTC') || s.name.includes('BTC')) btcVotes += s.weight;
-    if (tags.includes('ETH') || s.name.includes('ETH')) ethVotes += s.weight;
-  }
-  return ethVotes > btcVotes * 1.2 ? 'ETH' : 'BTC';
-}
-
 function recommendationToSide(rec: AggregatedPrediction['recommendation']): 'LONG' | 'SHORT' | null {
   if (rec.includes('SHORT')) return 'SHORT';
   if (rec.includes('LONG')) return 'LONG';
   return null;
-}
-
-function isActionable(rec: AggregatedPrediction['recommendation']): boolean {
-  return rec.startsWith('HEDGE_') || rec.startsWith('STRONG_');
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
@@ -342,33 +332,45 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const prediction = await PredictionAggregatorService.getAggregatedPrediction();
-    const sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
+    // Multi-market scan: get a SEPARATE aggregated prediction per asset, then
+    // pick the one with the strongest score (sqrt(conf*consensus) + STRONG bonus).
+    // This is "AI agents looking at multiple markets and deciding smartly":
+    // each asset gets its own bucket of Polymarket / Delphi / Crypto.com /
+    // funding-proxy sources before scoring.
+    const scan = await PredictionAggregatorService.scanAndPickBest(SUPPORTED_ASSETS, {
+      minConfidence: MIN_CONFIDENCE,
+      minConsensus: MIN_CONSENSUS,
+      minSources: 2,
+    });
 
-    const eligible =
-      isActionable(prediction.recommendation) &&
-      prediction.confidence >= MIN_CONFIDENCE &&
-      prediction.consensus >= MIN_CONSENSUS &&
-      prediction.sources.length >= 2;
+    const allSummary = Object.fromEntries(
+      Object.entries(scan.all).map(([a, p]) => [
+        a,
+        {
+          direction: p.direction,
+          recommendation: p.recommendation,
+          confidence: Math.round(p.confidence),
+          consensus: Math.round(p.consensus),
+          sources: p.sources.length,
+          score: Math.round(PredictionAggregatorService.scoreOpportunity(p)),
+        },
+      ]),
+    );
 
-    if (!eligible) {
+    if (!scan.best) {
       return NextResponse.json({
         success: true,
         ranAt,
         attempted: true,
         action: 'no-edge',
         stats,
-        prediction: {
-          direction: prediction.direction,
-          recommendation: prediction.recommendation,
-          confidence: prediction.confidence,
-          consensus: prediction.consensus,
-          probability: prediction.probability,
-          sourceNames,
-        },
-        reason: `rec=${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length}`,
+        scan: allSummary,
+        reason: 'no asset cleared confidence/consensus/source gates',
       });
     }
+
+    const prediction = scan.best.prediction;
+    const sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
 
     const side = recommendationToSide(prediction.recommendation);
     if (!side) {
@@ -378,6 +380,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         attempted: true,
         action: 'no-edge',
         stats,
+        scan: allSummary,
         prediction: {
           direction: prediction.direction,
           recommendation: prediction.recommendation,
@@ -390,7 +393,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const asset = selectAsset(prediction);
+    const asset = scan.best.asset as SupportedAsset;
     const symbol = `${asset}-PERP`;
 
     // Free collateral & sizing

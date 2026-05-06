@@ -462,6 +462,191 @@ export class PredictionAggregatorService {
       fetchedAt: Date.now(),
     };
   }
+
+  // ─── Multi-asset scanning ────────────────────────────────────────
+  //
+  // Instead of producing a single monolithic signal, scan all relevant
+  // Polymarket / Delphi / Crypto.com data sources and bucket evidence
+  // PER ASSET. The cron / orchestrator can then pick the asset with the
+  // strongest, most-aligned signal — turning the trader from "one BTC
+  // bet at a time" into a multi-market scout that selects the best edge
+  // across BTC, ETH (and any future asset we wire in).
+
+  /**
+   * Compute an aggregated prediction independently for each requested asset.
+   * Each asset gets its own source list (Polymarket 5-min only feeds BTC;
+   * Delphi predictions are routed by `relatedAssets`; Crypto.com 24h ticker
+   * routes to the matching bucket).
+   */
+  static async getPerAssetPredictions(
+    assets: string[] = ['BTC', 'ETH'],
+  ): Promise<Record<string, AggregatedPrediction>> {
+    const cacheKey = `prediction_per_asset:${assets.slice().sort().join(',')}`;
+    const cached = cache.get<Record<string, AggregatedPrediction>>(cacheKey);
+    if (cached) {
+      const fresh = Object.values(cached).every(
+        (p) => Date.now() - p.timestamp < CACHE_TTL_MS,
+      );
+      if (fresh) return cached;
+    }
+
+    const [polymarketSignal, delphiPredictions, cryptoComData] = await Promise.all([
+      this.fetchPolymarketSignal(),
+      this.fetchDelphiPredictions(),
+      this.fetchCryptoComData(),
+    ]);
+
+    const out: Record<string, AggregatedPrediction> = {};
+
+    for (const rawAsset of assets) {
+      const asset = rawAsset.toUpperCase();
+      const sources: PredictionSource[] = [];
+
+      // 1) Polymarket 5-min only contributes to BTC
+      if (asset === 'BTC' && polymarketSignal) {
+        sources.push({
+          name: 'Polymarket 5-Min BTC',
+          type: 'short_term',
+          direction: polymarketSignal.direction,
+          confidence: polymarketSignal.confidence,
+          probability:
+            polymarketSignal.direction === 'UP'
+              ? polymarketSignal.upProbability
+              : polymarketSignal.downProbability,
+          weight: 0.30,
+          rawData: polymarketSignal,
+          fetchedAt: polymarketSignal.fetchedAt,
+        });
+      }
+
+      // 2) Delphi/Polymarket markets that tag this asset
+      const assetDelphi = delphiPredictions.filter((p) =>
+        (p.relatedAssets || []).map((a) => a.toUpperCase()).includes(asset),
+      );
+      for (const pred of assetDelphi) {
+        const isPositive = pred.probability > 50;
+        sources.push({
+          name: `Delphi: ${pred.question.substring(0, 40)}...`,
+          type: pred.category === 'price' ? 'medium_term' : 'sentiment',
+          direction: isPositive ? 'UP' : pred.probability < 45 ? 'DOWN' : 'NEUTRAL',
+          confidence: pred.confidence,
+          probability: pred.probability,
+          weight:
+            pred.impact === 'HIGH' ? 0.15 : pred.impact === 'MODERATE' ? 0.10 : 0.05,
+          rawData: pred,
+          fetchedAt: pred.lastUpdate,
+        });
+      }
+
+      // 3) Crypto.com 24h ticker for this asset
+      const ticker =
+        asset === 'BTC' ? cryptoComData.btc : asset === 'ETH' ? cryptoComData.eth : null;
+      if (ticker) {
+        const change = ticker.change24h;
+        const dir: 'UP' | 'DOWN' | 'NEUTRAL' =
+          change > 1 ? 'UP' : change < -1 ? 'DOWN' : 'NEUTRAL';
+        sources.push({
+          name: `Crypto.com ${asset} 24h`,
+          type: 'medium_term',
+          direction: dir,
+          confidence: Math.min(50 + Math.abs(change) * 10, 90),
+          probability:
+            change > 0
+              ? 50 + Math.min(change * 5, 30)
+              : 50 + Math.max(change * 5, -30),
+          weight: 0.20,
+          rawData: ticker,
+          fetchedAt: Date.now(),
+        });
+      }
+
+      // 4) Funding-rate proxy from this asset's short-term sources
+      const funding = this.approximateFundingRateSentiment(sources);
+      if (funding) sources.push(funding);
+
+      // Normalize weights within this asset's bucket
+      const total = sources.reduce((sum, s) => sum + s.weight, 0);
+      if (total > 0) {
+        for (const s of sources) s.weight = s.weight / total;
+      }
+
+      out[asset] = this.calculateAggregation(sources);
+    }
+
+    cache.set(cacheKey, out, CACHE_TTL_MS);
+
+    logger.info('[PredictionAggregator] Computed per-asset predictions', {
+      assets,
+      summary: Object.fromEntries(
+        Object.entries(out).map(([a, p]) => [
+          a,
+          `${p.recommendation} conf=${p.confidence.toFixed(0)} cons=${p.consensus.toFixed(0)} src=${p.sources.length}`,
+        ]),
+      ),
+    });
+
+    return out;
+  }
+
+  /**
+   * Score how attractive a per-asset prediction is for trading.
+   * Higher = better edge. Returns 0 when not actionable.
+   */
+  static scoreOpportunity(p: AggregatedPrediction): number {
+    const actionable =
+      p.recommendation.startsWith('HEDGE_') || p.recommendation.startsWith('STRONG_');
+    if (!actionable) return 0;
+    const strongBonus = p.recommendation.startsWith('STRONG_') ? 10 : 0;
+    // Geometric mean of confidence × consensus, scaled by source breadth.
+    const breadthMul = Math.min(1.25, 1 + (p.sources.length - 2) * 0.05);
+    return Math.sqrt(p.confidence * p.consensus) * breadthMul + strongBonus;
+  }
+
+  /**
+   * Scan multiple assets and return the highest-scoring opportunity that
+   * passes the supplied gates. Returns `{ best: null, all }` when nothing
+   * qualifies.
+   */
+  static async scanAndPickBest(
+    assets: string[] = ['BTC', 'ETH'],
+    gates: { minConfidence?: number; minConsensus?: number; minSources?: number } = {},
+  ): Promise<{
+    best: { asset: string; prediction: AggregatedPrediction; score: number } | null;
+    all: Record<string, AggregatedPrediction>;
+  }> {
+    const minConfidence = gates.minConfidence ?? 60;
+    const minConsensus = gates.minConsensus ?? 60;
+    const minSources = gates.minSources ?? 2;
+
+    const all = await this.getPerAssetPredictions(assets);
+
+    let best: { asset: string; prediction: AggregatedPrediction; score: number } | null =
+      null;
+
+    for (const [asset, prediction] of Object.entries(all)) {
+      const score = this.scoreOpportunity(prediction);
+      if (score <= 0) continue;
+      if (prediction.confidence < minConfidence) continue;
+      if (prediction.consensus < minConsensus) continue;
+      if (prediction.sources.length < minSources) continue;
+      if (!best || score > best.score) {
+        best = { asset, prediction, score };
+      }
+    }
+
+    if (best) {
+      logger.info('[PredictionAggregator] Best opportunity selected', {
+        asset: best.asset,
+        score: best.score.toFixed(1),
+        recommendation: best.prediction.recommendation,
+        confidence: best.prediction.confidence.toFixed(0),
+        consensus: best.prediction.consensus.toFixed(0),
+        sources: best.prediction.sources.length,
+      });
+    }
+
+    return { best, all };
+  }
 }
 
 // Export singleton getter
