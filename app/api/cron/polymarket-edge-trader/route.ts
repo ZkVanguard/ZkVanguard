@@ -1,33 +1,45 @@
 /**
- * Cron Job: Polymarket Edge Trader (5-min BTC binary signal → BlueFin perp)
+ * Cron Job: Polymarket Edge Trader (multi-source aggregated → BlueFin perp)
  *
- * Thesis: Polymarket binary "BTC up/down in next 5 min" markets are well-
- * calibrated by construction (real-money crowd, Chainlink resolution).
- * A market quoting 90% UP resolves UP ~90% of the time. We exploit this
- * ONLY when probability ≥ 0.85 (the calibrated tail) and the BlueFin
- * funding rate is not actively against us.
+ * Thesis: prediction-market crowds + funding-rate sentiment + 24h momentum
+ * are well-calibrated. We do NOT trade a single market — we trade the
+ * AGGREGATED signal from `PredictionAggregatorService`, which weighs:
  *
- * State machine (per-tick on master 5-min cadence):
- *   1. If an active trade exists and its window has ended → close & book PnL.
- *   2. Else, if we are not halted and a high-confidence signal is fresh,
- *      open a new BTC-PERP position sized via fractional Kelly with a hard
- *      cap of 10% of free collateral.
+ *   • Polymarket 5-min BTC binary           (30%)
+ *   • Delphi-tagged macro/event predictions (≤25% combined)
+ *   • Crypto.com BTC + ETH 24h momentum     (30%)
+ *   • Funding-rate sentiment proxy          (10%)
+ *
+ * The aggregator returns a `recommendation ∈ {WAIT, LIGHT, HEDGE, STRONG}`
+ * × {LONG, SHORT}, plus a `consensus` (% of sources agreeing) and a
+ * `sizeMultiplier` (0.5×–2.0× of base stake). We trade only when:
+ *   • recommendation is HEDGE_* or STRONG_*
+ *   • consensus ≥ 60
+ *   • confidence ≥ 60
+ *
+ * Asset routing (which BlueFin perp to use):
+ *   • The aggregator carries `relatedAssets` per source. We route to
+ *     BTC-PERP by default but switch to ETH-PERP when ETH-tagged sources
+ *     dominate the consensus and ETH is in the relatedAssets list.
+ *
+ * Hold period: at most ONE master tick (~5 min). Each run closes the prior
+ * trade and re-evaluates. This is by design — the aggregator's freshness
+ * window is ~20s and short-term Polymarket signals expire every 5 min.
  *
  * Compounding:
- *   stake = baseStake × (1 + min(cumulativePnL / baseStake, 4))
- *   capped by 10% of BlueFin free collateral and POLYMARKET_EDGE_MAX_STAKE_USD.
+ *   stake = baseStake × sizeMultiplier × (1 + min(cumulativePnL/baseStake, 4))
+ *   capped by 10% of free collateral and POLYMARKET_EDGE_MAX_STAKE_USD.
  *
- * Kill switch (BOTH must trip back to halt):
+ * Kill switch (24h halt):
  *   • 5 consecutive losing trades, OR
- *   • cumulative drawdown ≥ 30% from running peak
- *   → 24-hour halt; stats reset, baseStake preserved at floor.
+ *   • 30% drawdown from running peak PnL.
  *
  * Idempotency:
- *   • clientOrderId derived from `polymarket-edge:${windowStart}` so a retried
- *     cron tick within the same 5-min window cannot double-open.
- *   • Position presence checked via getPositions() before any submit.
+ *   • clientOrderId derived from `polyedge_${asset}_${tickEpoch}` so a
+ *     retried tick within the same 5-min cron bucket cannot double-open.
+ *   • getPositions() pre-flight prevents stacking.
  *
- * Security: QStash signature or CRON_SECRET. Master scheduler invokes hourly.
+ * Security: QStash signature or CRON_SECRET. Master scheduler invokes every 5m.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -35,7 +47,10 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
-import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
+import {
+  PredictionAggregatorService,
+  type AggregatedPrediction,
+} from '@/lib/services/market-data/PredictionAggregatorService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';
@@ -43,19 +58,28 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 // ── Tunables (env-overridable) ─────────────────────────────────────────────
-const MIN_PROBABILITY = Number(process.env.POLYMARKET_EDGE_MIN_PROB || 0.85);
+const MIN_CONFIDENCE = Number(process.env.POLYMARKET_EDGE_MIN_CONFIDENCE || 60);
+const MIN_CONSENSUS = Number(process.env.POLYMARKET_EDGE_MIN_CONSENSUS || 60);
 const MIN_FREE_COLLATERAL_USD = Number(process.env.POLYMARKET_EDGE_MIN_COLLATERAL || 25);
 const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 5);
 const MAX_STAKE_USD = Number(process.env.POLYMARKET_EDGE_MAX_STAKE_USD || 500);
-const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.10); // 10%
+const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.10);
 const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
 const MAX_CONSECUTIVE_LOSSES = 5;
 const MAX_DRAWDOWN_PCT = 0.30;
 const HALT_DURATION_MS = 24 * 60 * 60 * 1000;
-// Open only when at least 60s remain (room for fill) and no more than 270s
-// (entering with <30s left is noise) on the 5-min binary window.
-const MIN_TIME_REMAINING_S = 60;
-const MAX_TIME_REMAINING_S = 270;
+
+// Per-asset min order size (BlueFin step). Mirrors MARKET_CONFIG in BluefinService.
+const ASSET_MIN_QTY: Record<SupportedAsset, number> = {
+  BTC: 0.001,
+  ETH: 0.01,
+};
+const ASSET_STEP: Record<SupportedAsset, number> = {
+  BTC: 0.001,
+  ETH: 0.01,
+};
+type SupportedAsset = 'BTC' | 'ETH';
+const SUPPORTED_ASSETS: SupportedAsset[] = ['BTC', 'ETH'];
 
 // ── Cron state keys ────────────────────────────────────────────────────────
 const KEY_ACTIVE = 'polymarket-edge:active-trade';
@@ -64,16 +88,19 @@ const KEY_HALTED_UNTIL = 'polymarket-edge:halted-until';
 
 interface ActiveTrade {
   symbol: string;
+  asset: SupportedAsset;
   side: 'LONG' | 'SHORT';
   size: number;
   entryPrice: number;
   stakeUsd: number;
-  marketId: string;
-  windowLabel: string;
-  windowEndMs: number;
+  recommendation: AggregatedPrediction['recommendation'];
+  consensus: number;
+  confidence: number;
+  sourceCount: number;
   openedAt: number;
+  /** Hard close time. We exit at most one master tick after open (5min). */
+  closeBy: number;
   clientOrderId: string;
-  probability: number;
 }
 
 interface EdgeStats {
@@ -84,6 +111,7 @@ interface EdgeStats {
   peakPnlUsd: number;
   consecutiveLosses: number;
   lastUpdatedMs: number;
+  perAsset?: Record<string, { trades: number; wins: number; pnlUsd: number }>;
 }
 
 interface EdgeResult {
@@ -93,17 +121,29 @@ interface EdgeResult {
   action?: 'closed' | 'opened' | 'idle' | 'halted' | 'no-signal' | 'no-collateral' | 'no-edge';
   trade?: {
     symbol: string;
+    asset: SupportedAsset;
     side: 'LONG' | 'SHORT';
     size: number;
     stakeUsd: number;
-    probability: number;
-    windowLabel: string;
+    consensus: number;
+    confidence: number;
+    sourceCount: number;
+    recommendation: AggregatedPrediction['recommendation'];
   };
   closed?: {
     symbol: string;
+    asset: SupportedAsset;
     realizedPnlUsd: number;
     win: boolean;
     durationS: number;
+  };
+  prediction?: {
+    direction: AggregatedPrediction['direction'];
+    recommendation: AggregatedPrediction['recommendation'];
+    confidence: number;
+    consensus: number;
+    probability: number;
+    sourceNames: string[];
   };
   stats?: EdgeStats;
   haltedUntil?: number;
@@ -119,14 +159,41 @@ const DEFAULT_STATS: EdgeStats = {
   peakPnlUsd: 0,
   consecutiveLosses: 0,
   lastUpdatedMs: 0,
+  perAsset: {},
 };
 
 function quantize(qty: number, step: number): number {
   return Math.floor(qty / step) * step;
 }
 
-function findBtcPerp(positions: BluefinPosition[]): BluefinPosition | undefined {
-  return positions.find((p) => p.symbol === 'BTC-PERP' && Number(p.size) > 0);
+function findActivePosition(positions: BluefinPosition[], symbol: string): BluefinPosition | undefined {
+  return positions.find((p) => p.symbol === symbol && Number(p.size) > 0);
+}
+
+/**
+ * Decide which asset to trade based on the source mix.
+ * Counts how many sources tag BTC vs ETH; ties go to BTC (more liquid + Polymarket present).
+ */
+function selectAsset(prediction: AggregatedPrediction): SupportedAsset {
+  let btcVotes = 0;
+  let ethVotes = 0;
+  for (const s of prediction.sources) {
+    const raw = s.rawData as { relatedAssets?: string[] } | null | undefined;
+    const tags = (raw?.relatedAssets || []).map((a) => a.toUpperCase());
+    if (tags.includes('BTC') || s.name.includes('BTC')) btcVotes += s.weight;
+    if (tags.includes('ETH') || s.name.includes('ETH')) ethVotes += s.weight;
+  }
+  return ethVotes > btcVotes * 1.2 ? 'ETH' : 'BTC';
+}
+
+function recommendationToSide(rec: AggregatedPrediction['recommendation']): 'LONG' | 'SHORT' | null {
+  if (rec.includes('SHORT')) return 'SHORT';
+  if (rec.includes('LONG')) return 'LONG';
+  return null;
+}
+
+function isActionable(rec: AggregatedPrediction['recommendation']): boolean {
+  return rec.startsWith('HEDGE_') || rec.startsWith('STRONG_');
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
@@ -153,7 +220,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
   const network: 'mainnet' | 'testnet' =
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 
-  // ── Load state ────────────────────────────────────────────────────────
   const [active, stats, haltedUntil] = await Promise.all([
     getCronStateOr<ActiveTrade | null>(KEY_ACTIVE, null),
     getCronStateOr<EdgeStats>(KEY_STATS, DEFAULT_STATS),
@@ -166,20 +232,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const bf = BluefinService.getInstance();
     await bf.initialize(adminKey, network);
 
-    // ── 1) If a trade is active and its window has ended, close it ────
+    // ── 1) If a trade is active and its hold-window has elapsed, close it ──
     if (active) {
-      const expired = now >= active.windowEndMs;
+      const expired = now >= active.closeBy;
       const positions = await bf.getPositions().catch(() => [] as BluefinPosition[]);
-      const livePos = findBtcPerp(positions);
+      const livePos = findActivePosition(positions, active.symbol);
 
       if (!livePos) {
         // Position vanished externally (manual close / liquidation). Reconcile.
         logger.warn('[PolymarketEdge] Active trade has no live position — clearing state', {
-          marketId: active.marketId,
+          asset: active.asset,
         });
         await setCronState(KEY_ACTIVE, null);
-        // Conservatively count as a loss for kill-switch purposes (we lost margin).
-        const newStats = await applyOutcome(stats, -active.stakeUsd);
+        const newStats = await applyOutcome(stats, -active.stakeUsd, active.asset);
         await maybeHalt(newStats, haltedUntil);
         return NextResponse.json({
           success: true,
@@ -188,6 +253,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           action: 'closed',
           closed: {
             symbol: active.symbol,
+            asset: active.asset,
             realizedPnlUsd: -active.stakeUsd,
             win: false,
             durationS: Math.round((now - active.openedAt) / 1000),
@@ -197,7 +263,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       }
 
       if (!expired) {
-        // Window not yet over — let it ride.
         return NextResponse.json({
           success: true,
           ranAt,
@@ -205,25 +270,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           action: 'idle',
           trade: {
             symbol: active.symbol,
+            asset: active.asset,
             side: active.side,
             size: active.size,
             stakeUsd: active.stakeUsd,
-            probability: active.probability,
-            windowLabel: active.windowLabel,
+            consensus: active.consensus,
+            confidence: active.confidence,
+            sourceCount: active.sourceCount,
+            recommendation: active.recommendation,
           },
           stats,
-          reason: `In flight (${Math.round((active.windowEndMs - now) / 1000)}s remaining)`,
+          reason: `In flight (${Math.round((active.closeBy - now) / 1000)}s remaining)`,
         });
       }
 
-      // Expired → close.
+      // Hold expired → close.
       const close = await bf.closeHedge({ symbol: active.symbol }).catch((e) => ({
         success: false,
         executionPrice: 0,
         fees: 0,
         error: errMsg(e),
       }));
-      // Compute realized PnL from entry/exit (closeHedge doesn't return it directly).
       const exitPrice =
         Number((close as { executionPrice?: number }).executionPrice) ||
         Number(livePos.markPrice) ||
@@ -233,14 +300,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
 
       const win = realized > 0;
-      const newStats = await applyOutcome(stats, realized);
+      const newStats = await applyOutcome(stats, realized, active.asset);
       const halted = await maybeHalt(newStats, haltedUntil);
 
       await setCronState(KEY_ACTIVE, null);
       logger.info('[PolymarketEdge] Closed trade', {
-        symbol: active.symbol,
+        asset: active.asset,
         side: active.side,
-        realizedUsd: realized,
+        realizedUsd: realized.toFixed(4),
         win,
         consecutiveLosses: newStats.consecutiveLosses,
       });
@@ -252,6 +319,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         action: 'closed',
         closed: {
           symbol: active.symbol,
+          asset: active.asset,
           realizedPnlUsd: realized,
           win,
           durationS: Math.round((now - active.openedAt) / 1000),
@@ -261,7 +329,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    // ── 2) No active trade — check halt, signal, sizing ──────────────
+    // ── 2) No active trade — check halt, fetch aggregated prediction ─────
     if (haltedUntil > now) {
       return NextResponse.json({
         success: true,
@@ -274,25 +342,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const signal = await Polymarket5MinService.getLatest5MinSignal();
-    if (!signal) {
-      return NextResponse.json({
-        success: true,
-        ranAt,
-        attempted: true,
-        action: 'no-signal',
-        stats,
-        reason: 'Polymarket service returned null',
-      });
-    }
+    const prediction = await PredictionAggregatorService.getAggregatedPrediction();
+    const sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
 
-    const probFraction = signal.probability / 100;
     const eligible =
-      probFraction >= MIN_PROBABILITY &&
-      signal.signalStrength === 'STRONG' &&
-      signal.recommendation !== 'WAIT' &&
-      signal.timeRemainingSeconds >= MIN_TIME_REMAINING_S &&
-      signal.timeRemainingSeconds <= MAX_TIME_REMAINING_S;
+      isActionable(prediction.recommendation) &&
+      prediction.confidence >= MIN_CONFIDENCE &&
+      prediction.consensus >= MIN_CONSENSUS &&
+      prediction.sources.length >= 2;
 
     if (!eligible) {
       return NextResponse.json({
@@ -301,9 +358,40 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         attempted: true,
         action: 'no-edge',
         stats,
-        reason: `prob=${probFraction.toFixed(3)} strength=${signal.signalStrength} t=${signal.timeRemainingSeconds}s`,
+        prediction: {
+          direction: prediction.direction,
+          recommendation: prediction.recommendation,
+          confidence: prediction.confidence,
+          consensus: prediction.consensus,
+          probability: prediction.probability,
+          sourceNames,
+        },
+        reason: `rec=${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length}`,
       });
     }
+
+    const side = recommendationToSide(prediction.recommendation);
+    if (!side) {
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        attempted: true,
+        action: 'no-edge',
+        stats,
+        prediction: {
+          direction: prediction.direction,
+          recommendation: prediction.recommendation,
+          confidence: prediction.confidence,
+          consensus: prediction.consensus,
+          probability: prediction.probability,
+          sourceNames,
+        },
+        reason: 'recommendation is WAIT',
+      });
+    }
+
+    const asset = selectAsset(prediction);
+    const symbol = `${asset}-PERP`;
 
     // Free collateral & sizing
     const free = Number(await bf.getBalance().catch(() => 0)) || 0;
@@ -318,55 +406,69 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    // Compounding: cumulative-PnL multiplier on baseStake (1× → 5×).
+    // Compounding × aggregator's sizeMultiplier
     const compoundMul = Math.max(1, Math.min(5, 1 + stats.totalPnlUsd / Math.max(1, BASE_STAKE_USD)));
     const targetStake = Math.min(
-      BASE_STAKE_USD * compoundMul,
+      BASE_STAKE_USD * compoundMul * prediction.sizeMultiplier,
       free * STAKE_PCT_OF_FREE,
       MAX_STAKE_USD,
     );
     const stakeUsd = Math.max(BASE_STAKE_USD, targetStake);
 
-    // Notional = stake × leverage. Quantize to BTC step (0.001).
+    // Need a current price for sizing. Use the BluefinService price feed.
+    const md = await bf.getMarketData(symbol).catch(() => null);
+    const refPrice = Number(md?.price) || 0;
+    if (!refPrice) {
+      return NextResponse.json({
+        success: false,
+        ranAt,
+        attempted: true,
+        stats,
+        error: `Could not read ${symbol} mark price`,
+      });
+    }
+
     const notionalUsd = stakeUsd * LEVERAGE;
-    const sizeBtc = quantize(notionalUsd / signal.currentPrice, 0.001);
-    if (sizeBtc < 0.001) {
+    const rawQty = notionalUsd / refPrice;
+    const sizeQty = quantize(rawQty, ASSET_STEP[asset]);
+    if (sizeQty < ASSET_MIN_QTY[asset]) {
       return NextResponse.json({
         success: true,
         ranAt,
         attempted: true,
         action: 'no-collateral',
         stats,
-        reason: `notional=$${notionalUsd.toFixed(2)} below BTC-PERP minQuantity 0.001`,
+        reason: `notional=$${notionalUsd.toFixed(2)} below ${symbol} minQuantity ${ASSET_MIN_QTY[asset]}`,
       });
     }
 
-    // Direction: HEDGE_LONG → LONG, HEDGE_SHORT → SHORT
-    const side: 'LONG' | 'SHORT' = signal.recommendation === 'HEDGE_LONG' ? 'LONG' : 'SHORT';
-    const windowStart = signal.windowEndTime - 5 * 60 * 1000;
-    const clientOrderId = `polyedge_${windowStart}`;
-
-    // Idempotency: refuse if a BTC position already exists.
+    // Idempotency: refuse if any of our supported perps already has a position.
     const positionsPre = await bf.getPositions().catch(() => [] as BluefinPosition[]);
-    if (findBtcPerp(positionsPre)) {
-      logger.warn('[PolymarketEdge] BTC-PERP position already exists — skipping new entry');
+    const conflict = SUPPORTED_ASSETS.some((a) => findActivePosition(positionsPre, `${a}-PERP`));
+    if (conflict) {
+      logger.warn('[PolymarketEdge] BTC/ETH-PERP position already exists — skipping new entry');
       return NextResponse.json({
         success: true,
         ranAt,
         attempted: true,
         action: 'no-edge',
         stats,
-        reason: 'pre-existing BTC-PERP position',
+        reason: 'pre-existing perp position',
       });
     }
 
+    // Bucket the master tick into a 5-min epoch so retries within the same
+    // tick share one clientOrderId.
+    const tickEpoch = Math.floor(now / (5 * 60 * 1000));
+    const clientOrderId = `polyedge_${asset}_${tickEpoch}`;
+
     const open = await bf.openHedge({
-      symbol: 'BTC-PERP',
+      symbol,
       side,
-      size: sizeBtc,
+      size: sizeQty,
       leverage: LEVERAGE,
       clientOrderId,
-      reason: `polymarket-edge prob=${probFraction.toFixed(3)} window=${signal.windowLabel}`,
+      reason: `polyedge ${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length}`,
     });
 
     if (!open.success) {
@@ -381,27 +483,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     }
 
     const trade: ActiveTrade = {
-      symbol: 'BTC-PERP',
+      symbol,
+      asset,
       side,
-      size: sizeBtc,
-      entryPrice: Number(open.executionPrice ?? signal.currentPrice) || signal.currentPrice,
+      size: sizeQty,
+      entryPrice: Number(open.executionPrice ?? refPrice) || refPrice,
       stakeUsd,
-      marketId: signal.marketId,
-      windowLabel: signal.windowLabel,
-      windowEndMs: signal.windowEndTime,
+      recommendation: prediction.recommendation,
+      consensus: prediction.consensus,
+      confidence: prediction.confidence,
+      sourceCount: prediction.sources.length,
       openedAt: now,
+      // Hold for one master tick (~5 min). Master runs every 5 min; the next
+      // tick will close + re-evaluate. STRONG signals get one extra tick (10m).
+      closeBy: now + (prediction.recommendation.startsWith('STRONG_') ? 10 : 5) * 60 * 1000,
       clientOrderId,
-      probability: probFraction,
     };
     await setCronState(KEY_ACTIVE, trade);
 
     logger.info('[PolymarketEdge] Opened trade', {
+      asset,
       side,
-      sizeBtc,
-      stakeUsd,
+      size: sizeQty,
+      stakeUsd: stakeUsd.toFixed(2),
       compoundMul: compoundMul.toFixed(2),
-      probability: probFraction.toFixed(3),
-      window: signal.windowLabel,
+      sizeMul: prediction.sizeMultiplier.toFixed(2),
+      recommendation: prediction.recommendation,
+      consensus: prediction.consensus.toFixed(0),
+      sources: prediction.sources.length,
     });
 
     return NextResponse.json({
@@ -410,12 +519,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       attempted: true,
       action: 'opened',
       trade: {
-        symbol: trade.symbol,
-        side: trade.side,
-        size: trade.size,
-        stakeUsd: trade.stakeUsd,
-        probability: trade.probability,
-        windowLabel: trade.windowLabel,
+        symbol,
+        asset,
+        side,
+        size: sizeQty,
+        stakeUsd,
+        consensus: prediction.consensus,
+        confidence: prediction.confidence,
+        sourceCount: prediction.sources.length,
+        recommendation: prediction.recommendation,
+      },
+      prediction: {
+        direction: prediction.direction,
+        recommendation: prediction.recommendation,
+        confidence: prediction.confidence,
+        consensus: prediction.consensus,
+        probability: prediction.probability,
+        sourceNames,
       },
       stats,
     });
@@ -430,7 +550,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-async function applyOutcome(prev: EdgeStats, realizedUsd: number): Promise<EdgeStats> {
+async function applyOutcome(
+  prev: EdgeStats,
+  realizedUsd: number,
+  asset: SupportedAsset,
+): Promise<EdgeStats> {
+  const perAsset = { ...(prev.perAsset || {}) };
+  const cur = perAsset[asset] || { trades: 0, wins: 0, pnlUsd: 0 };
+  perAsset[asset] = {
+    trades: cur.trades + 1,
+    wins: cur.wins + (realizedUsd > 0 ? 1 : 0),
+    pnlUsd: cur.pnlUsd + realizedUsd,
+  };
+
   const next: EdgeStats = {
     trades: prev.trades + 1,
     wins: prev.wins + (realizedUsd > 0 ? 1 : 0),
@@ -439,19 +571,19 @@ async function applyOutcome(prev: EdgeStats, realizedUsd: number): Promise<EdgeS
     peakPnlUsd: Math.max(prev.peakPnlUsd, prev.totalPnlUsd + realizedUsd),
     consecutiveLosses: realizedUsd > 0 ? 0 : prev.consecutiveLosses + 1,
     lastUpdatedMs: Date.now(),
+    perAsset,
   };
   await setCronState(KEY_STATS, next);
   return next;
 }
 
 async function maybeHalt(stats: EdgeStats, currentHaltUntil: number): Promise<boolean> {
-  // Drawdown from peak
   const drawdown = stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
   const tripLosses = stats.consecutiveLosses >= MAX_CONSECUTIVE_LOSSES;
   const tripDrawdown = drawdown >= MAX_DRAWDOWN_PCT && stats.peakPnlUsd > 0;
   if (tripLosses || tripDrawdown) {
     const until = Date.now() + HALT_DURATION_MS;
-    await setCronState('polymarket-edge:halted-until', until);
+    await setCronState(KEY_HALTED_UNTIL, until);
     logger.warn('[PolymarketEdge] KILL SWITCH TRIPPED — halting 24h', {
       consecutiveLosses: stats.consecutiveLosses,
       drawdown,
