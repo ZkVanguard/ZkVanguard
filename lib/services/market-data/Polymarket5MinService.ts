@@ -627,15 +627,38 @@ export class Polymarket5MinService {
 
   /**
    * Calculate running accuracy of recent signals.
+   *
+   * For each RESOLVED signal (window ended), find the latest later snapshot
+   * we observed AFTER `windowEndTime` and use its `currentPrice` as the
+   * realized BTC price at resolution. Realized direction is then UP iff
+   * `realizedPrice >= priceToBeat`. Accuracy = predicted matches realized.
+   *
+   * This is best-effort because signals only persist in-memory (50 max);
+   * if no later snapshot exists, the signal is excluded from the count.
    */
   private static calculateAccuracy(signals: FiveMinBTCSignal[]): { correct: number; total: number; rate: number } {
     let total = 0;
     let correct = 0;
-    for (let i = 0, len = signals.length; i < len; i++) {
-      if (signals[i].timeRemainingSeconds <= 0) {
-        total++;
-        if (signals[i].confidence > 60) correct++;
+    for (let i = 0; i < signals.length; i++) {
+      const s = signals[i];
+      if (s.timeRemainingSeconds > 0) continue;
+      // Find the earliest snapshot recorded AFTER windowEndTime to use as
+      // the resolution price. fetchedAt is monotonic-ish so the next signal
+      // with fetchedAt > windowEndTime is the closest realized observation.
+      let realizedPrice: number | null = null;
+      for (let j = i + 1; j < signals.length; j++) {
+        if (signals[j].fetchedAt > s.windowEndTime && signals[j].currentPrice > 0) {
+          realizedPrice = signals[j].currentPrice;
+          break;
+        }
       }
+      if (realizedPrice == null || !Number.isFinite(s.priceToBeat) || s.priceToBeat <= 0) {
+        continue;
+      }
+      const realizedDirection: 'UP' | 'DOWN' =
+        realizedPrice >= s.priceToBeat ? 'UP' : 'DOWN';
+      total++;
+      if (realizedDirection === s.direction) correct++;
     }
     return {
       correct,

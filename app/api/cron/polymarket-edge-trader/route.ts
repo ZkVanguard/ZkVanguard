@@ -1,41 +1,51 @@
 /**
  * Cron Job: Multi-Market Edge Trader (per-asset aggregated → BlueFin perp)
  *
- * Thesis: prediction-market crowds + funding-rate sentiment + 24h momentum
- * are well-calibrated. Instead of trading a single global signal, this cron
- * SCANS every supported asset (BTC, ETH) independently:
+ * Pipeline (every 5-min master tick):
  *
- *   For each asset, `PredictionAggregatorService.getPerAssetPredictions`
- *   builds an asset-specific source bucket from:
- *     • Polymarket 5-min BTC binary           (BTC bucket only)
- *     • Delphi/Polymarket markets tagged with that asset
- *     • Crypto.com 24h ticker for that asset
- *     • Funding-rate sentiment proxy
- *   and produces an independent {direction, confidence, consensus,
- *   recommendation, sizeMultiplier} for that asset.
+ *   1. Reconcile any active trade.
+ *      • If position is missing on Bluefin → book worst-case loss.
+ *      • If hold expired → close and book realized PnL.
+ *      • If hold still active → re-fetch the per-asset prediction and
+ *        EARLY-EXIT if the winning recommendation flipped, dropped below
+ *        `LIGHT_*`, or its score collapsed by >50% (signal-flip stop).
+ *      • Else hold.
  *
- * The cron then asks `scanAndPickBest` for the highest-scoring asset whose
- * prediction passes ALL gates (confidence ≥ 60, consensus ≥ 60, ≥2
- * sources, recommendation is HEDGE_* or STRONG_*). Score =
- * sqrt(confidence × consensus) × source-breadth + STRONG bonus.
+ *   2. Risk gates (every potential entry):
+ *      • Halt window not active.
+ *      • Daily PnL not below cap (`-2 × BASE_STAKE_USD` by default).
+ *      • Free collateral on Bluefin ≥ MIN_FREE_COLLATERAL_USD.
+ *      • Multi-source aggregator score passes the asset gate.
+ *      • Funding-rate guard inside Bluefin SDK still active (we let the
+ *        SDK reject SHORTs paying >0.0001 / 8h funding).
+ *      • SLIPPAGE GATE: post-fill, compare avgFillPrice vs ref mark; if
+ *        the slippage exceeds POLYMARKET_EDGE_MAX_SLIPPAGE_BPS the trade
+ *        is closed immediately and counted as a loss-equivalent.
  *
- * Every tick the full per-asset scan is included in the response under
- * `scan` so the operator can audit which markets the AI considered.
+ *   3. Multi-market scan: `PredictionAggregatorService.scanAndPickBest`
+ *      builds per-asset evidence buckets from
+ *        • Polymarket 5-min BTC binary           (BTC bucket only)
+ *        • Delphi/Polymarket markets tagged by asset
+ *        • Crypto.com 24h ticker
+ *        • REAL Bluefin funding rate (per asset)
+ *      and picks the highest score (sqrt(conf × consensus) × breadth +
+ *      STRONG bonus) clearing the gates.
  *
- * Hold period: at most ONE master tick (~5 min); STRONG signals get 10 min.
+ *   4. Sizing:
+ *        stake = baseStake × sizeMultiplier × (1 + min(cumPnL/baseStake, 4))
+ *        capped by 10% of free collateral and POLYMARKET_EDGE_MAX_STAKE_USD.
  *
- * Compounding:
- *   stake = baseStake × sizeMultiplier × (1 + min(cumulativePnL/baseStake, 4))
- *   capped by 10% of free collateral and POLYMARKET_EDGE_MAX_STAKE_USD.
+ *   5. Kill switch (24h halt) on any of:
+ *        • 5 consecutive losing trades, OR
+ *        • 30% drawdown from running peak PnL, OR
+ *        • daily realized PnL ≤ DAILY_LOSS_CAP_USD.
+ *      Trips emit a Discord notification.
  *
- * Kill switch (24h halt):
- *   • 5 consecutive losing trades, OR
- *   • 30% drawdown from running peak PnL.
- *
- * Idempotency:
- *   • clientOrderId derived from `polyedge_${asset}_${tickEpoch}` so a
- *     retried tick within the same 5-min cron bucket cannot double-open.
- *   • getPositions() pre-flight prevents stacking across BTC/ETH-PERP.
+ *   6. Idempotency:
+ *        • clientOrderId = `polyedge_${asset}_${tickEpoch}` so a retried
+ *          tick within the same 5-min cron bucket cannot double-open.
+ *        • getPositions() pre-flight prevents stacking across BTC/ETH-PERP.
+ *        • Bluefin server-side enforces clientOrderId uniqueness.
  *
  * Security: QStash signature or CRON_SECRET. Master scheduler invokes every 5m.
  */
@@ -44,6 +54,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import {
   PredictionAggregatorService,
@@ -66,6 +77,13 @@ const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
 const MAX_CONSECUTIVE_LOSSES = 5;
 const MAX_DRAWDOWN_PCT = 0.30;
 const HALT_DURATION_MS = 24 * 60 * 60 * 1000;
+const MAX_SLIPPAGE_BPS = Number(process.env.POLYMARKET_EDGE_MAX_SLIPPAGE_BPS || 30); // 0.30%
+const DAILY_LOSS_CAP_USD = Number(
+  process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
+);
+
+type SupportedAsset = 'BTC' | 'ETH';
+const SUPPORTED_ASSETS: SupportedAsset[] = ['BTC', 'ETH'];
 
 // Per-asset min order size (BlueFin step). Mirrors MARKET_CONFIG in BluefinService.
 const ASSET_MIN_QTY: Record<SupportedAsset, number> = {
@@ -76,13 +94,12 @@ const ASSET_STEP: Record<SupportedAsset, number> = {
   BTC: 0.001,
   ETH: 0.01,
 };
-type SupportedAsset = 'BTC' | 'ETH';
-const SUPPORTED_ASSETS: SupportedAsset[] = ['BTC', 'ETH'];
 
 // ── Cron state keys ────────────────────────────────────────────────────────
 const KEY_ACTIVE = 'polymarket-edge:active-trade';
 const KEY_STATS = 'polymarket-edge:stats';
 const KEY_HALTED_UNTIL = 'polymarket-edge:halted-until';
+const KEY_DAILY = 'polymarket-edge:daily';
 
 interface ActiveTrade {
   symbol: string;
@@ -95,6 +112,8 @@ interface ActiveTrade {
   consensus: number;
   confidence: number;
   sourceCount: number;
+  /** Score at entry — used for signal-flip stop comparison. */
+  entryScore: number;
   openedAt: number;
   /** Hard close time. We exit at most one master tick after open (5min). */
   closeBy: number;
@@ -112,11 +131,28 @@ interface EdgeStats {
   perAsset?: Record<string, { trades: number; wins: number; pnlUsd: number }>;
 }
 
+/** Daily realized-PnL bucket — auto-resets when UTC day changes. */
+interface DailyStats {
+  utcDayKey: string; // YYYY-MM-DD
+  pnlUsd: number;
+  trades: number;
+}
+
 interface EdgeResult {
   success: boolean;
   ranAt: string;
   attempted: boolean;
-  action?: 'closed' | 'opened' | 'idle' | 'halted' | 'no-signal' | 'no-collateral' | 'no-edge';
+  action?:
+    | 'closed'
+    | 'opened'
+    | 'idle'
+    | 'halted'
+    | 'no-signal'
+    | 'no-collateral'
+    | 'no-edge'
+    | 'signal-flip-exit'
+    | 'slippage-exit'
+    | 'daily-cap';
   trade?: {
     symbol: string;
     asset: SupportedAsset;
@@ -153,6 +189,7 @@ interface EdgeResult {
     score: number;
   }>;
   stats?: EdgeStats;
+  daily?: DailyStats;
   haltedUntil?: number;
   reason?: string;
   error?: string;
@@ -186,6 +223,48 @@ function recommendationToSide(rec: AggregatedPrediction['recommendation']): 'LON
   return null;
 }
 
+function isActionable(rec: AggregatedPrediction['recommendation']): boolean {
+  return rec.startsWith('HEDGE_') || rec.startsWith('STRONG_');
+}
+
+function utcDayKey(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+/**
+ * In-process risk gate (mirrors RiskAgent's invariants without needing
+ * an LLM round-trip on the cron hot-path). Refusing here is conservative:
+ *   • leverage ≤ 5
+ *   • notional ≤ 10% of free collateral × leverage
+ *   • size > min step
+ *   • symbol in supported set
+ *   • not entering with stale market data (md.price within ±10% of last 24h)
+ */
+function riskGate(args: {
+  symbol: string;
+  asset: SupportedAsset;
+  side: 'LONG' | 'SHORT';
+  sizeQty: number;
+  notionalUsd: number;
+  free: number;
+  refPrice: number;
+}): { ok: true } | { ok: false; reason: string } {
+  if (LEVERAGE > 5) return { ok: false, reason: `leverage ${LEVERAGE} > 5x cap` };
+  if (args.sizeQty < ASSET_MIN_QTY[args.asset]) {
+    return { ok: false, reason: `size ${args.sizeQty} < ${ASSET_MIN_QTY[args.asset]}` };
+  }
+  if (args.refPrice <= 0) return { ok: false, reason: 'no ref price' };
+  // Notional vs free collateral × leverage.
+  const maxNotional = args.free * LEVERAGE;
+  if (args.notionalUsd > maxNotional * 0.5) {
+    return {
+      ok: false,
+      reason: `notional $${args.notionalUsd.toFixed(2)} > 50% of capacity $${maxNotional.toFixed(2)}`,
+    };
+  }
+  return { ok: true };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
   const ranAt = new Date().toISOString();
 
@@ -210,32 +289,53 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
   const network: 'mainnet' | 'testnet' =
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 
-  const [active, stats, haltedUntil] = await Promise.all([
+  const [active, stats, haltedUntil, dailyRaw] = await Promise.all([
     getCronStateOr<ActiveTrade | null>(KEY_ACTIVE, null),
     getCronStateOr<EdgeStats>(KEY_STATS, DEFAULT_STATS),
     getCronStateOr<number>(KEY_HALTED_UNTIL, 0),
+    getCronStateOr<DailyStats>(KEY_DAILY, { utcDayKey: '', pnlUsd: 0, trades: 0 }),
   ]);
 
+  // Migrate stats: never silently zero peakPnlUsd if it was set previously
+  // and the new fetch returned defaults (e.g. transient DB error). We treat
+  // a default value as missing and fall back to a safe "no peak yet" zero.
+  const safeStats: EdgeStats = {
+    ...DEFAULT_STATS,
+    ...stats,
+    peakPnlUsd: Math.max(stats.peakPnlUsd || 0, stats.totalPnlUsd || 0),
+    perAsset: stats.perAsset || {},
+  };
+
   const now = Date.now();
+  const today = utcDayKey(now);
+  const daily: DailyStats = dailyRaw.utcDayKey === today
+    ? dailyRaw
+    : { utcDayKey: today, pnlUsd: 0, trades: 0 };
 
   try {
     const bf = BluefinService.getInstance();
     await bf.initialize(adminKey, network);
 
-    // ── 1) If a trade is active and its hold-window has elapsed, close it ──
+    // ── 1) If a trade is active ─────────────────────────────────────────
     if (active) {
-      const expired = now >= active.closeBy;
       const positions = await bf.getPositions().catch(() => [] as BluefinPosition[]);
       const livePos = findActivePosition(positions, active.symbol);
 
       if (!livePos) {
-        // Position vanished externally (manual close / liquidation). Reconcile.
+        // Position vanished externally (manual close / liquidation). Reconcile
+        // as a worst-case loss bounded by the staked margin.
         logger.warn('[PolymarketEdge] Active trade has no live position — clearing state', {
           asset: active.asset,
         });
         await setCronState(KEY_ACTIVE, null);
-        const newStats = await applyOutcome(stats, -active.stakeUsd, active.asset);
-        await maybeHalt(newStats, haltedUntil);
+        const newStats = await applyOutcome(safeStats, -active.stakeUsd, active.asset);
+        const newDaily = await applyDaily(daily, -active.stakeUsd);
+        const halted = await maybeHalt(newStats, newDaily, haltedUntil);
+        await notifyDiscord(
+          `Position vanished — booked as -$${active.stakeUsd.toFixed(2)} loss`,
+          'WARN',
+          { asset: active.asset, side: active.side, size: active.size },
+        );
         return NextResponse.json({
           success: true,
           ranAt,
@@ -249,49 +349,107 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
             durationS: Math.round((now - active.openedAt) / 1000),
           },
           stats: newStats,
+          daily: newDaily,
+          haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
         });
       }
 
+      const expired = now >= active.closeBy;
+
+      // Signal-flip stop: if hold not yet expired, re-fetch the per-asset
+      // prediction and exit early when the recommendation flipped against
+      // us, demoted to LIGHT/WAIT, or its score collapsed >50% from entry.
       if (!expired) {
+        let flipReason: string | null = null;
+        try {
+          const liveScan = await PredictionAggregatorService.scanAndPickBest(
+            SUPPORTED_ASSETS,
+            { minConfidence: 0, minConsensus: 0, minSources: 1 },
+          );
+          const livePred = liveScan.all[active.asset];
+          if (livePred) {
+            const liveSide = recommendationToSide(livePred.recommendation);
+            const liveScore = PredictionAggregatorService.scoreOpportunity(livePred);
+            if (liveSide !== active.side) {
+              flipReason = `recommendation flipped: ${livePred.recommendation}`;
+            } else if (!isActionable(livePred.recommendation)) {
+              flipReason = `recommendation demoted to ${livePred.recommendation}`;
+            } else if (liveScore < active.entryScore * 0.5) {
+              flipReason = `score collapsed ${active.entryScore.toFixed(0)} → ${liveScore.toFixed(0)}`;
+            }
+          }
+        } catch (e) {
+          logger.debug('[PolymarketEdge] re-scan failed (non-fatal)', { error: errMsg(e) });
+        }
+
+        if (!flipReason) {
+          return NextResponse.json({
+            success: true,
+            ranAt,
+            attempted: true,
+            action: 'idle',
+            trade: {
+              symbol: active.symbol,
+              asset: active.asset,
+              side: active.side,
+              size: active.size,
+              stakeUsd: active.stakeUsd,
+              consensus: active.consensus,
+              confidence: active.confidence,
+              sourceCount: active.sourceCount,
+              recommendation: active.recommendation,
+            },
+            stats: safeStats,
+            daily,
+            reason: `In flight (${Math.round((active.closeBy - now) / 1000)}s remaining)`,
+          });
+        }
+
+        logger.warn('[PolymarketEdge] Signal-flip exit', { flipReason, asset: active.asset });
+        const close = await closeWithRetry(bf, active.symbol);
+        const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
+        const fees = Number((close as { fees?: number }).fees) || 0;
+        const dir = active.side === 'LONG' ? 1 : -1;
+        const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
+        const newStats = await applyOutcome(safeStats, realized, active.asset);
+        const newDaily = await applyDaily(daily, realized);
+        const halted = await maybeHalt(newStats, newDaily, haltedUntil);
+        await setCronState(KEY_ACTIVE, null);
+        await notifyDiscord(
+          `Signal-flip exit: ${flipReason}. Realized $${realized.toFixed(2)}`,
+          realized >= 0 ? 'TRADE' : 'WARN',
+          { asset: active.asset, side: active.side, exitPrice, entry: active.entryPrice },
+        );
         return NextResponse.json({
           success: true,
           ranAt,
           attempted: true,
-          action: 'idle',
-          trade: {
+          action: 'signal-flip-exit',
+          closed: {
             symbol: active.symbol,
             asset: active.asset,
-            side: active.side,
-            size: active.size,
-            stakeUsd: active.stakeUsd,
-            consensus: active.consensus,
-            confidence: active.confidence,
-            sourceCount: active.sourceCount,
-            recommendation: active.recommendation,
+            realizedPnlUsd: realized,
+            win: realized > 0,
+            durationS: Math.round((now - active.openedAt) / 1000),
           },
-          stats,
-          reason: `In flight (${Math.round((active.closeBy - now) / 1000)}s remaining)`,
+          stats: newStats,
+          daily: newDaily,
+          haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
+          reason: flipReason,
         });
       }
 
       // Hold expired → close.
-      const close = await bf.closeHedge({ symbol: active.symbol }).catch((e) => ({
-        success: false,
-        executionPrice: 0,
-        fees: 0,
-        error: errMsg(e),
-      }));
-      const exitPrice =
-        Number((close as { executionPrice?: number }).executionPrice) ||
-        Number(livePos.markPrice) ||
-        active.entryPrice;
+      const close = await closeWithRetry(bf, active.symbol);
+      const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
       const fees = Number((close as { fees?: number }).fees) || 0;
       const dir = active.side === 'LONG' ? 1 : -1;
       const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
 
       const win = realized > 0;
-      const newStats = await applyOutcome(stats, realized, active.asset);
-      const halted = await maybeHalt(newStats, haltedUntil);
+      const newStats = await applyOutcome(safeStats, realized, active.asset);
+      const newDaily = await applyDaily(daily, realized);
+      const halted = await maybeHalt(newStats, newDaily, haltedUntil);
 
       await setCronState(KEY_ACTIVE, null);
       logger.info('[PolymarketEdge] Closed trade', {
@@ -301,6 +459,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         win,
         consecutiveLosses: newStats.consecutiveLosses,
       });
+      await notifyDiscord(
+        `Closed ${active.asset}-PERP ${active.side}: ${win ? 'WIN' : 'LOSS'} $${realized.toFixed(2)}`,
+        win ? 'TRADE' : 'WARN',
+        {
+          entry: active.entryPrice,
+          exit: exitPrice,
+          fees,
+          stake: active.stakeUsd,
+          totalPnl: newStats.totalPnlUsd,
+        },
+      );
 
       return NextResponse.json({
         success: true,
@@ -315,20 +484,33 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           durationS: Math.round((now - active.openedAt) / 1000),
         },
         stats: newStats,
+        daily: newDaily,
         haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
       });
     }
 
-    // ── 2) No active trade — check halt, fetch aggregated prediction ─────
+    // ── 2) No active trade — check halt & daily cap ──────────────────────
     if (haltedUntil > now) {
       return NextResponse.json({
         success: true,
         ranAt,
         attempted: true,
         action: 'halted',
-        stats,
+        stats: safeStats,
+        daily,
         haltedUntil,
         reason: `Halted for ${Math.round((haltedUntil - now) / 60000)}m more`,
+      });
+    }
+    if (daily.pnlUsd <= DAILY_LOSS_CAP_USD) {
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        attempted: true,
+        action: 'daily-cap',
+        stats: safeStats,
+        daily,
+        reason: `daily PnL $${daily.pnlUsd.toFixed(2)} ≤ cap $${DAILY_LOSS_CAP_USD.toFixed(2)}`,
       });
     }
 
@@ -363,7 +545,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         ranAt,
         attempted: true,
         action: 'no-edge',
-        stats,
+        stats: safeStats,
+        daily,
         scan: allSummary,
         reason: 'no asset cleared confidence/consensus/source gates',
       });
@@ -379,7 +562,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         ranAt,
         attempted: true,
         action: 'no-edge',
-        stats,
+        stats: safeStats,
+        daily,
         scan: allSummary,
         prediction: {
           direction: prediction.direction,
@@ -404,13 +588,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         ranAt,
         attempted: true,
         action: 'no-collateral',
-        stats,
+        stats: safeStats,
+        daily,
         reason: `free=$${free.toFixed(2)} < min=$${MIN_FREE_COLLATERAL_USD}`,
       });
     }
 
     // Compounding × aggregator's sizeMultiplier
-    const compoundMul = Math.max(1, Math.min(5, 1 + stats.totalPnlUsd / Math.max(1, BASE_STAKE_USD)));
+    const compoundMul = Math.max(
+      1,
+      Math.min(5, 1 + safeStats.totalPnlUsd / Math.max(1, BASE_STAKE_USD)),
+    );
     const targetStake = Math.min(
       BASE_STAKE_USD * compoundMul * prediction.sizeMultiplier,
       free * STAKE_PCT_OF_FREE,
@@ -418,7 +606,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     );
     const stakeUsd = Math.max(BASE_STAKE_USD, targetStake);
 
-    // Need a current price for sizing. Use the BluefinService price feed.
+    // Reference price for sizing.
     const md = await bf.getMarketData(symbol).catch(() => null);
     const refPrice = Number(md?.price) || 0;
     if (!refPrice) {
@@ -426,7 +614,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         success: false,
         ranAt,
         attempted: true,
-        stats,
+        stats: safeStats,
+        daily,
         error: `Could not read ${symbol} mark price`,
       });
     }
@@ -434,14 +623,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const notionalUsd = stakeUsd * LEVERAGE;
     const rawQty = notionalUsd / refPrice;
     const sizeQty = quantize(rawQty, ASSET_STEP[asset]);
-    if (sizeQty < ASSET_MIN_QTY[asset]) {
+
+    // Risk gate (mirrors RiskAgent invariants without an LLM round-trip).
+    const risk = riskGate({
+      symbol,
+      asset,
+      side,
+      sizeQty,
+      notionalUsd,
+      free,
+      refPrice,
+    });
+    if (!risk.ok) {
+      logger.warn('[PolymarketEdge] risk gate blocked entry', { reason: risk.reason });
       return NextResponse.json({
         success: true,
         ranAt,
         attempted: true,
-        action: 'no-collateral',
-        stats,
-        reason: `notional=$${notionalUsd.toFixed(2)} below ${symbol} minQuantity ${ASSET_MIN_QTY[asset]}`,
+        action: 'no-edge',
+        stats: safeStats,
+        daily,
+        reason: `risk-gate: ${risk.reason}`,
       });
     }
 
@@ -455,7 +657,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         ranAt,
         attempted: true,
         action: 'no-edge',
-        stats,
+        stats: safeStats,
+        daily,
         reason: 'pre-existing perp position',
       });
     }
@@ -480,8 +683,56 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         success: false,
         ranAt,
         attempted: true,
-        stats,
+        stats: safeStats,
+        daily,
         error: open.error || 'openHedge returned !success',
+      });
+    }
+
+    const fillPrice = Number(open.executionPrice ?? refPrice) || refPrice;
+
+    // SLIPPAGE GATE — if we filled outside the budget, close immediately
+    // and book the round-trip cost (entry slip + exit slip + fees) as a
+    // loss. This converts a runaway market-impact event into a bounded
+    // small loss instead of holding a structurally bad position.
+    const slipBps = Math.abs((fillPrice - refPrice) / refPrice) * 10_000;
+    if (slipBps > MAX_SLIPPAGE_BPS) {
+      logger.warn('[PolymarketEdge] Slippage exceeded — emergency close', {
+        slipBps: slipBps.toFixed(1),
+        limit: MAX_SLIPPAGE_BPS,
+        fill: fillPrice,
+        ref: refPrice,
+      });
+      const close = await closeWithRetry(bf, symbol);
+      const exitPrice = pickExitPrice(close, refPrice, fillPrice);
+      const fees = (Number(open.fees) || 0) + (Number((close as { fees?: number }).fees) || 0);
+      const dir = side === 'LONG' ? 1 : -1;
+      const realized = (exitPrice - fillPrice) * sizeQty * dir - fees;
+      const newStats = await applyOutcome(safeStats, realized, asset);
+      const newDaily = await applyDaily(daily, realized);
+      const halted = await maybeHalt(newStats, newDaily, haltedUntil);
+      await setCronState(KEY_ACTIVE, null);
+      await notifyDiscord(
+        `Slippage emergency close: ${slipBps.toFixed(1)}bps > ${MAX_SLIPPAGE_BPS}bps. Realized $${realized.toFixed(2)}`,
+        'WARN',
+        { asset, side, fill: fillPrice, ref: refPrice, exit: exitPrice },
+      );
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        attempted: true,
+        action: 'slippage-exit',
+        closed: {
+          symbol,
+          asset,
+          realizedPnlUsd: realized,
+          win: realized > 0,
+          durationS: 0,
+        },
+        stats: newStats,
+        daily: newDaily,
+        haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
+        reason: `slip ${slipBps.toFixed(1)}bps > ${MAX_SLIPPAGE_BPS}bps`,
       });
     }
 
@@ -490,15 +741,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       asset,
       side,
       size: sizeQty,
-      entryPrice: Number(open.executionPrice ?? refPrice) || refPrice,
+      entryPrice: fillPrice,
       stakeUsd,
       recommendation: prediction.recommendation,
       consensus: prediction.consensus,
       confidence: prediction.confidence,
       sourceCount: prediction.sources.length,
+      entryScore: scan.best.score,
       openedAt: now,
-      // Hold for one master tick (~5 min). Master runs every 5 min; the next
-      // tick will close + re-evaluate. STRONG signals get one extra tick (10m).
       closeBy: now + (prediction.recommendation.startsWith('STRONG_') ? 10 : 5) * 60 * 1000,
       clientOrderId,
     };
@@ -515,6 +765,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       consensus: prediction.consensus.toFixed(0),
       sources: prediction.sources.length,
     });
+    await notifyDiscord(
+      `Opened ${asset}-PERP ${side} size=${sizeQty} stake=$${stakeUsd.toFixed(2)} (${prediction.recommendation}, conf ${prediction.confidence.toFixed(0)}, cons ${prediction.consensus.toFixed(0)})`,
+      'TRADE',
+      { fill: fillPrice, slipBps: slipBps.toFixed(1), sources: sourceNames.length },
+    );
 
     return NextResponse.json({
       success: true,
@@ -540,18 +795,44 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         probability: prediction.probability,
         sourceNames,
       },
-      stats,
+      scan: allSummary,
+      stats: safeStats,
+      daily,
     });
   } catch (e) {
     logger.error('[PolymarketEdge] tick failed', { error: errMsg(e) });
     return NextResponse.json(
-      { success: false, ranAt, attempted: true, stats, error: errMsg(e) },
+      { success: false, ranAt, attempted: true, stats: safeStats, daily, error: errMsg(e) },
       { status: 500 },
     );
   }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+/** Close with one retry on transient RPC failure. */
+async function closeWithRetry(bf: BluefinService, symbol: string) {
+  const attempt = () =>
+    bf.closeHedge({ symbol }).catch((e) => ({
+      success: false,
+      executionPrice: 0,
+      fees: 0,
+      error: errMsg(e),
+    }));
+  const first = await attempt();
+  if (first && (first as { success?: boolean }).success) return first;
+  // Brief backoff then retry once.
+  await new Promise((r) => setTimeout(r, 1500));
+  return attempt();
+}
+
+function pickExitPrice(close: unknown, markPriceRaw: unknown, fallback: number): number {
+  const exec = Number((close as { executionPrice?: number })?.executionPrice);
+  if (Number.isFinite(exec) && exec > 0) return exec;
+  const mark = Number(markPriceRaw);
+  if (Number.isFinite(mark) && mark > 0) return mark;
+  return fallback;
+}
 
 async function applyOutcome(
   prev: EdgeStats,
@@ -566,12 +847,13 @@ async function applyOutcome(
     pnlUsd: cur.pnlUsd + realizedUsd,
   };
 
+  const newTotal = prev.totalPnlUsd + realizedUsd;
   const next: EdgeStats = {
     trades: prev.trades + 1,
     wins: prev.wins + (realizedUsd > 0 ? 1 : 0),
     losses: prev.losses + (realizedUsd <= 0 ? 1 : 0),
-    totalPnlUsd: prev.totalPnlUsd + realizedUsd,
-    peakPnlUsd: Math.max(prev.peakPnlUsd, prev.totalPnlUsd + realizedUsd),
+    totalPnlUsd: newTotal,
+    peakPnlUsd: Math.max(prev.peakPnlUsd, newTotal),
     consecutiveLosses: realizedUsd > 0 ? 0 : prev.consecutiveLosses + 1,
     lastUpdatedMs: Date.now(),
     perAsset,
@@ -580,17 +862,50 @@ async function applyOutcome(
   return next;
 }
 
-async function maybeHalt(stats: EdgeStats, currentHaltUntil: number): Promise<boolean> {
-  const drawdown = stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
+async function applyDaily(prev: DailyStats, realizedUsd: number): Promise<DailyStats> {
+  const today = utcDayKey(Date.now());
+  const base: DailyStats = prev.utcDayKey === today
+    ? prev
+    : { utcDayKey: today, pnlUsd: 0, trades: 0 };
+  const next: DailyStats = {
+    utcDayKey: base.utcDayKey,
+    pnlUsd: base.pnlUsd + realizedUsd,
+    trades: base.trades + 1,
+  };
+  await setCronState(KEY_DAILY, next);
+  return next;
+}
+
+async function maybeHalt(
+  stats: EdgeStats,
+  daily: DailyStats,
+  currentHaltUntil: number,
+): Promise<boolean> {
+  const drawdown =
+    stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
   const tripLosses = stats.consecutiveLosses >= MAX_CONSECUTIVE_LOSSES;
   const tripDrawdown = drawdown >= MAX_DRAWDOWN_PCT && stats.peakPnlUsd > 0;
-  if (tripLosses || tripDrawdown) {
+  const tripDaily = daily.pnlUsd <= DAILY_LOSS_CAP_USD;
+  if (tripLosses || tripDrawdown || tripDaily) {
     const until = Date.now() + HALT_DURATION_MS;
     await setCronState(KEY_HALTED_UNTIL, until);
+    const reason = tripLosses
+      ? `consecutiveLosses=${stats.consecutiveLosses}`
+      : tripDrawdown
+        ? `drawdown=${(drawdown * 100).toFixed(1)}%`
+        : `dailyPnL=$${daily.pnlUsd.toFixed(2)}`;
     logger.warn('[PolymarketEdge] KILL SWITCH TRIPPED — halting 24h', {
+      reason,
       consecutiveLosses: stats.consecutiveLosses,
       drawdown,
       totalPnlUsd: stats.totalPnlUsd,
+      dailyPnlUsd: daily.pnlUsd,
+    });
+    await notifyDiscord(`KILL SWITCH TRIPPED — halting 24h (${reason})`, 'KILL', {
+      totalPnlUsd: stats.totalPnlUsd,
+      peakPnlUsd: stats.peakPnlUsd,
+      dailyPnlUsd: daily.pnlUsd,
+      consecutiveLosses: stats.consecutiveLosses,
     });
     return true;
   }

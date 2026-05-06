@@ -430,6 +430,49 @@ export class PredictionAggregatorService {
   }
 
   /**
+   * Fetch the LIVE funding rate per asset from Bluefin's market ticker.
+   * Decimal per 8-hour funding interval (e.g. 0.0001 ≈ 11% APR).
+   * Returns a sparse map — assets with no data are simply omitted.
+   *
+   * Uses a public, unsigned ticker endpoint so this works without the
+   * Bluefin admin key being initialized in this service.
+   */
+  private static async fetchBluefinFundingRates(
+    assets: string[],
+  ): Promise<Record<string, number>> {
+    const out: Record<string, number> = {};
+    const network = (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet'
+      ? 'testnet' : 'mainnet';
+    const base = network === 'mainnet'
+      ? 'https://api.prod.sui-prod.bluefin.io'
+      : 'https://api.sui-staging.bluefin.io';
+    await Promise.all(assets.map(async (rawAsset) => {
+      const asset = rawAsset.toUpperCase();
+      const symbol = `${asset}-PERP`;
+      try {
+        const res = await fetch(
+          `${base}/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
+          { signal: AbortSignal.timeout(4000) },
+        );
+        if (!res.ok) return;
+        const data = await res.json() as {
+          lastFundingRateE9?: string;
+          fundingRate?: string;
+        };
+        let fr = NaN;
+        if (data?.lastFundingRateE9) fr = parseFloat(data.lastFundingRateE9) / 1e9;
+        else if (data?.fundingRate) fr = parseFloat(data.fundingRate);
+        if (Number.isFinite(fr)) out[asset] = fr;
+      } catch (e) {
+        logger.debug(`[PredictionAggregator] Bluefin funding fetch failed for ${symbol}`, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }));
+    return out;
+  }
+
+  /**
    * Approximate funding rate sentiment from existing signals
    * In a real system, this would fetch from perpetual exchanges
    */
@@ -490,10 +533,11 @@ export class PredictionAggregatorService {
       if (fresh) return cached;
     }
 
-    const [polymarketSignal, delphiPredictions, cryptoComData] = await Promise.all([
+    const [polymarketSignal, delphiPredictions, cryptoComData, fundingRates] = await Promise.all([
       this.fetchPolymarketSignal(),
       this.fetchDelphiPredictions(),
       this.fetchCryptoComData(),
+      this.fetchBluefinFundingRates(assets),
     ]);
 
     const out: Record<string, AggregatedPrediction> = {};
@@ -560,9 +604,37 @@ export class PredictionAggregatorService {
         });
       }
 
-      // 4) Funding-rate proxy from this asset's short-term sources
-      const funding = this.approximateFundingRateSentiment(sources);
-      if (funding) sources.push(funding);
+      // 4) REAL Bluefin funding rate for this asset (decimal per 8h).
+      //    Positive funding = longs pay shorts → market crowd is long-biased
+      //    → contrarian SHORT signal with strength scaled by magnitude.
+      const fundingRate = fundingRates[asset];
+      if (fundingRate !== undefined && Number.isFinite(fundingRate)) {
+        const magnitude = Math.abs(fundingRate);
+        // 0.0001/8h ≈ 11% APR. Treat 0.0001 as the "MODERATE" boundary.
+        if (magnitude > 0.00002) {
+          // Funding > 0 → longs pay → expect mean-reversion DOWN.
+          // Funding < 0 → shorts pay → expect mean-reversion UP.
+          const fundingDir: 'UP' | 'DOWN' = fundingRate > 0 ? 'DOWN' : 'UP';
+          const fundingConfidence = Math.min(40 + magnitude * 200_000, 90);
+          sources.push({
+            name: `Bluefin ${asset} Funding`,
+            type: 'on_chain',
+            direction: fundingDir,
+            confidence: fundingConfidence,
+            probability: 50 + Math.min(magnitude * 100_000, 30) * (fundingDir === 'UP' ? 1 : -1),
+            weight: 0.20,
+            rawData: { fundingRate, perfectAprPct: magnitude * 3 * 365 * 100 },
+            fetchedAt: Date.now(),
+          });
+        }
+      }
+
+      // 5) Funding-rate proxy from this asset's short-term sources (kept as
+      //    a low-weight backstop for assets with no live Bluefin funding).
+      if (fundingRate === undefined) {
+        const funding = this.approximateFundingRateSentiment(sources);
+        if (funding) sources.push(funding);
+      }
 
       // Normalize weights within this asset's bucket
       const total = sources.reduce((sum, s) => sum + s.weight, 0);
