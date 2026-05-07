@@ -443,8 +443,9 @@ export class PredictionAggregatorService {
     const out: Record<string, number> = {};
     const network = (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet'
       ? 'testnet' : 'mainnet';
+    // Exchange API base (matches BluefinService.NETWORK_CONFIG).
     const base = network === 'mainnet'
-      ? 'https://api.prod.sui-prod.bluefin.io'
+      ? 'https://api.sui-prod.bluefin.io'
       : 'https://api.sui-staging.bluefin.io';
     await Promise.all(assets.map(async (rawAsset) => {
       const asset = rawAsset.toUpperCase();
