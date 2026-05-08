@@ -7,7 +7,7 @@
     "docs": "Docs"
   },
   "hero": {
-    "eyebrow": "Cronos zkEVM",
+    "eyebrow": "SUI Mainnet",
     "quantumProof": "Quantum-Proof",
     "headline1": "Your portfolio.",
     "headline2": "Protected.",
@@ -41,7 +41,7 @@
     "gasSavings": "Gas Savings",
     "zkProofs": "ZK Proofs",
     "responseTime": "Response Time",
-    "batchingNote": "x402 batching on Cronos zkEVM",
+    "batchingNote": "AI trading agents on SUI Mainnet",
     "chainsSupported": "Chains Supported"
   },
   "cta": {
@@ -70,8 +70,8 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
     "rights": "All rights reserved.",
-    "testnet": "Cronos zkEVM Testnet",
-    "stage": "Pre-Seed Stage",
+    "testnet": "SUI Mainnet",
+    "stage": "Mainnet Live",
     "builtWith": "Built with ZK-STARK"
   },
   "connect": {
@@ -132,31 +132,6 @@
       "title": "Execute",
       "description": "Auto-hedge & settle transactions",
       "detail": "Automated protection"
-    }
-  },
-  "whitepaper": {
-    "version": "Version 1.0",
-    "date": "January 2026",
-    "title": "ZkVanguard Whitepaper",
-    "subtitle": "AI-Powered Predictive Risk Management with Zero-Knowledge Privacy for Institutional Digital Assets",
-    "readButton": "Read Whitepaper",
-    "toc": "Table of Contents",
-    "sections": {
-      "abstract": "Abstract",
-      "introduction": "Introduction & Market Opportunity",
-      "problem": "The Problem: Reactive Risk Management",
-      "solution": "Our Solution: Predictive Intelligence",
-      "architecture": "Technical Architecture",
-      "agents": "Multi-Agent AI System",
-      "zkp": "Zero-Knowledge Privacy Layer",
-      "gasless": "Gasless Transaction Protocol (x402)",
-      "predictions": "Prediction Market Integration",
-      "multichain": "Multi-Chain Strategy",
-      "security": "Security Analysis",
-      "tokenomics": "Tokenomics & Economics",
-      "roadmap": "Roadmap",
-      "conclusion": "Conclusion",
-      "references": "References"
     }
   },
   "zkProof": {
@@ -224,11 +199,11 @@
     "nonCustodial": "Non-Custodial",
     "nonCustodialDescription": "Your keys, your crypto",
     "gasOptimization": "Gas Optimization",
-    "gasDescription": "67% savings via x402 batching"
+    "gasDescription": "Sponsored transactions on SUI Mainnet"
   },
   "liveMetrics": {
     "title": "Real-Time Platform Metrics",
-    "subtitle": "Live performance data from Cronos Testnet",
+    "subtitle": "Live performance data from SUI Mainnet",
     "tvl": "Total Value Locked",
     "transactions": "Transactions",
     "gasSavings": "Gas Savings",
@@ -237,14 +212,16 @@
   "roadmap": {
     "title": "Product Roadmap",
     "subtitle": "Our path to revolutionizing institutional RWA risk management",
-    "q1Title": "Q1 2026: Testnet Launch",
-    "q1Description": "Full agent system live on Cronos zkEVM testnet",
-    "q2Title": "Q2 2026: Beta Users",
-    "q2Description": "100+ institutional users managing $50M+ TVL",
-    "q3Title": "Q3 2026: Mainnet",
+    "q1Title": "Q1 2026: Foundation",
+    "q1Description": "Core infrastructure built — SUI smart contracts, 5 AI agents, ZK pipeline",
+    "q2Title": "Q2 2026: Mainnet Launch",
+    "q2Description": "CommunityPool & 5 AI trading agents live on SUI Mainnet",
+    "q3Title": "Q3 2026: Growth",
     "q3Description": "Production launch with institutional partnerships",
     "q4Title": "Q4 2026: Scale",
     "q4Description": "$500M+ TVL across multiple chains",
+    "completed": "Completed",
+    "live": "Live",
     "inProgress": "In Progress",
     "upcoming": "Upcoming",
     "planned": "Planned"
