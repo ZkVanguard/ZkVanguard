@@ -12,28 +12,32 @@ export function Roadmap() {
       icon: Target,
       title: t('q1Title'),
       description: t('q1Description'),
-      status: t('inProgress'),
-      color: 'text-blue-500',
+      status: t('completed'),
+      statusClass: 'bg-[#E5E5EA] text-[#424245]',
+      color: 'text-[#86868b]',
     },
     {
       icon: Users,
       title: t('q2Title'),
       description: t('q2Description'),
-      status: t('upcoming'),
-      color: 'text-purple-500',
+      status: t('live'),
+      statusClass: 'bg-green-100 text-green-700',
+      color: 'text-green-500',
     },
     {
       icon: TrendingUp,
       title: t('q3Title'),
       description: t('q3Description'),
-      status: t('planned'),
-      color: 'text-green-500',
+      status: t('upcoming'),
+      statusClass: 'bg-[#E5E5EA] text-[#424245]',
+      color: 'text-purple-500',
     },
     {
       icon: Rocket,
       title: t('q4Title'),
       description: t('q4Description'),
       status: t('planned'),
+      statusClass: 'bg-[#E5E5EA] text-[#424245]',
       color: 'text-yellow-500',
     },
   ];
@@ -74,7 +78,7 @@ export function Roadmap() {
                 </div>
                 <h3 className="text-lg font-semibold mb-2 text-[#1D1D1F]">{milestone.title}</h3>
                 <p className="text-[#6E6E73] text-sm mb-4">{milestone.description}</p>
-                <div className="text-xs px-3 py-1 bg-[#E5E5EA] rounded-full inline-block text-[#424245]">
+                <div className={`text-xs px-3 py-1 rounded-full inline-block font-medium ${milestone.statusClass}`}>
                   {milestone.status}
                 </div>
               </motion.div>

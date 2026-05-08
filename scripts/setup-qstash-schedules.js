@@ -65,6 +65,12 @@ const MASTER_SCHEDULE = {
 
 const INDIVIDUAL_SCHEDULES = [
   {
+    name: 'Polymarket Edge Trader',
+    destination: `${BASE_URL}/api/cron/polymarket-edge-trader`,
+    cron: '*/5 * * * *', // Every 5 minutes — one tick per 5-min prediction window
+    retries: 2,
+  },
+  {
     name: 'Pyth Price Update',
     destination: `${BASE_URL}/api/cron/pyth-update`,
     cron: '*/30 * * * *', // Every 30 minutes - keep oracle prices fresh
@@ -210,6 +216,30 @@ async function main() {
 
   if (args.includes('--delete-all')) {
     await deleteAllSchedules();
+    return;
+  }
+
+  // Add ONLY the polymarket-edge-trader schedule without touching others
+  if (args.includes('--add-edge-trader')) {
+    const config = INDIVIDUAL_SCHEDULES.find(s => s.name === 'Polymarket Edge Trader');
+    console.log('🔧 Adding Polymarket Edge Trader schedule (every 5 min)\n');
+
+    // Check if one already exists so we don't duplicate
+    const existing = await listSchedules();
+    const alreadyExists = existing.some(s =>
+      s.destination && s.destination.includes('polymarket-edge-trader')
+    );
+    if (alreadyExists) {
+      console.log('⚠️  Schedule already exists — delete it first with --delete-all if you want to recreate it.');
+      return;
+    }
+
+    const result = await createSchedule(config);
+    if (result) {
+      console.log(`\n✅ Polymarket Edge Trader schedule created!`);
+      console.log(`   Ticks every 5 min → 288 messages/day`);
+      console.log(`   URL: ${config.destination}`);
+    }
     return;
   }
 
