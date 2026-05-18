@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     // Calculate total hedge value
     const totalHedgeValue = activeHedges
       .filter(h => h.status === 'active')
-      .reduce((sum, h) => sum + (h.notional || 0), 0);
+      .reduce((sum, h) => sum + (h.notional_value || 0), 0);
     
     // If portfolio specified, get its last risk assessment
     let riskAssessment = null;

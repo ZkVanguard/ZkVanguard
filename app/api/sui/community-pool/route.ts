@@ -1536,49 +1536,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Unauthorized — admin operation requires authentication' }, { status: 401 });
       }
 
-      const dryRun = body.dryRun !== false; // default true
-      
-      // Get on-chain hedges
-      const poolStats = await service.getPoolStats();
-      const onChainHedges = poolStats.activeHedges || 0;
-      
-      // Get DB hedges
-      const { getActiveHedges } = await import('@/lib/db/hedges');
-      const dbHedges = await getActiveHedges();
-      
-      let inserted = 0;
-      let closed = 0;
-      let unchanged = 0;
-      let errors = 0;
-      
-      // Simple reconcile: if on-chain > DB, insert missing; if DB > on-chain, close extra
-      if (onChainHedges > dbHedges.length) {
-        inserted = onChainHedges - dbHedges.length;
-        if (!dryRun) {
-          // Insert dummy hedges
-          for (let i = 0; i < inserted; i++) {
-            // TODO: implement actual insert logic
-          }
-        }
-      } else if (dbHedges.length > onChainHedges) {
-        closed = dbHedges.length - onChainHedges;
-        if (!dryRun) {
-          // Close extra hedges
-          // TODO: implement
-        }
-      } else {
-        unchanged = onChainHedges;
-      }
-      
+      const { reconcileSuiHedges } = await import('@/lib/services/sui/SuiHedgeReconciler');
+      const result = await reconcileSuiHedges();
+
       return NextResponse.json({
         success: true,
-        onChain: onChainHedges,
-        db: dbHedges.length,
-        inserted,
-        closed,
-        unchanged,
-        errors,
-        dryRun,
+        onChain: result.onChainCount,
+        db: result.dbCount,
+        inserted: result.inserted,
+        closed: result.closed,
+        unchanged: result.unchanged,
+        errors: result.errors,
       });
     }
     
