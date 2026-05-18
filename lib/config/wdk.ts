@@ -32,7 +32,7 @@ export const USDT_ADDRESSES = {
   // Cronos Mainnet - Official USDT
   cronos: {
     mainnet: '0x66e428c3f67a68878562e79A0234c1F83c208770',
-    testnet: null, // Cronos testnet uses separate testnet USDT
+    testnet: '0x28217DAddC55e3C4831b4A48A00Ce04880786967', // MockUSDT on Cronos testnet
   },
   // Hedera - USDT  
   hedera: {
