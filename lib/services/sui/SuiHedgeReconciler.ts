@@ -249,12 +249,20 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
       // derive it from the on-chain hedge id so re-runs are idempotent.
       const orderId = `sui-onchain-${oc.hedgeIdOnchain.slice(2, 18)}`;
 
-      // Already inserted by another runner? Skip.
-      const existing = await query<{ id: number }>(
-        'SELECT id FROM hedges WHERE order_id = $1 OR hedge_id_onchain = $2 LIMIT 1',
+      // Already inserted by another runner? Update portfolio_id if needed.
+      const existing = await query<{ id: number; portfolio_id: number }>(
+        'SELECT id, portfolio_id FROM hedges WHERE order_id = $1 OR hedge_id_onchain = $2 LIMIT 1',
         [orderId, oc.hedgeIdOnchain],
       );
       if (existing.length > 0) {
+        // Update portfolio_id if it's wrong
+        if (existing[0].portfolio_id !== SUI_COMMUNITY_POOL_PORTFOLIO_ID) {
+          await query(
+            'UPDATE hedges SET portfolio_id = $1 WHERE id = $2',
+            [SUI_COMMUNITY_POOL_PORTFOLIO_ID, existing[0].id],
+          );
+          logger.info(`[HedgeReconciler] Updated portfolio_id for hedge ${existing[0].id} to ${SUI_COMMUNITY_POOL_PORTFOLIO_ID}`);
+        }
         result.unchanged++;
         continue;
       }

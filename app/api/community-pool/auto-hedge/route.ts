@@ -455,7 +455,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const liveKeySet = new Set(
       liveBluefinHedges.map(h => `${h.asset}|${h.side}`),
     );
-    const staleDbRows = liveBluefinAuthoritative
+    const staleDbRows = liveBluefinAuthoritative && !isSui
       ? hedges.filter(h => !liveKeySet.has(`${h.asset}|${h.side}`))
       : [];
     if (staleDbRows.length > 0) {
@@ -553,11 +553,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ...status,
     };
 
-    // Cache the response
-    autoHedgeCacheByChain.set(chain, { data: responseData, expiresAt: Date.now() + (isSui ? AUTO_HEDGE_SUI_CACHE_TTL : AUTO_HEDGE_CACHE_TTL) });
+    // Cache the response (but not if no hedges found — may be due to DB issues)
+    if (status.activeHedges.length > 0) {
+      autoHedgeCacheByChain.set(chain, { data: responseData, expiresAt: Date.now() + (isSui ? AUTO_HEDGE_SUI_CACHE_TTL : AUTO_HEDGE_CACHE_TTL) });
+    }
 
     return NextResponse.json(responseData, {
-      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+      headers: status.activeHedges.length > 0 ? { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } : { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
     logger.error('[AutoHedge API] Error fetching status', { error });
