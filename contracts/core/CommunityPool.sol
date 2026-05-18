@@ -1571,6 +1571,10 @@ contract CommunityPool is
         return memberList.length;
     }
 
+    function getRebalanceHistoryCount() external view returns (uint256) {
+        return rebalanceHistory.length;
+    }
+
     // checkOracleHealth() removed - use getOraclePrices() for oracle status
 
     // getOraclePrices() removed - use Pyth SDK directly
