@@ -20,6 +20,14 @@ import sys
 import os
 from typing import Dict, Any, Optional, List
 
+# Force UTF-8 stdout/stderr so emoji prints don't crash on Windows cp1252
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, 'reconfigure'):
+        try:
+            _stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
