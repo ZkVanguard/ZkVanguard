@@ -465,11 +465,16 @@ export async function updateHedgeStatus(
   // Atomic transition guard: only allow active → terminal. This prevents
   // races between the hedge-monitor and the cron stale-closer from each
   // overwriting the other's terminal status.
+  // On terminal transition, zero current_pnl so stale watch-loop snapshots
+  // don't pollute closed-hedge analytics. realized_pnl is left alone (this
+  // path has no PnL info — caller should use closeHedge/closeOnChainHedge
+  // when realized PnL is known).
   const sql = `
-    UPDATE hedges 
-    SET status = $1::varchar, 
+    UPDATE hedges
+    SET status = $1::varchar,
         updated_at = CURRENT_TIMESTAMP,
-        closed_at = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END
+        closed_at = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END,
+        current_pnl = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN 0 ELSE current_pnl END
     WHERE (order_id = $2 OR hedge_id_onchain = $2)
       AND (
         $1::varchar = 'active'
@@ -480,13 +485,15 @@ export async function updateHedgeStatus(
 }
 
 export async function closeHedge(
-  orderId: string, 
-  realizedPnl: number, 
+  orderId: string,
+  realizedPnl: number,
   status: 'closed' | 'liquidated' = 'closed'
 ): Promise<void> {
+  // Mirror realized_pnl into current_pnl so closed-hedge analytics that sum
+  // current_pnl don't carry over stale price-watch snapshots.
   const sql = `
-    UPDATE hedges 
-    SET status = $1, realized_pnl = $2, closed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+    UPDATE hedges
+    SET status = $1, realized_pnl = $2, current_pnl = $2, closed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     WHERE order_id = $3
   `;
   await query(sql, [status, realizedPnl, orderId]);
@@ -525,6 +532,7 @@ export async function closePerpHedgeBySymbolSide(args: {
     UPDATE hedges SET
       status = 'closed',
       realized_pnl = COALESCE(realized_pnl, 0) + $3,
+      current_pnl  = COALESCE(realized_pnl, 0) + $3,
       funding_paid = COALESCE(funding_paid, 0) + COALESCE($4, 0),
       closed_at = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP,
@@ -795,6 +803,7 @@ export async function closeOnChainHedge(hedgeIdOnchain: string, realizedPnl: num
       UPDATE hedges SET
         status = 'closed',
         realized_pnl = $1,
+        current_pnl  = $1,
         closed_at = NOW(),
         updated_at = NOW(),
         tx_hash = COALESCE($2, tx_hash)
@@ -1102,6 +1111,7 @@ export async function closeHedgeByOnchainId(args: {
     UPDATE hedges SET
       status = $1,
       realized_pnl = COALESCE(realized_pnl, 0) + $2,
+      current_pnl  = COALESCE(realized_pnl, 0) + $2,
       closed_at = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP,
       tx_hash = COALESCE($3, tx_hash)
