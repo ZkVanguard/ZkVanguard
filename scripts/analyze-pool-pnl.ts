@@ -188,20 +188,25 @@ async function main() {
 
   // ── 5. Members + share concentration ─────────────────────────
   console.log('\n── 5. MEMBER POSITIONS ──');
+  // community_pool_shares columns: shares, cost_basis_usd (no separate withdrawn col).
+  // Don't silently swallow a query error here — a swallowed schema mismatch previously
+  // masked all 3 members as "Members: 0", which is exactly the kind of false-zero this
+  // diagnostic must never print.
   const sharesAgg = await pg.query(`
     SELECT
       COUNT(*) ::int                                                   AS n,
       COALESCE(SUM(shares),0)::numeric                                 AS total_shares,
       COALESCE(MAX(shares),0)::numeric                                 AS max_shares,
-      COALESCE(SUM(deposited_usd),0)::numeric                          AS sum_deposited,
-      COALESCE(SUM(withdrawn_usd),0)::numeric                          AS sum_withdrawn
+      COALESCE(SUM(cost_basis_usd),0)::numeric                         AS sum_cost_basis
     FROM community_pool_shares WHERE chain='sui'
-  `).catch(() => ({ rows: [{ n: 0 }] }));
+  `).catch((e: unknown) => {
+    console.log(`  ${c('⚠ member query failed:', 'r')} ${e instanceof Error ? e.message : String(e)}`);
+    return { rows: [{ n: '?', total_shares: 0, max_shares: 0, sum_cost_basis: 0 }] };
+  });
   const sharesRow = sharesAgg.rows[0];
   console.log(`  Members: ${sharesRow.n}  total_shares=${Number(sharesRow.total_shares || 0).toFixed(4)}  largest=${Number(sharesRow.max_shares || 0).toFixed(4)}`);
-  if (Number(sharesRow.sum_deposited || 0) > 0) {
-    const memberNetIn = Number(sharesRow.sum_deposited) - Number(sharesRow.sum_withdrawn);
-    console.log(`  DB-tracked deposits: $${Number(sharesRow.sum_deposited).toFixed(2)}  withdrawals: $${Number(sharesRow.sum_withdrawn).toFixed(2)}  net: $${memberNetIn.toFixed(2)}`);
+  if (Number(sharesRow.sum_cost_basis || 0) > 0) {
+    console.log(`  DB-tracked cost basis: $${Number(sharesRow.sum_cost_basis).toFixed(2)}`);
   }
 
   // ── 6. VERDICT ────────────────────────────────────────────────
