@@ -29,7 +29,8 @@ import { query } from '@/lib/db/postgres';
 import {
   ensureHedgesTable,
   createHedge,
-  updateHedgeStatus,
+  closeHedge,
+  closeHedgeByOnchainId,
   type Hedge,
 } from '@/lib/db/hedges';
 import { env, envFirst } from '@/lib/utils/env';
@@ -231,10 +232,16 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
 
   const onChainIds = new Set(onChain.map((h) => h.hedgeIdOnchain.toLowerCase()));
 
-  // Prefetch prices once for all assets present on-chain. Used both for new
-  // inserts (entry_price + current_price) and for refreshing current_price on
-  // already-mirrored rows so the UI shows live PnL.
-  const uniqueAssets = Array.from(new Set(onChain.map((h) => h.asset)));
+  // Prefetch prices once for all assets present on-chain AND in the DB hedge
+  // set. On-chain assets feed new inserts + live-PnL refresh; DB assets are
+  // needed to estimate realized PnL when closing a hedge whose on-chain marker
+  // has vanished (the asset may no longer be present on-chain).
+  const uniqueAssets = Array.from(
+    new Set([
+      ...onChain.map((h) => h.asset),
+      ...Array.from(db.values()).map((h) => h.asset),
+    ]),
+  );
   const priceMap = await fetchAssetPrices(uniqueAssets);
 
   // 1. INSERT on-chain hedges not in DB
@@ -320,11 +327,51 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
     }
   }
 
-  // 2. CLOSE DB hedges no longer present on-chain
+  // 2. CLOSE DB hedges no longer present on-chain.
+  //
+  // The proper close path (BluefinService.closeHedge → closePerpHedgeBySymbolSide)
+  // writes BlueFin-confirmed realized PnL. But many closes happen here instead —
+  // we only learn a hedge closed by observing its on-chain marker vanish, after
+  // the fact. Without a realized figure these rows landed at realized_pnl=0,
+  // making closed-hedge analytics under-count true performance.
+  //
+  // Estimate realized PnL from the price move using NOTIONAL (not `size`, whose
+  // unit is inconsistent across code paths): pnl = notional × pctMove × sign.
+  // Current market price is the exit proxy — accurate to within one reconcile
+  // interval of drift. Tagged `reconciler-estimate` so it's distinguishable from
+  // BlueFin-confirmed realized PnL in analytics.
   for (const [key, dbHedge] of db.entries()) {
     if (onChainIds.has(key)) continue;
     try {
-      await updateHedgeStatus(dbHedge.hedge_id_onchain || dbHedge.order_id, 'closed');
+      const entry = Number(dbHedge.entry_price ?? 0);
+      const exit = priceMap[dbHedge.asset] ?? 0;
+      const notional = Number(dbHedge.notional_value ?? 0);
+      const sign = dbHedge.side === 'LONG' ? 1 : -1;
+      const estPnl =
+        entry > 0 && exit > 0 && notional > 0
+          ? sign * notional * ((exit - entry) / entry)
+          : 0;
+
+      if (dbHedge.hedge_id_onchain) {
+        await closeHedgeByOnchainId({
+          hedgeIdOnchain: dbHedge.hedge_id_onchain,
+          realizedPnl: estPnl,
+          status: 'closed',
+        });
+      } else {
+        await closeHedge(dbHedge.order_id, estPnl, 'closed');
+      }
+
+      // Tag provenance so downstream code never mistakes an estimate for a
+      // BlueFin-confirmed fill. Only mark when we actually estimated (exit>0).
+      if (estPnl !== 0) {
+        await query(
+          `UPDATE hedges
+           SET close_reason = 'reconciler-estimate', price_source = 'reconciler-estimate'
+           WHERE (hedge_id_onchain = $1 OR order_id = $1) AND close_reason IS NULL`,
+          [dbHedge.hedge_id_onchain || dbHedge.order_id],
+        );
+      }
       result.closed++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -343,11 +390,13 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
     const livePrice = priceMap[dbHedge.asset];
     if (!livePrice || livePrice <= 0) continue;
     const entry = Number(dbHedge.entry_price ?? 0);
-    const size = Number(dbHedge.size ?? 0);
-    // PnL = (current - entry) × size × side-sign  (size is collateralUsdc here,
-    // so this is a directional dollar approximation suitable for display).
+    const notional = Number(dbHedge.notional_value ?? 0);
+    // PnL = notional × pctMove × side-sign. Uses notional_value (consistent
+    // across code paths) NOT `size` (whose unit varies: asset-units for
+    // auto-hedge rows, collateral-USDC for reconciler rows). The old
+    // size-based formula produced garbage like $304 PnL on a $1.73 hedge.
     const sign = dbHedge.side === 'LONG' ? 1 : -1;
-    const pnl = entry > 0 ? sign * (livePrice - entry) * size : 0;
+    const pnl = entry > 0 && notional > 0 ? sign * notional * ((livePrice - entry) / entry) : 0;
     try {
       await query(
         `UPDATE hedges
