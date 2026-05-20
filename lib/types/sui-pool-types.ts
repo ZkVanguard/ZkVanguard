@@ -87,6 +87,10 @@ export interface SuiPoolStats {
   performanceFeeBps: number;
   paused: boolean;
   allTimeHighNav: number;
+  /** Lifetime cumulative deposits in USDC (on-chain total_deposited, /1e6). */
+  totalDeposited?: number;
+  /** Lifetime cumulative withdrawals in USDC (on-chain total_withdrawn, /1e6). */
+  totalWithdrawn?: number;
   createdAt: number;
   poolStateId: string | null;
 }

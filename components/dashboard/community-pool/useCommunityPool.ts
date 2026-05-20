@@ -472,6 +472,9 @@ export function useCommunityPool(propAddress?: string) {
               allocations: liveAllocations,
               aiLastUpdate: null,
               aiReasoning: null,
+              allTimeHighNav: parseFloat(poolJson.data.allTimeHighNav) || undefined,
+              totalDeposited: parseFloat(poolJson.data.totalDeposited) || 0,
+              totalWithdrawn: parseFloat(poolJson.data.totalWithdrawn) || 0,
             },
           });
         }

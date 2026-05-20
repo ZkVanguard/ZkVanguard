@@ -1182,6 +1182,8 @@ export class SuiUsdcPoolService {
           performanceFeeBps: Number(fields.performance_fee_bps || 1000),
           paused: fields.paused || false,
           allTimeHighNav: Number(fields.all_time_high_nav_per_share || 1e6) / 1e6,
+          totalDeposited: Number(fields.total_deposited || 0) / Math.pow(10, USDC_DECIMALS),
+          totalWithdrawn: Number(fields.total_withdrawn || 0) / Math.pow(10, USDC_DECIMALS),
           createdAt: Number(fields.created_at || 0),
           poolStateId,
           allocation,

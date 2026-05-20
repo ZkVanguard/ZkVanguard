@@ -22,6 +22,12 @@ export interface PoolSummary {
   allocations: PoolAllocation;
   aiLastUpdate: string | null;
   aiReasoning: string | null;
+  /** ATH share price (USDC). Used to show drawdown-from-peak. */
+  allTimeHighNav?: number;
+  /** Lifetime cumulative deposits (USDC). For pool-level $ profit = NAV − (deposits − withdrawals). */
+  totalDeposited?: number;
+  /** Lifetime cumulative withdrawals (USDC). */
+  totalWithdrawn?: number;
 }
 
 export interface UserPosition {
