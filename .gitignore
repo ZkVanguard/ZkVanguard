@@ -1,4 +1,4 @@
-﻿# ===========================================
+# ===========================================
 # ZKVANGUARD PROJECT .GITIGNORE
 # Next.js + Hardhat + Python ZK + Bun Stack
 # ===========================================
@@ -11,8 +11,6 @@ node_modules/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
-build-output-local.txt
-build-result.txt
 
 # -------------------------------------------
 # Package Manager Lock Files (using bun.lock)
@@ -41,6 +39,8 @@ next-env.d.ts
 dist/
 build/
 *.tsbuildinfo
+build-output-local.txt
+build-result.txt
 build-error.txt
 build-output.txt
 build-now.txt
@@ -55,7 +55,7 @@ build-now.txt
 *_minimal-input.json
 
 # -------------------------------------------
-# Hardhat / Solidity
+# Hardhat / Solidity / OpenZeppelin
 # -------------------------------------------
 artifacts/
 cache/
@@ -64,37 +64,19 @@ typechain-types/
 coverage/
 coverage.json
 *.sol.js
-
-# -------------------------------------------
-# OpenZeppelin
-# -------------------------------------------
 .openzeppelin/
 
 # -------------------------------------------
 # Deployment Records (sensitive - regenerate per deploy)
 # -------------------------------------------
 deployments/
+mainnet-deploy.json
 
 # -------------------------------------------
-# Business Strategy Documents (Confidential)
-# -------------------------------------------
-docs/ACQUISITION_PLAN.md
-docs/GO_TO_MARKET_PLAN.md
-docs/VIDEO_PITCH_SCRIPTS.md
-
-# -------------------------------------------
-# Environment Files (CRITICAL - Contains private keys & API keys)
+# Environment Files (CRITICAL - private keys & API keys)
 # -------------------------------------------
 .env
 .env.*
-.env.local
-.env.development
-.env.development.local
-.env.test
-.env.test.local
-.env.production
-.env.production.local
-.env.prod.full
 !.env.example
 
 # -------------------------------------------
@@ -110,19 +92,36 @@ lerna-debug.log*
 bun-debug.log*
 
 # -------------------------------------------
-# Temporary/Debug Scripts (one-off migration helpers)
+# Diagnostic / Debug / One-off Scripts (local only)
 # -------------------------------------------
+# All check-* and analyze-* diagnostics under scripts/ are local tools
+scripts/check-*
+scripts/analyze-*
+# Root-level one-off helpers
 check-old-contracts.js
 check-db.js
 check-ownership.js
 check-auto-hedge.js
-scripts/check-nav.js
+check-hedges.js
+debug-hedges.js
+fix-sui-portfolio.js
+# scripts/ one-off helpers (migration / deploy / ad-hoc tests)
 scripts/complete-migration.js
 scripts/debug-*.js
 scripts/sync-shares-*.js
 scripts/upgrade-*.js
 scripts/test-deposit.js
 scripts/test-cetus-fix.ts
+scripts/close-1550m.ts
+scripts/mint-and-prepare.ts
+scripts/deploy-mainnet-gasless.ts
+scripts/test-auto-hedging-e2e.ts
+scripts/test-vercel-auto-rebalance.ts
+scripts/test/debug-pool-state.js
+scripts/test-production-services.cjs
+scripts/test-ai-decision-data.cjs
+scripts/tests/test-ai-services-integration.ts
+scripts/test-bluefin-testnet.ts
 
 # -------------------------------------------
 # Temporary Output / Debug Files
@@ -131,8 +130,10 @@ git-status.txt
 deploy-out.txt
 deploy-v2-output.txt
 deploy-final.txt
+deploy-to-vercel.ps1
 test-deposit-output.txt
 test-mainnet-output.txt
+test-output.txt
 tsc-output.txt
 tsc-bluefin-err.txt
 body.json
@@ -148,14 +149,6 @@ bf-test-out*.txt
 bluefin-test-results.txt
 server-probe.txt
 sui-swap-test.txt
-temp_env.txt
-mainnet-deploy.json
-
-# -------------------------------------------
-# External vendored sources (built locally, not committed)
-# -------------------------------------------
-external/wdk-wallet-evm
-external/wdk-wallet-evm/
 
 # -------------------------------------------
 # Testing
@@ -166,13 +159,10 @@ playwright-report/
 playwright/.cache/
 jest-cache/
 .jest/
-
-# Temporary test scripts
 test-*.js
 !test-utils.js
-test-chat-*.js
-test-zk-*.js
-test-auto-*.js
+test/ZKProxyVault.test.cjs
+test/ZKProxyVault.test.js
 
 # -------------------------------------------
 # ZK Proof Artifacts
@@ -264,12 +254,7 @@ mnemonic.txt
 *.backup
 .cache/
 tmp/
-temp/
-body.json
-git-status.txt
-deploy-v2-output.txt
-test-deposit-output.txt
-test-output.txt
+temp*
 
 # -------------------------------------------
 # Database
@@ -280,12 +265,39 @@ test-output.txt
 *.db-journal
 
 # -------------------------------------------
-# Documentation (temporary/generated - now in docs/)
+# Local Scripts
 # -------------------------------------------
-docs/AI_CHAT_TEST_REPORT.md
-docs/PROJECT_FIX_SUMMARY.md
-docs/QUICK_DEMO_SCRIPT.md
-docs/MOONLANDER_TEST_REPORT.md
+*.local.js
+*.local.ts
+*.local.sh
+*.local.ps1
+
+# -------------------------------------------
+# Old / Backup Config Files
+# -------------------------------------------
+*.old.js
+*.old.ts
+*.old.json
+
+# -------------------------------------------
+# Linting / Formatting Cache
+# -------------------------------------------
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# -------------------------------------------
+# Husky / Turbo / Storybook / Sentry
+# -------------------------------------------
+.husky/_/
+.turbo/
+storybook-static/
+.sentryclirc
+
+# -------------------------------------------
+# External vendored sources (built locally, not committed)
+# -------------------------------------------
+external/wdk-wallet-evm/
 
 # -------------------------------------------
 # Large Media Files (keep locally, don't commit)
@@ -312,58 +324,7 @@ docs/MOONLANDER_TEST_REPORT.md
 !docs/public/*.pdf
 
 # -------------------------------------------
-# Investor/Demo Content (confidential)
-# -------------------------------------------
-Investors/
-docs/demo-videos/
-
-# -------------------------------------------
-# Linting / Formatting Cache
-# -------------------------------------------
-.eslintcache
-.stylelintcache
-.prettiercache
-
-# -------------------------------------------
-# Husky
-# -------------------------------------------
-.husky/_/
-
-# -------------------------------------------
-# Turbo
-# -------------------------------------------
-.turbo/
-
-# -------------------------------------------
-# Storybook
-# -------------------------------------------
-storybook-static/
-
-# -------------------------------------------
-# Sentry
-# -------------------------------------------
-.sentryclirc
-
-# -------------------------------------------
-# Local Scripts
-# -------------------------------------------
-*.local.js
-*.local.ts
-*.local.sh
-*.local.ps1
-
-# -------------------------------------------
-# Confidential Documents
-# -------------------------------------------
-docs/PRICING_MODEL.md
-docs/PRICING_SPREADSHEET.md
-docs/PRICING_REVENUE_MODEL.md
-docs/SALES_PIPELINE.md
-docs/INVESTOR_*.md
-docs/SUI_BUILDER_REPORT_*.md
-
-# -------------------------------------------
-# Empty/Orphaned Directories (cleanup artifacts)
+# Empty / Orphaned Directories (cleanup artifacts)
 # -------------------------------------------
 zk-proof/
 zk-authenticity/
@@ -375,23 +336,40 @@ whitepaper/
 ~/
 
 # -------------------------------------------
-# Old/Backup Config Files
+# Investor / Demo Content (confidential)
 # -------------------------------------------
-*.old.js
-*.old.ts
-*.old.json
-*.bak
-*.backup
-test/ZKProxyVault.test.cjs
-test/ZKProxyVault.test.js
+Investors/
+docs/demo-videos/
+
+# -------------------------------------------
+# Confidential / Generated Docs
+# -------------------------------------------
+docs/ACQUISITION_PLAN.md
+docs/GO_TO_MARKET_PLAN.md
+docs/VIDEO_PITCH_SCRIPTS.md
+docs/AI_CHAT_TEST_REPORT.md
+docs/PROJECT_FIX_SUMMARY.md
+docs/QUICK_DEMO_SCRIPT.md
+docs/MOONLANDER_TEST_REPORT.md
+docs/PRICING_MODEL.md
+docs/PRICING_SPREADSHEET.md
+docs/PRICING_REVENUE_MODEL.md
+docs/SALES_PIPELINE.md
+docs/INVESTOR_*.md
+docs/SUI_BUILDER_REPORT_*.md
 docs/WEEKLY_SUBMISSION_2026-02-04.md
-ZKProxyVault_flat.sol
-zkproxy-vault-input.json
-MockMoonlander_flat.sol
-mock-contracts-input.json
-HedgeExecutor_flat.sol
-hedge-executor-metadata.json
-hedge-executor-input.json
+docs/FOUNDER_VIDEO_SCRIPT.md
+docs/PROJECT_DESCRIPTION.md
+docs/MAINNET_MIGRATION_GUIDE.md
+docs/MAINNET_READINESS_REPORT.md
+docs/MAINNET_COST_SUMMARY.md
+docs/DEPLOYMENT_DECISION_GUIDE.md
+docs/COST_COMPARISON_CHART.txt
+docs/COMPLETION_SUMMARY_*.md
+docs/AUTO_REBALANCE_GUIDE.md
+docs/E2E_TEST_REPORT.md
+docs/VERCEL_COMPATIBILITY_ANALYSIS.md
+docs/PRODUCTION_READINESS_AUDIT.md
 docs/pitch-deck/slide-10-the-ask.md
 docs/pitch-deck/slide-09-team.md
 docs/pitch-deck/slide-08-competition.md
@@ -399,63 +377,26 @@ docs/pitch-deck/slide-07-traction.md
 docs/pitch-deck/slide-06-business-model.md
 docs/pitch-deck/slide-05-market-opportunity.md
 docs/pitch-deck/glossary.md
-docs/FOUNDER_VIDEO_SCRIPT.md
-docs/PROJECT_DESCRIPTION.md
-docs/MAINNET_MIGRATION_GUIDE.md
-scripts/check-prices.mts
-scripts/close-1550m.ts
-scripts/mint-and-prepare.ts
-scripts/deploy-mainnet-gasless.ts
-docs/MAINNET_READINESS_REPORT.md
-docs/MAINNET_COST_SUMMARY.md
-docs/DEPLOYMENT_DECISION_GUIDE.md
 
 # -------------------------------------------
-# Redundant/Temporary Documentation (root level)
+# Redundant / Temporary Root Docs & Reports
 # -------------------------------------------
 VERCEL_QUICK_DEPLOY.md
 VERCEL_DEPLOYMENT_READY.md
 VERCEL_FREE_TIER_GUIDE.md
 VERCEL_CLI_SETUP.md
 TEST_COMPLETE.md
-deploy-to-vercel.ps1
-test-output.txt
-docs/COST_COMPARISON_CHART.txt
-docs/COMPLETION_SUMMARY_*.md
-docs/AUTO_REBALANCE_GUIDE.md
-docs/E2E_TEST_REPORT.md
-docs/VERCEL_COMPATIBILITY_ANALYSIS.md
-scripts/test-auto-hedging-e2e.ts
-scripts/test-vercel-auto-rebalance.ts
-scripts/test/debug-pool-state.js
-scripts/test-production-services.cjs
-docs/PRODUCTION_READINESS_AUDIT.md
-scripts/test-ai-decision-data.cjs
-scripts/tests/test-ai-services-integration.ts
-.env*.local
-temp*
-temp-*
-
-.vercel
 march-2026-monthly-report.md
 week-23-27-march-submission.md
-
-# -------------------------------------------
-# Tracked temp/debug output files
-# -------------------------------------------
-bf-test-out2.txt
-bluefin-test-results.txt
-server-probe.txt
-tsc-bluefin-err.txt
-scripts/check-ownership-lookup.js
-scripts/test-bluefin-testnet.ts
 monthly-submission-april-2026.md
 week-27-1st-may-submission.md
-CLAUDE.md
 week-8-10-may-submission.md
-check-hedges.js
-debug-hedges.js
-fix-sui-portfolio.js
+CLAUDE.md
+
+# -------------------------------------------
+# Claude Code local settings
+# -------------------------------------------
 .claude/settings.local.json
-external/wdk-wallet-evm
-external/wdk-wallet-evm
+scripts/analyze-pool-pnl.ts
+scripts/check-hedge-signal-alignment.ts
+scripts/analyze-pool-pnl.ts
