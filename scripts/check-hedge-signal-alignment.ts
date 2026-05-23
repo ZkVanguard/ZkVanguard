@@ -94,6 +94,7 @@ async function main() {
   // snapshotted by the cron into community_pool_nav_history — same figure the auto-hedge
   // gate uses. On-chain balance alone undercounts it badly, so read the snapshot for the floor verdict.
   let trueNavUsd: number | null = null;
+  let dbDown = false;
   if (!cs) {
     log(color('  ⚠ no DB connection string — skipping', 'y'));
   } else {
@@ -115,7 +116,11 @@ async function main() {
         const ageMin = (Date.now() - new Date(h.created_at).getTime()) / 60000;
         log(`    • #${h.id} ${h.asset.padEnd(4)} ${h.side.padEnd(5)}  size=${h.size}  notional=$${Number(h.notional_value).toFixed(2)}  lev=${h.leverage}x  PnL=$${Number(h.current_pnl).toFixed(2)}  age=${ageMin.toFixed(0)}m  pred=${h.prediction_market || '(none)'}`);
       }
-    } finally { await pg.end(); }
+    } catch (e) {
+      dbDown = true;
+      log(color('  ⚠ DB unavailable — skipping DB hedges + full-NAV floor check (on-chain + signal still shown).', 'y'));
+      log(color(`    Reason: ${e instanceof Error ? e.message : String(e)}`, 'dim'));
+    } finally { await pg.end().catch(() => {}); }
   }
 
   // ── 3. Polymarket 5-min signal (public API) ──────────────────
@@ -167,6 +172,8 @@ async function main() {
       const floor = Number(process.env.HEDGE_MIN_NAV_USD) || 20;
       if (trueNavUsd !== null) {
         log(`  Full NAV (DB snapshot, incl. BlueFin + admin) $${trueNavUsd.toFixed(2)} is ${trueNavUsd < floor ? color('below', 'y') : color('above', 'g')} the $${floor} auto-hedge floor (HEDGE_MIN_NAV_USD).`);
+      } else if (dbDown) {
+        log(color(`  ⚠ DB unavailable — cannot evaluate the $${floor} auto-hedge floor (full NAV lives in the DB snapshot; on-chain balance alone undercounts it).`, 'y'));
       } else {
         log(color(`  ⚠ No NAV snapshot in DB — cannot evaluate the $${floor} auto-hedge floor (on-chain balance alone undercounts NAV).`, 'y'));
       }

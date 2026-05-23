@@ -31,6 +31,21 @@ const c = (s: string | number, code: 'g' | 'r' | 'y' | 'b' | 'dim' | 'bold') => 
 const dollars = (n: number) => (n >= 0 ? '+' : '') + '$' + n.toFixed(2);
 const pct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 
+// Set once if the DB is unreachable (e.g. Neon compute-quota exhaustion). When the
+// DB is down the bulk of NAV (off-chain BlueFin snapshot) is invisible, so we show
+// on-chain figures only and explicitly DECLINE to render a profit/loss verdict —
+// printing on-chain-only NAV minus deposits would falsely look like a huge loss.
+let dbDown: string | null = null;
+async function safeQuery(pg: Pool, sql: string, params?: unknown[]): Promise<{ rows: any[] }> {
+  if (dbDown) return { rows: [] };
+  try {
+    return await pg.query(sql, params as any[]);
+  } catch (e) {
+    dbDown = e instanceof Error ? e.message : String(e);
+    return { rows: [] };
+  }
+}
+
 async function main() {
   const sui = new SuiClient({ url: process.env.SUI_MAINNET_RPC?.trim() || getFullnodeUrl('mainnet') });
   const pg = new Pool({ connectionString: process.env.DB_V2_DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -38,6 +53,15 @@ async function main() {
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║  SUI COMMUNITY POOL — DEEP PnL ANALYSIS                       ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
+
+  // Probe the DB once up-front so every section can degrade cleanly.
+  await safeQuery(pg, 'SELECT 1');
+  if (dbDown) {
+    console.log(c('\n  ⚠ Database unavailable — showing ON-CHAIN data only.', 'y'));
+    console.log(c(`    Reason: ${dbDown}`, 'dim'));
+    console.log(c('    NAV snapshot, hedge PnL, transactions and member figures are skipped,', 'dim'));
+    console.log(c('    and no profit/loss verdict is rendered (off-chain BlueFin NAV is invisible without the DB).', 'dim'));
+  }
 
   // ── 1. On-chain pool state ────────────────────────────────────
   console.log('\n── 1. ON-CHAIN POOL STATE ──');
@@ -60,14 +84,14 @@ async function main() {
   const memberCount = Number(f.member_count || 0);
 
   // Latest NAV snapshot from DB is the truth source for total NAV (incl. BlueFin)
-  const latestNav = await pg.query(
+  const latestNav = await safeQuery(pg,
     `SELECT share_price, total_nav, total_shares, timestamp FROM community_pool_nav_history WHERE chain='sui' ORDER BY timestamp DESC LIMIT 1`
   );
   const latestNavRow = latestNav.rows[0];
   const dbTotalNav = latestNavRow ? Number(latestNavRow.total_nav) : null;
   const dbSharePrice = latestNavRow ? Number(latestNavRow.share_price) : null;
 
-  console.log(`  ${c('Total NAV (cron snapshot):', 'bold')} ${c(dollars(dbTotalNav ?? 0), (dbTotalNav ?? 0) > 0 ? 'g' : 'dim')}  ${dbSharePrice !== null ? c(`(share price $${dbSharePrice.toFixed(4)})`, 'b') : ''}`);
+  console.log(`  ${c('Total NAV (cron snapshot):', 'bold')} ${dbTotalNav !== null ? c(dollars(dbTotalNav), dbTotalNav > 0 ? 'g' : 'dim') + '  ' + c(`(share price $${dbSharePrice!.toFixed(4)})`, 'b') : c('unavailable (DB down)', 'y')}`);
   console.log(`  On-chain breakdown:`);
   console.log(`    • Idle pool USDC:   $${onChainBalanceUsdc.toFixed(4)}`);
   console.log(`    • On-chain hedged:  $${onChainHedgedUsdc.toFixed(4)}`);
@@ -82,13 +106,19 @@ async function main() {
   console.log(`  Accrued mgmt fees:  $${mgmtFeesAccrued.toFixed(4)}`);
   console.log(`  Accrued perf fees:  $${perfFeesAccrued.toFixed(4)}`);
 
-  // Capital-flow PnL
+  // Capital-flow PnL. REQUIRES the DB NAV snapshot — the on-chain `balance` is only
+  // idle pool USDC and excludes the off-chain BlueFin collateral that holds most of
+  // the NAV, so computing (on-chain NAV − net capital) would falsely show a big loss.
   const netCapital = totalDepositedUsdc - totalWithdrawnUsdc;
-  const navForPnl = dbTotalNav ?? (onChainBalanceUsdc + onChainHedgedUsdc);
-  const capitalFlowPnl = navForPnl - netCapital;
+  const navForPnl = dbTotalNav; // null when DB unavailable — verdict is suppressed below
+  const capitalFlowPnl = navForPnl !== null ? navForPnl - netCapital : null;
   console.log(`\n  Net capital in:     $${netCapital.toFixed(4)}  (deposits − withdrawals)`);
-  console.log(`  ${c('Capital-flow PnL:', 'bold')}  ${c(dollars(capitalFlowPnl), capitalFlowPnl >= 0 ? 'g' : 'r')}  (NAV − net capital)`);
-  if (netCapital > 0) console.log(`  As %:               ${c(pct(capitalFlowPnl / netCapital * 100), capitalFlowPnl >= 0 ? 'g' : 'r')}`);
+  if (capitalFlowPnl !== null) {
+    console.log(`  ${c('Capital-flow PnL:', 'bold')}  ${c(dollars(capitalFlowPnl), capitalFlowPnl >= 0 ? 'g' : 'r')}  (NAV − net capital)`);
+    if (netCapital > 0) console.log(`  As %:               ${c(pct(capitalFlowPnl / netCapital * 100), capitalFlowPnl >= 0 ? 'g' : 'r')}`);
+  } else {
+    console.log(`  ${c('Capital-flow PnL:', 'bold')}  ${c('indeterminate — NAV snapshot unavailable (DB down)', 'y')}`);
+  }
 
   // Per-share return is the cleanest investor-facing metric
   if (athNavPerShare > 0 && dbSharePrice !== null) {
@@ -103,7 +133,7 @@ async function main() {
   // ── 2. Hedge PnL — realised + unrealised ──────────────────────
   console.log('\n── 2. HEDGE PnL (BlueFin perps, SUI chain) ──');
   // Filter out operational <$1 microhedges (see CLAUDE.md "Real risk hedges vs operational microhedges")
-  const hedgeAgg = await pg.query(`
+  const hedgeAgg = await safeQuery(pg, `
     SELECT
       status,
       COUNT(*) FILTER (WHERE notional_value >= 1)::int       AS n_real,
@@ -137,7 +167,7 @@ async function main() {
   console.log(`  ${c('Unrealised PnL on active hedges:        ', 'bold')}  ${c(dollars(sumCurrentActive), sumCurrentActive >= 0 ? 'g' : 'r')}`);
 
   // Best / worst hedges using the meaningful column
-  const extremes = await pg.query(`
+  const extremes = await safeQuery(pg, `
     SELECT id, asset, side, notional_value, current_pnl, realized_pnl, close_reason,
            EXTRACT(EPOCH FROM (closed_at - created_at))/3600 AS hours_open
     FROM hedges
@@ -154,7 +184,7 @@ async function main() {
 
   // ── 3. Share-price evolution (NAV history) ────────────────────
   console.log('\n── 3. SHARE-PRICE EVOLUTION (NAV snapshots) ──');
-  const navHist = await pg.query(`
+  const navHist = await safeQuery(pg, `
     (SELECT timestamp, share_price, total_nav, total_shares
        FROM community_pool_nav_history WHERE chain='sui' ORDER BY timestamp ASC LIMIT 1)
     UNION ALL
@@ -171,17 +201,18 @@ async function main() {
   } else if (navHist.rows.length === 1) {
     console.log(`  Only 1 snapshot — can't measure change. sharePrice=$${Number(navHist.rows[0].share_price).toFixed(6)}`);
   } else {
-    console.log(c('  (no NAV history rows for chain=sui)', 'dim'));
+    console.log(c(dbDown ? '  (skipped — DB unavailable)' : '  (no NAV history rows for chain=sui)', 'dim'));
   }
 
   // ── 4. Capital flow from transactions table ───────────────────
   console.log('\n── 4. CAPITAL FLOW (community_pool_transactions, chain=sui) ──');
-  const txAgg = await pg.query(`
+  const txAgg = await safeQuery(pg, `
     SELECT type, COUNT(*)::int n, COALESCE(SUM(amount_usd), 0)::numeric sum_usd
     FROM community_pool_transactions
     WHERE chain='sui' AND type IN ('DEPOSIT','WITHDRAW','FEE_COLLECTED','REBALANCE','HEDGE_OPEN','HEDGE_CLOSE')
     GROUP BY type ORDER BY type
   `);
+  if (dbDown) console.log(c('  (skipped — DB unavailable)', 'dim'));
   for (const row of txAgg.rows) {
     console.log(`  ${row.type.padEnd(15)} ${String(row.n).padStart(4)} tx   $${Number(row.sum_usd).toFixed(2).padStart(12)}`);
   }
@@ -192,21 +223,25 @@ async function main() {
   // Don't silently swallow a query error here — a swallowed schema mismatch previously
   // masked all 3 members as "Members: 0", which is exactly the kind of false-zero this
   // diagnostic must never print.
-  const sharesAgg = await pg.query(`
-    SELECT
-      COUNT(*) ::int                                                   AS n,
-      COALESCE(SUM(shares),0)::numeric                                 AS total_shares,
-      COALESCE(MAX(shares),0)::numeric                                 AS max_shares,
-      COALESCE(SUM(cost_basis_usd),0)::numeric                         AS sum_cost_basis
-    FROM community_pool_shares WHERE chain='sui'
-  `).catch((e: unknown) => {
-    console.log(`  ${c('⚠ member query failed:', 'r')} ${e instanceof Error ? e.message : String(e)}`);
-    return { rows: [{ n: '?', total_shares: 0, max_shares: 0, sum_cost_basis: 0 }] };
-  });
-  const sharesRow = sharesAgg.rows[0];
-  console.log(`  Members: ${sharesRow.n}  total_shares=${Number(sharesRow.total_shares || 0).toFixed(4)}  largest=${Number(sharesRow.max_shares || 0).toFixed(4)}`);
-  if (Number(sharesRow.sum_cost_basis || 0) > 0) {
-    console.log(`  DB-tracked cost basis: $${Number(sharesRow.sum_cost_basis).toFixed(2)}`);
+  if (dbDown) {
+    console.log(c('  (skipped — DB unavailable)', 'dim'));
+  } else {
+    const sharesAgg = await pg.query(`
+      SELECT
+        COUNT(*) ::int                                                   AS n,
+        COALESCE(SUM(shares),0)::numeric                                 AS total_shares,
+        COALESCE(MAX(shares),0)::numeric                                 AS max_shares,
+        COALESCE(SUM(cost_basis_usd),0)::numeric                         AS sum_cost_basis
+      FROM community_pool_shares WHERE chain='sui'
+    `).catch((e: unknown) => {
+      console.log(`  ${c('⚠ member query failed:', 'r')} ${e instanceof Error ? e.message : String(e)}`);
+      return { rows: [{ n: '?', total_shares: 0, max_shares: 0, sum_cost_basis: 0 }] };
+    });
+    const sharesRow = sharesAgg.rows[0];
+    console.log(`  Members: ${sharesRow.n}  total_shares=${Number(sharesRow.total_shares || 0).toFixed(4)}  largest=${Number(sharesRow.max_shares || 0).toFixed(4)}`);
+    if (Number(sharesRow.sum_cost_basis || 0) > 0) {
+      console.log(`  DB-tracked cost basis: $${Number(sharesRow.sum_cost_basis).toFixed(2)}`);
+    }
   }
 
   // ── 6. VERDICT ────────────────────────────────────────────────
@@ -214,15 +249,24 @@ async function main() {
   console.log('║  VERDICT                                                       ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
 
-  // Two complementary measures — both must agree before claiming a verdict
-  const investorReturnPct = dbSharePrice !== null ? (dbSharePrice / 1.0 - 1) * 100 : null;
-  const capitalPnl = capitalFlowPnl;
+  // A trustworthy verdict needs the DB NAV snapshot. Without it (DB down) we only
+  // see idle on-chain USDC, not the off-chain BlueFin NAV — so we report INDETERMINATE
+  // rather than a misleading LOSS.
+  if (navForPnl === null || dbSharePrice === null) {
+    console.log(`\n  ${c('Capital flow (true $ generated):', 'bold')}`);
+    console.log(`    ${c('Indeterminate — NAV snapshot unavailable (DB down).', 'y')}`);
+    console.log(`    On-chain idle USDC $${onChainBalanceUsdc.toFixed(2)} only; the bulk of NAV is off-chain (BlueFin) and needs the DB snapshot or a live BlueFin read.`);
+    console.log(`\n  ${c('VERDICT:', 'bold')} ${c('INDETERMINATE ⚠ (DB unavailable)', 'y')}\n`);
+    await pg.end().catch(() => {});
+    return;
+  }
+
+  const investorReturnPct = (dbSharePrice / 1.0 - 1) * 100;
+  const capitalPnl = navForPnl - netCapital;
 
   console.log(`\n  ${c('Headline (investor-facing):', 'bold')}`);
-  if (investorReturnPct !== null) {
-    console.log(`    Share price: $${dbSharePrice!.toFixed(4)} (from $1.0000)  →  ${c(pct(investorReturnPct), investorReturnPct >= 0 ? 'g' : 'r')} return per share`);
-    console.log(`    ATH per share: $${athNavPerShare.toFixed(4)} — currently ${Math.abs(dbSharePrice! - athNavPerShare) < 0.001 ? c('at peak', 'g') : c('off peak', 'y')}`);
-  }
+  console.log(`    Share price: $${dbSharePrice.toFixed(4)} (from $1.0000)  →  ${c(pct(investorReturnPct), investorReturnPct >= 0 ? 'g' : 'r')} return per share`);
+  console.log(`    ATH per share: $${athNavPerShare.toFixed(4)} — currently ${Math.abs(dbSharePrice - athNavPerShare) < 0.001 ? c('at peak', 'g') : c('off peak', 'y')}`);
   console.log(`\n  ${c('Capital flow (true $ generated):', 'bold')}`);
   console.log(`    NAV $${navForPnl.toFixed(2)} vs net capital in $${netCapital.toFixed(2)}  →  ${c(dollars(capitalPnl), capitalPnl >= 0 ? 'g' : 'r')}`);
   console.log(`\n  ${c('Hedge engine contribution:', 'bold')}`);
@@ -230,12 +274,12 @@ async function main() {
   console.log(`    Active unrealised:        ${c(dollars(sumCurrentActive), sumCurrentActive >= 0 ? 'g' : 'r')}`);
   console.log(`    Accrued mgmt fees:        $${mgmtFeesAccrued.toFixed(4)}`);
 
-  const inProfit = (investorReturnPct ?? 0) > 0 && capitalPnl > 0;
-  const inLoss = (investorReturnPct ?? 0) < 0 || capitalPnl < 0;
+  const inProfit = investorReturnPct > 0 && capitalPnl > 0;
+  const inLoss = investorReturnPct < 0 || capitalPnl < 0;
   const verdict = inProfit ? c('PROFIT ✅', 'g') : inLoss ? c('LOSS ❌', 'r') : c('FLAT', 'dim');
   console.log(`\n  ${c('VERDICT:', 'bold')} ${verdict}\n`);
 
-  await pg.end();
+  await pg.end().catch(() => {});
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
