@@ -15,6 +15,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { composeNavUsdc, computeSharePrice, isNavSane } from '@/lib/services/sui/pool-nav';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 
 // Re-export all types and configs from the dedicated types module
@@ -1124,14 +1125,13 @@ export class SuiUsdcPoolService {
         const offChainPoolCapital = usedAdminBalances
           ? (adminUsdcInWallet + adminAssetValueUsdc)
           : hedgedUsdc;
-        const totalNAVUsdc = balanceUsdc + offChainPoolCapital + bluefinValueUsdc;
+        const totalNAVUsdc = composeNavUsdc(balanceUsdc, offChainPoolCapital, bluefinValueUsdc);
 
         const totalShares = Number(fields.total_shares || 0) / Math.pow(10, USDC_DECIMALS);
-        const sharePriceUsdc = totalShares > 0 ? totalNAVUsdc / totalShares : 1.0;
+        const sharePriceUsdc = computeSharePrice(totalNAVUsdc, totalShares);
 
         // MAINNET SANITY CHECK: Reject obviously wrong values
-        const MAX_REASONABLE_NAV = 10_000_000_000; // $10B
-        if (totalNAVUsdc > MAX_REASONABLE_NAV || sharePriceUsdc > 1_000_000) {
+        if (!isNavSane(totalNAVUsdc, sharePriceUsdc)) {
           logger.error('[SuiUsdcPool] SANITY CHECK FAILED — values exceed reasonable bounds', {
             rawBalance: balanceValue,
             totalNAVUsdc,
