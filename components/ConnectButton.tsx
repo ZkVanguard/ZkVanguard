@@ -133,7 +133,7 @@ export function ConnectButton() {
         <div className="relative">
           <button
             onClick={() => setShowSelector(!showSelector)}
-            className="px-5 h-11 bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-[12px] font-semibold text-[15px] transition-colors flex items-center gap-2"
+            className="px-5 h-11 bg-claude-orange hover:bg-claude-rust text-white rounded-[12px] font-semibold text-[15px] transition-colors flex items-center gap-2"
           >
             <Wallet className="w-4 h-4" />
             <span>Connect</span>

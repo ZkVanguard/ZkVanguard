@@ -5,7 +5,9 @@ import { useTranslations } from 'next-intl';
 
 export const Stats = memo(function Stats() {
   const t = useTranslations('stats');
-  const [isVisible, setIsVisible] = useState(false);
+  // Visible by default so the section renders even if client hydration is delayed
+  // or blocked (e.g. strict CSP) — entrance animation is a progressive enhancement.
+  const [isVisible, setIsVisible] = useState(true);
   const [liveStats, setLiveStats] = useState<{ agents: number; chains: number; zkProofs: number } | null>(null);
 
   useEffect(() => {
@@ -35,10 +37,10 @@ export const Stats = memo(function Stats() {
             }`}
             style={{ transitionDelay: `${index * 80}ms` }}
           >
-            <div className="text-[72px] font-semibold text-[#1d1d1f] tracking-[-0.06em] leading-none mb-2">
+            <div className="text-[72px] font-semibold text-claude-ink tracking-[-0.06em] leading-none mb-2">
               {stat.value}
             </div>
-            <div className="text-[17px] text-[#86868b]">{stat.label}</div>
+            <div className="text-[17px] text-claude-ink3">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -53,11 +55,11 @@ export const Stats = memo(function Stats() {
             }`}
             style={{ transitionDelay: '80ms' }}
           >
-            <div className="text-[180px] font-semibold text-[#1d1d1f] tracking-[-0.08em] leading-none mb-4">
+            <div className="font-serif text-[180px] font-semibold text-claude-orange tracking-[-0.05em] leading-none mb-4">
               {stats[1].value}
             </div>
-            <div className="text-[32px] font-semibold text-[#1d1d1f] mb-2">{stats[1].label}</div>
-            <div className="text-[17px] text-[#86868b]">{t('batchingNote')}</div>
+            <div className="text-[32px] font-semibold text-claude-ink mb-2">{stats[1].label}</div>
+            <div className="text-[17px] text-claude-ink3">{t('batchingNote')}</div>
           </div>
         </div>
 
@@ -71,10 +73,10 @@ export const Stats = memo(function Stats() {
               }`}
               style={{ transitionDelay: `${(index + 2) * 80}ms` }}
             >
-              <div className="text-[80px] font-semibold text-[#1d1d1f] tracking-[-0.06em] leading-none mb-3">
+              <div className="text-[80px] font-semibold text-claude-ink tracking-[-0.06em] leading-none mb-3">
                 {stat.value}
               </div>
-              <div className="text-[17px] text-[#86868b]">{stat.label}</div>
+              <div className="text-[17px] text-claude-ink3">{stat.label}</div>
             </div>
           ))}
         </div>

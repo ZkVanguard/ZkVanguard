@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback, memo } from 'react';
-import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 
 interface PoolMetrics {
@@ -11,58 +10,39 @@ interface PoolMetrics {
   sharePrice: number;
 }
 
-// Memoized metric card to prevent unnecessary re-renders
-const MetricCard = memo(function MetricCard({ 
-  label, 
-  value, 
-  delay 
-}: { 
-  label: string; 
-  value: string | number; 
-  delay: number 
+const MetricCard = memo(function MetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay }}
-      className="p-6 lg:p-8"
-    >
-      <div className="text-[15px] text-[#86868b] mb-2">{label}</div>
-      <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">
+    <div className="p-6 lg:p-8">
+      <div className="text-[15px] text-claude-ink3 mb-2">{label}</div>
+      <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">
         {value}
       </div>
-    </motion.div>
+    </div>
   );
 });
 
-// Static fallback component for SSR and loading states
 function StaticMetricsContent({ t }: { t: (key: string) => string }) {
   return (
     <div>
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
+        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
           {t('title')}
         </h2>
-        <p className="text-[17px] lg:text-[19px] text-[#86868b]">{t('subtitle')}</p>
+        <p className="text-[17px] lg:text-[19px] text-claude-ink3">{t('subtitle')}</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">{t('tvl')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">{t('transactions')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">{t('gasSavings')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
-        </div>
-        <div className="p-6 lg:p-8">
-          <div className="text-[15px] text-[#86868b] mb-2">{t('aiAgentsOnline')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter">--</div>
-        </div>
+        {[t('tvl'), t('transactions'), t('gasSavings'), t('aiAgentsOnline')].map((label) => (
+          <div key={label} className="p-6 lg:p-8">
+            <div className="text-[15px] text-claude-ink3 mb-2">{label}</div>
+            <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">--</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -109,13 +89,11 @@ export const LiveMetrics = memo(function LiveMetrics() {
 
   useEffect(() => {
     if (!mounted) return;
-    // Fetch real on-chain pool data immediately, then refresh every 30s
     refreshMetrics();
     const interval = setInterval(refreshMetrics, 30000);
     return () => clearInterval(interval);
   }, [mounted, refreshMetrics]);
 
-  // Return static content until client-side mount is complete
   if (!mounted || loading) {
     return <StaticMetricsContent t={t} />;
   }
@@ -134,33 +112,24 @@ export const LiveMetrics = memo(function LiveMetrics() {
 
   return (
     <div>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12 lg:mb-16"
-      >
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-[-0.015em] mb-3">
+      <div className="text-center mb-12 lg:mb-16">
+        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
           {t('title')}
         </h2>
-        <p className="text-[17px] lg:text-[19px] text-[#86868b]">{t('subtitle')}</p>
-      </motion.div>
+        <p className="text-[17px] lg:text-[19px] text-claude-ink3">{t('subtitle')}</p>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <MetricCard label={t('tvl')} value={formattedMetrics.tvl} delay={0.1} />
-        <MetricCard label={t('transactions')} value={formattedMetrics.memberCount} delay={0.2} />
-        <MetricCard label={t('gasSavings')} value={formattedMetrics.sharePrice} delay={0.3} />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          className="p-6 lg:p-8"
-        >
-          <div className="text-[15px] text-[#86868b] mb-2">{t('aiAgentsOnline')}</div>
-          <div className="text-[48px] lg:text-[56px] font-semibold text-[#1D1D1F] tracking-tighter flex items-center gap-2">
+        <MetricCard label={t('tvl')} value={formattedMetrics.tvl} />
+        <MetricCard label={t('transactions')} value={formattedMetrics.memberCount} />
+        <MetricCard label={t('gasSavings')} value={formattedMetrics.sharePrice} />
+        <div className="p-6 lg:p-8">
+          <div className="text-[15px] text-claude-ink3 mb-2">{t('aiAgentsOnline')}</div>
+          <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight flex items-center gap-2">
             {formattedMetrics.agents}
-            <div className="w-2 h-2 bg-[#34C759] rounded-full" />
+            <div className="w-2 h-2 bg-[#6E8C5E] rounded-full" />
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

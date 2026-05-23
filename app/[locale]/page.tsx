@@ -13,40 +13,40 @@ const LiveMetrics = dynamic(() => import('../../components/LiveMetrics').then(m 
 
 export default function HomePage() {
   return (
-    <div className="overflow-x-hidden">
+    <div className="claude-home overflow-x-hidden">
       {/* Hero Section */}
       <Hero />
-      
+
       {/* Stats Section */}
-      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-claude-bg">
         <div className="max-w-[1280px] mx-auto">
           <Stats />
         </div>
       </section>
-      
+
       {/* Features Section */}
-      <section id="features" className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+      <section id="features" className="py-20 lg:py-32 px-5 lg:px-8 bg-claude-surface">
         <div className="max-w-[1280px] mx-auto">
           <Features />
         </div>
       </section>
-      
+
       {/* AI Agents Section */}
-      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-white">
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-claude-bg">
         <div className="max-w-[1280px] mx-auto">
           <AgentShowcase />
         </div>
       </section>
-      
+
       {/* How It Works Section */}
-      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-[#fbfbfd]">
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-claude-surface">
         <div className="max-w-[1280px] mx-auto">
           <HowItWorks />
         </div>
       </section>
-      
+
       {/* Live Metrics Section */}
-      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-white">
+      <section className="py-20 lg:py-32 px-5 lg:px-8 bg-claude-bg">
         <div className="max-w-[1280px] mx-auto">
           <LiveMetrics />
         </div>

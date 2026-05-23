@@ -1,87 +1,76 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { Target, TrendingUp, Users, Rocket } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 export function Roadmap() {
   const t = useTranslations('roadmap');
-  
+
   const milestones = [
     {
       icon: Target,
       title: t('q1Title'),
       description: t('q1Description'),
       status: t('completed'),
-      statusClass: 'bg-[#E5E5EA] text-[#424245]',
-      color: 'text-[#86868b]',
+      statusClass: 'bg-claude-border text-claude-ink2',
+      iconColor: 'text-claude-ink3',
+      iconBg: 'bg-claude-ink3/12',
     },
     {
       icon: Users,
       title: t('q2Title'),
       description: t('q2Description'),
       status: t('live'),
-      statusClass: 'bg-green-100 text-green-700',
-      color: 'text-green-500',
+      statusClass: 'bg-[#7E9B6F]/20 text-[#5C7850]',
+      iconColor: 'text-[#6E8C5E]',
+      iconBg: 'bg-[#7E9B6F]/15',
     },
     {
       icon: TrendingUp,
       title: t('q3Title'),
       description: t('q3Description'),
       status: t('upcoming'),
-      statusClass: 'bg-[#E5E5EA] text-[#424245]',
-      color: 'text-purple-500',
+      statusClass: 'bg-claude-border text-claude-ink2',
+      iconColor: 'text-claude-sky',
+      iconBg: 'bg-claude-sky/15',
     },
     {
       icon: Rocket,
       title: t('q4Title'),
       description: t('q4Description'),
       status: t('planned'),
-      statusClass: 'bg-[#E5E5EA] text-[#424245]',
-      color: 'text-yellow-500',
+      statusClass: 'bg-claude-border text-claude-ink2',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
   ];
 
   return (
-    <section className="py-24 bg-white">
+    <section className="py-24 bg-claude-bg">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <h2 className="text-4xl md:text-5xl font-bold mb-4">
-            <span className="bg-gradient-to-r from-[#007AFF] to-[#5856D6] bg-clip-text text-transparent">
-              {t('title')}
-            </span>
+        <div className="text-center mb-16">
+          <h2 className="font-serif text-4xl md:text-5xl font-semibold mb-4 text-claude-ink tracking-[-0.02em]">
+            {t('title')}
           </h2>
-          <p className="text-xl text-[#6E6E73] max-w-2xl mx-auto">
+          <p className="text-xl text-claude-ink2 max-w-2xl mx-auto">
             {t('subtitle')}
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {milestones.map((milestone, index) => {
             const Icon = milestone.icon;
             return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="p-6 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl hover:border-[#C6C6C8] transition-all"
-              >
-                <div className={`inline-flex p-3 ${milestone.color.replace('text-', 'bg-')}/10 rounded-lg mb-4`}>
-                  <Icon className={`w-6 h-6 ${milestone.color}`} />
+              <div key={index} className="claude-card p-6">
+                <div className={`inline-flex p-3 ${milestone.iconBg} rounded-[14px] mb-4`}>
+                  <Icon className={`w-6 h-6 ${milestone.iconColor}`} />
                 </div>
-                <h3 className="text-lg font-semibold mb-2 text-[#1D1D1F]">{milestone.title}</h3>
-                <p className="text-[#6E6E73] text-sm mb-4">{milestone.description}</p>
+                <h3 className="text-lg font-semibold mb-2 text-claude-ink">{milestone.title}</h3>
+                <p className="text-claude-ink2 text-sm mb-4">{milestone.description}</p>
                 <div className={`text-xs px-3 py-1 rounded-full inline-block font-medium ${milestone.statusClass}`}>
                   {milestone.status}
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>

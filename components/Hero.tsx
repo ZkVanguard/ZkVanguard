@@ -7,90 +7,93 @@ import { useTranslations } from 'next-intl';
 
 export const Hero = memo(function Hero() {
   const t = useTranslations('hero');
-  
+
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden bg-claude-bg">
+      {/* Soft warm radial wash */}
+      <div className="claude-hero-glow absolute inset-0 -z-10" />
+
       <div className="relative w-full px-5 lg:px-8 pt-28 pb-20 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32">
-        <div className="max-w-[1280px] mx-auto">
-          
-          {/* Asymmetric layout - content left, visual right */}
-          <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 lg:gap-16 items-center">
-            
+        <div className="max-w-[1200px] mx-auto">
+
+          <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-12 lg:gap-16 items-center">
+
             {/* Left: Main content */}
             <div className="max-w-[640px]">
-              {/* Eyebrow - clean badge with emphasis */}
-              <div className="inline-flex items-center gap-3 mb-6">
-                <span className="text-subheadline text-label-secondary font-medium">
+              {/* Eyebrow — warm pill */}
+              <div className="claude-chip inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 mb-7">
+                <span className="w-1.5 h-1.5 rounded-full bg-claude-orange" />
+                <span className="text-[13px] font-medium tracking-wide">
                   {t('eyebrow')}
                 </span>
-                <div className="w-px h-3 bg-separator-opaque" />
-                <span className="text-subheadline font-semibold text-transparent bg-gradient-to-r from-ios-blue to-[#0066FF] bg-clip-text">
+                <span className="w-px h-3 bg-claude-orange/30" />
+                <span className="text-[13px] font-semibold">
                   {t('quantumProof')}
                 </span>
               </div>
 
-              {/* Hero headline - responsive sizing */}
-              <h1 className="text-[36px] leading-[1.1] sm:text-[48px] sm:leading-[1.08] lg:text-[64px] xl:text-[80px] lg:leading-[1.05] font-bold text-label-primary tracking-[-0.02em] mb-4 sm:mb-6">
+              {/* Hero headline — warm editorial serif */}
+              <h1 className="font-serif text-[40px] leading-[1.08] sm:text-[52px] sm:leading-[1.06] lg:text-[68px] xl:text-[76px] lg:leading-[1.04] font-semibold text-claude-ink tracking-[-0.015em] mb-5 sm:mb-6">
                 {t('headline1')}
                 <br />
-                <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-ios-blue via-[#0066FF] to-[#0052CC] bg-clip-text text-transparent">
-                    {t('headline2')}
-                  </span>
-                  {/* Subtle glow under gradient text */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-ios-blue/20 to-transparent blur-2xl -z-10" />
+                <span className="relative inline-block text-claude-orange">
+                  {t('headline2')}
+                  {/* hand-drawn style underline swash */}
+                  <svg className="absolute -bottom-2 left-0 w-full" height="10" viewBox="0 0 300 10" preserveAspectRatio="none" fill="none" aria-hidden="true">
+                    <path d="M2 7C60 3 120 2 180 4C230 5.5 270 6 298 4" stroke="#D97757" strokeWidth="3" strokeLinecap="round" opacity="0.55" />
+                  </svg>
                 </span>
               </h1>
-              
-              {/* Shorter subheadline - responsive */}
-              <p className="text-body sm:text-title-3 lg:text-title-2 text-label-secondary font-normal leading-relaxed mb-8 sm:mb-10">
+
+              {/* Subtitle */}
+              <p className="text-[18px] sm:text-[21px] lg:text-[22px] text-claude-ink2 font-normal leading-[1.55] mb-9 sm:mb-10 max-w-[560px]">
                 {t('subtitle')}
               </p>
 
-              {/* CTA - responsive button size */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-4">
-                <Link 
-                  href="/dashboard" 
-                  className="group inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 h-[52px] sm:h-[56px] bg-ios-blue text-white text-callout sm:text-headline font-semibold rounded-[14px] hover:opacity-90 active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_30px_rgba(0,122,255,0.25)] w-full sm:w-auto"
+              {/* CTA */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="group inline-flex items-center justify-center gap-2.5 px-7 sm:px-8 h-[52px] sm:h-[56px] bg-claude-orange text-white text-[16px] sm:text-[17px] font-semibold rounded-[14px] hover:bg-claude-rust active:scale-[0.97] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_10px_28px_-10px_rgba(189,91,61,0.55)] w-full sm:w-auto"
                 >
                   <span>{t('ctaDashboard')}</span>
-                  <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]" strokeWidth={2.5} />
+                  <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]" strokeWidth={2.25} />
                 </Link>
-                <a 
+                <a
                   href="#features"
-                  className="text-callout sm:text-headline font-medium text-ios-blue hover:text-[#0066FF] transition-colors duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  className="inline-flex items-center gap-1.5 h-[52px] sm:h-[56px] px-2 text-[16px] sm:text-[17px] font-medium text-claude-ink2 hover:text-claude-rust transition-colors duration-200"
                 >
                   {t('ctaLearnMore')}
+                  <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
                 </a>
               </div>
             </div>
 
-            {/* Right: Visual representation - Desktop only */}
+            {/* Right: Visual — Desktop only */}
             <div className="hidden lg:block relative">
-              {/* Modern stacked card composition */}
-              <div className="relative w-full max-w-[520px] ml-auto space-y-4">
-                
-                {/* Primary card - Zero-Knowledge Security */}
-                <div className="bg-white rounded-[20px] p-7 shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-black/5">
-                  <div className="flex items-start gap-4 mb-5">
-                    <div className="w-14 h-14 rounded-[14px] bg-[#007AFF] flex items-center justify-center flex-shrink-0">
-                      <ShieldCheckIcon className="w-7 h-7 text-white" strokeWidth={2} />
+              <div className="relative w-full max-w-[500px] ml-auto space-y-4">
+
+                {/* Primary card — Zero-Knowledge Security */}
+                <div className="claude-card p-7">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="w-14 h-14 rounded-[16px] bg-claude-orange/12 flex items-center justify-center flex-shrink-0">
+                      <ShieldCheckIcon className="w-7 h-7 text-claude-orange" strokeWidth={1.9} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-[19px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                      <h3 className="text-[19px] font-semibold text-claude-ink mb-1.5 tracking-[-0.01em]">
                         Zero-Knowledge Security
                       </h3>
-                      <p className="text-[15px] text-[#86868b] leading-[1.4]">
-                        ZK-STARK verification. Your strategies remain completely private.
+                      <p className="text-[15px] text-claude-ink2 leading-[1.45]">
+                        ZK-STARK verification. Your strategies stay completely private.
                       </p>
                     </div>
                   </div>
-                  {/* Clean minimal chart */}
-                  <div className="flex items-end gap-1.5 h-16 px-2">
+                  {/* Warm minimal chart */}
+                  <div className="flex items-end gap-1.5 h-16 px-1">
                     {[60, 82, 68, 95, 72, 88, 78].map((height, i) => (
-                      <div 
+                      <div
                         key={i}
-                        className="flex-1 bg-[#007AFF]/80 rounded-t-[3px]"
+                        className="flex-1 rounded-t-[4px] bg-gradient-to-t from-claude-orange/55 to-claude-orange"
                         style={{ height: `${height}%` }}
                       />
                     ))}
@@ -99,28 +102,26 @@ export const Hero = memo(function Hero() {
 
                 {/* Secondary cards row */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Real-Time Data card */}
-                  <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
-                    <div className="w-11 h-11 rounded-[11px] bg-[#FF9500]/10 flex items-center justify-center mb-4">
-                      <ChartBarIcon className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
+                  <div className="claude-card p-6">
+                    <div className="w-11 h-11 rounded-[13px] bg-claude-sky/15 flex items-center justify-center mb-4">
+                      <ChartBarIcon className="w-5 h-5 text-claude-sky" strokeWidth={2} />
                     </div>
-                    <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                    <h4 className="text-[17px] font-semibold text-claude-ink mb-1.5 tracking-[-0.01em]">
                       Real-Time Data
                     </h4>
-                    <p className="text-[14px] text-[#86868b] leading-[1.35]">
+                    <p className="text-[14px] text-claude-ink2 leading-[1.4]">
                       Live market analytics and insights
                     </p>
                   </div>
 
-                  {/* AI Automation card */}
-                  <div className="bg-white rounded-[18px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.06)] border border-black/5">
-                    <div className="w-11 h-11 rounded-[11px] bg-[#34C759]/10 flex items-center justify-center mb-4">
-                      <BoltIcon className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
+                  <div className="claude-card p-6">
+                    <div className="w-11 h-11 rounded-[13px] bg-[#7E9B6F]/15 flex items-center justify-center mb-4">
+                      <BoltIcon className="w-5 h-5 text-[#6E8C5E]" strokeWidth={2} />
                     </div>
-                    <h4 className="text-[17px] font-semibold text-[#1d1d1f] mb-1.5 tracking-[-0.01em]">
+                    <h4 className="text-[17px] font-semibold text-claude-ink mb-1.5 tracking-[-0.01em]">
                       AI Automation
                     </h4>
-                    <p className="text-[14px] text-[#86868b] leading-[1.35]">
+                    <p className="text-[14px] text-claude-ink2 leading-[1.4]">
                       Autonomous trading and risk mitigation
                     </p>
                   </div>
@@ -130,55 +131,25 @@ export const Hero = memo(function Hero() {
             </div>
           </div>
 
-          {/* Mobile: Better feature showcase */}
-          <div className="lg:hidden mt-12 space-y-4">
-            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#007AFF]/10 flex items-center justify-center">
-                  <ShieldCheckIcon className="w-5 h-5 text-[#007AFF]" strokeWidth={2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
-                    Zero-Knowledge Security
-                  </h3>
-                  <p className="text-[15px] text-[#86868b] leading-snug">
-                    Quantum-proof privacy for your portfolio
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#34C759]/10 flex items-center justify-center">
-                  <BoltIcon className="w-5 h-5 text-[#34C759]" strokeWidth={2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
-                    AI Automation
-                  </h3>
-                  <p className="text-[15px] text-[#86868b] leading-snug">
-                    Autonomous trading and risk mitigation
-                  </p>
+          {/* Mobile: feature showcase */}
+          <div className="lg:hidden mt-12 space-y-3.5">
+            {[
+              { Icon: ShieldCheckIcon, tint: 'bg-claude-orange/12', color: 'text-claude-orange', title: 'Zero-Knowledge Security', body: 'Quantum-proof privacy for your portfolio' },
+              { Icon: BoltIcon, tint: 'bg-[#7E9B6F]/15', color: 'text-[#6E8C5E]', title: 'AI Automation', body: 'Autonomous trading and risk mitigation' },
+              { Icon: ChartBarIcon, tint: 'bg-claude-sky/15', color: 'text-claude-sky', title: 'Real-Time Data', body: 'Live market analytics and insights' },
+            ].map(({ Icon, tint, color, title, body }) => (
+              <div key={title} className="claude-card p-5">
+                <div className="flex items-start gap-4">
+                  <div className={`flex-shrink-0 w-11 h-11 rounded-[13px] ${tint} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${color}`} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[17px] font-semibold text-claude-ink mb-1">{title}</h3>
+                    <p className="text-[15px] text-claude-ink2 leading-snug">{body}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-white rounded-[16px] p-5 border border-[#d2d2d7] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-11 h-11 rounded-[11px] bg-[#FF9500]/10 flex items-center justify-center">
-                  <ChartBarIcon className="w-5 h-5 text-[#FF9500]" strokeWidth={2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
-                    Real-Time Data
-                  </h3>
-                  <p className="text-[15px] text-[#86868b] leading-snug">
-                    Live market analytics and insights
-                  </p>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>

@@ -916,3 +916,43 @@ h1, h2, h3, h4, h5, h6 {
   transition-duration: 0.5s !important;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLAUDE WARM THEME — homepage (comfortable, paper-like, terracotta accent)
+   Scoped helpers; does not alter the existing Apple system used elsewhere.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.claude-home {
+  background-color: #FAF9F5;
+  color: #2A2722;
+}
+.claude-home ::selection {
+  background: rgba(217, 119, 87, 0.22);
+  color: #2A2722;
+}
+
+/* Soft radial warmth behind the hero — calm, not glowy */
+.claude-hero-glow {
+  background:
+    radial-gradient(60% 55% at 78% 18%, rgba(217, 119, 87, 0.10) 0%, rgba(217, 119, 87, 0) 60%),
+    radial-gradient(50% 50% at 8% 90%, rgba(106, 155, 204, 0.08) 0%, rgba(106, 155, 204, 0) 55%);
+}
+
+/* Reusable warm card — gentle lift, warm-tinted shadow */
+.claude-card {
+  background: #FEFDFB;
+  border: 1px solid #E8E3D5;
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(41, 38, 32, 0.04), 0 10px 28px -16px rgba(41, 38, 32, 0.18);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.claude-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 2px 4px rgba(41, 38, 32, 0.05), 0 18px 40px -18px rgba(41, 38, 32, 0.26);
+}
+
+/* Pill / eyebrow chip */
+.claude-chip {
+  background: rgba(217, 119, 87, 0.10);
+  border: 1px solid rgba(217, 119, 87, 0.22);
+  color: #BD5B3D;
+}
+

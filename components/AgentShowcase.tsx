@@ -11,35 +11,35 @@ export function AgentShowcase() {
       name: 'Lead Agent',
       role: 'Orchestrator',
       description: 'Coordinates all agent activities and manages workflow',
-      bgColor: 'bg-[#007AFF]/[0.08]',
+      bgColor: 'bg-claude-orange/[0.10]',
     },
     {
       id: 'risk',
       name: 'Risk Agent',
       role: 'Risk Analyzer',
       description: 'Analyzes market conditions and portfolio risks',
-      bgColor: 'bg-[#FF9500]/[0.08]',
+      bgColor: 'bg-[#E0A458]/[0.14]',
     },
     {
       id: 'hedging',
       name: 'Hedging Agent',
       role: 'Strategy Generator',
       description: 'Creates optimal hedging strategies',
-      bgColor: 'bg-[#34C759]/[0.08]',
+      bgColor: 'bg-[#7E9B6F]/[0.16]',
     },
     {
       id: 'settlement',
       name: 'Settlement Agent',
       role: 'Transaction Executor',
       description: 'Executes trades with gasless transactions',
-      bgColor: 'bg-[#AF52DE]/[0.08]',
+      bgColor: 'bg-claude-sky/[0.13]',
     },
     {
       id: 'reporting',
       name: 'Reporting Agent',
       role: 'Analytics Generator',
       description: 'Generates compliance reports and analytics',
-      bgColor: 'bg-[#FF2D55]/[0.08]',
+      bgColor: 'bg-[#C98A7D]/[0.15]',
     },
   ];
 
@@ -47,10 +47,10 @@ export function AgentShowcase() {
     <div>
       {/* Section Header */}
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="text-[40px] lg:text-[56px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-4">
+        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.08] mb-4">
           {t('title')}
         </h2>
-        <p className="text-[19px] lg:text-[21px] text-[#86868b] leading-[1.47] max-w-[600px] mx-auto">
+        <p className="text-[19px] lg:text-[21px] text-claude-ink2 leading-[1.47] max-w-[600px] mx-auto">
           {t('subtitle')}
         </p>
       </div>
@@ -63,10 +63,10 @@ export function AgentShowcase() {
               key={agent.id}
               className={`${agent.bgColor} rounded-[20px] p-10`}
             >
-              <h3 className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+              <h3 className="text-[32px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.08] mb-2">
                 {agent.name}
               </h3>
-              <p className="text-[17px] text-[#86868b] leading-[1.47]">
+              <p className="text-[17px] text-claude-ink2 leading-[1.47]">
                 {agent.role}
               </p>
             </div>
@@ -79,10 +79,10 @@ export function AgentShowcase() {
         {/* Hero Agent - Lead Agent takes full width */}
         <div className={`${agents[0].bgColor} rounded-[30px] px-16 pt-20 pb-16 mb-3 min-h-[320px] flex flex-col justify-end`}>
           <div>
-            <h3 className="text-[64px] font-semibold text-[#1d1d1f] tracking-[-0.03em] leading-[1.05] mb-4">
+            <h3 className="text-[64px] font-semibold text-claude-ink tracking-[-0.03em] leading-[1.05] mb-4">
               {agents[0].name}
             </h3>
-            <p className="text-[28px] text-[#86868b] leading-[1.42] tracking-[-0.005em]">
+            <p className="text-[28px] text-claude-ink2 leading-[1.42] tracking-[-0.005em]">
               {agents[0].role}
             </p>
           </div>
@@ -95,10 +95,10 @@ export function AgentShowcase() {
             {/* Risk Agent */}
             <div className={`${agents[1].bgColor} rounded-[30px] p-12 min-h-[240px] flex flex-col justify-end`}>
               <div>
-                <h3 className="text-[44px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+                <h3 className="text-[44px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.08] mb-2">
                   {agents[1].name}
                 </h3>
-                <p className="text-[21px] text-[#86868b] leading-[1.47]">
+                <p className="text-[21px] text-claude-ink2 leading-[1.47]">
                   {agents[1].role}
                 </p>
               </div>
@@ -107,10 +107,10 @@ export function AgentShowcase() {
             {/* Hedging Agent */}
             <div className={`${agents[2].bgColor} rounded-[30px] p-12 min-h-[240px] flex flex-col justify-end`}>
               <div>
-                <h3 className="text-[44px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.08] mb-2">
+                <h3 className="text-[44px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.08] mb-2">
                   {agents[2].name}
                 </h3>
-                <p className="text-[21px] text-[#86868b] leading-[1.47]">
+                <p className="text-[21px] text-claude-ink2 leading-[1.47]">
                   {agents[2].role}
                 </p>
               </div>
@@ -122,10 +122,10 @@ export function AgentShowcase() {
             {/* Settlement Agent - taller */}
             <div className={`${agents[3].bgColor} rounded-[30px] p-10 min-h-[320px] flex flex-col justify-end`}>
               <div>
-                <h3 className="text-[40px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.1] mb-2">
+                <h3 className="text-[40px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.1] mb-2">
                   {agents[3].name}
                 </h3>
-                <p className="text-[19px] text-[#86868b] leading-[1.47]">
+                <p className="text-[19px] text-claude-ink2 leading-[1.47]">
                   {agents[3].role}
                 </p>
               </div>
@@ -134,10 +134,10 @@ export function AgentShowcase() {
             {/* Reporting Agent - shorter */}
             <div className={`${agents[4].bgColor} rounded-[30px] p-10 min-h-[160px] flex flex-col justify-end`}>
               <div>
-                <h3 className="text-[36px] font-semibold text-[#1d1d1f] tracking-[-0.025em] leading-[1.1] mb-2">
+                <h3 className="text-[36px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.1] mb-2">
                   {agents[4].name}
                 </h3>
-                <p className="text-[17px] text-[#86868b] leading-[1.47]">
+                <p className="text-[17px] text-claude-ink2 leading-[1.47]">
                   {agents[4].role}
                 </p>
               </div>
