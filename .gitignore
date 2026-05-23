@@ -107,7 +107,8 @@ debug-hedges.js
 fix-sui-portfolio.js
 # scripts/ one-off helpers (migration / deploy / ad-hoc tests)
 scripts/complete-migration.js
-scripts/debug-*.js
+scripts/debug-*
+scripts/fix-*
 scripts/sync-shares-*.js
 scripts/upgrade-*.js
 scripts/test-deposit.js
