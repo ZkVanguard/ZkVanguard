@@ -21,9 +21,6 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { getSuiUsdcPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/sui/SuiCommunityPoolService';
 import {
   initCommunityPoolTables,
-  recordNavSnapshot,
-  saveUserSharesToDb,
-  savePoolStateToDb,
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
@@ -37,6 +34,7 @@ import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
+import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -1153,71 +1151,20 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       });
     }
 
-    try {
-      await recordNavSnapshot({
-        sharePrice: sharePriceUsd || poolStats.sharePrice,
-        totalNav: navUsd || poolStats.totalNAV,
-        totalShares: poolStats.totalShares,
-        memberCount: poolStats.memberCount,
-        allocations: aiResult.allocations,
-        source: 'sui-usdc-pool',
-        chain: 'sui',
-      });
-      logger.info('[SUI Cron] NAV snapshot recorded');
-    } catch (navErr) {
-      logger.warn('[SUI Cron] Failed to record NAV (non-critical)', { error: navErr });
-    }
+    await recordPoolNavSnapshot({ sharePriceUsd, navUsd, poolStats, allocations: aiResult.allocations });
 
     // Step 5: Sync members to DB from on-chain
-    try {
-      const members = await suiService.getAllMembers();
-      let synced = 0;
-      for (const m of members) {
-        if (m.shares > 0) {
-          await saveUserSharesToDb({
-            walletAddress: m.address.toLowerCase(),
-            shares: m.shares,
-            costBasisUSD: m.valueUsd || m.valueSui * (pricesUSD['SUI'] || 0),
-            chain: 'sui',
-          });
-          synced++;
-        }
-      }
-      logger.info('[SUI Cron] Members synced to DB', { synced, total: members.length });
-    } catch (syncErr) {
-      logger.warn('[SUI Cron] Member sync failed (non-critical)', { error: syncErr });
-    }
+    await syncMembersToDb({ suiService, suiPriceUsd: pricesUSD['SUI'] || 0 });
 
     // Step 6: Save pool state to DB
-    try {
-      const poolAllocRecord: Record<string, { percentage: number; valueUSD: number; amount: number; price: number }> = {};
-      for (const asset of POOL_ASSETS) {
-        const pct = aiResult.allocations[asset] || 25;
-        poolAllocRecord[asset] = {
-          percentage: pct,
-          valueUSD: navUsd * (pct / 100),
-          amount: 0,
-          price: pricesUSD[asset] || 0,
-        };
-      }
-
-      await savePoolStateToDb({
-        totalValueUSD: navUsd,
-        totalShares: poolStats.totalShares,
-        sharePrice: sharePriceUsd || 1,
-        allocations: poolAllocRecord,
-        lastRebalance: Date.now(),
-        lastAIDecision: {
-          timestamp: Date.now(),
-          reasoning: aiResult.reasoning,
-          allocations: aiResult.allocations,
-        },
-        chain: 'sui',
-      });
-      logger.info('[SUI Cron] Pool state saved to DB');
-    } catch (dbErr) {
-      logger.warn('[SUI Cron] DB pool state save failed (non-critical)', { error: dbErr });
-    }
+    await savePoolState({
+      navUsd,
+      sharePriceUsd,
+      poolStats,
+      allocations: aiResult.allocations,
+      reasoning: aiResult.reasoning,
+      pricesUSD,
+    });
 
     // Step 6.5: Settle PREVIOUS cycle's hedges — return USDC from admin back to pool
     // This runs BEFORE new swaps so the pool gets its money back first.
