@@ -23,6 +23,8 @@
   },
   "scripts": {
     "prepare": "husky install",
+    "security:scan": "node scripts/security-scan.cjs",
+    "prebuild": "node scripts/security-scan.cjs",
     "clean": "rimraf dist coverage .hardhat cache",
     "compile": "hardhat compile",
     "compile:circuits": "bun run scripts/utils/generate-circuits.ts",
