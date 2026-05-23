@@ -25,7 +25,6 @@ import {
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
 import { getCronStateOr, setCronState, tryClaimCronRun } from '@/lib/db/cron-state';
-import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
@@ -36,7 +35,7 @@ import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/const
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
-import { classifyVolatility, classifyTrend, scoreAsset, clampConfidence, isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
+import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -111,110 +110,6 @@ interface SuiCronResult {
   };
   duration: number;
   error?: string;
-}
-
-// ============================================================================
-// AI Allocation Engine (same algorithm as EVM, adapted for SUI USDC pool)
-// ============================================================================
-
-interface AssetIndicator {
-  asset: PoolAsset;
-  price: number;
-  change24h: number;
-  volume24h: number;
-  high24h: number;
-  low24h: number;
-  volatility: 'low' | 'medium' | 'high';
-  trend: 'bullish' | 'bearish' | 'neutral';
-  score: number;
-}
-
-async function fetchMarketIndicators(): Promise<AssetIndicator[]> {
-  const mds = getMarketDataService();
-  const indicators: AssetIndicator[] = [];
-
-  for (const asset of POOL_ASSETS) {
-    try {
-      const data = await mds.getTokenPrice(asset);
-      const price = data.price;
-      const change24h = data.change24h ?? 0;
-      const volume24h = data.volume24h ?? 0;
-      // Estimate high/low from price and 24h change (MarketPrice doesn't have these)
-      const high24h = price * (1 + Math.abs(change24h) / 100 * 0.6);
-      const low24h = price * (1 - Math.abs(change24h) / 100 * 0.6);
-
-      // Volatility from 24h range
-      const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
-      const volatility = classifyVolatility(rangePercent);
-      const trend = classifyTrend(change24h);
-      const score = scoreAsset({ change24h, volatility, trend, volume24h, price });
-
-      indicators.push({ asset, price, change24h, volume24h, high24h, low24h, volatility, trend, score });
-    } catch (err) {
-      logger.warn(`[SUI Cron] Failed to fetch ${asset} price — skipping asset (no zero-data fallback)`, { error: err });
-      // Do NOT push zero-data indicators — AI should not make decisions on missing data
-    }
-  }
-
-  return indicators;
-}
-
-function generateAllocation(
-  indicators: AssetIndicator[],
-  currentAllocations?: Record<PoolAsset, number>
-): {
-  allocations: Record<PoolAsset, number>;
-  confidence: number;
-  reasoning: string;
-  shouldRebalance: boolean;
-} {
-  const totalScore = indicators.reduce((s, i) => s + i.score, 0) || 1;
-  const sorted = [...indicators].sort((a, b) => b.score - a.score);
-
-  const allocations: Record<string, number> = {};
-  let remaining = 100;
-
-  for (let i = 0; i < sorted.length; i++) {
-    if (i === sorted.length - 1) {
-      allocations[sorted[i].asset] = remaining;
-    } else {
-      let pct = Math.round((sorted[i].score / totalScore) * 100);
-      pct = Math.max(10, Math.min(40, pct));
-      allocations[sorted[i].asset] = pct;
-      remaining -= pct;
-    }
-  }
-
-  // Confidence
-  const clearTrends = indicators.filter(i => i.trend !== 'neutral').length;
-  const highVol = indicators.filter(i => i.volatility === 'high').length;
-  const confidence = clampConfidence(clearTrends, highVol);
-
-  // Reasoning
-  const top = sorted[0];
-  const bottom = sorted[sorted.length - 1];
-  const reasoning = `SUI USDC Pool AI (${new Date().toISOString().split('T')[0]}): ` +
-    `Overweight ${top.asset} (${allocations[top.asset]}%) — ${top.trend}, score ${top.score.toFixed(0)}. ` +
-    `Underweight ${bottom.asset} (${allocations[bottom.asset]}%) — ${bottom.trend}, score ${bottom.score.toFixed(0)}. ` +
-    `Prices: ${indicators.map(i => `${i.asset}=$${i.price.toLocaleString()}`).join(', ')}.`;
-
-  // Check drift to decide if rebalance needed
-  let shouldRebalance = false;
-  if (currentAllocations) {
-    const maxDrift = Math.max(
-      ...POOL_ASSETS.map(a => Math.abs((allocations[a] || 25) - (currentAllocations[a] || 25)))
-    );
-    shouldRebalance = maxDrift > 3;
-  } else {
-    shouldRebalance = confidence >= 65;
-  }
-
-  return {
-    allocations: allocations as Record<PoolAsset, number>,
-    confidence,
-    reasoning,
-    shouldRebalance,
-  };
 }
 
 // ============================================================================

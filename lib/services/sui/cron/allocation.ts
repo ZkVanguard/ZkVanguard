@@ -9,6 +9,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
+import { classifyVolatility, classifyTrend, scoreAsset, clampConfidence } from '@/lib/services/sui/cron/signal-gating';
 
 // 3 pool assets (SUI community pool — BTC, ETH, SUI only)
 export const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
@@ -42,21 +43,9 @@ export async function fetchMarketIndicators(): Promise<AssetIndicator[]> {
 
       // Volatility from 24h range
       const rangePercent = price > 0 ? ((high24h - low24h) / price) * 100 : 0;
-      const volatility: 'low' | 'medium' | 'high' =
-        rangePercent < 3 ? 'low' : rangePercent < 7 ? 'medium' : 'high';
-
-      // Trend from 24h change
-      const trend: 'bullish' | 'bearish' | 'neutral' =
-        change24h > 2 ? 'bullish' : change24h < -2 ? 'bearish' : 'neutral';
-
-      // Score 0-100
-      let score = 50 + change24h * 2;
-      if (volatility === 'low') score += 10;
-      else if (volatility === 'high') score -= 5;
-      if (trend === 'bullish') score += 10;
-      else if (trend === 'bearish') score -= 10;
-      if (volume24h * price > 100_000_000) score += 5;
-      score = Math.max(0, Math.min(100, score));
+      const volatility = classifyVolatility(rangePercent);
+      const trend = classifyTrend(change24h);
+      const score = scoreAsset({ change24h, volatility, trend, volume24h, price });
 
       indicators.push({ asset, price, change24h, volume24h, high24h, low24h, volatility, trend, score });
     } catch (err) {
@@ -97,7 +86,7 @@ export function generateAllocation(
   // Confidence
   const clearTrends = indicators.filter(i => i.trend !== 'neutral').length;
   const highVol = indicators.filter(i => i.volatility === 'high').length;
-  const confidence = Math.max(50, Math.min(95, 60 + clearTrends * 8 - highVol * 5));
+  const confidence = clampConfidence(clearTrends, highVol);
 
   // Reasoning
   const top = sorted[0];
