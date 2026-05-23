@@ -22,8 +22,8 @@ export function Roadmap() {
       description: t('q2Description'),
       status: t('live'),
       statusClass: 'bg-[#7E9B6F]/20 text-[#5C7850]',
-      iconColor: 'text-[#6E8C5E]',
-      iconBg: 'bg-[#7E9B6F]/15',
+      iconColor: 'text-claude-ink3',
+      iconBg: 'bg-claude-ink3/12',
     },
     {
       icon: TrendingUp,
@@ -31,8 +31,8 @@ export function Roadmap() {
       description: t('q3Description'),
       status: t('upcoming'),
       statusClass: 'bg-claude-border text-claude-ink2',
-      iconColor: 'text-claude-sky',
-      iconBg: 'bg-claude-sky/15',
+      iconColor: 'text-claude-ink3',
+      iconBg: 'bg-claude-ink3/12',
     },
     {
       icon: Rocket,
@@ -40,8 +40,8 @@ export function Roadmap() {
       description: t('q4Description'),
       status: t('planned'),
       statusClass: 'bg-claude-border text-claude-ink2',
-      iconColor: 'text-claude-orange',
-      iconBg: 'bg-claude-orange/12',
+      iconColor: 'text-claude-ink3',
+      iconBg: 'bg-claude-ink3/12',
     },
   ];
 
@@ -49,7 +49,7 @@ export function Roadmap() {
     <section className="py-24 bg-claude-bg">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="font-serif text-4xl md:text-5xl font-semibold mb-4 text-claude-ink tracking-[-0.02em]">
+          <h2 className="text-4xl md:text-5xl font-semibold mb-4 text-claude-ink tracking-[-0.02em]">
             {t('title')}
           </h2>
           <p className="text-xl text-claude-ink2 max-w-2xl mx-auto">

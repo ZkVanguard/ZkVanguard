@@ -18,28 +18,28 @@ export function AgentShowcase() {
       name: 'Risk Agent',
       role: 'Risk Analyzer',
       description: 'Analyzes market conditions and portfolio risks',
-      bgColor: 'bg-[#E0A458]/[0.14]',
+      bgColor: 'bg-claude-ink/[0.04]',
     },
     {
       id: 'hedging',
       name: 'Hedging Agent',
       role: 'Strategy Generator',
       description: 'Creates optimal hedging strategies',
-      bgColor: 'bg-[#7E9B6F]/[0.16]',
+      bgColor: 'bg-claude-ink/[0.04]',
     },
     {
       id: 'settlement',
       name: 'Settlement Agent',
       role: 'Transaction Executor',
       description: 'Executes trades with gasless transactions',
-      bgColor: 'bg-claude-sky/[0.13]',
+      bgColor: 'bg-claude-ink/[0.04]',
     },
     {
       id: 'reporting',
       name: 'Reporting Agent',
       role: 'Analytics Generator',
       description: 'Generates compliance reports and analytics',
-      bgColor: 'bg-[#C98A7D]/[0.15]',
+      bgColor: 'bg-claude-ink/[0.04]',
     },
   ];
 
@@ -47,7 +47,7 @@ export function AgentShowcase() {
     <div>
       {/* Section Header */}
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.08] mb-4">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.08] mb-4">
           {t('title')}
         </h2>
         <p className="text-[19px] lg:text-[21px] text-claude-ink2 leading-[1.47] max-w-[600px] mx-auto">

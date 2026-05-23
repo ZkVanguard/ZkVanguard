@@ -12,24 +12,24 @@ export function MarketOpportunity() {
       label: t('rwaMarketSize'),
       value: '$16T',
       description: t('rwaDescription'),
-      iconColor: 'text-[#6E8C5E]',
-      iconBg: 'bg-[#7E9B6F]/15',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
     {
       icon: TrendingUp,
       label: t('growthRate'),
       value: '50x',
       description: t('growthDescription'),
-      iconColor: 'text-claude-sky',
-      iconBg: 'bg-claude-sky/15',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
     {
       icon: Globe,
       label: t('targetMarket'),
       value: '$1.2T',
       description: t('targetDescription'),
-      iconColor: 'text-claude-clay',
-      iconBg: 'bg-claude-clay/12',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
     {
       icon: Users,
@@ -58,7 +58,7 @@ export function MarketOpportunity() {
     <section className="py-24 bg-claude-surface relative overflow-hidden">
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-16">
-          <h2 className="font-serif text-4xl md:text-5xl font-semibold mb-4 text-claude-ink tracking-[-0.02em]">
+          <h2 className="text-4xl md:text-5xl font-semibold mb-4 text-claude-ink tracking-[-0.02em]">
             {t('title')}
           </h2>
           <p className="text-xl text-claude-ink2 max-w-2xl mx-auto">
@@ -75,7 +75,7 @@ export function MarketOpportunity() {
                 <div className={`inline-flex p-3 ${data.iconBg} rounded-[14px] mb-3`}>
                   <Icon className={`w-6 h-6 ${data.iconColor}`} />
                 </div>
-                <div className="font-serif text-3xl font-semibold mb-2 text-claude-ink">{data.value}</div>
+                <div className="text-3xl font-semibold mb-2 text-claude-ink">{data.value}</div>
                 <div className="text-sm text-claude-ink2 mb-1">{data.label}</div>
                 <div className="text-xs text-claude-ink3">{data.description}</div>
               </div>
@@ -85,7 +85,7 @@ export function MarketOpportunity() {
 
         {/* Competitive Advantage */}
         <div className="max-w-4xl mx-auto">
-          <h3 className="font-serif text-2xl font-semibold text-center mb-8 text-claude-ink">{t('competitiveEdge')}</h3>
+          <h3 className="text-2xl font-semibold text-center mb-8 text-claude-ink">{t('competitiveEdge')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {competitors.map((comp, index) => (
               <div key={index} className="claude-card p-6">
@@ -101,7 +101,7 @@ export function MarketOpportunity() {
         <div className="mt-16 claude-card p-8 max-w-4xl mx-auto">
           <div className="flex items-center space-x-3 mb-6">
             <Shield className="w-8 h-8 text-claude-orange" />
-            <h3 className="font-serif text-2xl font-semibold text-claude-ink">{t('whyWins')}</h3>
+            <h3 className="text-2xl font-semibold text-claude-ink">{t('whyWins')}</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {valueProps.map((vp, index) => (

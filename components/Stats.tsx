@@ -55,7 +55,7 @@ export const Stats = memo(function Stats() {
             }`}
             style={{ transitionDelay: '80ms' }}
           >
-            <div className="font-serif text-[180px] font-semibold text-claude-orange tracking-[-0.05em] leading-none mb-4">
+            <div className="text-[180px] font-bold text-claude-orange tracking-[-0.08em] leading-none mb-4">
               {stats[1].value}
             </div>
             <div className="text-[32px] font-semibold text-claude-ink mb-2">{stats[1].label}</div>

@@ -28,7 +28,7 @@ export function HowItWorks() {
 
   return (
     <div>
-      <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.05] mb-4 text-center">{t('title')}</h2>
+      <h2 className="text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.05] mb-4 text-center">{t('title')}</h2>
       <p className="text-[19px] lg:text-[24px] text-claude-ink2 leading-[1.45] text-center mb-20 lg:mb-28">{t('subtitle')}</p>
       
       {/* Mobile - vertical stack */}
@@ -36,7 +36,7 @@ export function HowItWorks() {
         {steps.map((step, index) => {
           return (
             <div key={index} className="text-center">
-              <div className="font-serif text-[96px] font-semibold text-claude-orange/25 tracking-[-0.04em] leading-[1] mb-6">
+              <div className="text-[96px] font-semibold text-claude-orange/25 tracking-[-0.04em] leading-[1] mb-6">
                 {step.number}
               </div>
               <h3 className="text-[36px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.08] mb-4">
@@ -58,7 +58,7 @@ export function HowItWorks() {
         {steps.map((step, index) => {
           return (
             <div key={index} className="text-center">
-              <div className="font-serif text-[140px] font-semibold text-claude-orange/25 tracking-[-0.04em] leading-[1] mb-8">
+              <div className="text-[140px] font-semibold text-claude-orange/25 tracking-[-0.04em] leading-[1] mb-8">
                 {step.number}
               </div>
               <h3 className="text-[44px] font-semibold text-claude-ink tracking-[-0.025em] leading-[1.08] mb-5">

@@ -32,16 +32,12 @@ export const Hero = memo(function Hero() {
                 </span>
               </div>
 
-              {/* Hero headline — warm editorial serif */}
-              <h1 className="font-serif text-[40px] leading-[1.08] sm:text-[52px] sm:leading-[1.06] lg:text-[68px] xl:text-[76px] lg:leading-[1.04] font-semibold text-claude-ink tracking-[-0.015em] mb-5 sm:mb-6">
+              {/* Hero headline — Apple-style tight bold sans */}
+              <h1 className="text-[40px] leading-[1.08] sm:text-[52px] sm:leading-[1.06] lg:text-[68px] xl:text-[76px] lg:leading-[1.04] font-bold text-claude-ink tracking-[-0.03em] mb-5 sm:mb-6">
                 {t('headline1')}
                 <br />
-                <span className="relative inline-block text-claude-orange">
+                <span className="text-claude-orange">
                   {t('headline2')}
-                  {/* hand-drawn style underline swash */}
-                  <svg className="absolute -bottom-2 left-0 w-full" height="10" viewBox="0 0 300 10" preserveAspectRatio="none" fill="none" aria-hidden="true">
-                    <path d="M2 7C60 3 120 2 180 4C230 5.5 270 6 298 4" stroke="#D97757" strokeWidth="3" strokeLinecap="round" opacity="0.55" />
-                  </svg>
                 </span>
               </h1>
 
@@ -103,8 +99,8 @@ export const Hero = memo(function Hero() {
                 {/* Secondary cards row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="claude-card p-6">
-                    <div className="w-11 h-11 rounded-[13px] bg-claude-sky/15 flex items-center justify-center mb-4">
-                      <ChartBarIcon className="w-5 h-5 text-claude-sky" strokeWidth={2} />
+                    <div className="w-11 h-11 rounded-[13px] bg-claude-ink/[0.05] flex items-center justify-center mb-4">
+                      <ChartBarIcon className="w-5 h-5 text-claude-ink2" strokeWidth={2} />
                     </div>
                     <h4 className="text-[17px] font-semibold text-claude-ink mb-1.5 tracking-[-0.01em]">
                       Real-Time Data
@@ -115,8 +111,8 @@ export const Hero = memo(function Hero() {
                   </div>
 
                   <div className="claude-card p-6">
-                    <div className="w-11 h-11 rounded-[13px] bg-[#7E9B6F]/15 flex items-center justify-center mb-4">
-                      <BoltIcon className="w-5 h-5 text-[#6E8C5E]" strokeWidth={2} />
+                    <div className="w-11 h-11 rounded-[13px] bg-claude-ink/[0.05] flex items-center justify-center mb-4">
+                      <BoltIcon className="w-5 h-5 text-claude-ink2" strokeWidth={2} />
                     </div>
                     <h4 className="text-[17px] font-semibold text-claude-ink mb-1.5 tracking-[-0.01em]">
                       AI Automation
@@ -135,8 +131,8 @@ export const Hero = memo(function Hero() {
           <div className="lg:hidden mt-12 space-y-3.5">
             {[
               { Icon: ShieldCheckIcon, tint: 'bg-claude-orange/12', color: 'text-claude-orange', title: 'Zero-Knowledge Security', body: 'Quantum-proof privacy for your portfolio' },
-              { Icon: BoltIcon, tint: 'bg-[#7E9B6F]/15', color: 'text-[#6E8C5E]', title: 'AI Automation', body: 'Autonomous trading and risk mitigation' },
-              { Icon: ChartBarIcon, tint: 'bg-claude-sky/15', color: 'text-claude-sky', title: 'Real-Time Data', body: 'Live market analytics and insights' },
+              { Icon: BoltIcon, tint: 'bg-claude-ink/[0.05]', color: 'text-claude-ink2', title: 'AI Automation', body: 'Autonomous trading and risk mitigation' },
+              { Icon: ChartBarIcon, tint: 'bg-claude-ink/[0.05]', color: 'text-claude-ink2', title: 'Real-Time Data', body: 'Live market analytics and insights' },
             ].map(({ Icon, tint, color, title, body }) => (
               <div key={title} className="claude-card p-5">
                 <div className="flex items-start gap-4">

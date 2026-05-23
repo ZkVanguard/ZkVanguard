@@ -12,7 +12,7 @@ export function CTASection() {
     <section className="py-32 lg:py-40">
       <div className="container mx-auto px-5">
         <div className="max-w-[980px] mx-auto text-center">
-          <h2 className="font-serif text-[52px] lg:text-[76px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.05] mb-6 lg:mb-8">
+          <h2 className="text-[52px] lg:text-[76px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.05] mb-6 lg:mb-8">
             {t('title')}
           </h2>
           <p className="text-[21px] lg:text-[27px] text-claude-ink2 leading-[1.42] tracking-[-0.003em] mb-12 lg:mb-16 max-w-[720px] mx-auto">

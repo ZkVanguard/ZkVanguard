@@ -19,22 +19,22 @@ export const Features = memo(function Features() {
       icon: BoltIcon,
       title: t('aiAgents.title'),
       description: t('aiAgents.description'),
-      iconColor: 'text-[#6E8C5E]',
-      iconBg: 'bg-[#7E9B6F]/15',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
     {
       icon: ChartBarIcon,
       title: t('liveAnalytics.title'),
       description: t('liveAnalytics.description'),
-      iconColor: 'text-claude-sky',
-      iconBg: 'bg-claude-sky/15',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
     {
       icon: LockClosedIcon,
       title: t('quantumProof.title'),
       description: t('quantumProof.description'),
-      iconColor: 'text-claude-clay',
-      iconBg: 'bg-claude-clay/12',
+      iconColor: 'text-claude-orange',
+      iconBg: 'bg-claude-orange/12',
     },
   ];
 
@@ -42,7 +42,7 @@ export const Features = memo(function Features() {
     <div>
       {/* Section Header */}
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.08] mb-4">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.02em] leading-[1.08] mb-4">
           {t('title')}
         </h2>
         <p className="text-[19px] lg:text-[21px] text-claude-ink2 leading-[1.47] max-w-[600px] mx-auto">

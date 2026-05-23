@@ -20,7 +20,7 @@ const MetricCard = memo(function MetricCard({
   return (
     <div className="p-6 lg:p-8">
       <div className="text-[15px] text-claude-ink3 mb-2">{label}</div>
-      <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">
+      <div className="text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">
         {value}
       </div>
     </div>
@@ -31,7 +31,7 @@ function StaticMetricsContent({ t }: { t: (key: string) => string }) {
   return (
     <div>
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
           {t('title')}
         </h2>
         <p className="text-[17px] lg:text-[19px] text-claude-ink3">{t('subtitle')}</p>
@@ -40,7 +40,7 @@ function StaticMetricsContent({ t }: { t: (key: string) => string }) {
         {[t('tvl'), t('transactions'), t('gasSavings'), t('aiAgentsOnline')].map((label) => (
           <div key={label} className="p-6 lg:p-8">
             <div className="text-[15px] text-claude-ink3 mb-2">{label}</div>
-            <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">--</div>
+            <div className="text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight">--</div>
           </div>
         ))}
       </div>
@@ -113,7 +113,7 @@ export const LiveMetrics = memo(function LiveMetrics() {
   return (
     <div>
       <div className="text-center mb-12 lg:mb-16">
-        <h2 className="font-serif text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
+        <h2 className="text-[40px] lg:text-[56px] font-semibold text-claude-ink tracking-[-0.01em] mb-3">
           {t('title')}
         </h2>
         <p className="text-[17px] lg:text-[19px] text-claude-ink3">{t('subtitle')}</p>
@@ -125,9 +125,9 @@ export const LiveMetrics = memo(function LiveMetrics() {
         <MetricCard label={t('gasSavings')} value={formattedMetrics.sharePrice} />
         <div className="p-6 lg:p-8">
           <div className="text-[15px] text-claude-ink3 mb-2">{t('aiAgentsOnline')}</div>
-          <div className="font-serif text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight flex items-center gap-2">
+          <div className="text-[48px] lg:text-[56px] font-semibold text-claude-ink tracking-tight flex items-center gap-2">
             {formattedMetrics.agents}
-            <div className="w-2 h-2 bg-[#6E8C5E] rounded-full" />
+            <div className="w-2 h-2 bg-claude-orange rounded-full" />
           </div>
         </div>
       </div>
