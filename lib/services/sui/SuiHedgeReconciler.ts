@@ -34,6 +34,7 @@ import {
   type Hedge,
 } from '@/lib/db/hedges';
 import { env, envFirst } from '@/lib/utils/env';
+import { estimateHedgePnl, roundPnl8 } from '@/lib/services/sui/hedge-pnl';
 import { logger } from '@/lib/utils/logger';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
@@ -343,14 +344,13 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
   for (const [key, dbHedge] of db.entries()) {
     if (onChainIds.has(key)) continue;
     try {
-      const entry = Number(dbHedge.entry_price ?? 0);
       const exit = priceMap[dbHedge.asset] ?? 0;
-      const notional = Number(dbHedge.notional_value ?? 0);
-      const sign = dbHedge.side === 'LONG' ? 1 : -1;
-      const estPnl =
-        entry > 0 && exit > 0 && notional > 0
-          ? sign * notional * ((exit - entry) / entry)
-          : 0;
+      const estPnl = estimateHedgePnl(
+        dbHedge.side,
+        Number(dbHedge.notional_value ?? 0),
+        Number(dbHedge.entry_price ?? 0),
+        exit,
+      );
 
       if (dbHedge.hedge_id_onchain) {
         await closeHedgeByOnchainId({
@@ -389,14 +389,13 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
     if (!onChainIds.has(key)) continue;
     const livePrice = priceMap[dbHedge.asset];
     if (!livePrice || livePrice <= 0) continue;
-    const entry = Number(dbHedge.entry_price ?? 0);
-    const notional = Number(dbHedge.notional_value ?? 0);
-    // PnL = notional × pctMove × side-sign. Uses notional_value (consistent
-    // across code paths) NOT `size` (whose unit varies: asset-units for
-    // auto-hedge rows, collateral-USDC for reconciler rows). The old
-    // size-based formula produced garbage like $304 PnL on a $1.73 hedge.
-    const sign = dbHedge.side === 'LONG' ? 1 : -1;
-    const pnl = entry > 0 && notional > 0 ? sign * notional * ((livePrice - entry) / entry) : 0;
+    // PnL = notional × pctMove × side-sign — see lib/services/sui/hedge-pnl.ts.
+    const pnl = estimateHedgePnl(
+      dbHedge.side,
+      Number(dbHedge.notional_value ?? 0),
+      Number(dbHedge.entry_price ?? 0),
+      livePrice,
+    );
     try {
       await query(
         `UPDATE hedges
@@ -406,7 +405,7 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
              current_pnl = $2,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $3 AND status = 'active'`,
-        [livePrice, Math.round(pnl * 1e8) / 1e8, dbHedge.id],
+        [livePrice, roundPnl8(pnl), dbHedge.id],
       );
     } catch (err) {
       // Non-fatal — price refresh is a best-effort enrichment
