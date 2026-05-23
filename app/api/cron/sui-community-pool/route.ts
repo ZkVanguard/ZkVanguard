@@ -35,6 +35,7 @@ import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID, isSuiCommunityPool } from '@/lib/constants';
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
+import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -1646,19 +1647,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // Above $1k we drop to 5x; above $1M we cap at 3x to limit
           // single-wallet liquidation risk; above $100M cap at 2x because
           // a single 50% adverse move would wipe a pool of that size.
-          const navTier =
-            navUsd < 1_000           ? 'tiny'   :
-            navUsd < 1_000_000       ? 'small'  :
-            navUsd < 100_000_000     ? 'medium' : 'large';
-          const tierLeverageCap =
-            navTier === 'tiny'   ? 10 :
-            navTier === 'small'  ?  5 :
-            navTier === 'medium' ?  3 : 2;
-          const leverage = Math.min(
-            suiPoolConfig?.maxLeverage || tierLeverageCap,
-            tierLeverageCap,
-          );
-          const hedgeRatio = navUsd < 1000 ? 1.0 : 0.5;
+          const leverage = resolveLeverage(navUsd, suiPoolConfig?.maxLeverage);
+          const hedgeRatio = hedgeRatioForNav(navUsd);
 
           logger.info('[SUI Cron] Auto-hedge plan', {
             navUsd: navUsd.toFixed(2), sentiment, side, leverage, hedgeRatio,
@@ -1683,10 +1673,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             // Margin requirement: notional / leverage (10x => 10% of NAV).
             const totalAllocPct = (['BTC','ETH','SUI'] as const)
               .reduce((s, a) => s + Math.max(0, aiResult.allocations[a] || 0), 0);
-            const targetMargin = Math.max(
-              1.5, // BlueFin min deposit is 1 USDC; add a small buffer
-              (navUsd * (totalAllocPct / 100) * hedgeRatio) / Math.max(1, leverage) + 0.5,
-            );
+            const targetMargin = computeTargetMargin(navUsd, totalAllocPct, hedgeRatio, leverage);
             const minMargin = targetMargin * 0.9;
             try {
               // Reserves and swap caps scale with NAV so the same code
@@ -1694,10 +1681,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               //   • spotReserve: 0.05% of NAV (min $0.50, max $5k buffer)
               //   • suiReserve:  0.001% of NAV in SUI equiv (min 0.5 SUI)
               //   • maxSwapSui:  0.1% of NAV per tick, expressed in SUI
-              const suiPrice = Math.max(0.01, pricesUSD['SUI'] || 1);
-              const scaledSpotReserve = Math.min(5_000, Math.max(0.5, navUsd * 0.0005));
-              const scaledSuiReserve = Math.max(0.5, (navUsd * 0.00001) / suiPrice);
-              const scaledMaxSwapSui = Math.max(5, (navUsd * 0.001) / suiPrice);
+              const { spotReserve: scaledSpotReserve, suiReserve: scaledSuiReserve, maxSwapSui: scaledMaxSwapSui } = scaledReserves(navUsd, pricesUSD['SUI']);
               const topUp = await bluefinTreasury.autoTopUp({
                 minMargin, targetMargin,
                 spotReserve: scaledSpotReserve,
@@ -1805,7 +1789,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 continue;
               }
 
-              const hedgeValueUSD = navUsd * (allocation / 100) * hedgeRatio;
+              const hedgeValueUSD = hedgeValueUsd(navUsd, allocation, hedgeRatio);
               const effectiveValue = hedgeValueUSD * leverage;
               const hedgeSizeBase = effectiveValue / price;
               const spec = PERP_SPECS[asset];
