@@ -16,7 +16,11 @@
 
 import { logger } from '@/lib/utils/logger';
 import { cache } from '../../utils/cache';
-import { scoreTradeOpportunity } from '@/lib/services/market-data/opportunity-scoring';
+import {
+  scoreTradeOpportunity,
+  determineRecommendation as determineRecommendationPure,
+  calculateSizeMultiplier as calculateSizeMultiplierPure,
+} from '@/lib/services/market-data/opportunity-scoring';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import type { PredictionMarket } from './DelphiMarketService';
 
@@ -278,24 +282,7 @@ export class PredictionAggregatorService {
     consensus: number,
     directionStrength: number
   ): AggregatedPrediction['recommendation'] {
-    // Neutral or low confidence = wait
-    if (direction === 'NEUTRAL' || confidence < 40) {
-      return 'WAIT';
-    }
-
-    // Strong signals (high confidence + consensus + direction)
-    const isStrong = confidence >= 70 && consensus >= 70 && directionStrength >= 0.4;
-    const isMedium = confidence >= 55 && consensus >= 55;
-    
-    if (direction === 'DOWN') {
-      if (isStrong) return 'STRONG_HEDGE_SHORT';
-      if (isMedium) return 'HEDGE_SHORT';
-      return 'LIGHT_HEDGE_SHORT';
-    } else {
-      if (isStrong) return 'STRONG_HEDGE_LONG';
-      if (isMedium) return 'HEDGE_LONG';
-      return 'LIGHT_HEDGE_LONG';
-    }
+    return determineRecommendationPure(direction, confidence, consensus, directionStrength);
   }
 
   /**
@@ -306,25 +293,7 @@ export class PredictionAggregatorService {
     consensus: number,
     directionStrength: number
   ): number {
-    // Base: 1.0
-    let multiplier = 1.0;
-
-    // Confidence adjustment: +/- 0.3
-    if (confidence >= 75) multiplier += 0.3;
-    else if (confidence >= 60) multiplier += 0.15;
-    else if (confidence < 45) multiplier -= 0.2;
-
-    // Consensus adjustment: +/- 0.3
-    if (consensus >= 80) multiplier += 0.3;
-    else if (consensus >= 65) multiplier += 0.15;
-    else if (consensus < 50) multiplier -= 0.2;
-
-    // Direction strength adjustment: +/- 0.2
-    if (directionStrength >= 0.5) multiplier += 0.2;
-    else if (directionStrength < 0.2) multiplier -= 0.1;
-
-    // Clamp to reasonable range
-    return Math.max(0.5, Math.min(2.0, multiplier));
+    return calculateSizeMultiplierPure(confidence, consensus, directionStrength);
   }
 
   /**
