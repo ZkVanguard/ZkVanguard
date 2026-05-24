@@ -5,11 +5,14 @@
  * flag. validateExecution is read-only w.r.t. cooldown/volume state, so calling
  * the fresh singleton against defaults is deterministic.
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, afterEach } from '@jest/globals';
 import { SafeExecutionGuard } from '@/agents/core/SafeExecutionGuard';
 
 const guard = SafeExecutionGuard.getInstance();
 const base = { executionId: 'test', agentId: 'tester', action: 'hedge' };
+
+// Reset breaker state after each test so the shared singleton can't bleed.
+afterEach(() => { (guard as unknown as { resetCircuitBreaker(): void }).resetCircuitBreaker(); });
 
 describe('SafeExecutionGuard.validateExecution', () => {
   it('accepts a clean, within-limits trade', async () => {
@@ -57,5 +60,30 @@ describe('SafeExecutionGuard.validateExecution', () => {
   it('skips cooldown for read-only zero-size analysis actions', async () => {
     const r = await guard.validateExecution({ ...base, action: 'analyze', positionSizeUSD: 0 });
     expect(r.isValid).toBe(true);
+  });
+});
+
+describe('SafeExecutionGuard circuit breaker', () => {
+  const breaker = () => (guard as unknown as { circuitBreaker: { isOpen: boolean } }).circuitBreaker;
+
+  it('stays closed below the 3-failure threshold', () => {
+    guard.failExecution('f1', 'simulated');
+    guard.failExecution('f2', 'simulated');
+    expect(breaker().isOpen).toBe(false);
+  });
+
+  it('opens after 3 consecutive failures and blocks new executions', async () => {
+    for (let i = 0; i < 3; i++) guard.failExecution(`f${i}`, 'simulated failure');
+    expect(breaker().isOpen).toBe(true);
+    const r = await guard.validateExecution({ ...base, positionSizeUSD: 1000 });
+    expect(r.isValid).toBe(false);
+    expect(r.errors.some(e => e.includes('CIRCUIT BREAKER'))).toBe(true);
+  });
+
+  it('emergencyStop trips it immediately and halts trades', async () => {
+    guard.emergencyStop('manual halt');
+    expect(breaker().isOpen).toBe(true);
+    const r = await guard.validateExecution({ ...base, positionSizeUSD: 1000 });
+    expect(r.isValid).toBe(false);
   });
 });
