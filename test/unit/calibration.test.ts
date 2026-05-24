@@ -14,6 +14,7 @@ import {
   isPriceFreshEnough,
   buildDecisionToken,
   qualifyAggregatedPrediction,
+  qualifyPolymarketSignal,
   isTradingHalted,
   type QualifiedSignal,
 } from '@/lib/services/hedging/calibration';
@@ -120,6 +121,38 @@ describe('qualifyAggregatedPrediction', () => {
     expect(q!.probability).toBeCloseTo(0.65, 6);
     expect(q!.edge).toBeCloseTo(0.15, 6);
     expect(q!.weight).toBeCloseTo(0.64, 6); // 0.8 * 0.8
+  });
+});
+
+describe('qualifyPolymarketSignal', () => {
+  const now = 1_000_000;
+  const fresh = now - 1000;
+  // A clean, calibrated 5-min BTC signal (UP @ 65%).
+  const base = () => ({
+    confidence: 80, fetchedAt: fresh, volume24h: 5000, liquidity: 5000,
+    direction: 'UP' as const, upProbability: 65, downProbability: 35,
+  });
+
+  it('null / low confidence / stale → null', () => {
+    expect(qualifyPolymarketSignal(null, now)).toBeNull();
+    expect(qualifyPolymarketSignal({ ...base(), confidence: 50 } as any, now)).toBeNull();
+    expect(qualifyPolymarketSignal({ ...base(), fetchedAt: 0 } as any, now)).toBeNull();
+  });
+  it('rejects thin volume / thin liquidity', () => {
+    expect(qualifyPolymarketSignal({ ...base(), volume24h: 100 } as any, now)).toBeNull();
+    expect(qualifyPolymarketSignal({ ...base(), liquidity: 100 } as any, now)).toBeNull();
+  });
+  it('rejects insufficient edge (prob too close to 0.5)', () => {
+    expect(qualifyPolymarketSignal({ ...base(), upProbability: 55 } as any, now)).toBeNull(); // edge 0.05 < 0.10
+  });
+  it('qualifies a clean signal with liquidity-scaled weight', () => {
+    const q = qualifyPolymarketSignal(base() as any, now);
+    expect(q).not.toBeNull();
+    expect(q!.direction).toBe('UP');
+    expect(q!.probability).toBeCloseTo(0.65, 6);
+    expect(q!.edge).toBeCloseTo(0.15, 6);
+    expect(q!.weight).toBeCloseTo(1, 6); // max(5000,5000)/5000 saturates at 1
+    expect(q!.source).toBe('polymarket-5min');
   });
 });
 
