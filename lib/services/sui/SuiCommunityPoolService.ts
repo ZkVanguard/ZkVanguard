@@ -16,6 +16,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { composeNavUsdc, computeSharePrice, isNavSane } from '@/lib/services/sui/pool-nav';
+import { parseTargetAllocation, computeLiveAllocation } from '@/lib/services/sui/pool-allocation';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 
 // Re-export all types and configs from the dedicated types module
@@ -1141,33 +1142,17 @@ export class SuiUsdcPoolService {
           return this.getStatsFromFallback();
         }
 
-        // Parse 4-asset allocation from on-chain (AI TARGET, used as fallback only).
-        const alloc = fields.current_allocation?.fields || {};
-        const targetAllocation: SuiPoolAllocation = {
-          BTC: Number(alloc.btc_bps || 3000) / 100,
-          ETH: Number(alloc.eth_bps || 3000) / 100,
-          SUI: Number(alloc.sui_bps || 2000) / 100,
-          CRO: Number(alloc.cro_bps || 2000) / 100,
-        };
-
-        // LIVE composition: real economic exposure as % of NAV.
-        //   • USDC bucket = pool balance + idle admin USDC + BlueFin free + locked margin
-        //     (USD-denominated capital not yet rotated into a basket asset)
-        //   • BTC/ETH/SUI = market value of held wrapped coins
-        // Falls back to AI target if NAV ≈ 0 (empty pool / pre-deposit state).
-        const usdcBucket =
-          balanceUsdc + adminUsdcInWallet + bluefinValueUsdc;
-        const navForPct = totalNAVUsdc > 0 ? totalNAVUsdc : 1;
-        const liveAllocation: SuiPoolAllocation = totalNAVUsdc > 0.01
-          ? {
-              BTC: Math.round((assetUsdValue.BTC / navForPct) * 10000) / 100,
-              ETH: Math.round((assetUsdValue.ETH / navForPct) * 10000) / 100,
-              SUI: Math.round((assetUsdValue.SUI / navForPct) * 10000) / 100,
-              CRO: 0,
-              USDC: Math.round((usdcBucket / navForPct) * 10000) / 100,
-            }
-          : targetAllocation;
-        const allocation = liveAllocation;
+        // Parse 4-asset allocation from on-chain (AI TARGET, used as fallback only),
+        // then compute LIVE composition (market value % of NAV + USDC bucket of
+        // idle pool/admin/BlueFin capital). See lib/services/sui/pool-allocation.ts.
+        const targetAllocation = parseTargetAllocation(fields.current_allocation?.fields);
+        const usdcBucket = balanceUsdc + adminUsdcInWallet + bluefinValueUsdc;
+        const allocation = computeLiveAllocation({
+          assetUsdValue,
+          usdcBucket,
+          totalNavUsdc: totalNAVUsdc,
+          target: targetAllocation,
+        });
 
         return {
           totalNAV: totalNAVUsdc,
