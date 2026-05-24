@@ -31,6 +31,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -890,7 +891,7 @@ export class BluefinService {
         throw new Error(`Order size ${params.size} below minimum ${pair.minQuantity} for ${params.symbol}`);
       }
       // Round down to nearest step size to avoid rejection
-      const steppedSize = Math.floor(params.size / pair.stepSize) * pair.stepSize;
+      const steppedSize = snapToStepSize(params.size, pair.stepSize);
       if (steppedSize < pair.minQuantity) {
         throw new Error(`Order size ${params.size} rounds to ${steppedSize} which is below minimum ${pair.minQuantity} for ${params.symbol}`);
       }
@@ -1084,7 +1085,7 @@ export class BluefinService {
 
       // Step 4b: Minimum order size + step validation
       const sizeOk = params.size >= pair.minQuantity;
-      const steppedSize = Math.floor(params.size / pair.stepSize) * pair.stepSize;
+      const steppedSize = snapToStepSize(params.size, pair.stepSize);
       steps.push({
         step: 'order-size',
         passed: sizeOk && steppedSize >= pair.minQuantity,
