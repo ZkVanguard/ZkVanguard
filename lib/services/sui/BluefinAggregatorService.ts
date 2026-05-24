@@ -16,6 +16,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { normalizePriceImpact } from '@/lib/services/sui/bluefin-order-size';
 import {
   Config as BluefinConfig,
   getQuote as bluefinGetQuote,
@@ -347,10 +348,9 @@ export class BluefinAggregatorService {
         ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
         : 'direct';
 
-      // BlueFin SDK returns priceImpact as "price ratio remaining" (0.9999 = <0.01% slippage).
-      // Convert to actual impact fraction: if value > 0.5, it's the ratio remaining, not the impact.
-      const rawImpact = Math.abs(quoteResponse.priceImpact || 0);
-      const priceImpact = rawImpact > 0.5 ? (1 - rawImpact) : rawImpact;
+      // BlueFin SDK returns priceImpact as "price ratio remaining" (0.9999 = <0.01% slippage)
+      // OR a direct impact fraction — normalize (see lib/services/sui/bluefin-order-size.ts).
+      const priceImpact = normalizePriceImpact(quoteResponse.priceImpact);
 
       // If aggregator returned 0 output, fall back to BlueFin hedging
       if (expectedOut === '0' || expectedOut === '') {

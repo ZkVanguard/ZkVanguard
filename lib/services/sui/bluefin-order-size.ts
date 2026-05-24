@@ -30,3 +30,15 @@ export function snapToStepSize(size: number, stepSize: number): number {
   const steps = Math.floor(size / stepSize + 1e-9);
   return Number((steps * stepSize).toFixed(stepDecimals(stepSize)));
 }
+
+/**
+ * Normalize the BlueFin aggregator's price-impact field to an impact fraction.
+ * The SDK returns it in one of two formats: a "price ratio remaining" near 1
+ * (0.9999 ⇒ 0.01% impact) or a direct impact fraction (0.0001). Values > 0.5
+ * are treated as ratio-remaining (impact = 1 − v); otherwise as direct impact.
+ * Returns 0 for null/undefined/NaN.
+ */
+export function normalizePriceImpact(raw: number | null | undefined): number {
+  const v = Math.abs(Number(raw) || 0);
+  return v > 0.5 ? 1 - v : v;
+}

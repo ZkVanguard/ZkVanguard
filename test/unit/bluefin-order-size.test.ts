@@ -4,7 +4,7 @@
  * multiples (0.003 BTC must stay 0.003, not collapse to 0.002).
  */
 import { describe, it, expect } from '@jest/globals';
-import { snapToStepSize, stepDecimals } from '@/lib/services/sui/bluefin-order-size';
+import { snapToStepSize, stepDecimals, normalizePriceImpact } from '@/lib/services/sui/bluefin-order-size';
 
 describe('stepDecimals', () => {
   it('derives decimals from the step size', () => {
@@ -52,5 +52,23 @@ describe('snapToStepSize — edges', () => {
     expect(snapToStepSize(0, 0.001)).toBe(0);
     expect(snapToStepSize(-1, 0.001)).toBe(0);
     expect(snapToStepSize(0.5, 0)).toBe(0.5); // no step → unchanged
+  });
+});
+
+describe('normalizePriceImpact', () => {
+  it('treats values > 0.5 as ratio-remaining (impact = 1 − v)', () => {
+    expect(normalizePriceImpact(0.9999)).toBeCloseTo(0.0001, 6);
+    expect(normalizePriceImpact(0.6)).toBeCloseTo(0.4, 6);
+    expect(normalizePriceImpact(-0.9999)).toBeCloseTo(0.0001, 6); // abs first
+  });
+  it('treats values ≤ 0.5 as direct impact', () => {
+    expect(normalizePriceImpact(0.0001)).toBeCloseTo(0.0001, 6);
+    expect(normalizePriceImpact(0.5)).toBe(0.5);
+  });
+  it('returns 0 for null/undefined/NaN/0', () => {
+    expect(normalizePriceImpact(null)).toBe(0);
+    expect(normalizePriceImpact(undefined)).toBe(0);
+    expect(normalizePriceImpact(NaN)).toBe(0);
+    expect(normalizePriceImpact(0)).toBe(0);
   });
 });
