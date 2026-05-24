@@ -10,6 +10,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { riskToleranceToThreshold, computeRiskScore } from '@/lib/services/hedging/risk-scoring';
 import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { getAgentOrchestrator } from '../agent-orchestrator';
@@ -288,7 +289,7 @@ class AutoHedgingService {
       // Map risk tolerance (0-100) to risk threshold (1-10)
       // Lower tolerance = lower threshold = more aggressive hedging
       // Higher tolerance = higher threshold = less hedging
-      const calculatedThreshold = Math.max(2, Math.min(10, Math.floor((riskTolerance / 10) * 0.8 + 2)));
+      const calculatedThreshold = riskToleranceToThreshold(riskTolerance);
       
       logger.info('[AutoHedging] Using portfolio settings', {
         portfolioId: config.portfolioId,
@@ -536,16 +537,8 @@ class AutoHedgingService {
       const volatility = calculateVolatility(positions);
       const concentrationRisk = calculateConcentrationRisk(positions, totalValue);
       
-      // Calculate comprehensive risk score (1-10)
-      let riskScore = 1;
-      if (drawdownPercent > 2) riskScore += 1;
-      if (drawdownPercent > 5) riskScore += 2;
-      if (drawdownPercent > 10) riskScore += 2;
-      if (volatility > 3) riskScore += 1;
-      if (volatility > 5) riskScore += 1;
-      if (concentrationRisk > 40) riskScore += 2; // Single asset >40%
-      if (concentrationRisk > 60) riskScore += 1; // Single asset >60%
-      riskScore = Math.min(riskScore, 10);
+      // Calculate comprehensive risk score (1-10) — see lib/services/hedging/risk-scoring.ts
+      const riskScore = computeRiskScore({ drawdownPercent, volatility, concentrationRisk });
 
       logger.info('[AutoHedging] Portfolio risk assessment', {
         portfolioId,
