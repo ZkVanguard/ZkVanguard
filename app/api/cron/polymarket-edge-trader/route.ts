@@ -54,6 +54,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
+import { computeEdgeStake } from '@/lib/services/trading/edge-sizing';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import {
@@ -594,17 +595,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    // Compounding × aggregator's sizeMultiplier
-    const compoundMul = Math.max(
-      1,
-      Math.min(5, 1 + safeStats.totalPnlUsd / Math.max(1, BASE_STAKE_USD)),
-    );
-    const targetStake = Math.min(
-      BASE_STAKE_USD * compoundMul * prediction.sizeMultiplier,
-      free * STAKE_PCT_OF_FREE,
-      MAX_STAKE_USD,
-    );
-    const stakeUsd = Math.max(BASE_STAKE_USD, targetStake);
+    // Compounding × aggregator's sizeMultiplier (see lib/services/trading/edge-sizing.ts)
+    const { compoundMul, stakeUsd } = computeEdgeStake({
+      baseStakeUsd: BASE_STAKE_USD,
+      totalPnlUsd: safeStats.totalPnlUsd,
+      sizeMultiplier: prediction.sizeMultiplier,
+      freeCollateral: free,
+      stakePctOfFree: STAKE_PCT_OF_FREE,
+      maxStakeUsd: MAX_STAKE_USD,
+    });
 
     // Reference price for sizing.
     const md = await bf.getMarketData(symbol).catch(() => null);
