@@ -16,6 +16,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { cache } from '../../utils/cache';
+import { scoreTradeOpportunity } from '@/lib/services/market-data/opportunity-scoring';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import type { PredictionMarket } from './DelphiMarketService';
 
@@ -666,13 +667,12 @@ export class PredictionAggregatorService {
    * Higher = better edge. Returns 0 when not actionable.
    */
   static scoreOpportunity(p: AggregatedPrediction): number {
-    const actionable =
-      p.recommendation.startsWith('HEDGE_') || p.recommendation.startsWith('STRONG_');
-    if (!actionable) return 0;
-    const strongBonus = p.recommendation.startsWith('STRONG_') ? 10 : 0;
-    // Geometric mean of confidence × consensus, scaled by source breadth.
-    const breadthMul = Math.min(1.25, 1 + (p.sources.length - 2) * 0.05);
-    return Math.sqrt(p.confidence * p.consensus) * breadthMul + strongBonus;
+    return scoreTradeOpportunity({
+      recommendation: p.recommendation,
+      confidence: p.confidence,
+      consensus: p.consensus,
+      sourceCount: p.sources.length,
+    });
   }
 
   /**
