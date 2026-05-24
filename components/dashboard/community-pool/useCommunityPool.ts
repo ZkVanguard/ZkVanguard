@@ -54,6 +54,7 @@ import type {
   TxStatus
 } from './types';
 import { poolReducer, txReducer, initialPoolState, initialTxState } from './reducers';
+import { mapApiToPoolSummary, mapApiToUserPosition } from './mappers';
 
 // ============================================================================
 // HOOK
@@ -324,62 +325,11 @@ export function useCommunityPool(propAddress?: string) {
             dispatchPool({ type: 'SET_SUI_POOL_STATE_ID', payload: poolJson.data.poolStateId });
           }
           
-          const totalValueUSD = parseFloat(poolJson.data.totalNAVUsd) || 0;
-          const totalNAV = parseFloat(poolJson.data.totalNAV) || 0;
-
-          // Live composition from server (BTC/ETH/SUI in market value % + USDC bucket).
-          // Falls back to "SUI 100%" only if the pool is empty or the server
-          // didn't compute it (e.g. transient admin-wallet read failure).
-          const apiAlloc = (poolJson.data.allocation || {}) as Record<string, number>;
-          const allocSum =
-            (Number(apiAlloc.BTC) || 0) +
-            (Number(apiAlloc.ETH) || 0) +
-            (Number(apiAlloc.SUI) || 0) +
-            (Number(apiAlloc.USDC) || 0) +
-            (Number(apiAlloc.CRO) || 0);
-          const liveAllocations = allocSum > 0
-            ? {
-                BTC: Number(apiAlloc.BTC) || 0,
-                ETH: Number(apiAlloc.ETH) || 0,
-                SUI: Number(apiAlloc.SUI) || 0,
-                USDC: Number(apiAlloc.USDC) || 0,
-                CRO: Number(apiAlloc.CRO) || 0,
-              }
-            : { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0, USDC: 0 };
-
-          dispatchPool({
-            type: 'SET_POOL_DATA',
-            payload: {
-              totalShares: parseFloat(poolJson.data.totalShares) || 0,
-              totalNAV,
-              totalValueUSD,
-              sharePrice: parseFloat(poolJson.data.sharePrice) || 1.0,
-              sharePriceUSD: parseFloat(poolJson.data.sharePriceUsd) || 1.0,
-              memberCount: poolJson.data.memberCount || 0,
-              allocations: liveAllocations,
-              aiLastUpdate: null,
-              aiReasoning: null,
-              allTimeHighNav: parseFloat(poolJson.data.allTimeHighNav) || undefined,
-              totalDeposited: parseFloat(poolJson.data.totalDeposited) || 0,
-              totalWithdrawn: parseFloat(poolJson.data.totalWithdrawn) || 0,
-            },
-          });
+          dispatchPool({ type: 'SET_POOL_DATA', payload: mapApiToPoolSummary(poolJson.data) });
         }
-        
+
         if (userJson?.success) {
-          dispatchPool({
-            type: 'SET_USER_POSITION',
-            payload: {
-              walletAddress: userAddress || '',
-              shares: parseFloat(userJson.data.shares) || 0,
-              valueUSD: parseFloat(userJson.data.valueUsd) || 0,
-              valueSUI: parseFloat(userJson.data.valueSui) || 0,
-              percentage: parseFloat(userJson.data.percentage) || 0,
-              isMember: userJson.data.isMember || false,
-              totalDeposited: parseFloat(userJson.data.depositedSui) || 0,
-              totalWithdrawn: parseFloat(userJson.data.withdrawnSui) || 0,
-            },
-          });
+          dispatchPool({ type: 'SET_USER_POSITION', payload: mapApiToUserPosition(userJson.data, userAddress) });
         }
         
         dispatchPool({ type: 'SET_LEADERBOARD', payload: [] });
