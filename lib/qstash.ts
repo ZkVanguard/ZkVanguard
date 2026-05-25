@@ -18,6 +18,7 @@
 import { Receiver } from '@upstash/qstash';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
+import { cronSecretMatches, classifyUnauthedOutcome } from '@/lib/security/cron-auth';
 
 // Lazy singleton — created on first use
 let _receiver: Receiver | null = null;
@@ -90,37 +91,30 @@ export async function verifyCronRequest(
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET?.trim();
 
-  if (cronSecret && authHeader) {
-    // Timing-safe comparison so we never leak secret length / prefix via
-    // response-time analysis. Both buffers must be equal length first.
-    const expected = Buffer.from(`Bearer ${cronSecret}`, 'utf8');
-    const provided = Buffer.from(authHeader, 'utf8');
-    if (expected.length === provided.length) {
-      const { timingSafeEqual } = await import('crypto');
-      if (timingSafeEqual(expected, provided)) {
-        logger.debug(`[QStash] ✅ CRON_SECRET verified for ${routeName}`);
-        return true;
-      }
-    }
+  if (cronSecretMatches(authHeader, cronSecret)) {
+    logger.debug(`[QStash] ✅ CRON_SECRET verified for ${routeName}`);
+    return true;
   }
 
-  // No auth configured — only allow in local development, reject everywhere else
-  if (!cronSecret && !signature) {
-    if (process.env.NODE_ENV === 'development') {
+  switch (classifyUnauthedOutcome({
+    hasSignature: !!signature,
+    hasCronSecret: !!cronSecret,
+    isDevelopment: process.env.NODE_ENV === 'development',
+  })) {
+    case 'allow-dev':
       logger.warn(`[QStash] ⚠️ No auth configured — allowing ${routeName} (local dev only)`);
       return true;
-    }
-    logger.error(`[QStash] ❌ CRITICAL: No CRON_SECRET or QStash signature — rejecting ${routeName} (NODE_ENV=${process.env.NODE_ENV})`);
-    return NextResponse.json(
-      { success: false, error: 'Server misconfiguration: auth not configured' },
-      { status: 500 }
-    );
+    case 'misconfig':
+      logger.error(`[QStash] ❌ CRITICAL: No CRON_SECRET or QStash signature — rejecting ${routeName} (NODE_ENV=${process.env.NODE_ENV})`);
+      return NextResponse.json(
+        { success: false, error: 'Server misconfiguration: auth not configured' },
+        { status: 500 }
+      );
+    default:
+      logger.warn(`[QStash] ❌ Unauthorized request to ${routeName}`);
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
   }
-
-  // Unauthorized
-  logger.warn(`[QStash] ❌ Unauthorized request to ${routeName}`);
-  return NextResponse.json(
-    { success: false, error: 'Unauthorized' },
-    { status: 401 }
-  );
 }
