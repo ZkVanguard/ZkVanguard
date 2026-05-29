@@ -147,22 +147,30 @@ export async function GET(req: NextRequest) {
   if (limited) return limited;
 
   const start = Date.now();
-  const [db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron] =
-    await Promise.all([
-      checkDb(),
-      checkPolymarket(),
-      checkSuiRpc(),
-      checkBluefin(),
-      checkNavFreshness(),
-      // Heartbeat keys written by each cron's tryClaimCronRun, NOT the bare
-      // route names. The trader writes polymarket-edge:* only on trade
-      // state changes; an idle WAIT tick writes nothing, so we fall back
-      // to its daily stats key which updates on every realized trade.
-      checkCronAge('cron:lastRun:sui-community-pool', 45, 90),
-      checkCronAge('polymarket-edge:daily', 60, 1440),
-      checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240),
-      checkCronAge('bluefin-health:consecutiveDegraded', 15, 30),
-    ]);
+  // External HTTP checks fire in parallel — they don't touch the DB pool.
+  const [polymarket, suiRpc, bluefin] = await Promise.all([
+    checkPolymarket(),
+    checkSuiRpc(),
+    checkBluefin(),
+  ]);
+
+  // DB-touching checks run sequentially. Aiven's plan-wide connection_limit=20
+  // is shared across every Vercel instance, so a single Promise.all of 6 DB
+  // queries can saturate the pool and tip the endpoint into the same
+  // `remaining connection slots are reserved...` error it's meant to diagnose.
+  // Six fast queries serialized cost ~600ms total — acceptable for a health probe.
+  //
+  // Heartbeat keys written by each cron's tryClaimCronRun or explicit
+  // setCronState, NOT the bare route names. The trader writes
+  // polymarket-edge:* only on trade state changes; an idle WAIT tick writes
+  // nothing, so we fall back to its daily stats key which updates on every
+  // realized trade.
+  const db = await checkDb();
+  const navFreshness = await checkNavFreshness();
+  const suiPoolCron = await checkCronAge('cron:lastRun:sui-community-pool', 45, 90);
+  const traderCron = await checkCronAge('polymarket-edge:daily', 60, 1440);
+  const hedgeReconcileCron = await checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240);
+  const bluefinHealthCron = await checkCronAge('bluefin-health:consecutiveDegraded', 15, 30);
 
   const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron };
   const overall = worstStatus(Object.values(components));

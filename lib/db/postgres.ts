@@ -19,36 +19,53 @@ export function getPoolMetrics() {
 
 export function getPool(): Pool {
   if (!pool) {
-    // Support both Neon serverless and local PostgreSQL
-    // Use DATABASE_POOL_URL (Neon pooler endpoint, port 6543) for high concurrency,
-    // falling back to DATABASE_URL (direct connection, port 5432)
-    let connectionString = process.env.DATABASE_POOL_URL 
-      || process.env.DATABASE_URL 
+    // Supports Neon serverless, Aiven, and local PostgreSQL.
+    // Prefer DATABASE_POOL_URL (Neon pooler endpoint, port 6543) for high concurrency,
+    // fall back to DATABASE_URL (direct connection).
+    let connectionString = process.env.DATABASE_POOL_URL
+      || process.env.DATABASE_URL
       || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
-    
+
     // Remove channel_binding parameter if present (not supported by pg module)
     connectionString = connectionString.replace(/&?channel_binding=[^&]*/g, '').replace('?&', '?');
-    
-    // Ensure sslmode=verify-full for security (replaces require/prefer modes)
-    if (connectionString.includes('neon.tech')) {
+
+    const isNeon = connectionString.includes('neon.tech');
+    const isAiven = connectionString.includes('aivencloud.com');
+
+    // Ensure sslmode=verify-full for Neon (replaces require/prefer modes)
+    if (isNeon) {
       connectionString = connectionString.replace(/sslmode=require|sslmode=prefer/g, 'sslmode=verify-full');
       if (!connectionString.includes('sslmode=')) {
         connectionString += (connectionString.includes('?') ? '&' : '?') + 'sslmode=verify-full';
       }
     }
-    
-    const isNeon = connectionString.includes('neon.tech');
+
+    // Any URL declaring sslmode=require (or providers we know enforce SSL) needs ssl on the pool.
+    const requiresSsl = isNeon || isAiven || /sslmode=(require|verify-full|verify-ca)/.test(connectionString);
     // Neon pooler (port 6543) supports up to 10,000 connections
     const isPooler = connectionString.includes(':6543') || connectionString.includes('-pooler.');
-    
+
+    // For non-Neon providers (e.g. Aiven) strip `sslmode` from the URL so pg-connection-string
+    // doesn't turn it into `ssl: true` (strict verify) and override the explicit ssl config below.
+    if (requiresSsl && !isNeon) {
+      connectionString = connectionString.replace(/([?&])sslmode=[^&]+/g, '$1').replace(/[?&]$/, '');
+    }
+
     pool = new Pool({
       connectionString,
-      ssl: isNeon ? { rejectUnauthorized: true } : undefined,
-      // With Neon pooler: can safely use 25 connections per serverless instance
-      // Without pooler (direct): keep conservative to avoid exhausting Neon's 10 limit
-      max: isPooler ? 25 : (isNeon ? 8 : 20),
-      min: isNeon ? 1 : 2,
-      idleTimeoutMillis: isNeon ? 8000 : 20000,
+      // Neon uses verify-full (rejectUnauthorized: true). Aiven needs SSL but we don't
+      // ship its CA cert here, so allow the unverified chain (still encrypted in transit).
+      ssl: requiresSsl
+        ? (isNeon ? { rejectUnauthorized: true } : { rejectUnauthorized: false })
+        : undefined,
+      // With Neon pooler: can safely use 25 connections per serverless instance.
+      // Aiven plan caps at connection_limit=20 total across the whole project
+      // — every Vercel instance shares that budget, so per-instance max=10 saturates
+      // with 2 cold-start instances. max=4 leaves room for ~4 instances + scripts.
+      max: isPooler ? 25 : (isAiven ? 4 : (isNeon ? 8 : 20)),
+      min: isNeon ? 1 : (isAiven ? 0 : 2),
+      // Aiven: release idle connections aggressively so cold-start fan-out doesn't pin them.
+      idleTimeoutMillis: isNeon ? 8000 : (isAiven ? 5000 : 20000),
       connectionTimeoutMillis: isNeon ? 5000 : 3000,
       // Statement timeout: kill queries that run too long (protects pool from hangs)
       statement_timeout: 15000,              // 15s max per query
