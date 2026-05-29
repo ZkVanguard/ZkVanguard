@@ -9,6 +9,7 @@
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 // Long single lines are the most reliable tell of an appended obfuscated payload
 // hidden behind whitespace. Real source in this repo stays well under this.
@@ -23,18 +24,41 @@ const SIGNATURES = [
   /global\[[^\]]{1,40}\]\s*=\s*require\b/, // require() hijack
 ];
 
+const EXTS = new Set(['.js', '.ts', '.jsx', '.tsx', '.cjs', '.mjs']);
+const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', '.git', 'out', '.vercel']);
+
+// Fallback: recursively walk the source tree when git isn't available.
+// Vercel CLI deploys upload a tarball without .git, so the git path fails
+// there — without this fallback the prebuild guard blocks every deploy.
+function walk(dir, acc) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (SKIP_DIRS.has(e.name)) continue;
+      walk(path.join(dir, e.name), acc);
+    } else if (e.isFile() && EXTS.has(path.extname(e.name))) {
+      acc.push(path.relative(process.cwd(), path.join(dir, e.name)));
+    }
+  }
+  return acc;
+}
+
 let files;
+let source;
 try {
   files = execSync('git ls-files "*.js" "*.ts" "*.jsx" "*.tsx" "*.cjs" "*.mjs"', {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
     .split('\n')
     .filter(Boolean)
     .filter((f) => !f.startsWith('node_modules/') && !f.includes('/.next/') && !f.startsWith('.next/') && !f.startsWith('dist/'));
-} catch (e) {
-  console.error('[security-scan] could not list tracked files:', e.message);
-  process.exit(2);
+  source = 'git';
+} catch {
+  files = walk(process.cwd(), []);
+  source = 'fs';
 }
 
 const hits = [];
