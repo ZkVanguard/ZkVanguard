@@ -19,6 +19,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg, errName } from '@/lib/utils/error-handler';
 import { getActiveHedges } from '@/lib/db/hedges';
 import type { Hedge } from '@/lib/db/hedges';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -326,7 +327,12 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
     // Check if within liquidation buffer
     if (distanceToLiq < LIQUIDATION_BUFFER_PERCENT) {
       logger.error(`[LiquidationGuard] EMERGENCY: ${position.id} within ${distanceToLiq.toFixed(2)}% of liquidation!`);
-      
+      await notifyDiscord(
+        `EMERGENCY CLOSE: ${position.id} (${position.side} ${position.asset} ${position.leverage}x) is ${distanceToLiq.toFixed(2)}% from liquidation @ $${liquidationPrice.toFixed(2)}. Collateral at risk: $${position.collateral.toFixed(2)}.`,
+        'KILL',
+        { positionId: position.id, asset: position.asset, distanceToLiq: distanceToLiq.toFixed(2), liquidationPrice: liquidationPrice.toFixed(2) },
+      );
+
       const result = await emergencyClose(position, `Emergency close: ${distanceToLiq.toFixed(2)}% from liquidation`);
       actions.push({
         positionId: position.id,
@@ -335,15 +341,20 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
         executed: result.success,
         txHash: result.txHash,
       });
-      
+
       criticalCount++;
       totalCollateralAtRisk += position.collateral;
       continue;
     }
-    
+
     // Check critical margin level
     if (marginLevel < MARGIN_LEVEL_CRITICAL) {
       logger.warn(`[LiquidationGuard] CRITICAL: ${position.id} margin level ${marginLevel.toFixed(1)}%`);
+      await notifyDiscord(
+        `Margin CRITICAL: ${position.id} (${position.asset} ${position.leverage}x) at ${marginLevel.toFixed(1)}% (threshold ${MARGIN_LEVEL_CRITICAL}%). Attempting collateral top-up or size reduction.`,
+        'ERROR',
+        { positionId: position.id, asset: position.asset, marginLevel: marginLevel.toFixed(1) },
+      );
       
       // Try to add collateral first
       const topUpAmount = position.collateral * (COLLATERAL_TOP_UP_PERCENT / 100);
@@ -379,6 +390,11 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
     // Check warning margin level
     if (marginLevel < MARGIN_LEVEL_WARNING) {
       logger.warn(`[LiquidationGuard] WARNING: ${position.id} margin level ${marginLevel.toFixed(1)}%`);
+      await notifyDiscord(
+        `Margin warning: ${position.id} (${position.asset} ${position.leverage}x) at ${marginLevel.toFixed(1)}% (threshold ${MARGIN_LEVEL_WARNING}%). Attempting collateral top-up.`,
+        'WARN',
+        { positionId: position.id, asset: position.asset, marginLevel: marginLevel.toFixed(1) },
+      );
       
       const topUpAmount = position.collateral * (COLLATERAL_TOP_UP_PERCENT / 100);
       const addResult = await addCollateral(position, topUpAmount);

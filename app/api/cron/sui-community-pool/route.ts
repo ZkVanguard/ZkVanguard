@@ -36,6 +36,7 @@ import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
 import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -617,6 +618,11 @@ async function aiDrivenResetDailyHedge(
       logger.info('[SUI Cron] AI-driven daily-cap reset SUCCESS', {
         urgency, confidence, resetsUsed: usedSoFar + 1, maxResets, txDigest: result.digest,
       });
+      await notifyDiscord(
+        `Daily hedge cap RESET (${usedSoFar + 1}/${maxResets} resets used today, urgency=${urgency}, conf=${confidence}). Pool can now hedge again before UTC midnight.`,
+        'WARN',
+        { network, urgency, confidence, resetsUsed: usedSoFar + 1, maxResets, txDigest: result.digest },
+      );
       return { reset: true, txDigest: result.digest, resetsUsed: usedSoFar + 1 };
     }
     logger.warn('[SUI Cron] AI-driven daily-cap reset FAILED', {
@@ -1033,6 +1039,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         ceiling: NAV_SAFETY_CEILING_USDC,
         message: 'Redeploy Move contracts with u128 fee/cap math before continuing.',
       });
+      await notifyDiscord(
+        `NAV $${navUsd.toFixed(0)} exceeds safety ceiling $${NAV_SAFETY_CEILING_USDC.toLocaleString()} — write actions HALTED. Redeploy Move contracts with u128 math before resuming.`,
+        'KILL',
+        { navUsd: navUsd.toFixed(2), ceiling: NAV_SAFETY_CEILING_USDC },
+      );
     }
 
     await recordPoolNavSnapshot({ sharePriceUsd, navUsd, poolStats, allocations: aiResult.allocations });
@@ -1754,6 +1765,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   } catch (dbErr) {
                     logger.warn('[SUI Cron] Failed to persist hedge', { asset, error: dbErr });
                   }
+                  await notifyDiscord(
+                    `Auto-hedge OPENED: ${side} ${snappedSize} ${asset}-PERP @ ${leverage}x (notional $${hedgeValueUSD.toFixed(2)}, signal=${sentiment}).`,
+                    'TRADE',
+                    { network, asset, side, size: snappedSize, leverage, notionalUsd: hedgeValueUSD.toFixed(2), orderId: result.orderId },
+                  );
+                } else if (!result.success) {
+                  await notifyDiscord(
+                    `Auto-hedge FAILED: ${side} ${snappedSize} ${asset}-PERP @ ${leverage}x — ${result.error || 'unknown'}.`,
+                    'WARN',
+                    { network, asset, side, size: snappedSize, leverage, error: result.error },
+                  );
                 }
                 logger.info(`[SUI Cron] ${asset}-PERP ${side} ${result.success ? 'OPENED' : 'FAILED'}`, {
                   size: snappedSize, leverage, orderId: result.orderId, error: result.error,

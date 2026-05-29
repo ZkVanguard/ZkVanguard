@@ -39,6 +39,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -180,6 +181,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       deltaUsdc: deltaUsdc.toFixed(4),
       supportedSymbols: SUPPORTED_SYMBOLS,
     });
+    await notifyDiscord(
+      `Hedge-state drift: on-chain reports ${onChainCount} hedge(s) ($${onChainHedgedUsdc.toFixed(2)}), BlueFin sees ${liveCount} live ($${liveMarginUsdc.toFixed(2)}). Δ=$${deltaUsdc.toFixed(2)} — withdrawal cap at risk.`,
+      'WARN',
+      { network, onChainCount, liveCount, deltaUsdc: deltaUsdc.toFixed(4) },
+    );
 
     // 4. Attempt reset (only if AdminCap is held by cron signer)
     if (!adminCapId) {
@@ -270,10 +276,20 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
         clearedHedgesCount: onChainCount,
         clearedHedgedUsdc: onChainHedgedUsdc.toFixed(4),
       });
+      await notifyDiscord(
+        `Drift repaired: cleared ${onChainCount} phantom hedge(s) ($${onChainHedgedUsdc.toFixed(2)}). Withdrawal cap correct again.`,
+        'INFO',
+        { network, txDigest: result.digest },
+      );
     } else {
       logger.error('[SuiHedgeReconcile] admin_reset_hedge_state FAILED', {
         error: result.effects?.status?.error,
       });
+      await notifyDiscord(
+        `Drift detected but admin_reset_hedge_state FAILED — withdrawal cap remains over-reported by $${deltaUsdc.toFixed(2)}. Manual intervention required.`,
+        'ERROR',
+        { network, error: result.effects?.status?.error, deltaUsdc: deltaUsdc.toFixed(4) },
+      );
     }
 
     return NextResponse.json({

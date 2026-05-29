@@ -31,6 +31,7 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -169,6 +170,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<CollectFee
         txDigest: result.digest,
         network,
       });
+      await notifyDiscord(
+        `Fees swept to treasury. tx: ${result.digest}`,
+        'INFO',
+        { network, txDigest: result.digest },
+      );
       return NextResponse.json({
         success: true,
         ranAt,

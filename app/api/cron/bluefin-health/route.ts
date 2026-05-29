@@ -33,6 +33,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -189,6 +190,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
     ...signals,
     apiError,
   });
+  await notifyDiscord(
+    `BlueFin venue distress sustained (${newCounter}/${DE_RISK_AFTER_N_DEGRADED}) — closing all ${positionsCount ?? '?'} position(s) via reduceOnly.`,
+    'KILL',
+    { network, status, signals, apiError },
+  );
 
   const closedPositions: Array<{ symbol: string; success: boolean; error?: string }> = [];
 
@@ -214,6 +220,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
   if (allClosed) {
     // Reset counter — successful de-risk; next tick will reassess
     await setCronState(CRON_KEY_DEGRADED_COUNTER, 0);
+    await notifyDiscord(
+      `De-risk complete: closed ${closedPositions.length}/${closedPositions.length} BlueFin positions. Next sui-community-pool tick will repatriate USDC.`,
+      'KILL',
+      { network, closedSymbols: closedPositions.map(c => c.symbol) },
+    );
+  } else if (closedPositions.length > 0) {
+    const failed = closedPositions.filter(c => !c.success);
+    await notifyDiscord(
+      `De-risk PARTIAL: ${closedPositions.length - failed.length}/${closedPositions.length} closed. ${failed.length} failed — operator must close manually on BlueFin UI.`,
+      'ERROR',
+      { network, failed },
+    );
   }
 
   return NextResponse.json({
