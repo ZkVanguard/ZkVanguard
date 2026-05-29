@@ -35,6 +35,8 @@ import { BluefinService, type BluefinPosition } from '@/lib/services/sui/Bluefin
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 
+const CRON_KEY_LAST_RUN = 'cron:lastRun:bluefin-health';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -78,6 +80,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 
   const auth = await verifyCronRequest(request, 'BluefinHealth');
+  // Heartbeat for /api/health/production cron-freshness check.
+  void setCronState(CRON_KEY_LAST_RUN, Date.now()).catch(() => {});
   if (auth !== true) {
     return NextResponse.json(
       { success: false, ranAt, network, attempted: false, reason: 'Unauthorized' },

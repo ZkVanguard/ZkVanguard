@@ -150,9 +150,13 @@ export async function GET(req: NextRequest) {
       checkSuiRpc(),
       checkBluefin(),
       checkNavFreshness(),
-      checkCronAge('sui-community-pool', 45, 90),
-      checkCronAge('polymarket-edge:active-trade', 15, 30),
-      checkCronAge('sui-hedge-reconcile', 90, 180),
+      // Heartbeat keys written by each cron's tryClaimCronRun, NOT the bare
+      // route names. The trader writes polymarket-edge:* only on trade
+      // state changes; an idle WAIT tick writes nothing, so we fall back
+      // to its daily stats key which updates on every realized trade.
+      checkCronAge('cron:lastRun:sui-community-pool', 45, 90),
+      checkCronAge('polymarket-edge:daily', 60, 1440),
+      checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240),
       checkCronAge('bluefin-health:consecutiveDegraded', 15, 30),
     ]);
 

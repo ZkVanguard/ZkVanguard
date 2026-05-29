@@ -40,6 +40,7 @@ import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,6 +79,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 
   const auth = await verifyCronRequest(request, 'SuiHedgeReconcile');
+  // Heartbeat for /api/health/production cron-freshness check. Fire-and-forget
+  // so a DB hiccup never blocks reconcile work.
+  void setCronState('cron:lastRun:sui-hedge-reconcile', Date.now()).catch(() => {});
   if (auth !== true) {
     return NextResponse.json(
       { success: false, ranAt, network, attempted: false, reason: 'Unauthorized' },
