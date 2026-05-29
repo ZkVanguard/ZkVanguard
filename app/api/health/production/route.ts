@@ -68,9 +68,13 @@ async function checkCronAge(key: string, warnAfterMin: number, downAfterMin: num
 
 async function checkNavFreshness(): Promise<Component & { navUsd?: number }> {
   try {
+    // Filter to chain='sui' — pool-nav-monitor also writes Cronos $0 snapshots
+    // every 15min, which would otherwise drag the freshness check to a stale,
+    // empty pool that's not the flagship SUI mainnet product.
     const r = await query<{ age_s: number; total_nav: string | number }>(
       `SELECT EXTRACT(EPOCH FROM (NOW() - timestamp))::int as age_s, total_nav
        FROM community_pool_nav_history
+       WHERE chain = 'sui'
        ORDER BY timestamp DESC LIMIT 1`,
     );
     if (r.length === 0) return { status: 'warn', detail: 'no NAV snapshot yet' };
