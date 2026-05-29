@@ -68,14 +68,14 @@ async function checkCronAge(key: string, warnAfterMin: number, downAfterMin: num
 
 async function checkNavFreshness(): Promise<Component & { navUsd?: number }> {
   try {
-    const r = await query<{ age_s: number; nav_usd: string | number }>(
-      `SELECT EXTRACT(EPOCH FROM (NOW() - snapshot_at))::int as age_s, nav_usd
+    const r = await query<{ age_s: number; total_nav: string | number }>(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - timestamp))::int as age_s, total_nav
        FROM community_pool_nav_history
-       ORDER BY snapshot_at DESC LIMIT 1`,
+       ORDER BY timestamp DESC LIMIT 1`,
     );
     if (r.length === 0) return { status: 'warn', detail: 'no NAV snapshot yet' };
     const ageSeconds = Number(r[0].age_s);
-    const navUsd = Number(r[0].nav_usd);
+    const navUsd = Number(r[0].total_nav);
     const out: Component & { navUsd?: number } = { status: 'ok', ageSeconds, navUsd };
     if (ageSeconds > 90 * 60) out.status = 'down';
     else if (ageSeconds > 45 * 60) out.status = 'warn';
