@@ -28,13 +28,13 @@ describe('SafeExecutionGuard.validateExecution', () => {
     expect(r.riskScore).toBeGreaterThanOrEqual(50);
   });
 
-  it('rejects leverage above 5x', async () => {
+  it('rejects leverage above the 4x cap', async () => {
     const r = await guard.validateExecution({ ...base, positionSizeUSD: 1000, leverage: 10 });
     expect(r.isValid).toBe(false);
     expect(r.errors.some(e => e.includes('Leverage'))).toBe(true);
   });
 
-  it('rejects slippage above 50bps', async () => {
+  it('rejects slippage above the 30bps cap', async () => {
     const r = await guard.validateExecution({ ...base, positionSizeUSD: 1000, expectedSlippageBps: 100 });
     expect(r.isValid).toBe(false);
     expect(r.errors.some(e => e.includes('slippage'))).toBe(true);

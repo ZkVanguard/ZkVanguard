@@ -25,8 +25,8 @@ describe('navTier + tierLeverageCap', () => {
     expect(navTier(100_000_000)).toBe('large');
   });
   it('maps tiers to leverage caps', () => {
-    expect(tierLeverageCap('tiny')).toBe(10);
-    expect(tierLeverageCap('small')).toBe(5);
+    expect(tierLeverageCap('tiny')).toBe(5);
+    expect(tierLeverageCap('small')).toBe(3);
     expect(tierLeverageCap('medium')).toBe(3);
     expect(tierLeverageCap('large')).toBe(2);
   });
@@ -34,14 +34,14 @@ describe('navTier + tierLeverageCap', () => {
 
 describe('resolveLeverage', () => {
   it('uses the tier cap when no config is given', () => {
-    expect(resolveLeverage(50)).toBe(10);       // tiny
-    expect(resolveLeverage(5_000)).toBe(5);     // small
-    expect(resolveLeverage(5_000_000)).toBe(3); // medium
+    expect(resolveLeverage(50)).toBe(5);          // tiny
+    expect(resolveLeverage(5_000)).toBe(3);       // small
+    expect(resolveLeverage(5_000_000)).toBe(3);   // medium
     expect(resolveLeverage(200_000_000)).toBe(2); // large
   });
   it('lets an operator config only LOWER leverage, never raise it', () => {
     expect(resolveLeverage(50, 3)).toBe(3);   // config below cap → config
-    expect(resolveLeverage(50, 20)).toBe(10); // config above cap → cap
+    expect(resolveLeverage(50, 20)).toBe(5);  // config above cap → cap
     expect(resolveLeverage(5_000, 2)).toBe(2);
   });
 });

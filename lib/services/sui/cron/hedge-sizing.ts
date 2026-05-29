@@ -21,8 +21,8 @@ export function navTier(navUsd: number): NavTier {
 
 export function tierLeverageCap(tier: NavTier): number {
   switch (tier) {
-    case 'tiny': return 10;
-    case 'small': return 5;
+    case 'tiny': return 5;
+    case 'small': return 3;
     case 'medium': return 3;
     case 'large': return 2;
   }

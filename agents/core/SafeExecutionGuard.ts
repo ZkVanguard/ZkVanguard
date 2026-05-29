@@ -73,8 +73,8 @@ export interface AgentConsensus {
 const DEFAULT_LIMITS: ExecutionLimits = {
   maxPositionSizeUSD: 10_000_000,     // $10M max single position
   maxDailyVolumeUSD: 100_000_000,     // $100M daily volume cap
-  maxSlippageBps: 50,                  // 0.5% max slippage
-  maxLeverage: 5,                      // 5x max leverage
+  maxSlippageBps: 30,                  // 0.30% max slippage — matches POLYMARKET_EDGE_MAX_SLIPPAGE_BPS
+  maxLeverage: 4,                      // 4x max leverage — defense in depth above per-route LEVERAGE
   minConfirmations: 3,                 // 3 block confirmations
   cooldownMs: 5000,                    // 5s between executions
   maxConcurrentExecutions: 3,          // 3 parallel max

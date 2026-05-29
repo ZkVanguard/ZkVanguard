@@ -225,6 +225,77 @@ Manual checks:
 
 ---
 
+## Appendix Z — profit-tuning config (Sharpe-oriented preset)
+
+Pool target: **stability + Sharpe**, not absolute return. Depositor trust is the moat.
+Set these in Vercel production env. None are secrets — safe to commit a snapshot to
+this runbook. Trader code reads them on every cron tick, no redeploy needed for env
+changes (Vercel injects fresh env per invocation).
+
+### Trader (`polymarket-edge-trader`)
+
+```
+POLYMARKET_EDGE_MIN_CONFIDENCE         = 70      # was 60 — only high-conviction
+POLYMARKET_EDGE_MIN_CONSENSUS          = 70      # was 60 — require alignment
+POLYMARKET_EDGE_LEVERAGE               = 2       # was 3  — smaller PnL swings
+POLYMARKET_EDGE_STAKE_PCT              = 0.05    # was 0.10 — Kelly half
+POLYMARKET_EDGE_MAX_STAKE_USD          = 100     # was 500 — bound single-trade loss
+POLYMARKET_EDGE_MAX_CONSECUTIVE_LOSSES = 3       # was 5  — earlier kill
+POLYMARKET_EDGE_MAX_DRAWDOWN_PCT       = 0.20    # was 0.30 — earlier kill
+```
+
+Raise `MAX_STAKE_USD` to 500 once pool NAV > $5k (Kelly stops binding the cap).
+
+### Auto-hedge (`sui-community-pool` cron)
+
+```
+HEDGE_MIN_NAV_USD             = 100   # was 20  — don't hedge dust
+HEDGE_RISK_THRESHOLD_DEFAULT  = 5     # was 0   — only hedge when risk elevated
+HEDGE_DAILY_MAX_RESETS        = 2     # was 4   — preserve daily-cap teeth
+HEDGE_RESET_MIN_CONFIDENCE    = 85    # was 75  — higher bar to override the cap
+```
+
+### `SafeExecutionGuard` defaults (read at boot, hardcoded in
+`agents/core/SafeExecutionGuard.ts`)
+
+Bring slippage and leverage caps in line with the trader's tighter knobs:
+
+```ts
+maxSlippageBps: 30,     // was 50 — match POLYMARKET_EDGE_MAX_SLIPPAGE_BPS
+maxLeverage:     4,     // was  5 — defense in depth above per-route LEVERAGE
+```
+
+(These two require a small code change; the other four `SafeExecutionGuard` caps —
+`maxPositionUsd $10M`, `maxDailyVolumeUSD $100M`, `cooldownMs 5s`,
+`consensusThreshold 0.67` — stay as is until pool NAV approaches them.)
+
+### NAV-tiered leverage (`lib/services/sui/cron/hedge-sizing.ts`)
+
+```ts
+case 'tiny':   return 5;   // was 10 — still clears BlueFin minQty in most cases
+case 'small':  return 3;   // was  5
+```
+
+(`medium=3`, `large=2` unchanged.)
+
+### What this preset is NOT
+
+- It is **not max EV.** It biases toward Sharpe and depositor-trust signals
+  (low drawdown, fewer kill events) over absolute daily PnL.
+- It is **not blind.** Each knob's tradeoff is documented inline above.
+- It is **not permanent.** After the pool has logged ~50 real trades in Aiven,
+  re-tune from the actual PnL distribution and win-rate-by-confidence histogram.
+
+### Roll-out order
+
+1. Land the env-var refactor commit (makes `MAX_CONSECUTIVE_LOSSES` and
+   `MAX_DRAWDOWN_PCT` overrideable).
+2. Set the trader + auto-hedge env vars in Vercel production. No redeploy needed.
+3. Land the `SafeExecutionGuard` + `hedge-sizing` code changes in a follow-up
+   PR. These DO require redeploy.
+4. Watch one week of trader output via Discord `TRADE` and `KILL` alerts. If
+   trade frequency drops below 1/day, lower `MIN_CONFIDENCE` to 65 and reassess.
+
 ## Appendix A — secret inventory (what lives where)
 
 Fund-moving / highest priority: `SUI_POOL_ADMIN_KEY`, `BLUEFIN_PRIVATE_KEY`.
