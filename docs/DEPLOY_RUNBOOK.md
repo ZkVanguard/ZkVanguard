@@ -255,6 +255,24 @@ HEDGE_DAILY_MAX_RESETS        = 2     # was 4   — preserve daily-cap teeth
 HEDGE_RESET_MIN_CONFIDENCE    = 85    # was 75  — higher bar to override the cap
 ```
 
+**`HEDGE_MIN_NAV_USD` must track current NAV.** Setting the floor above the
+current pool NAV freezes the auto-hedge step entirely — every tick logs
+"skipping Step 8". A target of roughly **60% of current NAV** keeps the pool
+active while protecting against hedging dust:
+
+| Pool NAV | `HEDGE_MIN_NAV_USD` |
+|---|---|
+| $0 - $50    | `30`  |
+| $50 - $200  | `100` (recommended preset) |
+| $200 - $500 | `150` |
+| > $500      | `300` |
+
+Why `30` is still safe at sub-$50 NAV: the `tiny` leverage tier (5x) and
+100% hedge ratio combined with `HEDGE_RISK_THRESHOLD_DEFAULT=5` mean
+auto-hedge only fires when risk is genuinely elevated, and at sub-$50
+notional only SUI-PERP can clear BlueFin's minQty — BTC and ETH minQty
+floors block accidental dust trades on those venues automatically.
+
 ### `SafeExecutionGuard` defaults (read at boot, hardcoded in
 `agents/core/SafeExecutionGuard.ts`)
 
