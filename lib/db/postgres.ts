@@ -60,12 +60,16 @@ export function getPool(): Pool {
         : undefined,
       // With Neon pooler: can safely use 25 connections per serverless instance.
       // Aiven plan caps at connection_limit=20 total across the whole project
-      // — every Vercel instance shares that budget, so per-instance max=10 saturates
-      // with 2 cold-start instances. max=4 leaves room for ~4 instances + scripts.
-      max: isPooler ? 25 : (isAiven ? 4 : (isNeon ? 8 : 20)),
+      // — every Vercel instance shares that budget. Real observation 2026-05-30:
+      // mid-deploy fan-out (old + new instances simultaneously) saturated the
+      // budget at max=4. max=2 leaves room for ~8 concurrent instances + 4
+      // shared script/migration connections — still well under the cap given
+      // 2s idleTimeoutMillis releases between requests.
+      max: isPooler ? 25 : (isAiven ? 2 : (isNeon ? 8 : 20)),
       min: isNeon ? 1 : (isAiven ? 0 : 2),
-      // Aiven: release idle connections aggressively so cold-start fan-out doesn't pin them.
-      idleTimeoutMillis: isNeon ? 8000 : (isAiven ? 5000 : 20000),
+      // Aiven: release idle connections aggressively. 2s is faster than any
+      // realistic cron interval, so a quiet instance frees its slot in seconds.
+      idleTimeoutMillis: isNeon ? 8000 : (isAiven ? 2000 : 20000),
       connectionTimeoutMillis: isNeon ? 5000 : 3000,
       // Statement timeout: kill queries that run too long (protects pool from hangs)
       statement_timeout: 15000,              // 15s max per query
