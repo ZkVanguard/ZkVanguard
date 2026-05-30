@@ -1770,6 +1770,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     'TRADE',
                     { network, asset, side, size: snappedSize, leverage, notionalUsd: hedgeValueUSD.toFixed(2), orderId: result.orderId },
                   );
+                } else if (result.success && result.orderId && !filled) {
+                  // Order accepted by BlueFin but not yet filled — collateral
+                  // is reserved against the resting order. Visible state but
+                  // not yet a position. Surface this to operators since the
+                  // reconciler will pick it up only after fill.
+                  await notifyDiscord(
+                    `Auto-hedge PENDING: ${side} ${snappedSize} ${asset}-PERP @ ${leverage}x accepted, awaiting fill (notional $${hedgeValueUSD.toFixed(2)}, signal=${sentiment}).`,
+                    'INFO',
+                    { network, asset, side, size: snappedSize, leverage, notionalUsd: hedgeValueUSD.toFixed(2), orderId: result.orderId },
+                  );
                 } else if (!result.success) {
                   await notifyDiscord(
                     `Auto-hedge FAILED: ${side} ${snappedSize} ${asset}-PERP @ ${leverage}x — ${result.error || 'unknown'}.`,
