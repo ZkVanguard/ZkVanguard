@@ -105,10 +105,14 @@ async function handle(req: NextRequest, dryRun: boolean) {
       durationMs: Date.now() - startTime,
     });
   } catch (e: any) {
-    logger.error('[cancel-bluefin-orders] error', { error: e?.message });
+    const msg = e?.message || (typeof e === 'string' ? e : '') || JSON.stringify(e)?.slice(0, 500) || 'unknown';
+    const stack = e?.stack?.split('\n').slice(0, 6).join('\n');
+    logger.error('[cancel-bluefin-orders] error', { message: msg, stack });
     return NextResponse.json({
       success: false,
-      error: e?.message || 'unknown',
+      error: msg,
+      stack,
+      errorName: e?.name,
       durationMs: Date.now() - startTime,
     }, { status: 500 });
   }
