@@ -401,3 +401,8 @@ CLAUDE.md
 scripts/analyze-pool-pnl.ts
 scripts/check-hedge-signal-alignment.ts
 scripts/analyze-pool-pnl.ts
+week-11-submission.md
+week-18-22-submission.md
+
+# Operational snapshot artifacts (debug only)
+scripts/.neon-snapshot.json
