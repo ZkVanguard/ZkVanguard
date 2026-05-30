@@ -40,7 +40,10 @@ async function getClient() {
     hex,
     'ED25519',
   );
-  await client.init();
+  // First arg controls whether to (re-)onboard the wallet against BlueFin's
+  // backend. We pass true: fresh init in a serverless function has no cached
+  // session, so without onboarding the cancel signature gets rejected.
+  await client.init(true);
   return client;
 }
 
