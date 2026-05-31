@@ -123,14 +123,51 @@ async function checkSuiRpc(): Promise<Component> {
   }
 }
 
-async function checkBluefin(): Promise<Component> {
+const COLLATERAL_FLOOR_USD = Number(process.env.BLUEFIN_COLLATERAL_FLOOR_USD || 5);
+
+async function checkBluefin(): Promise<Component & {
+  freeCollateral?: number;
+  positionsCount?: number;
+  totalMarginUsd?: number;
+  positionsSummary?: string;
+}> {
   const start = Date.now();
   try {
     const { BluefinService } = await import('@/lib/services/sui/BluefinService');
     const bf = BluefinService.getInstance();
-    const balance = await bf.getBalance();
+    const [balance, positions] = await Promise.all([
+      bf.getBalance(),
+      bf.getPositions(),
+    ]);
     if (!Number.isFinite(balance)) return { status: 'warn', detail: 'getBalance returned non-finite' };
-    return { status: 'ok', latencyMs: Date.now() - start, detail: `freeCollateral=$${balance.toFixed(2)}` };
+
+    const totalMargin = positions.reduce((sum, p) => {
+      const pp = p as unknown as Record<string, unknown>;
+      const m = Number(pp.margin ?? pp.marginUsed ?? 0);
+      return sum + (Number.isFinite(m) ? m : 0);
+    }, 0);
+    const summary = positions
+      .map(p => {
+        const pp = p as unknown as Record<string, unknown>;
+        return `${pp.symbol || '?'} ${pp.side || '?'} ${Number(pp.size ?? 0).toFixed(4)}`;
+      })
+      .join(', ') || 'none';
+
+    // Floor check — warn when free collateral drops below configured floor
+    // AND positions are open (open positions + tiny free = liquidation risk).
+    const tooLow = balance < COLLATERAL_FLOOR_USD && positions.length > 0;
+    const status: CompStatus = tooLow ? 'warn' : 'ok';
+    const detail = `freeCollateral=$${balance.toFixed(2)}, positions=${positions.length}, margin=$${totalMargin.toFixed(2)}${tooLow ? ` (BELOW FLOOR $${COLLATERAL_FLOOR_USD} with positions open)` : ''}`;
+
+    return {
+      status,
+      latencyMs: Date.now() - start,
+      detail,
+      freeCollateral: balance,
+      positionsCount: positions.length,
+      totalMarginUsd: Number(totalMargin.toFixed(4)),
+      positionsSummary: summary,
+    };
   } catch (e: any) {
     return { status: 'down', error: e?.message?.slice(0, 100) };
   }
