@@ -1222,7 +1222,21 @@ export class BluefinService {
 
       const signature = await this.signOrderFields(signedFields);
 
-      // Submit close order
+      // Submit close order.
+      //
+      // IMPORTANT: BlueFin deprecated reduceOnly orders — the v2 SDK
+      // explicitly warns:
+      //   "Reduce Only feature is deprecated until further notice.
+      //    Reduce Only orders will be rejected from the API."
+      // (bluefinClient.js postOrder, line 464-466)
+      // Setting reduceOnly:true returns an orderHash but the matching
+      // engine silently drops the order (observed 2026-05-30/31).
+      //
+      // Replacement: place a normal MARKET order in the opposite side
+      // with the same size. BlueFin nets it against the existing
+      // position, effectively closing it. Account-level netting handles
+      // the "this should reduce, not open a new opposite position"
+      // semantics implicitly.
       const orderResponse = await this.apiRequest<{
         orderHash: string;
         txDigest?: string;
@@ -1235,7 +1249,7 @@ export class BluefinService {
         signature,
         clientOrderId: hedgeId,
         type: 'MARKET',
-        reduceOnly: true,
+        reduceOnly: false,
       });
 
       // Verify the close actually took effect. BlueFin will return an
