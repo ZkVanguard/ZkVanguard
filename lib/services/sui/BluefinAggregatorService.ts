@@ -618,6 +618,94 @@ export class BluefinAggregatorService {
    * - Slippage bounds enforcement
    * - Gas reserve validation (prevents wallet drain)
    */
+  /**
+   * Split a large USDC → asset swap into smaller chunks when the single-tx
+   * price impact exceeds MAX_SWAP_PRICE_IMPACT_BPS (default 50 bps = 0.5%).
+   * Sized for scale: at $100k+ swap sizes on SUI DEXs the single-tx
+   * slippage is catastrophic without splitting.
+   *
+   * Algorithm:
+   *   1. Quote the full amount
+   *   2. If priceImpact within budget → execute as one swap
+   *   3. Otherwise recursively halve the amount and re-quote until within
+   *      budget OR chunk < MIN_SWAP_CHUNK_USD (then bail out — too small
+   *      to be worth the per-tx gas overhead)
+   *   4. Execute each chunk sequentially; aggregate results
+   *
+   * Returns the combined result (sum of all chunks' amountOut, count of
+   * sub-swaps, and the FIRST chunk's tx digest as a primary reference).
+   *
+   * Env overrides:
+   *   MAX_SWAP_PRICE_IMPACT_BPS  default 50    (0.5% per chunk ceiling)
+   *   MIN_SWAP_CHUNK_USD         default 25    (below this, give up splitting)
+   *   MAX_SWAP_CHUNK_COUNT       default 16    (hard cap, refuse to split more)
+   *   SWAP_CHUNK_INTERVAL_MS     default 1500  (delay between chunks)
+   */
+  async executeSplitSwap(
+    asset: PoolAsset,
+    totalUsdcAmount: number,
+    slippage: number = 0.01,
+  ): Promise<SwapExecutionResult & { subSwaps: number; chunks: Array<{ usdc: number; amountOut?: string; success: boolean; error?: string; txDigest?: string }> }> {
+    const maxImpactBps = Math.max(5, Number(process.env.MAX_SWAP_PRICE_IMPACT_BPS) || 50);
+    const minChunkUsd = Math.max(1, Number(process.env.MIN_SWAP_CHUNK_USD) || 25);
+    const maxChunkCount = Math.max(2, Number(process.env.MAX_SWAP_CHUNK_COUNT) || 16);
+    const intervalMs = Math.max(0, Number(process.env.SWAP_CHUNK_INTERVAL_MS) || 1500);
+
+    // Greedy chunking: try full size, halve until impact within budget or
+    // chunk too small. Repeat sized chunks until totalUsdcAmount consumed.
+    const chunks: Array<{ usdc: number; amountOut?: string; success: boolean; error?: string; txDigest?: string }> = [];
+    let remaining = totalUsdcAmount;
+    let totalOut = 0;
+    let firstDigest: string | undefined;
+    let anySuccess = false;
+    let firstError: string | undefined;
+
+    while (remaining >= minChunkUsd && chunks.length < maxChunkCount) {
+      // Find a chunk size that quotes under maxImpactBps
+      let chunk = remaining;
+      let quote = await this.getSwapQuote(asset, chunk);
+      let impactBps = (quote.priceImpact || 0) * 10000;
+      while (impactBps > maxImpactBps && chunk > minChunkUsd) {
+        chunk = chunk / 2;
+        quote = await this.getSwapQuote(asset, chunk);
+        impactBps = (quote.priceImpact || 0) * 10000;
+      }
+      if (impactBps > maxImpactBps) {
+        // Even minimum chunk would exceed impact — bail
+        chunks.push({ usdc: chunk, success: false, error: `min chunk $${chunk.toFixed(2)} still ${impactBps.toFixed(1)}bps over ${maxImpactBps}bps cap` });
+        break;
+      }
+      const res = await this.executeSwap(quote, slippage);
+      const usdcChunk = Number(quote.amountIn) / 1e6;
+      const outChunk = Number(res.amountOut || '0');
+      chunks.push({
+        usdc: usdcChunk, success: !!res.success,
+        amountOut: res.amountOut, error: res.error, txDigest: res.txDigest,
+      });
+      if (res.success) {
+        anySuccess = true;
+        totalOut += outChunk;
+        remaining -= usdcChunk;
+        if (!firstDigest) firstDigest = res.txDigest;
+        if (remaining > 0 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+      } else {
+        if (!firstError) firstError = res.error;
+        break; // Don't retry endlessly — let operator triage
+      }
+    }
+
+    return {
+      asset,
+      success: anySuccess && remaining < minChunkUsd,
+      amountIn: ((totalUsdcAmount - remaining) * 1e6).toString(),
+      amountOut: totalOut.toString(),
+      txDigest: firstDigest,
+      error: anySuccess ? undefined : firstError,
+      subSwaps: chunks.length,
+      chunks,
+    };
+  }
+
   async executeSwap(
     quote: SwapQuoteResult,
     slippage: number = 0.01,
