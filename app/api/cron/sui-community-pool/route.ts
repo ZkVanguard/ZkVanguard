@@ -24,7 +24,7 @@ import {
   addPoolTransactionToDb,
 } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
-import { getCronStateOr, setCronState, tryClaimCronRun } from '@/lib/db/cron-state';
+import { getCronStateOr, setCronState, tryClaimCronRun, getCronHalt, setCronHalt, endOfUtcDayMs, CronKeys } from '@/lib/db/cron-state';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
@@ -1497,8 +1497,52 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     const MIN_HEDGE_NAV_USD = Number(process.env.HEDGE_MIN_NAV_USD) || 20;
     const HEDGE_DISABLED = process.env.SUI_AUTO_HEDGE_DISABLE === '1';
 
+    // ── Drawdown auto-halt ─────────────────────────────────────────
+    // The cron auto-opens positions every 30min but has no global
+    // equity stop — many small losses can bleed the pool without any
+    // individual position hitting liquidation-guard. Use the
+    // `poolNav:peak:community-pool` value that pool-nav-monitor
+    // already tracks as a global peak, compare against current NAV,
+    // and halt auto-hedge for the rest of the UTC day if drawdown
+    // exceeds the configured ceiling (default 10%).
+    //
+    // Halt is honored via cronHaltUntil — same primitive bluefin-
+    // health uses. Clears at UTC midnight when the next day's pool-
+    // nav-monitor tick can re-establish peak.
+    const HEDGE_DRAWDOWN_HALT_PCT = Number(process.env.HEDGE_DRAWDOWN_HALT_PCT) || 10;
+    let drawdownHalted = false;
+    try {
+      const existingHalt = await getCronHalt('sui-community-pool:autohedge');
+      if (existingHalt) {
+        drawdownHalted = true;
+        logger.warn('[SUI Cron] Auto-hedge halt active', { until: new Date(existingHalt.untilMs).toISOString(), reason: existingHalt.reason });
+      } else {
+        const peakNav = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+        if (peakNav > 0 && navUsd < peakNav) {
+          const ddPct = ((peakNav - navUsd) / peakNav) * 100;
+          if (ddPct >= HEDGE_DRAWDOWN_HALT_PCT) {
+            await setCronHalt(
+              'sui-community-pool:autohedge',
+              endOfUtcDayMs(),
+              `Pool NAV $${navUsd.toFixed(2)} is ${ddPct.toFixed(1)}% below peak $${peakNav.toFixed(2)} (>= ${HEDGE_DRAWDOWN_HALT_PCT}% halt threshold). Auto-hedge paused until UTC midnight.`,
+            );
+            await notifyDiscord(
+              `Auto-hedge HALTED — pool NAV $${navUsd.toFixed(2)} is ${ddPct.toFixed(1)}% below peak $${peakNav.toFixed(2)} (threshold ${HEDGE_DRAWDOWN_HALT_PCT}%). Paused until UTC midnight.`,
+              'KILL',
+              { navUsd, peakNav, drawdownPct: ddPct.toFixed(2), threshold: HEDGE_DRAWDOWN_HALT_PCT },
+            );
+            drawdownHalted = true;
+          }
+        }
+      }
+    } catch (haltErr) {
+      logger.warn('[SUI Cron] Drawdown halt check threw — failing open', { error: haltErr });
+    }
+
     if (HEDGE_DISABLED) {
       logger.info('[SUI Cron] Auto-hedge disabled by SUI_AUTO_HEDGE_DISABLE=1');
+    } else if (drawdownHalted) {
+      logger.warn('[SUI Cron] Auto-hedge skipped — drawdown halt active');
     } else if (aboveSafetyCeiling) {
       logger.warn('[SUI Cron] Auto-hedge skipped — NAV above safety ceiling', {
         navUsd: navUsd.toFixed(2),
