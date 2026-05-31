@@ -1033,6 +1033,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // circuit breaker. Halt write-side actions (rebalance, hedge,
     // top-up) but still record snapshots so dashboards keep working.
     let aboveSafetyCeiling = false;
+    // Pre-halt warning at 80% so the team gets weeks of lead time to plan
+    // the u128 Move redeploy + audit rather than scrambling at the wall.
+    const NAV_SAFETY_WARN_PCT = Number(process.env.NAV_SAFETY_WARN_PCT) || 80;
+    const navPctOfCeiling = (navUsd / NAV_SAFETY_CEILING_USDC) * 100;
     if (navUsd > NAV_SAFETY_CEILING_USDC) {
       aboveSafetyCeiling = true;
       logger.error('[SUI Cron] NAV exceeds safety ceiling — write actions disabled', {
@@ -1045,6 +1049,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         'KILL',
         { navUsd: navUsd.toFixed(2), ceiling: NAV_SAFETY_CEILING_USDC },
       );
+    } else if (navPctOfCeiling >= NAV_SAFETY_WARN_PCT) {
+      // De-bounce: only re-alert if we haven't pinged about this in 6h.
+      const lastWarnKey = 'sui-community-pool:nav-ceiling-warn-ms';
+      const lastWarn = await getCronStateOr<number>(lastWarnKey, 0);
+      if (Date.now() - lastWarn > 6 * 3600_000) {
+        logger.warn('[SUI Cron] NAV approaching safety ceiling', {
+          navUsd: navUsd.toFixed(2),
+          ceiling: NAV_SAFETY_CEILING_USDC,
+          pctOfCeiling: navPctOfCeiling.toFixed(1),
+        });
+        await notifyDiscord(
+          `NAV $${navUsd.toFixed(0)} is ${navPctOfCeiling.toFixed(1)}% of safety ceiling $${NAV_SAFETY_CEILING_USDC.toLocaleString()} — plan the u128 Move contract redeploy + audit BEFORE the pool hits 100%. Halt is automatic at the ceiling and freezes all writes.`,
+          'WARN',
+          { navUsd: navUsd.toFixed(2), ceiling: NAV_SAFETY_CEILING_USDC, pctOfCeiling: navPctOfCeiling.toFixed(1) },
+        );
+        await setCronState(lastWarnKey, Date.now()).catch(() => {});
+      }
     }
 
     // ── Hedgeability clamp (T1-A) ────────────────────────────────

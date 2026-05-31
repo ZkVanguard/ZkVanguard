@@ -70,16 +70,25 @@ export interface AgentConsensus {
 // DEFAULT LIMITS (CONSERVATIVE)
 // ============================================================================
 
+// Env-overridable so we can scale with deposits without a code release.
+// Defaults are conservative for sub-$10k AUM; raise per the scale-tier
+// table in docs/DEPLOY_RUNBOOK.md Appendix Z.
+function envNum(name: string, fallback: number): number {
+  const raw = (process.env[name] || '').trim();
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
 const DEFAULT_LIMITS: ExecutionLimits = {
-  maxPositionSizeUSD: 10_000_000,     // $10M max single position
-  maxDailyVolumeUSD: 100_000_000,     // $100M daily volume cap
-  maxSlippageBps: 30,                  // 0.30% max slippage — matches POLYMARKET_EDGE_MAX_SLIPPAGE_BPS
-  maxLeverage: 4,                      // 4x max leverage — defense in depth above per-route LEVERAGE
-  minConfirmations: 3,                 // 3 block confirmations
-  cooldownMs: 5000,                    // 5s between executions
-  maxConcurrentExecutions: 3,          // 3 parallel max
-  requireMultiAgentConsensus: true,    // Require agent consensus
-  consensusThreshold: 0.67,            // 2/3 majority
+  maxPositionSizeUSD: envNum('SAFE_GUARD_MAX_POSITION_USD', 10_000_000),
+  maxDailyVolumeUSD:  envNum('SAFE_GUARD_MAX_DAILY_VOLUME_USD', 100_000_000),
+  maxSlippageBps:     envNum('SAFE_GUARD_MAX_SLIPPAGE_BPS', 30),
+  maxLeverage:        envNum('SAFE_GUARD_MAX_LEVERAGE', 4),
+  minConfirmations:   3,                 // 3 block confirmations
+  cooldownMs:         envNum('SAFE_GUARD_COOLDOWN_MS', 5000),
+  maxConcurrentExecutions: 3,            // 3 parallel max
+  requireMultiAgentConsensus: true,      // Require agent consensus
+  consensusThreshold: 0.67,              // 2/3 majority
 };
 
 // ============================================================================

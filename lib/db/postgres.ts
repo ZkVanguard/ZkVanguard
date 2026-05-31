@@ -65,7 +65,14 @@ export function getPool(): Pool {
       // budget at max=4. max=2 leaves room for ~8 concurrent instances + 4
       // shared script/migration connections — still well under the cap given
       // 2s idleTimeoutMillis releases between requests.
-      max: isPooler ? 25 : (isAiven ? 2 : (isNeon ? 8 : 20)),
+      //
+      // Override via AIVEN_POOL_MAX (or DB_POOL_MAX as a generic catch-all)
+      // when scaling to a higher Aiven tier with connection_limit > 20.
+      max: isPooler
+        ? 25
+        : (isAiven
+            ? (Number(process.env.AIVEN_POOL_MAX) || Number(process.env.DB_POOL_MAX) || 2)
+            : (isNeon ? 8 : 20)),
       min: isNeon ? 1 : (isAiven ? 0 : 2),
       // Aiven: release idle connections aggressively. 2s is faster than any
       // realistic cron interval, so a quiet instance frees its slot in seconds.
