@@ -81,10 +81,16 @@ async function check1_dbReachable() {
   if (!url.includes('aivencloud.com')) warn(`DATABASE_URL is not Aiven: ${url.replace(/:[^:@]+@/, ':***@')}`);
   const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 1 });
   try {
-    const r = await pool.query<{ count: string }>(`SELECT COUNT(*)::text c FROM cron_state WHERE updated_at > NOW() - INTERVAL '30 minutes'`);
-    const n = Number(r.rows[0]?.count ?? 0);
-    if (n >= 3) pass(`Aiven reachable, ${n} cron_state rows updated in last 30min`);
-    else warn(`Only ${n} cron_state rows in last 30min — crons may be stale`);
+    const r = await pool.query<{ count: string; max_age_min: string }>(
+      `SELECT COUNT(*)::text count,
+              ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 60.0, 1)::text max_age_min
+         FROM cron_state`,
+    );
+    const totalRows = Number(r.rows[0]?.count ?? 0);
+    const minutesSinceMostRecent = Number(r.rows[0]?.max_age_min ?? Infinity);
+    if (totalRows === 0) return fail(`cron_state is empty — no crons have written ever`);
+    if (minutesSinceMostRecent <= 30) pass(`Aiven reachable, ${totalRows} cron_state row(s), newest write ${minutesSinceMostRecent} min ago`);
+    else warn(`Aiven reachable but newest cron_state write is ${minutesSinceMostRecent} min ago — crons may be stalled`);
   } catch (e: any) {
     fail(`Aiven query failed: ${e?.message?.slice(0, 100)}`);
   } finally {
@@ -114,7 +120,6 @@ async function check3_qstashSchedules() {
   try {
     const r = await fetch(`${QSTASH_URL}/v2/schedules`, { headers: { Authorization: `Bearer ${QSTASH_TOKEN}` }, signal: AbortSignal.timeout(15_000) });
     const list = await r.json() as Array<{ cron: string; destination: string; lastScheduleStates?: Record<string, string>; isPaused: boolean }>;
-    const byRoute = new Map(list.map(s => [s.destination.rsplit('/', 1)?.[1] ?? s.destination.split('/').pop(), s] as const));
     for (const expected of EXPECTED_SCHEDULES) {
       const sched = list.find(s => s.destination.endsWith(`/api/cron/${expected}`));
       if (!sched) { fail(`missing schedule: ${expected}`); continue; }
@@ -124,8 +129,6 @@ async function check3_qstashSchedules() {
       if (lastState === 'SUCCESS' || lastState === 'never') pass(`${expected} (${sched.cron}) last=${lastState}`);
       else warn(`${expected} (${sched.cron}) last=${lastState}`);
     }
-    // Suppress unused warning
-    void byRoute;
   } catch (e: any) {
     fail(`QStash query failed: ${e?.message?.slice(0, 100)}`);
   }
