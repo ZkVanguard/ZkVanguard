@@ -58,6 +58,23 @@ const EXPECTED_SCHEDULES = [
   'health-monitor',
 ];
 
+// Retry wrapper for the standalone pg pool — mirrors the retry logic
+// added to lib/db/postgres.ts so the probe doesn't false-fail during
+// Aiven post-deploy fan-out.
+async function retryOnPoolExhaustion<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < 4; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i - 1)));
+    try { return await fn(); }
+    catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/remaining connection slots|too many clients|connection limit exceeded/i.test(msg)) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
 const SHARPE_PRESET_VARS = [
   'POLYMARKET_EDGE_MIN_CONFIDENCE',
   'POLYMARKET_EDGE_MIN_CONSENSUS',
@@ -81,11 +98,11 @@ async function check1_dbReachable() {
   if (!url.includes('aivencloud.com')) warn(`DATABASE_URL is not Aiven: ${url.replace(/:[^:@]+@/, ':***@')}`);
   const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 1 });
   try {
-    const r = await pool.query<{ count: string; max_age_min: string }>(
+    const r = await retryOnPoolExhaustion(() => pool.query<{ count: string; max_age_min: string }>(
       `SELECT COUNT(*)::text count,
               ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) / 60.0, 1)::text max_age_min
          FROM cron_state`,
-    );
+    ));
     const totalRows = Number(r.rows[0]?.count ?? 0);
     const minutesSinceMostRecent = Number(r.rows[0]?.max_age_min ?? Infinity);
     if (totalRows === 0) return fail(`cron_state is empty — no crons have written ever`);
@@ -208,7 +225,7 @@ async function check8_navFresh() {
     .replace(/([?&])sslmode=[^&]+/g, '$1').replace(/[?&]$/, '');
   const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 1 });
   try {
-    const r = await pool.query<{ age_s: number; nav: string }>(`SELECT EXTRACT(EPOCH FROM (NOW() - "timestamp"))::int age_s, total_nav nav FROM community_pool_nav_history WHERE chain='sui' ORDER BY "timestamp" DESC LIMIT 1`);
+    const r = await retryOnPoolExhaustion(() => pool.query<{ age_s: number; nav: string }>(`SELECT EXTRACT(EPOCH FROM (NOW() - "timestamp"))::int age_s, total_nav nav FROM community_pool_nav_history WHERE chain='sui' ORDER BY "timestamp" DESC LIMIT 1`));
     if (r.rows.length === 0) return fail('no SUI NAV snapshot yet');
     const ageMin = Number(r.rows[0].age_s) / 60;
     if (ageMin < 30) pass(`NAV $${r.rows[0].nav} (${ageMin.toFixed(1)} min ago)`);
