@@ -982,6 +982,19 @@ export class BluefinService {
       // Sign the fields with wallet
       const signature = await this.signOrderFields(signedFields);
 
+      // Snapshot the pre-open position so we can verify the order actually
+      // opened. Like closeHedge, BlueFin returns an orderHash for any
+      // well-formed signed request even when the matching engine silently
+      // drops the order — we have to verify by observing the position
+      // appear / grow.
+      const preOpenPositions = await this.getPositions();
+      const prePos = preOpenPositions.find(p => p.symbol === params.symbol);
+      const preOpenSize = prePos?.size ?? 0;
+      // If we already hold the same-side position, "opened" means size grew.
+      // If we hold the opposite side, the new order may net-close it before
+      // any net-open is visible — that's still success on this call.
+      const preOpenSameSideSize = prePos?.side === params.side ? preOpenSize : 0;
+
       // Submit order to BlueFin Pro Trade API
       // POST /api/v1/trade/orders
       const orderResponse = await this.apiRequest<{
@@ -999,10 +1012,87 @@ export class BluefinService {
         reduceOnly: false,
       });
 
+      // Verify the open actually took effect. Same shape of bug as
+      // closeHedge: orderHash returned but matching engine silently drops
+      // the order (root cause was step-size — fixed for closes 2026-05-31).
+      // The cron's auto-hedge step has its own per-order verification, but
+      // any other caller (bluefin-health, trader, ad-hoc admin) needs the
+      // honest signal from this function.
+      if (!orderResponse?.orderHash) {
+        throw new Error('BlueFin returned no orderHash — open not accepted');
+      }
+
+      let filledSize = parseFloat(orderResponse?.filledQty || '0');
+      let positionGrew = false;
+      let postOpenSize = preOpenSize;
+
+      if (filledSize === 0) {
+        const POLL_MS = 500;
+        const POLL_ATTEMPTS = 10;
+        for (let i = 0; i < POLL_ATTEMPTS; i++) {
+          await new Promise(r => setTimeout(r, POLL_MS));
+          const fresh = await this.getPositions();
+          const stillThere = fresh.find(p => p.symbol === params.symbol);
+          if (stillThere) {
+            postOpenSize = stillThere.size;
+            const sameSideSize = stillThere.side === params.side ? stillThere.size : 0;
+            const growth = sameSideSize - preOpenSameSideSize;
+            if (growth >= params.size * 0.99) {
+              positionGrew = true;
+              filledSize = growth;
+              break;
+            }
+            // Opposite-side reduction also counts as a fill (the order
+            // netted against an existing position).
+            const oppositeReduction = (prePos?.side && prePos.side !== params.side)
+              ? Math.max(0, preOpenSize - stillThere.size)
+              : 0;
+            if (oppositeReduction >= params.size * 0.99) {
+              positionGrew = true;
+              filledSize = oppositeReduction;
+              break;
+            }
+          } else if (prePos && prePos.side !== params.side && prePos.size > 0) {
+            // Position disappeared — fully netted out by our open order.
+            positionGrew = true;
+            filledSize = preOpenSize;
+            break;
+          }
+        }
+      }
+
+      const openedOk = filledSize >= params.size * 0.99 || positionGrew;
+
+      if (!openedOk) {
+        logger.error('❌ BlueFin open did NOT take effect — silent reject', {
+          hedgeId,
+          symbol: params.symbol,
+          side: params.side,
+          requestedSize: params.size,
+          preOpenSize,
+          postOpenSize,
+          orderHash: orderResponse?.orderHash,
+          filledQty: orderResponse?.filledQty,
+          rawResponse: JSON.stringify(orderResponse).slice(0, 500),
+        });
+        return {
+          success: false,
+          hedgeId,
+          orderId: orderResponse?.orderHash,
+          error: `BlueFin accepted orderHash ${orderResponse?.orderHash?.slice(0, 12)}… but position did not appear (preSize=${preOpenSize}, postSize=${postOpenSize}, requested=${params.size}). Likely silent reject — check step size & free collateral.`,
+          timestamp: Date.now(),
+          rawResponse: orderResponse,
+          preCloseSize: preOpenSize,
+          postCloseSize: postOpenSize,
+        };
+      }
+
       logger.info('✅ BlueFin hedge opened', {
         hedgeId,
         orderHash: orderResponse?.orderHash,
         txDigest: orderResponse?.txDigest,
+        filledSize,
+        verifiedByPoll: positionGrew,
         elapsed: `${Date.now() - startTime}ms`,
       });
 
@@ -1012,7 +1102,7 @@ export class BluefinService {
         orderId: orderResponse?.orderHash || orderResponse?.orderId,
         txDigest: orderResponse?.txDigest,
         executionPrice: parseFloat(orderResponse?.avgFillPrice || String(currentPrice)),
-        filledSize: parseFloat(orderResponse?.filledQty || String(params.size)),
+        filledSize: filledSize || params.size,
         fees: parseFloat(orderResponse?.fee || '0'),
         timestamp: Date.now(),
       };
