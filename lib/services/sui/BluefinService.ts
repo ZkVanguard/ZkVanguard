@@ -134,6 +134,11 @@ export interface BluefinHedgeResult {
   fees?: number;
   error?: string;
   timestamp: number;
+  /** Raw BlueFin API response — only populated on close failures for diagnosis. */
+  rawResponse?: unknown;
+  /** Pre/post position sizes — populated when a close was attempted. */
+  preCloseSize?: number;
+  postCloseSize?: number;
 }
 
 /**
@@ -1292,8 +1297,11 @@ export class BluefinService {
           success: false,
           hedgeId,
           orderId: orderResponse?.orderHash,
-          error: `BlueFin accepted orderHash ${orderResponse?.orderHash?.slice(0, 12)}… but position did not shrink (preSize=${preCloseSize}, postSize=${postCloseSize}). Likely silent reject — see logs.`,
+          error: `BlueFin accepted orderHash ${orderResponse?.orderHash?.slice(0, 12)}… but position did not shrink (preSize=${preCloseSize}, postSize=${postCloseSize}). Likely silent reject — raw response surfaced in rawResponse.`,
           timestamp: Date.now(),
+          rawResponse: orderResponse,
+          preCloseSize,
+          postCloseSize,
         };
       }
 

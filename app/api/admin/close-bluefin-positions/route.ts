@@ -71,7 +71,15 @@ async function handle(req: NextRequest, dryRun: boolean) {
       });
     }
 
-    const results: Array<{ symbol: string; success: boolean; orderId?: string; error?: string }> = [];
+    const results: Array<{
+      symbol: string;
+      success: boolean;
+      orderId?: string;
+      error?: string;
+      preCloseSize?: number;
+      postCloseSize?: number;
+      rawResponse?: unknown;
+    }> = [];
     for (const p of positions) {
       const symbol = String((p as unknown as Record<string, unknown>).symbol || '');
       if (!symbol) continue;
@@ -82,6 +90,9 @@ async function handle(req: NextRequest, dryRun: boolean) {
           success: !!res.success,
           orderId: res.orderId,
           error: res.success ? undefined : res.error,
+          preCloseSize: res.preCloseSize,
+          postCloseSize: res.postCloseSize,
+          rawResponse: res.success ? undefined : res.rawResponse,
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
