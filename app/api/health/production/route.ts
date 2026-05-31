@@ -208,8 +208,9 @@ export async function GET(req: NextRequest) {
   const traderCron = await checkCronAge('polymarket-edge:daily', 60, 1440);
   const hedgeReconcileCron = await checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240);
   const bluefinHealthCron = await checkCronAge('bluefin-health:consecutiveDegraded', 15, 30);
+  const bluefinDbReconcileCron = await checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60);
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron };
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron };
   const overall = worstStatus(Object.values(components));
 
   const body = {
