@@ -101,22 +101,63 @@ export function getPool(): Pool {
 
 const SLOW_QUERY_MS = 2000;
 
+// Aiven's per-plan connection_limit (20 on default) is shared across every
+// Vercel instance. During post-deploy fan-out OR concurrent cron ticks +
+// reconciler runs, new connections can be rejected with this exact error:
+//   "remaining connection slots are reserved for roles with the SUPERUSER attribute"
+// The connections themselves are transient — they free within seconds as
+// other crons finish. Retry with exponential backoff instead of bubbling
+// the error to the caller. 3 retries × 1s/2s/4s = up to 7s total — well
+// under the 20s query_timeout. Anything more persistent means a real
+// capacity issue; surface that to the caller.
+const POOL_EXHAUSTED_PATTERNS = [
+  /remaining connection slots are reserved/i,
+  /sorry, too many clients already/i,
+  /connection limit exceeded/i,
+];
+function isPoolExhausted(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return POOL_EXHAUSTED_PATTERNS.some(re => re.test(msg));
+}
+
 export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
   const p = getPool();
   _poolMetrics.queries++;
   const start = Date.now();
-  try {
-    const result = await p.query(text, params);
-    const duration = Date.now() - start;
-    if (duration > SLOW_QUERY_MS) {
-      _poolMetrics.slowQueries++;
-      logger.warn(`[DB] Slow query (${duration}ms): ${text.slice(0, 80)}`, { component: 'postgres', duration });
+  const MAX_RETRIES = 3;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        const backoffMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+        await new Promise(r => setTimeout(r, backoffMs));
+        logger.warn(`[DB] Retry attempt ${attempt}/${MAX_RETRIES} after pool-exhaustion`, {
+          component: 'postgres',
+          backoffMs,
+          query: text.slice(0, 80),
+        });
+      }
+      const result = await p.query(text, params);
+      const duration = Date.now() - start;
+      if (attempt > 0) {
+        logger.info(`[DB] Query recovered after ${attempt} retry(ies)`, { component: 'postgres', totalDurationMs: duration });
+      }
+      if (duration > SLOW_QUERY_MS) {
+        _poolMetrics.slowQueries++;
+        logger.warn(`[DB] Slow query (${duration}ms): ${text.slice(0, 80)}`, { component: 'postgres', duration });
+      }
+      return result.rows;
+    } catch (err) {
+      lastErr = err;
+      if (!isPoolExhausted(err) || attempt === MAX_RETRIES) {
+        _poolMetrics.errors++;
+        throw err;
+      }
+      // else: loop and retry
     }
-    return result.rows;
-  } catch (err) {
-    _poolMetrics.errors++;
-    throw err;
   }
+  _poolMetrics.errors++;
+  throw lastErr;
 }
 
 export async function queryOne<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T | null> {
