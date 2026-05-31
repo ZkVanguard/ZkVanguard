@@ -1186,7 +1186,19 @@ export class BluefinService {
         throw new Error(`No open position found for ${params.symbol}`);
       }
 
-      const closeSize = params.size || position.size;
+      // Snap to BlueFin's per-symbol step size. SUI-PERP step is 1 (whole
+      // SUI only), ETH 0.01, BTC 0.001. Sending a non-stepped quantity
+      // (e.g. position.size=4.0418 with step=1) returns an orderHash but
+      // the matching engine drops the order silently — the root cause of
+      // the closeHedge bug observed 2026-05-30/31. openHedge already
+      // snaps via snapToStepSize at line 899; closeHedge didn't until now.
+      const rawCloseSize = params.size || position.size;
+      const pair = BLUEFIN_PAIRS[params.symbol as keyof typeof BLUEFIN_PAIRS];
+      const stepSize = pair?.stepSize ?? 0.001;
+      const closeSize = snapToStepSize(rawCloseSize, stepSize);
+      if (closeSize <= 0 || closeSize < (pair?.minQuantity ?? 0)) {
+        throw new Error(`Close size ${rawCloseSize} snapped to ${closeSize} below minQty ${pair?.minQuantity} for ${params.symbol} — position too small to close on BlueFin`);
+      }
       const closeSide = position.side === 'LONG' ? 'SHORT' : 'LONG';
       // Snapshot the pre-close size so we can verify the position actually
       // shrunk if BlueFin returns an orderHash without filledQty.
