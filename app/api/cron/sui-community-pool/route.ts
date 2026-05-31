@@ -1671,6 +1671,48 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 continue;
               }
 
+              // Direction-flip: if an opposite-side position exists, close
+              // it before opening the new direction. Without this the cron
+              // accumulates both legs (one LONG + one SHORT on the same
+              // symbol) and burns margin for net-zero exposure until
+              // liquidation-guard fires. The existing dedup gate above
+              // only catches same-side dupes, not flips.
+              const oppositeSide: 'LONG' | 'SHORT' = side === 'LONG' ? 'SHORT' : 'LONG';
+              const oppositeKey = `${symbol}|${oppositeSide}`;
+              if (liveSet.has(oppositeKey)) {
+                logger.info(`[SUI Cron] Direction flip — closing existing ${oppositeKey} before opening ${key}`);
+                try {
+                  const closeRes = await bluefin.closeHedge({ symbol });
+                  if (!closeRes.success) {
+                    logger.warn(`[SUI Cron] Direction-flip close FAILED for ${symbol} — skipping open to avoid double-leg accumulation`, {
+                      error: closeRes.error,
+                      preCloseSize: (closeRes as { preCloseSize?: number }).preCloseSize,
+                      postCloseSize: (closeRes as { postCloseSize?: number }).postCloseSize,
+                    });
+                    await notifyDiscord(
+                      `Direction-flip close FAILED for ${symbol} (was ${oppositeSide}, wanted ${side}). Skipping open to avoid double-leg margin burn. Investigate: ${closeRes.error}`,
+                      'WARN',
+                      { symbol, fromSide: oppositeSide, toSide: side, error: closeRes.error },
+                    );
+                    hedges.push({ symbol, side, size: 0, status: 'SKIPPED_FLIP_CLOSE_FAILED', error: closeRes.error });
+                    continue;
+                  }
+                  await notifyDiscord(
+                    `Direction-flip on ${symbol}: closed ${oppositeSide}, opening ${side}.`,
+                    'INFO',
+                    { symbol, fromSide: oppositeSide, toSide: side, closeOrderId: closeRes.orderId },
+                  );
+                  // Brief settle window so the next openHedge's pre-trade
+                  // margin check sees the freed collateral.
+                  await new Promise(r => setTimeout(r, 1500));
+                } catch (flipErr) {
+                  const msg = flipErr instanceof Error ? flipErr.message : String(flipErr);
+                  logger.warn(`[SUI Cron] Direction-flip close threw for ${symbol} — skipping open`, { error: msg });
+                  hedges.push({ symbol, side, size: 0, status: 'SKIPPED_FLIP_CLOSE_ERROR', error: msg });
+                  continue;
+                }
+              }
+
               const allocation = aiResult.allocations[asset] || 0;
               if (allocation < 5) {
                 hedges.push({ symbol, side, size: 0, status: 'SKIPPED_LOW_ALLOC' });
