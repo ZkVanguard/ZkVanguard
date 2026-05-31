@@ -706,18 +706,20 @@ export class BluefinService {
    * Note: Prices are in E9 format (multiply by 1e-9 to get decimal)
    * Falls back to null if exchange API is unavailable
    */
-  async getMarketData(symbol: string): Promise<{ price: number; fundingRate: number; change24h?: number } | null> {
+  async getMarketData(symbol: string): Promise<{ price: number; fundingRate: number; change24h?: number; openInterestUsd?: number } | null> {
     await this.ensureInitializedAsync();
 
     try {
       // Response uses E9 format: lastPriceE9, fundingRateE9, etc.
-      const marketData = await this.apiRequest<{ 
+      const marketData = await this.apiRequest<{
         lastPriceE9?: string;
         lastPrice?: string;  // Some responses may use non-E9 format
         lastFundingRateE9?: string;
         fundingRate?: string;
         priceChangePercent24hrE9?: string;
         priceChange24h?: string;
+        openInterestE9?: string;
+        openInterest?: string;
       }>(
         'GET',
         `/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
@@ -752,8 +754,20 @@ export class BluefinService {
         change24h = parseFloat(marketData.priceChange24h);
       }
       if (change24h !== undefined && isNaN(change24h)) change24h = undefined;
-      
-      return { price, fundingRate, change24h };
+
+      // Open interest: position quantity (in base asset units) × price = USD
+      // depth of the market. Used for OI-aware pre-trade sizing — a hedge
+      // > BLUEFIN_MAX_OI_PCT × OI gets rejected as too-impactful for venue.
+      let openInterestUsd: number | undefined;
+      if (marketData?.openInterestE9 && price > 0) {
+        const oiBase = parseFloat(marketData.openInterestE9) / 1e9;
+        if (Number.isFinite(oiBase) && oiBase > 0) openInterestUsd = oiBase * price;
+      } else if (marketData?.openInterest && price > 0) {
+        const oiBase = parseFloat(marketData.openInterest);
+        if (Number.isFinite(oiBase) && oiBase > 0) openInterestUsd = oiBase * price;
+      }
+
+      return { price, fundingRate, change24h, openInterestUsd };
     } catch (error) {
       // Log at debug level - exchange API may be temporarily unavailable on testnet
       logger.debug('Failed to get market data', { 
@@ -950,6 +964,45 @@ export class BluefinService {
             error: `Funding rate ${fundingRate.toFixed(6)} (≈${(Math.abs(fundingRate) * 3 * 365 * 100).toFixed(1)}% APR) exceeds guard ${maxFunding} for ${params.side} ${params.symbol}. Skipping to avoid systematic bleed.`,
             timestamp: Date.now(),
           };
+        }
+      }
+
+      // Open-interest pre-trade check (T3-B): reject hedges that exceed a
+      // configurable percentage of the venue's open interest for the
+      // symbol. Large hedges relative to OI move the market against us
+      // (slippage + adverse fill) and starve other liquidity-takers. The
+      // hardware reality: BlueFin SUI-PERP total OI is single-digit
+      // millions in 2026, so a $100k hedge is already ~1-2% of OI; tune
+      // BLUEFIN_MAX_OI_PCT per scale tier.
+      //
+      // Skip the check when:
+      //  - openInterestUsd is unavailable from the ticker (don't block on
+      //    a missing field — funding-guard already covered the main risk)
+      //  - params.bypassOiGuard is set (per-call override for known-good
+      //    paths like bluefin-health's emergency close)
+      const oiGuardEnabled = (process.env.BLUEFIN_OI_GUARD || 'true').toLowerCase() !== 'false';
+      if (oiGuardEnabled && !(params as { bypassOiGuard?: boolean }).bypassOiGuard) {
+        const oiUsd = marketData?.openInterestUsd ?? 0;
+        if (oiUsd > 0) {
+          const maxOiPct = Math.max(0.5, Number(process.env.BLUEFIN_MAX_OI_PCT) || 5); // % of OI
+          const notionalUsd = params.size * (marketData?.price ?? 0);
+          const proposedPct = (notionalUsd / oiUsd) * 100;
+          if (proposedPct > maxOiPct) {
+            logger.warn('[BlueFin] OI guard rejected hedge — too large vs venue', {
+              symbol: params.symbol,
+              side: params.side,
+              notionalUsd: notionalUsd.toFixed(2),
+              oiUsd: oiUsd.toFixed(2),
+              proposedPctOfOi: proposedPct.toFixed(2),
+              maxOiPct,
+            });
+            return {
+              success: false,
+              hedgeId,
+              error: `Hedge $${notionalUsd.toFixed(0)} is ${proposedPct.toFixed(2)}% of ${params.symbol} OI ($${oiUsd.toFixed(0)}) — exceeds ${maxOiPct}% guard. Reduce size, split execution, or use multi-venue routing.`,
+              timestamp: Date.now(),
+            };
+          }
         }
       }
 
