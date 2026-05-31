@@ -1204,7 +1204,25 @@ export class BluefinService {
       const signedAtMillis = Date.now();
       const salt = (Date.now() + crypto.randomInt(1000000)).toString();
 
-      // Create signedFields for close order per SDK format
+      // Create signedFields for close order per SDK format.
+      //
+      // Leverage MUST match the position's leverage. Earlier this set
+      // leverageE9: '1000000000' (1x) under the assumption "close orders
+      // don't need leverage." That's wrong: BlueFin's pre-trade risk
+      // check sees the opposite-side order as opening a new position
+      // (because account-level netting only resolves at fill time) and
+      // requires `notional / leverage` margin BEFORE the close lands.
+      //
+      // With 1x: closing a 3x position requires the full notional as
+      // free margin — usually impossible (you couldn't have opened the
+      // position at all if you had that much idle). With matching
+      // leverage: required margin = posted margin, which is by
+      // definition available.
+      //
+      // Use Math.max(1, position.leverage) to guard against odd cases.
+      const closeLeverage = Math.max(1, position.leverage || 1);
+      const leverageE9 = Math.floor(closeLeverage * 1e9).toString();
+
       const networkConfig = BLUEFIN_NETWORKS[this.network];
       const signedFields = {
         idsId: networkConfig.idsId,
@@ -1212,7 +1230,7 @@ export class BluefinService {
         symbol: params.symbol,
         priceE9: priceE9,
         quantityE9: quantityE9,
-        leverageE9: '1000000000', // 1x leverage for close
+        leverageE9,
         side: closeSide,
         isIsolated: false,
         expiresAtMillis: expiresAt,
