@@ -314,6 +314,91 @@ case 'small':  return 3;   // was  5
 4. Watch one week of trader output via Discord `TRADE` and `KILL` alerts. If
    trade frequency drops below 1/day, lower `MIN_CONFIDENCE` to 65 and reassess.
 
+## Appendix Y — BlueFin order invariants (silent-reject prevention)
+
+BlueFin's Trade API returns an `orderHash` for any well-formed signed
+request, even when the matching engine later silently drops the order.
+We learned this the hard way on 2026-05-31. Every new code path that
+opens or closes BlueFin orders MUST observe these invariants, or
+positions get reserved on collateral without ever filling.
+
+**1. Quantity must snap to per-symbol step size.**
+The `BLUEFIN_PAIRS` map (`lib/services/sui/BluefinService.ts:76`) is
+authoritative:
+```
+BTC-PERP  stepSize 0.001   minQty 0.001
+ETH-PERP  stepSize 0.01    minQty 0.01
+SUI-PERP  stepSize 1       minQty 1     ← whole SUI only
+SOL-PERP  stepSize 0.1     minQty 0.1
+```
+Use `snapToStepSize(rawSize, pair.stepSize)` BEFORE signing. A
+fractional SUI quantity returns an orderHash but is silently dropped.
+
+**2. Leverage on a close must match the position's leverage.**
+The pre-trade risk check sees the opposite-side close as opening a
+new position and requires `notional / leverage` as free margin. At
+hardcoded 1x leverage, closing a 3x position needs the full notional
+free — usually impossible. Use `position.leverage`.
+
+**3. Never pass `reduceOnly: true`.**
+The BlueFin v2 SDK (`bluefinClient.js` line 464-466) explicitly warns
+that reduceOnly is deprecated and the API rejects flagged orders.
+Use a plain opposite-side MARKET order with `reduceOnly: false` and
+let BlueFin's account-level netting do the work.
+
+**4. Verify the fill — orderHash alone is not proof.**
+Both `openHedge` and `closeHedge` snapshot the pre-trade position
+size, submit, then poll `getPositions()` for up to 5s checking for
+size change. Success requires ONE of:
+- `filledQty >= 99%` of requested size in the response, OR
+- non-empty non-zero `realizedPnl`, OR
+- position visibly grew (open) or shrunk (close) during polling
+Otherwise return `success: false` with `rawResponse` surfaced for
+diagnosis. Don't ever return `success: true` based only on orderHash.
+
+**5. If you must debug a silent reject**, hit
+`GET /api/admin/bluefin-debug` (CRON_SECRET-gated). Returns
+ground-truth `positions + openOrders + freeCollateral`.
+
+## Appendix W — reconciliation topology
+
+Three independent reconcile paths cover the three drift surfaces:
+
+| Cron | Cadence | Compares | Repair |
+|---|---|---|---|
+| `sui-hedge-reconcile`     | 1h    | on-chain Move ↔ BlueFin | `admin_reset_hedge_state` |
+| `bluefin-db-reconcile`    | 15min | BlueFin ↔ DB hedges      | close phantom DB rows; alert on orphan positions |
+| `SuiHedgeReconciler.reconcileSuiHedges()` (service, on-demand) | — | on-chain Move ↔ DB hedges | INSERT missing; UPDATE closed |
+
+Adding a new reconcile path: write the comparison + repair in a new
+cron route under `app/api/cron/`, write a heartbeat via
+`setCronState('cron:lastRun:<route>', Date.now())` at the top, fire a
+`notifyDiscord` on detected drift, and schedule it on QStash via the
+v2 API (see [[qstash-schedules]] memo). Add the freshness check to
+`/api/health/production` so the operator sees it without polling logs.
+
+## Appendix V — admin endpoints (operator escape hatches)
+
+All CRON_SECRET-gated via `verifyCronRequest`. Not browser-callable.
+Run from terminal during incident response.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/admin/bluefin-debug`          | GET  | Ground-truth positions + openOrders + freeCollateral |
+| `/api/admin/close-bluefin-positions`| GET  | Dry-run: list positions only |
+| `/api/admin/close-bluefin-positions`| POST | Close every open BlueFin position (uses fixed closeHedge) |
+| `/api/admin/reconcile-sui-hedges`   | POST | On-demand on-chain Move ↔ DB sync |
+
+Example flatten-everything sequence:
+```bash
+SECRET="$(grep ^CRON_SECRET= .env.local | cut -d= -f2 | tr -d '\"')"
+URL=https://www.zkvanguard.xyz
+curl -s -X GET  -H "Authorization: Bearer $SECRET" $URL/api/admin/bluefin-debug | jq
+curl -s -X GET  -H "Authorization: Bearer $SECRET" $URL/api/admin/close-bluefin-positions | jq  # dry run
+curl -s -X POST -H "Authorization: Bearer $SECRET" $URL/api/admin/close-bluefin-positions | jq  # commit
+curl -s -X GET  -H "Authorization: Bearer $SECRET" $URL/api/admin/bluefin-debug | jq            # verify
+```
+
 ## Appendix A — secret inventory (what lives where)
 
 Fund-moving / highest priority: `SUI_POOL_ADMIN_KEY`, `BLUEFIN_PRIVATE_KEY`.
