@@ -1183,6 +1183,9 @@ export class BluefinService {
 
       const closeSize = params.size || position.size;
       const closeSide = position.side === 'LONG' ? 'SHORT' : 'LONG';
+      // Snapshot the pre-close size so we can verify the position actually
+      // shrunk if BlueFin returns an orderHash without filledQty.
+      const preCloseSize = position.size;
 
       // Get current market price
       const marketData = await this.getMarketData(params.symbol);
@@ -1230,16 +1233,80 @@ export class BluefinService {
         reduceOnly: true,
       });
 
+      // Verify the close actually took effect. BlueFin will return an
+      // orderHash even for orders it later rejects server-side (observed
+      // 2026-05-30 — both SUI and ETH close attempts returned distinct
+      // orderHashes but positions stayed unchanged and openOrders was
+      // empty). Three signals, any one of which proves the close worked:
+      //   1. filledQty >= 99% of closeSize in the response
+      //   2. realizedPnl is non-zero (only set when an actual close fills)
+      //   3. getPositions() shows size shrunk by >= 99% of closeSize
+      //      after up to 5s of polling (BlueFin's settlement isn't always
+      //      instant; the response can omit filledQty even on success)
+      let filledSize = parseFloat(orderResponse?.filledQty || '0');
+      let positionShrunk = false;
+      let postCloseSize = preCloseSize;
+
+      if (!orderResponse?.orderHash) {
+        throw new Error('BlueFin returned no orderHash — close not accepted');
+      }
+
+      if (filledSize === 0 && (orderResponse?.realizedPnl ?? '') === '') {
+        // Poll up to 5s for the position to shrink. Stop early on success.
+        const POLL_MS = 500;
+        const POLL_ATTEMPTS = 10;
+        for (let i = 0; i < POLL_ATTEMPTS; i++) {
+          await new Promise(r => setTimeout(r, POLL_MS));
+          const fresh = await this.getPositions();
+          const stillThere = fresh.find(p => p.symbol === params.symbol);
+          postCloseSize = stillThere?.size ?? 0;
+          const shrinkage = preCloseSize - postCloseSize;
+          if (shrinkage >= closeSize * 0.99) {
+            positionShrunk = true;
+            filledSize = shrinkage;
+            break;
+          }
+        }
+      }
+
+      // Honest success check: either we saw a fill in the response, OR the
+      // position visibly shrunk during polling.
+      const closedOk =
+        filledSize >= closeSize * 0.99 ||
+        positionShrunk ||
+        parseFloat(orderResponse?.realizedPnl || '0') !== 0;
+
+      if (!closedOk) {
+        logger.error('❌ BlueFin close did NOT take effect — silent reject', {
+          hedgeId,
+          symbol: params.symbol,
+          orderHash: orderResponse?.orderHash,
+          requestedSize: closeSize,
+          preCloseSize,
+          postCloseSize,
+          filledQty: orderResponse?.filledQty,
+          realizedPnl: orderResponse?.realizedPnl,
+          rawResponse: JSON.stringify(orderResponse).slice(0, 500),
+        });
+        return {
+          success: false,
+          hedgeId,
+          orderId: orderResponse?.orderHash,
+          error: `BlueFin accepted orderHash ${orderResponse?.orderHash?.slice(0, 12)}… but position did not shrink (preSize=${preCloseSize}, postSize=${postCloseSize}). Likely silent reject — see logs.`,
+          timestamp: Date.now(),
+        };
+      }
+
       logger.info('✅ BlueFin position closed', {
         hedgeId,
         symbol: params.symbol,
         orderHash: orderResponse?.orderHash,
+        filledSize,
         realizedPnl: orderResponse?.realizedPnl,
+        verifiedByPoll: positionShrunk,
         elapsed: `${Date.now() - startTime}ms`,
       });
 
-      // M1: Verify fill completeness — warn on partial fills
-      const filledSize = parseFloat(orderResponse?.filledQty || '0');
       if (filledSize > 0 && filledSize < closeSize * 0.99) {
         logger.warn('⚠️ BlueFin partial fill on close order', {
           hedgeId,
