@@ -35,8 +35,9 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
-import { getActiveHedges, closeHedge, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, closeHedge, createHedge, type Hedge } from '@/lib/db/hedges';
 import { setCronState } from '@/lib/db/cron-state';
+import { SUI_COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     }
 
     const orphanBluefinPositions: ReconcileResult['orphanBluefinPositions'] = [];
+    const orphanInsertedIds: number[] = [];
     for (const p of positions) {
       const pp = p as unknown as Record<string, unknown>;
       const symbol = String(pp.symbol || '').toUpperCase();
@@ -132,6 +134,40 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       );
       if (!matchedInDb && symbol && size > 0) {
         orphanBluefinPositions.push({ symbol, side, size });
+        // Auto-recover: insert a reconstructed DB row with markPrice as the
+        // entry estimate. Without this, the orphan sits forever and every
+        // future reconcile tick re-alerts. The cron's createHedge sometimes
+        // fails silently after openHedge succeeds (DB hiccup, schema drift),
+        // so this is the closing-the-loop mechanism.
+        try {
+          const asset = symbol.replace('-PERP', '');
+          const markPrice = Number(pp.markPrice ?? pp.entryPrice ?? 0);
+          const leverage = Number(pp.leverage ?? 3);
+          const notionalUsd = size * (markPrice || 0);
+          if (notionalUsd > 0) {
+            const reconstructed = await createHedge({
+              orderId: `reconstructed_${symbol}_${side}_${Date.now()}`,
+              portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+              walletAddress: (process.env.SUI_ADMIN_ADDRESS || '').trim(),
+              asset,
+              market: symbol,
+              side: side as 'LONG' | 'SHORT',
+              size,
+              notionalValue: notionalUsd,
+              leverage,
+              entryPrice: markPrice,
+              simulationMode: false,
+              chain: 'sui',
+              reason: `Orphan auto-recovered by bluefin-db-reconcile (entry=markPrice estimate; openHedge succeeded but createHedge missed)`,
+            });
+            orphanInsertedIds.push(reconstructed.id);
+          }
+        } catch (insertErr) {
+          logger.warn('[bluefin-db-reconcile] orphan insert failed', {
+            symbol, side, size,
+            error: insertErr instanceof Error ? insertErr.message : String(insertErr),
+          });
+        }
       }
     }
 
