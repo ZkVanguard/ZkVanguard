@@ -45,6 +45,14 @@ export const maxDuration = 30;
 
 const CRON_KEY_LAST_RUN = 'cron:lastRun:bluefin-db-reconcile';
 
+// T1-C: max-hold force-close. Perp positions ride indefinitely while AI
+// keeps the same direction; if the AI is stuck wrong for days the pool
+// bleeds without any direction-flip or kill-switch triggering. Force-
+// close any position older than HEDGE_MAX_HOLD_HOURS to bound the
+// "stuck wrong" loss window. Default 24h matches the trader's daily
+// PnL cap horizon. Disable by setting HEDGE_MAX_HOLD_HOURS=0.
+const HEDGE_MAX_HOLD_HOURS = Number(process.env.HEDGE_MAX_HOLD_HOURS ?? 24);
+
 interface ReconcileResult {
   success: boolean;
   ranAt: string;
@@ -53,6 +61,7 @@ interface ReconcileResult {
   phantomDbRows: Array<{ id: number; symbol: string; side: string; size: number }>;
   orphanBluefinPositions: Array<{ symbol: string; side: string; size: number }>;
   closedDbRowIds: number[];
+  ageForceClosed: Array<{ id: number; symbol: string; side: string; ageHours: number; closeOk: boolean; error?: string }>;
   error?: string;
 }
 
@@ -81,7 +90,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     return NextResponse.json(
       {
         success: false, ranAt, dbActiveCount: 0, bluefinPositionsCount: 0,
-        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [],
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
         error: 'Unauthorized',
       } as ReconcileResult,
       { status: 401 },
@@ -94,6 +103,53 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       getActiveHedges(undefined, 'sui'),
       bf.getPositions(),
     ]);
+
+    // T1-C: force-close positions older than HEDGE_MAX_HOLD_HOURS. Runs
+    // BEFORE the phantom/orphan reconciliation so the close shows up as
+    // a phantom on the next tick if BlueFin processes it quickly.
+    const ageForceClosed: ReconcileResult['ageForceClosed'] = [];
+    if (HEDGE_MAX_HOLD_HOURS > 0) {
+      const cutoffMs = Date.now() - HEDGE_MAX_HOLD_HOURS * 3600_000;
+      for (const h of dbHedges) {
+        // Skip operational micro-hedges + reconstructed-orphan rows
+        // (those have no real open timestamp).
+        const notional = Number(h.notional_value ?? 0);
+        if (notional < 1) continue;
+        if (String(h.order_id || '').startsWith('reconstructed_')) continue;
+        const createdMs = new Date(h.created_at).getTime();
+        if (!Number.isFinite(createdMs) || createdMs > cutoffMs) continue;
+        // Confirm it's actually still open on BlueFin before closing —
+        // otherwise we'd just be alerting on a stale DB row that the
+        // phantom-reconciler is about to clean up.
+        const symbol = String(h.market || '');
+        if (!matchesPosition(h, positions as Array<{ symbol?: string; side?: string; size?: number }>)) continue;
+        const ageHours = (Date.now() - createdMs) / 3600_000;
+        try {
+          const closeRes = await bf.closeHedge({ symbol });
+          ageForceClosed.push({
+            id: h.id, symbol, side: String(h.side || ''),
+            ageHours: Number(ageHours.toFixed(2)),
+            closeOk: !!closeRes.success,
+            error: closeRes.success ? undefined : closeRes.error,
+          });
+        } catch (e) {
+          ageForceClosed.push({
+            id: h.id, symbol, side: String(h.side || ''),
+            ageHours: Number(ageHours.toFixed(2)),
+            closeOk: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      if (ageForceClosed.length > 0) {
+        const ok = ageForceClosed.filter(c => c.closeOk).length;
+        await notifyDiscord(
+          `Max-hold force-close: ${ok}/${ageForceClosed.length} position(s) closed after ${HEDGE_MAX_HOLD_HOURS}h. ${ageForceClosed.map(c => `${c.symbol} ${c.side} ${c.ageHours}h ${c.closeOk ? 'OK' : 'FAIL'}`).join(', ')}.`,
+          ok === ageForceClosed.length ? 'INFO' : 'WARN',
+          { hours: HEDGE_MAX_HOLD_HOURS, closed: ageForceClosed },
+        );
+      }
+    }
 
     const phantomDbRows: ReconcileResult['phantomDbRows'] = [];
     const closedDbRowIds: number[] = [];
@@ -197,6 +253,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       phantomDbRows,
       orphanBluefinPositions,
       closedDbRowIds,
+      ageForceClosed,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -204,7 +261,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     return NextResponse.json(
       {
         success: false, ranAt, dbActiveCount: 0, bluefinPositionsCount: 0,
-        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [],
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
         error: msg,
       },
       { status: 500 },

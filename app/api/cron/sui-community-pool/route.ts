@@ -36,6 +36,7 @@ import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
 import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
+import { clampAllocationsToHedgeable } from '@/lib/services/sui/cron/hedgeable-allocation';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
@@ -1044,6 +1045,64 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         'KILL',
         { navUsd: navUsd.toFixed(2), ceiling: NAV_SAFETY_CEILING_USDC },
       );
+    }
+
+    // ── Hedgeability clamp (T1-A) ────────────────────────────────
+    // BlueFin's per-symbol minQty creates a naked-long gap at small NAV:
+    // if NAV × alloc% × leverage / price < minQty, the perp leg can't
+    // open and the spot leg sits unhedged when AI signals BEARISH/NEUTRAL.
+    // Concrete: at $50 NAV with 45% BTC alloc, BTC perp needs
+    // ≥0.001 BTC = $73 notional but only sees $14 → silently skipped,
+    // wBTC stays naked-long. Clamp drops unhedgeable assets and
+    // redistributes their share to assets that CAN clear minQty.
+    {
+      const tierLev = resolveLeverage(navUsd, undefined);
+      const ratio = hedgeRatioForNav(navUsd);
+      const perpSpecs: Record<string, { minQuantity: number; stepSize: number }> = {
+        BTC: { minQuantity: 0.001, stepSize: 0.001 },
+        ETH: { minQuantity: 0.01,  stepSize: 0.01  },
+        SUI: { minQuantity: 1,     stepSize: 1     },
+      };
+      const clamp = clampAllocationsToHedgeable({
+        navUsd,
+        allocations: aiResult.allocations as Record<string, number>,
+        prices: pricesUSD,
+        hedgeRatio: ratio,
+        leverage: tierLev,
+        perpSpecs,
+      });
+      if (clamp.redistributed) {
+        logger.warn('[SUI Cron] Hedgeability clamp redistributed allocations', {
+          dropped: clamp.dropped,
+          before: aiResult.allocations,
+          after: clamp.allocations,
+          navUsd: navUsd.toFixed(2),
+          leverage: tierLev,
+          hedgeRatio: ratio,
+        });
+        await notifyDiscord(
+          `Allocation auto-adjusted: ${clamp.dropped.map(d => `${d.asset} ${d.originalPct}% (need $${d.notionalNeeded.toFixed(0)} notional, have $${d.notionalAvailable.toFixed(2)})`).join(', ')} dropped — redistributed to hedgeable assets to avoid naked spot exposure.`,
+          'INFO',
+          { navUsd, leverage: tierLev, dropped: clamp.dropped, before: aiResult.allocations, after: clamp.allocations },
+        );
+        aiResult.allocations = clamp.allocations as typeof aiResult.allocations;
+      } else if (clamp.dropped.length > 0 && !clamp.redistributed) {
+        // No survivor — every asset unhedgeable. Fall back to keeping
+        // pool in USDC for this cycle (skip swap + skip hedge).
+        logger.error('[SUI Cron] No asset can clear minQty at current NAV — skipping swap + hedge', {
+          navUsd: navUsd.toFixed(2),
+          leverage: tierLev,
+          dropped: clamp.dropped,
+        });
+        await notifyDiscord(
+          `Pool too small to hedge ANY asset (NAV $${navUsd.toFixed(2)}, leverage ${tierLev}x). All ${clamp.dropped.length} candidates below minQty. Skipping swap + hedge — pool stays in USDC.`,
+          'WARN',
+          { navUsd, leverage: tierLev, dropped: clamp.dropped },
+        );
+        for (const a of Object.keys(aiResult.allocations)) {
+          (aiResult.allocations as Record<string, number>)[a] = 0;
+        }
+      }
     }
 
     await recordPoolNavSnapshot({ sharePriceUsd, navUsd, poolStats, allocations: aiResult.allocations });
