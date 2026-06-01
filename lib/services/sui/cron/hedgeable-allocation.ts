@@ -30,6 +30,14 @@ export interface ClampInput {
   hedgeRatio: number;                   // 0.5 (large) or 1.0 (tiny)
   leverage: number;                     // tier-capped (5 for tiny, 3 for small, etc)
   perpSpecs: Record<string, PerpSpec>;  // asset → { minQuantity, stepSize }
+  /**
+   * Per-asset BlueFin open-interest snapshot in USD. If supplied and the
+   * proposed hedge notional > maxOiPct% of OI, the asset is treated as
+   * unhedgeable (same as failing minQty). Mirrors the T3-B OI guard so
+   * the swap path doesn't take spot exposure we can't perp-hedge.
+   */
+  openInterestUsd?: Record<string, number>;
+  maxOiPct?: number;                    // default 5
 }
 
 export interface ClampOutput {
@@ -91,7 +99,8 @@ export function isHedgeable(
  *     authorise unhedged exposure).
  */
 export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
-  const { navUsd, allocations, prices, hedgeRatio, leverage, perpSpecs } = input;
+  const { navUsd, allocations, prices, hedgeRatio, leverage, perpSpecs, openInterestUsd, maxOiPct } = input;
+  const oiPct = Math.max(0.5, maxOiPct ?? 5);
   const assets = Object.keys(allocations);
 
   const dropped: ClampOutput['dropped'] = [];
@@ -111,10 +120,7 @@ export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
       continue;
     }
     const check = isHedgeable(navUsd, pct, hedgeRatio, leverage, price, spec);
-    if (check.ok) {
-      survivors.push(asset);
-      survivorPctSum += pct;
-    } else {
+    if (!check.ok) {
       dropped.push({
         asset,
         originalPct: pct,
@@ -125,7 +131,27 @@ export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
           : `NAV $${navUsd.toFixed(2)} × ${pct}% × ratio ${hedgeRatio} × ${leverage}x lev = ${check.snappedSize} ${asset} < minQty ${spec.minQuantity}`,
       });
       droppedPctSum += pct;
+      continue;
     }
+    // Check OI constraint if provided. Hedge notional = snappedSize × price.
+    const oi = openInterestUsd?.[asset];
+    if (typeof oi === 'number' && oi > 0) {
+      const proposedNotional = check.notional;
+      const maxAllowedByOi = oi * (oiPct / 100);
+      if (proposedNotional > maxAllowedByOi) {
+        dropped.push({
+          asset,
+          originalPct: pct,
+          notionalNeeded: proposedNotional,
+          notionalAvailable: maxAllowedByOi,
+          reason: `hedge notional $${proposedNotional.toFixed(2)} > ${oiPct}% of venue OI $${oi.toFixed(0)} (max $${maxAllowedByOi.toFixed(2)})`,
+        });
+        droppedPctSum += pct;
+        continue;
+      }
+    }
+    survivors.push(asset);
+    survivorPctSum += pct;
   }
 
   if (dropped.length === 0) {

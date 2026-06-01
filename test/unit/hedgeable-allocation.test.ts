@@ -147,6 +147,76 @@ describe('clampAllocationsToHedgeable — missing price is unhedgeable', () => {
   });
 });
 
+describe('clampAllocationsToHedgeable — OI guard (T3-B integration)', () => {
+  it('drops asset whose hedge notional exceeds maxOiPct of venue OI', () => {
+    // $5000 NAV, 40% ETH alloc, 3x lev → hedge notional = $6000.
+    // BlueFin ETH OI ~$40k (real number observed 2026-06-01); 5% of that
+    // = $2000. $6000 > $2000 → drop ETH, redistribute to BTC + SUI.
+    const out = clampAllocationsToHedgeable({
+      navUsd: 5000,
+      allocations: { BTC: 40, ETH: 40, SUI: 20 },
+      prices: PRICES,
+      hedgeRatio: 1.0,
+      leverage: 3,
+      perpSpecs: SPECS,
+      openInterestUsd: { BTC: 1_660_000, ETH: 40_000, SUI: 1_470_000 },
+      maxOiPct: 5,
+    });
+    const ethDrop = out.dropped.find(d => d.asset === 'ETH');
+    expect(ethDrop).toBeDefined();
+    expect(ethDrop?.reason).toMatch(/% of venue OI/);
+    expect(out.allocations.ETH).toBe(0);
+    expect(out.redistributed).toBe(true);
+  });
+
+  it('passes through when all assets fit BOTH minQty and OI cap', () => {
+    // Same NAV but smaller allocations that fit OI cap.
+    const out = clampAllocationsToHedgeable({
+      navUsd: 500,
+      allocations: { BTC: 50, ETH: 30, SUI: 20 },
+      prices: PRICES,
+      hedgeRatio: 1.0,
+      leverage: 3,
+      perpSpecs: SPECS,
+      openInterestUsd: { BTC: 1_660_000, ETH: 40_000, SUI: 1_470_000 },
+      maxOiPct: 5,
+    });
+    // $500 × 30% × 1.0 × 3 = $450 notional ETH, < $2k OI cap → ok
+    expect(out.dropped).toEqual([]);
+    expect(out.redistributed).toBe(false);
+  });
+
+  it('skips OI check when openInterestUsd is omitted', () => {
+    // Same conditions as the first OI test but no OI data — should pass.
+    const out = clampAllocationsToHedgeable({
+      navUsd: 5000,
+      allocations: { BTC: 40, ETH: 40, SUI: 20 },
+      prices: PRICES,
+      hedgeRatio: 1.0,
+      leverage: 3,
+      perpSpecs: SPECS,
+      // openInterestUsd omitted
+    });
+    expect(out.dropped).toEqual([]);
+    expect(out.redistributed).toBe(false);
+  });
+
+  it('uses default maxOiPct=5 when not supplied', () => {
+    // ETH notional $6000 / $40k OI = 15% — exceeds default 5%.
+    const out = clampAllocationsToHedgeable({
+      navUsd: 5000,
+      allocations: { BTC: 40, ETH: 40, SUI: 20 },
+      prices: PRICES,
+      hedgeRatio: 1.0,
+      leverage: 3,
+      perpSpecs: SPECS,
+      openInterestUsd: { BTC: 1_660_000, ETH: 40_000, SUI: 1_470_000 },
+      // maxOiPct omitted — should default to 5
+    });
+    expect(out.dropped.find(d => d.asset === 'ETH')).toBeDefined();
+  });
+});
+
 describe('clampAllocationsToHedgeable — unknown symbols pass through', () => {
   it('keeps allocation for asset without a spec (caller responsibility)', () => {
     const out = clampAllocationsToHedgeable({

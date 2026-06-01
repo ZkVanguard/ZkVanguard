@@ -1084,6 +1084,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         ETH: { minQuantity: 0.01,  stepSize: 0.01  },
         SUI: { minQuantity: 1,     stepSize: 1     },
       };
+      // Fetch BlueFin OI for the 3 perps so the clamp also enforces the
+      // T3-B OI cap (5% of venue OI by default). At BlueFin's real ETH OI
+      // ~$40k, any hedge > ~$2k would be rejected by T3-B at open time;
+      // without checking here, the cron would still swap USDC to wETH
+      // and end up holding naked spot. Fetch is best-effort — if BlueFin
+      // is unreachable we proceed with minQty-only check (acceptable
+      // degradation; OI guard still gates the actual open).
+      let openInterestUsd: Record<string, number> | undefined;
+      try {
+        const bfService = BluefinService.getInstance();
+        const oiResults = await Promise.all([
+          bfService.getMarketData('BTC-PERP').catch(() => null),
+          bfService.getMarketData('ETH-PERP').catch(() => null),
+          bfService.getMarketData('SUI-PERP').catch(() => null),
+        ]);
+        openInterestUsd = {};
+        if (oiResults[0]?.openInterestUsd) openInterestUsd.BTC = oiResults[0].openInterestUsd;
+        if (oiResults[1]?.openInterestUsd) openInterestUsd.ETH = oiResults[1].openInterestUsd;
+        if (oiResults[2]?.openInterestUsd) openInterestUsd.SUI = oiResults[2].openInterestUsd;
+      } catch {
+        // best-effort — fall back to minQty-only clamp
+      }
       const clamp = clampAllocationsToHedgeable({
         navUsd,
         allocations: aiResult.allocations as Record<string, number>,
@@ -1091,6 +1113,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         hedgeRatio: ratio,
         leverage: tierLev,
         perpSpecs,
+        openInterestUsd,
+        maxOiPct: Number(process.env.BLUEFIN_MAX_OI_PCT) || 5,
       });
       if (clamp.redistributed) {
         logger.warn('[SUI Cron] Hedgeability clamp redistributed allocations', {
