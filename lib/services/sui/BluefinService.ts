@@ -720,6 +720,11 @@ export class BluefinService {
         priceChange24h?: string;
         openInterestE9?: string;
         openInterest?: string;
+        // 24h quote volume in USD × 1e9 — used as sanity cross-check
+        // against openInterestE9, which has bitten us with stale/wrong
+        // values in the past (BTC OI reported $117B on 2026-06-01 prior
+        // to the parsing fix).
+        quoteVolume24hrE9?: string;
       }>(
         'GET',
         `/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
@@ -755,16 +760,44 @@ export class BluefinService {
       }
       if (change24h !== undefined && isNaN(change24h)) change24h = undefined;
 
-      // Open interest: position quantity (in base asset units) × price = USD
-      // depth of the market. Used for OI-aware pre-trade sizing — a hedge
-      // > BLUEFIN_MAX_OI_PCT × OI gets rejected as too-impactful for venue.
+      // Open interest: the BlueFin Pro SDK types (api.d.ts:4981) document
+      // openInterestE9 as "Open interest value (e9 format)" — i.e. USD
+      // VALUE × 1e9, NOT base-asset count × 1e9. Earlier code multiplied
+      // (E9 / 1e9) by price, inflating BTC OI from ~$1.66M to ~$117B
+      // (verified 2026-06-01 against live ticker — 1.66M BTC × $71k math).
+      //
+      // For comparison, the SDK uses two different conventions on the
+      // same response:
+      //   volume24hrE9        BASE asset × 1e9   (e.g. 6.44 BTC)
+      //   quoteVolume24hrE9   USD × 1e9
+      //   openInterestE9      USD × 1e9   (per "value" wording in docs)
+      //
+      // Sanity check: if the parsed OI is implausibly large relative to
+      // 24h quote volume (>10,000× — e.g. test data bug or schema drift),
+      // treat as unreliable so the T3-B OI guard skips this symbol
+      // cleanly instead of approving any hedge.
       let openInterestUsd: number | undefined;
-      if (marketData?.openInterestE9 && price > 0) {
-        const oiBase = parseFloat(marketData.openInterestE9) / 1e9;
-        if (Number.isFinite(oiBase) && oiBase > 0) openInterestUsd = oiBase * price;
-      } else if (marketData?.openInterest && price > 0) {
-        const oiBase = parseFloat(marketData.openInterest);
-        if (Number.isFinite(oiBase) && oiBase > 0) openInterestUsd = oiBase * price;
+      const oiRaw = marketData?.openInterestE9 ?? marketData?.openInterest;
+      const oiHasE9Suffix = !!marketData?.openInterestE9;
+      if (oiRaw && price > 0) {
+        const parsed = parseFloat(oiRaw);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          openInterestUsd = oiHasE9Suffix ? parsed / 1e9 : parsed;
+        }
+      }
+      // Sanity floor: cross-check against 24h quote volume.
+      const rawQuoteVol = marketData?.quoteVolume24hrE9;
+      if (openInterestUsd && typeof rawQuoteVol === 'string') {
+        const quoteVol24Usd = parseFloat(rawQuoteVol) / 1e9;
+        if (Number.isFinite(quoteVol24Usd) && quoteVol24Usd > 0 && openInterestUsd > quoteVol24Usd * 10000) {
+          logger.warn('[BlueFin] OI implausibly large vs 24h volume — treating as unreliable', {
+            symbol,
+            openInterestUsd,
+            quoteVol24Usd,
+            ratio: openInterestUsd / quoteVol24Usd,
+          });
+          openInterestUsd = undefined;
+        }
       }
 
       return { price, fundingRate, change24h, openInterestUsd };
