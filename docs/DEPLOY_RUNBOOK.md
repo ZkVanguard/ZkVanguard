@@ -314,6 +314,80 @@ case 'small':  return 3;   // was  5
 4. Watch one week of trader output via Discord `TRADE` and `KILL` alerts. If
    trade frequency drops below 1/day, lower `MIN_CONFIDENCE` to 65 and reassess.
 
+### Scale-tier config (added 2026-05-31)
+
+These env vars (all read on every cron tick — no redeploy needed) let
+you scale the system as deposits grow without code releases. Set in
+Vercel production. Defaults are tuned for sub-$10k AUM; raise per the
+tier as deposits land.
+
+**SafeExecutionGuard caps (`agents/core/SafeExecutionGuard.ts`):**
+
+```
+SAFE_GUARD_MAX_POSITION_USD       default 10_000_000   raise at $100k+ AUM
+SAFE_GUARD_MAX_DAILY_VOLUME_USD   default 100_000_000  raise proportionally
+SAFE_GUARD_MAX_SLIPPAGE_BPS       default 30           raise if spreads widen
+SAFE_GUARD_MAX_LEVERAGE           default 4            keep low until $10M+
+SAFE_GUARD_COOLDOWN_MS            default 5000         raise if rate-limited
+```
+
+**NAV ceiling pre-warning (`sui-community-pool/route.ts`):**
+
+```
+NAV_SAFETY_CEILING_USDC  default 500_000_000   hard halt — u64 overflow boundary
+NAV_SAFETY_WARN_PCT      default 80            % of ceiling at which to alert
+                                              (re-alerts every 6h while above)
+```
+
+**Aiven Postgres pool sizing (`lib/db/postgres.ts`):**
+
+```
+AIVEN_POOL_MAX  default 2   per-Vercel-instance connection limit
+DB_POOL_MAX     fallback    generic catch-all if AIVEN_POOL_MAX not set
+```
+
+At default Aiven tier (`connection_limit=20` plan-wide) keep max=2 to
+allow ~8 concurrent Vercel instances + scripts. Upgrade Aiven business
+tier first, THEN raise.
+
+**Position aging (`bluefin-db-reconcile` cron, T1-C):**
+
+```
+HEDGE_MAX_HOLD_HOURS  default 24    force-close positions older than this
+                                    (0 disables — not recommended)
+```
+
+**BlueFin open-interest guard (`BluefinService.openHedge`, T3-B):**
+
+```
+BLUEFIN_OI_GUARD          default 'true'   set 'false' to disable entirely
+BLUEFIN_MAX_OI_PCT        default 5        max % of venue OI per hedge
+                                           (floor 0.5)
+```
+
+**DEX split-execution (`BluefinAggregatorService.executeSplitSwap`, T3-C):**
+
+```
+MAX_SWAP_PRICE_IMPACT_BPS  default 50      0.5% per-chunk price-impact ceiling
+MIN_SWAP_CHUNK_USD         default 25      refuse to split smaller chunks
+MAX_SWAP_CHUNK_COUNT       default 16      hard cap on iterations
+SWAP_CHUNK_INTERVAL_MS     default 1500    inter-chunk settle delay
+```
+
+**Drawdown auto-halt (`sui-community-pool/route.ts` auto-hedge step):**
+
+```
+HEDGE_DRAWDOWN_HALT_PCT  default 10   % from peak NAV that triggers halt
+                                      until UTC midnight
+```
+
+**Collateral floor (`/api/health/production` bluefin check):**
+
+```
+BLUEFIN_COLLATERAL_FLOOR_USD  default 5   when positions open + free below
+                                          this, bluefin component goes WARN
+```
+
 ## Appendix Y — BlueFin order invariants (silent-reject prevention)
 
 BlueFin's Trade API returns an `orderHash` for any well-formed signed
