@@ -30,7 +30,8 @@
  *   SHORT receiving funding:     funding > 0
  */
 
-export type Side = 'LONG' | 'SHORT';
+export type { Side } from './PerpVenue';
+import type { Side } from './PerpVenue';
 
 export interface VenueLiquidity {
   name: string;             // 'bluefin' | 'hyperliquid' | ...

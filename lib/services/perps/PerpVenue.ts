@@ -35,6 +35,28 @@ export interface PerpVenue {
   canTrade(): Promise<boolean>;
 }
 
+/** Sub-interface for venues that can open positions. */
+export interface PerpTradingResult {
+  success: boolean;
+  venue: string;
+  orderId?: string;
+  filledNotionalUsd?: number;
+  fees?: number;
+  error?: string;
+}
+
+export interface TradingPerpVenue extends PerpVenue {
+  openPosition(params: {
+    symbol: string;
+    side: Side;
+    notionalUsd: number;
+    leverage: number;
+    reason?: string;
+  }): Promise<PerpTradingResult>;
+}
+
+export type Side = 'LONG' | 'SHORT';
+
 /**
  * Canonical symbol normaliser. Venues use slightly different naming:
  *   BlueFin     BTC-PERP
