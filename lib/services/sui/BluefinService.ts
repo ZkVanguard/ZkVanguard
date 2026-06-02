@@ -32,6 +32,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
+import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -760,44 +761,18 @@ export class BluefinService {
       }
       if (change24h !== undefined && isNaN(change24h)) change24h = undefined;
 
-      // Open interest: the BlueFin Pro SDK types (api.d.ts:4981) document
-      // openInterestE9 as "Open interest value (e9 format)" — i.e. USD
-      // VALUE × 1e9, NOT base-asset count × 1e9. Earlier code multiplied
-      // (E9 / 1e9) by price, inflating BTC OI from ~$1.66M to ~$117B
-      // (verified 2026-06-01 against live ticker — 1.66M BTC × $71k math).
-      //
-      // For comparison, the SDK uses two different conventions on the
-      // same response:
-      //   volume24hrE9        BASE asset × 1e9   (e.g. 6.44 BTC)
-      //   quoteVolume24hrE9   USD × 1e9
-      //   openInterestE9      USD × 1e9   (per "value" wording in docs)
-      //
-      // Sanity check: if the parsed OI is implausibly large relative to
-      // 24h quote volume (>10,000× — e.g. test data bug or schema drift),
-      // treat as unreliable so the T3-B OI guard skips this symbol
-      // cleanly instead of approving any hedge.
-      let openInterestUsd: number | undefined;
-      const oiRaw = marketData?.openInterestE9 ?? marketData?.openInterest;
-      const oiHasE9Suffix = !!marketData?.openInterestE9;
-      if (oiRaw && price > 0) {
-        const parsed = parseFloat(oiRaw);
-        if (Number.isFinite(parsed) && parsed > 0) {
-          openInterestUsd = oiHasE9Suffix ? parsed / 1e9 : parsed;
-        }
-      }
-      // Sanity floor: cross-check against 24h quote volume.
-      const rawQuoteVol = marketData?.quoteVolume24hrE9;
-      if (openInterestUsd && typeof rawQuoteVol === 'string') {
-        const quoteVol24Usd = parseFloat(rawQuoteVol) / 1e9;
-        if (Number.isFinite(quoteVol24Usd) && quoteVol24Usd > 0 && openInterestUsd > quoteVol24Usd * 10000) {
-          logger.warn('[BlueFin] OI implausibly large vs 24h volume — treating as unreliable', {
-            symbol,
-            openInterestUsd,
-            quoteVol24Usd,
-            ratio: openInterestUsd / quoteVol24Usd,
-          });
-          openInterestUsd = undefined;
-        }
+      // Open interest extraction delegated to a pure helper for testability.
+      // See lib/services/sui/bluefin-ticker-parsers.ts for the encoding
+      // story (openInterestE9 is USD × 1e9, NOT base × 1e9 — earlier code
+      // was inflating BTC OI ~71,000×).
+      const oiSnap = parseTickerOpenInterest({
+        openInterestE9: marketData?.openInterestE9,
+        openInterest: marketData?.openInterest,
+        quoteVolume24hrE9: marketData?.quoteVolume24hrE9,
+      }, price);
+      const openInterestUsd = oiSnap.openInterestUsd;
+      if (oiSnap.rejectedReason) {
+        logger.warn('[BlueFin] OI snapshot rejected by sanity check', { symbol, reason: oiSnap.rejectedReason });
       }
 
       return { price, fundingRate, change24h, openInterestUsd };
