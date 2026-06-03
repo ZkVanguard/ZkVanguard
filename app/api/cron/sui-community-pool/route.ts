@@ -1887,6 +1887,44 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 continue;
               }
 
+              // ── T5-A Phase 3 shadow mode ─────────────────────────
+              // When PERP_ROUTER_SHADOW=true, compute what the multi-
+              // venue router WOULD do alongside the existing BlueFin
+              // direct call. Logs the plan + Discord-alerts if the
+              // router would have made a different choice (e.g. split
+              // across venues, picked Hyperliquid for lower funding).
+              // Zero execution change — purely diagnostic so we can
+              // validate the router in production before flipping live.
+              if ((process.env.PERP_ROUTER_SHADOW || '').toLowerCase() === 'true') {
+                try {
+                  const { routeHedge } = await import('@/lib/services/perps/PerpVenueRouter');
+                  const { HyperliquidService } = await import('@/lib/services/perps/HyperliquidService');
+                  const hl = HyperliquidService.getInstance();
+                  const [bfMd, hlSnap] = await Promise.all([
+                    bluefin.getMarketData(symbol).catch(() => null),
+                    hl.getMarketSnapshot(symbol).catch(() => null),
+                  ]);
+                  const venues = [] as Array<{ name: string; oiUsd: number; fundingRate8h: number; canTrade: boolean }>;
+                  if (bfMd) venues.push({ name: 'bluefin', oiUsd: bfMd.openInterestUsd ?? 0, fundingRate8h: bfMd.fundingRate ?? 0, canTrade: true });
+                  if (hlSnap) venues.push({ name: 'hyperliquid', oiUsd: hlSnap.openInterestUsd, fundingRate8h: hlSnap.fundingRate, canTrade: false });
+                  const plan = routeHedge({ symbol, notionalUsd: hedgeValueUSD, side, venues, maxOiPct: Number(process.env.BLUEFIN_MAX_OI_PCT) || 5 });
+                  logger.info('[SUI Cron][shadow-router]', { symbol, plan, venues });
+                  const primaryVenue = plan.legs[0]?.venue ?? 'none';
+                  const wouldDiverge = plan.legs.length > 1 || (primaryVenue !== 'bluefin' && plan.legs.length > 0);
+                  if (wouldDiverge) {
+                    await notifyDiscord(
+                      `[shadow-router] ${symbol} ${side} $${hedgeValueUSD.toFixed(2)}: router would split across ${plan.legs.length} legs (primary ${primaryVenue}), blended cost ${plan.blendedFundingCostBps8h.toFixed(2)}bps/8h. Live path still using direct BlueFin.`,
+                      'INFO',
+                      { symbol, primaryVenue, legs: plan.legs, blendedCostBps: plan.blendedFundingCostBps8h },
+                    );
+                  }
+                } catch (shadowErr) {
+                  logger.debug('[SUI Cron][shadow-router] failed (non-critical)', {
+                    error: shadowErr instanceof Error ? shadowErr.message : String(shadowErr),
+                  });
+                }
+              }
+
               try {
                 logger.info(`[SUI Cron] Opening ${asset}-PERP ${side}`, {
                   allocation, hedgeValueUSD: hedgeValueUSD.toFixed(4),
