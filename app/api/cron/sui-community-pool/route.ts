@@ -537,6 +537,118 @@ async function replenishAdminUsdc(
  *   • AI urgency in {HIGH, CRITICAL} OR confidence >= 75
  *   • resets-used-today < HEDGE_DAILY_MAX_RESETS (default 4)
  */
+/**
+ * Push the off-chain NAV portion to the Move contract's oracle field so
+ * deposit/withdraw share math reflects true pool value.
+ *
+ * external_nav_usdc = navUsd_total - balance_onchain_usdc - hedge_state.total_hedged_value
+ *
+ * We subtract balance + hedge_state because the contract adds those on
+ * the on-chain side already (see get_total_nav in the Move source).
+ * Double-counting them in the oracle would over-pay withdrawers and
+ * under-issue shares on deposit.
+ *
+ * Fails open on any error (logs warn, returns success:false). The
+ * Move contract reverts on stale oracle when admin_set_external_nav_required(true)
+ * has been called, so a missed attestation pauses withdrawals automatically.
+ */
+async function attestExternalNav(
+  network: 'mainnet' | 'testnet',
+  navUsdTotal: number,
+): Promise<{ pushed: boolean; externalNavUsd?: number; txDigest?: string; error?: string }> {
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  const adminCapId = (process.env.SUI_ADMIN_CAP_ID || '').trim();
+  const poolConfig = SUI_USDC_POOL_CONFIG[network];
+  if (!adminKey || !adminCapId || !poolConfig.packageId || !poolConfig.poolStateId) {
+    return { pushed: false, error: 'missing admin key, AdminCap, or pool config' };
+  }
+
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { Transaction } = await import('@mysten/sui/transactions');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
+    const suiClient = new SuiClient({ url: rpcUrl });
+
+    // Read on-chain balance + hedge_state from the pool object so we
+    // compute the external portion correctly. Cron's navUsdTotal already
+    // includes everything; subtracting these gives the bit that lives
+    // off-chain.
+    const obj = await suiClient.getObject({ id: poolConfig.poolStateId!, options: { showContent: true } });
+    const fields = (obj.data?.content as { fields?: Record<string, unknown> } | undefined)?.fields ?? {};
+    const balanceRaw = Number((fields as { balance?: string }).balance ?? 0);
+    const hedgeStateFields = ((fields as { hedge_state?: { fields?: Record<string, unknown> } }).hedge_state?.fields) ?? {};
+    const hedgedRaw = Number((hedgeStateFields as { total_hedged_value?: string }).total_hedged_value ?? 0);
+    const balanceUsd = balanceRaw / 1e6;
+    const hedgedUsd = hedgedRaw / 1e6;
+
+    const externalNavUsd = Math.max(0, navUsdTotal - balanceUsd - hedgedUsd);
+    const externalNavRaw = Math.floor(externalNavUsd * 1e6); // USDC has 6 decimals
+
+    // AdminCap ownership check — like aiDrivenResetDailyHedge, the cron
+    // gracefully no-ops when the cap has been transferred to MSafe.
+    const capObj = await suiClient.getObject({ id: adminCapId, options: { showOwner: true } });
+    const capOwner = capObj.data?.owner;
+    const cronSigner = keypair.toSuiAddress();
+    if (!capOwner || typeof capOwner !== 'object' || !('AddressOwner' in capOwner)) {
+      return { pushed: false, error: 'AdminCap owner unreadable — skipping attestation' };
+    }
+    if (capOwner.AddressOwner.toLowerCase() !== cronSigner.toLowerCase()) {
+      return { pushed: false, error: `AdminCap is on MSafe (${capOwner.AddressOwner.slice(0, 12)}…) — cron cannot attest. Multi-sig must push.` };
+    }
+
+    const tx = new Transaction();
+    const usdcType = SUI_USDC_COIN_TYPE[network];
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_attest_external_nav`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(adminCapId),
+        tx.object(poolConfig.poolStateId!),
+        tx.pure.u64(externalNavRaw),
+        tx.object('0x6'),
+      ],
+    });
+    tx.setGasBudget(20_000_000);
+
+    const result = await suiClient.signAndExecuteTransaction({
+      signer: keypair, transaction: tx, options: { showEffects: true },
+    });
+    const ok = result.effects?.status?.status === 'success';
+    if (ok) {
+      logger.info('[SUI Cron] External NAV attested', {
+        externalNavUsd: externalNavUsd.toFixed(2),
+        balanceUsd: balanceUsd.toFixed(2),
+        hedgedUsd: hedgedUsd.toFixed(2),
+        navUsdTotal: navUsdTotal.toFixed(2),
+        txDigest: result.digest,
+      });
+      return { pushed: true, externalNavUsd, txDigest: result.digest };
+    }
+    const errStr = result.effects?.status?.error || 'unknown';
+    // E_EXTERNAL_NAV_CHANGE_TOO_LARGE is an expected reversion (anti-
+    // manipulation guard); just warn and let the next tick try again.
+    if (errStr.includes('30,') || errStr.includes('E_EXTERNAL_NAV_CHANGE_TOO_LARGE')) {
+      logger.warn('[SUI Cron] External NAV attestation rejected — change > 30%', {
+        externalNavUsd: externalNavUsd.toFixed(2), error: errStr,
+      });
+      return { pushed: false, error: 'change > 30% guard' };
+    }
+    logger.warn('[SUI Cron] External NAV attestation tx failed', { error: errStr, txDigest: result.digest });
+    return { pushed: false, error: errStr, txDigest: result.digest };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn('[SUI Cron] External NAV attestation threw', { error: msg });
+    return { pushed: false, error: msg };
+  }
+}
+
 async function aiDrivenResetDailyHedge(
   network: 'mainnet' | 'testnet',
   signal: { urgency?: string; confidence?: number },
@@ -1147,6 +1259,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         for (const a of Object.keys(aiResult.allocations)) {
           (aiResult.allocations as Record<string, number>)[a] = 0;
         }
+      }
+    }
+
+    // Push the off-chain NAV portion to the Move contract's oracle field
+    // so deposit + withdraw share math reflects true pool value. Without
+    // this, the contract pays withdrawing members against only the
+    // on-chain USDC balance (~$0.40 vs $44.99 true NAV on 2026-06-03 =
+    // 97% underpayment). Best-effort: failure does NOT block the cron
+    // tick (NAV snapshot + reconcile still need to run); the next tick
+    // retries. With admin_set_external_nav_required(true), the contract
+    // will revert deposits/withdrawals if attestation goes stale,
+    // pausing user flow until the cron catches up.
+    if (!aboveSafetyCeiling) {
+      const attest = await attestExternalNav(network, navUsd);
+      if (attest.pushed) {
+        logger.info('[SUI Cron] External NAV oracle updated', {
+          externalNavUsd: attest.externalNavUsd?.toFixed(2),
+          txDigest: attest.txDigest,
+        });
+      } else if (attest.error && !attest.error.includes('AdminCap is on MSafe')) {
+        // MSafe-gated path is expected; everything else is worth surfacing.
+        logger.warn('[SUI Cron] External NAV attestation failed (non-fatal)', { error: attest.error });
       }
     }
 

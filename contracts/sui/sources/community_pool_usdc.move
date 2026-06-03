@@ -18,6 +18,7 @@ module zkvanguard::community_pool_usdc {
     use sui::clock::{Self, Clock};
     use sui::hash;
     use sui::bcs;
+    use sui::dynamic_field as df;
 
     // ============ USDC Coin Type (Phantom) ============
     // On SUI mainnet: 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC
@@ -48,6 +49,10 @@ module zkvanguard::community_pool_usdc {
     const E_MAX_HEDGE_EXCEEDED: u64 = 20;
     const E_HEDGE_NOT_FOUND: u64 = 21;
     const E_ALLOC_SUM_INVALID: u64 = 28;
+    /// External NAV oracle errors (added 2026-06-03 for withdrawal-underpayment fix)
+    const E_EXTERNAL_NAV_STALE: u64 = 29;
+    const E_EXTERNAL_NAV_CHANGE_TOO_LARGE: u64 = 30;
+    const E_EXTERNAL_NAV_REQUIRED: u64 = 31;
 
     // ============ Constants ============
     const BPS_DENOMINATOR: u64 = 10000;
@@ -73,6 +78,27 @@ module zkvanguard::community_pool_usdc {
     const MIN_RESERVE_RATIO_BPS: u64 = 2000; // 20% must stay liquid
     const MAX_SINGLE_HEDGE_BPS: u64 = 500;   // Max 5% per hedge
     const DAILY_HEDGE_CAP_BPS: u64 = 5000;   // Max 50% daily hedging (increased for small pools)
+
+    // External NAV oracle (added 2026-06-03 for withdrawal-underpayment fix).
+    //
+    // Bug background: the original `calculate_assets_for_shares` /
+    // `calculate_shares_for_deposit` / `get_nav_per_share` used only
+    // `balance::value(&state.balance) + VIRTUAL_ASSETS` as total assets.
+    // That ignores wBTC/wETH/SUI on the admin wallet and BlueFin perp
+    // collateral — value the cron's NAV view correctly includes but the
+    // contract was unaware of. At one point on 2026-06-03 the pool had
+    // $0.41 on-chain balance vs $44.99 true NAV; a member withdrawing
+    // 10% of shares would have received $0.135 instead of $4.50 (97%
+    // underpayment).
+    //
+    // Fix: an oracle field the cron pushes each tick (admin-only via
+    // AdminCap). Stored in a dynamic field so the upgrade is layout-
+    // safe (no UsdcPoolState struct field change).
+    const EXTERNAL_NAV_MAX_AGE_MS: u64 = 7_200_000;   // 2 hours — must be < this old for entries
+    const EXTERNAL_NAV_MAX_CHANGE_BPS: u64 = 3000;    // 30% max change per attestation (anti-manipulation)
+    const EXTERNAL_NAV_KEY: vector<u8> = b"external_nav_usdc";
+    const EXTERNAL_NAV_TS_KEY: vector<u8> = b"external_nav_ts_ms";
+    const EXTERNAL_NAV_REQUIRED_KEY: vector<u8> = b"external_nav_required";
 
     // Circuit breaker defaults
     const DEFAULT_MAX_SINGLE_DEPOSIT: u64 = 1_000_000_000_000; // $1M USDC
@@ -287,6 +313,14 @@ module zkvanguard::community_pool_usdc {
         timestamp: u64,
     }
 
+    /// External NAV oracle attestation event (added 2026-06-03).
+    public struct ExternalNavAttested has copy, drop {
+        prior_external_nav_usdc: u64,
+        new_external_nav_usdc: u64,
+        change_bps: u64,
+        timestamp: u64,
+    }
+
     public struct UsdcPoolPaused has copy, drop {
         pool_id: ID,
         paused: bool,
@@ -422,6 +456,11 @@ module zkvanguard::community_pool_usdc {
     ) {
         assert!(!state.paused, E_PAUSED);
         assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
+        // External NAV freshness — when strict mode is on, deposits revert
+        // unless the cron has attested off-chain holdings recently.
+        // Without this, new depositors get over-issued shares against a
+        // depleted on-chain balance (the underpayment bug's mirror image).
+        assert_external_nav_fresh_if_required(state, clock);
 
         let amount = coin::value(&payment);
         assert!(amount > 0, E_ZERO_AMOUNT);
@@ -494,6 +533,10 @@ module zkvanguard::community_pool_usdc {
         assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
         assert!(shares_to_burn > 0, E_ZERO_AMOUNT);
         assert!(shares_to_burn >= MIN_SHARES_FOR_WITHDRAWAL, E_MIN_SHARES_NOT_MET);
+        // External NAV freshness gate — see deposit() commentary above.
+        // Without this, members would receive payout against the depleted
+        // on-chain balance only (the original 2026-06-03 underpayment bug).
+        assert_external_nav_fresh_if_required(state, clock);
 
         let sender = ctx.sender();
         let timestamp = clock::timestamp_ms(clock);
@@ -627,25 +670,39 @@ module zkvanguard::community_pool_usdc {
         if (state.total_shares == 0) {
             return WAD
         };
-        let total_assets = balance::value(&state.balance) + VIRTUAL_ASSETS;
+        // Fix 2026-06-03: include attested external NAV so the share
+        // price reflects the off-chain wBTC/wETH/SUI + BlueFin
+        // collateral, not just on-chain USDC.
+        let total_assets = total_assets_including_external(state) + VIRTUAL_ASSETS;
         let total_shares = state.total_shares + VIRTUAL_SHARES;
         ((total_assets as u128) * (WAD as u128) / (total_shares as u128)) as u64
     }
 
-    /// Get total NAV = pool balance + hedged value (USDC transferred to admin for external hedges)
+    /// Get total NAV = pool balance + attested external NAV + operational hedge value.
+    /// The operational hedge_state.total_hedged_value tracks USDC sent through
+    /// open_hedge (the capability-transfer rail) and is double-counted with
+    /// the external NAV unless cron is careful, so external NAV should be
+    /// reported NET of the operational rail.
     public fun get_total_nav<T>(state: &UsdcPoolState<T>): u64 {
-        balance::value(&state.balance) + state.hedge_state.total_hedged_value
+        balance::value(&state.balance)
+            + get_external_nav_usdc(state)
+            + state.hedge_state.total_hedged_value
     }
 
     public fun calculate_shares_for_deposit<T>(state: &UsdcPoolState<T>, amount: u64): u64 {
-        let total_assets = balance::value(&state.balance) + VIRTUAL_ASSETS;
+        // Fix 2026-06-03: include external NAV so new depositors aren't
+        // over-issued shares when off-chain holdings are non-trivial.
+        let total_assets = total_assets_including_external(state) + VIRTUAL_ASSETS;
         let total_shares = state.total_shares + VIRTUAL_SHARES;
         ((amount as u128) * (total_shares as u128) / (total_assets as u128)) as u64
     }
 
     public fun calculate_assets_for_shares<T>(state: &UsdcPoolState<T>, shares: u64): u64 {
         if (state.total_shares == 0) return 0;
-        let total_assets = balance::value(&state.balance) + VIRTUAL_ASSETS;
+        // Fix 2026-06-03: include external NAV so withdrawing members
+        // get paid their fair share, not just their portion of the
+        // depleted on-chain balance.
+        let total_assets = total_assets_including_external(state) + VIRTUAL_ASSETS;
         let total_shares = state.total_shares + VIRTUAL_SHARES;
         ((shares as u128) * (total_assets as u128) / (total_shares as u128)) as u64
     }
@@ -938,6 +995,123 @@ module zkvanguard::community_pool_usdc {
             pnl_usdc,
             is_profit,
             timestamp,
+        });
+    }
+
+    // ============ External NAV Oracle (added 2026-06-03) ============
+
+    /// Read the current attested external NAV (USDC value of off-chain
+    /// holdings — admin-wallet wBTC/wETH/SUI + BlueFin collateral that
+    /// the pool contract has no direct view of). Returns 0 if no
+    /// attestation has ever been made. Does NOT staleness-check.
+    public fun get_external_nav_usdc<T>(state: &UsdcPoolState<T>): u64 {
+        if (!df::exists_(&state.id, EXTERNAL_NAV_KEY)) return 0;
+        let v: &u64 = df::borrow(&state.id, EXTERNAL_NAV_KEY);
+        *v
+    }
+
+    /// Read the timestamp of the last external NAV attestation, or 0
+    /// if none. Caller checks staleness against EXTERNAL_NAV_MAX_AGE_MS.
+    public fun get_external_nav_ts_ms<T>(state: &UsdcPoolState<T>): u64 {
+        if (!df::exists_(&state.id, EXTERNAL_NAV_TS_KEY)) return 0;
+        let t: &u64 = df::borrow(&state.id, EXTERNAL_NAV_TS_KEY);
+        *t
+    }
+
+    /// True when the attestation is recent enough that withdraw/deposit
+    /// math may rely on it. False when stale or never set.
+    public fun is_external_nav_fresh<T>(state: &UsdcPoolState<T>, clock: &Clock): bool {
+        let ts = get_external_nav_ts_ms(state);
+        if (ts == 0) return false;
+        let now = clock::timestamp_ms(clock);
+        now >= ts && now - ts <= EXTERNAL_NAV_MAX_AGE_MS
+    }
+
+    /// Read the operator's choice of whether deposits/withdrawals MUST
+    /// have a fresh external NAV attestation. Default false (pools that
+    /// were deployed before this fix keep working until admin opts in).
+    public fun is_external_nav_required<T>(state: &UsdcPoolState<T>): bool {
+        if (!df::exists_(&state.id, EXTERNAL_NAV_REQUIRED_KEY)) return false;
+        let v: &bool = df::borrow(&state.id, EXTERNAL_NAV_REQUIRED_KEY);
+        *v
+    }
+
+    /// AdminCap-gated: switch on the freshness requirement. Once true,
+    /// withdraw/deposit will revert with E_EXTERNAL_NAV_STALE when the
+    /// last attestation is older than EXTERNAL_NAV_MAX_AGE_MS. Operator
+    /// MUST attest within the cron cadence (every 30 min default).
+    public entry fun admin_set_external_nav_required<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        required: bool,
+    ) {
+        let id_mut = &mut state.id;
+        if (df::exists_(id_mut, EXTERNAL_NAV_REQUIRED_KEY)) {
+            let v_mut: &mut bool = df::borrow_mut(id_mut, EXTERNAL_NAV_REQUIRED_KEY);
+            *v_mut = required;
+        } else {
+            df::add(id_mut, EXTERNAL_NAV_REQUIRED_KEY, required);
+        };
+    }
+
+    /// Helper used by withdraw + deposit entry points. Asserts when
+    /// strict mode is on AND the oracle is stale. Cheap no-op when off.
+    fun assert_external_nav_fresh_if_required<T>(state: &UsdcPoolState<T>, clock: &Clock) {
+        if (is_external_nav_required(state)) {
+            assert!(is_external_nav_fresh(state, clock), E_EXTERNAL_NAV_STALE);
+        };
+    }
+
+    /// Internal helper: total assets including the (possibly stale)
+    /// external NAV. Used by share-math view functions.
+    fun total_assets_including_external<T>(state: &UsdcPoolState<T>): u64 {
+        balance::value(&state.balance) + get_external_nav_usdc(state)
+    }
+
+    /// AdminCap-gated oracle update. Bounded change magnitude prevents
+    /// rugpull-style manipulation: a single attestation cannot move the
+    /// recorded value by more than EXTERNAL_NAV_MAX_CHANGE_BPS (30%).
+    /// First-ever attestation has no prior to bound against.
+    public entry fun admin_attest_external_nav<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        external_nav_usdc: u64,
+        clock: &Clock,
+    ) {
+        let now = clock::timestamp_ms(clock);
+        let id_mut = &mut state.id;
+        let prior = if (df::exists_(id_mut, EXTERNAL_NAV_KEY)) {
+            let p: &u64 = df::borrow(id_mut, EXTERNAL_NAV_KEY);
+            *p
+        } else { 0 };
+
+        // Bound update magnitude on subsequent calls.
+        let change_bps = if (prior > 0) {
+            let delta = if (external_nav_usdc > prior) {
+                external_nav_usdc - prior
+            } else {
+                prior - external_nav_usdc
+            };
+            let bps = ((delta as u128) * (BPS_DENOMINATOR as u128) / (prior as u128)) as u64;
+            assert!(bps <= EXTERNAL_NAV_MAX_CHANGE_BPS, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
+            bps
+        } else { 0 };
+
+        if (df::exists_(id_mut, EXTERNAL_NAV_KEY)) {
+            let val_mut: &mut u64 = df::borrow_mut(id_mut, EXTERNAL_NAV_KEY);
+            *val_mut = external_nav_usdc;
+            let ts_mut: &mut u64 = df::borrow_mut(id_mut, EXTERNAL_NAV_TS_KEY);
+            *ts_mut = now;
+        } else {
+            df::add(id_mut, EXTERNAL_NAV_KEY, external_nav_usdc);
+            df::add(id_mut, EXTERNAL_NAV_TS_KEY, now);
+        };
+
+        event::emit(ExternalNavAttested {
+            prior_external_nav_usdc: prior,
+            new_external_nav_usdc: external_nav_usdc,
+            change_bps,
+            timestamp: now,
         });
     }
 
