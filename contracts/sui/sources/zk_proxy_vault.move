@@ -448,6 +448,14 @@ module zkvanguard::zk_proxy_vault {
     }
 
     /// Execute a time-locked withdrawal after unlock time
+    ///
+    /// AUDIT 2026-06-04 (CRITICAL): added `pending.proxy_id == object::id(proxy)`
+    /// guard. Without it, an attacker could open a small withdrawal from their
+    /// own proxy A (reserving 100 SUI from A's deposited_amount), wait the
+    /// time-lock, then call execute_withdrawal with pending=A and proxy=victim's
+    /// shared proxy B — draining 100 SUI from B's balance straight into
+    /// pending.owner. Shared objects can be passed by any caller; only this
+    /// assert binds the pending to the proxy that reserved the funds.
     public entry fun execute_withdrawal(
         state: &mut ZKProxyVaultState,
         pending: &mut PendingWithdrawal,
@@ -457,15 +465,16 @@ module zkvanguard::zk_proxy_vault {
     ) {
         let sender = tx_context::sender(ctx);
         assert!(pending.owner == sender, E_NOT_PROXY_OWNER);
+        assert!(pending.proxy_id == object::id(proxy), E_NOT_PROXY_OWNER);
         assert!(!pending.executed, E_WITHDRAWAL_ALREADY_EXECUTED);
         assert!(!pending.cancelled, E_WITHDRAWAL_ALREADY_CANCELLED);
-        
+
         let current_time = clock::timestamp_ms(clock);
         assert!(current_time >= pending.unlock_time, E_WITHDRAWAL_NOT_READY);
-        
+
         pending.executed = true;
         state.total_value_locked = state.total_value_locked - pending.amount;
-        
+
         let withdrawn = coin::from_balance(balance::split(&mut proxy.balance, pending.amount), ctx);
         transfer::public_transfer(withdrawn, pending.owner);
         
@@ -477,20 +486,27 @@ module zkvanguard::zk_proxy_vault {
     }
 
     /// Cancel a pending withdrawal (owner or guardian)
+    ///
+    /// AUDIT 2026-06-04 (CRITICAL): added pending↔proxy binding check. Without
+    /// it, a user with multiple proxies could open a withdrawal from proxy A
+    /// (decrementing A.deposited_amount), then cancel it pointing at proxy B,
+    /// inflating B.deposited_amount without any matching balance. Sequential
+    /// abuse fakes credit indefinitely.
     public entry fun cancel_withdrawal(
         pending: &mut PendingWithdrawal,
         proxy: &mut ProxyBinding,
         ctx: &mut TxContext,
     ) {
         let sender = tx_context::sender(ctx);
-        
+
         // Only owner can cancel (guardian cancellation via separate function)
         assert!(pending.owner == sender, E_NOT_AUTHORIZED);
+        assert!(pending.proxy_id == object::id(proxy), E_NOT_AUTHORIZED);
         assert!(!pending.executed, E_WITHDRAWAL_ALREADY_EXECUTED);
         assert!(!pending.cancelled, E_WITHDRAWAL_ALREADY_CANCELLED);
-        
+
         pending.cancelled = true;
-        
+
         // Return funds to proxy balance
         proxy.deposited_amount = proxy.deposited_amount + pending.amount;
         
@@ -501,17 +517,23 @@ module zkvanguard::zk_proxy_vault {
     }
 
     /// Guardian cancel withdrawal
+    ///
+    /// AUDIT 2026-06-04 (CRITICAL): same pending↔proxy binding check as
+    /// cancel_withdrawal. Without it a guardian (or an attacker who got hold
+    /// of a GuardianCap) could cancel pending=A pointing at unrelated proxy B
+    /// and inflate B's accounting.
     public entry fun guardian_cancel_withdrawal(
         _guardian: &GuardianCap,
         pending: &mut PendingWithdrawal,
         proxy: &mut ProxyBinding,
         ctx: &mut TxContext,
     ) {
+        assert!(pending.proxy_id == object::id(proxy), E_NOT_AUTHORIZED);
         assert!(!pending.executed, E_WITHDRAWAL_ALREADY_EXECUTED);
         assert!(!pending.cancelled, E_WITHDRAWAL_ALREADY_CANCELLED);
-        
+
         pending.cancelled = true;
-        
+
         // Return funds to proxy balance
         proxy.deposited_amount = proxy.deposited_amount + pending.amount;
         

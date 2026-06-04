@@ -338,6 +338,15 @@ module zkvanguard::community_pool_timelock {
     }
 
     /// Cancel a pending operation (proposer only)
+    ///
+    /// AUDIT 2026-06-04 (HIGH): added `operation.proposer == ctx.sender()`
+    /// check. Without it, in a multi-proposer setup (the entire point of the
+    /// timelock), any single proposer with a ProposerCap could permanently
+    /// cancel operations scheduled by the others — a 1-of-N veto turning the
+    /// timelock into a footgun rather than a safety. Proposers can still
+    /// cancel their own ops; cross-proposer cancellation now requires the
+    /// admin function path (or rescheduling the cancel via the timelock
+    /// itself).
     public entry fun cancel_operation(
         _proposer: &ProposerCap,
         state: &mut TimelockState,
@@ -346,12 +355,13 @@ module zkvanguard::community_pool_timelock {
         ctx: &mut TxContext
     ) {
         let timestamp = clock::timestamp_ms(clock);
-        
+
         assert!(table::contains(&state.pending_operations, operation_id), E_OPERATION_NOT_FOUND);
-        
+
         let operation = table::borrow_mut(&mut state.pending_operations, operation_id);
+        assert!(operation.proposer == ctx.sender(), E_NOT_PROPOSER);
         assert!(!operation.executed, E_OPERATION_ALREADY_EXECUTED);
-        
+
         operation.cancelled = true;
         
         event::emit(OperationCancelled {
@@ -499,6 +509,12 @@ module zkvanguard::community_pool_timelock {
 
     /// Execute a ready operation
     /// Returns the operation details so caller can perform the actual action
+    ///
+    /// AUDIT 2026-06-04 (MEDIUM): added pause check. schedule_operation,
+    /// schedule_batch, and execute_batch all check `!paused` but the single
+    /// execute_operation didn't — so emergency pause halts new operations
+    /// and batch execution but a lone attacker could still drain a queued
+    /// operation through the single path during an active incident.
     public fun execute_operation(
         _executor: &ExecutorCap,
         state: &mut TimelockState,
@@ -506,17 +522,18 @@ module zkvanguard::community_pool_timelock {
         clock: &Clock,
         ctx: &mut TxContext
     ): (u8, address, u64, vector<u8>) {
+        assert!(!state.paused, E_PAUSED);
         let timestamp = clock::timestamp_ms(clock);
-        
+
         assert!(table::contains(&state.pending_operations, operation_id), E_OPERATION_NOT_FOUND);
-        
+
         let operation = table::borrow_mut(&mut state.pending_operations, operation_id);
-        
+
         assert!(!operation.executed, E_OPERATION_ALREADY_EXECUTED);
         assert!(!operation.cancelled, E_OPERATION_NOT_FOUND);
         assert!(timestamp >= operation.ready_time, E_OPERATION_NOT_READY);
         assert!(timestamp <= operation.expiry_time, E_OPERATION_EXPIRED);
-        
+
         operation.executed = true;
         
         event::emit(OperationExecuted {
