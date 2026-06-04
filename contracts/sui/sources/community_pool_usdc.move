@@ -689,6 +689,18 @@ module zkvanguard::community_pool_usdc {
             + state.hedge_state.total_hedged_value
     }
 
+    /// On-chain NAV = pool balance + operational hedge value. EXCLUDES
+    /// admin-attested external NAV. Used by ratios that need to reason
+    /// about the contract's actual liquid + operationally-tracked USDC
+    /// (reserve ratio, hedge caps in open_hedge), NOT by share-pricing
+    /// math. Including external_nav in those checks would break the
+    /// cron's operational rail: with $0.41 on-chain and $44 external,
+    /// the 20% reserve floor becomes $8.89 which the pool can never
+    /// satisfy on-chain.
+    public fun get_onchain_nav<T>(state: &UsdcPoolState<T>): u64 {
+        balance::value(&state.balance) + state.hedge_state.total_hedged_value
+    }
+
     public fun calculate_shares_for_deposit<T>(state: &UsdcPoolState<T>, amount: u64): u64 {
         // Fix 2026-06-03: include external NAV so new depositors aren't
         // over-issued shares when off-chain holdings are non-trivial.
@@ -891,13 +903,22 @@ module zkvanguard::community_pool_usdc {
         let pool_balance = balance::value(&state.balance);
         assert!(pool_balance >= collateral_usdc, E_INSUFFICIENT_BALANCE);
 
+        // AUDIT 2026-06-04: ratio checks below must use ON-CHAIN NAV
+        // (balance + operational hedge state). Using the full
+        // get_total_nav — which now includes admin-attested external NAV
+        // after the 2026-06-03 share-pricing fix — would break the
+        // cron's operational rail: at $0.41 balance and $44 external,
+        // a 20% reserve floor of $8.89 is unreachable on-chain. Reserve
+        // and hedge caps are about the contract's controllable USDC,
+        // not depositor wealth.
+        let onchain_nav = get_onchain_nav(state);
+
         // Reserve ratio check (20%)
-        let nav = get_total_nav(state);
-        let min_reserve = (nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
+        let min_reserve = (onchain_nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
         assert!(pool_balance - collateral_usdc >= min_reserve, E_RESERVE_RATIO_BREACHED);
 
         // Max hedge ratio check
-        let max_hedge = (nav * state.hedge_state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
+        let max_hedge = (onchain_nav * state.hedge_state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
         assert!(state.hedge_state.total_hedged_value + collateral_usdc <= max_hedge, E_MAX_HEDGE_EXCEEDED);
 
         // Daily cap check
@@ -906,7 +927,7 @@ module zkvanguard::community_pool_usdc {
             state.hedge_state.daily_hedge_total = 0;
             state.hedge_state.current_hedge_day = current_day;
         };
-        let daily_cap = (nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
+        let daily_cap = (onchain_nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
         assert!(state.hedge_state.daily_hedge_total + collateral_usdc <= daily_cap, E_MAX_HEDGE_EXCEEDED);
 
         // Generate hedge ID
@@ -980,6 +1001,28 @@ module zkvanguard::community_pool_usdc {
         } else {
             0
         };
+
+        // AUDIT 2026-06-04: verify the caller actually transferred USDC
+        // consistent with the claimed PnL. Without this check, a
+        // compromised AgentCap holder could call close_hedge with
+        // is_profit=false, pnl_usdc=collateral_usdc, funds=Coin::zero(),
+        // wiping the hedge accounting without returning any USDC —
+        // silent collateral drain.
+        //
+        // Expected funds returned:
+        //   profit:  collateral + pnl
+        //   loss:    collateral - pnl   (or 0 if pnl > collateral)
+        // We allow >= expected so a generous return (e.g. funding rewards
+        // captured during the hedge) doesn't revert. Excess is donated
+        // to the pool.
+        let expected_return = if (is_profit) {
+            hedge.collateral_usdc + pnl_usdc
+        } else if (pnl_usdc >= hedge.collateral_usdc) {
+            0
+        } else {
+            hedge.collateral_usdc - pnl_usdc
+        };
+        assert!(coin::value(&funds) >= expected_return, E_INSUFFICIENT_BALANCE);
 
         balance::join(&mut state.balance, coin::into_balance(funds));
 
@@ -1305,7 +1348,16 @@ module zkvanguard::community_pool_usdc {
         );
     }
 
-    /// Emergency withdrawal when pool is paused/tripped
+    /// Emergency withdrawal when pool is paused/tripped.
+    ///
+    /// AUDIT 2026-06-04: cap payout at the caller's PRO-RATA share of the
+    /// available on-chain balance, not their full fair share value. The
+    /// old logic capped at `min(fair_share, available)` which allowed
+    /// the first caller to drain the balance up to their fair share,
+    /// starving later callers. Severity increased after the external-
+    /// NAV oracle fix because fair_share can now far exceed available
+    /// (off-chain assets aren't directly accessible at withdraw time).
+    /// Pro-rata gives every member a proportional cut regardless of order.
     public entry fun emergency_withdraw<T>(
         state: &mut UsdcPoolState<T>,
         clock: &Clock,
@@ -1321,12 +1373,20 @@ module zkvanguard::community_pool_usdc {
         assert!(member.shares > 0, E_INSUFFICIENT_SHARES);
 
         let shares_to_burn = member.shares;
-        let mut amount = calculate_assets_for_shares(state, shares_to_burn);
+        let fair_share = calculate_assets_for_shares(state, shares_to_burn);
 
+        // Pro-rata cap: this member can only claim their proportional
+        // slice of whatever USDC is currently on-chain. The remainder of
+        // their fair share value lives in off-chain holdings the
+        // contract can't unwind here — they recover it by waiting for
+        // the operator to repatriate and unpause the pool.
         let available = balance::value(&state.balance);
-        if (amount > available) {
-            amount = available;
+        let pro_rata = if (state.total_shares == 0) {
+            0
+        } else {
+            ((available as u128) * (shares_to_burn as u128) / (state.total_shares as u128)) as u64
         };
+        let amount = if (fair_share < pro_rata) { fair_share } else { pro_rata };
 
         state.total_shares = state.total_shares - shares_to_burn;
         state.total_withdrawn = state.total_withdrawn + amount;
@@ -1335,8 +1395,10 @@ module zkvanguard::community_pool_usdc {
         member_mut.shares = 0;
         member_mut.withdrawn_usdc = member_mut.withdrawn_usdc + amount;
 
-        let withdrawal_balance = balance::split(&mut state.balance, amount);
-        let withdrawal_coin = coin::from_balance(withdrawal_balance, ctx);
-        transfer::public_transfer(withdrawal_coin, sender);
+        if (amount > 0) {
+            let withdrawal_balance = balance::split(&mut state.balance, amount);
+            let withdrawal_coin = coin::from_balance(withdrawal_balance, ctx);
+            transfer::public_transfer(withdrawal_coin, sender);
+        };
     }
 }
