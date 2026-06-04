@@ -295,8 +295,17 @@ module zkvanguard::bluefin_bridge {
             timestamp,
         });
 
-        // Transfer position to trader
-        transfer::transfer(position, trader);
+        // AUDIT 2026-06-04 (MEDIUM): share the position object instead
+        // of transferring to the trader. Previously the position was
+        // owned by the trader, which meant the relayer (who calls
+        // sync_position and record_position_close) couldn't take `&mut`
+        // on it without the trader wrapping the object in their own tx
+        // — defeating the relayer-driven sync model. Sharing the object
+        // lets the relayer sync without trader cooperation while
+        // preserving the trader's audit trail via the trader field.
+        // The close path is gated by RelayerCap, so trader-side
+        // permission is not weakened.
+        transfer::share_object(position);
     }
 
     /// Record a position closed on BlueFin (called by relayer)

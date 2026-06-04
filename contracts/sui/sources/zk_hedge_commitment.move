@@ -24,6 +24,12 @@ module zkvanguard::zk_hedge_commitment {
     use sui::clock::{Self, Clock};
     use sui::hash;
     use sui::bcs;
+    use sui::ed25519;
+    use sui::dynamic_field as df;
+
+    // Audit 2026-06-04: ed25519-based prover attestation. See zk_verifier
+    // for the design. Falls back to length check if no prover is set.
+    const PROVER_PUBKEY_KEY: vector<u8> = b"zhc_prover_pubkey_v1";
 
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
@@ -208,6 +214,27 @@ module zkvanguard::zk_hedge_commitment {
         state.total_value_locked = new_tvl;
     }
 
+    /// Configure the off-chain prover's ed25519 public key (32 bytes).
+    /// Empty pubkey clears it (back to insecure mode).
+    public entry fun admin_set_prover_pubkey(
+        _admin: &AdminCap,
+        state: &mut ZKHedgeCommitmentState,
+        pubkey: vector<u8>,
+    ) {
+        let len = vector::length(&pubkey);
+        assert!(len == 32 || len == 0, E_INVALID_PROOF);
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let _: vector<u8> = df::remove(&mut state.id, PROVER_PUBKEY_KEY);
+        };
+        if (len == 32) {
+            df::add(&mut state.id, PROVER_PUBKEY_KEY, pubkey);
+        };
+    }
+
+    public fun has_prover_pubkey(state: &ZKHedgeCommitmentState): bool {
+        df::exists_(&state.id, PROVER_PUBKEY_KEY)
+    }
+
     // ============ Core Functions ============
 
     /// Store a hedge commitment (privacy-preserving)
@@ -285,10 +312,15 @@ module zkvanguard::zk_hedge_commitment {
             return
         };
         
-        // Take pending commitments for this batch
+        // Take pending commitments for this batch.
+        //
+        // AUDIT 2026-06-04 (LOW): vector::remove(_, 0) is O(n); the loop
+        // below is O(batch_size²). At MAX_BATCH_SIZE=100 this is ~5000
+        // ops, well under gas limits. Don't raise MAX_BATCH_SIZE above
+        // ~200 without refactoring to a head-index queue structure.
         let mut commitment_ids = vector::empty<ID>();
         let batch_size = if (pending_count > MAX_BATCH_SIZE) { MAX_BATCH_SIZE } else { pending_count };
-        
+
         let mut i = 0;
         while (i < batch_size) {
             let id = vector::remove(&mut state.pending_commitments, 0);
@@ -337,9 +369,10 @@ module zkvanguard::zk_hedge_commitment {
     ) {
         assert!(!state.paused, E_PAUSED);
         assert!(!commitment.settled, E_ALREADY_SETTLED);
-        
-        // Verify ZK proof
-        assert!(verify_settlement_proof(&zk_proof, &commitment.commitment_hash), E_INVALID_PROOF);
+
+        // Verify ZK proof — real ed25519 check when prover is configured,
+        // legacy length check otherwise.
+        assert!(verify_settlement_proof(state, &zk_proof, &commitment.commitment_hash), E_INVALID_PROOF);
         
         commitment.settled = true;
         state.total_settled = state.total_settled + 1;
@@ -425,17 +458,34 @@ module zkvanguard::zk_hedge_commitment {
         hash::keccak256(&data)
     }
 
-    /// Verify settlement proof (simplified)
-    /// In production: full ZK-STARK verification
-    fun verify_settlement_proof(zk_proof: &vector<u8>, commitment_hash: &vector<u8>): bool {
-        // Basic validation
-        if (vector::length(zk_proof) < 64) {
-            return false
+    /// Verify settlement proof.
+    ///
+    /// AUDIT 2026-06-04: previously a no-op length check. Now: if a
+    /// prover pubkey is registered, the first 64 bytes of zk_proof must
+    /// be a valid ed25519 signature from that prover over the
+    /// commitment_hash. Without a registered pubkey, falls back to the
+    /// legacy length check for migration compatibility.
+    fun verify_settlement_proof(
+        state: &ZKHedgeCommitmentState,
+        zk_proof: &vector<u8>,
+        commitment_hash: &vector<u8>,
+    ): bool {
+        if (vector::length(zk_proof) < 64) { return false };
+        if (vector::length(commitment_hash) == 0) { return false };
+
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let pubkey: &vector<u8> = df::borrow(&state.id, PROVER_PUBKEY_KEY);
+            let mut sig = vector::empty<u8>();
+            let mut i: u64 = 0;
+            while (i < 64) {
+                vector::push_back(&mut sig, *vector::borrow(zk_proof, i));
+                i = i + 1;
+            };
+            return ed25519::ed25519_verify(&sig, pubkey, commitment_hash)
         };
-        
-        // In production: verify ZK-STARK proof against commitment
-        // For now: verify proof contains commitment hash reference
-        vector::length(commitment_hash) > 0
+
+        // INSECURE legacy mode.
+        true
     }
 
     // ============ Test Functions ============

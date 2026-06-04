@@ -413,11 +413,18 @@ module zkvanguard::payment_router {
         });
     }
 
-    /// Withdraw from sponsor fund (admin only)
+    /// Withdraw from sponsor fund (admin only).
+    ///
+    /// AUDIT 2026-06-04 (MEDIUM): now takes an explicit `recipient` arg
+    /// instead of hardcoding fee_recipient. Previously the admin's
+    /// "withdraw sponsor fund" silently funnelled all deposits to the
+    /// fee_recipient — confusing semantics for a fund labelled "sponsor".
+    /// Admin now states the destination explicitly.
     public entry fun withdraw_sponsor_fund(
         _admin: &AdminCap,
         state: &mut PaymentRouterState,
         amount: u64,
+        recipient: address,
         ctx: &mut TxContext,
     ) {
         assert!(balance::value(&state.sponsor_fund) >= amount, E_INSUFFICIENT_BALANCE);
@@ -426,11 +433,66 @@ module zkvanguard::payment_router {
             balance::split(&mut state.sponsor_fund, amount),
             ctx
         );
-        
-        transfer::public_transfer(withdrawn, state.fee_recipient);
+
+        transfer::public_transfer(withdrawn, recipient);
     }
 
-    /// Record a sponsored transaction
+    /// Pay sponsored gas to a beneficiary from the sponsor fund.
+    ///
+    /// AUDIT 2026-06-04 (MEDIUM): added to make sponsorship a real
+    /// payment, not pure accounting. `record_sponsored_tx` below still
+    /// exists for bookkeeping-only flows (e.g. when gas was sponsored
+    /// at the SUI tx level via sponsored transactions), but this
+    /// function actually transfers SUI from `state.sponsor_fund` to the
+    /// beneficiary while enforcing the sponsor's daily limit.
+    public entry fun pay_sponsor_gas(
+        sponsor_cap: &mut SponsorCap,
+        state: &mut PaymentRouterState,
+        beneficiary: address,
+        gas_amount: u64,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        assert!(!state.paused, E_PAUSED);
+        assert!(gas_amount > 0, E_INVALID_AMOUNT);
+        assert!(balance::value(&state.sponsor_fund) >= gas_amount, E_INSUFFICIENT_BALANCE);
+
+        let current_time = clock::timestamp_ms(clock);
+
+        // Reset daily limit if new day
+        if (current_time >= sponsor_cap.last_reset + MS_PER_DAY) {
+            sponsor_cap.used_today = 0;
+            sponsor_cap.last_reset = current_time;
+        };
+
+        assert!(
+            sponsor_cap.used_today + gas_amount <= sponsor_cap.daily_limit,
+            E_DAILY_LIMIT_EXCEEDED
+        );
+
+        sponsor_cap.used_today = sponsor_cap.used_today + gas_amount;
+
+        let payout = coin::from_balance(
+            balance::split(&mut state.sponsor_fund, gas_amount),
+            ctx
+        );
+        transfer::public_transfer(payout, beneficiary);
+
+        event::emit(SponsoredTransaction {
+            sponsor: sponsor_cap.sponsor_address,
+            beneficiary,
+            gas_covered: gas_amount,
+            timestamp: current_time,
+        });
+    }
+
+    /// Record a sponsored transaction (bookkeeping only — no SUI moves).
+    ///
+    /// Use `pay_sponsor_gas` for actual payouts. This function exists
+    /// for cases where the gas was sponsored via the SUI tx-level
+    /// sponsored-transaction mechanism (the sponsor signed at the tx
+    /// envelope layer) and only the daily-limit accounting needs to be
+    /// recorded on-chain.
     public entry fun record_sponsored_tx(
         sponsor_cap: &mut SponsorCap,
         state: &PaymentRouterState,
@@ -442,7 +504,7 @@ module zkvanguard::payment_router {
         assert!(!state.paused, E_PAUSED);
 
         let current_time = clock::timestamp_ms(clock);
-        
+
         // Reset daily limit if new day
         if (current_time >= sponsor_cap.last_reset + MS_PER_DAY) {
             sponsor_cap.used_today = 0;

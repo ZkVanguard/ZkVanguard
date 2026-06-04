@@ -9,7 +9,12 @@ module zkvanguard::rwa_manager {
     use sui::event;
     use sui::table::{Self, Table};
     use sui::clock::{Self, Clock};
+    use sui::ed25519;
+    use sui::dynamic_field as df;
     use std::string::String;
+
+    // Audit 2026-06-04: ed25519 prover attestation key.
+    const PROVER_PUBKEY_KEY: vector<u8> = b"rwa_prover_pubkey_v1";
 
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
@@ -240,6 +245,27 @@ module zkvanguard::rwa_manager {
         state.paused = paused;
     }
 
+    /// Configure the off-chain prover's ed25519 public key (32 bytes).
+    /// Empty pubkey clears it (back to insecure mode).
+    public entry fun admin_set_prover_pubkey(
+        _admin: &AdminCap,
+        state: &mut RWAManagerState,
+        pubkey: vector<u8>,
+    ) {
+        let len = vector::length(&pubkey);
+        assert!(len == 32 || len == 0, E_INVALID_ALLOCATION);
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let _: vector<u8> = df::remove(&mut state.id, PROVER_PUBKEY_KEY);
+        };
+        if (len == 32) {
+            df::add(&mut state.id, PROVER_PUBKEY_KEY, pubkey);
+        };
+    }
+
+    public fun has_prover_pubkey(state: &RWAManagerState): bool {
+        df::exists_(&state.id, PROVER_PUBKEY_KEY)
+    }
+
     /// Withdraw collected fees
     public entry fun withdraw_fees(
         _admin: &AdminCap,
@@ -369,7 +395,17 @@ module zkvanguard::rwa_manager {
         transfer::public_transfer(withdrawn, sender);
     }
 
-    /// Execute strategy (agents/executors only)
+    /// Execute strategy (agents/executors only).
+    ///
+    /// NOTE: The actual strategy execution logic is not implemented in
+    /// this module — this function only verifies the proof of intent
+    /// and emits an event. Real strategy actions live elsewhere (off-
+    /// chain orchestrator, or future module composition).
+    ///
+    /// AUDIT 2026-06-04: previously `verified = length > 0` (theatre).
+    /// Now: if a prover pubkey is set, the first 64 bytes of
+    /// zk_proof_hash must be an ed25519 signature from that prover over
+    /// the portfolio_id + strategy bytes.
     public entry fun execute_strategy(
         _agent: &AgentCap,
         state: &RWAManagerState,
@@ -385,8 +421,15 @@ module zkvanguard::rwa_manager {
         let executor = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
 
-        // In production, verify ZK proof here
-        let verified = vector::length(&zk_proof_hash) > 0;
+        // Build context message from portfolio id + strategy bytes so
+        // the prover signs a binding over what is being executed.
+        let portfolio_id = object::id(portfolio);
+        let mut msg = sui::bcs::to_bytes(&portfolio_id);
+        let strategy_bytes = std::string::as_bytes(&strategy);
+        vector::append(&mut msg, *strategy_bytes);
+
+        let verified = verify_with_prover_rwa(state, &zk_proof_hash, &msg);
+        assert!(verified, E_NOT_AUTHORIZED);
 
         event::emit(StrategyExecuted {
             portfolio_id: object::id(portfolio),
@@ -503,6 +546,35 @@ module zkvanguard::rwa_manager {
     /// Get portfolio balance
     public fun get_portfolio_balance(portfolio: &Portfolio): u64 {
         balance::value(&portfolio.balance)
+    }
+
+    /// Internal: verify a proof with the configured prover, falling back
+    /// to the legacy length check if no prover is configured.
+    fun verify_with_prover_rwa(
+        state: &RWAManagerState,
+        proof: &vector<u8>,
+        msg: &vector<u8>,
+    ): bool {
+        if (vector::length(proof) < 64) {
+            // No prover, no minimum signature length — accept any
+            // non-empty proof as in the legacy implementation.
+            if (!df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+                return vector::length(proof) > 0
+            };
+            return false
+        };
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let pubkey: &vector<u8> = df::borrow(&state.id, PROVER_PUBKEY_KEY);
+            let mut sig = vector::empty<u8>();
+            let mut i: u64 = 0;
+            while (i < 64) {
+                vector::push_back(&mut sig, *vector::borrow(proof, i));
+                i = i + 1;
+            };
+            return ed25519::ed25519_verify(&sig, pubkey, msg)
+        };
+        // INSECURE legacy mode.
+        true
     }
 
     // ============ Test Functions ============

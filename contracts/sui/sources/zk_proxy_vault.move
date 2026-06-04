@@ -19,6 +19,14 @@ module zkvanguard::zk_proxy_vault {
     use sui::hash;
     use sui::bcs;
     use sui::address as sui_address;
+    use sui::ed25519;
+    use sui::dynamic_field as df;
+
+    // Dynamic-field key for the ed25519 prover public key. See AUDIT
+    // 2026-06-04. When set, withdraw() requires the proof to start with
+    // a valid 64-byte ed25519 signature over the derived binding hash.
+    // When unset, the legacy length-check is preserved for migration.
+    const PROVER_PUBKEY_KEY: vector<u8> = b"zpv_prover_pubkey_v1";
 
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
@@ -252,6 +260,28 @@ module zkvanguard::zk_proxy_vault {
         state.time_lock_duration = new_duration;
     }
 
+    /// Configure the off-chain prover's ed25519 public key (32 bytes).
+    /// Empty pubkey clears it (back to insecure mode — emergency only).
+    public entry fun admin_set_prover_pubkey(
+        _admin: &AdminCap,
+        state: &mut ZKProxyVaultState,
+        pubkey: vector<u8>,
+    ) {
+        let len = vector::length(&pubkey);
+        assert!(len == 32 || len == 0, E_INVALID_ZK_PROOF);
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let _: vector<u8> = df::remove(&mut state.id, PROVER_PUBKEY_KEY);
+        };
+        if (len == 32) {
+            df::add(&mut state.id, PROVER_PUBKEY_KEY, pubkey);
+        };
+    }
+
+    /// Returns true if a prover pubkey is currently configured.
+    public fun has_prover_pubkey(state: &ZKProxyVaultState): bool {
+        df::exists_(&state.id, PROVER_PUBKEY_KEY)
+    }
+
     /// Pause the vault
     public entry fun pause(
         _guardian: &GuardianCap,
@@ -390,6 +420,7 @@ module zkvanguard::zk_proxy_vault {
         
         // Verify ZK proof
         assert!(verify_zk_proof(
+            state,
             sender,
             proxy.proxy_address,
             &proxy.zk_binding_hash,
@@ -618,36 +649,53 @@ module zkvanguard::zk_proxy_vault {
         hash::keccak256(&data)
     }
 
-    /// Verify ZK-STARK proof
-    /// In production, this would call the ZK verifier module
+    /// Verify ZK-STARK proof.
+    ///
+    /// AUDIT 2026-06-04: this function previously did only length checks.
+    /// Now: if a prover pubkey has been registered via
+    /// admin_set_prover_pubkey, the first 64 bytes of the proof MUST be a
+    /// valid ed25519 signature from that prover over the derived binding
+    /// hash (owner + proxy_address). Without a registered pubkey, the
+    /// legacy length check is preserved so that contract deployments
+    /// without configured provers continue to work during migration —
+    /// but operators should consider that mode INSECURE.
     fun verify_zk_proof(
+        state: &ZKProxyVaultState,
         owner: address,
         proxy_address: address,
         _zk_binding_hash: &vector<u8>,
         zk_proof: &vector<u8>,
         public_inputs: &vector<vector<u8>>
     ): bool {
-        // For now, verify that the proof is not empty and matches basic structure
-        // In production: call ZK verifier module for actual STARK verification
         if (vector::length(zk_proof) < 64) {
             return false
         };
-        
+
         if (vector::length(public_inputs) < 4) {
             return false
         };
-        
-        // Verify binding hash matches (simplified verification)
-        // Real implementation would verify the full ZK-STARK proof
+
+        // Verify binding hash matches (legacy structural check)
         let expected_hash = derive_binding_hash(owner, proxy_address);
-        
-        // Check if first public input matches expected hash
         let input_hash = vector::borrow(public_inputs, 0);
         if (vector::length(input_hash) != vector::length(&expected_hash)) {
             return false
         };
-        
-        // In production: full STARK verification
+
+        // Real verification: if prover is configured, require an ed25519
+        // signature in the proof prefix over the expected binding hash.
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let pubkey: &vector<u8> = df::borrow(&state.id, PROVER_PUBKEY_KEY);
+            let mut sig = vector::empty<u8>();
+            let mut i: u64 = 0;
+            while (i < 64) {
+                vector::push_back(&mut sig, *vector::borrow(zk_proof, i));
+                i = i + 1;
+            };
+            return ed25519::ed25519_verify(&sig, pubkey, &expected_hash)
+        };
+
+        // INSECURE legacy mode: no prover configured.
         true
     }
 

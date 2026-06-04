@@ -6,7 +6,29 @@ module zkvanguard::zk_verifier {
     use sui::table::{Self, Table};
     use sui::clock::{Self, Clock};
     use sui::hash;
+    use sui::ed25519;
+    use sui::dynamic_field as df;
     use std::string::String;
+
+    // ============ Audit 2026-06-04 — ed25519-based prover attestation ============
+    //
+    // The verify_proof / execute_commitment paths historically only checked
+    // proof byte length. To upgrade from theatre to real verification without
+    // breaking existing test deployments, an opt-in attestation model is added:
+    //
+    //   1. Admin calls admin_set_prover_pubkey(pubkey) with the 32-byte
+    //      ed25519 public key of the off-chain STARK prover.
+    //   2. From that point on, every verify call requires the proof bytes
+    //      to start with a 64-byte ed25519 signature over the expected
+    //      context (commitment_hash or commitment_hash || extra context).
+    //   3. Until a pubkey is set, the legacy length check is preserved so
+    //      existing flows keep working during migration — but operators
+    //      should treat unset-pubkey state as INSECURE and set the key
+    //      before relying on the ZK gate.
+    //
+    // Dynamic-field storage is used so the field can be added to already-
+    // deployed package state objects without a struct migration.
+    const PROVER_PUBKEY_KEY: vector<u8> = b"zkv_prover_pubkey_v1";
 
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
@@ -168,6 +190,62 @@ module zkvanguard::zk_verifier {
         state.proof_expiry_ms = expiry_ms;
     }
 
+    /// Configure the off-chain prover's ed25519 public key.
+    ///
+    /// Must be exactly 32 bytes. Once set, all verify_proof /
+    /// verify_proof_for_portfolio / execute_commitment calls require a
+    /// real signature in the first 64 bytes of the proof data over the
+    /// commitment_hash (for verify_proof) or hash(proof_data) (for
+    /// execute_commitment). Pass an empty vector to clear (back to
+    /// insecure length-check mode — operator emergency only).
+    public entry fun admin_set_prover_pubkey(
+        _admin: &AdminCap,
+        state: &mut ZKVerifierState,
+        pubkey: vector<u8>,
+    ) {
+        let len = vector::length(&pubkey);
+        assert!(len == 32 || len == 0, E_INVALID_PROOF);
+        if (df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            let _: vector<u8> = df::remove(&mut state.id, PROVER_PUBKEY_KEY);
+        };
+        if (len == 32) {
+            df::add(&mut state.id, PROVER_PUBKEY_KEY, pubkey);
+        };
+    }
+
+    /// Returns true if a prover pubkey is currently configured. Used by
+    /// off-chain ops to detect insecure mode.
+    public fun has_prover_pubkey(state: &ZKVerifierState): bool {
+        df::exists_(&state.id, PROVER_PUBKEY_KEY)
+    }
+
+    /// Extract the first 64 bytes of a proof as the ed25519 signature.
+    /// Returns empty if proof is shorter than 64 bytes.
+    fun extract_signature(proof: &vector<u8>): vector<u8> {
+        let mut sig = vector::empty<u8>();
+        if (vector::length(proof) < 64) { return sig };
+        let mut i: u64 = 0;
+        while (i < 64) {
+            vector::push_back(&mut sig, *vector::borrow(proof, i));
+            i = i + 1;
+        };
+        sig
+    }
+
+    /// Verify proof against the configured prover. If no pubkey is set,
+    /// falls back to the legacy "proof must be non-empty" check.
+    fun verify_with_prover(state: &ZKVerifierState, proof: &vector<u8>, msg: &vector<u8>): bool {
+        if (!df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
+            // INSECURE MODE — legacy length check. Operator should set
+            // a prover pubkey before relying on the ZK gate.
+            return vector::length(proof) > 0
+        };
+        if (vector::length(proof) < 64) { return false };
+        let pubkey: &vector<u8> = df::borrow(&state.id, PROVER_PUBKEY_KEY);
+        let sig = extract_signature(proof);
+        ed25519::ed25519_verify(&sig, pubkey, msg)
+    }
+
     // ============ Verification Functions ============
 
     /// Verify a ZK proof
@@ -184,10 +262,15 @@ module zkvanguard::zk_verifier {
 
         let verifier = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
-        
+
+        // Real verification (or fallback if no pubkey set). Message =
+        // commitment_hash so the prover commits to the specific
+        // commitment being verified.
+        assert!(verify_with_prover(state, &proof_data, &commitment_hash), E_INVALID_PROOF);
+
         // Generate proof hash from proof data
         let proof_hash = hash::keccak256(&proof_data);
-        
+
         // Check if proof already used (prevent replay attacks)
         assert!(!table::contains(&state.used_proofs, proof_hash), E_PROOF_ALREADY_USED);
 
@@ -283,6 +366,11 @@ module zkvanguard::zk_verifier {
         // In production, add proper ZK proof verification here
         assert!(vector::length(&proof_hash) > 0, E_INVALID_PROOF);
 
+        // Real verification: prover signs the commitment_hash so
+        // execution is gated by a fresh attestation, not just possession
+        // of a VerifierCap.
+        assert!(verify_with_prover(state, &proof_data, &commitment.commitment_hash), E_INVALID_PROOF);
+
         commitment.executed = true;
         commitment.executed_at = option::some(current_time);
 
@@ -309,9 +397,11 @@ module zkvanguard::zk_verifier {
 
         let verifier = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
-        
+
+        assert!(verify_with_prover(state, &proof_data, &commitment_hash), E_INVALID_PROOF);
+
         let proof_hash = hash::keccak256(&proof_data);
-        
+
         assert!(!table::contains(&state.used_proofs, proof_hash), E_PROOF_ALREADY_USED);
 
         table::add(&mut state.used_proofs, proof_hash, true);
