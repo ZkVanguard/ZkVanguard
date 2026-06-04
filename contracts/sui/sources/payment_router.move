@@ -413,14 +413,36 @@ module zkvanguard::payment_router {
         });
     }
 
-    /// Withdraw from sponsor fund (admin only).
-    ///
-    /// AUDIT 2026-06-04 (MEDIUM): now takes an explicit `recipient` arg
-    /// instead of hardcoding fee_recipient. Previously the admin's
-    /// "withdraw sponsor fund" silently funnelled all deposits to the
-    /// fee_recipient — confusing semantics for a fund labelled "sponsor".
-    /// Admin now states the destination explicitly.
+    /// Withdraw from sponsor fund (admin only) — original signature
+    /// preserved for SUI package-upgrade ABI compatibility. Sends to
+    /// `state.fee_recipient`. Use `withdraw_sponsor_fund_to` if you need
+    /// to specify a different destination.
     public entry fun withdraw_sponsor_fund(
+        _admin: &AdminCap,
+        state: &mut PaymentRouterState,
+        amount: u64,
+        ctx: &mut TxContext,
+    ) {
+        assert!(balance::value(&state.sponsor_fund) >= amount, E_INSUFFICIENT_BALANCE);
+
+        let withdrawn = coin::from_balance(
+            balance::split(&mut state.sponsor_fund, amount),
+            ctx
+        );
+
+        transfer::public_transfer(withdrawn, state.fee_recipient);
+    }
+
+    /// Withdraw from sponsor fund with an explicit recipient.
+    ///
+    /// AUDIT 2026-06-04 (MEDIUM): added as a new function (instead of
+    /// changing the original signature, which would break compatible
+    /// package upgrades). The original `withdraw_sponsor_fund` keeps
+    /// its fee_recipient default; this variant lets the admin send the
+    /// withdrawal anywhere — used when the "sponsor fund" deposits
+    /// actually need to go back to a sponsor wallet rather than to the
+    /// admin's fee beneficiary.
+    public entry fun withdraw_sponsor_fund_to(
         _admin: &AdminCap,
         state: &mut PaymentRouterState,
         amount: u64,
