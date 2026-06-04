@@ -520,6 +520,17 @@ module zkvanguard::hedge_executor {
     }
 
     /// Update oracle price feed for a pair (called by admin from off-chain oracle like Pyth)
+    /// Update an oracle price feed.
+    ///
+    /// AUDIT 2026-06-04: bounded magnitude check added. Without this, the
+    /// AdminCap holder could push an arbitrary price (e.g. drop BTC to $1)
+    /// between user calls, causing close_hedge to compute massive losses
+    /// or massive profits depending on the user's side, draining the
+    /// collateral pool either way. The cap bounds per-update change to
+    /// 50% which is still permissive enough for legitimate volatility
+    /// (BTC's worst day in 2020 was -45%) but stops the single-block
+    /// rugpull. Contract is testnet-only today; this fix is for
+    /// when/if it ships to mainnet.
     public entry fun update_price_feed(
         _cap: &AdminCap,
         state: &mut HedgeExecutorState,
@@ -529,6 +540,11 @@ module zkvanguard::hedge_executor {
         assert!(pair_index <= MAX_PAIRS, E_INVALID_PAIR);
         assert!(price > 0, E_BELOW_MIN_COLLATERAL); // Price must be positive
         if (table::contains(&state.price_feeds, pair_index)) {
+            let prior = *table::borrow(&state.price_feeds, pair_index);
+            // Bound the change to 50% of the prior recorded value.
+            let max_delta = prior / 2;
+            let delta = if (price > prior) { price - prior } else { prior - price };
+            assert!(delta <= max_delta, E_INVALID_PAIR);
             let price_ref = table::borrow_mut(&mut state.price_feeds, pair_index);
             *price_ref = price;
         } else {

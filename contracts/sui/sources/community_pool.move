@@ -1474,14 +1474,28 @@ module zkvanguard::community_pool {
         assert!(found, E_HEDGE_NOT_FOUND);
         
         let hedge = vector::remove(&mut state.hedge_state.active_hedges, found_idx);
-        
+
         // Update state
         state.hedge_state.total_hedged_value = if (state.hedge_state.total_hedged_value > hedge.collateral_amount) {
             state.hedge_state.total_hedged_value - hedge.collateral_amount
         } else {
             0
         };
-        
+
+        // AUDIT 2026-06-04: verify funds match the claimed PnL. Without
+        // this, a compromised AgentCap holder could pass funds=Coin::zero()
+        // and is_profit=false, pnl_amount=collateral, and silently drain
+        // the pool's hedge collateral accounting. Same bug class as
+        // community_pool_usdc::close_hedge fixed today.
+        let expected_return = if (is_profit) {
+            hedge.collateral_amount + pnl_amount
+        } else if (pnl_amount >= hedge.collateral_amount) {
+            0
+        } else {
+            hedge.collateral_amount - pnl_amount
+        };
+        assert!(coin::value(&funds) >= expected_return, E_INSUFFICIENT_BALANCE);
+
         // Add returned funds to pool
         let fund_balance = coin::into_balance(funds);
         balance::join(&mut state.balance, fund_balance);
