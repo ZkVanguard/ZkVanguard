@@ -21,3 +21,11 @@ source = { root = true }
 use_environment = "mainnet"
 manifest_digest = "BA49968BFF7C4A4D9F013B59535CF8B89D935A7C6D63C121606B1FE844829B72"
 deps = { Sui = "Sui" }
+
+[env]
+
+[env.mainnet]
+chain-id = "35834a8a"
+original-published-id = "0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88"
+latest-published-id = "0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88"
+published-version = "2"
