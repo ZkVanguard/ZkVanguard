@@ -2,6 +2,11 @@
 name = "zkvanguard"
 version = "0.1.0"
 edition = "2024"
+# published-at points to the current on-chain package address. Required for
+# `sui client upgrade`; without it the CLI cannot resolve the original
+# module address and fails (often misreported as InsufficientGas under
+# newer protocol versions). This is the address the UpgradeCap targets.
+published-at = "0x9ccbabbdca72c5c0b5d6e01765b578ae37dc33946dd80d6c9b984cd83e598c88"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
