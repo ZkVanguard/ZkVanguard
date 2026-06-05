@@ -268,19 +268,33 @@ module zkvanguard::zk_verifier {
         // commitment being verified.
         assert!(verify_with_prover(state, &proof_data, &commitment_hash), E_INVALID_PROOF);
 
-        // Generate proof hash from proof data
-        let proof_hash = hash::keccak256(&proof_data);
+        // AUDIT 2026-06-04 phase 4: dedup by SIGNATURE bytes, not by
+        // keccak(proof_data). The signature is over commitment_hash;
+        // an attacker who has any valid signature could otherwise
+        // append arbitrary bytes to proof_data to mint unlimited
+        // distinct keccak hashes while keeping the signature valid —
+        // bypassing replay protection. Using the deterministic 64-byte
+        // ed25519 signature as the dedup key closes that gap. When in
+        // legacy length-check mode (no prover configured) the dedup
+        // key is just the full proof_data hash, matching old behavior.
+        let dedup_key = if (has_prover_pubkey(state)) {
+            extract_signature(&proof_data)
+        } else {
+            hash::keccak256(&proof_data)
+        };
 
         // Check if proof already used (prevent replay attacks)
-        assert!(!table::contains(&state.used_proofs, proof_hash), E_PROOF_ALREADY_USED);
+        assert!(!table::contains(&state.used_proofs, dedup_key), E_PROOF_ALREADY_USED);
 
         // Mark proof as used
-        table::add(&mut state.used_proofs, proof_hash, true);
+        table::add(&mut state.used_proofs, dedup_key, true);
 
         // Increment counter
         state.total_proofs_verified = state.total_proofs_verified + 1;
 
-        // Create proof record
+        // Create proof record (keep keccak hash in the record so off-chain
+        // indexers can still verify the proof_data ↔ record link).
+        let proof_hash = hash::keccak256(&proof_data);
         let proof_record = ProofRecord {
             id: object::new(ctx),
             proof_hash,
@@ -400,13 +414,18 @@ module zkvanguard::zk_verifier {
 
         assert!(verify_with_prover(state, &proof_data, &commitment_hash), E_INVALID_PROOF);
 
-        let proof_hash = hash::keccak256(&proof_data);
-
-        assert!(!table::contains(&state.used_proofs, proof_hash), E_PROOF_ALREADY_USED);
-
-        table::add(&mut state.used_proofs, proof_hash, true);
+        // AUDIT 2026-06-04 phase 4: dedup by signature, not full proof
+        // hash — see verify_proof above for the rationale.
+        let dedup_key = if (has_prover_pubkey(state)) {
+            extract_signature(&proof_data)
+        } else {
+            hash::keccak256(&proof_data)
+        };
+        assert!(!table::contains(&state.used_proofs, dedup_key), E_PROOF_ALREADY_USED);
+        table::add(&mut state.used_proofs, dedup_key, true);
         state.total_proofs_verified = state.total_proofs_verified + 1;
 
+        let proof_hash = hash::keccak256(&proof_data);
         let proof_record = ProofRecord {
             id: object::new(ctx),
             proof_hash,
