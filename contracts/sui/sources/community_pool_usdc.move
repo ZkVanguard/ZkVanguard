@@ -629,13 +629,26 @@ module zkvanguard::community_pool_usdc {
             state.last_fee_collection = current_time;
             return
         };
+        // AUDIT 2026-06-06 phase 5 (LOW): defend against clock skew.
+        // Move u64 subtraction aborts on underflow; if Clock somehow
+        // reports a value below last_fee_collection (epoch boundary,
+        // RPC inconsistency) the whole tx would abort. Skip fee accrual
+        // gracefully instead.
+        if (current_time < state.last_fee_collection) return;
         let time_elapsed_ms = current_time - state.last_fee_collection;
         if (time_elapsed_ms == 0) return;
 
         let time_elapsed_sec = time_elapsed_ms / 1000;
         let nav = get_total_nav(state);
-        let fee = (nav * state.management_fee_bps * time_elapsed_sec) /
-                  (BPS_DENOMINATOR * SECONDS_PER_YEAR);
+        // AUDIT 2026-06-06 phase 5 (HIGH): u128 intermediate to prevent
+        // u64 overflow. Original: nav * fee_bps * time_elapsed_sec.
+        // At $10M NAV × 100 bps × 1 day = 10e12 × 100 × 86400 = 8.64e19,
+        // already over u64::MAX (1.8e19). u128 max is 3.4e38 — fits
+        // even at $500M × 1000 bps × 7 days (3.0e22) with room to spare.
+        let fee_u128 = (nav as u128) * (state.management_fee_bps as u128) * (time_elapsed_sec as u128) /
+                       ((BPS_DENOMINATOR as u128) * (SECONDS_PER_YEAR as u128));
+        // Fee is bounded by nav, so it always fits in u64 (nav itself is u64).
+        let fee = (fee_u128 as u64);
 
         if (fee > 0) {
             state.accumulated_management_fees = state.accumulated_management_fees + fee;
@@ -651,8 +664,15 @@ module zkvanguard::community_pool_usdc {
 
         if (current_nav_per_share > member.high_water_mark) {
             let gain_per_share = current_nav_per_share - member.high_water_mark;
-            let member_gain = (gain_per_share * member.shares) / WAD;
-            let performance_fee = (member_gain * state.performance_fee_bps) / BPS_DENOMINATOR;
+            // AUDIT 2026-06-06 phase 5 (MEDIUM): u128 intermediate.
+            // gain_per_share × member.shares overflows u64 at modest
+            // scale: with WAD=1e6 precision, member.shares=10^11 (= $100k
+            // worth) × gain_per_share=10^9 (a 1000x ratio) = 10^20 > u64.
+            // Performance fees are charged at every withdraw + collect,
+            // so realistic gain_per_share is small, but defense in depth.
+            let member_gain_u128 = (gain_per_share as u128) * (member.shares as u128) / (WAD as u128);
+            let performance_fee_u128 = member_gain_u128 * (state.performance_fee_bps as u128) / (BPS_DENOMINATOR as u128);
+            let performance_fee = (performance_fee_u128 as u64);
 
             if (performance_fee > 0) {
                 state.accumulated_performance_fees =
@@ -1107,14 +1127,39 @@ module zkvanguard::community_pool_usdc {
 
     /// Internal helper: total assets including the (possibly stale)
     /// external NAV. Used by share-math view functions.
+    ///
+    /// AUDIT 2026-06-06 phase 5 (MEDIUM): when total_shares == 0,
+    /// ignore external_nav. The external NAV represents members' claim
+    /// on off-chain holdings; with no members, the claim is undefined
+    /// and including a stale external_nav would dilute the next
+    /// depositor with phantom assets. After everyone withdraws, the
+    /// pool is effectively empty regardless of whatever the cron last
+    /// attested. The cron should also clear external_nav when no
+    /// members remain, but this guard protects against ordering races.
     fun total_assets_including_external<T>(state: &UsdcPoolState<T>): u64 {
+        if (state.total_shares == 0) {
+            return balance::value(&state.balance)
+        };
         balance::value(&state.balance) + get_external_nav_usdc(state)
     }
 
     /// AdminCap-gated oracle update. Bounded change magnitude prevents
     /// rugpull-style manipulation: a single attestation cannot move the
     /// recorded value by more than EXTERNAL_NAV_MAX_CHANGE_BPS (30%).
-    /// First-ever attestation has no prior to bound against.
+    ///
+    /// AUDIT 2026-06-06 phase 5 (MEDIUM): first attestation now also
+    /// bounded. Previously the 30% delta cap only kicked in once a
+    /// prior value existed (`prior > 0`); first-ever attestation was
+    /// unbounded. A compromised AdminCap holder could push an
+    /// arbitrarily large initial external_nav, inflate share price via
+    /// get_nav_per_share, trigger HWM crossings on every member, and
+    /// harvest performance fees to the admin-controlled treasury.
+    ///
+    /// First attestation is now capped at 100x of total_deposited as
+    /// a sanity bound. Real yields don't approach 100x; the cap leaves
+    /// room for legitimate growth while blocking a one-shot nuke. For
+    /// pools with total_deposited=0 (brand new), first attestation
+    /// must be 0 (which is the contract's default state already).
     public entry fun admin_attest_external_nav<T>(
         _admin: &AdminCap,
         state: &mut UsdcPoolState<T>,
@@ -1128,7 +1173,7 @@ module zkvanguard::community_pool_usdc {
             *p
         } else { 0 };
 
-        // Bound update magnitude on subsequent calls.
+        // Bound update magnitude.
         let change_bps = if (prior > 0) {
             let delta = if (external_nav_usdc > prior) {
                 external_nav_usdc - prior
@@ -1138,7 +1183,14 @@ module zkvanguard::community_pool_usdc {
             let bps = ((delta as u128) * (BPS_DENOMINATOR as u128) / (prior as u128)) as u64;
             assert!(bps <= EXTERNAL_NAV_MAX_CHANGE_BPS, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
             bps
-        } else { 0 };
+        } else {
+            // First attestation: bound to 100x total_deposited (sanity cap).
+            // Pools with no deposits yet can only attest 0 — they don't
+            // hold any off-chain value because no money has entered.
+            let max_first = state.total_deposited * 100;
+            assert!(external_nav_usdc <= max_first, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
+            0
+        };
 
         if (df::exists_(id_mut, EXTERNAL_NAV_KEY)) {
             let val_mut: &mut u64 = df::borrow_mut(id_mut, EXTERNAL_NAV_KEY);
@@ -1268,11 +1320,26 @@ module zkvanguard::community_pool_usdc {
         state.ai_state.min_ai_confidence = min_confidence;
     }
 
-    /// Emergency reset of hedge tracking state
+    /// Emergency reset of hedge tracking state.
+    ///
     /// Use when hedge positions were liquidated/closed outside the contract
     /// and the on-chain tracking is out of sync with actual positions.
     /// CAUTION: This resets all hedge tracking - only use after verifying
     /// external positions are actually closed.
+    ///
+    /// AUDIT 2026-06-06 phase 5 (HIGH): NAV inconsistency window.
+    /// Before this fix, admin clearing total_hedged_value on-chain while
+    /// the attested external_nav was still computed NET of the hedge value
+    /// caused get_total_nav to under-report by the hedge amount. A
+    /// deposit or withdraw landing in the window between this call and
+    /// the next attest_external_nav from the cron would be priced
+    /// against the wrong NAV — symmetric mirror of the original
+    /// underpayment bug.
+    ///
+    /// Fix: this function now ALSO stales the external_nav timestamp
+    /// (deletes it) so any deposit/withdraw with strict mode ON reverts
+    /// until the cron observes the cleared hedge state and re-attests
+    /// with the correct gross-of-hedge value.
     public entry fun admin_reset_hedge_state<T>(
         _admin: &AdminCap,
         state: &mut UsdcPoolState<T>,
@@ -1284,8 +1351,14 @@ module zkvanguard::community_pool_usdc {
         state.hedge_state.total_hedged_value = 0;
         state.hedge_state.daily_hedge_total = 0;
         state.hedge_state.current_hedge_day = clock::timestamp_ms(clock) / 86400000;
-        
-        // Emit pause event to signal state change
+
+        // Force the external NAV to be stale so strict mode protects
+        // deposit/withdraw until the cron re-attests with hedge-aware math.
+        let id_mut = &mut state.id;
+        if (df::exists_(id_mut, EXTERNAL_NAV_TS_KEY)) {
+            let _: u64 = df::remove(id_mut, EXTERNAL_NAV_TS_KEY);
+        };
+
         event::emit(UsdcPoolPaused {
             pool_id: object::id(state),
             paused: false,
