@@ -99,6 +99,13 @@ module zkvanguard::community_pool_usdc {
     const EXTERNAL_NAV_KEY: vector<u8> = b"external_nav_usdc";
     const EXTERNAL_NAV_TS_KEY: vector<u8> = b"external_nav_ts_ms";
     const EXTERNAL_NAV_REQUIRED_KEY: vector<u8> = b"external_nav_required";
+    /// Audit 2026-06-06 phase 6: lockdown flag for capability minting.
+    /// Once set true, `create_admin_cap`, `create_rebalancer_cap`, and
+    /// `add_agent` all revert. Used to prevent a compromised AdminCap
+    /// holder from minting backup caps for persistence. Default = false
+    /// (minting allowed) so existing flows continue to work; admin
+    /// should lock as soon as the cap set is final.
+    const CAP_MINTING_LOCKED_KEY: vector<u8> = b"cap_minting_locked";
 
     // Circuit breaker defaults
     const DEFAULT_MAX_SINGLE_DEPOSIT: u64 = 1_000_000_000_000; // $1M USDC
@@ -1383,13 +1390,19 @@ module zkvanguard::community_pool_usdc {
         });
     }
 
-    /// Add an agent address and transfer AgentCap
+    /// Add an agent address and transfer AgentCap.
+    ///
+    /// AUDIT 2026-06-06 phase 6 (HIGH): now respects the cap-minting
+    /// lockdown. The function already had a `state: &mut UsdcPoolState<T>`
+    /// parameter (previously unused as `_state`), so we can check the
+    /// lockdown flag without changing the ABI.
     public entry fun add_agent<T>(
         _admin: &AdminCap,
-        _state: &mut UsdcPoolState<T>,
+        state: &mut UsdcPoolState<T>,
         agent: address,
         ctx: &mut TxContext
     ) {
+        assert!(!is_cap_minting_locked(state), E_NOT_AUTHORIZED);
         transfer::transfer(
             AgentCap {
                 id: object::new(ctx),
@@ -1399,26 +1412,55 @@ module zkvanguard::community_pool_usdc {
         );
     }
 
+    /// AUDIT 2026-06-06 phase 6 (HIGH): DISABLED. Body always aborts.
+    ///
+    /// Previously this minted a fresh AdminCap to any recipient — a free
+    /// persistence escalation if the AdminCap was ever compromised. The
+    /// only legitimate post-deploy reason to "create an AdminCap" was
+    /// multi-sig migration, but that pattern transfers the existing cap
+    /// instead of minting a duplicate (`transfer::public_transfer`).
+    ///
+    /// Signature preserved (policy=0 compatible upgrade); body now
+    /// always aborts so existing callers fail loudly rather than
+    /// silently producing a security risk.
     public entry fun create_admin_cap(
         _admin: &AdminCap,
-        recipient: address,
-        ctx: &mut TxContext
+        _recipient: address,
+        _ctx: &mut TxContext
     ) {
-        transfer::transfer(
-            AdminCap { id: object::new(ctx) },
-            recipient
-        );
+        abort E_NOT_AUTHORIZED
     }
 
+    /// AUDIT 2026-06-06 phase 6 (HIGH): DISABLED. Same rationale as
+    /// create_admin_cap — the only safe post-deploy delegation path is
+    /// `transfer::public_transfer` of the existing cap.
     public entry fun create_rebalancer_cap(
         _admin: &AdminCap,
-        recipient: address,
-        ctx: &mut TxContext
+        _recipient: address,
+        _ctx: &mut TxContext
     ) {
-        transfer::transfer(
-            RebalancerCap { id: object::new(ctx) },
-            recipient
-        );
+        abort E_NOT_AUTHORIZED
+    }
+
+    /// True if cap-minting (specifically `add_agent`) has been locked.
+    /// One-way: the dynamic_field is only ever added.
+    public fun is_cap_minting_locked<T>(state: &UsdcPoolState<T>): bool {
+        df::exists_(&state.id, CAP_MINTING_LOCKED_KEY)
+    }
+
+    /// AUDIT 2026-06-06 phase 6 (HIGH): one-way lockdown for `add_agent`.
+    /// Once called, `add_agent` reverts. Should be called by the admin
+    /// once the agent set is final (after multi-sig migration), so even
+    /// a compromised AdminCap cannot mint new AgentCaps for unauthorized
+    /// cron operators. Irreversible by design.
+    public entry fun admin_lock_cap_minting<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+    ) {
+        let id_mut = &mut state.id;
+        if (!df::exists_(id_mut, CAP_MINTING_LOCKED_KEY)) {
+            df::add(id_mut, CAP_MINTING_LOCKED_KEY, true);
+        };
     }
 
     /// Emergency withdrawal when pool is paused/tripped.
