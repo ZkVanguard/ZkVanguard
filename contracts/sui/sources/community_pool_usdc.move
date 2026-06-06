@@ -1359,11 +1359,29 @@ module zkvanguard::community_pool_usdc {
         state.hedge_state.daily_hedge_total = 0;
         state.hedge_state.current_hedge_day = clock::timestamp_ms(clock) / 86400000;
 
-        // Force the external NAV to be stale so strict mode protects
-        // deposit/withdraw until the cron re-attests with hedge-aware math.
+        // Force the external NAV to be stale AND wipe the value so:
+        //   1. Strict mode protects deposit/withdraw until cron re-attests
+        //      (TS_KEY removed → is_external_nav_fresh = false).
+        //   2. Next attestation can push directly to the true value in
+        //      one tick instead of ratcheting at 30%/tick. Without this
+        //      step, end-to-end verification showed: after clearing a
+        //      $10 hedge from $20 external_nav, cron needs to push to $30
+        //      (+50%), which the 30% delta cap rejects — locking the pool
+        //      for 2-3 ticks. Clearing VALUE makes the next attestation
+        //      a "first" (bounded by 100x total_deposited instead).
+        //
+        // Strict mode caveat: if the operator has not enabled
+        // admin_set_external_nav_required, the brief window between this
+        // call and the next attestation will have external_nav=0 in the
+        // share-math view functions — re-introducing the original
+        // underpayment behavior for that window. Operators MUST keep
+        // strict mode on around admin_reset_hedge_state calls.
         let id_mut = &mut state.id;
         if (df::exists_(id_mut, EXTERNAL_NAV_TS_KEY)) {
             let _: u64 = df::remove(id_mut, EXTERNAL_NAV_TS_KEY);
+        };
+        if (df::exists_(id_mut, EXTERNAL_NAV_KEY)) {
+            let _: u64 = df::remove(id_mut, EXTERNAL_NAV_KEY);
         };
 
         event::emit(UsdcPoolPaused {
