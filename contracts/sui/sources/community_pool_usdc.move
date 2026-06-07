@@ -1352,6 +1352,20 @@ module zkvanguard::community_pool_usdc {
         state: &mut UsdcPoolState<T>,
         clock: &Clock,
     ) {
+        // AUDIT 2026-06-07 phase 8 (HIGH): require a safety net to be
+        // already in place. This function clears hedge state AND wipes
+        // external_nav (per phase 7), which creates a window where
+        // share-math reads as balance-only — the original underpayment
+        // behavior. If the pool is active and strict mode is OFF, a
+        // deposit/withdraw landing in that window silently underpays.
+        //
+        // Allowed contexts:
+        //   1. Pool is paused — user flow already blocked at the front.
+        //   2. Strict mode is on — assert_external_nav_fresh_if_required
+        //      reverts deposit/withdraw once we wipe the TS key.
+        // Either way, the inconsistency window is invisible to users.
+        assert!(state.paused || is_external_nav_required(state), E_NOT_AUTHORIZED);
+
         // Clear all active hedges
         state.hedge_state.active_hedges = vector::empty();
         // Reset counters
