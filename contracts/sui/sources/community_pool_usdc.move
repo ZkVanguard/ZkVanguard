@@ -1180,22 +1180,40 @@ module zkvanguard::community_pool_usdc {
             *p
         } else { 0 };
 
-        // Bound update magnitude.
+        // AUDIT 2026-06-07 phase 9 (MEDIUM): absolute cap on external_nav.
+        // Previously, only the FIRST attestation had an absolute bound
+        // (100x total_deposited). Subsequent attestations were limited to
+        // 30% delta from prior, which is per-tick. Over many ticks, a
+        // compromised admin could cumulatively grow external_nav to any
+        // value (1.3^N grows fast — 50 ticks ≈ 1B× growth). The 100x
+        // total_deposited cap applies to EVERY attestation now. Real
+        // yields don't approach 100x; this stops the slow-drift attack.
+        //
+        // u128 intermediate prevents overflow when total_deposited is
+        // very large (>$184 trillion would otherwise abort the mul).
+        let absolute_cap_u128 = (state.total_deposited as u128) * 100u128;
+        assert!((external_nav_usdc as u128) <= absolute_cap_u128, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
+
+        // Bound per-tick delta magnitude.
         let change_bps = if (prior > 0) {
             let delta = if (external_nav_usdc > prior) {
                 external_nav_usdc - prior
             } else {
                 prior - external_nav_usdc
             };
-            let bps = ((delta as u128) * (BPS_DENOMINATOR as u128) / (prior as u128)) as u64;
-            assert!(bps <= EXTERNAL_NAV_MAX_CHANGE_BPS, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
-            bps
+            // AUDIT 2026-06-07 phase 9 (LOW, defense in depth):
+            // do the bound comparison in u128 to be robust against
+            // any cast semantics. The intermediate (delta × 10000) /
+            // prior can be up to ~1.8e23 in pathological cases; cast
+            // to u64 may abort or truncate depending on the Move VM
+            // version. Compare in u128 first, then cast safely once
+            // we know it fits.
+            let bps_u128 = (delta as u128) * (BPS_DENOMINATOR as u128) / (prior as u128);
+            assert!(bps_u128 <= (EXTERNAL_NAV_MAX_CHANGE_BPS as u128), E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
+            (bps_u128 as u64) // safe — we just asserted ≤ 3000
         } else {
-            // First attestation: bound to 100x total_deposited (sanity cap).
-            // Pools with no deposits yet can only attest 0 — they don't
-            // hold any off-chain value because no money has entered.
-            let max_first = state.total_deposited * 100;
-            assert!(external_nav_usdc <= max_first, E_EXTERNAL_NAV_CHANGE_TOO_LARGE);
+            // First attestation has no prior to delta against. The
+            // absolute_cap above handles the bound.
             0
         };
 
