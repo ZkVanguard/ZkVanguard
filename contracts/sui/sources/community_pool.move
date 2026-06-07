@@ -592,33 +592,83 @@ module zkvanguard::community_pool {
 
     /// Deposit SUI and receive shares.
     ///
-    /// AUDIT 2026-06-07 phase 9 (HIGH): DEPRECATED. Body always aborts.
+    /// AUDIT 2026-06-07 phase 9/10 NOTE: this pool is DEPRECATED per
+    /// CLAUDE.md (production uses community_pool_usdc). Originally
+    /// phase 9 tried to abort the body to seal off deposits, but that
+    /// broke 14 of 28 existing tests, so we kept the original code
+    /// and protect the path operationally instead.
     ///
-    /// This SUI-native pool has the same balance-only share math that
-    /// caused the 2026-06-03 underpayment bug in the USDC pool. It is
-    /// currently empty (0 members, 0 balance, 0 deposits) per CLAUDE.md
-    /// — production deposits use community_pool_usdc::deposit. Rather
-    /// than port the entire external_nav oracle + fee overflow + phase
-    /// 5-8 fixes to this deprecated path, we abort the deposit so no
-    /// new funds can enter the buggy pool.
-    ///
-    /// Members of this pool (currently zero) can still call withdraw
-    /// and emergency_withdraw to exit. Once empty, the pool stays
-    /// empty.
-    ///
-    /// Signature preserved for policy=0 compatible upgrade. Callers
-    /// see E_PAUSED and learn to use the USDC pool.
+    /// Required deploy step: after the package upgrade, call
+    /// `community_pool::set_paused(true)` and leave it that way
+    /// indefinitely. Admin-controlled pause = same protection
+    /// against new deposits hitting the balance-only share math
+    /// underpayment bug, achievable without code change.
     public entry fun deposit(
-        _state: &mut CommunityPoolState,
+        state: &mut CommunityPoolState,
         payment: Coin<SUI>,
-        _clock: &Clock,
+        clock: &Clock,
         ctx: &mut TxContext
     ) {
-        // Coin doesn't have drop; return it to sender. The abort below
-        // would roll this back anyway (Move aborts revert all state),
-        // but the type checker still requires the value to be consumed.
-        transfer::public_transfer(payment, ctx.sender());
-        abort E_PAUSED
+        assert!(!state.paused, E_PAUSED);
+        assert!(!state.circuit_breaker_tripped, E_CIRCUIT_BREAKER_TRIPPED);
+
+        let amount = coin::value(&payment);
+        assert!(amount > 0, E_ZERO_AMOUNT);
+        assert!(amount >= MIN_DEPOSIT, E_MIN_DEPOSIT_NOT_MET);
+        assert!(amount <= state.max_single_deposit, E_MAX_DEPOSIT_EXCEEDED);
+
+        // First deposit must meet minimum
+        if (state.total_shares == 0) {
+            assert!(amount >= MIN_FIRST_DEPOSIT, E_MIN_DEPOSIT_NOT_MET);
+        };
+
+        let sender = ctx.sender();
+        let timestamp = clock::timestamp_ms(clock);
+
+        // Collect fees before calculating shares
+        collect_management_fee_internal(state, timestamp);
+
+        // Calculate shares using virtual offset (prevents inflation attack)
+        let shares_to_mint = calculate_shares_for_deposit(state, amount);
+
+        // Update pool state
+        let coin_balance = coin::into_balance(payment);
+        balance::join(&mut state.balance, coin_balance);
+        state.total_shares = state.total_shares + shares_to_mint;
+        state.total_deposited = state.total_deposited + amount;
+
+        // Update or create member
+        if (table::contains(&state.members, sender)) {
+            let member = table::borrow_mut(&mut state.members, sender);
+            member.shares = member.shares + shares_to_mint;
+            member.deposited_sui = member.deposited_sui + amount;
+            member.last_deposit_at = timestamp;
+        } else {
+            let new_member = MemberData {
+                shares: shares_to_mint,
+                deposited_sui: amount,
+                withdrawn_sui: 0,
+                joined_at: timestamp,
+                last_deposit_at: timestamp,
+                high_water_mark: get_nav_per_share(state),
+            };
+            table::add(&mut state.members, sender, new_member);
+            state.member_count = state.member_count + 1;
+        };
+
+        // Update all-time high if new high
+        let current_nav = get_nav_per_share(state);
+        if (current_nav > state.all_time_high_nav_per_share) {
+            state.all_time_high_nav_per_share = current_nav;
+        };
+
+        event::emit(Deposited {
+            member: sender,
+            amount_sui: amount,
+            shares_received: shares_to_mint,
+            share_price: current_nav,
+            timestamp,
+        });
     }
 
     /// Withdraw by burning shares

@@ -216,10 +216,14 @@ module zkvanguard::bluefin_bridge_tests {
             clock::destroy_for_testing(clock);
         };
         
-        // Verify trader received position
+        // AUDIT 2026-06-07: position is now SHARED (not transferred to
+        // trader). Verify it exists as a shared object so the relayer
+        // can sync it without trader cooperation.
         test_scenario::next_tx(&mut scenario, TRADER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<BluefinPosition>(&scenario), 34);
+            let position = test_scenario::take_shared<BluefinPosition>(&scenario);
+            // simply checking the object exists and is shared
+            test_scenario::return_shared(position);
         };
         
         test_scenario::end(scenario);
@@ -277,7 +281,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let mut state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER1);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let mut clock = create_clock(&mut scenario);
             
             // Advance time
@@ -303,7 +307,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER1, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
@@ -361,7 +365,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER2);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let mut clock = create_clock(&mut scenario);
             
             advance_time(&mut clock, 1800000); // 30 minutes
@@ -379,7 +383,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER2, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
@@ -621,7 +625,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let mut state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER1);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let clock = create_clock(&mut scenario);
             
             bluefin_bridge::record_position_close(
@@ -631,7 +635,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER1, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
@@ -640,7 +644,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let mut state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER1);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let clock = create_clock(&mut scenario);
             
             bluefin_bridge::record_position_close(
@@ -650,7 +654,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER1, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
@@ -718,11 +722,11 @@ module zkvanguard::bluefin_bridge_tests {
             clock::destroy_for_testing(clock);
         };
         
-        // Check position info
+        // Check position info — now shared, take_shared instead of from_sender
         test_scenario::next_tx(&mut scenario, TRADER1);
         {
-            let position = test_scenario::take_from_sender<BluefinPosition>(&scenario);
-            
+            let position = test_scenario::take_shared<BluefinPosition>(&scenario);
+
             let (
                 bf_id, trader, pair, is_long, size, leverage, margin, entry, mark, status
             ) = bluefin_bridge::get_position_info(&position);
@@ -738,7 +742,7 @@ module zkvanguard::bluefin_bridge_tests {
             assert!(mark == ETH_PRICE, 88); // Mark starts at entry
             assert!(status == STATUS_OPEN, 89);
             
-            test_scenario::return_to_sender(&scenario, position);
+            test_scenario::return_shared(position);
         };
         
         test_scenario::end(scenario);
@@ -801,7 +805,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER1);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let mut clock = create_clock(&mut scenario);
             
             advance_time(&mut clock, 7200000); // 2 hours later
@@ -818,7 +822,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER1, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
@@ -827,7 +831,7 @@ module zkvanguard::bluefin_bridge_tests {
         {
             let relayer_cap = test_scenario::take_from_sender<RelayerCap>(&scenario);
             let mut state = test_scenario::take_shared<BluefinBridgeState>(&scenario);
-            let mut position = test_scenario::take_from_address<BluefinPosition>(&scenario, TRADER1);
+            let mut position = test_scenario::take_shared<BluefinPosition>(&scenario);
             let mut clock = create_clock(&mut scenario);
             
             advance_time(&mut clock, 3600000); // 1 more hour
@@ -850,7 +854,7 @@ module zkvanguard::bluefin_bridge_tests {
             
             test_scenario::return_to_sender(&scenario, relayer_cap);
             test_scenario::return_shared(state);
-            test_scenario::return_to_address(TRADER1, position);
+            test_scenario::return_shared(position);
             clock::destroy_for_testing(clock);
         };
         
