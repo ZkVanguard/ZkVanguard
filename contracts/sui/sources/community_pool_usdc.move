@@ -567,12 +567,16 @@ module zkvanguard::community_pool_usdc {
         let amount_to_withdraw = calculate_assets_for_shares(state, shares_to_burn);
         assert!(balance::value(&state.balance) >= amount_to_withdraw, E_INSUFFICIENT_BALANCE);
 
-        // Circuit breaker checks
+        // Circuit breaker checks.
+        // AUDIT 2026-06-08 phase 12 (MEDIUM): u128 intermediates to
+        // avoid overflow at scale. nav (u64) × bps (≤10000) overflows
+        // u64 at nav > 1.8e15 raw = $1.8 billion. We expect to
+        // pass that with billions of dollars of AUM.
         let nav = get_total_nav(state);
-        let max_single = (nav * state.max_single_withdrawal_bps) / BPS_DENOMINATOR;
+        let max_single = (((nav as u128) * (state.max_single_withdrawal_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
         assert!(amount_to_withdraw <= max_single, E_MAX_WITHDRAWAL_EXCEEDED);
 
-        let daily_cap = (nav * state.daily_withdrawal_cap_bps) / BPS_DENOMINATOR;
+        let daily_cap = (((nav as u128) * (state.daily_withdrawal_cap_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
         assert!(state.daily_withdrawal_total + amount_to_withdraw <= daily_cap, E_DAILY_WITHDRAWAL_EXCEEDED);
 
         // Update state
@@ -600,13 +604,24 @@ module zkvanguard::community_pool_usdc {
 
     // ============ Fee Functions ============
 
-    /// Collect accumulated fees to treasury
+    /// Collect accumulated fees to treasury.
+    ///
+    /// AUDIT 2026-06-08 phase 12 (MEDIUM): now respects pause. Previously
+    /// FeeManagerCap could withdraw fees to treasury even during a pause,
+    /// which is the operational state we use for emergencies and audits.
+    /// The treasury address is admin-controlled — a compromised admin
+    /// could pause, set_treasury(attacker), then collect_fees during the
+    /// frozen window to drain accumulated fees to the attacker. Gating
+    /// on pause blocks this and aligns fee collection with normal pool
+    /// operation. emergency_withdraw remains available during pause for
+    /// members; collect_fees does not.
     public entry fun collect_fees<T>(
         _fee_manager: &FeeManagerCap,
         state: &mut UsdcPoolState<T>,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
+        assert!(!state.paused, E_PAUSED);
         let timestamp = clock::timestamp_ms(clock);
         collect_management_fee_internal(state, timestamp);
 
@@ -940,12 +955,15 @@ module zkvanguard::community_pool_usdc {
         // not depositor wealth.
         let onchain_nav = get_onchain_nav(state);
 
-        // Reserve ratio check (20%)
-        let min_reserve = (onchain_nav * MIN_RESERVE_RATIO_BPS) / BPS_DENOMINATOR;
+        // Reserve ratio check (20%).
+        // AUDIT 2026-06-08 phase 12 (MEDIUM): u128 intermediates here
+        // and in the two checks below. onchain_nav × bps overflows u64
+        // at ~$1.8-3.6B depending on bps value.
+        let min_reserve = (((onchain_nav as u128) * (MIN_RESERVE_RATIO_BPS as u128)) / (BPS_DENOMINATOR as u128)) as u64;
         assert!(pool_balance - collateral_usdc >= min_reserve, E_RESERVE_RATIO_BREACHED);
 
         // Max hedge ratio check
-        let max_hedge = (onchain_nav * state.hedge_state.auto_hedge_config.max_hedge_ratio_bps) / BPS_DENOMINATOR;
+        let max_hedge = (((onchain_nav as u128) * (state.hedge_state.auto_hedge_config.max_hedge_ratio_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
         assert!(state.hedge_state.total_hedged_value + collateral_usdc <= max_hedge, E_MAX_HEDGE_EXCEEDED);
 
         // Daily cap check
@@ -954,7 +972,7 @@ module zkvanguard::community_pool_usdc {
             state.hedge_state.daily_hedge_total = 0;
             state.hedge_state.current_hedge_day = current_day;
         };
-        let daily_cap = (onchain_nav * DAILY_HEDGE_CAP_BPS) / BPS_DENOMINATOR;
+        let daily_cap = (((onchain_nav as u128) * (DAILY_HEDGE_CAP_BPS as u128)) / (BPS_DENOMINATOR as u128)) as u64;
         assert!(state.hedge_state.daily_hedge_total + collateral_usdc <= daily_cap, E_MAX_HEDGE_EXCEEDED);
 
         // Generate hedge ID
@@ -1494,8 +1512,16 @@ module zkvanguard::community_pool_usdc {
 
     /// True if cap-minting (specifically `add_agent`) has been locked.
     /// One-way: the dynamic_field is only ever added.
+    ///
+    /// AUDIT 2026-06-08 phase 12 (LOW): also reads the stored value
+    /// for defense in depth. Today `admin_lock_cap_minting` only adds
+    /// the field with value=true, so exists_ alone is equivalent. But
+    /// reading the value makes the check robust to any future code
+    /// path that might add the field with value=false.
     public fun is_cap_minting_locked<T>(state: &UsdcPoolState<T>): bool {
-        df::exists_(&state.id, CAP_MINTING_LOCKED_KEY)
+        if (!df::exists_(&state.id, CAP_MINTING_LOCKED_KEY)) return false;
+        let v: &bool = df::borrow(&state.id, CAP_MINTING_LOCKED_KEY);
+        *v
     }
 
     /// AUDIT 2026-06-06 phase 6 (HIGH): one-way lockdown for `add_agent`.
