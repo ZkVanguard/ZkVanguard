@@ -107,6 +107,32 @@ module zkvanguard::community_pool_usdc {
     /// should lock as soon as the cap set is final.
     const CAP_MINTING_LOCKED_KEY: vector<u8> = b"cap_minting_locked";
 
+    /// AUDIT 2026-06-09 phase 13 (CRITICAL FOR SCALE): TVL ceiling.
+    ///
+    /// Operator-settable maximum on total_deposited. Below this cap,
+    /// deposits work normally. Above this cap, deposits revert. The
+    /// operator ratchets the cap upward explicitly as confidence
+    /// grows: initially small (e.g., $100k or $1M), raised after the
+    /// external audit (T4-C) completes, multi-sig migration (T4-A)
+    /// lands, and the pool has accumulated a production track record.
+    ///
+    /// Why this is required for billion-dollar safety:
+    ///   - No matter how many audit phases we run in-session, there's
+    ///     a residual probability of a bug we missed.
+    ///   - At $30 NAV today, a critical bug costs $30. Tolerable.
+    ///   - At $1B NAV, the same bug costs $1B. Catastrophic.
+    ///   - The TVL ceiling caps potential damage at the operator's
+    ///     current confidence level, independent of any bug.
+    ///
+    /// Default value 0 = unlimited (backwards compatible — pools
+    /// without the cap field set behave as before). Operator should
+    /// set a real cap right after the upgrade as part of the deploy
+    /// runbook.
+    ///
+    /// Compound, Aave, Morpho, and every other billion-dollar DeFi
+    /// protocol uses supply caps per asset. This is industry standard.
+    const TVL_CAP_KEY: vector<u8> = b"tvl_cap_usdc";
+
     // Circuit breaker defaults
     const DEFAULT_MAX_SINGLE_DEPOSIT: u64 = 1_000_000_000_000; // $1M USDC
     const DEFAULT_MAX_SINGLE_WITHDRAWAL_BPS: u64 = 2500; // 25%
@@ -473,6 +499,16 @@ module zkvanguard::community_pool_usdc {
         assert!(amount > 0, E_ZERO_AMOUNT);
         assert!(amount >= MIN_DEPOSIT, E_MIN_DEPOSIT_NOT_MET);
         assert!(amount <= state.max_single_deposit, E_MAX_DEPOSIT_EXCEEDED);
+
+        // AUDIT 2026-06-09 phase 13 (CRITICAL FOR SCALE): TVL ceiling.
+        // Operator-settable cap on total_deposited. Default 0 means
+        // unlimited (backwards compat for pools without the cap set).
+        // Operator ratchets this up as confidence grows: external
+        // audit completes, multi-sig migrates, track record builds.
+        let tvl_cap = get_tvl_cap_usdc(state);
+        if (tvl_cap > 0) {
+            assert!(state.total_deposited + amount <= tvl_cap, E_MAX_DEPOSIT_EXCEEDED);
+        };
 
         if (state.total_shares == 0) {
             assert!(amount >= MIN_FIRST_DEPOSIT, E_MIN_DEPOSIT_NOT_MET);
@@ -1508,6 +1544,51 @@ module zkvanguard::community_pool_usdc {
         _ctx: &mut TxContext
     ) {
         abort E_NOT_AUTHORIZED
+    }
+
+    /// AUDIT 2026-06-09 phase 13: Return the operator-set TVL ceiling
+    /// in raw USDC (6 decimals). Returns 0 when unset, which the
+    /// deposit function interprets as "unlimited" for backwards
+    /// compatibility.
+    public fun get_tvl_cap_usdc<T>(state: &UsdcPoolState<T>): u64 {
+        if (!df::exists_(&state.id, TVL_CAP_KEY)) return 0;
+        let v: &u64 = df::borrow(&state.id, TVL_CAP_KEY);
+        *v
+    }
+
+    /// AUDIT 2026-06-09 phase 13: AdminCap-gated TVL ceiling setter.
+    ///
+    /// Sets the maximum value of `total_deposited` the pool will
+    /// accept. Once `total_deposited` would exceed this cap (via a
+    /// new deposit), the deposit reverts with `E_MAX_DEPOSIT_EXCEEDED`.
+    /// Existing deposits are not affected.
+    ///
+    /// Operator sequence for billion-dollar readiness:
+    ///   1. Deploy upgrade with this function available.
+    ///   2. Set cap = $100,000 (raw 100_000_000_000) for initial
+    ///      operation. Members above the cap stay; new depositors
+    ///      are blocked until cap is raised.
+    ///   3. After 1 month of clean operation: raise to $1M.
+    ///   4. After T4-A multi-sig migration: raise to $10M.
+    ///   5. After T4-C external audit: raise to $100M.
+    ///   6. After production track record at $100M for 6 months
+    ///      and T4-B u128 redeploy: raise toward $1B+.
+    ///
+    /// Setting cap = 0 explicitly removes the cap. Setting cap lower
+    /// than current total_deposited stops new deposits but doesn't
+    /// affect existing members.
+    public entry fun admin_set_tvl_cap<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        cap_usdc: u64,
+    ) {
+        let id_mut = &mut state.id;
+        if (df::exists_(id_mut, TVL_CAP_KEY)) {
+            let v_mut: &mut u64 = df::borrow_mut(id_mut, TVL_CAP_KEY);
+            *v_mut = cap_usdc;
+        } else {
+            df::add(id_mut, TVL_CAP_KEY, cap_usdc);
+        };
     }
 
     /// True if cap-minting (specifically `add_agent`) has been locked.

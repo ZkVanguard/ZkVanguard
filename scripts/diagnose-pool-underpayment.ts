@@ -27,6 +27,7 @@ const EXTERNAL_NAV_KEY = 'external_nav_usdc';
 const EXTERNAL_NAV_TS_KEY = 'external_nav_ts_ms';
 const EXTERNAL_NAV_REQUIRED_KEY = 'external_nav_required';
 const CAP_MINTING_LOCKED_KEY = 'cap_minting_locked';
+const TVL_CAP_KEY = 'tvl_cap_usdc';
 const EXTERNAL_NAV_MAX_AGE_MS = 7_200_000; // 2 hours
 
 async function main() {
@@ -60,6 +61,8 @@ async function main() {
   let externalNavRequired = false;
   let capMintingLocked = false;
   let hasExternalNavDfs = false;
+  let tvlCapRaw = 0;
+  let hasTvlCap = false;
 
   for (const df of dynamicFields.data) {
     const name = df.name?.value;
@@ -80,6 +83,10 @@ async function main() {
     } else if (nameStr === CAP_MINTING_LOCKED_KEY) {
       const v = await client.getDynamicFieldObject({ parentId: poolStateId, name: df.name });
       capMintingLocked = Boolean((v.data?.content as any)?.fields?.value);
+    } else if (nameStr === TVL_CAP_KEY) {
+      hasTvlCap = true;
+      const v = await client.getDynamicFieldObject({ parentId: poolStateId, name: df.name });
+      tvlCapRaw = Number((v.data?.content as any)?.fields?.value ?? 0);
     }
   }
 
@@ -143,6 +150,23 @@ async function main() {
     console.log(`  strict mode required:    ${externalNavRequired}`);
   }
   console.log(`  cap minting locked:      ${capMintingLocked}`);
+
+  console.log('\n═══ TVL CEILING (phase 13 — billion-dollar safety) ═══');
+  if (!hasTvlCap || tvlCapRaw === 0) {
+    console.log(`  ⚠ NO CAP SET — pool will accept unlimited deposits`);
+    console.log(`  Operator should call admin_set_tvl_cap with an initial value.`);
+  } else {
+    const tvlCapUsd = tvlCapRaw / 1e6;
+    const remainingRaw = Math.max(0, tvlCapRaw - totalDepositedRaw);
+    const remainingUsd = remainingRaw / 1e6;
+    const pctUsed = totalDepositedRaw > 0 ? (totalDepositedRaw / tvlCapRaw) * 100 : 0;
+    console.log(`  TVL cap:               $${tvlCapUsd.toLocaleString()}`);
+    console.log(`  Currently deposited:   $${totalDepositedUsd.toFixed(2)} (${pctUsed.toFixed(1)}% of cap)`);
+    console.log(`  Remaining headroom:    $${remainingUsd.toLocaleString()}`);
+    if (pctUsed > 90) {
+      console.log(`  ⚠ Above 90% of cap — operator should consider raising the cap soon.`);
+    }
+  }
 
   console.log('\n═══ NAV + SHARE PRICE (matches contract math) ═══');
   console.log(`  get_total_nav():         $${totalNavUsd.toFixed(4)}  (balance + external_nav + hedged)`);
