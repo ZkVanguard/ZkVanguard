@@ -601,6 +601,13 @@ module zkvanguard::community_pool_usdc {
 
         // Calculate USDC to return
         let amount_to_withdraw = calculate_assets_for_shares(state, shares_to_burn);
+        // AUDIT 2026-06-09 phase 14 (LOW): refuse zero-payout withdraws.
+        // For very small share amounts vs total_shares, integer division
+        // in calculate_assets_for_shares can round to 0. Without this
+        // guard, the member would burn their shares but receive nothing —
+        // foot gun. Now reverts cleanly so they keep their shares and
+        // can retry with a larger amount.
+        assert!(amount_to_withdraw > 0, E_ZERO_AMOUNT);
         assert!(balance::value(&state.balance) >= amount_to_withdraw, E_INSUFFICIENT_BALANCE);
 
         // Circuit breaker checks.
@@ -1660,6 +1667,14 @@ module zkvanguard::community_pool_usdc {
         };
         let amount = if (fair_share < pro_rata) { fair_share } else { pro_rata };
 
+        // AUDIT 2026-06-09 phase 14 (LOW): refuse zero-payout exits.
+        // If balance is 0 or pro_rata rounds to 0, the member would
+        // burn all their shares for nothing. Now reverts so they
+        // retain their position. Useful when pool is temporarily
+        // out of liquidity — wait for cron repatriation instead of
+        // losing shares irreversibly.
+        assert!(amount > 0, E_ZERO_AMOUNT);
+
         state.total_shares = state.total_shares - shares_to_burn;
         state.total_withdrawn = state.total_withdrawn + amount;
 
@@ -1667,10 +1682,8 @@ module zkvanguard::community_pool_usdc {
         member_mut.shares = 0;
         member_mut.withdrawn_usdc = member_mut.withdrawn_usdc + amount;
 
-        if (amount > 0) {
-            let withdrawal_balance = balance::split(&mut state.balance, amount);
-            let withdrawal_coin = coin::from_balance(withdrawal_balance, ctx);
-            transfer::public_transfer(withdrawal_coin, sender);
-        };
+        let withdrawal_balance = balance::split(&mut state.balance, amount);
+        let withdrawal_coin = coin::from_balance(withdrawal_balance, ctx);
+        transfer::public_transfer(withdrawal_coin, sender);
     }
 }

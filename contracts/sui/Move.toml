@@ -1,7 +1,20 @@
 [package]
 name = "zkvanguard"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+# v0.2.0 — 2026-06-09 — 13 audit phases, ~44 bugs fixed, billion-dollar
+# safety features added. See docs/AUDIT_2026-06-04.md for full details.
+# Major changes vs v0.1.0:
+#   - External NAV oracle (fixes 2026-06-03 share-math underpayment)
+#   - ed25519 prover attestation across 4 ZK contracts
+#   - Cap-minting lockdown (prevents persistence escalation)
+#   - TVL ceiling (operator-set hard cap on total deposits)
+#   - u128 math throughout (no overflow at billion-dollar scale)
+#   - Funds-verify on close_hedge (drain prevention)
+#   - emergency_withdraw pro-rata cap (FCFS race fix)
+#   - Replay protection in zk_verifier (signature-based dedup)
+#   - Cross-proxy drain fix in zk_proxy_vault (3 paths)
+#   - admin_reset_hedge_state safety guard + recovery semantics
 # published-at points to the current on-chain package address. Required for
 # `sui client upgrade`; without it the CLI cannot resolve the original
 # module address and fails (often misreported as InsufficientGas under
