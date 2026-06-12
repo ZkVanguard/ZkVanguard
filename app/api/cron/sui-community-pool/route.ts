@@ -846,6 +846,61 @@ async function transferUsdcFromPoolToAdmin(
 }
 
 /**
+ * Sum the USD value of admin wallet's non-USDC, non-SUI-gas holdings.
+ *
+ * Used as a guard before settleActiveHedges: if replenishAdminUsdc only
+ * partially converted wBTC/wETH/SUI back to USDC (e.g. aggregator route
+ * missing for one asset, slippage tripped, RPC hiccup), settling hedges
+ * with whatever USDC made it back writes a fake "realized loss" to the
+ * hedge rows while the real value sits idle in the admin wallet. Skip the
+ * settlement tick when residual non-USDC value > $1 so the loss path only
+ * triggers after a clean replenish.
+ *
+ * SUI is excluded up to a small gas-reserve threshold — the cron always
+ * keeps ~1 SUI for gas, not because replenishment failed.
+ */
+async function getAdminNonUsdcUsdValue(
+  network: 'mainnet' | 'testnet',
+  prices: Record<string, number>,
+): Promise<number> {
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  if (!adminKey) return 0;
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const address = keypair.getPublicKey().toSuiAddress();
+    const rpcUrl = network === 'mainnet'
+      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
+      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
+    const suiClient = new SuiClient({ url: rpcUrl });
+    const aggregator = getBluefinAggregatorService(network);
+    const all = await suiClient.getAllBalances({ owner: address });
+    let usdResidual = 0;
+    const SUI_GAS_RESERVE = 1.5; // 1 SUI floor + 0.5 buffer
+    for (const bal of all) {
+      const raw = Number(bal.totalBalance);
+      if (raw <= 0) continue;
+      for (const asset of POOL_ASSETS) {
+        const t = aggregator.getAssetCoinType(asset as BluefinPoolAsset);
+        if (!t || bal.coinType !== t) continue;
+        const decimals = asset === 'SUI' ? 9 : 8;
+        const amount = raw / Math.pow(10, decimals);
+        const swappable = asset === 'SUI' ? Math.max(0, amount - SUI_GAS_RESERVE) : amount;
+        const price = prices[asset] || 0;
+        usdResidual += swappable * price;
+        break;
+      }
+    }
+    return usdResidual;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Check admin wallet's USDC balance on SUI.
  */
 async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promise<number> {
@@ -1339,8 +1394,38 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             pnl: (adminUsdcForSettlement - totalCollateralNeeded).toFixed(6),
           });
 
-          // Settle all hedges — returns ALL admin USDC to pool proportionally
-          if (adminUsdcForSettlement > 0.001) {
+          // Audit-15 guard: if the replenish step failed to fully convert
+          // non-USDC holdings (aggregator route missing, slippage tripped,
+          // RPC hiccup) and we settle anyway, the proportional-distribution
+          // loop calls close_hedge with the deficit framed as `is_profit=false,
+          // pnl_usdc=collateral_minus_returned`. The Move funds-verify guard
+          // accepts that (the math is internally consistent), so the row is
+          // closed at a fake realized loss while the real value sits in
+          // unsold wBTC/wETH/SUI in the admin wallet. Skip the settle when
+          // residual non-USDC value > $1 — let the next tick try replenish
+          // again. Real losses (asset depreciation) still settle correctly
+          // because in that case the admin wallet IS empty of non-USDC after
+          // a clean swap.
+          const residualUsd = await getAdminNonUsdcUsdValue(network, pricesUSD);
+          const REPLENISH_RESIDUAL_GUARD_USD = Number(process.env.HEDGE_SETTLE_RESIDUAL_GUARD_USD) || 1;
+          if (residualUsd > REPLENISH_RESIDUAL_GUARD_USD && adminUsdcForSettlement < totalCollateralNeeded * 0.95) {
+            logger.warn('[SUI Cron] Skipping hedge settlement — replenish incomplete; would write fake losses', {
+              residualUsd: residualUsd.toFixed(2),
+              adminUsdc: adminUsdcForSettlement.toFixed(2),
+              totalCollateralNeeded: totalCollateralNeeded.toFixed(2),
+              guard: REPLENISH_RESIDUAL_GUARD_USD,
+            });
+            await notifyDiscord(
+              `Hedge settlement SKIPPED: admin still holds $${residualUsd.toFixed(2)} of non-USDC after replenish (USDC $${adminUsdcForSettlement.toFixed(2)} vs needed $${totalCollateralNeeded.toFixed(2)}). Likely aggregator route failure — would write fake losses if settled. Retry next tick.`,
+              'WARN',
+              { residualUsd: residualUsd.toFixed(2), adminUsdcForSettlement: adminUsdcForSettlement.toFixed(2), totalCollateralNeeded: totalCollateralNeeded.toFixed(2) },
+            );
+            hedgeSettlement = {
+              settled: 0, failed: 0, details: [],
+              replenishment,
+              debug: { skippedReason: 'replenish-incomplete', residualUsd, adminUsdcForSettlement, totalCollateralNeeded },
+            };
+          } else if (adminUsdcForSettlement > 0.001) {
             const settlement = await settleActiveHedges(network);
             hedgeSettlement = {
               settled: settlement.settled,

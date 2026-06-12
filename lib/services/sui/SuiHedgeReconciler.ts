@@ -231,6 +231,24 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
   }
   result.dbCount = db.size;
 
+  // Safety bail: if the on-chain read returned zero hedges but the DB still
+  // has notional-bearing active rows, treat as a likely transient RPC
+  // inconsistency (Sui RPC nodes occasionally return a successful response
+  // with no fields). Closing every DB row in that case would silently mark
+  // real hedges as exited at realized_pnl=0 (the estimator falls back to
+  // notional × pctMove with stale prices), corrupting analytics and the
+  // share-math NAV until the next reconciler tick re-opens them. Wait for
+  // the next tick instead.
+  const dbWithNotional = Array.from(db.values()).filter(
+    (h) => Number(h.notional_value ?? 0) >= 1,
+  ).length;
+  if (onChain.length === 0 && dbWithNotional > 0) {
+    const msg = `safety-bail: on-chain returned 0 hedges but DB has ${dbWithNotional} active notional-bearing hedge(s); refusing to mass-close (likely RPC inconsistency). Retry next tick.`;
+    logger.warn('[HedgeReconciler] ' + msg);
+    result.errors.push(msg);
+    return result;
+  }
+
   const onChainIds = new Set(onChain.map((h) => h.hedgeIdOnchain.toLowerCase()));
 
   // Prefetch prices once for all assets present on-chain AND in the DB hedge

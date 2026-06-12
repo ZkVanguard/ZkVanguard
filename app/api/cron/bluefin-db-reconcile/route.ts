@@ -104,6 +104,31 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       bf.getPositions(),
     ]);
 
+    // Safety bail: BlueFin's /positions endpoint occasionally returns []
+    // during transient venue issues (observed during the 2026-05-30 closeHedge
+    // incident). If we run the phantom-close loop on that empty response,
+    // every DB row with notional >= $1 gets marked closed at realized_pnl=0,
+    // even though the positions are still live on BlueFin. Bail in that case
+    // so the next 15-min tick can retry. We only bail when DB has SOME
+    // notional-bearing rows — a genuinely empty pool is fine.
+    const dbNotionalCount = dbHedges.filter(h => Number(h.notional_value ?? 0) >= 1).length;
+    if (positions.length === 0 && dbNotionalCount > 0) {
+      logger.error('[bluefin-db-reconcile] safety-bail: BlueFin returned 0 positions but DB has active notional hedges — refusing to mass-close (likely venue API blip)', {
+        dbNotionalCount, dbActiveTotal: dbHedges.length,
+      });
+      await notifyDiscord(
+        `bluefin-db-reconcile safety bail: BlueFin /positions returned [] while DB has ${dbNotionalCount} active notional-bearing hedge(s). Refusing to phantom-close. Will retry next tick.`,
+        'WARN',
+        { dbNotionalCount, dbActiveTotal: dbHedges.length },
+      );
+      return NextResponse.json({
+        success: false, ranAt,
+        dbActiveCount: dbHedges.length, bluefinPositionsCount: 0,
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
+        error: `safety-bail: empty positions vs ${dbNotionalCount} notional DB hedges`,
+      } as ReconcileResult);
+    }
+
     // T1-C: force-close positions older than HEDGE_MAX_HOLD_HOURS. Runs
     // BEFORE the phantom/orphan reconciliation so the close shows up as
     // a phantom on the next tick if BlueFin processes it quickly.
