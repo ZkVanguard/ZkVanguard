@@ -1280,10 +1280,59 @@ export class SuiUsdcPoolService {
     }, SUI_MEMBER_TTL);
   }
 
-  /** Get all members */
+  /** Get all members of the USDC pool.
+   *
+   * The previous implementation delegated to the SUI-native fallback service,
+   * which queries the SUI-native pool's members table (different object id +
+   * field schema). For USDC mainnet this caused the cron's `syncMembersToDb`
+   * step to write the WRONG members to DB (deploy 2026-06-12 found 2 stale
+   * SUI-native rows in `community_pool_shares` instead of the 3 real USDC
+   * members). Fixed by enumerating the USDC pool's own members table and
+   * piggybacking on the already-implemented per-member fetcher.
+   */
   async getAllMembers(): Promise<SuiMemberPosition[]> {
-    // Delegate to fallback for now — member structure is compatible
-    return this.fallbackService.getAllMembers();
+    if (!this.isDeployed()) {
+      return this.fallbackService.getAllMembers();
+    }
+    const poolStateId = await this.getPoolStateId();
+    if (!poolStateId) return [];
+
+    const cacheKey = `sui-usdc-all-members-${this.network}`;
+    return suiCachedFetch(cacheKey, async () => {
+      try {
+        const fields = await this.fetchObjectFields(poolStateId);
+        if (!fields) return [];
+        const membersTableId = fields.members?.fields?.id?.id;
+        if (!membersTableId) return [];
+
+        // Enumerate dynamic-field names (= member addresses) on the USDC
+        // pool's members table. With a 100-row page limit; the pool's
+        // TVL cap of $10k initially keeps this small.
+        const dfRes = await suiFetchWithTimeout(this.config.rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'suix_getDynamicFields',
+            params: [membersTableId, null, 100],
+          }),
+        });
+        const dfJson = await dfRes.json();
+        const dfData = dfJson.result?.data || [];
+
+        const addresses = dfData
+          .map((f: { name?: { value?: string } }) => f.name?.value)
+          .filter((a: string | undefined): a is string => typeof a === 'string');
+
+        // Reuse the per-member fetcher — it already reads the right table,
+        // computes valueUsdc, and caches per-address. N+1 over a small N.
+        const positions = await Promise.all(addresses.map((a: string) => this.getMemberPosition(a)));
+        return positions.filter((p) => p.isMember && p.shares > 0);
+      } catch (err) {
+        logger.error('[SuiUsdcPool] getAllMembers failed', err);
+        return [];
+      }
+    }, SUI_MEMBER_TTL);
   }
 
   /**
