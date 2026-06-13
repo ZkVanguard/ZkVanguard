@@ -20,7 +20,10 @@ export const UserPositionCard = memo(function UserPositionCard({
 
   const valueDisplay = useMemo(() => {
     if (isSui) {
-      // USDC pool: 1 share = 1 USDC, show value in USD
+      // SUI USDC pool: valueUSD reflects current share price × shares (v0.2.0
+      // external-NAV oracle). At inception share price is $1, so shares can
+      // act as a sane fallback when valueUSD hasn't loaded yet — but past
+      // inception this fallback under-reports the member's true entitlement.
       const usdcVal = Number(userPosition.valueUSD) || Number(userPosition.shares) || 0;
       return formatUSD(usdcVal);
     }

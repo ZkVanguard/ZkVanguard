@@ -15,7 +15,7 @@ export interface PoolAllocation {
 export interface PoolSummary {
   totalValueUSD: number;
   totalShares: number;
-  sharePrice: number;  // USD per share (1.0 for SUI USDC pool)
+  sharePrice: number;  // USD per share. SUI USDC pool: tracks the v0.2.0 external-NAV oracle (1.0 only at inception, grows with NAV).
   sharePriceUSD?: number; // Legacy: converted to USD
   totalNAV?: number;  // Legacy: native asset NAV
   memberCount: number;

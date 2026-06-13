@@ -135,7 +135,7 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 <Wallet className="w-4 h-4 text-green-500" />
                 <span>Connected: {suiAddress?.slice(0, 8)}...{suiAddress?.slice(-6)}</span>
                 <span className="text-gray-400">|</span>
-                <span>1 share = 1 USDC</span>
+                <span>1 share = ${(Number(poolData?.sharePrice) || 1).toFixed(4)} USDC</span>
               </div>
             ) : (
               <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -215,7 +215,11 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                   Min deposit: $10 USDC • Your wallet will prompt you to sign the transaction.
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  USDC is deposited on-chain to the pool contract. 1 share = 1 USDC.
+                  USDC is deposited on-chain to the pool contract.
+                  {' '}Current share price: ${(Number(poolData?.sharePrice) || 1).toFixed(4)} USDC
+                  {suiDepositAmount && Number(poolData?.sharePrice) > 0 ? (
+                    <> — You&apos;ll receive ~{(parseFloat(suiDepositAmount) / (Number(poolData.sharePrice) || 1)).toFixed(4)} shares</>
+                  ) : null}
                 </p>
               </motion.div>
             )}
@@ -256,7 +260,8 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 </div>
                 {poolData && suiWithdrawShares && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Estimated value: ~${parseFloat(suiWithdrawShares).toFixed(2)} USDC (1 share = 1 USDC)
+                    Estimated value: ~${(parseFloat(suiWithdrawShares) * (Number(poolData.sharePrice) || 1)).toFixed(2)} USDC
+                    {' '}(share price ${(Number(poolData.sharePrice) || 1).toFixed(4)})
                   </p>
                 )}
               </motion.div>

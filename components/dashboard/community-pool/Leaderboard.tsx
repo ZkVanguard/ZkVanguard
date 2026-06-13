@@ -160,7 +160,8 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Deposits are recorded in the pool database. AI manages a 3-asset allocation
-            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI'}. 1 share = 1 USDC.
+            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI'}. Share price starts at $1 at
+            inception and tracks the pool&apos;s on-chain NAV oracle as the AI grows capital.
           </p>
         </div>
       )}
