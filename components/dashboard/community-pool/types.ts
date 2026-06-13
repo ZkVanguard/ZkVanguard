@@ -12,6 +12,20 @@ export interface PoolAllocation {
   USDC?: number;
 }
 
+export interface PoolHedge {
+  id: number;
+  market: string;          // e.g. "ETH-PERP", "SUI-PERP"
+  side: 'LONG' | 'SHORT';
+  size: number;
+  notionalValue: number;   // USDC
+  leverage: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  currentPnl: number;      // USDC
+  openedAt: string;
+  source: 'bluefin-perp' | 'on-chain-mirror';
+}
+
 export interface PoolSummary {
   totalValueUSD: number;
   totalShares: number;
@@ -28,6 +42,8 @@ export interface PoolSummary {
   totalDeposited?: number;
   /** Lifetime cumulative withdrawals (USDC). */
   totalWithdrawn?: number;
+  /** Active BlueFin perp hedges (SUI pool only; undefined elsewhere). */
+  hedges?: PoolHedge[];
 }
 
 export interface UserPosition {

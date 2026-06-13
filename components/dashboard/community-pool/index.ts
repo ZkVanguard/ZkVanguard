@@ -1,6 +1,7 @@
 export { PoolHeader } from './PoolHeader';
 export { PoolStats } from './PoolStats';
 export { AllocationChart } from './AllocationChart';
+export { HedgesPanel } from './HedgesPanel';
 export { UserPositionCard } from './UserPositionCard';
 export { DepositWithdrawActions } from './DepositWithdrawActions';
 export { StatusMessages } from './StatusMessages';

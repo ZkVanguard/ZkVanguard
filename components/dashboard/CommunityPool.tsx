@@ -25,6 +25,7 @@ import {
   PoolHeader,
   PoolStats,
   AllocationChart,
+  HedgesPanel,
   UserPositionCard,
   DepositWithdrawActions,
   StatusMessages,
@@ -277,6 +278,12 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         allocations={pool.poolData.allocations}
         assets={pool.chainConfig?.assets}
       />
+
+      {/* Active BlueFin perp hedges (SUI pool only). Renders nothing when
+          no real hedges are open or when the chain doesn't have any. */}
+      {pool.selectedChain === 'sui' && (
+        <HedgesPanel hedges={pool.poolData.hedges} />
+      )}
 
       {/* Show user position if wallet is connected for the selected chain */}
       {(pool.activeAddress && pool.userPosition) && (

@@ -36,6 +36,64 @@ export const dynamic = 'force-dynamic';
 type NetworkType = 'testnet' | 'mainnet';
 
 // ============================================
+// Compact hedge row for the dashboard. Excludes the operational micro-hedges
+// (transport entries with sub-$1 notional) — those are accounting artifacts,
+// not directional bets users care about.
+// ============================================
+interface PoolHedge {
+  id: number;
+  market: string;
+  side: 'LONG' | 'SHORT';
+  size: number;
+  notionalValue: number;
+  leverage: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  currentPnl: number;
+  openedAt: string;
+  source: 'bluefin-perp' | 'on-chain-mirror';
+}
+
+async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
+  // Lazy import: keeps the route's cold-start fast for users who never hit it.
+  const { query } = await import('@/lib/db/postgres');
+  try {
+    const rows = await query<{
+      id: number; market: string; side: string;
+      size: string | number; notional_value: string | number;
+      leverage: string | number; entry_price: string | number | null;
+      current_price: string | number | null; current_pnl: string | number;
+      created_at: Date; hedge_id_onchain: string | null;
+    }>(
+      `SELECT id, market, side, size, notional_value, leverage, entry_price,
+              current_price, current_pnl, created_at, hedge_id_onchain
+         FROM hedges
+        WHERE chain = 'sui'
+          AND status = 'active'
+          AND market LIKE '%-PERP'
+        ORDER BY notional_value DESC
+        LIMIT 20`,
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      market: String(r.market || ''),
+      side: (String(r.side || '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG'),
+      size: Number(r.size),
+      notionalValue: Number(r.notional_value),
+      leverage: Number(r.leverage),
+      entryPrice: r.entry_price == null ? 0 : Number(r.entry_price),
+      currentPrice: r.current_price == null ? null : Number(r.current_price),
+      currentPnl: Number(r.current_pnl ?? 0),
+      openedAt: (r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)),
+      source: r.hedge_id_onchain ? 'on-chain-mirror' : 'bluefin-perp',
+    }));
+  } catch (err) {
+    logger.warn('[SUI-API] fetchActivePoolHedges failed', { error: err });
+    return [];
+  }
+}
+
+// ============================================
 // PER-WALLET MUTEX LOCK (prevents race conditions on concurrent deposits/withdrawals)
 // ============================================
 const walletLocks = new Map<string, Promise<void>>();
@@ -434,10 +492,29 @@ export async function GET(request: NextRequest) {
         duration: Date.now() - startTime,
       }, 30);
     }
+
+    // Hedges: active BlueFin perp positions tracked in DB for this pool.
+    // The default stats response also embeds this (in a compact form) so
+    // the dashboard doesn't need a separate roundtrip.
+    if (action === 'hedges') {
+      const hedges = await fetchActivePoolHedges();
+      return cachedJsonResponse({
+        success: true,
+        data: { hedges, count: hedges.length },
+        chain: 'sui',
+        network,
+        duration: Date.now() - startTime,
+      }, 30);
+    }
     
-    // Default: Get pool summary (cached 30s)
-    const stats = await service.getPoolStats();
-    
+    // Default: Get pool summary (cached 30s) — fetched in parallel with hedges
+    // so the dashboard gets the perp positions in the same payload (no extra
+    // roundtrip). Hedge fetch failure is non-fatal.
+    const [stats, hedges] = await Promise.all([
+      service.getPoolStats(),
+      fetchActivePoolHedges().catch(() => [] as PoolHedge[]),
+    ]);
+
     return cachedJsonResponse({
       success: true,
       data: {
@@ -455,6 +532,7 @@ export async function GET(request: NextRequest) {
         paused: stats.paused,
         poolStateId: stats.poolStateId,
         allocation: stats.allocation,
+        hedges,
       },
       chain: 'sui',
       network,

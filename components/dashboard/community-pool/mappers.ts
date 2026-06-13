@@ -4,7 +4,7 @@
  * test net (test/unit/community-pool-mappers.test.ts). No React, no fetch —
  * pure (apiData) → model, behavior-identical to the inline code they replaced.
  */
-import type { PoolSummary, UserPosition, PoolAllocation } from './types';
+import type { PoolSummary, UserPosition, PoolAllocation, PoolHedge } from './types';
 
 type ApiData = Record<string, unknown>;
 
@@ -37,6 +37,23 @@ export function normalizeAllocations(
     : { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0, USDC: 0 };
 }
 
+function mapHedges(raw: unknown): PoolHedge[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.map((h: Record<string, unknown>) => ({
+    id: Number(h.id) || 0,
+    market: String(h.market || ''),
+    side: (String(h.side || '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT',
+    size: Number(h.size) || 0,
+    notionalValue: Number(h.notionalValue) || 0,
+    leverage: Number(h.leverage) || 1,
+    entryPrice: Number(h.entryPrice) || 0,
+    currentPrice: h.currentPrice == null ? null : Number(h.currentPrice),
+    currentPnl: Number(h.currentPnl) || 0,
+    openedAt: String(h.openedAt || ''),
+    source: (h.source === 'on-chain-mirror' ? 'on-chain-mirror' : 'bluefin-perp'),
+  }));
+}
+
 /** Shape the SUI pool-summary API response into the PoolSummary view model. */
 export function mapApiToPoolSummary(data: ApiData): PoolSummary {
   const totalValueUSD = num(data.totalNAVUsd);
@@ -53,6 +70,7 @@ export function mapApiToPoolSummary(data: ApiData): PoolSummary {
     allTimeHighNav: parseFloat(String(data.allTimeHighNav)) || undefined,
     totalDeposited: num(data.totalDeposited),
     totalWithdrawn: num(data.totalWithdrawn),
+    hedges: mapHedges(data.hedges),
   };
 }
 
