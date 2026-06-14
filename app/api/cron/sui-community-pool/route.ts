@@ -1374,19 +1374,46 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             totalCollateral: totalCollateralNeeded.toFixed(6),
           });
 
-          // Reverse-swap ALL non-USDC assets in admin wallet → USDC
-          // Use a large target so ALL assets are converted (not just shortfall)
-          const replenishment = await replenishAdminUsdc(network, 1_000_000, pricesUSD);
-          logger.info('[SUI Cron] Step 6.5 replenishment result', { swapped: replenishment.swapped, details: replenishment.details });
-          if (replenishment.swapped > 0) {
-            await new Promise(r => setTimeout(r, 2000));
-            logger.info('[SUI Cron] Admin assets → USDC replenishment', {
-              swapped: replenishment.swapped.toFixed(6),
-              details: replenishment.details,
+          // Replenish only the actual shortfall, not blanket-convert everything.
+          // The old design (replenish target = $1M) churned the wallet on every
+          // tick: wBTC/wETH/SUI got swapped to USDC, then Step 7 tried to buy
+          // them back, but small-notional buys often failed on slippage/route,
+          // so wETH/SUI never re-accumulated even though the AI kept allocating
+          // 25-40% to them. Net effect: every $1 of wETH was lost to round-trip
+          // friction (~1-2% slippage each direction, plus DEX fees).
+          //
+          // New behaviour:
+          //  - Compute the USDC shortfall = collateral_needed − admin_usdc_now.
+          //  - If shortfall ≤ 0, admin already has enough USDC for settlement
+          //    → skip replenish entirely. Step 7 will buy any allocation drift
+          //    from the spare USDC.
+          //  - Else replenish exactly shortfall × 1.2 (20% buffer for slippage),
+          //    which only converts the minimum non-USDC needed.
+          const adminUsdcPreReplenish = await getAdminUsdcBalance(network);
+          const usdcShortfall = Math.max(0, totalCollateralNeeded - adminUsdcPreReplenish);
+          let replenishment: Awaited<ReturnType<typeof replenishAdminUsdc>> = { swapped: 0, details: [] };
+          if (usdcShortfall > 0) {
+            const replenishTarget = usdcShortfall * 1.2; // 20% buffer for slippage
+            logger.info('[SUI Cron] Step 6.5 replenish needed', {
+              adminUsdc: adminUsdcPreReplenish.toFixed(6),
+              collateralNeeded: totalCollateralNeeded.toFixed(6),
+              shortfall: usdcShortfall.toFixed(6),
+              replenishTarget: replenishTarget.toFixed(6),
+            });
+            replenishment = await replenishAdminUsdc(network, replenishTarget, pricesUSD);
+            logger.info('[SUI Cron] Step 6.5 replenishment result', { swapped: replenishment.swapped, details: replenishment.details });
+            if (replenishment.swapped > 0) {
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          } else {
+            logger.info('[SUI Cron] Step 6.5 replenish skipped — admin has enough USDC', {
+              adminUsdc: adminUsdcPreReplenish.toFixed(6),
+              collateralNeeded: totalCollateralNeeded.toFixed(6),
+              excess: (adminUsdcPreReplenish - totalCollateralNeeded).toFixed(6),
             });
           }
 
-          // Check total admin USDC after replenishment
+          // Check total admin USDC after replenishment (or after skipping)
           const adminUsdcForSettlement = await getAdminUsdcBalance(network);
           logger.info('[SUI Cron] Admin USDC for settlement', {
             adminUsdc: adminUsdcForSettlement.toFixed(6),
