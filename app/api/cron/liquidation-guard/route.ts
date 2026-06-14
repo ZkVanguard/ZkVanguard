@@ -20,6 +20,7 @@ import { errMsg, errName } from '@/lib/utils/error-handler';
 import { getActiveHedges } from '@/lib/db/hedges';
 import type { Hedge } from '@/lib/db/hedges';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -434,7 +435,8 @@ async function guardPositions(): Promise<{ positions: LeveragedPosition[]; actio
  */
 export async function GET(request: NextRequest): Promise<NextResponse<LiquidationGuardResult>> {
   const startTime = Date.now();
-  
+  void setCronState('cron:lastRun:liquidation-guard', Date.now()).catch(() => {});
+
   // Security: Verify QStash signature or CRON_SECRET
   const authResult = await verifyCronRequest(request, 'LiquidationGuard');
   if (authResult !== true) {

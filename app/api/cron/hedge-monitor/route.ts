@@ -18,6 +18,7 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getActiveHedges as getActiveHedgesFromDB, closeHedge, type Hedge } from '@/lib/db/hedges';
 import { errMsg, errName } from '@/lib/utils/error-handler';
+import { setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';
 
@@ -389,7 +390,8 @@ async function monitorHedges(): Promise<HedgeMonitorResult['actionsExecuted'] & 
  */
 export async function GET(request: NextRequest): Promise<NextResponse<HedgeMonitorResult>> {
   const startTime = Date.now();
-  
+  void setCronState('cron:lastRun:hedge-monitor', Date.now()).catch(() => {});
+
   // Security: Verify QStash signature or CRON_SECRET
   const authResult = await verifyCronRequest(request, 'HedgeMonitor');
   if (authResult !== true) {

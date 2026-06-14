@@ -20,7 +20,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
 import { getPoolSummary } from '@/lib/services/cronos/CommunityPoolService';
-import { getNumber, setNumber, getTimestamp, setTimestamp, CronKeys } from '@/lib/db/cron-state';
+import { getNumber, setNumber, getTimestamp, setTimestamp, setCronState, CronKeys } from '@/lib/db/cron-state';
 import { ethers } from 'ethers';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
@@ -760,7 +760,8 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
  */
 export async function GET(request: NextRequest): Promise<NextResponse<PoolMonitorResult>> {
   const startTime = Date.now();
-  
+  void setCronState('cron:lastRun:pool-nav-monitor', Date.now()).catch(() => {});
+
   // Security: Verify QStash signature or CRON_SECRET
   const authResult = await verifyCronRequest(request, 'PoolNAVMonitor');
   if (authResult !== true) {

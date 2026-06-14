@@ -32,6 +32,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,7 @@ interface CollectFeesResult {
 
 export async function GET(request: NextRequest): Promise<NextResponse<CollectFeesResult>> {
   const ranAt = new Date().toISOString();
+  void setCronState('cron:lastRun:sui-collect-fees', Date.now()).catch(() => {});
   const network: 'mainnet' | 'testnet' =
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 

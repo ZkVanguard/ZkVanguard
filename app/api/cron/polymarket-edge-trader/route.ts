@@ -268,6 +268,7 @@ function riskGate(args: {
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
   const ranAt = new Date().toISOString();
+  void setCronState('cron:lastRun:polymarket-edge-trader', Date.now()).catch(() => {});
 
   const auth = await verifyCronRequest(request, 'PolymarketEdgeTrader');
   if (auth !== true) {
