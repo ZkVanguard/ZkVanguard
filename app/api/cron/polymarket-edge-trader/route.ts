@@ -911,3 +911,8 @@ async function maybeHalt(
   }
   return currentHaltUntil > Date.now();
 }
+
+// QStash sends POST by default — support both methods. Without this the cron
+// silently 405s on every tick (root cause of zero cron-initiated trades from
+// 2026-05-07 through 2026-06-14; manual GET probes still worked).
+export const POST = GET;
