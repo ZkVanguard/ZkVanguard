@@ -1034,7 +1034,19 @@ export class BluefinService {
         quantityE9: quantityE9,
         leverageE9: leverageE9,
         side: params.side, // LONG or SHORT
-        isIsolated: false,
+        // BlueFin Pro currently supports ISOLATED margin only — the SDK's
+        // own enum has the comment "atm exchange only supports isolated
+        // margin" next to MARGIN_TYPE.CROSS. Submitting orders with
+        // isIsolated:false yields a valid orderHash from the API layer
+        // but the matching engine silently drops them downstream. That
+        // was the root cause of months of "BlueFin accepted orderHash but
+        // position did not appear" failures (every cron-initiated open
+        // failed; existing positions only persist because bluefin-db-
+        // reconcile keeps re-adopting them as orphans).
+        // Discovered 2026-06-13 while investigating the BTC-PERP silent
+        // reject. Fix: always use ISOLATED for now. Leverage in this
+        // signed field is honored per-position (ISOLATED semantics).
+        isIsolated: true,
         expiresAtMillis: expiresAt,
         salt,
         signedAtMillis,
@@ -1273,7 +1285,8 @@ export class BluefinService {
         quantityE9,
         leverageE9,
         side: params.side,
-        isIsolated: false,
+        // ISOLATED only — see openHedge for the full root-cause writeup.
+        isIsolated: true,
         expiresAtMillis: expiresAt,
         salt,
         signedAtMillis,
@@ -1395,7 +1408,8 @@ export class BluefinService {
         quantityE9: quantityE9,
         leverageE9,
         side: closeSide,
-        isIsolated: false,
+        // ISOLATED only — see openHedge for the full root-cause writeup.
+        isIsolated: true,
         expiresAtMillis: expiresAt,
         salt,
         signedAtMillis,
