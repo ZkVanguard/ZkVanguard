@@ -459,9 +459,26 @@ export class BluefinService {
   }
 
   /**
+   * Admin-only escape hatch: invoke the authenticated apiRequest from outside
+   * the service. Used by /api/admin/bluefin-prefs to inspect / write per-symbol
+   * preferences (which the SDK exposes but our service wraps minimally). Do
+   * NOT use this for production paths — add a typed method for whatever the
+   * real flow needs.
+   */
+  async adminRawApiRequest<T = unknown>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    body?: Record<string, unknown>,
+    apiType: 'trade' | 'exchange' = 'trade',
+  ): Promise<T> {
+    await this.ensureInitializedAsync();
+    return this.apiRequest<T>(method, path, body, apiType);
+  }
+
+  /**
    * Make authenticated API request to BlueFin Trade API
    * Handles rate limiting with exponential backoff, auto-retry on 429 and 5xx errors
-   * 
+   *
    * Rate limit: 500 RPM on trade.api
    */
   private async apiRequest<T>(
