@@ -38,6 +38,7 @@ import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { getActiveHedges, closeHedge, createHedge, type Hedge } from '@/lib/db/hedges';
 import { setCronState } from '@/lib/db/cron-state';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
+import { query } from '@/lib/db/postgres';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,24 +62,30 @@ interface ReconcileResult {
   phantomDbRows: Array<{ id: number; symbol: string; side: string; size: number }>;
   orphanBluefinPositions: Array<{ symbol: string; side: string; size: number }>;
   closedDbRowIds: number[];
+  syncedDbRowIds: number[];
   ageForceClosed: Array<{ id: number; symbol: string; side: string; ageHours: number; closeOk: boolean; error?: string }>;
   error?: string;
 }
 
-function matchesPosition(
+type LivePosition = {
+  symbol?: string; side?: string; size?: number;
+  markPrice?: number; entryPrice?: number; unrealizedPnl?: number;
+};
+
+function findMatchingPosition(
   hedge: Hedge,
-  positions: Array<{ symbol?: string; side?: string; size?: number }>,
-): boolean {
-  // A DB row matches a BlueFin position when symbol AND side both line up.
-  // Size doesn't need to match exactly — BlueFin position sizes drift from
-  // funding rate adjustments, and a partial close still leaves the DB row
-  // marked active (which is correct — there's still exposure).
-  return positions.some(p => {
-    const pSymbol = String(p.symbol || '').toUpperCase();
-    const pSide = String(p.side || '').toUpperCase();
-    return pSymbol === String(hedge.market || '').toUpperCase()
-        && pSide === String(hedge.side || '').toUpperCase();
-  });
+  positions: LivePosition[],
+): LivePosition | null {
+  const hMarket = String(hedge.market || '').toUpperCase();
+  const hSide = String(hedge.side || '').toUpperCase();
+  return positions.find(p =>
+    String(p.symbol || '').toUpperCase() === hMarket &&
+    String(p.side || '').toUpperCase() === hSide,
+  ) ?? null;
+}
+
+function matchesPosition(hedge: Hedge, positions: LivePosition[]): boolean {
+  return findMatchingPosition(hedge, positions) !== null;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<ReconcileResult>> {
@@ -90,7 +97,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     return NextResponse.json(
       {
         success: false, ranAt, dbActiveCount: 0, bluefinPositionsCount: 0,
-        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], syncedDbRowIds: [], ageForceClosed: [],
         error: 'Unauthorized',
       } as ReconcileResult,
       { status: 401 },
@@ -124,7 +131,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       return NextResponse.json({
         success: false, ranAt,
         dbActiveCount: dbHedges.length, bluefinPositionsCount: 0,
-        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], syncedDbRowIds: [], ageForceClosed: [],
         error: `safety-bail: empty positions vs ${dbNotionalCount} notional DB hedges`,
       } as ReconcileResult);
     }
@@ -178,13 +185,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
 
     const phantomDbRows: ReconcileResult['phantomDbRows'] = [];
     const closedDbRowIds: number[] = [];
+    const syncedDbRowIds: number[] = [];
+    const livePositions = positions as LivePosition[];
     for (const h of dbHedges) {
       // Skip operational micro-hedges (the < $1 entries that exist purely as
       // capability-transfer artifacts on the Move side, never on BlueFin).
       const notional = Number(h.notional_value ?? 0);
       if (notional < 1) continue;
 
-      if (!matchesPosition(h, positions as Array<{ symbol?: string; side?: string; size?: number }>)) {
+      const livePos = findMatchingPosition(h, livePositions);
+      if (!livePos) {
         phantomDbRows.push({
           id: h.id,
           symbol: String(h.market || ''),
@@ -198,6 +208,48 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
           logger.warn('[bluefin-db-reconcile] failed to close phantom DB row', {
             id: h.id, error: e instanceof Error ? e.message : String(e),
           });
+        }
+        continue;
+      }
+
+      // Matched: sync size + notional + current_price + current_pnl from live
+      // BlueFin so the DB-sourced UI panel (HedgesPanel via /api/sui/community-pool)
+      // doesn't fall out of sync with the live-sourced one (AutoHedgePanel via
+      // /api/community-pool/auto-hedge). Without this, DB sizes drift over partial
+      // fills/funding (observed on 2026-06-14: SUI-PERP DB=0.97 vs live=0.82, 17%
+      // drift) and current_pnl stays stale (ETH-PERP DB=-$0.24 vs live=+$3.43,
+      // $3.67 drift) until manual repair.
+      const liveSize = Number(livePos.size ?? 0);
+      const liveMark = Number(livePos.markPrice ?? livePos.entryPrice ?? 0);
+      const liveUpnl = Number(livePos.unrealizedPnl ?? 0);
+      if (liveSize > 0 && liveMark > 0) {
+        const liveNotional = liveSize * liveMark;
+        const dbSize = Number(h.size ?? 0);
+        const dbPnl = Number(h.current_pnl ?? 0);
+        const sizeDriftPct = dbSize > 0 ? Math.abs(liveSize - dbSize) / dbSize : 1;
+        const pnlDriftAbs = Math.abs(liveUpnl - dbPnl);
+        // Only write if something actually moved — saves DB writes on no-op ticks.
+        if (sizeDriftPct > 0.001 || pnlDriftAbs > 0.01) {
+          try {
+            await query(
+              `UPDATE hedges
+                  SET size = $1,
+                      notional_value = $2,
+                      current_price = $3,
+                      current_pnl = $4,
+                      price_source = 'bluefin-live',
+                      price_updated_at = CURRENT_TIMESTAMP,
+                      updated_at = CURRENT_TIMESTAMP
+                WHERE id = $5
+                  AND status = 'active'`,
+              [liveSize, liveNotional, liveMark, liveUpnl, h.id],
+            );
+            syncedDbRowIds.push(h.id);
+          } catch (e) {
+            logger.warn('[bluefin-db-reconcile] live-sync UPDATE failed', {
+              id: h.id, error: e instanceof Error ? e.message : String(e),
+            });
+          }
         }
       }
     }
@@ -268,6 +320,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       bluefinPositions: positions.length,
       phantomsClosed: closedDbRowIds.length,
       orphans: orphanBluefinPositions.length,
+      liveSynced: syncedDbRowIds.length,
     });
 
     return NextResponse.json({
@@ -278,6 +331,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       phantomDbRows,
       orphanBluefinPositions,
       closedDbRowIds,
+      syncedDbRowIds,
       ageForceClosed,
     });
   } catch (e: unknown) {
@@ -286,7 +340,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     return NextResponse.json(
       {
         success: false, ranAt, dbActiveCount: 0, bluefinPositionsCount: 0,
-        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], ageForceClosed: [],
+        phantomDbRows: [], orphanBluefinPositions: [], closedDbRowIds: [], syncedDbRowIds: [], ageForceClosed: [],
         error: msg,
       },
       { status: 500 },
