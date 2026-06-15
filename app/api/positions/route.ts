@@ -61,14 +61,63 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // SUI addresses (>40 hex chars) have no EVM positions — return empty
+    // SUI addresses (>40 hex chars): pull the user's SUI Community Pool
+    // share position directly from the SUI pool service. Before this fix
+    // the route short-circuited to totalValue=0, which made the dashboard
+    // overview render "$0.00" even when the user held real shares (e.g.
+    // 23.43 shares = $43.88). Cached 30 s server-side via the same TTL
+    // as EVM positions.
     if (address.length > 42) {
-      return NextResponse.json({
-        address,
-        totalValue: 0,
-        positions: [],
-        lastUpdated: Date.now(),
-      });
+      try {
+        const { getSuiUsdcPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
+        const service = getSuiUsdcPoolService('mainnet');
+        const [stats, user] = await Promise.all([
+          service.getPoolStats(),
+          service.getMemberPosition(address),
+        ]);
+        const shares = Number(user?.shares ?? 0);
+        const valueUsd = Number(user?.valueUsd ?? 0);
+        const sharePrice = Number(stats?.sharePriceUsd ?? stats?.sharePrice ?? 1);
+        const positions = shares > 0
+          ? [{
+              id: 'sui-community-pool',
+              symbol: 'SUIPOOL',
+              name: 'SUI Community Pool (USDC)',
+              chain: 'sui',
+              network: 'mainnet',
+              type: 'pool-share',
+              shares,
+              balance: shares,
+              price: sharePrice,
+              currentValue: valueUsd,
+              value: valueUsd,
+              valueUsd,
+              percentage: Number(user?.percentage ?? 0),
+              poolNav: Number(stats?.totalNAVUsd ?? stats?.totalNAV ?? 0),
+              poolMembers: Number(stats?.memberCount ?? 0),
+              joinedAt: Number(user?.joinedAt ?? 0),
+              isMember: !!user?.isMember,
+            }]
+          : [];
+        const payload = {
+          address,
+          totalValue: valueUsd,
+          positions,
+          lastUpdated: Date.now(),
+          chain: 'sui',
+        };
+        await setAllPositionsCaches(address, payload);
+        return NextResponse.json(payload);
+      } catch (err) {
+        logger.warn('[Positions API] SUI position lookup failed', { error: err instanceof Error ? err.message : String(err) });
+        return NextResponse.json({
+          address,
+          totalValue: 0,
+          positions: [],
+          lastUpdated: Date.now(),
+          chain: 'sui',
+        });
+      }
     }
 
     // Check cache first (two-tier: memory → DB)
