@@ -2245,11 +2245,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               //   • suiReserve:  0.001% of NAV in SUI equiv (min 0.5 SUI)
               //   • maxSwapSui:  0.1% of NAV per tick, expressed in SUI
               const { spotReserve: scaledSpotReserve, suiReserve: scaledSuiReserve, maxSwapSui: scaledMaxSwapSui } = scaledReserves(navUsd, pricesUSD['SUI']);
+              // Honor the AI's SUI allocation: autoTopUp must NOT sweep the
+              // target SUI spot position back to USDC. Without this guard,
+              // Step 7 buys SUI for the spot leg → autoTopUp immediately
+              // swaps it to USDC → SUI never accumulates on the wallet.
+              // Reserve covers gas + the target SUI allocation; only EXCESS
+              // SUI above (reserve + target) is sweepable.
+              const suiPrice = pricesUSD['SUI'] || 0;
+              const targetSuiUsd = (navUsd * Number(aiResult.allocations.SUI || 0)) / 100;
+              const targetSuiUnits = suiPrice > 0 ? targetSuiUsd / suiPrice : 0;
+              const suiReserveWithTarget = scaledSuiReserve + targetSuiUnits;
               const topUp = await bluefinTreasury.autoTopUp({
                 minMargin, targetMargin,
                 spotReserve: scaledSpotReserve,
                 swapFromSui: true,
-                suiReserve: scaledSuiReserve,
+                suiReserve: suiReserveWithTarget,
                 maxSwapSui: scaledMaxSwapSui,
               });
               logger.info('[SUI Cron] Margin top-up', {
