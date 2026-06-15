@@ -424,25 +424,24 @@ async function replenishAdminUsdc(
     const allBalances = await suiClient.getAllBalances({ owner: address });
     const candidates: Array<{ asset: BluefinPoolAsset; amount: number; valueUsd: number }> = [];
 
+    // Build canonical lookup so `0x27792d9…` from getAllBalances matches
+    // `0x027792d9…` from MAINNET_COIN_TYPES. See canonicalizeCoinType()
+    // for the root cause — same bug that was breaking getAdminAssetValuesUsd
+    // (this function had it from before; finally fixing both at once).
+    const canonMap = new Map<string, BluefinPoolAsset>();
+    for (const a of POOL_ASSETS) {
+      const t = aggregator.getAssetCoinType(a as BluefinPoolAsset);
+      if (t) canonMap.set(canonicalizeCoinType(t), a as BluefinPoolAsset);
+    }
+
     for (const bal of allBalances) {
-      const coinType = bal.coinType;
       const raw = Number(bal.totalBalance);
       if (raw <= 0) continue;
 
       // Match coin type to known assets (skip USDC and SUI gas reserve)
-      let asset: BluefinPoolAsset | null = null;
-      let decimals = 8;
-
-      for (const a of POOL_ASSETS) {
-        const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
-        if (assetType && coinType === assetType) {
-          asset = a as BluefinPoolAsset;
-          decimals = a === 'SUI' ? 9 : 8;
-          break;
-        }
-      }
-
+      const asset: BluefinPoolAsset | undefined = canonMap.get(canonicalizeCoinType(bal.coinType));
       if (!asset) continue;
+      const decimals = asset === 'SUI' ? 9 : 8;
 
       const amount = raw / Math.pow(10, decimals);
       const price = pricesUSD[asset] || 0;
@@ -535,6 +534,24 @@ async function replenishAdminUsdc(
 }
 
 /**
+ * Canonicalize a Move struct tag by zero-padding the address portion to
+ * 32 bytes (64 hex chars). `suix_getAllBalances` returns coin types with
+ * the address stripped of leading zeros (e.g. `0x27792d9...::coin::COIN`),
+ * but the configured `MAINNET_COIN_TYPES` use the canonical 64-char form
+ * (`0x027792d9...::coin::COIN`). A naive `===` comparison silently misses
+ * every match — root cause of the "preHoldings show $0 even though
+ * wallet has $33 wBTC" bug on the first drift-rebalance test.
+ */
+function canonicalizeCoinType(t: string): string {
+  if (!t) return t;
+  const parts = t.split('::');
+  if (parts.length !== 3) return t;
+  let addr = parts[0].replace(/^0x/, '').toLowerCase();
+  if (addr.length < 64) addr = addr.padStart(64, '0');
+  return `0x${addr}::${parts[1]}::${parts[2]}`;
+}
+
+/**
  * Read per-asset USD values held by the admin wallet (spot leg of the
  * dual-leg strategy). SUI is counted minus the 1-SUI gas reserve. USDC
  * and BlueFin margin are NOT counted here — this function returns only
@@ -562,25 +579,28 @@ async function getAdminAssetValuesUsd(
     const aggregator = getBluefinAggregatorService(network);
     const allBalances = await suiClient.getAllBalances({ owner: address });
     const result: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+    // Build canonical lookup of {canonicalCoinType → PoolAsset} once.
+    const canonMap = new Map<string, PoolAsset>();
+    for (const a of POOL_ASSETS) {
+      const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
+      if (assetType) canonMap.set(canonicalizeCoinType(assetType), a as PoolAsset);
+    }
     for (const bal of allBalances) {
       const raw = Number(bal.totalBalance);
       if (raw <= 0) continue;
-      for (const a of POOL_ASSETS) {
-        const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
-        if (!assetType || bal.coinType !== assetType) continue;
-        const decimals = a === 'SUI' ? 9 : 8;
-        const amount = raw / Math.pow(10, decimals);
-        const price = pricesUSD[a] || 0;
-        let usd = 0;
-        if (a === 'SUI') {
-          const swappable = Math.max(0, amount - 1.0);
-          usd = swappable * price;
-        } else {
-          usd = amount * price;
-        }
-        result[a] = (result[a] || 0) + usd;
-        break;
+      const a = canonMap.get(canonicalizeCoinType(bal.coinType));
+      if (!a) continue;
+      const decimals = a === 'SUI' ? 9 : 8;
+      const amount = raw / Math.pow(10, decimals);
+      const price = pricesUSD[a] || 0;
+      let usd = 0;
+      if (a === 'SUI') {
+        const swappable = Math.max(0, amount - 1.0);
+        usd = swappable * price;
+      } else {
+        usd = amount * price;
       }
+      result[a] = (result[a] || 0) + usd;
     }
     return result;
   } catch (err) {
