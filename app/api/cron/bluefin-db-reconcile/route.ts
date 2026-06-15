@@ -144,9 +144,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       const cutoffMs = Date.now() - HEDGE_MAX_HOLD_HOURS * 3600_000;
       for (const h of dbHedges) {
         // Skip operational micro-hedges + reconstructed-orphan rows
-        // (those have no real open timestamp).
+        // (those have no real open timestamp). Operational hedges are
+        // identified by BOTH sub-$1 notional AND leverage=1x; filtering
+        // on notional alone catches real low-priced hedges (SUI-PERP
+        // notional drops below $1 when SUI < $1, but at 3x leverage
+        // those are real positions that SHOULD be age-bounded).
         const notional = Number(h.notional_value ?? 0);
-        if (notional < 1) continue;
+        const leverage = Number(h.leverage ?? 1);
+        if (notional < 1 && leverage <= 1) continue;
         if (String(h.order_id || '').startsWith('reconstructed_')) continue;
         const createdMs = new Date(h.created_at).getTime();
         if (!Number.isFinite(createdMs) || createdMs > cutoffMs) continue;
@@ -188,10 +193,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     const syncedDbRowIds: number[] = [];
     const livePositions = positions as LivePosition[];
     for (const h of dbHedges) {
-      // Skip operational micro-hedges (the < $1 entries that exist purely as
-      // capability-transfer artifacts on the Move side, never on BlueFin).
+      // Skip operational micro-hedges only — the $0.01 transport entries
+      // that exist purely as capability artifacts on the Move side (lev=1x,
+      // sub-$1 notional, never on BlueFin). Filtering on notional alone
+      // accidentally caught real low-priced SUI hedges (e.g. SUI-PERP LONG
+      // 0.97 SUI × $0.76 = $0.88 notional, 3x lev) and left them
+      // permanently out-of-sync. Require BOTH conditions to skip.
       const notional = Number(h.notional_value ?? 0);
-      if (notional < 1) continue;
+      const leverage = Number(h.leverage ?? 1);
+      if (notional < 1 && leverage <= 1) continue;
 
       const livePos = findMatchingPosition(h, livePositions);
       if (!livePos) {
