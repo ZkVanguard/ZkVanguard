@@ -61,47 +61,112 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // SUI addresses (>40 hex chars): pull the user's SUI Community Pool
-    // share position directly from the SUI pool service. Before this fix
-    // the route short-circuited to totalValue=0, which made the dashboard
-    // overview render "$0.00" even when the user held real shares (e.g.
-    // 23.43 shares = $43.88). Cached 30 s server-side via the same TTL
-    // as EVM positions.
+    // SUI addresses (>40 hex chars): return the user's full SUI portfolio —
+    // their Community Pool share PLUS native wallet coin balances (USDC,
+    // SUI, wBTC, wETH). Before this fix the route short-circuited to
+    // totalValue=0, so the dashboard overview rendered "$0.00" even when
+    // the user held 23.43 pool shares ($43.88) plus $10.61 USDC in their
+    // wallet ready to deposit. Cached 30 s server-side.
     if (address.length > 42) {
       try {
-        const { getSuiUsdcPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
+        const [{ getSuiUsdcPoolService }, { getMarketDataService }] = await Promise.all([
+          import('@/lib/services/sui/SuiCommunityPoolService'),
+          import('@/lib/services/market-data/RealMarketDataService'),
+        ]);
         const service = getSuiUsdcPoolService('mainnet');
-        const [stats, user] = await Promise.all([
+        const mds = getMarketDataService();
+
+        // 1) Pool share + 2) wallet coin balances + 3) live prices, all in parallel
+        const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
+        const balancesP = fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_getAllBalances', params: [address] }),
+        }).then(r => r.json()).then(j => (j.result as Array<{ coinType: string; totalBalance: string }>) || []).catch(() => []);
+
+        const [stats, user, balances, pBtc, pEth, pSui] = await Promise.all([
           service.getPoolStats(),
           service.getMemberPosition(address),
+          balancesP,
+          mds.getTokenPrice('BTC').then(p => p?.price ?? 0).catch(() => 0),
+          mds.getTokenPrice('ETH').then(p => p?.price ?? 0).catch(() => 0),
+          mds.getTokenPrice('SUI').then(p => p?.price ?? 0).catch(() => 0),
         ]);
+
+        // Coin type catalog — canonical 64-char address form
+        const canon = (t: string) => {
+          const parts = t.split('::');
+          if (parts.length !== 3) return t;
+          let a = parts[0].replace(/^0x/, '').toLowerCase();
+          if (a.length < 64) a = a.padStart(64, '0');
+          return `0x${a}::${parts[1]}::${parts[2]}`;
+        };
+        const CATALOG: Record<string, { symbol: string; name: string; dec: number; price: number }> = {
+          [canon('0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC')]: { symbol: 'USDC', name: 'USD Coin', dec: 6, price: 1 },
+          [canon('0x2::sui::SUI')]: { symbol: 'SUI', name: 'Sui', dec: 9, price: pSui },
+          [canon('0x027792d9fed7f9844eb4839566001bb6f6cb4804f66aa2da6fe1ee242d896881::coin::COIN')]: { symbol: 'wBTC', name: 'Wrapped Bitcoin', dec: 8, price: pBtc },
+          [canon('0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN')]: { symbol: 'wETH', name: 'Wrapped Ether', dec: 8, price: pEth },
+        };
+
+        const positions: Array<Record<string, unknown>> = [];
+        let totalValue = 0;
+
+        // Pool share
         const shares = Number(user?.shares ?? 0);
-        const valueUsd = Number(user?.valueUsd ?? 0);
+        const shareValueUsd = Number(user?.valueUsd ?? 0);
         const sharePrice = Number(stats?.sharePriceUsd ?? stats?.sharePrice ?? 1);
-        const positions = shares > 0
-          ? [{
-              id: 'sui-community-pool',
-              symbol: 'SUIPOOL',
-              name: 'SUI Community Pool (USDC)',
-              chain: 'sui',
-              network: 'mainnet',
-              type: 'pool-share',
-              shares,
-              balance: shares,
-              price: sharePrice,
-              currentValue: valueUsd,
-              value: valueUsd,
-              valueUsd,
-              percentage: Number(user?.percentage ?? 0),
-              poolNav: Number(stats?.totalNAVUsd ?? stats?.totalNAV ?? 0),
-              poolMembers: Number(stats?.memberCount ?? 0),
-              joinedAt: Number(user?.joinedAt ?? 0),
-              isMember: !!user?.isMember,
-            }]
-          : [];
+        if (shares > 0) {
+          positions.push({
+            id: 'sui-community-pool',
+            symbol: 'SUIPOOL',
+            name: 'SUI Community Pool (USDC)',
+            chain: 'sui',
+            network: 'mainnet',
+            type: 'pool-share',
+            shares,
+            balance: shares,
+            price: sharePrice,
+            currentValue: shareValueUsd,
+            value: shareValueUsd,
+            valueUsd: shareValueUsd,
+            percentage: Number(user?.percentage ?? 0),
+            poolNav: Number(stats?.totalNAVUsd ?? stats?.totalNAV ?? 0),
+            poolMembers: Number(stats?.memberCount ?? 0),
+            joinedAt: Number(user?.joinedAt ?? 0),
+            isMember: !!user?.isMember,
+          });
+          totalValue += shareValueUsd;
+        }
+
+        // Wallet coin balances (USDC, SUI, wBTC, wETH)
+        for (const b of balances) {
+          const meta = CATALOG[canon(b.coinType)];
+          if (!meta) continue;
+          const amount = Number(b.totalBalance) / Math.pow(10, meta.dec);
+          if (amount <= 0) continue;
+          const value = amount * meta.price;
+          // Skip dust (< $0.01) to keep the UI uncluttered
+          if (value < 0.01 && meta.symbol !== 'SUI') continue;
+          positions.push({
+            id: `wallet-${meta.symbol.toLowerCase()}`,
+            symbol: meta.symbol,
+            name: meta.name,
+            chain: 'sui',
+            network: 'mainnet',
+            type: 'wallet-balance',
+            balance: amount,
+            shares: amount,
+            price: meta.price,
+            currentValue: value,
+            value,
+            valueUsd: value,
+          });
+          totalValue += value;
+        }
+
         const payload = {
           address,
-          totalValue: valueUsd,
+          totalValue,
           positions,
           lastUpdated: Date.now(),
           chain: 'sui',
