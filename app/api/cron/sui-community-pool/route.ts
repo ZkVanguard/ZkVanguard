@@ -57,6 +57,13 @@ const CRON_LOCK_KEY = 'sui-community-pool';
 // new package id has the u128 fixes.
 const NAV_SAFETY_CEILING_USDC = Number(process.env.NAV_SAFETY_CEILING_USDC) || 500_000_000;
 
+// Step 6.6 drift-rebalance tunables. Together they bound the per-tick
+// blast radius — at most MAX_REBALANCE_SELL_USD of any one overweight
+// asset can be reverse-swapped per tick, and only when its drift from
+// AI target exceeds REBALANCE_DRIFT_THRESHOLD_PCT.
+const REBALANCE_DRIFT_THRESHOLD_PCT = Number(process.env.REBALANCE_DRIFT_THRESHOLD_PCT) || 10;
+const MAX_REBALANCE_SELL_USD = Number(process.env.MAX_REBALANCE_SELL_USD) || 20;
+
 // 3 pool assets (SUI community pool — BTC, ETH, SUI only)
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
 type PoolAsset = (typeof POOL_ASSETS)[number];
@@ -109,6 +116,15 @@ interface SuiCronResult {
     executed?: number;
     failed?: number;
     txDigests?: Array<{ asset: string; digest: string }>;
+  };
+  driftRebalance?: {
+    preHoldings: Record<string, number>;
+    targets: Record<string, number>;
+    deltas: Record<string, number>;
+    sold: Array<{ asset: string; usdcReceived: number; driftPct: number; txDigest?: string; error?: string }>;
+    totalSoldUsdc: number;
+    executionAllocations?: Record<string, number>;
+    skippedReason?: string;
   };
   duration: number;
   error?: string;
@@ -516,6 +532,96 @@ async function replenishAdminUsdc(
   }
 
   return { swapped: totalSwapped, details };
+}
+
+/**
+ * Read per-asset USD values held by the admin wallet (spot leg of the
+ * dual-leg strategy). SUI is counted minus the 1-SUI gas reserve. USDC
+ * and BlueFin margin are NOT counted here — this function returns only
+ * the asset-spot values that the drift-rebalance compares against AI
+ * target percentages.
+ */
+async function getAdminAssetValuesUsd(
+  network: 'mainnet' | 'testnet',
+  pricesUSD: Record<string, number>,
+): Promise<Record<PoolAsset, number>> {
+  const empty: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  if (!adminKey) return empty;
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const address = keypair.getPublicKey().toSuiAddress();
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+    const aggregator = getBluefinAggregatorService(network);
+    const allBalances = await suiClient.getAllBalances({ owner: address });
+    const result: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+    for (const bal of allBalances) {
+      const raw = Number(bal.totalBalance);
+      if (raw <= 0) continue;
+      for (const a of POOL_ASSETS) {
+        const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
+        if (!assetType || bal.coinType !== assetType) continue;
+        const decimals = a === 'SUI' ? 9 : 8;
+        const amount = raw / Math.pow(10, decimals);
+        const price = pricesUSD[a] || 0;
+        let usd = 0;
+        if (a === 'SUI') {
+          const swappable = Math.max(0, amount - 1.0);
+          usd = swappable * price;
+        } else {
+          usd = amount * price;
+        }
+        result[a] = (result[a] || 0) + usd;
+        break;
+      }
+    }
+    return result;
+  } catch (err) {
+    logger.warn('[SUI Cron] getAdminAssetValuesUsd failed', { error: err instanceof Error ? err.message : String(err) });
+    return empty;
+  }
+}
+
+/**
+ * Sell a specific dollar amount of a single asset to USDC via the 7k
+ * aggregator. Used by Step 6.6 drift rebalance to free USDC from
+ * overweight asset(s) for Step 7 to buy underweight ones. Unlike
+ * replenishAdminUsdc (which iterates largest-first to cover a shortfall),
+ * this targets one specific asset with one targeted swap.
+ */
+async function sellAssetForUsdc(
+  network: 'mainnet' | 'testnet',
+  asset: BluefinPoolAsset,
+  targetUsdc: number,
+  pricesUSD: Record<string, number>,
+): Promise<{ swapped: number; txDigest?: string; error?: string }> {
+  if (targetUsdc < 0.10) return { swapped: 0, error: 'target below $0.10 minimum' };
+  const price = pricesUSD[asset] || 0;
+  if (price <= 0) return { swapped: 0, error: 'no price' };
+  try {
+    const aggregator = getBluefinAggregatorService(network);
+    // Compute asset amount to swap (with 5% slippage buffer baked in)
+    const assetAmountToSwap = (targetUsdc * 1.05) / price;
+    const quote = await aggregator.getReverseSwapQuote(asset, assetAmountToSwap);
+    if (!quote.canSwapOnChain || !quote.routerData) {
+      return { swapped: 0, error: 'No on-chain route' };
+    }
+    const swapResult = await aggregator.executeSwap(quote, 0.02); // 2% slippage tolerance
+    const usdcReceived = Number(swapResult.amountOut || '0') / 1e6;
+    if (swapResult.success) {
+      return { swapped: usdcReceived, txDigest: swapResult.txDigest };
+    }
+    return { swapped: 0, error: swapResult.error };
+  } catch (err) {
+    return { swapped: 0, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /**
@@ -1493,6 +1599,140 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { envMissing: { adminKey: !process.env.SUI_POOL_ADMIN_KEY, agentCap: !process.env.SUI_AGENT_CAP_ID } } };
     }
 
+    // Step 6.6: Drift-based pre-rebalance — sell overweight asset(s) to USDC
+    // so Step 7 has actual budget to buy underweight assets.
+    //
+    // Why this step exists: after the Step 6.5 shortfall-only fix (commit
+    // 598484a7), admin USDC sat near zero because nothing was sold. Step 7's
+    // planRebalanceSwaps then had no budget and the wallet got stuck at
+    // whatever composition existed — e.g. all wBTC, no wETH, no SUI — even
+    // though the AI kept targeting BTC=45/ETH=37/SUI=18.
+    //
+    // The fix: explicitly identify overweight assets (drift > threshold) and
+    // sell exactly the excess. Step 7 then uses the recovered USDC to buy
+    // underweight assets per the AI target. Pure addition — does NOT
+    // change the original aiResult.allocations (which still drives the
+    // hedge step and DB snapshots).
+    let driftRebalance: SuiCronResult['driftRebalance'];
+    let executionAllocations: Record<string, number> | undefined;
+    if (process.env.SUI_POOL_ADMIN_KEY && !aboveSafetyCeiling && navUsd >= 15) {
+      try {
+        const preHoldings = await getAdminAssetValuesUsd(network, pricesUSD);
+        const targets: Record<string, number> = {};
+        const deltas: Record<string, number> = {};
+        for (const a of POOL_ASSETS) {
+          const targetPct = Number(aiResult.allocations[a as PoolAsset] || 0);
+          targets[a] = (navUsd * targetPct) / 100;
+          deltas[a] = targets[a] - (preHoldings[a as PoolAsset] || 0);
+        }
+        logger.info('[SUI Cron] Step 6.6 drift analysis', {
+          navUsd: navUsd.toFixed(2),
+          preHoldings: Object.entries(preHoldings).map(([k, v]) => `${k}=$${(v as number).toFixed(2)}`).join(' '),
+          targets: Object.entries(targets).map(([k, v]) => `${k}=$${v.toFixed(2)}`).join(' '),
+          deltas: Object.entries(deltas).map(([k, v]) => `${k}=${v > 0 ? '+' : ''}$${v.toFixed(2)}`).join(' '),
+          driftThreshold: REBALANCE_DRIFT_THRESHOLD_PCT,
+          maxSellPerTick: MAX_REBALANCE_SELL_USD,
+        });
+
+        const sold: NonNullable<SuiCronResult['driftRebalance']>['sold'] = [];
+        let totalSoldUsdc = 0;
+
+        // Sell overweight assets, smallest excess first to spread DEX impact
+        const overweightAssets = POOL_ASSETS
+          .map(a => ({ asset: a as string, excess: -(deltas[a] || 0), driftPct: targets[a] > 0 ? (-(deltas[a] || 0) / targets[a]) * 100 : 0 }))
+          .filter(x => x.excess > 0 && x.driftPct >= REBALANCE_DRIFT_THRESHOLD_PCT)
+          .sort((a, b) => a.excess - b.excess);
+
+        for (const { asset, excess, driftPct } of overweightAssets) {
+          const sellUsd = Math.min(excess, MAX_REBALANCE_SELL_USD);
+          logger.info(`[SUI Cron] Step 6.6 SELL ${asset}`, {
+            currentUsd: (preHoldings[asset as PoolAsset] || 0).toFixed(2),
+            targetUsd: targets[asset].toFixed(2),
+            excessUsd: excess.toFixed(2),
+            driftPct: driftPct.toFixed(1),
+            sellUsd: sellUsd.toFixed(2),
+          });
+          const result = await sellAssetForUsdc(network, asset as BluefinPoolAsset, sellUsd, pricesUSD);
+          sold.push({
+            asset,
+            usdcReceived: result.swapped,
+            driftPct,
+            txDigest: result.txDigest,
+            error: result.error,
+          });
+          if (result.swapped > 0) {
+            totalSoldUsdc += result.swapped;
+            // Wait for on-chain state propagation before next swap
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+
+        // Build buy-only execution allocations from positive deltas. Step 7
+        // uses this instead of the raw aiResult.allocations so it doesn't
+        // accidentally buy MORE of an overweight asset we just sold from.
+        const positiveDeltas: Record<string, number> = {};
+        let totalPositive = 0;
+        for (const a of POOL_ASSETS) {
+          const d = deltas[a] || 0;
+          if (d > 0) {
+            positiveDeltas[a] = d;
+            totalPositive += d;
+          }
+        }
+        if (totalPositive > 0) {
+          executionAllocations = {};
+          let allocated = 0;
+          const positiveAssets = Object.keys(positiveDeltas);
+          for (let i = 0; i < positiveAssets.length; i++) {
+            const a = positiveAssets[i];
+            const isLast = i === positiveAssets.length - 1;
+            const pct = isLast
+              ? Math.max(0, 100 - allocated)
+              : Math.round((positiveDeltas[a] / totalPositive) * 100);
+            executionAllocations[a] = pct;
+            allocated += pct;
+          }
+          // Ensure overweight assets are 0% in the buy plan (Step 7 won't buy them)
+          for (const a of POOL_ASSETS) {
+            if (!(a in executionAllocations)) executionAllocations[a] = 0;
+          }
+        }
+
+        driftRebalance = { preHoldings, targets, deltas, sold, totalSoldUsdc, executionAllocations };
+
+        if (totalSoldUsdc > 0 || sold.length > 0) {
+          const okSold = sold.filter(s => s.usdcReceived > 0);
+          await notifyDiscord(
+            `Drift rebalance: sold $${totalSoldUsdc.toFixed(2)} of overweight asset(s) → USDC for Step 7 buys. ${okSold.map(s => `${s.asset} $${s.usdcReceived.toFixed(2)} (drift ${s.driftPct.toFixed(0)}%)`).join(', ') || '(no swap succeeded)'}.`,
+            okSold.length > 0 ? 'INFO' : 'WARN',
+            { sold, deltas, targets, navUsd: navUsd.toFixed(2), executionAllocations },
+          );
+        }
+      } catch (driftErr) {
+        const msg = driftErr instanceof Error ? driftErr.message : String(driftErr);
+        logger.warn('[SUI Cron] Step 6.6 drift rebalance failed (non-critical)', { error: msg });
+        driftRebalance = {
+          preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
+          targets: { BTC: 0, ETH: 0, SUI: 0 },
+          deltas: { BTC: 0, ETH: 0, SUI: 0 },
+          sold: [], totalSoldUsdc: 0,
+          skippedReason: `error: ${msg}`,
+        };
+      }
+    } else {
+      driftRebalance = {
+        preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
+        targets: { BTC: 0, ETH: 0, SUI: 0 },
+        deltas: { BTC: 0, ETH: 0, SUI: 0 },
+        sold: [], totalSoldUsdc: 0,
+        skippedReason: !process.env.SUI_POOL_ADMIN_KEY
+          ? 'no admin key'
+          : aboveSafetyCeiling
+            ? 'above NAV safety ceiling'
+            : `NAV $${navUsd.toFixed(2)} < $15 minimum`,
+      };
+    }
+
     // Step 7: Plan + Execute rebalance via SuiPoolAgent
     // Trigger swaps when:
     //  a) AI detects allocation drift and recommends rebalancing, OR
@@ -1524,9 +1764,22 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       try {
         const aggregator = getBluefinAggregatorService(network);
 
+        // Use buy-only execution allocations from Step 6.6 if available,
+        // else fall back to the raw AI target. The buy-only set zeros out
+        // any overweight asset so Step 7 doesn't re-buy what we just sold.
+        const planAllocations = (executionAllocations && Object.values(executionAllocations).some(v => v > 0))
+          ? executionAllocations as Record<BluefinPoolAsset, number>
+          : aiResult.allocations as Record<BluefinPoolAsset, number>;
+        if (executionAllocations && executionAllocations !== aiResult.allocations) {
+          logger.info('[SUI Cron] Step 7 using buy-only execution allocations (excludes overweight assets)', {
+            aiTarget: aiResult.allocations,
+            executionAllocations: planAllocations,
+          });
+        }
+
         const plan = await aggregator.planRebalanceSwaps(
           navUsd,
-          aiResult.allocations as Record<BluefinPoolAsset, number>,
+          planAllocations,
         );
 
         const onChainCount = plan.swaps.filter(s => s.canSwapOnChain).length;
@@ -1757,7 +2010,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           // Re-plan swaps with actual available admin USDC budget
           let swapPlan = plan;
           if (actualAdminUsdc < totalUsdcNeeded * 0.95 && actualAdminUsdc > 0.10) {
-            // Budget is limited — re-plan with available USDC
+            // Budget is limited — re-plan with available USDC.
+            // Use the same buy-only allocations the initial plan used, so the
+            // re-plan also skips overweight assets.
             logger.info('[SUI Cron] Re-planning swaps with available budget', {
               available: actualAdminUsdc.toFixed(2),
               originalNeeded: totalUsdcNeeded.toFixed(2),
@@ -1765,7 +2020,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
             try {
               swapPlan = await aggregator.planRebalanceSwaps(
                 actualAdminUsdc,
-                aiResult.allocations as Record<BluefinPoolAsset, number>,
+                planAllocations,
               );
             } catch (replanErr) {
               logger.warn('[SUI Cron] Re-plan failed, using original plan', { error: replanErr });
@@ -2350,6 +2605,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       pricesUSD,
       autoHedge: autoHedgeResult.triggered ? autoHedgeResult : undefined,
       rebalanceSwaps,
+      ...(driftRebalance && { driftRebalance }),
       ...(hedgeSettlement && { hedgeSettlement }),
       duration: Date.now() - startTime,
     };
