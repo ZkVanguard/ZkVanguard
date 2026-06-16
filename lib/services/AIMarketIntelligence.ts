@@ -21,6 +21,7 @@ import { logger } from '@/lib/utils/logger';
 import { cache } from '../utils/cache';
 import { Polymarket5MinService, type FiveMinBTCSignal, type FiveMinSignalHistory } from './market-data/Polymarket5MinService';
 import { DelphiMarketService, type PredictionMarket } from './market-data/DelphiMarketService';
+import { MultiAssetSignalService, type MultiAssetSignal } from './market-data/MultiAssetSignalService';
 
 // ============================================================================
 // Enhanced Types for AI Agents
@@ -124,9 +125,24 @@ export interface AIMarketContext {
   
   /** Implied price movement */
   impliedMove: ImpliedMove;
-  
+
   /** Top prediction markets (filtered & prioritized) */
   predictions: EnhancedPrediction[];
+
+  /**
+   * Per-asset 5-min Polymarket binaries (BTC + ETH + SOL …). Augments
+   * `fiveMinSignal` (BTC-only) so the AI can see if cross-asset binaries
+   * agree (high conviction) or diverge (low conviction), instead of being
+   * driven by a single market.
+   */
+  multiAssetSignals: {
+    perAsset: Record<string, MultiAssetSignal | null>;
+    netScore: number;          // -100 (all bearish) → +100 (all bullish)
+    bullishCount: number;
+    bearishCount: number;
+    strongCount: number;
+    avgConfidence: number;
+  };
   
   /** Overall market sentiment */
   marketSentiment: {
@@ -210,19 +226,41 @@ export class AIMarketIntelligence {
 
     const startTime = Date.now();
     
-    // Fetch all data in parallel
+    // Fetch all data in parallel — including per-asset 5-min Polymarket
+    // binaries for the assets the caller cares about (default BTC/ETH/SOL).
+    // The multi-asset signal widens the prediction surface from one binary
+    // to N, so the AI/cron can spot cross-asset agreement (high conviction)
+    // vs divergence (low conviction) instead of being driven by a single
+    // market.
+    const multiAssetTargets = (() => {
+      const targets = new Set<string>();
+      // Always include the 3 most liquid 5-min binaries
+      for (const a of ['BTC', 'ETH', 'SOL']) targets.add(a);
+      // Plus any pool-tracked asset Polymarket might also list
+      for (const a of assets) {
+        const up = a.toUpperCase();
+        if (up === 'BTC' || up === 'ETH' || up === 'SOL') targets.add(up);
+      }
+      return Array.from(targets);
+    })();
+
     const [
       fiveMinSignal,
       predictions,
       priceData,
+      multiAssetAgg,
     ] = await Promise.all([
       Polymarket5MinService.getLatest5MinSignal().catch((err) => { logger.warn('[AIMarketIntelligence] 5min signal fetch failed', { error: err }); return null; }),
       DelphiMarketService.getRelevantMarkets(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Predictions fetch failed', { error: err }); return []; }),
       this.fetchPriceData(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Price data fetch failed', { error: err }); return {}; }),
+      MultiAssetSignalService.getAggregatedSentiment(multiAssetTargets).catch((err) => {
+        logger.warn('[AIMarketIntelligence] Multi-asset signal fetch failed', { error: err });
+        return { netScore: 0, bullishCount: 0, bearishCount: 0, strongCount: 0, avgConfidence: 0, perAsset: {} as Record<string, MultiAssetSignal | null> };
+      }),
     ]);
 
     const signalHistory = Polymarket5MinService.getSignalHistory();
-    
+
     // Build comprehensive context
     const context: AIMarketContext = {
       generatedAt: Date.now(),
@@ -234,6 +272,14 @@ export class AIMarketIntelligence {
       liquidity: this.analyzeLiquidity(fiveMinSignal, predictions),
       impliedMove: this.calculateImpliedMove(fiveMinSignal, signalHistory, priceData),
       predictions: this.enhancePredictions(predictions, fiveMinSignal),
+      multiAssetSignals: {
+        perAsset: multiAssetAgg.perAsset,
+        netScore: multiAssetAgg.netScore,
+        bullishCount: multiAssetAgg.bullishCount,
+        bearishCount: multiAssetAgg.bearishCount,
+        strongCount: multiAssetAgg.strongCount,
+        avgConfidence: multiAssetAgg.avgConfidence,
+      },
       marketSentiment: this.calculateSentiment(fiveMinSignal, signalHistory, predictions, priceData),
       summary: this.generateSummary(fiveMinSignal, signalHistory, predictions),
     };

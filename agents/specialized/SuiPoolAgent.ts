@@ -454,6 +454,40 @@ export class SuiPoolAgent extends BaseAgent {
         recommendations.push(`5-min BTC signal DOWN (${sigConfidence}% confidence) - reducing BTC`);
       }
     }
+
+    // 3c. Use per-asset 5-min binaries (BTC / ETH / SOL …) for diversified
+    // adjustment. Lets ETH react to its own binary (was previously stuck
+    // following the BTC signal) and gives us a cross-asset consensus
+    // signal in `multiAssetSignals.netScore`.
+    if (context.multiAssetSignals?.perAsset) {
+      const perAsset = context.multiAssetSignals.perAsset;
+      for (const asset of ['BTC', 'ETH', 'SUI'] as PoolAsset[]) {
+        // SUI binaries aren't listed on Polymarket — fall back to BTC signal
+        // for SUI (it's the most correlated of the available proxies).
+        const signalAsset = asset === 'SUI' ? 'BTC' : asset;
+        const sig = perAsset[signalAsset];
+        if (!sig) continue;
+        // Skip weak signals — only act on MODERATE / STRONG conviction.
+        if (sig.signalStrength === 'WEAK') continue;
+        // Step size: 3 for MODERATE, 6 for STRONG (capped at the floor/ceiling)
+        const step = sig.signalStrength === 'STRONG' ? 6 : 3;
+        if (sig.direction === 'UP') {
+          adjustedAllocations[asset] = Math.min(45, (adjustedAllocations[asset] || 25) + step);
+          recommendations.push(`${signalAsset} 5-min UP ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → +${step}% ${asset}`);
+        } else {
+          adjustedAllocations[asset] = Math.max(10, (adjustedAllocations[asset] || 25) - step);
+          recommendations.push(`${signalAsset} 5-min DOWN ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → -${step}% ${asset}`);
+        }
+      }
+      // Add a cross-asset consensus alert when binaries agree
+      if (context.multiAssetSignals.strongCount >= 2 && context.multiAssetSignals.netScore !== 0) {
+        const dir = context.multiAssetSignals.netScore > 0 ? 'BULLISH' : 'BEARISH';
+        recommendations.push(
+          `Cross-asset binary consensus: ${context.multiAssetSignals.strongCount} STRONG, ${dir} ` +
+          `(${context.multiAssetSignals.bullishCount}↑ / ${context.multiAssetSignals.bearishCount}↓)`,
+        );
+      }
+    }
     
     // 4. Calculate overall sentiment from marketSentiment.score (-100 to +100)
     // Also factor in prediction signal consensus
