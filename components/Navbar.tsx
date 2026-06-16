@@ -39,8 +39,8 @@ export const Navbar = memo(function Navbar() {
     <nav 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
         scrolled
-          ? 'bg-[#FAF9F5]/85 backdrop-blur-xl shadow-[0_4px_16px_-8px_rgba(41,38,32,0.12)] border-b border-claude-border'
-          : 'bg-[#FAF9F5]/90 backdrop-blur-lg'
+          ? 'bg-system-bg-primary/85 backdrop-blur-xl shadow-ios-1 border-b border-separator-opaque/40'
+          : 'bg-system-bg-primary/90 backdrop-blur-lg'
       }`}
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -57,7 +57,7 @@ export const Navbar = memo(function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 h-11 flex items-center text-[16px] font-normal text-claude-ink hover:text-claude-rust active:scale-[0.98] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap"
+                className="px-3 h-11 flex items-center text-[16px] font-normal text-label-secondary hover:text-ios-blue active:scale-[0.98] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap"
               >
                 {link.label}
               </Link>
@@ -73,7 +73,7 @@ export const Navbar = memo(function Navbar() {
           {/* Mobile Menu Button - Proper 44pt touch target */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-claude-ink hover:text-claude-rust active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+            className="lg:hidden w-11 h-11 flex items-center justify-center -mr-2 text-label-primary hover:text-ios-blue active:scale-[0.96] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
             aria-label="Toggle menu"
           >
             {isOpen ? (
@@ -92,7 +92,7 @@ export const Navbar = memo(function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="block px-3 h-11 flex items-center text-[17px] text-claude-ink hover:bg-claude-surface active:scale-[0.98] rounded-[10px] transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  className="block px-3 h-11 flex items-center text-[17px] text-label-primary hover:bg-system-bg-grouped active:scale-[0.98] rounded-ios transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}
