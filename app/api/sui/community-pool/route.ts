@@ -108,6 +108,7 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
     let venuePositions: Array<{
       symbol?: unknown; side?: unknown;
       markPrice?: unknown; unrealizedPnl?: unknown;
+      entryPrice?: unknown; size?: unknown; leverage?: unknown;
     }> = [];
     try {
       const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
@@ -125,15 +126,26 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
     }
 
     // Build a (symbol, side) → venue position lookup for fast matching.
-    const venueLookup = new Map<string, { markPrice: number; uPnL: number }>();
+    // Pull every field the API surfaces to consumers: mark + uPnL drive
+    // PnL math; entry + size + leverage drive the "entry vs mark"
+    // display + position-sizing logic downstream. All sourced from the
+    // matching engine so a stale DB row can't ship a wrong entry price
+    // (observed 2026-06-21: DB entry $1664 vs venue truth $2016).
+    const venueLookup = new Map<string, {
+      markPrice: number; uPnL: number;
+      entryPrice: number; size: number; leverage: number;
+    }>();
     for (const p of venuePositions) {
       const symbol = String(p.symbol || '').toUpperCase();
       const side = String(p.side || '').toUpperCase();
       if (!symbol) continue;
       const markPrice = Number(p.markPrice ?? 0) || 0;
       const uPnL = Number(p.unrealizedPnl ?? 0) || 0;
+      const entryPrice = Number(p.entryPrice ?? 0) || 0;
+      const size = Number(p.size ?? 0) || 0;
+      const leverage = Number(p.leverage ?? 0) || 0;
       if (markPrice > 0) {
-        venueLookup.set(`${symbol}|${side}`, { markPrice, uPnL });
+        venueLookup.set(`${symbol}|${side}`, { markPrice, uPnL, entryPrice, size, leverage });
       }
     }
 
@@ -166,13 +178,27 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
       let currentPrice: number | null = null;
       let currentPnl: number;
       let pnlSource: 'venue' | 'spot' | 'db' = 'db';
+      // Overlay defaults: start from DB row, replace with venue truth
+      // where available. Keeps every consumer reading honest values.
+      let effectiveEntry = r.entryPrice;
+      let effectiveSize = r.size;
+      let effectiveLeverage = r.leverage;
+      let effectiveNotional = r.notionalValue;
 
       if (venue && venue.markPrice > 0) {
-        // Source 1: venue truth
+        // Source 1: venue truth — mark, uPnL, entry, size, leverage all
+        // come from the matching engine.
         currentPrice = venue.markPrice;
-        // venue uPnL already includes leverage + funding effects
         currentPnl = venue.uPnL;
         pnlSource = 'venue';
+        if (venue.entryPrice > 0) effectiveEntry = venue.entryPrice;
+        if (venue.size > 0) effectiveSize = venue.size;
+        if (venue.leverage > 0) effectiveLeverage = venue.leverage;
+        // Recompute notional from venue values so the displayed
+        // size × mark math always reconciles.
+        if (effectiveSize > 0 && venue.markPrice > 0) {
+          effectiveNotional = effectiveSize * venue.markPrice;
+        }
       } else if (r.entryPrice > 0 && r.size > 0) {
         // Source 2: recompute from spot
         const spot = await getSpotPrice(baseSymbol);
@@ -203,10 +229,10 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
         id: r.id,
         market: r.market,
         side: r.side,
-        size: r.size,
-        notionalValue: r.notionalValue,
-        leverage: r.leverage,
-        entryPrice: r.entryPrice,
+        size: effectiveSize,
+        notionalValue: Number(effectiveNotional.toFixed(4)),
+        leverage: effectiveLeverage,
+        entryPrice: effectiveEntry,
         currentPrice,
         currentPnl: Number(currentPnl.toFixed(4)),
         openedAt: r.openedAt,

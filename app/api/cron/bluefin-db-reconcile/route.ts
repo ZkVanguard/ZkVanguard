@@ -70,6 +70,7 @@ interface ReconcileResult {
 type LivePosition = {
   symbol?: string; side?: string; size?: number;
   markPrice?: number; entryPrice?: number; unrealizedPnl?: number;
+  leverage?: number;
 };
 
 function findMatchingPosition(
@@ -231,30 +232,73 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       // $3.67 drift) until manual repair.
       const liveSize = Number(livePos.size ?? 0);
       const liveMark = Number(livePos.markPrice ?? livePos.entryPrice ?? 0);
+      const liveEntry = Number(livePos.entryPrice ?? 0);
+      const liveLeverage = Number(livePos.leverage ?? 0);
       const liveUpnl = Number(livePos.unrealizedPnl ?? 0);
       if (liveSize > 0 && liveMark > 0) {
         const liveNotional = liveSize * liveMark;
         const dbSize = Number(h.size ?? 0);
         const dbPnl = Number(h.current_pnl ?? 0);
+        const dbEntry = Number(h.entry_price ?? 0);
+        const dbLeverage = Number(h.leverage ?? 0);
         const sizeDriftPct = dbSize > 0 ? Math.abs(liveSize - dbSize) / dbSize : 1;
         const pnlDriftAbs = Math.abs(liveUpnl - dbPnl);
+        // Entry drift is logged + repaired separately from size/pnl drift.
+        // Entry changes when the venue records partial fills or weighted-
+        // average updates (observed 2026-06-21: DB entry $1664 vs venue
+        // truth $2016 on ETH SHORT — a $352 drift causing every consumer
+        // reading DB-rooted entries to misrepresent the position).
+        const entryDriftPct = dbEntry > 0 && liveEntry > 0
+          ? Math.abs(liveEntry - dbEntry) / dbEntry
+          : (liveEntry > 0 ? 1 : 0);
+        const leverageDrift = Math.abs(liveLeverage - dbLeverage);
+        const hadAnyDrift = sizeDriftPct > 0.001
+          || pnlDriftAbs > 0.01
+          || (liveEntry > 0 && entryDriftPct > 0.005)
+          || (liveLeverage > 0 && leverageDrift > 0.01);
         // Only write if something actually moved — saves DB writes on no-op ticks.
-        if (sizeDriftPct > 0.001 || pnlDriftAbs > 0.01) {
+        if (hadAnyDrift) {
           try {
+            // Compose UPDATE dynamically so we only touch fields that have
+            // a meaningful venue value (e.g. leverage=0 from a stale SDK
+            // response shouldn't clobber the real DB leverage).
+            const sets: string[] = [
+              'size = $1',
+              'notional_value = $2',
+              'current_price = $3',
+              'current_pnl = $4',
+              "price_source = 'bluefin-live'",
+              'price_updated_at = CURRENT_TIMESTAMP',
+              'updated_at = CURRENT_TIMESTAMP',
+            ];
+            const params: Array<number> = [liveSize, liveNotional, liveMark, liveUpnl];
+            let nextParam = 5;
+            if (liveEntry > 0) {
+              sets.push(`entry_price = $${nextParam++}`);
+              params.push(liveEntry);
+            }
+            if (liveLeverage > 0) {
+              sets.push(`leverage = $${nextParam++}`);
+              params.push(liveLeverage);
+            }
+            params.push(h.id);
             await query(
-              `UPDATE hedges
-                  SET size = $1,
-                      notional_value = $2,
-                      current_price = $3,
-                      current_pnl = $4,
-                      price_source = 'bluefin-live',
-                      price_updated_at = CURRENT_TIMESTAMP,
-                      updated_at = CURRENT_TIMESTAMP
-                WHERE id = $5
-                  AND status = 'active'`,
-              [liveSize, liveNotional, liveMark, liveUpnl, h.id],
+              `UPDATE hedges SET ${sets.join(', ')} WHERE id = $${nextParam} AND status = 'active'`,
+              params,
             );
             syncedDbRowIds.push(h.id);
+            // Material entry drift suggests a fill happened or the venue
+            // restated the position — page ops via Discord (INFO) so we
+            // know the position changed under us.
+            if (liveEntry > 0 && entryDriftPct > 0.05) {
+              await notifyDiscord(
+                `Entry-price drift repaired: ${h.market} ${h.side} ` +
+                `DB=$${dbEntry.toFixed(4)} → venue=$${liveEntry.toFixed(4)} ` +
+                `(${(entryDriftPct * 100).toFixed(1)}%). Likely a fill / weighted-avg restate.`,
+                'INFO',
+                { id: h.id, market: h.market, side: h.side, dbEntry, liveEntry, entryDriftPct },
+              ).catch(() => {});
+            }
           } catch (e) {
             logger.warn('[bluefin-db-reconcile] live-sync UPDATE failed', {
               id: h.id, error: e instanceof Error ? e.message : String(e),
