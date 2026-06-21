@@ -121,13 +121,13 @@ export const WDK_CHAINS: Record<string, WDKChainConfig> = {
       decimals: 18,
     },
   },
-  // Cronos Testnet - NOTE: Does NOT have official WDK USDT
+  // Cronos Testnet - uses the deployed MockUSDT address for WDK flows
   'cronos-testnet': {
     chainId: 338,
     name: 'Cronos Testnet',
     network: 'testnet',
     rpcUrl: 'https://evm-t3.cronos.org',
-    usdtAddress: null, // NO official WDK USDT - use Sepolia instead
+    usdtAddress: USDT_ADDRESSES.cronos.testnet,
     explorerUrl: 'https://explorer.cronos.org/testnet',
     nativeCurrency: {
       name: 'Test Cronos',
@@ -233,16 +233,13 @@ export function isMainnet(chainId: number): boolean {
 export function getDepositTokenAddress(
   chainId: number,
   testnetUsdtAddress?: string
-): string {
-  const usdtAddress = getUSDTAddress(chainId);
-  if (usdtAddress) {
-    return usdtAddress;
+): string | null {
+  const chain = getChainConfig(chainId);
+  if (!chain) {
+    throw new Error(`No deposit token configured for chain ${chainId}`);
   }
-  // Fallback to testnet USDT
-  if (testnetUsdtAddress) {
-    return testnetUsdtAddress;
-  }
-  throw new Error(`No deposit token configured for chain ${chainId}`);
+
+  return chain.usdtAddress ?? testnetUsdtAddress ?? null;
 }
 
 // ============================================
@@ -271,12 +268,10 @@ export function getWDKEvmConfig(chainId: number) {
  * PRIORITY: Sepolia (11155111) has official WDK USDT for hackathon!
  */
 export const WDK_SUPPORTED_CHAINS = [
-  11155111, // Sepolia - OFFICIAL WDK USDT (primary for hackathon)
   25,       // Cronos Mainnet
+  338,      // Cronos Testnet
   295,      // Hedera Mainnet
   296,      // Hedera Testnet
-  9745,     // Plasma (x402 primary)
-  988,      // Stable (x402 secondary)
 ] as const;
 
 export type WDKSupportedChainId = typeof WDK_SUPPORTED_CHAINS[number];
