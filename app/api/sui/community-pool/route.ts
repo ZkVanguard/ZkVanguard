@@ -107,7 +107,7 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
     //   3. DB column — last resort. Logged as a stale fallback.
     let venuePositions: Array<{
       symbol?: unknown; side?: unknown;
-      markPrice?: unknown; unrealizedProfit?: unknown; uPnL?: unknown;
+      markPrice?: unknown; unrealizedPnl?: unknown;
     }> = [];
     try {
       const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
@@ -131,7 +131,7 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
       const side = String(p.side || '').toUpperCase();
       if (!symbol) continue;
       const markPrice = Number(p.markPrice ?? 0) || 0;
-      const uPnL = Number(p.unrealizedProfit ?? p.uPnL ?? 0) || 0;
+      const uPnL = Number(p.unrealizedPnl ?? 0) || 0;
       if (markPrice > 0) {
         venueLookup.set(`${symbol}|${side}`, { markPrice, uPnL });
       }

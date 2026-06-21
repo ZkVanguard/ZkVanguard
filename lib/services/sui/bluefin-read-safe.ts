@@ -56,8 +56,11 @@ function sumPositionFields(positions: BluefinPosition[]): { lockedMargin: number
   let upnl = 0;
   for (const p of positions) {
     const pp = p as unknown as Record<string, unknown>;
-    lockedMargin += Number(pp.margin ?? 0) || 0;
-    upnl += Number(pp.unrealizedProfit ?? pp.uPnL ?? 0) || 0;
+    // BluefinService.getPositions returns `margin` (initialMargin) and
+    // `unrealizedPnl` (NOT `unrealizedProfit` / `uPnL` — those names
+    // came from a different SDK shape and would silently sum to zero).
+    lockedMargin += Number(pp.margin ?? pp.initialMargin ?? 0) || 0;
+    upnl += Number(pp.unrealizedPnl ?? 0) || 0;
   }
   return { lockedMargin, upnl };
 }
